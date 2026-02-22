@@ -86,17 +86,17 @@ describe('UX-344 — Landing Page Accessible Counters', () => {
       ).toBeInTheDocument();
     });
 
-    it('renders aria-label="1000+ regras de filtragem"', () => {
+    it('renders aria-label="87% de editais descartados"', () => {
       render(<HeroSection />);
       expect(
-        screen.getByRole('text', { name: '1000+ regras de filtragem' })
+        screen.getByRole('text', { name: '87% de editais descartados' })
       ).toBeInTheDocument();
     });
 
-    it('renders aria-label="27 estados cobertos"', () => {
+    it('renders aria-label="27 UFs cobertas"', () => {
       render(<HeroSection />);
       expect(
-        screen.getByRole('text', { name: '27 estados cobertos' })
+        screen.getByRole('text', { name: '27 UFs cobertas' })
       ).toBeInTheDocument();
     });
   });

@@ -2,49 +2,49 @@ import { render, screen } from '@testing-library/react';
 import DifferentialsGrid from '@/app/components/landing/DifferentialsGrid';
 
 describe('DifferentialsGrid', () => {
-  it('renders section title with value positioning', () => {
+  it('renders section title with risk elimination positioning (GTM-COPY-001 AC6)', () => {
     render(<DifferentialsGrid />);
 
-    expect(screen.getByText(/Por que empresas que vencem licitações usam SmartLic/i)).toBeInTheDocument();
+    expect(screen.getByText(/Cada funcionalidade elimina um risco real/i)).toBeInTheDocument();
   });
 
-  it('renders subtitle focused on winning bids', () => {
+  it('renders subtitle focused on waste reduction', () => {
     render(<DifferentialsGrid />);
 
-    expect(screen.getByText(/Cada funcionalidade foi projetada para você vencer, não apenas encontrar/i)).toBeInTheDocument();
+    expect(screen.getByText(/Menos ruído, menos desperdício, mais retorno/i)).toBeInTheDocument();
   });
 
-  it('renders 4 value differentials with correct titles (AC6)', () => {
+  it('renders 4 value differentials with correct titles (GTM-COPY-001 AC6)', () => {
     render(<DifferentialsGrid />);
 
-    expect(screen.getByText('PRIORIZAÇÃO INTELIGENTE')).toBeInTheDocument();
-    expect(screen.getByText('ANÁLISE AUTOMATIZADA')).toBeInTheDocument();
-    expect(screen.getByText('REDUÇÃO DE INCERTEZA')).toBeInTheDocument();
-    expect(screen.getByText('COBERTURA NACIONAL')).toBeInTheDocument();
+    expect(screen.getByText('FOCO NO QUE PAGA')).toBeInTheDocument();
+    expect(screen.getByText('DESCARTE SEM LER 100 PÁGINAS')).toBeInTheDocument();
+    expect(screen.getByText('DECISÃO COM DADOS, NÃO ACHISMO')).toBeInTheDocument();
+    expect(screen.getByText('NENHUM EDITAL INVISÍVEL')).toBeInTheDocument();
   });
 
   it('renders bullet points for each differential (AC6)', () => {
     render(<DifferentialsGrid />);
 
-    // PRIORIZAÇÃO INTELIGENTE
-    expect(screen.getByText(/Análise de adequação ao seu perfil/i)).toBeInTheDocument();
-    expect(screen.getByText(/Filtros inteligentes por setor/i)).toBeInTheDocument();
-    expect(screen.getByText(/Foco no que gera resultado/i)).toBeInTheDocument();
+    // FOCO NO QUE PAGA
+    expect(screen.getByText(/Cruza cada edital com o perfil da sua empresa/i)).toBeInTheDocument();
+    expect(screen.getByText(/Descarta automaticamente o que não se encaixa/i)).toBeInTheDocument();
+    expect(screen.getByText(/Direciona esforço para editais com retorno real/i)).toBeInTheDocument();
 
-    // ANÁLISE AUTOMATIZADA
-    expect(screen.getByText(/Avaliação automática de cada edital/i)).toBeInTheDocument();
-    expect(screen.getByText(/Destaques de critérios decisivos/i)).toBeInTheDocument();
-    expect(screen.getByText(/Decisão em segundos, não horas/i)).toBeInTheDocument();
+    // DESCARTE SEM LER 100 PÁGINAS
+    expect(screen.getByText(/Avaliação objetiva de cada edital por IA/i)).toBeInTheDocument();
+    expect(screen.getByText(/Justificativa para cada recomendação/i)).toBeInTheDocument();
+    expect(screen.getByText(/Decisão em segundos, não em horas/i)).toBeInTheDocument();
 
-    // REDUÇÃO DE INCERTEZA
-    expect(screen.getByText(/Critérios objetivos de avaliação/i)).toBeInTheDocument();
+    // DECISÃO COM DADOS, NÃO ACHISMO
+    expect(screen.getByText(/Critérios objetivos de compatibilidade/i)).toBeInTheDocument();
     expect(screen.getByText(/Dados verificados de fontes oficiais/i)).toBeInTheDocument();
-    expect(screen.getByText(/Confiança em cada decisão/i)).toBeInTheDocument();
+    expect(screen.getByText(/Justificativa transparente/i)).toBeInTheDocument();
 
-    // COBERTURA NACIONAL
-    expect(screen.getByText(/Cobertura nacional integrada/i)).toBeInTheDocument();
-    expect(screen.getByText(/27 estados cobertos diariamente/i)).toBeInTheDocument();
-    expect(screen.getByText(/Novas fontes adicionadas regularmente/i)).toBeInTheDocument();
+    // NENHUM EDITAL INVISÍVEL
+    expect(screen.getByText(/27 estados cobertos automaticamente/i)).toBeInTheDocument();
+    expect(screen.getByText(/Fontes oficiais consolidadas/i)).toBeInTheDocument();
+    expect(screen.getByText(/Se existe e é compatível, você sabe/i)).toBeInTheDocument();
   });
 
   it('uses 1+3 asymmetric layout', () => {
@@ -63,6 +63,7 @@ describe('DifferentialsGrid', () => {
     expect(text).not.toMatch(/busca rápida/i);
     expect(text).not.toMatch(/ferramenta de busca/i);
     expect(text).not.toMatch(/planilha automatizada/i);
+    expect(text).not.toMatch(/inteligência automatizada/i);
   });
 
   it('uses design system colors', () => {

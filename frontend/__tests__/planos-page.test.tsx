@@ -451,10 +451,10 @@ describe("AC9: Non-logged user (anonymous)", () => {
     expect(screen.queryByTestId("status-banner-privileged")).not.toBeInTheDocument();
   });
 
-  it("shows 'Começar Agora' CTA", () => {
+  it("shows anonymous CTA (GTM-COPY-002)", () => {
     setupMocks({ session: false });
     render(<PlanosPage />);
-    expect(screen.getByRole("button", { name: "Começar Agora" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Começar a filtrar oportunidades/i })).toBeInTheDocument();
   });
 
   it("shows pricing content normally", () => {

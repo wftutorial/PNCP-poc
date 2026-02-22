@@ -74,11 +74,11 @@ export default function HeroSection({ className = '' }: HeroSectionProps) {
           variants={fadeInUp}
         >
           <span className="text-ink">
-            Saiba Onde Investir
+            Pare de perder dinheiro
           </span>
           <br />
           <span className="text-gradient">
-            para Ganhar Mais Licitações
+            com licitações erradas.
           </span>
         </motion.h1>
 
@@ -95,9 +95,7 @@ export default function HeroSection({ className = '' }: HeroSectionProps) {
           "
           variants={fadeInUp}
         >
-          Inteligência que avalia oportunidades, prioriza o que importa
-          <br className="hidden sm:block" />
-          e guia suas decisões. Avaliação objetiva, não busca genérica.
+          O SmartLic analisa cada edital contra o perfil da sua empresa. Elimina o que não faz sentido. Entrega só o que tem chance real de retorno — com justificativa objetiva.
         </motion.p>
 
         {/* CTA Buttons */}
@@ -112,7 +110,7 @@ export default function HeroSection({ className = '' }: HeroSectionProps) {
             glow={true}
             onClick={() => window.location.href = '/signup?source=landing-cta'}
           >
-            Descobrir minhas oportunidades
+            Ver oportunidades para meu setor
           </GradientButton>
 
           {/* Secondary CTA with border fill animation */}
@@ -120,9 +118,9 @@ export default function HeroSection({ className = '' }: HeroSectionProps) {
             variant="secondary"
             size="lg"
             glow={false}
-            onClick={() => scrollToSection('como-funciona')}
+            onClick={() => scrollToSection('proof-of-value')}
           >
-            Como funciona
+            Ver exemplo de análise real
             <ChevronDown size={20} className="ml-2 transition-transform" aria-hidden="true" />
           </GradientButton>
         </motion.div>
@@ -132,9 +130,9 @@ export default function HeroSection({ className = '' }: HeroSectionProps) {
           className="mt-12 flex flex-wrap items-center justify-center gap-4"
           variants={fadeInUp}
         >
-          <StatsBadge icon={Target} value="15" label="setores especializados" delay={0} />
-          <StatsBadge icon={Zap} value="1000+" label="regras de filtragem" delay={0.1} />
-          <StatsBadge icon={Globe} value="27" label="estados cobertos" delay={0.2} />
+          <StatsBadge icon={Target} value="87%" label="de editais descartados" delay={0} />
+          <StatsBadge icon={Zap} value="15" label="setores especializados" delay={0.1} />
+          <StatsBadge icon={Globe} value="27" label="UFs cobertas" delay={0.2} />
         </motion.div>
       </motion.div>
     </section>

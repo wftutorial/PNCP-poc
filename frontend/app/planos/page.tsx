@@ -356,7 +356,7 @@ export default function PlanosPage() {
                 ? "Continuar com SmartLic"
                 : userStatus === "trial"
                 ? "Assinar agora"
-                : "Começar Agora"}
+                : "Começar a filtrar oportunidades"}
             </button>
 
             <p className="mt-3 text-center text-xs text-[var(--ink-muted)]">

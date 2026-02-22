@@ -36,7 +36,7 @@ export default function FeaturesPage() {
               href="/signup?source=features-hero"
               className="inline-flex items-center gap-2 bg-white text-brand-blue px-8 py-4 rounded-lg font-semibold hover:bg-white/90 transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand-blue"
             >
-              <span>Experimentar SmartLic Pro</span>
+              <span>Analisar oportunidades do meu setor</span>
               <svg
                 role="img"
                 aria-label="Seta para direita"
@@ -64,16 +64,16 @@ export default function FeaturesPage() {
       <section className="py-20 bg-gradient-to-br from-brand-blue to-brand-blue/80 text-white">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl sm:text-4xl font-bold mb-6">
-            Começar a Ganhar Mais Licitações
+            Comece a filtrar o que realmente vale a pena
           </h2>
           <p className="text-xl text-white/90 mb-8 max-w-2xl mx-auto">
-            Experimente o SmartLic completo por 7 dias. Sem versão limitada. Se uma única licitação ganha pagar o sistema por um ano inteiro, por que esperar?
+            Produto completo por 7 dias. Se uma única licitação ganha pagar o investimento do ano inteiro, por que esperar?
           </p>
           <a
             href="/signup?source=features-bottom-cta"
             className="inline-flex items-center gap-2 bg-white text-brand-blue px-8 py-4 rounded-lg font-semibold hover:bg-white/90 transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand-blue"
           >
-            <span>Experimentar SmartLic Pro</span>
+            <span>Analisar oportunidades do meu setor</span>
             <svg
               role="img"
               aria-label="Seta para direita"

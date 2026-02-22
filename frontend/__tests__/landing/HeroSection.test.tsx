@@ -3,24 +3,24 @@ import userEvent from '@testing-library/user-event';
 import HeroSection from '@/app/components/landing/HeroSection';
 
 describe('HeroSection', () => {
-  it('renders headline with intelligence/curation positioning (AC1)', () => {
+  it('renders headline with financial impact positioning (GTM-COPY-001 AC1)', () => {
     render(<HeroSection />);
 
-    expect(screen.getByText(/Saiba Onde Investir/i)).toBeInTheDocument();
-    expect(screen.getByText(/para Ganhar Mais Licitações/i)).toBeInTheDocument();
+    expect(screen.getByText(/Pare de perder dinheiro/i)).toBeInTheDocument();
+    expect(screen.getByText(/com licitações erradas/i)).toBeInTheDocument();
   });
 
-  it('renders subheadline mentioning AI as differentiator (AC2)', () => {
+  it('renders subheadline explaining filtering mechanism (GTM-COPY-001 AC2)', () => {
     render(<HeroSection />);
 
-    expect(screen.getByText(/Inteligência que avalia oportunidades/i)).toBeInTheDocument();
-    expect(screen.getByText(/prioriza o que importa/i)).toBeInTheDocument();
+    expect(screen.getByText(/O SmartLic analisa cada edital contra o perfil da sua empresa/i)).toBeInTheDocument();
+    expect(screen.getByText(/justificativa objetiva/i)).toBeInTheDocument();
   });
 
-  it('renders primary CTA with results verb (AC3)', () => {
+  it('renders primary CTA with action verb (GTM-COPY-002 AC1)', () => {
     render(<HeroSection />);
 
-    const primaryCTA = screen.getByRole('button', { name: /Descobrir minhas oportunidades/i });
+    const primaryCTA = screen.getByRole('button', { name: /Ver oportunidades para meu setor/i });
     expect(primaryCTA).toBeInTheDocument();
   });
 
@@ -28,18 +28,18 @@ describe('HeroSection', () => {
     render(<HeroSection />);
 
     expect(screen.getByText(/setores especializados/i)).toBeInTheDocument();
-    expect(screen.getByText(/regras de filtragem/i)).toBeInTheDocument();
-    expect(screen.getByText(/estados cobertos/i)).toBeInTheDocument();
+    expect(screen.getByText(/de editais descartados/i)).toBeInTheDocument();
+    expect(screen.getByText(/UFs cobertas/i)).toBeInTheDocument();
   });
 
-  it('renders secondary CTA button with scroll functionality', () => {
+  it('renders secondary CTA button linking to proof-of-value', () => {
     render(<HeroSection />);
 
-    const secondaryCTA = screen.getByRole('button', { name: /Como funciona/i });
+    const secondaryCTA = screen.getByRole('button', { name: /Ver exemplo de análise real/i });
     expect(secondaryCTA).toBeInTheDocument();
   });
 
-  it('scrolls to section when secondary CTA is clicked', async () => {
+  it('scrolls to proof-of-value section when secondary CTA is clicked', async () => {
     const user = userEvent.setup();
 
     const mockScrollIntoView = jest.fn();
@@ -48,10 +48,10 @@ describe('HeroSection', () => {
 
     render(<HeroSection />);
 
-    const secondaryCTA = screen.getByRole('button', { name: /Como funciona/i });
+    const secondaryCTA = screen.getByRole('button', { name: /Ver exemplo de análise real/i });
     await user.click(secondaryCTA);
 
-    expect(document.getElementById).toHaveBeenCalledWith('como-funciona');
+    expect(document.getElementById).toHaveBeenCalledWith('proof-of-value');
     expect(mockScrollIntoView).toHaveBeenCalledWith({
       behavior: 'smooth',
       block: 'start',
@@ -67,6 +67,9 @@ describe('HeroSection', () => {
     expect(text).not.toMatch(/ferramenta de busca/i);
     expect(text).not.toMatch(/planilha automatizada/i);
     expect(text).not.toMatch(/10h\/semana/i);
+    // GTM-COPY-001 banned phrases
+    expect(text).not.toMatch(/inteligência automatizada/i);
+    expect(text).not.toMatch(/inovador/i);
   });
 
   it('uses design system tokens for styling', () => {

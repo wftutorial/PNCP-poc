@@ -30,10 +30,10 @@ export default function ComparisonTable() {
           animate={isVisible ? 'visible' : 'hidden'}
         >
           <h2 className="text-3xl sm:text-4xl font-bold text-ink mb-4">
-            SmartLic vs Plataformas Tradicionais
+            O risco de usar alternativas genéricas
           </h2>
           <p className="text-lg text-ink-secondary max-w-3xl mx-auto">
-            Baseado em reclamações reais de usuários do mercado
+            Cada linha abaixo é um risco real que empresas enfrentam com plataformas tradicionais
           </p>
         </motion.div>
 
@@ -52,7 +52,7 @@ export default function ComparisonTable() {
                     Funcionalidade
                   </th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-ink">
-                    Plataformas Tradicionais
+                    O Risco
                   </th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-brand-blue">
                     SmartLic
@@ -164,7 +164,7 @@ export default function ComparisonTable() {
                 {/* Traditional */}
                 <div className="mb-4">
                   <p className="text-xs text-ink-muted mb-2 uppercase tracking-wide">
-                    Plataformas Tradicionais
+                    O Risco
                   </p>
                   <div className="flex items-start gap-2">
                     <span className="text-error">❌</span>
@@ -221,7 +221,7 @@ export default function ComparisonTable() {
             glow={true}
             onClick={() => window.location.href = '/signup?source=comparison-table'}
           >
-            Experimentar o Produto Completo
+            Filtrar oportunidades para meu setor
             <svg
               role="img"
               aria-label="Ícone"

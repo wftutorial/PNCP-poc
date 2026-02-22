@@ -23,59 +23,59 @@ A landing atual não mostra o produto funcionando. O visitante vê promessas, co
 ## Acceptance Criteria
 
 ### AC1 — Componente de Exemplo Real
-- [ ] Novo componente `ProofOfValue.tsx` (ou similar) na landing
-- [ ] Posicionado **abaixo do hero, acima do fold** (ou como segunda seção visível)
-- [ ] Exibe 1-2 licitações reais com análise do sistema
-- [ ] Arquivo: `frontend/app/components/landing/ProofOfValue.tsx`
+- [x] Novo componente `ProofOfValue.tsx` (ou similar) na landing
+- [x] Posicionado **abaixo do hero, acima do fold** (ou como segunda seção visível)
+- [x] Exibe 1-2 licitações reais com análise do sistema
+- [x] Arquivo: `frontend/app/components/landing/ProofOfValue.tsx`
 
 ### AC2 — Card de Licitação Recomendada
-- [ ] Card visual mostrando uma licitação que o sistema **recomendaria**
-- [ ] Campos visíveis: título resumido, valor estimado, UF, modalidade
-- [ ] Badge de aderência: "Alta compatibilidade" (verde) com score visual
-- [ ] Selo de viabilidade (se feature flag ativa)
+- [x] Card visual mostrando uma licitação que o sistema **recomendaria**
+- [x] Campos visíveis: título resumido, valor estimado, UF, modalidade
+- [x] Badge de aderência: "Alta compatibilidade" (verde) com score visual
+- [x] Selo de viabilidade (se feature flag ativa)
 
 ### AC3 — Justificativa de Priorização
-- [ ] Abaixo do card, lista de 2-3 critérios que justificam a recomendação
-- [ ] Exemplos: "Setor compatível: engenharia", "Valor dentro da faixa ideal", "Prazo: 15 dias (viável)"
-- [ ] Linguagem clara, sem jargão técnico
-- [ ] Ícones ou badges visuais para cada critério
+- [x] Abaixo do card, lista de 2-3 critérios que justificam a recomendação
+- [x] Exemplos: "Setor compatível: engenharia", "Valor dentro da faixa ideal", "Prazo: 15 dias (viável)"
+- [x] Linguagem clara, sem jargão técnico
+- [x] Ícones ou badges visuais para cada critério
 
 ### AC4 — Contraste com Licitação Rejeitada (opcional mas recomendado)
-- [ ] Segundo card (menor, esmaecido) mostrando uma licitação que o sistema **descartou**
-- [ ] Motivo visível: "Fora do seu setor", "Valor abaixo do mínimo", "Prazo insuficiente"
-- [ ] Reforça visualmente que o sistema **protege o tempo do usuário**
+- [x] Segundo card (menor, esmaecido) mostrando uma licitação que o sistema **descartou**
+- [x] Motivo visível: "Fora do seu setor", "Valor abaixo do mínimo", "Prazo insuficiente"
+- [x] Reforça visualmente que o sistema **protege o tempo do usuário**
 
 ### AC5 — Dados Estáticos (não API call)
-- [ ] Exemplos são **dados estáticos hardcoded** (não chamada à API)
-- [ ] Dados baseados em licitações reais (podem ser anonimizados ou simplificados)
-- [ ] Não exige autenticação para visualizar
-- [ ] Atualizáveis manualmente (não auto-refresh)
+- [x] Exemplos são **dados estáticos hardcoded** (não chamada à API)
+- [x] Dados baseados em licitações reais (podem ser anonimizados ou simplificados)
+- [x] Não exige autenticação para visualizar
+- [x] Atualizáveis manualmente (não auto-refresh)
 
 ### AC6 — Anotação de Transparência
-- [ ] Texto pequeno abaixo dos exemplos: "Exemplo baseado em análise real do sistema"
-- [ ] Se os dados forem simulados/anonimizados: "Exemplo ilustrativo baseado em análises reais"
-- [ ] Sem claims falsos ("100% real-time" etc.)
+- [x] Texto pequeno abaixo dos exemplos: "Exemplo baseado em análise real do sistema"
+- [x] Se os dados forem simulados/anonimizados: "Exemplo ilustrativo baseado em análises reais"
+- [x] Sem claims falsos ("100% real-time" etc.)
 
 ### AC7 — Explicação do Mecanismo
-- [ ] Texto curto (2-3 linhas) explicando **como o sistema decide**:
+- [x] Texto curto (2-3 linhas) explicando **como o sistema decide**:
   - "O SmartLic cruza o perfil da sua empresa com cada edital publicado. Avalia setor, valor, prazo e região. Entrega apenas o que tem aderência — com a explicação do porquê."
-- [ ] Posicionado como caption/annotation dos exemplos
+- [x] Posicionado como caption/annotation dos exemplos
 
 ### AC8 — Responsividade
-- [ ] Cards responsivos: desktop (lado a lado), mobile (empilhados)
-- [ ] Leitura confortável em 375px (mobile mínimo)
-- [ ] Dark mode funcional
+- [x] Cards responsivos: desktop (lado a lado), mobile (empilhados)
+- [x] Leitura confortável em 375px (mobile mínimo)
+- [x] Dark mode funcional
 
 ### AC9 — Integração na Landing
-- [ ] Componente adicionado em `page.tsx` na posição estratégica
-- [ ] Ordem sugerida: Hero → **ProofOfValue** → ValueProps → ...
-- [ ] Transição visual suave com seções adjacentes
+- [x] Componente adicionado em `page.tsx` na posição estratégica
+- [x] Ordem sugerida: Hero → **ProofOfValue** → ValueProps → ...
+- [x] Transição visual suave com seções adjacentes
 
 ### AC10 — Dados de Exemplo
-- [ ] Pelo menos 2 exemplos preparados (1 recomendado + 1 descartado)
-- [ ] Exemplos cobrem setores diferentes (não setor-específico)
-- [ ] Valores realistas (R$ 50k-500k range)
-- [ ] UFs diversas
+- [x] Pelo menos 2 exemplos preparados (1 recomendado + 1 descartado)
+- [x] Exemplos cobrem setores diferentes (não setor-específico)
+- [x] Valores realistas (R$ 50k-500k range)
+- [x] UFs diversas
 
 ## Arquivos Impactados
 
@@ -101,9 +101,9 @@ A landing atual não mostra o produto funcionando. O visitante vê promessas, co
 
 ## Definition of Done
 
-- [ ] ACs 1-9 verificados (AC4 e AC10 são recomendados mas não bloqueantes)
-- [ ] Componente visualmente integrado à landing
-- [ ] Mobile 375px verificado
-- [ ] Dark mode verificado
-- [ ] Zero regressions
-- [ ] Commit: `feat(frontend): GTM-COPY-003 — prova de funcionamento na primeira dobra`
+- [x] ACs 1-9 verificados (AC4 e AC10 são recomendados mas não bloqueantes)
+- [x] Componente visualmente integrado à landing
+- [x] Mobile 375px verificado
+- [x] Dark mode verificado
+- [x] Zero regressions
+- [x] Commit: `feat(frontend): GTM-COPY-003 — prova de funcionamento na primeira dobra`

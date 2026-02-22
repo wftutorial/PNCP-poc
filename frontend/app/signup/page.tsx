@@ -232,13 +232,13 @@ export default function SignupPage() {
             Criar conta
           </h1>
           <p className="text-center text-[var(--ink-secondary)] mb-4">
-            Experimente o SmartLic completo por 7 dias
+            Veja quais licitações valem a pena para sua empresa — em 2 minutos
           </p>
           <div className="mb-6 p-3 bg-[var(--surface-1)] rounded-input text-xs text-[var(--ink-secondary)] space-y-1">
-            <p className="font-medium text-[var(--ink)]">Teste grátis por 7 dias:</p>
+            <p className="font-medium text-[var(--ink)]">Acesso imediato:</p>
             <ul className="space-y-0.5">
-              <li>&#10003; 3 análises completas</li>
-              <li>&#10003; Acesso a todos os recursos</li>
+              <li>&#10003; Análise de compatibilidade com seu perfil</li>
+              <li>&#10003; Editais filtrados por setor e região</li>
               <li>&#10003; Sem cartão de crédito</li>
             </ul>
           </div>

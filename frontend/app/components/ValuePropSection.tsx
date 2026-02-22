@@ -38,10 +38,10 @@ export default function ValuePropSection() {
           animate={isVisible ? 'visible' : 'hidden'}
         >
           <h2 className="text-3xl sm:text-4xl font-bold text-ink mb-4">
-            Por Que SmartLic?
+            O que muda no seu resultado
           </h2>
           <p className="text-lg text-ink-secondary max-w-3xl mx-auto">
-            Enquanto outras plataformas exigem trabalho manual, o SmartLic entrega inteligência automatizada.
+            Cada funcionalidade existe para proteger seu tempo e direcionar seu esforço para editais com chance real de retorno.
           </p>
         </motion.div>
 
@@ -112,7 +112,7 @@ export default function ValuePropSection() {
             glow={true}
             onClick={() => window.location.href = '/signup?source=value-props'}
           >
-            Descobrir Minhas Oportunidades
+            Ver oportunidades para meu setor
             <svg
               role="img"
               aria-label="Ícone"

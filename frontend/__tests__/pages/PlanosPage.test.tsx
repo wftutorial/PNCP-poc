@@ -285,11 +285,11 @@ describe('PlanosPage Component', () => {
   });
 
   describe('CTA Button', () => {
-    it('should render "Começar Agora" button', async () => {
+    it('should render anonymous CTA button (GTM-COPY-002 AC5)', async () => {
       render(<PlanosPage />);
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /Começar Agora/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Começar a filtrar oportunidades/i })).toBeInTheDocument();
       });
     });
 
@@ -304,7 +304,7 @@ describe('PlanosPage Component', () => {
       render(<PlanosPage />);
 
       await waitFor(() => {
-        const ctaButton = screen.getByRole('button', { name: /Começar Agora/i });
+        const ctaButton = screen.getByRole('button', { name: /Começar a filtrar oportunidades/i });
         fireEvent.click(ctaButton);
       });
 

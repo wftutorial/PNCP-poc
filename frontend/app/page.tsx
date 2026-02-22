@@ -10,6 +10,7 @@ import StatsSection from './components/landing/StatsSection';
 import DataSourcesSection from './components/landing/DataSourcesSection';
 import SectorsGrid from './components/landing/SectorsGrid';
 import FinalCTA from './components/landing/FinalCTA';
+import ProofOfValue from './components/landing/ProofOfValue';
 import ValuePropSection from './components/ValuePropSection';
 import ComparisonTable from './components/ComparisonTable';
 import AnalysisExamplesCarousel from './components/landing/AnalysisExamplesCarousel';
@@ -22,6 +23,7 @@ export default function LandingPage() {
 
       <main id="main-content">
         <HeroSection />
+        <ProofOfValue />
         <ValuePropSection />
         <OpportunityCost />
         <BeforeAfter />

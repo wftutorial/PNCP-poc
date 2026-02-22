@@ -25,10 +25,10 @@ A landing atual (GTM-001, commit e7bf18c) já migrou de "economia de tempo" para
 ## Acceptance Criteria
 
 ### AC1 — Hero Headline
-- [ ] Headline afirma **diretamente** ganho financeiro ou redução de erro
-- [ ] Elimina abstrações ("inteligência", "automatizado", "inovador")
-- [ ] Tom incisivo: promete foco apenas no que tem real potencial de retorno
-- [ ] Arquivo: `HeroSection.tsx`
+- [x] Headline afirma **diretamente** ganho financeiro ou redução de erro
+- [x] Elimina abstrações ("inteligência", "automatizado", "inovador")
+- [x] Tom incisivo: promete foco apenas no que tem real potencial de retorno
+- [x] Arquivo: `HeroSection.tsx`
 
 **Direção de copy (exemplos, não definitivos):**
 - "Pare de perder dinheiro com licitações erradas."
@@ -36,26 +36,26 @@ A landing atual (GTM-001, commit e7bf18c) já migrou de "economia de tempo" para
 - "Licitações que realmente pagam. O resto, a gente descarta."
 
 ### AC2 — Hero Subheadline
-- [ ] Complementa explicando o **mecanismo de valor** (não repete a headline)
-- [ ] Evidencia: analisa compatibilidade com perfil do negócio + elimina ruído + destaca maior probabilidade de êxito
-- [ ] Reforça decisão fundamentada (não "busca")
-- [ ] Arquivo: `HeroSection.tsx`
+- [x] Complementa explicando o **mecanismo de valor** (não repete a headline)
+- [x] Evidencia: analisa compatibilidade com perfil do negócio + elimina ruído + destaca maior probabilidade de êxito
+- [x] Reforça decisão fundamentada (não "busca")
+- [x] Arquivo: `HeroSection.tsx`
 
 **Direção de copy (exemplo):**
 - "O SmartLic analisa cada edital contra o perfil da sua empresa. Elimina o que não faz sentido. Entrega só o que tem chance real de retorno — com justificativa objetiva."
 
 ### AC3 — Stats Badges
-- [ ] Badges do hero reforçam confiança prática (não métricas abstratas)
-- [ ] Atual: "15 setores | 1000+ regras | 27 estados" → Migrar para impacto ou prova
-- [ ] Sugestão: "X% de editais descartados por irrelevância | Y setores especializados | 27 UFs cobertas"
-- [ ] Arquivo: `HeroSection.tsx`
+- [x] Badges do hero reforçam confiança prática (não métricas abstratas)
+- [x] Atual: "15 setores | 1000+ regras | 27 estados" → Migrar para impacto ou prova
+- [x] Sugestão: "X% de editais descartados por irrelevância | Y setores especializados | 27 UFs cobertas"
+- [x] Arquivo: `HeroSection.tsx`
 
 ### AC4 — Value Props Section
-- [ ] Título de seção orientado a consequência (não "Por Que SmartLic?")
-- [ ] 4 value props reescritas com foco em **consequência prática** para o cliente
-- [ ] Cada prop: título = benefício tangível, descrição = como o sistema entrega
-- [ ] Elimina referências a "inteligência automatizada"
-- [ ] Arquivos: `ValuePropSection.tsx`, `valueProps.ts`
+- [x] Título de seção orientado a consequência (não "Por Que SmartLic?")
+- [x] 4 value props reescritas com foco em **consequência prática** para o cliente
+- [x] Cada prop: título = benefício tangível, descrição = como o sistema entrega
+- [x] Elimina referências a "inteligência automatizada"
+- [x] Arquivos: `ValuePropSection.tsx`, `valueProps.ts`
 
 **Direção:**
 | Atual | Desejado |
@@ -66,51 +66,51 @@ A landing atual (GTM-001, commit e7bf18c) já migrou de "economia de tempo" para
 | "Cobertura Nacional" | "Nenhuma oportunidade invisível" |
 
 ### AC5 — Opportunity Cost Section
-- [ ] Copy mais específica e incisiva
-- [ ] Converte "custo de não usar" em **risco operacional explícito**
-- [ ] Linguagem: "continuar sem = operar no escuro"
-- [ ] Arquivo: `OpportunityCost.tsx`
+- [x] Copy mais específica e incisiva
+- [x] Converte "custo de não usar" em **risco operacional explícito**
+- [x] Linguagem: "continuar sem = operar no escuro"
+- [x] Arquivo: `OpportunityCost.tsx`
 
 ### AC6 — Before/After Section
-- [ ] "Sem SmartLic" = lista de consequências concretas de operar sem filtro estratégico
-- [ ] "Com SmartLic" = lista de resultados práticos (não features)
-- [ ] Headline migra de "Da busca manual à decisão estratégica" para algo mais orientado a resultado
-- [ ] Arquivo: `BeforeAfter.tsx`
+- [x] "Sem SmartLic" = lista de consequências concretas de operar sem filtro estratégico
+- [x] "Com SmartLic" = lista de resultados práticos (não features)
+- [x] Headline migra de "Da busca manual à decisão estratégica" para algo mais orientado a resultado
+- [x] Arquivo: `BeforeAfter.tsx`
 
 ### AC7 — Differentials Grid
-- [ ] Headline reforça **resultado** ("empresas que vencem" está bom, pode ser mais incisivo)
-- [ ] Featured card enfatiza **redução de desperdício + foco em retorno**
-- [ ] Cards secundários: cada um = um risco eliminado
-- [ ] Arquivo: `DifferentialsGrid.tsx`
+- [x] Headline reforça **resultado** ("empresas que vencem" está bom, pode ser mais incisivo)
+- [x] Featured card enfatiza **redução de desperdício + foco em retorno**
+- [x] Cards secundários: cada um = um risco eliminado
+- [x] Arquivo: `DifferentialsGrid.tsx`
 
 ### AC8 — How It Works
-- [ ] 3 passos reescritos enfatizando **eliminação de ruído** em cada etapa
-- [ ] Step 1: perfil → sistema entende o que é relevante para VOCÊ
-- [ ] Step 2: filtragem → elimina X% de ruído, entrega Y recomendações priorizadas
-- [ ] Step 3: decisão → cada oportunidade com justificativa objetiva
-- [ ] Arquivo: `HowItWorks.tsx`
+- [x] 3 passos reescritos enfatizando **eliminação de ruído** em cada etapa
+- [x] Step 1: perfil → sistema entende o que é relevante para VOCÊ
+- [x] Step 2: filtragem → elimina X% de ruído, entrega Y recomendações priorizadas
+- [x] Step 3: decisão → cada oportunidade com justificativa objetiva
+- [x] Arquivo: `HowItWorks.tsx`
 
 ### AC9 — Comparison Table
-- [ ] Coluna "Outros" reforça **risco de usar alternativa** (não apenas desvantagem)
-- [ ] Coluna "SmartLic" reforça **resultado concreto** (não feature)
-- [ ] Arquivo: `ComparisonTable.tsx`, `comparisons.ts`
+- [x] Coluna "Outros" reforça **risco de usar alternativa** (não apenas desvantagem)
+- [x] Coluna "SmartLic" reforça **resultado concreto** (não feature)
+- [x] Arquivo: `ComparisonTable.tsx`, `comparisons.ts`
 
 ### AC10 — Narrativa Convergente
-- [ ] Toda a página converge para uma única mensagem: **filtro estratégico que direciona esforço para oportunidades com maior potencial de retorno**
-- [ ] A escolha de NÃO usar o SmartLic é percebida como **risco operacional**
-- [ ] Nenhuma seção usa "inteligência" como substantivo isolado
-- [ ] Nenhuma seção promete "busca rápida" ou "economia de tempo"
+- [x] Toda a página converge para uma única mensagem: **filtro estratégico que direciona esforço para oportunidades com maior potencial de retorno**
+- [x] A escolha de NÃO usar o SmartLic é percebida como **risco operacional**
+- [x] Nenhuma seção usa "inteligência" como substantivo isolado
+- [x] Nenhuma seção promete "busca rápida" ou "economia de tempo"
 
 ### AC11 — Copy Library Update
-- [ ] `valueProps.ts` atualizado com nova copy (single source of truth)
-- [ ] `comparisons.ts` atualizado com novas comparações orientadas a risco
-- [ ] Banned phrases list revisada e expandida
-- [ ] Preferred phrases list atualizada com novo vocabulário
+- [x] `valueProps.ts` atualizado com nova copy (single source of truth)
+- [x] `comparisons.ts` atualizado com novas comparações orientadas a risco
+- [x] Banned phrases list revisada e expandida
+- [x] Preferred phrases list atualizada com novo vocabulário
 
 ### AC12 — Zero Regressions
-- [ ] TypeScript compila: `npx tsc --noEmit` limpo
-- [ ] Testes frontend: zero novas falhas vs baseline (40 fail / 2205 pass)
-- [ ] Layout visual preservado (mesmos componentes, nova copy)
+- [x] TypeScript compila: `npx tsc --noEmit` limpo
+- [x] Testes frontend: zero novas falhas vs baseline (40 fail / 2205 pass)
+- [x] Layout visual preservado (mesmos componentes, nova copy)
 
 ## Arquivos Impactados
 
@@ -136,7 +136,7 @@ A landing atual (GTM-001, commit e7bf18c) já migrou de "economia de tempo" para
 
 ## Definition of Done
 
-- [ ] Todos os 12 ACs verificados
+- [x] Todos os 12 ACs verificados
 - [ ] Review de copy por stakeholder
 - [ ] Screenshots before/after documentados
-- [ ] Commit com mensagem: `feat(frontend): GTM-COPY-001 — headlines e narrativa orientada a impacto`
+- [x] Commit com mensagem: `feat(frontend): GTM-COPY-001 — headlines e narrativa orientada a impacto`

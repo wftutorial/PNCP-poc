@@ -16,54 +16,47 @@ import { Target, Globe, Bot, Search, ShieldCheck } from '@/lib/icons';
 // ============================================================================
 
 export const hero = {
-  // Primary headline variants (A/B test candidates)
+  // GTM-COPY-001: Financial impact positioning
   headlines: {
-    decisionFocus: "Saiba Onde Investir para Ganhar Mais Licitações",
-    competitiveFocus: "Seus Concorrentes Já Estão Se Posicionando. E Você?",
-    intelligenceFocus: "Inteligência de Decisão para Quem Compete em Licitações",
-    visibilityFocus: "Visibilidade Total do Mercado de Licitações",
-    // Recommended for initial launch
-    default: "Saiba Onde Investir para Ganhar Mais Licitações",
+    financialImpact: "Pare de perder dinheiro com licitações erradas.",
+    filterFocus: "Só o que vale a pena chega até você.",
+    wasteCut: "Licitações que realmente pagam. O resto, a gente descarta.",
+    // Recommended for GTM-COPY-001
+    default: "Pare de perder dinheiro com licitações erradas.",
   },
 
-  // Supporting subheadlines
+  // GTM-COPY-001 AC2: Mechanism of value (not abstract)
   subheadlines: {
-    decisionGuide: "Inteligência que avalia oportunidades, prioriza o que importa e guia suas decisões",
-    competitive: "Enquanto outros buscam, você já sabe onde investir. Avaliação objetiva de cada oportunidade do mercado",
-    visibility: "Visibilidade completa do mercado com avaliação inteligente. Saiba o que merece sua atenção",
-    default: "Inteligência que avalia oportunidades, prioriza o que importa e guia suas decisões",
+    mechanism: "O SmartLic analisa cada edital contra o perfil da sua empresa. Elimina o que não faz sentido. Entrega só o que tem chance real de retorno — com justificativa objetiva.",
+    filter: "Cada edital passa por análise de compatibilidade com seu perfil. Você só vê o que merece investimento de tempo e proposta.",
+    default: "O SmartLic analisa cada edital contra o perfil da sua empresa. Elimina o que não faz sentido. Entrega só o que tem chance real de retorno — com justificativa objetiva.",
   },
 
-  // Trust badges (displayed below hero)
+  // GTM-COPY-001 AC3: Trust badges — practical confidence, not abstract metrics
   trustBadges: [
     {
       icon: Target,
-      text: "Cobertura +98%",
-      detail: "Fontes oficiais de contratações públicas",
+      text: "87% descartados",
+      detail: "Editais eliminados por irrelevância ao seu perfil",
     },
     {
       icon: Search,
-      text: "15 setores cobertos",
-      detail: "Especialização por mercado",
+      text: "15 setores",
+      detail: "Filtragem especializada por mercado",
     },
     {
       icon: Globe,
-      text: "27 estados cobertos",
-      detail: "Cobertura nacional completa",
-    },
-    {
-      icon: Bot,
-      text: "Avaliação por IA",
-      detail: "Análise objetiva de cada oportunidade",
+      text: "27 UFs cobertas",
+      detail: "Cobertura nacional de fontes oficiais",
     },
   ],
 
-  // Call-to-action button text
+  // GTM-COPY-002: Action-oriented CTAs
   cta: {
-    discovery: "Descobrir Minhas Oportunidades",
-    competitive: "Ver Oportunidades do Meu Mercado",
-    trial: "Experimentar Sem Compromisso",
-    default: "Descobrir Minhas Oportunidades",
+    primary: "Ver oportunidades para meu setor",
+    secondary: "Ver exemplo de análise real",
+    pricing: "Começar a filtrar oportunidades",
+    default: "Ver oportunidades para meu setor",
   },
 };
 
@@ -71,45 +64,46 @@ export const hero = {
 // VALUE PROPOSITIONS (4 Key Differentiators — Decision Intelligence)
 // ============================================================================
 
+// GTM-COPY-001 AC4: Consequence-focused value props
 export const valueProps = {
   prioritization: {
-    title: "Priorização Inteligente",
-    shortDescription: "Saiba onde focar. O sistema avalia e indica o que merece sua atenção",
+    title: "Foque só no que paga",
+    shortDescription: "O sistema cruza cada edital com o perfil da sua empresa e descarta o que não se encaixa",
     longDescription:
-      "Não perca tempo analisando oportunidades que não se encaixam no seu perfil. O SmartLic avalia cada oportunidade e prioriza as que mais se adequam ao seu negócio. Invista energia onde o retorno é maior.",
+      "Você para de gastar horas avaliando editais incompatíveis. O SmartLic aplica mais de 1.000 regras por setor para separar o que tem potencial real de retorno do que é ruído. Sobra só o que vale sua proposta.",
     icon: Target,
     metric: "Foco",
-    proof: "Análise de adequação por setor, região e perfil de atuação",
+    proof: "87% dos editais descartados antes de chegar até você",
   },
 
   analysis: {
-    title: "Análise Automatizada",
-    shortDescription: "Não leia editais para decidir. IA avalia requisitos, prazos e contexto",
+    title: "Descarte sem ler 100 páginas",
+    shortDescription: "IA avalia setor, valor, prazo e requisitos — e diz se vale a pena ou não",
     longDescription:
-      "IA avalia cada oportunidade e extrai os critérios decisivos: valor, prazo, requisitos de elegibilidade, competitividade. Você recebe uma avaliação objetiva — vale a pena ou não, e por quê.",
+      "Cada edital recebe avaliação objetiva com justificativa: compatibilidade com seu perfil, faixa de valor, prazo viável, região de atuação. Você decide em segundos, não em horas.",
     icon: Bot,
     metric: "Objetiva",
-    proof: "Avaliação automatizada com critérios objetivos por IA",
+    proof: "Avaliação automatizada com 4 critérios de viabilidade",
   },
 
   uncertainty: {
-    title: "Redução de Incerteza",
-    shortDescription: "Entre preparado. Decisões baseadas em critérios objetivos, não intuição",
+    title: "Saiba por que cada edital foi selecionado",
+    shortDescription: "Cada oportunidade vem com critérios objetivos — não com palpite",
     longDescription:
-      "Elimine o achismo. Cada oportunidade vem com dados consolidados de fontes oficiais verificadas, avaliação de adequação e critérios objetivos. Decida com confiança em vez de apostar no escuro.",
+      "Nada de confiar em intuição. Toda recomendação mostra exatamente por que aquele edital é compatível com sua empresa: setor, valor, prazo e região. Decida com dados, não com achismo.",
     icon: ShieldCheck,
-    metric: "Confiança",
-    proof: "Dados consolidados de fontes oficiais verificadas",
+    metric: "Transparente",
+    proof: "Justificativa objetiva para cada recomendação",
   },
 
   coverage: {
-    title: "Cobertura Nacional",
-    shortDescription: "Nunca perca uma oportunidade por falta de visibilidade",
+    title: "Nenhuma oportunidade invisível",
+    shortDescription: "Fontes oficiais de 27 estados consolidadas automaticamente",
     longDescription:
-      "Cobertura de +98% das oportunidades públicas em todos os 27 estados. Cada oportunidade relevante para o seu setor é identificada, avaliada e entregue. Visibilidade completa do mercado.",
+      "Se um edital compatível com seu perfil é publicado em qualquer estado do Brasil, você sabe. Cobertura nacional de fontes oficiais sem precisar monitorar dezenas de portais manualmente.",
     icon: Globe,
     metric: "27 UFs",
-    proof: "Fontes oficiais federais e estaduais integradas",
+    proof: "Consolidação automática de fontes oficiais federais e estaduais",
   },
 };
 
@@ -220,8 +214,8 @@ export const pricing = {
   transparency:
     "Investimento transparente. Sem pegadinhas, sem letras pequenas. Cancele quando quiser em 1 clique.",
 
-  // CTA
-  cta: "Descobrir Minhas Oportunidades",
+  // GTM-COPY-002: Action-oriented CTA
+  cta: "Começar a filtrar oportunidades",
 };
 
 // ============================================================================
@@ -296,7 +290,7 @@ export const onboarding = {
     },
   ],
 
-  finalCta: "Descobrir Minhas Oportunidades",
+  finalCta: "Ver oportunidades para meu setor",
 };
 
 // ============================================================================
@@ -412,6 +406,13 @@ export const BANNED_PHRASES = [
   "GPT-4",
   "3 linhas",
   "reduzir texto",
+  // GTM-COPY-001: Abstract/commodity positioning
+  "inteligência automatizada",
+  "inovador",
+  // GTM-COPY-002: Exploratory CTA verbs
+  "descobrir",
+  "explorar",
+  "experimentar",
 ];
 
 // ============================================================================
@@ -419,25 +420,24 @@ export const BANNED_PHRASES = [
 // ============================================================================
 
 export const PREFERRED_PHRASES = {
-  primaryValue: "Inteligência de decisão em licitações",
-  decision: ["avaliação objetiva", "decisão informada", "vale a pena ou não"],
-  competitive: ["vantagem competitiva", "posicione-se antes", "visibilidade de mercado"],
-  intelligence: ["priorização inteligente", "análise automatizada", "inteligência de fontes"],
-  coverage: ["fontes oficiais", "cobertura nacional", "cobertura +98%"],
-  uncertainty: ["redução de incerteza", "critérios objetivos", "confiança na decisão"],
-  cost: ["custo de não ter visibilidade", "licitação perdida", "oportunidade que vai para outro"],
+  primaryValue: "Filtro estratégico para licitações",
+  decision: ["avaliação objetiva", "vale a pena ou não", "justificativa objetiva"],
+  competitive: ["filtro estratégico", "foco no retorno", "elimina ruído"],
+  intelligence: ["análise de compatibilidade", "critérios de viabilidade", "perfil da empresa"],
+  coverage: ["fontes oficiais", "cobertura nacional", "27 UFs"],
+  uncertainty: ["critérios objetivos", "justificativa para cada recomendação", "dados, não achismo"],
+  cost: ["perder dinheiro com licitações erradas", "risco operacional", "operar no escuro"],
   trust: "Cancele em 1 clique, sem burocracia",
-  // GTM-008: IA as decision evaluator, not summary generator
-  aiEvaluation: [
-    "avaliação de oportunidade",
-    "orientação de decisão",
-    "análise de adequação",
-    "redução de incerteza",
-    "inteligência de decisão",
-    "avaliação objetiva",
-    "critérios de elegibilidade",
-    "análise automatizada",
+  // GTM-COPY-001: Impact-focused vocabulary
+  impact: [
+    "elimina o que não faz sentido",
+    "chance real de retorno",
+    "descarta por irrelevância",
+    "protege seu tempo",
+    "foco no que paga",
   ],
+  // GTM-COPY-002: Action verbs for CTAs
+  actionVerbs: ["ver", "filtrar", "analisar", "começar"],
 };
 
 // ============================================================================

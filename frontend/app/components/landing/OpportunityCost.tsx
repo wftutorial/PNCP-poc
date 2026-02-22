@@ -35,7 +35,7 @@ export default function OpportunityCost({ className = '' }: OpportunityCostProps
 
           <div>
             <h2 className="text-2xl sm:text-3xl font-bold text-ink tracking-tight">
-              Enquanto você busca, seu concorrente já está se posicionando.
+              Continuar sem filtro estratégico é operar no escuro.
             </h2>
 
             {/* Bullet Points — Custo de oportunidade financeiro */}
@@ -43,16 +43,16 @@ export default function OpportunityCost({ className = '' }: OpportunityCostProps
               <li className="flex items-start gap-3">
                 <span className="text-warning font-bold">•</span>
                 <span>
-                  Uma única licitação perdida por falta de visibilidade pode custar <strong className="text-ink tabular-nums">R$ 50.000, R$ 200.000 ou mais</strong>
+                  Uma única licitação perdida por investir proposta no edital errado pode custar <strong className="text-ink tabular-nums">R$ 50.000, R$ 200.000 ou mais</strong>
                 </span>
               </li>
               <li className="flex items-start gap-3">
                 <span className="text-warning font-bold">•</span>
-                <span>Cada dia sem visibilidade completa é uma oportunidade que pode ir para outro</span>
+                <span>Cada dia sem filtro de compatibilidade é um dia de esforço direcionado para editais que não pagam</span>
               </li>
               <li className="flex items-start gap-3">
                 <span className="text-warning font-bold">•</span>
-                <span>O custo de não usar SmartLic não é tempo — <strong className="text-ink">é dinheiro</strong></span>
+                <span>O risco não é perder tempo. É perder dinheiro investindo proposta em licitações erradas.</span>
               </li>
             </ul>
           </div>

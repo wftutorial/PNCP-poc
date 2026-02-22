@@ -2,30 +2,32 @@ import { render, screen } from '@testing-library/react';
 import BeforeAfter from '@/app/components/landing/BeforeAfter';
 
 describe('BeforeAfter', () => {
-  it('renders section title focused on decision quality (AC5)', () => {
+  it('renders section title focused on strategic filter contrast (GTM-COPY-001 AC5)', () => {
     render(<BeforeAfter />);
 
-    expect(screen.getByText(/Da busca manual à decisão estratégica/i)).toBeInTheDocument();
+    expect(screen.getByText(/O que acontece sem filtro estratégico — e com ele/i)).toBeInTheDocument();
   });
 
-  it('renders "Sem Curadoria" card with quality-focused negatives (AC5)', () => {
+  it('renders "Sem Filtro Estratégico" card with concrete consequences (AC5)', () => {
     render(<BeforeAfter />);
 
-    expect(screen.getByText(/Sem Inteligência de Mercado/i)).toBeInTheDocument();
-    expect(screen.getByText(/falta de visibilidade/i)).toBeInTheDocument();
-    expect(screen.getByText(/Oportunidades certas passam despercebidas/i)).toBeInTheDocument();
-    expect(screen.getByText(/Concorrentes se posicionam antes de você/i)).toBeInTheDocument();
-    expect(screen.getByText(/Decisões baseadas em intuição, não em dados/i)).toBeInTheDocument();
+    // "Sem Filtro Estratégico" appears in both heading and card title — use getAllByText
+    const matches = screen.getAllByText(/Sem Filtro Estratégico/i);
+    expect(matches.length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/Gasta horas analisando editais que não se encaixam/i)).toBeInTheDocument();
+    expect(screen.getByText(/Perde licitações porque não sabia que existiam/i)).toBeInTheDocument();
+    expect(screen.getByText(/Descobre oportunidades quando o prazo já está curto/i)).toBeInTheDocument();
+    expect(screen.getByText(/Investe proposta com base em intuição/i)).toBeInTheDocument();
   });
 
-  it('renders "Com SmartLic" card with intelligence-focused positives (AC5)', () => {
+  it('renders "Com SmartLic" card with filtering-focused positives (AC5)', () => {
     render(<BeforeAfter />);
 
     expect(screen.getByText(/Com SmartLic/i)).toBeInTheDocument();
-    expect(screen.getByText(/Visão completa do mercado/i)).toBeInTheDocument();
-    expect(screen.getByText(/Avaliação objetiva: vale a pena ou não, e por quê/i)).toBeInTheDocument();
-    expect(screen.getByText(/Posicione-se antes da concorrência/i)).toBeInTheDocument();
-    expect(screen.getByText(/Decisões com confiança baseadas em inteligência/i)).toBeInTheDocument();
+    expect(screen.getByText(/87% dos editais descartados antes de chegar até você/i)).toBeInTheDocument();
+    expect(screen.getByText(/Cobertura nacional automática — 27 UFs/i)).toBeInTheDocument();
+    expect(screen.getByText(/Acesso assim que publicados — você se posiciona antes/i)).toBeInTheDocument();
+    expect(screen.getByText(/Cada recomendação com justificativa objetiva/i)).toBeInTheDocument();
   });
 
   it('uses asymmetric 40/60 layout', () => {
@@ -42,6 +44,7 @@ describe('BeforeAfter', () => {
     expect(text).not.toMatch(/8h\/dia/i);
     expect(text).not.toMatch(/economize.*tempo/i);
     expect(text).not.toMatch(/busca rápida/i);
+    expect(text).not.toMatch(/inteligência automatizada/i);
   });
 
   it('uses design system semantic colors', () => {

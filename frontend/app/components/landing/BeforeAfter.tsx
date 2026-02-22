@@ -20,7 +20,7 @@ export default function BeforeAfter({ className = '' }: BeforeAfterProps) {
           isInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
         }`}
       >
-        Da busca manual à decisão estratégica
+        O que acontece sem filtro estratégico — e com ele
       </h2>
 
       {/* Layout Assimétrico 40/60 */}
@@ -42,25 +42,25 @@ export default function BeforeAfter({ className = '' }: BeforeAfterProps) {
             <div className="w-10 h-10 bg-red-500/10 rounded-full flex items-center justify-center">
               <AlertCircle className="w-6 h-6 text-red-600" aria-label="Sem Curadoria" />
             </div>
-            <h3 className="text-lg font-bold text-red-900 dark:text-red-100 uppercase tracking-wide">Sem Inteligência de Mercado</h3>
+            <h3 className="text-lg font-bold text-red-900 dark:text-red-100 uppercase tracking-wide">Sem Filtro Estratégico</h3>
           </div>
 
           <ul className="space-y-3 text-red-800 dark:text-red-200 text-sm">
             <li className="flex items-start gap-2">
               <X className="text-red-500 flex-shrink-0 mt-1" size={18} />
-              <span>Perde contratos por <strong className="text-red-900 dark:text-red-100">falta de visibilidade</strong></span>
+              <span>Gasta horas analisando editais que não se encaixam no seu perfil</span>
             </li>
             <li className="flex items-start gap-2">
               <X className="text-red-500 flex-shrink-0 mt-1" size={18} />
-              <span>Oportunidades certas passam despercebidas</span>
+              <span>Perde licitações porque não sabia que existiam</span>
             </li>
             <li className="flex items-start gap-2">
               <X className="text-red-500 flex-shrink-0 mt-1" size={18} />
-              <span>Concorrentes se posicionam antes de você</span>
+              <span>Descobre oportunidades quando o prazo já está curto</span>
             </li>
             <li className="flex items-start gap-2">
               <X className="text-red-500 flex-shrink-0 mt-1" size={18} />
-              <span>Decisões baseadas em intuição, não em dados</span>
+              <span>Investe proposta com base em intuição, sem dados de compatibilidade</span>
             </li>
           </ul>
         </div>
@@ -88,19 +88,19 @@ export default function BeforeAfter({ className = '' }: BeforeAfterProps) {
           <ul className="space-y-3 text-blue-800 dark:text-blue-200">
             <li className="flex items-start gap-2">
               <Check className="text-green-500 flex-shrink-0 mt-1 font-bold" size={18} />
-              <span>Visão completa do mercado <strong className="text-blue-900 dark:text-blue-100">com cobertura nacional verificada</strong></span>
+              <span>87% dos editais descartados antes de chegar até você — sobra só o compatível</span>
             </li>
             <li className="flex items-start gap-2">
               <Check className="text-green-500 flex-shrink-0 mt-1 font-bold" size={18} />
-              <span>Avaliação objetiva: vale a pena ou não, e por quê</span>
+              <span>Cobertura nacional automática — 27 UFs de fontes oficiais</span>
             </li>
             <li className="flex items-start gap-2">
               <Check className="text-green-500 flex-shrink-0 mt-1 font-bold" size={18} />
-              <span>Posicione-se antes da concorrência</span>
+              <span>Acesso assim que publicados — você se posiciona antes</span>
             </li>
             <li className="flex items-start gap-2">
               <Check className="text-green-500 flex-shrink-0 mt-1 font-bold" size={18} />
-              <span>Decisões com confiança baseadas em inteligência</span>
+              <span>Cada recomendação com justificativa objetiva: setor, valor, prazo, região</span>
             </li>
           </ul>
         </div>

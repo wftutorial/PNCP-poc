@@ -95,10 +95,10 @@ describe('SignupPage Component', () => {
       expect(screen.getByRole('heading', { name: /Criar conta/i })).toBeInTheDocument();
     });
 
-    it('should show subtitle about free trial', () => {
+    it('should show subtitle about value proposition (GTM-COPY-002 AC6)', () => {
       render(<SignupPage />);
 
-      expect(screen.getByText(/Experimente o SmartLic completo por 7 dias/i)).toBeInTheDocument();
+      expect(screen.getByText(/Veja quais licitações valem a pena para sua empresa/i)).toBeInTheDocument();
     });
 
     it('should render simplified form fields (name, email, password — no confirm)', () => {
@@ -135,11 +135,12 @@ describe('SignupPage Component', () => {
       expect(loginLink).toHaveAttribute('href', '/login');
     });
 
-    it('should show trial info box', () => {
+    it('should show trial info box with immediate access framing (GTM-COPY-002 AC6)', () => {
       render(<SignupPage />);
 
-      expect(screen.getByText(/Teste grátis por 7 dias/i)).toBeInTheDocument();
-      expect(screen.getByText(/3 análises completas/i)).toBeInTheDocument();
+      expect(screen.getByText(/Acesso imediato:/i)).toBeInTheDocument();
+      expect(screen.getByText(/Análise de compatibilidade com seu perfil/i)).toBeInTheDocument();
+      expect(screen.getByText(/Editais filtrados por setor e região/i)).toBeInTheDocument();
       expect(screen.getByText(/Sem cartão de crédito/i)).toBeInTheDocument();
     });
   });

@@ -27,7 +27,7 @@ export default function Footer() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Main Footer Grid */}
-        <div className="grid md:grid-cols-4 gap-8 mb-8">
+        <div className="grid md:grid-cols-5 gap-8 mb-8">
           {/* Sobre */}
           <div>
             <h3 className="font-bold text-lg mb-4 text-ink">Sobre</h3>
@@ -40,6 +40,25 @@ export default function Footer() {
               </li>
               <li>
                 <FooterLink href="#como-funciona">Como funciona</FooterLink>
+              </li>
+            </ul>
+          </div>
+
+          {/* Conteudo */}
+          <div>
+            <h3 className="font-bold text-lg mb-4 text-ink">Conteudo</h3>
+            <ul className="space-y-2 text-sm text-ink-secondary">
+              <li>
+                <FooterLink href="/como-avaliar-licitacao">Avaliar licitacoes</FooterLink>
+              </li>
+              <li>
+                <FooterLink href="/como-evitar-prejuizo-licitacao">Evitar prejuizo</FooterLink>
+              </li>
+              <li>
+                <FooterLink href="/como-filtrar-editais">Filtrar editais</FooterLink>
+              </li>
+              <li>
+                <FooterLink href="/como-priorizar-oportunidades">Priorizar oportunidades</FooterLink>
               </li>
             </ul>
           </div>

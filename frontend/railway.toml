@@ -12,9 +12,13 @@ watchPatterns = ["**"]
 
 [deploy]
 healthcheckPath = "/api/health"
-healthcheckTimeout = 30
+healthcheckTimeout = 60
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
+# Zero-downtime: keep old container running 15s after new one is healthy
+overlapSeconds = "15"
+# Graceful shutdown: 10s for in-flight requests after SIGTERM
+drainingSeconds = "10"
 
 # =============================================================================
 # Environment Variables (Set in Railway Dashboard)

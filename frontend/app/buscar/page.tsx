@@ -360,9 +360,9 @@ function HomePageContent() {
             <Link href="/buscar" className="lg:hidden text-xl font-bold text-brand-navy hover:text-brand-blue transition-colors">
               SmartLic<span className="text-brand-blue">.tech</span>
             </Link>
-            <h1 className="hidden lg:block text-base font-semibold text-[var(--ink)]">
-              Buscar Licitacoes
-            </h1>
+            <span className="hidden lg:block text-base font-semibold text-[var(--ink)]">
+              Buscar Licitações
+            </span>
           </div>
 
           {/* UX-340 AC1: Mobile — hamburger with "Menu" label (AC8: ≥44px touch) */}

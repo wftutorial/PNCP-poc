@@ -285,10 +285,10 @@ function LoginContent() {
       <div className="w-full md:w-1/2 flex items-center justify-center bg-[var(--canvas)] p-4">
         <div className="w-full max-w-md p-8 bg-[var(--surface-0)] rounded-card shadow-lg">
           <h1 className="text-2xl font-display font-bold text-center text-[var(--ink)] mb-2">
-            {APP_NAME}
+            Acesse suas análises
           </h1>
           <p className="text-center text-[var(--ink-secondary)] mb-8">
-            Entre para acessar suas buscas
+            Entre para acessar suas análises de viabilidade
           </p>
 
         {success && (

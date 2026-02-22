@@ -7,7 +7,7 @@ describe('InstitutionalSidebar', () => {
     it('renders login variant headline', () => {
       render(<InstitutionalSidebar variant="login" />);
 
-      const headline = screen.getByRole('heading', { level: 1 });
+      const headline = screen.getByRole('heading', { level: 2 });
       expect(headline).toHaveTextContent('Descubra oportunidades de licitação antes da concorrência');
     });
 
@@ -50,7 +50,7 @@ describe('InstitutionalSidebar', () => {
     it('renders signup variant headline', () => {
       render(<InstitutionalSidebar variant="signup" />);
 
-      const headline = screen.getByRole('heading', { level: 1 });
+      const headline = screen.getByRole('heading', { level: 2 });
       expect(headline).toHaveTextContent('Sua empresa a um passo das melhores oportunidades públicas');
     });
 
@@ -150,7 +150,7 @@ describe('InstitutionalSidebar', () => {
     it('uses semantic HTML with heading hierarchy', () => {
       render(<InstitutionalSidebar variant="login" />);
 
-      const heading = screen.getByRole('heading', { level: 1 });
+      const heading = screen.getByRole('heading', { level: 2 });
       expect(heading).toBeInTheDocument();
     });
 

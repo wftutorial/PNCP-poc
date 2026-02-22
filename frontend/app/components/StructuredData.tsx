@@ -1,30 +1,34 @@
 import Script from 'next/script';
 
+/**
+ * GTM-COPY-006 AC6: Structured Data (JSON-LD) for Google & AI Search
+ *
+ * Includes Organization, WebSite (with SearchAction), and SoftwareApplication schemas.
+ * FAQPage schema is rendered separately in /ajuda via FaqStructuredData.
+ */
 export function StructuredData() {
-  // Organization Schema
+  // Organization Schema — AC6
   const organizationSchema = {
     '@context': 'https://schema.org',
     '@type': 'Organization',
     name: 'SmartLic',
-    legalName: 'SmartLic - Busca Inteligente de Licitações',
+    legalName: 'CONFENGE Avaliações e Inteligência Artificial LTDA',
     url: 'https://smartlic.tech',
     logo: 'https://smartlic.tech/logo.svg',
-    foundingDate: '2025',
-    description: 'Inteligência de decisão em licitações com avaliação objetiva por setor, região e período',
+    foundingDate: '2024',
+    description: 'Inteligência de decisão em licitações públicas com avaliação objetiva de viabilidade por setor, região e modalidade',
     address: {
       '@type': 'PostalAddress',
       addressCountry: 'BR',
-      addressLocality: 'Brasil',
     },
     contactPoint: {
       '@type': 'ContactPoint',
       contactType: 'customer support',
       email: 'contato@smartlic.tech',
-      availableLanguage: ['Portuguese', 'pt-BR'],
+      availableLanguage: ['Portuguese'],
     },
     sameAs: [
       'https://www.linkedin.com/company/smartlic',
-      // Add other social profiles when available
     ],
   };
 
@@ -34,7 +38,7 @@ export function StructuredData() {
     '@type': 'WebSite',
     name: 'SmartLic',
     url: 'https://smartlic.tech',
-    description: 'Inteligência de decisão em licitações com avaliação objetiva por setor, região e período',
+    description: 'Inteligência de decisão em licitações públicas com avaliação objetiva de viabilidade por setor, região e modalidade',
     publisher: {
       '@type': 'Organization',
       name: 'SmartLic',
@@ -53,7 +57,7 @@ export function StructuredData() {
     },
   };
 
-  // SoftwareApplication Schema
+  // SoftwareApplication Schema — AC6
   const softwareApplicationSchema = {
     '@context': 'https://schema.org',
     '@type': 'SoftwareApplication',
@@ -61,31 +65,26 @@ export function StructuredData() {
     applicationCategory: 'BusinessApplication',
     operatingSystem: 'Web',
     offers: {
-      '@type': 'Offer',
-      price: '1999.00',
+      '@type': 'AggregateOffer',
+      lowPrice: '1599.00',
+      highPrice: '1999.00',
       priceCurrency: 'BRL',
-      priceValidUntil: '2026-12-31',
-      availability: 'https://schema.org/InStock',
-      seller: {
-        '@type': 'Organization',
-        name: 'SmartLic',
-      },
+      offerCount: 3,
     },
-    description: 'Inteligência de decisão para oportunidades de licitação. Busca inteligente, análise por setor, geração de relatórios e muito mais.',
+    description: 'Avaliação de viabilidade de licitações públicas com critérios objetivos. Filtragem por setor, região e modalidade. Relatórios Excel e pipeline de oportunidades.',
     screenshot: 'https://smartlic.tech/api/og',
     featureList: [
-      'Busca inteligente de licitações',
-      'Análise por setor e região',
-      'Relatórios personalizados',
+      'Avaliação de viabilidade com 4 critérios objetivos',
+      'Filtragem inteligente por setor e região',
+      'Relatórios Excel detalhados',
       'Pipeline de oportunidades',
-      'Avaliação por IA',
-      'Exportação para Excel',
+      'Classificação por IA de decisão',
+      'Cobertura de fontes oficiais em 27 estados',
     ],
   };
 
   return (
     <>
-      {/* Organization Schema */}
       <Script
         id="organization-schema"
         type="application/ld+json"
@@ -93,8 +92,6 @@ export function StructuredData() {
           __html: JSON.stringify(organizationSchema),
         }}
       />
-
-      {/* WebSite Schema with Search Action */}
       <Script
         id="website-schema"
         type="application/ld+json"
@@ -102,8 +99,6 @@ export function StructuredData() {
           __html: JSON.stringify(websiteSchema),
         }}
       />
-
-      {/* SoftwareApplication Schema */}
       <Script
         id="software-application-schema"
         type="application/ld+json"

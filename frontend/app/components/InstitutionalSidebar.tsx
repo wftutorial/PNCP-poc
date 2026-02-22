@@ -200,9 +200,9 @@ export default function InstitutionalSidebar({ variant, className = "" }: Instit
 
         {/* Headline Section */}
         <div className="space-y-4">
-          <h1 className="text-3xl md:text-4xl font-display font-bold text-white leading-tight">
+          <h2 className="text-3xl md:text-4xl font-display font-bold text-white leading-tight">
             {content.headline}
-          </h1>
+          </h2>
           <p className="text-base md:text-lg text-white/90">
             {content.subheadline}
           </p>

@@ -14,9 +14,13 @@ import Footer from '../components/Footer';
 import { FeaturesContent } from './FeaturesContent';
 
 
+// GTM-COPY-006 AC5: Per-page metadata for /features
 export const metadata = {
-  title: 'O Que Muda no Seu Resultado | SmartLic',
-  description: 'Compare os cenários: sem SmartLic vs com SmartLic. Descubra como transformar sua forma de encontrar, avaliar e decidir em quais licitações investir.',
+  title: 'O Que Muda no Seu Resultado com Avaliação de Viabilidade',
+  description: 'Compare cenários: sem avaliação vs com SmartLic. Critérios objetivos, fontes oficiais e filtragem estratégica para decidir em quais licitações investir.',
+  alternates: {
+    canonical: 'https://smartlic.tech/features',
+  },
 };
 
 export default function FeaturesPage() {

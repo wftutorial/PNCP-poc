@@ -1,10 +1,9 @@
 import { MetadataRoute } from 'next';
 
 /**
- * Dynamic sitemap generation for SmartLic.tech
+ * GTM-COPY-006 AC10: Dynamic sitemap with all public pages
  *
- * Next.js will automatically generate sitemap.xml from this file.
- * See: https://nextjs.org/docs/app/api-reference/file-conventions/metadata/sitemap
+ * Next.js generates sitemap.xml automatically from this file.
  */
 export default function sitemap(): MetadataRoute.Sitemap {
   const baseUrl = process.env.NEXT_PUBLIC_CANONICAL_URL || 'https://smartlic.tech';
@@ -20,19 +19,49 @@ export default function sitemap(): MetadataRoute.Sitemap {
       url: `${baseUrl}/planos`,
       lastModified: new Date(),
       changeFrequency: 'weekly',
+      priority: 0.9,
+    },
+    {
+      url: `${baseUrl}/features`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
       priority: 0.8,
     },
     {
-      url: `${baseUrl}/login`,
+      url: `${baseUrl}/ajuda`,
       lastModified: new Date(),
       changeFrequency: 'monthly',
-      priority: 0.5,
+      priority: 0.7,
+    },
+    {
+      url: `${baseUrl}/pricing`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.7,
     },
     {
       url: `${baseUrl}/signup`,
       lastModified: new Date(),
       changeFrequency: 'monthly',
       priority: 0.6,
+    },
+    {
+      url: `${baseUrl}/login`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.4,
+    },
+    {
+      url: `${baseUrl}/termos`,
+      lastModified: new Date(),
+      changeFrequency: 'yearly',
+      priority: 0.2,
+    },
+    {
+      url: `${baseUrl}/privacidade`,
+      lastModified: new Date(),
+      changeFrequency: 'yearly',
+      priority: 0.2,
     },
   ];
 }

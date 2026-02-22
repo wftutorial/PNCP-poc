@@ -89,7 +89,7 @@ export default function ComoEvitarPrejuizo() {
 
       <h1>Como evitar prejuízo em licitações públicas</h1>
 
-      <p className="text-xl leading-relaxed text-ink">
+      <p className="text-base sm:text-xl leading-relaxed text-ink">
         Participar da licitação errada custa mais do que não participar. Quem
         já viveu isso sabe: semanas de trabalho, honorários de advogado, custos
         com certidões e horas da equipe técnica — tudo investido em um edital
@@ -112,8 +112,8 @@ export default function ComoEvitarPrejuizo() {
       </p>
 
       {/* Example Box */}
-      <div className="not-prose my-8 border-l-4 border-warning bg-surface-1 rounded-r-xl p-6">
-        <p className="text-ink-secondary leading-relaxed">
+      <div className="not-prose my-6 sm:my-8 border-l-4 border-warning bg-surface-1 rounded-r-xl p-4 sm:p-6">
+        <p className="text-sm sm:text-base text-ink-secondary leading-relaxed">
           <strong className="text-ink">Caso real:</strong> Uma empresa de
           facilities de médio porte investiu R$ 35 mil — entre documentação,
           certidões e horas da equipe — para participar de um pregão de
@@ -149,8 +149,8 @@ export default function ComoEvitarPrejuizo() {
       </ul>
 
       {/* Example Box */}
-      <div className="not-prose my-8 border-l-4 border-warning bg-surface-1 rounded-r-xl p-6">
-        <p className="text-ink-secondary leading-relaxed">
+      <div className="not-prose my-6 sm:my-8 border-l-4 border-warning bg-surface-1 rounded-r-xl p-4 sm:p-6">
+        <p className="text-sm sm:text-base text-ink-secondary leading-relaxed">
           <strong className="text-ink">Caso real:</strong> Uma empresa de
           software gastou R$ 18 mil preparando proposta técnica detalhada para
           uma concorrência de informatização hospitalar. Perdeu por 0,3 pontos
@@ -177,8 +177,8 @@ export default function ComoEvitarPrejuizo() {
       </p>
 
       {/* Example Box */}
-      <div className="not-prose my-8 border-l-4 border-warning bg-surface-1 rounded-r-xl p-6">
-        <p className="text-ink-secondary leading-relaxed">
+      <div className="not-prose my-6 sm:my-8 border-l-4 border-warning bg-surface-1 rounded-r-xl p-4 sm:p-6">
+        <p className="text-sm sm:text-base text-ink-secondary leading-relaxed">
           <strong className="text-ink">Caso real:</strong> Uma construtora de
           pequeno porte participou de licitação para reforma de escola. O
           edital exigia engenheiro civil com certificação em acessibilidade
@@ -224,8 +224,8 @@ export default function ComoEvitarPrejuizo() {
       </p>
 
       {/* Example Box */}
-      <div className="not-prose my-8 border-l-4 border-warning bg-surface-1 rounded-r-xl p-6">
-        <p className="text-ink-secondary leading-relaxed">
+      <div className="not-prose my-6 sm:my-8 border-l-4 border-warning bg-surface-1 rounded-r-xl p-4 sm:p-6">
+        <p className="text-sm sm:text-base text-ink-secondary leading-relaxed">
           <strong className="text-ink">Caso real:</strong> Uma empresa de
           vigilância de Curitiba venceu licitação para segurança patrimonial
           em três unidades no Mato Grosso. O custo de implantação —
@@ -266,17 +266,17 @@ export default function ComoEvitarPrejuizo() {
       </p>
 
       {/* CTA Section */}
-      <div className="not-prose mt-12 bg-brand-blue-subtle dark:bg-brand-navy/20 rounded-xl p-8 text-center border border-brand-blue/20">
-        <p className="text-xl font-bold text-ink mb-2">
+      <div className="not-prose mt-8 sm:mt-12 bg-brand-blue-subtle dark:bg-brand-navy/20 rounded-xl p-5 sm:p-8 text-center border border-brand-blue/20">
+        <p className="text-lg sm:text-xl font-bold text-ink mb-2">
           Pare de investir em licitações erradas
         </p>
-        <p className="text-ink-secondary mb-6 max-w-lg mx-auto">
+        <p className="text-sm sm:text-base text-ink-secondary mb-4 sm:mb-6 max-w-lg mx-auto">
           O SmartLic filtra, classifica e avalia a viabilidade de cada edital
           automaticamente — antes que você gaste um centavo.
         </p>
         <Link
           href="/signup?source=content-prejuizo"
-          className="inline-block bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-6 py-3 rounded-button transition-all hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2"
+          className="inline-block bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-button text-sm sm:text-base transition-all hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2"
         >
           Comece Grátis
         </Link>

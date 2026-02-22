@@ -89,7 +89,7 @@ export default function ComoPriorizarOportunidades() {
 
       <h1>Como identificar licitações com maior chance de vitória</h1>
 
-      <p className="text-xl leading-relaxed text-ink">
+      <p className="text-base sm:text-xl leading-relaxed text-ink">
         Encontrar licitações é fácil. Saber quais priorizar é o que gera
         resultado. Uma empresa com recursos limitados — e todas têm — precisa
         concentrar esforços nos editais onde a probabilidade de vitória e a
@@ -220,25 +220,25 @@ export default function ComoPriorizarOportunidades() {
       </p>
 
       {/* Practical Example */}
-      <div className="not-prose my-10 border-l-4 border-brand-blue bg-surface-1 rounded-r-xl p-6 lg:p-8">
-        <h3 className="font-bold text-ink text-lg mb-6">
+      <div className="not-prose my-8 sm:my-10 border-l-4 border-brand-blue bg-surface-1 rounded-r-xl p-4 sm:p-6 lg:p-8">
+        <h3 className="font-bold text-ink text-base sm:text-lg mb-4 sm:mb-6">
           Na prática: 3 editais, qual priorizar?
         </h3>
-        <p className="text-ink-secondary mb-6 leading-relaxed">
+        <p className="text-sm sm:text-base text-ink-secondary mb-4 sm:mb-6 leading-relaxed">
           Uma empresa de materiais elétricos com sede em São Paulo, faixa ideal
           de R$ 200k a R$ 1,5M, encontra três editais na mesma semana:
         </p>
 
         {/* Edital A */}
-        <div className="mb-6 bg-canvas rounded-lg p-5 border border-[var(--border)]">
-          <div className="flex items-center justify-between mb-3">
-            <h4 className="font-semibold text-ink">Edital A — Pregão Eletrônico, R$ 450 mil</h4>
-            <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-success/10 text-success">PARTICIPAR</span>
+        <div className="mb-4 sm:mb-6 bg-canvas rounded-lg p-3.5 sm:p-5 border border-[var(--border)]">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0 mb-2.5 sm:mb-3">
+            <h4 className="font-semibold text-ink text-sm sm:text-base">Edital A — Pregão Eletrônico, R$ 450 mil</h4>
+            <span className="text-[11px] sm:text-xs font-bold px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-success/10 text-success w-fit">PARTICIPAR</span>
           </div>
-          <p className="text-sm text-ink-secondary mb-2">
+          <p className="text-xs sm:text-sm text-ink-secondary mb-2.5">
             Material elétrico para hospital em Campinas/SP. Menor preço. Prazo: 12 dias.
           </p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs text-ink-secondary">
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] sm:text-xs text-ink-secondary">
             <span>Setor: <strong className="text-success">Alta</strong></span>
             <span>Valor: <strong className="text-success">Adequado</strong></span>
             <span>Prazo: <strong className="text-success">Suficiente</strong></span>
@@ -248,15 +248,15 @@ export default function ComoPriorizarOportunidades() {
         </div>
 
         {/* Edital B */}
-        <div className="mb-6 bg-canvas rounded-lg p-5 border border-[var(--border)]">
-          <div className="flex items-center justify-between mb-3">
-            <h4 className="font-semibold text-ink">Edital B — Concorrência, R$ 3,2 milhões</h4>
-            <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-error/10 text-error">DESCARTAR</span>
+        <div className="mb-4 sm:mb-6 bg-canvas rounded-lg p-3.5 sm:p-5 border border-[var(--border)]">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0 mb-2.5 sm:mb-3">
+            <h4 className="font-semibold text-ink text-sm sm:text-base">Edital B — Concorrência, R$ 3,2 milhões</h4>
+            <span className="text-[11px] sm:text-xs font-bold px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-error/10 text-error w-fit">DESCARTAR</span>
           </div>
-          <p className="text-sm text-ink-secondary mb-2">
+          <p className="text-xs sm:text-sm text-ink-secondary mb-2.5">
             Instalação elétrica completa de escola em Manaus/AM. Técnica e preço. Prazo: 25 dias.
           </p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs text-ink-secondary">
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] sm:text-xs text-ink-secondary">
             <span>Setor: <strong className="text-ink-secondary">Média</strong></span>
             <span>Valor: <strong className="text-error">Acima da faixa</strong></span>
             <span>Prazo: <strong className="text-success">Confortável</strong></span>
@@ -266,15 +266,15 @@ export default function ComoPriorizarOportunidades() {
         </div>
 
         {/* Edital C */}
-        <div className="bg-canvas rounded-lg p-5 border border-[var(--border)]">
-          <div className="flex items-center justify-between mb-3">
-            <h4 className="font-semibold text-ink">Edital C — Pregão Eletrônico, R$ 180 mil</h4>
-            <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-warning/10 text-warning">MONITORAR</span>
+        <div className="bg-canvas rounded-lg p-3.5 sm:p-5 border border-[var(--border)]">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0 mb-2.5 sm:mb-3">
+            <h4 className="font-semibold text-ink text-sm sm:text-base">Edital C — Pregão Eletrônico, R$ 180 mil</h4>
+            <span className="text-[11px] sm:text-xs font-bold px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-warning/10 text-warning w-fit">MONITORAR</span>
           </div>
-          <p className="text-sm text-ink-secondary mb-2">
+          <p className="text-xs sm:text-sm text-ink-secondary mb-2.5">
             Material elétrico para reforma de edifício público no Rio de Janeiro/RJ. Menor preço. Prazo: 8 dias.
           </p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs text-ink-secondary">
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] sm:text-xs text-ink-secondary">
             <span>Setor: <strong className="text-success">Alta</strong></span>
             <span>Valor: <strong className="text-ink-secondary">Abaixo da faixa</strong></span>
             <span>Prazo: <strong className="text-warning">Apertado</strong></span>
@@ -283,7 +283,7 @@ export default function ComoPriorizarOportunidades() {
           </div>
         </div>
 
-        <p className="text-ink-secondary mt-6 leading-relaxed">
+        <p className="text-sm sm:text-base text-ink-secondary mt-4 sm:mt-6 leading-relaxed">
           Sem esse framework, a empresa provavelmente tentaria os três editais,
           diluindo recursos e reduzindo a qualidade de todas as propostas.
         </p>
@@ -298,17 +298,17 @@ export default function ComoPriorizarOportunidades() {
       </p>
 
       {/* CTA Section */}
-      <div className="not-prose mt-12 bg-brand-blue-subtle dark:bg-brand-navy/20 rounded-xl p-8 text-center border border-brand-blue/20">
-        <p className="text-xl font-bold text-ink mb-2">
+      <div className="not-prose mt-8 sm:mt-12 bg-brand-blue-subtle dark:bg-brand-navy/20 rounded-xl p-5 sm:p-8 text-center border border-brand-blue/20">
+        <p className="text-lg sm:text-xl font-bold text-ink mb-2">
           Priorize com dados, não com intuição
         </p>
-        <p className="text-ink-secondary mb-6 max-w-lg mx-auto">
+        <p className="text-sm sm:text-base text-ink-secondary mb-4 sm:mb-6 max-w-lg mx-auto">
           O SmartLic avalia a viabilidade de cada edital com 4 critérios
           ponderados e classifica automaticamente em alta, média e baixa.
         </p>
         <Link
           href="/signup?source=content-priorizar"
-          className="inline-block bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-6 py-3 rounded-button transition-all hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2"
+          className="inline-block bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-button text-sm sm:text-base transition-all hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2"
         >
           Comece Grátis
         </Link>

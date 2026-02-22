@@ -89,7 +89,7 @@ export default function ComoAvaliarLicitacao() {
 
       <h1>Como avaliar se uma licitação vale a pena?</h1>
 
-      <p className="text-xl leading-relaxed text-ink">
+      <p className="text-base sm:text-xl leading-relaxed text-ink">
         Quem trabalha com licitações conhece bem a situação: a equipe passa
         duas semanas montando proposta, reúne certidões, mobiliza técnicos,
         revisa documentação — e no final descobre que o edital nunca fez
@@ -206,39 +206,39 @@ export default function ComoAvaliarLicitacao() {
       </p>
 
       {/* Practical Example */}
-      <div className="not-prose my-10 border-l-4 border-brand-blue bg-surface-1 rounded-r-xl p-6 lg:p-8">
-        <h3 className="font-bold text-ink text-lg mb-4">
+      <div className="not-prose my-8 sm:my-10 border-l-4 border-brand-blue bg-surface-1 rounded-r-xl p-4 sm:p-6 lg:p-8">
+        <h3 className="font-bold text-ink text-base sm:text-lg mb-3 sm:mb-4">
           Na prática: análise de um pregão real
         </h3>
-        <p className="text-ink-secondary mb-4 leading-relaxed">
+        <p className="text-sm sm:text-base text-ink-secondary mb-3 sm:mb-4 leading-relaxed">
           Pregão Eletrônico para aquisição de equipamentos de informática para
           hospital universitário em Minas Gerais. Valor estimado: R$ 1,2
           milhão. Prazo: 18 dias. Para uma empresa de TI sediada em Belo
           Horizonte:
         </p>
-        <ul className="space-y-2 text-ink-secondary">
+        <ul className="space-y-2 text-sm sm:text-base text-ink-secondary">
           <li className="flex items-start gap-2">
-            <span className="text-success font-bold mt-0.5">&#10003;</span>
+            <span className="text-success font-bold mt-0.5 shrink-0">&#10003;</span>
             <span><strong className="text-ink">Setor:</strong> Alta — equipamentos de informática é o core business</span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-success font-bold mt-0.5">&#10003;</span>
+            <span className="text-success font-bold mt-0.5 shrink-0">&#10003;</span>
             <span><strong className="text-ink">Valor:</strong> Adequado — dentro do histórico (R$ 500k a R$ 2M)</span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-success font-bold mt-0.5">&#10003;</span>
+            <span className="text-success font-bold mt-0.5 shrink-0">&#10003;</span>
             <span><strong className="text-ink">Prazo:</strong> Suficiente — 18 dias permitem preparação completa</span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-success font-bold mt-0.5">&#10003;</span>
+            <span className="text-success font-bold mt-0.5 shrink-0">&#10003;</span>
             <span><strong className="text-ink">Geografia:</strong> Viável — mesma UF, custo logístico mínimo</span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-success font-bold mt-0.5">&#10003;</span>
+            <span className="text-success font-bold mt-0.5 shrink-0">&#10003;</span>
             <span><strong className="text-ink">Modalidade:</strong> Pregão eletrônico (menor preço) — competição previsível</span>
           </li>
         </ul>
-        <p className="text-ink mt-4 font-medium">
+        <p className="text-sm sm:text-base text-ink mt-3 sm:mt-4 font-medium">
           5 de 5 critérios positivos — essa licitação merece dedicação total.
           Compare com uma licitação de obras civis de R$ 8 milhões no Acre
           para a mesma empresa: nenhum critério seria atendido.
@@ -265,17 +265,17 @@ export default function ComoAvaliarLicitacao() {
       </p>
 
       {/* CTA Section */}
-      <div className="not-prose mt-12 bg-brand-blue-subtle dark:bg-brand-navy/20 rounded-xl p-8 text-center border border-brand-blue/20">
-        <p className="text-xl font-bold text-ink mb-2">
+      <div className="not-prose mt-8 sm:mt-12 bg-brand-blue-subtle dark:bg-brand-navy/20 rounded-xl p-5 sm:p-8 text-center border border-brand-blue/20">
+        <p className="text-lg sm:text-xl font-bold text-ink mb-2">
           Descubra quais licitações valem a pena para o seu setor
         </p>
-        <p className="text-ink-secondary mb-6 max-w-lg mx-auto">
+        <p className="text-sm sm:text-base text-ink-secondary mb-4 sm:mb-6 max-w-lg mx-auto">
           O SmartLic aplica esses 5 critérios automaticamente a cada edital,
           usando IA e dados de 3 fontes oficiais.
         </p>
         <Link
           href="/signup?source=content-avaliar"
-          className="inline-block bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-6 py-3 rounded-button transition-all hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2"
+          className="inline-block bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-button text-sm sm:text-base transition-all hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2"
         >
           Comece Grátis
         </Link>

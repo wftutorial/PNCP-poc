@@ -89,7 +89,7 @@ export default function ComoFiltrarEditais() {
 
       <h1>Como filtrar editais de licitação e focar no que importa</h1>
 
-      <p className="text-xl leading-relaxed text-ink">
+      <p className="text-base sm:text-xl leading-relaxed text-ink">
         O problema não é falta de licitações. É excesso de irrelevância. Todos
         os dias, milhares de editais são publicados nos portais PNCP,
         ComprasGov e Portal de Compras Públicas. Para uma empresa de
@@ -193,37 +193,37 @@ export default function ComoFiltrarEditais() {
       </p>
 
       {/* Practical Example */}
-      <div className="not-prose my-10 border-l-4 border-brand-blue bg-surface-1 rounded-r-xl p-6 lg:p-8">
-        <h3 className="font-bold text-ink text-lg mb-4">
+      <div className="not-prose my-8 sm:my-10 border-l-4 border-brand-blue bg-surface-1 rounded-r-xl p-4 sm:p-6 lg:p-8">
+        <h3 className="font-bold text-ink text-base sm:text-lg mb-3 sm:mb-4">
           Na prática: de 1.500 para 12
         </h3>
-        <p className="text-ink-secondary mb-4 leading-relaxed">
+        <p className="text-sm sm:text-base text-ink-secondary mb-3 sm:mb-4 leading-relaxed">
           Cenário real de uma empresa de mobiliário corporativo em uma semana
           típica:
         </p>
-        <ul className="space-y-3 text-ink-secondary">
-          <li className="flex items-start gap-3">
-            <span className="text-ink-muted font-mono text-sm mt-0.5 shrink-0">1.500</span>
+        <ul className="space-y-2.5 sm:space-y-3 text-sm sm:text-base text-ink-secondary">
+          <li className="flex items-start gap-2.5 sm:gap-3">
+            <span className="text-ink-muted font-mono text-xs sm:text-sm mt-0.5 shrink-0 tabular-nums w-10 text-right">1.500</span>
             <span>editais publicados nas 3 fontes oficiais para 27 UFs</span>
           </li>
-          <li className="flex items-start gap-3">
-            <span className="text-ink-muted font-mono text-sm mt-0.5 shrink-0 pl-1.5">180</span>
+          <li className="flex items-start gap-2.5 sm:gap-3">
+            <span className="text-ink-muted font-mono text-xs sm:text-sm mt-0.5 shrink-0 tabular-nums w-10 text-right">180</span>
             <span>após filtro por setor — 12% relacionados a mobiliário</span>
           </li>
-          <li className="flex items-start gap-3">
-            <span className="text-ink-muted font-mono text-sm mt-0.5 shrink-0 pl-3">45</span>
+          <li className="flex items-start gap-2.5 sm:gap-3">
+            <span className="text-ink-muted font-mono text-xs sm:text-sm mt-0.5 shrink-0 tabular-nums w-10 text-right">45</span>
             <span>após filtro por faixa de valor (R$ 100k a R$ 2M)</span>
           </li>
-          <li className="flex items-start gap-3">
-            <span className="text-ink-muted font-mono text-sm mt-0.5 shrink-0 pl-3">22</span>
+          <li className="flex items-start gap-2.5 sm:gap-3">
+            <span className="text-ink-muted font-mono text-xs sm:text-sm mt-0.5 shrink-0 tabular-nums w-10 text-right">22</span>
             <span>após filtro por UFs de atuação (SP, RJ, MG, PR)</span>
           </li>
-          <li className="flex items-start gap-3">
-            <span className="text-brand-blue font-mono text-sm mt-0.5 font-bold shrink-0 pl-3">12</span>
+          <li className="flex items-start gap-2.5 sm:gap-3">
+            <span className="text-brand-blue font-mono text-xs sm:text-sm mt-0.5 font-bold shrink-0 tabular-nums w-10 text-right">12</span>
             <span><strong className="text-ink">após classificação IA de relevância</strong> — 0,8% do total</span>
           </li>
         </ul>
-        <p className="text-ink mt-4 font-medium">
+        <p className="text-sm sm:text-base text-ink mt-3 sm:mt-4 font-medium">
           Esses 12 editais são os que realmente merecem atenção. Os outros
           1.488 seriam tempo perdido.{' '}
           <Link href="/como-evitar-prejuizo-licitacao" className="text-brand-blue hover:underline">
@@ -268,17 +268,17 @@ export default function ComoFiltrarEditais() {
       </p>
 
       {/* CTA Section */}
-      <div className="not-prose mt-12 bg-brand-blue-subtle dark:bg-brand-navy/20 rounded-xl p-8 text-center border border-brand-blue/20">
-        <p className="text-xl font-bold text-ink mb-2">
+      <div className="not-prose mt-8 sm:mt-12 bg-brand-blue-subtle dark:bg-brand-navy/20 rounded-xl p-5 sm:p-8 text-center border border-brand-blue/20">
+        <p className="text-lg sm:text-xl font-bold text-ink mb-2">
           Pare de perder tempo com editais irrelevantes
         </p>
-        <p className="text-ink-secondary mb-6 max-w-lg mx-auto">
+        <p className="text-sm sm:text-base text-ink-secondary mb-4 sm:mb-6 max-w-lg mx-auto">
           O SmartLic filtra milhares de licitações e entrega apenas as que
           importam para o seu setor, região e faixa de valor.
         </p>
         <Link
           href="/signup?source=content-filtrar"
-          className="inline-block bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-6 py-3 rounded-button transition-all hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2"
+          className="inline-block bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-button text-sm sm:text-base transition-all hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2"
         >
           Comece Grátis
         </Link>

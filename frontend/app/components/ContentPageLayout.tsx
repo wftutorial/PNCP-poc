@@ -45,25 +45,25 @@ export default function ContentPageLayout({
           {/* Content Grid */}
           <div className="lg:grid lg:grid-cols-3 lg:gap-12">
             {/* Main Content */}
-            <article className="lg:col-span-2 prose prose-lg prose-gray dark:prose-invert max-w-none prose-headings:text-ink prose-headings:font-bold prose-p:text-ink-secondary prose-p:leading-relaxed prose-strong:text-ink prose-a:text-brand-blue prose-a:no-underline hover:prose-a:underline prose-li:text-ink-secondary prose-h1:text-3xl prose-h1:sm:text-4xl prose-h1:tracking-tight prose-h2:text-xl prose-h2:sm:text-2xl prose-h2:mt-12 prose-h2:border-b prose-h2:border-[var(--border)] prose-h2:pb-3 prose-h3:text-lg">
+            <article className="lg:col-span-2 prose prose-base sm:prose-lg prose-gray dark:prose-invert max-w-none prose-headings:text-ink prose-headings:font-bold prose-p:text-ink-secondary prose-p:leading-relaxed prose-strong:text-ink prose-a:text-brand-blue prose-a:no-underline hover:prose-a:underline prose-li:text-ink-secondary prose-h1:text-2xl prose-h1:sm:text-3xl prose-h1:lg:text-4xl prose-h1:tracking-tight prose-h1:leading-tight prose-h2:text-lg prose-h2:sm:text-xl prose-h2:lg:text-2xl prose-h2:mt-10 prose-h2:sm:mt-12 prose-h2:border-b prose-h2:border-[var(--border)] prose-h2:pb-3 prose-h3:text-base prose-h3:sm:text-lg">
               {children}
             </article>
 
             {/* Sidebar */}
-            <aside className="mt-12 lg:mt-0">
-              <div className="sticky top-24 space-y-8">
+            <aside className="mt-8 sm:mt-12 lg:mt-0">
+              <div className="sticky top-24 space-y-6 sm:space-y-8">
                 {/* CTA Card */}
-                <div className="bg-brand-blue-subtle dark:bg-brand-navy/20 rounded-xl p-6 border border-brand-blue/20 shadow-sm">
-                  <h3 className="font-semibold text-ink text-lg mb-2">
+                <div className="bg-brand-blue-subtle dark:bg-brand-navy/20 rounded-xl p-4 sm:p-6 border border-brand-blue/20 shadow-sm">
+                  <h3 className="font-semibold text-ink text-base sm:text-lg mb-2">
                     Avalie licitações automaticamente
                   </h3>
-                  <p className="text-sm text-ink-secondary mb-4 leading-relaxed">
+                  <p className="text-xs sm:text-sm text-ink-secondary mb-3 sm:mb-4 leading-relaxed">
                     O SmartLic analisa editais em segundos usando IA e 5
                     critérios de viabilidade.
                   </p>
                   <Link
                     href="/signup?source=conteudo"
-                    className="block text-center bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-4 py-2.5 rounded-button transition-all hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2"
+                    className="block text-center bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-4 py-2.5 rounded-button text-sm sm:text-base transition-all hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2"
                   >
                     Comece Grátis
                   </Link>
@@ -71,16 +71,16 @@ export default function ContentPageLayout({
 
                 {/* Related Pages */}
                 {relatedPages.length > 0 && (
-                  <div className="bg-surface-1 rounded-xl p-6 border border-[var(--border)]">
-                    <h3 className="font-semibold text-ink text-base mb-4">
+                  <div className="bg-surface-1 rounded-xl p-4 sm:p-6 border border-[var(--border)]">
+                    <h3 className="font-semibold text-ink text-sm sm:text-base mb-3 sm:mb-4">
                       Conteúdo relacionado
                     </h3>
-                    <ul className="space-y-3">
+                    <ul className="space-y-2.5 sm:space-y-3">
                       {relatedPages.map((page) => (
                         <li key={page.href}>
                           <Link
                             href={page.href}
-                            className="text-sm text-brand-blue hover:underline transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 rounded px-1"
+                            className="text-xs sm:text-sm text-brand-blue hover:underline transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 rounded px-1"
                           >
                             {page.title}
                           </Link>
@@ -91,13 +91,13 @@ export default function ContentPageLayout({
                 )}
 
                 {/* Features Link */}
-                <div className="border-t border-[var(--border)] pt-6">
-                  <p className="text-sm text-ink-secondary mb-2">
+                <div className="border-t border-[var(--border)] pt-4 sm:pt-6">
+                  <p className="text-xs sm:text-sm text-ink-secondary mb-2">
                     Conheça todas as funcionalidades
                   </p>
                   <Link
                     href="/features"
-                    className="text-sm font-medium text-brand-blue hover:underline"
+                    className="text-xs sm:text-sm font-medium text-brand-blue hover:underline"
                   >
                     Ver recursos do SmartLic &rarr;
                   </Link>

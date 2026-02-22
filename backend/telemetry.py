@@ -66,6 +66,19 @@ def init_tracing() -> None:
         _noop = True
         return
 
+    # CRIT-025: Log the effective traces endpoint for debugging.
+    # SDK priority: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT (as-is) > OTEL_EXPORTER_OTLP_ENDPOINT + /v1/traces
+    traces_endpoint = os.getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "").strip()
+    if traces_endpoint:
+        logger.info(
+            f"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT set — SDK will use '{traces_endpoint}' as-is"
+        )
+    else:
+        effective_url = endpoint.rstrip("/") + "/v1/traces"
+        logger.info(
+            f"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT not set — SDK will auto-append /v1/traces: '{effective_url}'"
+        )
+
     if not _is_otel_available():
         logger.warning(
             "OpenTelemetry packages not installed — tracing disabled. "

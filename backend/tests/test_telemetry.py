@@ -433,3 +433,72 @@ class TestNoRegression:
         assert hasattr(telemetry, "get_tracer")
         assert hasattr(telemetry, "optional_span")
         assert hasattr(telemetry, "get_trace_id")
+
+
+# ===========================================================================
+# CRIT-025 AC4: Startup validation — log effective traces endpoint
+# ===========================================================================
+
+class TestEndpointStartupValidation:
+    """CRIT-025 AC4: init_tracing() should log the effective traces URL at startup."""
+
+    def test_logs_traces_endpoint_when_explicit(self):
+        """When OTEL_EXPORTER_OTLP_TRACES_ENDPOINT is set, log it as 'as-is'."""
+        import telemetry
+
+        with patch.dict(os.environ, {
+            "OTEL_EXPORTER_OTLP_ENDPOINT": "https://grafana.net/otlp",
+            "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "https://grafana.net/otlp/v1/traces",
+        }, clear=False):
+            with patch.object(telemetry, "_is_otel_available", return_value=False):
+                with patch("telemetry.logger") as mock_logger:
+                    telemetry.init_tracing()
+
+        info_calls = [str(c) for c in mock_logger.info.call_args_list]
+        traces_log = [c for c in info_calls if "TRACES_ENDPOINT" in c and "as-is" in c]
+        assert len(traces_log) == 1, f"Expected 1 info log about TRACES_ENDPOINT, got: {info_calls}"
+
+    def test_logs_auto_append_when_no_traces_endpoint(self):
+        """When only OTEL_EXPORTER_OTLP_ENDPOINT is set, log auto-append info."""
+        import telemetry
+
+        with patch.dict(os.environ, {
+            "OTEL_EXPORTER_OTLP_ENDPOINT": "https://grafana.net/otlp",
+        }, clear=False):
+            os.environ.pop("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", None)
+            with patch.object(telemetry, "_is_otel_available", return_value=False):
+                with patch("telemetry.logger") as mock_logger:
+                    telemetry.init_tracing()
+
+        info_calls = [str(c) for c in mock_logger.info.call_args_list]
+        append_log = [c for c in info_calls if "auto-append" in c and "/v1/traces" in c]
+        assert len(append_log) == 1, f"Expected auto-append log, got: {info_calls}"
+
+    def test_auto_append_shows_correct_url(self):
+        """Auto-append log should show the effective URL."""
+        import telemetry
+
+        with patch.dict(os.environ, {
+            "OTEL_EXPORTER_OTLP_ENDPOINT": "https://grafana.net/otlp",
+        }, clear=False):
+            os.environ.pop("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", None)
+            with patch.object(telemetry, "_is_otel_available", return_value=False):
+                with patch("telemetry.logger") as mock_logger:
+                    telemetry.init_tracing()
+
+        info_calls = [str(c) for c in mock_logger.info.call_args_list]
+        url_log = [c for c in info_calls if "grafana.net/otlp/v1/traces" in c]
+        assert len(url_log) == 1, f"Expected effective URL in log, got: {info_calls}"
+
+    def test_no_validation_when_no_endpoint(self):
+        """When no endpoint is set, only the 'disabled' log should appear."""
+        import telemetry
+
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("OTEL_EXPORTER_OTLP_ENDPOINT", None)
+            os.environ.pop("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", None)
+            with patch("telemetry.logger") as mock_logger:
+                telemetry.init_tracing()
+
+        info_calls = [str(c) for c in mock_logger.info.call_args_list]
+        assert any("disabled" in c.lower() or "not set" in c.lower() for c in info_calls)

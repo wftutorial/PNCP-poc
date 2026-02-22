@@ -32,6 +32,13 @@ const ERROR_MAP: Record<string, string> = {
   "is not valid JSON": "Erro temporário de comunicação. Tente novamente.",
   "Resposta inesperada": "Erro temporário de comunicação. Tente novamente.",
 
+  // CRIT-017: Infrastructure errors that should never leak (defense-in-depth)
+  "Application not found": "Nossos servidores estão sendo atualizados. Tente novamente em alguns instantes.",
+  "Bad Gateway": "O servidor está temporariamente indisponível. Tente novamente em instantes.",
+  "Service Unavailable": "Serviço temporariamente indisponível. Tente em alguns minutos.",
+  "Gateway Timeout": "A requisição demorou muito. Tente novamente.",
+  "Nossos servidores estão sendo atualizados": "keep_original",
+
   // Backend specific — GTM-FIX-033 AC5: actionable message
   "Backend indisponível": "Não foi possível processar sua busca. A busca pode ter sido concluída. Verifique suas buscas salvas ou tente novamente.",
   "Erro ao buscar licitações": "Não foi possível processar sua busca. A busca pode ter sido concluída. Verifique suas buscas salvas ou tente novamente.",
@@ -189,6 +196,7 @@ export function isTransientError(httpStatus: number | null, message?: string): b
  * These are more specific than getUserFriendlyError() and take precedence when error_code is present.
  */
 export const ERROR_CODE_MESSAGES: Record<string, string> = {
+  BACKEND_UNAVAILABLE: "Nossos servidores estão sendo atualizados. Tente novamente em alguns instantes.",
   SOURCE_UNAVAILABLE: "Nossas fontes de dados estão temporariamente indisponíveis.",
   ALL_SOURCES_FAILED: "Nenhuma fonte de dados respondeu. Tente novamente em alguns minutos.",
   TIMEOUT: "A busca demorou mais que o esperado. Tente reduzir o número de estados.",

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sanitizeProxyError, sanitizeNetworkError } from "../../../lib/proxy-error-handler";
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
@@ -28,11 +29,24 @@ export async function GET(request: NextRequest) {
     const res = await fetch(`${backendUrl}/v1/trial-status`, { headers });
 
     if (!res.ok) {
-      const errorText = await res.text();
-      return NextResponse.json(
-        { error: errorText },
-        { status: res.status }
-      );
+      // CRIT-017: Sanitize non-JSON / infrastructure errors
+      const body = await res.text();
+      const sanitized = sanitizeProxyError(res.status, body, res.headers.get("content-type"));
+      if (sanitized) return sanitized;
+
+      // Structured backend error — parse and forward
+      try {
+        const parsed = JSON.parse(body);
+        return NextResponse.json(
+          { error: parsed.detail || parsed.message || "Erro do servidor" },
+          { status: res.status }
+        );
+      } catch {
+        return NextResponse.json(
+          { error: "Erro do servidor" },
+          { status: res.status }
+        );
+      }
     }
 
     const data = await res.json().catch(() => null);
@@ -43,10 +57,9 @@ export async function GET(request: NextRequest) {
       );
     }
     return NextResponse.json(data);
-  } catch {
-    return NextResponse.json(
-      { error: "Falha ao conectar com o servidor" },
-      { status: 502 }
-    );
+  } catch (error) {
+    // CRIT-017: Sanitize network errors
+    console.error("[trial-status] Network error:", error instanceof Error ? error.message : error);
+    return sanitizeNetworkError(error);
   }
 }

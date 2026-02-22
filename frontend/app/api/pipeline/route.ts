@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sanitizeProxyError, sanitizeNetworkError } from "../../../lib/proxy-error-handler";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
 
@@ -8,6 +9,31 @@ function getAuthHeader(request: NextRequest): string | null {
   return authHeader;
 }
 
+// CRIT-017: Shared helper to safely parse response with infrastructure error sanitization
+async function safeProxyResponse(
+  response: Response,
+  fallbackMessage: string,
+): Promise<NextResponse> {
+  const body = await response.text();
+  const sanitized = sanitizeProxyError(
+    response.status,
+    body,
+    response.headers.get("content-type"),
+  );
+  if (sanitized) return sanitized;
+
+  // Parse JSON — safe because sanitizeProxyError verified it's valid structured JSON
+  try {
+    const data = JSON.parse(body);
+    return NextResponse.json(data, { status: response.status });
+  } catch {
+    return NextResponse.json(
+      { message: fallbackMessage },
+      { status: response.status },
+    );
+  }
+}
+
 export async function GET(request: NextRequest) {
   const auth = getAuthHeader(request);
   if (!auth) {
@@ -15,7 +41,6 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url);
-  const queryString = searchParams.toString();
   const path = searchParams.get("_path") || "/pipeline";
   const cleanParams = new URLSearchParams(searchParams);
   cleanParams.delete("_path");
@@ -34,10 +59,10 @@ export async function GET(request: NextRequest) {
 
   try {
     const response = await fetch(url, { headers });
-    const data = await response.json();
-    return NextResponse.json(data, { status: response.status });
+    return safeProxyResponse(response, "Erro ao conectar com servidor.");
   } catch (error) {
-    return NextResponse.json({ message: "Erro ao conectar com servidor." }, { status: 502 });
+    console.error("[pipeline] Network error:", error instanceof Error ? error.message : error);
+    return sanitizeNetworkError(error);
   }
 }
 
@@ -64,10 +89,10 @@ export async function POST(request: NextRequest) {
       headers,
       body: JSON.stringify(body),
     });
-    const data = await response.json();
-    return NextResponse.json(data, { status: response.status });
+    return safeProxyResponse(response, "Erro ao conectar com servidor.");
   } catch (error) {
-    return NextResponse.json({ message: "Erro ao conectar com servidor." }, { status: 502 });
+    console.error("[pipeline] Network error:", error instanceof Error ? error.message : error);
+    return sanitizeNetworkError(error);
   }
 }
 
@@ -95,10 +120,10 @@ export async function PATCH(request: NextRequest) {
       headers,
       body: JSON.stringify(updateData),
     });
-    const data = await response.json();
-    return NextResponse.json(data, { status: response.status });
+    return safeProxyResponse(response, "Erro ao conectar com servidor.");
   } catch (error) {
-    return NextResponse.json({ message: "Erro ao conectar com servidor." }, { status: 502 });
+    console.error("[pipeline] Network error:", error instanceof Error ? error.message : error);
+    return sanitizeNetworkError(error);
   }
 }
 
@@ -127,9 +152,9 @@ export async function DELETE(request: NextRequest) {
       method: "DELETE",
       headers,
     });
-    const data = await response.json();
-    return NextResponse.json(data, { status: response.status });
+    return safeProxyResponse(response, "Erro ao conectar com servidor.");
   } catch (error) {
-    return NextResponse.json({ message: "Erro ao conectar com servidor." }, { status: 502 });
+    console.error("[pipeline] Network error:", error instanceof Error ? error.message : error);
+    return sanitizeNetworkError(error);
   }
 }

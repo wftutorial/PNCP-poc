@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRefreshedToken } from "../../../lib/serverAuth";
+import { sanitizeProxyError, sanitizeNetworkError } from "../../../lib/proxy-error-handler";
 
 export async function GET(request: NextRequest) {
   const backendUrl = process.env.BACKEND_URL;
@@ -38,11 +39,23 @@ export async function GET(request: NextRequest) {
     const response = await fetch(`${backendUrl}/v1/me`, { headers });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      return NextResponse.json(
-        { message: error.detail || "Erro ao obter perfil" },
-        { status: response.status }
-      );
+      // CRIT-017: Sanitize infrastructure errors
+      const body = await response.text();
+      const sanitized = sanitizeProxyError(response.status, body, response.headers.get("content-type"));
+      if (sanitized) return sanitized;
+
+      try {
+        const error = JSON.parse(body);
+        return NextResponse.json(
+          { message: error.detail || "Erro ao obter perfil" },
+          { status: response.status }
+        );
+      } catch {
+        return NextResponse.json(
+          { message: "Erro ao obter perfil" },
+          { status: response.status }
+        );
+      }
     }
 
     const data = await response.json().catch(() => null);
@@ -55,10 +68,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(data);
   } catch (error) {
     console.error("Error fetching profile:", error);
-    return NextResponse.json(
-      { message: "Erro ao conectar com servidor" },
-      { status: 503 }
-    );
+    return sanitizeNetworkError(error);
   }
 }
 
@@ -95,20 +105,29 @@ export async function DELETE(request: NextRequest) {
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      return NextResponse.json(
-        { message: error.detail || "Erro ao excluir conta" },
-        { status: response.status }
-      );
+      // CRIT-017: Sanitize infrastructure errors
+      const body = await response.text();
+      const sanitized = sanitizeProxyError(response.status, body, response.headers.get("content-type"));
+      if (sanitized) return sanitized;
+
+      try {
+        const error = JSON.parse(body);
+        return NextResponse.json(
+          { message: error.detail || "Erro ao excluir conta" },
+          { status: response.status }
+        );
+      } catch {
+        return NextResponse.json(
+          { message: "Erro ao excluir conta" },
+          { status: response.status }
+        );
+      }
     }
 
     const data = await response.json().catch(() => ({ success: true }));
     return NextResponse.json(data);
   } catch (error) {
     console.error("Error deleting account:", error);
-    return NextResponse.json(
-      { message: "Erro ao conectar com servidor" },
-      { status: 503 }
-    );
+    return sanitizeNetworkError(error);
   }
 }

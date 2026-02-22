@@ -6,8 +6,33 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { sanitizeProxyError, sanitizeNetworkError } from "../../../lib/proxy-error-handler";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
+
+// CRIT-017: Shared helper to safely parse response with infrastructure error sanitization
+async function safeProxyResponse(
+  response: Response,
+  fallbackMessage: string,
+): Promise<NextResponse> {
+  const body = await response.text();
+  const sanitized = sanitizeProxyError(
+    response.status,
+    body,
+    response.headers.get("content-type"),
+  );
+  if (sanitized) return sanitized;
+
+  try {
+    const data = JSON.parse(body);
+    return NextResponse.json(data, { status: response.status });
+  } catch {
+    return NextResponse.json(
+      { error: fallbackMessage },
+      { status: response.status },
+    );
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,14 +55,10 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify(body),
     });
 
-    const data = await res.json();
-    return NextResponse.json(data, { status: res.status });
+    return safeProxyResponse(res, "Erro ao enviar feedback");
   } catch (error) {
     console.error("Feedback proxy error:", error);
-    return NextResponse.json(
-      { error: "Failed to submit feedback" },
-      { status: 500 }
-    );
+    return sanitizeNetworkError(error);
   }
 }
 
@@ -66,13 +87,9 @@ export async function DELETE(request: NextRequest) {
       headers,
     });
 
-    const data = await res.json();
-    return NextResponse.json(data, { status: res.status });
+    return safeProxyResponse(res, "Erro ao remover feedback");
   } catch (error) {
     console.error("Feedback delete proxy error:", error);
-    return NextResponse.json(
-      { error: "Failed to delete feedback" },
-      { status: 500 }
-    );
+    return sanitizeNetworkError(error);
   }
 }

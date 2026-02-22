@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sanitizeProxyError, sanitizeNetworkError } from "../../../../lib/proxy-error-handler";
 
 export async function GET(
   request: NextRequest,
@@ -91,21 +92,35 @@ async function handleAdminRequest(
       fetchOptions
     );
 
+    // CRIT-017: Read body as text first, sanitize infrastructure errors
+    const body = await response.text();
+
     if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      return NextResponse.json(
-        { detail: error.detail || `Erro na operacao admin` },
-        { status: response.status }
-      );
+      const sanitized = sanitizeProxyError(response.status, body, response.headers.get("content-type"));
+      if (sanitized) return sanitized;
+
+      try {
+        const error = JSON.parse(body);
+        return NextResponse.json(
+          { detail: error.detail || "Erro na operacao admin" },
+          { status: response.status }
+        );
+      } catch {
+        return NextResponse.json(
+          { detail: "Erro na operacao admin" },
+          { status: response.status }
+        );
+      }
     }
 
-    const data = await response.json().catch(() => ({}));
-    return NextResponse.json(data);
+    try {
+      const data = JSON.parse(body);
+      return NextResponse.json(data);
+    } catch {
+      return NextResponse.json({});
+    }
   } catch (error) {
     console.error(`Error in admin ${method} request:`, error);
-    return NextResponse.json(
-      { detail: "Erro ao conectar com servidor" },
-      { status: 503 }
-    );
+    return sanitizeNetworkError(error);
   }
 }

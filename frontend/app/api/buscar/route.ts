@@ -4,6 +4,7 @@ import { writeFile } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
 import { getRefreshedToken } from "../../../lib/serverAuth";
+import { sanitizeProxyError, sanitizeNetworkError } from "../../../lib/proxy-error-handler";
 
 // CRIT-002 AC3: Contextual error messages based on HTTP status code
 function getContextualErrorMessage(status: number, detail?: string): string {
@@ -137,8 +138,11 @@ export async function POST(request: NextRequest) {
           break;
         }
 
-        // Retryable error - log and continue loop
-        const errorBody = await response.json().catch(() => ({}));
+        // CRIT-017: Read body as text, sanitize infrastructure errors
+        const errorText = await response.text();
+        const sanitized = sanitizeProxyError(response.status, errorText, response.headers.get("content-type"));
+        if (sanitized) return sanitized;
+        const errorBody = (() => { try { return JSON.parse(errorText); } catch { return {}; } })();
         lastError = { detail: errorBody.detail, status: response.status };
         console.warn(
           `[buscar] Backend returned ${response.status}: ${errorBody.detail || 'unknown error'}. ` +
@@ -148,15 +152,16 @@ export async function POST(request: NextRequest) {
       } catch (error) {
         const isTimeout = error instanceof DOMException && error.name === "AbortError";
         if (isTimeout || attempt >= MAX_RETRIES - 1) {
-          // Timeout or final attempt - return error
-          const message = isTimeout
-            ? "A consulta excedeu o tempo limite (8 min). Tente com menos estados ou um período menor."
-            : `Backend indisponível em ${backendUrl}: ${error instanceof Error ? error.message : 'conexão recusada'}`;
+          // Timeout: keep specific message; Network error: use sanitizer
+          if (isTimeout) {
+            return NextResponse.json(
+              { message: "A consulta excedeu o tempo limite (8 min). Tente com menos estados ou um período menor." },
+              { status: 504 }
+            );
+          }
+          // CRIT-017: Sanitize network error
           console.error(`Erro ao conectar com backend em ${backendUrl}:`, error);
-          return NextResponse.json(
-            { message },
-            { status: isTimeout ? 504 : 503 }
-          );
+          return sanitizeNetworkError(error);
         }
         // Connection error - will retry
         console.warn(`[buscar] Connection error on attempt ${attempt + 1}: ${error instanceof Error ? error.message : 'unknown'}. Will retry...`);
@@ -189,7 +194,11 @@ export async function POST(request: NextRequest) {
       }
       // Try to extract error from last response
       if (response && !response.ok) {
-        const errorBody = await response.json().catch(() => ({}));
+        // CRIT-017: Read body as text, sanitize infrastructure errors
+        const rawBody = await response.text();
+        const sanitizedFinal = sanitizeProxyError(response.status, rawBody, response.headers.get("content-type"));
+        if (sanitizedFinal) return sanitizedFinal;
+        const errorBody = (() => { try { return JSON.parse(rawBody); } catch { return {}; } })();
         // CRIT-009 AC4: Handle structured detail (object) or legacy detail (string)
         const detail = errorBody.detail;
         const isStructured = detail && typeof detail === "object" && detail.error_code;

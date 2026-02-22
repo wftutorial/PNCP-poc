@@ -832,6 +832,12 @@ class LicitacaoItem(BaseModel):
         default=None,
         description="Breakdown of viability factors: modalidade, timeline, value_fit, geography (each 0-100 with label)"
     )
+    # CRIT-FLT-003 AC2: Whether bid value was reported or missing
+    value_source: Optional[Literal["estimated", "missing"]] = Field(
+        default=None,
+        alias="_value_source",
+        description="Whether the bid's estimated value was reported ('estimated') or missing ('missing')"
+    )
 
     class Config:
         populate_by_name = True

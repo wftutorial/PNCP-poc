@@ -273,7 +273,7 @@ export function LicitacoesPreview({
                   {getRelevanceBadge(item.relevance_score)}
                   {getRelevanceSourceBadge(item.relevance_source)}
                   {getConfidenceBadge(item.confidence)}
-                  <ViabilityBadge level={item.viability_level} score={item.viability_score} factors={item.viability_factors} />
+                  <ViabilityBadge level={item.viability_level} score={item.viability_score} factors={item.viability_factors} valueSource={item._value_source} />
                   {getSourceBadge(item._source ?? undefined)}
                   <span className="inline-flex items-center px-2 py-0.5 rounded bg-brand-blue-subtle text-brand-navy text-xs font-medium">
                     {item.uf}

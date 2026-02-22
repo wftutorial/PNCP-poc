@@ -292,6 +292,8 @@ def _convert_to_licitacao_items(licitacoes: list[dict]) -> list[LicitacaoItem]:
                 viability_score=lic.get("_viability_score"),
                 viability_level=lic.get("_viability_level"),
                 viability_factors=lic.get("_viability_factors"),
+                # CRIT-FLT-003 AC2: Value source indicator
+                value_source=lic.get("_value_source"),
             )
             items.append(item)
         except Exception as e:
@@ -1649,11 +1651,23 @@ class SearchPipeline:
                 vr = ctx.sector.viability_value_range
             ufs_busca = set(ctx.request.ufs) if ctx.request.ufs else set()
             viability_assess_batch(ctx.licitacoes_filtradas, ufs_busca, vr)
+            # CRIT-FLT-003 AC4: Log zero-value proportion
+            total = len(ctx.licitacoes_filtradas)
+            zero_count = sum(
+                1 for l in ctx.licitacoes_filtradas
+                if l.get("_value_source") == "missing"
+            )
+            zero_pct = round(zero_count / total * 100, 1) if total else 0.0
+            logger.info(
+                "CRIT-FLT-003: zero_value_stats",
+                extra={"zero_value_count": zero_count, "total_bids": total, "zero_value_pct": zero_pct},
+            )
             logger.debug(
-                f"D-04: Viability assessed for {len(ctx.licitacoes_filtradas)} bids. "
+                f"D-04: Viability assessed for {total} bids. "
                 f"Alta: {sum(1 for l in ctx.licitacoes_filtradas if l.get('_viability_level') == 'alta')}, "
                 f"Media: {sum(1 for l in ctx.licitacoes_filtradas if l.get('_viability_level') == 'media')}, "
-                f"Baixa: {sum(1 for l in ctx.licitacoes_filtradas if l.get('_viability_level') == 'baixa')}"
+                f"Baixa: {sum(1 for l in ctx.licitacoes_filtradas if l.get('_viability_level') == 'baixa')}, "
+                f"Zero-value: {zero_count}/{total} ({zero_pct}%)"
             )
 
         # Relevance scoring (STORY-178)

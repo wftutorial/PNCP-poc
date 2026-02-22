@@ -33,11 +33,11 @@ Realidade: Provavelmente R$ 200k-2M (faixa ideal do setor vestuario)
 
 ## Acceptance Criteria
 
-- [ ] **AC1:** Quando `valor <= 0`, o fator `value_fit` deve retornar `50` (neutro) em vez de `30` (penalização)
-- [ ] **AC2:** Adicionar campo `_value_source: "estimated" | "missing"` ao item para frontend exibir badge indicativo
-- [ ] **AC3:** No `ViabilityBadge.tsx`, quando `_value_source == "missing"`, exibir tooltip: "Valor estimado não informado pelo órgão — viabilidade pode ser maior"
-- [ ] **AC4:** Log de proporção de bids com valor zero por busca: `{zero_value_pct: 25.0}`
-- [ ] **AC5:** Testes unitários para `_calculate_value_fit()` com valor=0 retornando 50
+- [x] **AC1:** Quando `valor <= 0`, o fator `value_fit` deve retornar `50` (neutro) em vez de `30` (penalização)
+- [x] **AC2:** Adicionar campo `_value_source: "estimated" | "missing"` ao item para frontend exibir badge indicativo
+- [x] **AC3:** No `ViabilityBadge.tsx`, quando `_value_source == "missing"`, exibir tooltip: "Valor estimado não informado pelo órgão — viabilidade pode ser maior"
+- [x] **AC4:** Log de proporção de bids com valor zero por busca: `{zero_value_pct: 25.0}`
+- [x] **AC5:** Testes unitários para `_calculate_value_fit()` com valor=0 retornando 50
 
 ## Impacto
 

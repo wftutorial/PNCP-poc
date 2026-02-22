@@ -160,9 +160,9 @@ def _score_value_fit(
     """AC4: Score based on value proximity to sector ideal range."""
     val_min, val_max = value_range
 
-    # PCP v2 and others may have valor=0
+    # CRIT-FLT-003 AC1: Neutral score when value not reported (25% of PNCP bids)
     if valor <= 0:
-        return 40, "Não informado"
+        return 50, "Não informado"
 
     # Within ideal range
     if val_min <= valor <= val_max:
@@ -301,3 +301,6 @@ def assess_batch(
         bid["_viability_score"] = assessment.viability_score
         bid["_viability_level"] = assessment.viability_level
         bid["_viability_factors"] = assessment.factors.model_dump()
+        # CRIT-FLT-003 AC2: Mark value source for frontend display
+        valor = float(bid.get("valorTotalEstimado") or bid.get("valorEstimado") or 0)
+        bid["_value_source"] = "missing" if valor <= 0 else "estimated"

@@ -177,15 +177,16 @@ class TestScoreValueFit:
         assert score == 20
         assert label == "Muito acima"
 
-    def test_zero_value_score_40(self):
-        """PCP v2 bids with valor=0 should get neutral score 40."""
+    def test_zero_value_score_50(self):
+        """CRIT-FLT-003 AC1+AC5: valor=0 returns neutral 50 (not penalizing 40)."""
         score, label = _score_value_fit(0, (50_000, 2_000_000))
-        assert score == 40
+        assert score == 50
         assert label == "Não informado"
 
-    def test_negative_value_score_40(self):
+    def test_negative_value_score_50(self):
+        """CRIT-FLT-003 AC5: Negative value also returns neutral 50."""
         score, _ = _score_value_fit(-1, (50_000, 2_000_000))
-        assert score == 40
+        assert score == 50
 
     def test_exact_min_boundary(self):
         score, _ = _score_value_fit(50_000, (50_000, 2_000_000))
@@ -470,3 +471,73 @@ class TestRegionMap:
 
     def test_rs_in_sul(self):
         assert "RS" in REGION_MAP["sul"]
+
+
+# =============================================================================
+# CRIT-FLT-003: Zero-value viability distortion fix
+# =============================================================================
+
+
+class TestCritFlt003ValueSource:
+    """CRIT-FLT-003 AC2+AC5: _value_source field and neutral scoring for zero values."""
+
+    def test_assess_batch_sets_value_source_estimated(self):
+        """AC2: Bids with valor > 0 get _value_source='estimated'."""
+        bids = [{"valorTotalEstimado": 100_000, "uf": "SP"}]
+        assess_batch(bids, {"SP"})
+        assert bids[0]["_value_source"] == "estimated"
+
+    def test_assess_batch_sets_value_source_missing(self):
+        """AC2: Bids with valor=0 get _value_source='missing'."""
+        bids = [{"valorTotalEstimado": 0, "uf": "SP"}]
+        assess_batch(bids, {"SP"})
+        assert bids[0]["_value_source"] == "missing"
+
+    def test_assess_batch_sets_value_source_missing_for_none(self):
+        """AC2: Bids with no valor field get _value_source='missing'."""
+        bids = [{"uf": "SP"}]
+        assess_batch(bids, {"SP"})
+        assert bids[0]["_value_source"] == "missing"
+
+    def test_assess_batch_sets_value_source_missing_for_negative(self):
+        """AC2: Bids with negative valor get _value_source='missing'."""
+        bids = [{"valorTotalEstimado": -1, "uf": "SP"}]
+        assess_batch(bids, {"SP"})
+        assert bids[0]["_value_source"] == "missing"
+
+    def test_zero_value_viability_neutral_not_penalizing(self):
+        """AC1+AC5: Valor=0 should produce neutral value_fit=50, not pull score down."""
+        bid = {
+            "modalidadeNome": "Pregão Eletrônico",
+            "dataEncerramentoProposta": "2099-12-31",
+            "valorTotalEstimado": 0,
+            "uf": "SP",
+        }
+        result = calculate_viability(bid, {"SP"}, (50_000, 2_000_000))
+        assert result.factors.value_fit == 50
+        assert result.factors.value_fit_label == "Não informado"
+
+    def test_zero_value_does_not_block_alta_viability(self):
+        """AC1: A bid with all good factors but valor=0 can still reach 'alta'."""
+        bid = {
+            "modalidadeNome": "Pregão Eletrônico",
+            "dataEncerramentoProposta": "2099-12-31",
+            "valorTotalEstimado": 0,
+            "uf": "SP",
+        }
+        result = calculate_viability(bid, {"SP"}, (50_000, 2_000_000))
+        # mod=100*0.3 + tl=100*0.25 + vf=50*0.25 + geo=100*0.2 = 30+25+12.5+20 = 87.5
+        assert result.viability_score >= 85
+        assert result.viability_level == "alta"
+
+    def test_mixed_batch_value_sources(self):
+        """AC2: Batch with mixed values correctly assigns _value_source."""
+        bids = [
+            {"valorTotalEstimado": 100_000, "uf": "SP"},
+            {"valorTotalEstimado": 0, "uf": "RJ"},
+            {"valorEstimado": 50_000, "uf": "MG"},
+        ]
+        assess_batch(bids, {"SP"})
+        assert bids[0]["_value_source"] == "estimated"
+        assert bids[1]["_value_source"] == "missing"
+        assert bids[2]["_value_source"] == "estimated"

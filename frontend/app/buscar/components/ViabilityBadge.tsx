@@ -18,6 +18,7 @@ interface ViabilityBadgeProps {
   level?: "alta" | "media" | "baixa" | null;
   score?: number | null;
   factors?: ViabilityFactors | null;
+  valueSource?: "estimated" | "missing" | null;
 }
 
 /** Factor label for tooltip display */
@@ -30,6 +31,7 @@ export default function ViabilityBadge({
   level,
   score,
   factors,
+  valueSource,
 }: ViabilityBadgeProps) {
   if (!level) return null;
 
@@ -73,6 +75,10 @@ export default function ViabilityBadge({
       factorLine("Valor", factors.value_fit, factors.value_fit_label) +
       "\n" +
       factorLine("UF", factors.geography, factors.geography_label);
+  }
+  // CRIT-FLT-003 AC3: Inform user when value was not reported
+  if (valueSource === "missing") {
+    tooltip += "\n⚠ Valor estimado não informado pelo órgão — viabilidade pode ser maior";
   }
 
   // Icon: chart bar for viability (distinct from shield for confidence)

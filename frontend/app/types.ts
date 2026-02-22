@@ -60,6 +60,8 @@ export type LicitacaoItem = components["schemas"]["LicitacaoItem"] & {
     geography: number;
     geography_label: string;
   } | null;
+  /** CRIT-FLT-003 AC2: Whether bid value was reported or missing */
+  _value_source?: "estimated" | "missing" | null;
 };
 
 /** InMail message response */

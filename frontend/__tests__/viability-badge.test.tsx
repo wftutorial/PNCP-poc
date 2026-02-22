@@ -126,4 +126,49 @@ describe("ViabilityBadge", () => {
     const badge = screen.getByTestId("viability-badge");
     expect(badge.getAttribute("title")).toContain("Viabilidade: 100/100");
   });
+
+  // CRIT-FLT-003 AC3: Tooltip for missing value source
+  it("shows missing value warning in tooltip when valueSource is missing", () => {
+    render(
+      <ViabilityBadge
+        level="media"
+        score={55}
+        factors={mockFactors}
+        valueSource="missing"
+      />
+    );
+    const badge = screen.getByTestId("viability-badge");
+    const title = badge.getAttribute("title") || "";
+    expect(title).toContain(
+      "Valor estimado não informado pelo órgão — viabilidade pode ser maior"
+    );
+  });
+
+  it("does NOT show missing value warning when valueSource is estimated", () => {
+    render(
+      <ViabilityBadge
+        level="alta"
+        score={85}
+        factors={mockFactors}
+        valueSource="estimated"
+      />
+    );
+    const badge = screen.getByTestId("viability-badge");
+    const title = badge.getAttribute("title") || "";
+    expect(title).not.toContain("não informado pelo órgão");
+  });
+
+  it("does NOT show missing value warning when valueSource is null", () => {
+    render(
+      <ViabilityBadge
+        level="alta"
+        score={85}
+        factors={mockFactors}
+        valueSource={null}
+      />
+    );
+    const badge = screen.getByTestId("viability-badge");
+    const title = badge.getAttribute("title") || "";
+    expect(title).not.toContain("não informado pelo órgão");
+  });
 });

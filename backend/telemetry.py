@@ -98,7 +98,20 @@ def init_tracing() -> None:
         )
 
         # Configure OTLP exporter
-        exporter = OTLPSpanExporter(endpoint=endpoint, insecure=True)
+        # CRIT-023: Support both local (insecure gRPC) and cloud (HTTPS with auth)
+        use_insecure = not endpoint.startswith("https://")
+        headers_raw = os.getenv("OTEL_EXPORTER_OTLP_HEADERS", "").strip()
+        headers = None
+        if headers_raw:
+            # Parse "key1=val1,key2=val2" format
+            headers = tuple(
+                tuple(h.split("=", 1)) for h in headers_raw.split(",") if "=" in h
+            )
+        exporter = OTLPSpanExporter(
+            endpoint=endpoint,
+            insecure=use_insecure,
+            headers=headers,
+        )
         span_processor = BatchSpanProcessor(exporter)
         _tracer_provider.add_span_processor(span_processor)
 

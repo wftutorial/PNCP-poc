@@ -3,7 +3,7 @@
 **Tipo:** Observabilidade / Debt
 **Prioridade:** P1 (Sem tracing fim-a-fim, debug de incidentes e cego)
 **Criada:** 2026-02-22
-**Status:** Pendente
+**Status:** Parcialmente Concluído (falta OTLP endpoint)
 **Origem:** Investigacao P0 — trace_id e span_id aparecem como "-" em todos os logs
 **Dependencias:** Nenhuma
 **Estimativa:** S (configuracao + verificacao)
@@ -43,12 +43,12 @@ O codigo de tracing OpenTelemetry esta implementado (`telemetry.py`, `middleware
 
 ### Criterios de Aceitacao
 
-- [ ] **AC1:** `OTEL_EXPORTER_OTLP_ENDPOINT` configurado no Railway para backend service (apontando para Grafana Cloud OTLP endpoint)
-- [ ] **AC2:** `OTEL_SERVICE_NAME=smartlic-backend` configurado
-- [ ] **AC3:** `.env.example` documentado com as variaveis OTEL
-- [ ] **AC4:** Logs em producao mostram `trace_id` e `span_id` reais (nao "-")
-- [ ] **AC5:** Grafana Cloud mostra traces da aplicacao
-- [ ] **AC6:** Verificar que tracing nao degrada performance (sampling rate adequado)
+- [ ] **AC1:** `OTEL_EXPORTER_OTLP_ENDPOINT` configurado no Railway para backend service (apontando para Grafana Cloud OTLP endpoint) — **PENDENTE: Requer URL do Grafana Cloud Tempo OTLP. Configurar via `railway variables --set "OTEL_EXPORTER_OTLP_ENDPOINT=https://<stack>.grafana.net/otlp" --set "OTEL_EXPORTER_OTLP_HEADERS=Authorization=Basic <base64(instanceId:apiKey)>"`**
+- [x] **AC2:** `OTEL_SERVICE_NAME=smartlic-backend` configurado
+- [x] **AC3:** `.env.example` documentado com as variaveis OTEL
+- [ ] **AC4:** Logs em producao mostram `trace_id` e `span_id` reais (nao "-") — pós-deploy
+- [ ] **AC5:** Grafana Cloud mostra traces da aplicacao — pós-deploy
+- [x] **AC6:** Verificar que tracing nao degrada performance (sampling rate adequado) — OTEL_SAMPLING_RATE=0.1 configurado
 
 ### Verificacao Pos-Deploy
 
@@ -62,9 +62,9 @@ O codigo de tracing OpenTelemetry esta implementado (`telemetry.py`, `middleware
 
 | Arquivo | Mudanca |
 |---|---|
-| `.env.example` | Documentar OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_SERVICE_NAME |
-| Railway env vars | Configurar via `railway variables set` |
-| `backend/config.py` | Verificar defaults (ja existem, apenas confirmar) |
+| `.env.example` | Documentar OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_SERVICE_NAME, OTEL_SAMPLING_RATE |
+| `backend/telemetry.py` | CRIT-023: Suporte a HTTPS + OTEL_EXPORTER_OTLP_HEADERS para Grafana Cloud |
+| Railway env vars | OTEL_SERVICE_NAME e OTEL_SAMPLING_RATE configurados (falta OTLP endpoint) |
 
 ---
 

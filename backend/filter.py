@@ -651,14 +651,21 @@ RED_FLAGS_INFRASTRUCTURE: Set[str] = {
     "recapeamento", "asfalto", "esgoto", "bueiro",
 }
 
-# CRIT-020: Sectors exempt from specific red flag categories
+# CRIT-020 + CRIT-024: Sectors exempt from specific red flag categories
 # Infrastructure red flags are the PRIMARY keywords for these sectors
 _INFRA_EXEMPT_SECTORS: Set[str] = {
     "engenharia", "engenharia_rodoviaria", "manutencao_predial", "materiais_hidraulicos",
 }
-# Medical red flags are the PRIMARY keywords for saude
+# Medical red flags are the PRIMARY keywords for saude;
+# CRIT-024: facilities has "material de limpeza hospitalar" (contains "hospitalar");
+# CRIT-024: transporte has "ambulância" (descriptions naturally contain "paciente", "hospitalar")
 _MEDICAL_EXEMPT_SECTORS: Set[str] = {
-    "saude",
+    "saude", "facilities", "transporte",
+}
+# CRIT-024: Administrative red flags overlap with software sector keywords
+# (software has "consultoria de software", "consultoria de ti", "assessoria de ti")
+_ADMIN_EXEMPT_SECTORS: Set[str] = {
+    "software",
 }
 
 
@@ -677,6 +684,7 @@ def has_red_flags(
     CRIT-020: Exempts infrastructure sectors from RED_FLAGS_INFRASTRUCTURE
     and saude from RED_FLAGS_MEDICAL, since those terms are the primary
     keywords of those sectors.
+    CRIT-024: Extends exemptions to facilities/transporte (medical) and software (admin).
 
     Args:
         objeto_norm: Normalized procurement object description
@@ -694,6 +702,8 @@ def has_red_flags(
             if red_flags is RED_FLAGS_INFRASTRUCTURE and setor in _INFRA_EXEMPT_SECTORS:
                 continue
             if red_flags is RED_FLAGS_MEDICAL and setor in _MEDICAL_EXEMPT_SECTORS:
+                continue
+            if red_flags is RED_FLAGS_ADMINISTRATIVE and setor in _ADMIN_EXEMPT_SECTORS:
                 continue
         matches = [flag for flag in red_flags if flag in objeto_norm]
         if len(matches) >= threshold:

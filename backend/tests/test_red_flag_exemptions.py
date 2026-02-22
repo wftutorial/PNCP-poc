@@ -1,9 +1,9 @@
-"""CRIT-020: Tests for red flag sector exemptions.
+"""CRIT-020 + CRIT-024: Tests for red flag sector exemptions.
 
 Validates that infrastructure sectors (engenharia, engenharia_rodoviaria,
 manutencao_predial, materiais_hidraulicos) are exempt from RED_FLAGS_INFRASTRUCTURE,
-and that saude is exempt from RED_FLAGS_MEDICAL, while non-exempt sectors remain
-protected.
+saude/facilities/transporte are exempt from RED_FLAGS_MEDICAL, and software is
+exempt from RED_FLAGS_ADMINISTRATIVE.
 """
 
 import pytest
@@ -15,6 +15,7 @@ from filter import (
     RED_FLAGS_ADMINISTRATIVE,
     _INFRA_EXEMPT_SECTORS,
     _MEDICAL_EXEMPT_SECTORS,
+    _ADMIN_EXEMPT_SECTORS,
 )
 
 
@@ -245,7 +246,7 @@ class TestNonExemptSectors:
         "alimentos", "facilities", "vigilancia", "transporte",
     ])
     def test_non_exempt_sector_catches_infra_flags(self, setor: str):
-        """Non-exempt sectors are checked against infrastructure red flags."""
+        """Non-infra-exempt sectors are checked against infrastructure red flags."""
         flagged, terms = has_red_flags(
             _infra_heavy_text(), ALL_RED_FLAG_SETS, setor=setor
         )
@@ -253,9 +254,10 @@ class TestNonExemptSectors:
 
     @pytest.mark.parametrize("setor", [
         "informatica", "software", "vestuario", "engenharia",
+        "papelaria", "mobiliario", "alimentos", "vigilancia",
     ])
     def test_non_exempt_sector_catches_medical_flags(self, setor: str):
-        """Non-saude sectors are checked against medical red flags."""
+        """Non-medical-exempt sectors are checked against medical red flags."""
         flagged, terms = has_red_flags(
             _medical_heavy_text(), ALL_RED_FLAG_SETS, setor=setor
         )
@@ -308,4 +310,165 @@ class TestExemptionSets:
         }
 
     def test_medical_exempt_sectors(self):
-        assert _MEDICAL_EXEMPT_SECTORS == {"saude"}
+        # CRIT-024: facilities and transporte added
+        assert _MEDICAL_EXEMPT_SECTORS == {"saude", "facilities", "transporte"}
+
+    def test_admin_exempt_sectors(self):
+        # CRIT-024: software exempt from administrative red flags
+        assert _ADMIN_EXEMPT_SECTORS == {"software"}
+
+
+# ---------------------------------------------------------------------------
+# CRIT-024: Software administrative exemption
+# ---------------------------------------------------------------------------
+
+class TestSoftwareAdminExemption:
+    """CRIT-024 AC3: Software sector exempt from administrative red flags."""
+
+    def test_software_consultoria_bid_not_flagged(self):
+        """Software consulting bid with admin terms passes."""
+        text = normalize_text(
+            "Contratacao de consultoria de software e assessoria "
+            "de ti para treinamento de equipe"
+        )
+        flagged, terms = has_red_flags(
+            text, ALL_RED_FLAG_SETS, setor="software"
+        )
+        # Admin red flags skipped for software
+        admin_terms = [t for t in terms if t in RED_FLAGS_ADMINISTRATIVE]
+        assert len(admin_terms) == 0
+
+    def test_software_still_catches_medical_flags(self):
+        """Software sector is NOT exempt from medical flags."""
+        flagged, terms = has_red_flags(
+            _medical_heavy_text(), ALL_RED_FLAG_SETS, setor="software"
+        )
+        assert flagged is True
+        medical_terms = [t for t in terms if t in RED_FLAGS_MEDICAL]
+        assert len(medical_terms) >= 2
+
+    def test_software_still_catches_infra_flags(self):
+        """Software sector is NOT exempt from infrastructure flags."""
+        flagged, terms = has_red_flags(
+            _infra_heavy_text(), ALL_RED_FLAG_SETS, setor="software"
+        )
+        assert flagged is True
+
+    def test_non_software_still_catches_admin_flags(self):
+        """Non-software sectors still catch admin red flags."""
+        text = normalize_text(
+            "Contratacao de consultoria e assessoria para auditoria "
+            "e treinamento de capacitacao"
+        )
+        flagged, terms = has_red_flags(
+            text, ALL_RED_FLAG_SETS, setor="vestuario"
+        )
+        assert flagged is True
+        admin_terms = [t for t in terms if t in RED_FLAGS_ADMINISTRATIVE]
+        assert len(admin_terms) >= 2
+
+
+# ---------------------------------------------------------------------------
+# CRIT-024: Facilities medical exemption
+# ---------------------------------------------------------------------------
+
+class TestFacilitiesMedicalExemption:
+    """CRIT-024 AC3: Facilities sector exempt from medical red flags."""
+
+    def test_facilities_hospitalar_bid_not_flagged(self):
+        """Hospital cleaning bid with medical terms passes."""
+        text = normalize_text(
+            "Material de limpeza hospitalar para tratamento de pisos "
+            "e higienizacao de clinica medica"
+        )
+        flagged, terms = has_red_flags(
+            text, ALL_RED_FLAG_SETS, setor="facilities"
+        )
+        medical_terms = [t for t in terms if t in RED_FLAGS_MEDICAL]
+        assert len(medical_terms) == 0
+
+    def test_facilities_still_catches_infra_flags(self):
+        """Facilities is NOT exempt from infra flags."""
+        flagged, terms = has_red_flags(
+            _infra_heavy_text(), ALL_RED_FLAG_SETS, setor="facilities"
+        )
+        assert flagged is True
+
+    def test_facilities_still_catches_admin_flags(self):
+        """Facilities is NOT exempt from admin flags."""
+        flagged, terms = has_red_flags(
+            _admin_heavy_text(), ALL_RED_FLAG_SETS, setor="facilities"
+        )
+        assert flagged is True
+
+
+# ---------------------------------------------------------------------------
+# CRIT-024: Transporte medical exemption
+# ---------------------------------------------------------------------------
+
+class TestTransporteMedicalExemption:
+    """CRIT-024 AC3: Transporte sector exempt from medical red flags."""
+
+    def test_transporte_ambulancia_bid_not_flagged(self):
+        """Ambulance procurement bid with medical terms passes."""
+        text = normalize_text(
+            "Aquisicao de ambulancia para transporte de paciente "
+            "hospitalar com leito e equipamento cirurgico"
+        )
+        flagged, terms = has_red_flags(
+            text, ALL_RED_FLAG_SETS, setor="transporte"
+        )
+        medical_terms = [t for t in terms if t in RED_FLAGS_MEDICAL]
+        assert len(medical_terms) == 0
+
+    def test_transporte_still_catches_infra_flags(self):
+        """Transporte is NOT exempt from infra flags."""
+        flagged, terms = has_red_flags(
+            _infra_heavy_text(), ALL_RED_FLAG_SETS, setor="transporte"
+        )
+        assert flagged is True
+
+    def test_transporte_still_catches_admin_flags(self):
+        """Transporte is NOT exempt from admin flags."""
+        flagged, terms = has_red_flags(
+            _admin_heavy_text(), ALL_RED_FLAG_SETS, setor="transporte"
+        )
+        assert flagged is True
+
+
+# ---------------------------------------------------------------------------
+# CRIT-024 AC6: Recall test for all 15 sectors
+# ---------------------------------------------------------------------------
+
+class TestAllSectorsRecall:
+    """CRIT-024 AC6: Every sector has recall > 0 when filtering relevant bids."""
+
+    SECTOR_TEST_TEXTS = {
+        "vestuario": "Aquisicao de uniformes escolares e fardamento para servidores",
+        "alimentos": "Aquisicao de generos alimenticios e merenda escolar para rede municipal",
+        "informatica": "Aquisicao de computadores notebook e impressoras para informatica",
+        "mobiliario": "Aquisicao de mobiliario cadeiras e mesas para escritorio municipal",
+        "papelaria": "Aquisicao de material de escritorio papel a4 canetas e grampeadores",
+        "engenharia": "Servico de engenharia construcao civil pavimentacao e reforma predial",
+        "software": "Contratacao de software sistema de gestao e consultoria de ti",
+        "facilities": "Servico de limpeza predial conservacao e manutencao de ar condicionado",
+        "saude": "Aquisicao de medicamento hospitalar material cirurgico e equipamento medico",
+        "vigilancia": "Servico de vigilancia patrimonial monitoramento e alarme eletronico",
+        "transporte": "Aquisicao de veiculo ambulancia e locacao de onibus para transporte",
+        "manutencao_predial": "Servico de manutencao predial elevador e ar condicionado",
+        "engenharia_rodoviaria": "Obra de pavimentacao asfaltica e drenagem rodoviaria",
+        "materiais_eletricos": "Aquisicao de material eletrico lampada led e disjuntor",
+        "materiais_hidraulicos": "Aquisicao de tubo pvc registro e conexao hidraulica",
+    }
+
+    @pytest.mark.parametrize("setor", list(SECTOR_TEST_TEXTS.keys()))
+    def test_sector_bid_not_false_rejected_by_red_flags(self, setor: str):
+        """AC6: A relevant bid for each sector is NOT rejected by red flags."""
+        text = normalize_text(self.SECTOR_TEST_TEXTS[setor])
+        flagged, terms = has_red_flags(
+            text, ALL_RED_FLAG_SETS, setor=setor
+        )
+        assert flagged is False, (
+            f"Sector {setor} bid was incorrectly red-flagged: {terms}. "
+            f"Text: {text[:100]}"
+        )

@@ -325,9 +325,8 @@ async def lifespan(app_instance: FastAPI):
         - Close Redis pool gracefully
     """
     # === STARTUP ===
-    # GTM-RESILIENCE-F02: Initialize OpenTelemetry tracing (before anything else)
-    from telemetry import init_tracing, shutdown_tracing
-    init_tracing(app_instance)
+    # GTM-RESILIENCE-F02: OpenTelemetry tracing (init moved before app creation, CRIT-023)
+    from telemetry import shutdown_tracing
 
     # AC12-AC14: Validate environment variables
     validate_env_vars()
@@ -444,6 +443,11 @@ async def lifespan(app_instance: FastAPI):
     # STORY-217: Close Redis pool
     await shutdown_redis()
 
+
+# CRIT-023: Initialize tracing BEFORE app creation so FastAPIInstrumentor
+# can patch the FastAPI class (instrument_app in lifespan is too late)
+from telemetry import init_tracing as _init_tracing
+_init_tracing()
 
 # Initialize FastAPI application
 app = FastAPI(

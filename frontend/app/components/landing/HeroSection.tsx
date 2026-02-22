@@ -213,6 +213,8 @@ function StatsBadge({ icon, value, label, delay }: StatsBadgeProps) {
           justify-center
           cursor-default
         "
+        role="text"
+        aria-label={`${value} ${label}`}
       >
         {isComponent && IconComponent ? (
           <IconComponent
@@ -226,15 +228,14 @@ function StatsBadge({ icon, value, label, delay }: StatsBadgeProps) {
               ${label.includes('Portais') ? 'group-hover:-rotate-6' : ''}
             `}
             strokeWidth={2}
-            aria-label={label}
-            role="img"
+            aria-hidden="true"
           />
         ) : (
-          <span className="text-lg" role="img" aria-label={label}>
+          <span className="text-lg" aria-hidden="true">
             {icon as string}
           </span>
         )}
-        <div className="flex flex-col items-start">
+        <div className="flex flex-col items-start" aria-hidden="true">
           <span className="text-ink font-bold tabular-nums">
             {displayValue}
           </span>

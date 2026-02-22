@@ -3,6 +3,7 @@ import logging
 import time
 import uuid
 from contextvars import ContextVar
+from starlette.datastructures import State
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
@@ -46,24 +47,44 @@ class RequestIDFilter(logging.Filter):
         return True
 
 
-class CorrelationIDMiddleware(BaseHTTPMiddleware):
+class CorrelationIDMiddleware:
     """
-    Add correlation/request ID to every request for distributed tracing.
+    Pure ASGI middleware for correlation/request ID and distributed tracing.
+
+    CRIT-023: Must be pure ASGI (not BaseHTTPMiddleware) to preserve
+    OpenTelemetry contextvar propagation. BaseHTTPMiddleware creates a
+    new async task for dispatch(), which breaks OTel span context.
 
     SYS-L04: Produces exactly one log line per request with:
     - HTTP method, path, status code, duration
     - Request ID for correlation across distributed services
     """
 
-    async def dispatch(self, request: Request, call_next) -> Response:
-        # Use incoming X-Request-ID or generate new
-        req_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
-        request_id_var.set(req_id)
+    def __init__(self, app):
+        self.app = app
 
-        # CRIT-004 AC6: Read and store X-Correlation-ID from browser
-        corr_id = request.headers.get("X-Correlation-ID") or "-"
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        # Extract headers from raw ASGI scope
+        headers = {k: v for k, v in scope.get("headers", [])}
+        req_id = (headers.get(b"x-request-id", b"").decode() or
+                  str(uuid.uuid4()))
+        corr_id = headers.get(b"x-correlation-id", b"").decode() or "-"
+
+        # Set context vars (now in same task as OTel ASGI middleware)
+        request_id_var.set(req_id)
         correlation_id_var.set(corr_id)
-        request.state.correlation_id = corr_id
+
+        # Store in scope state for access via request.state in handlers
+        if "state" not in scope:
+            scope["state"] = State()
+        elif isinstance(scope["state"], dict):
+            scope["state"] = State(scope["state"])
+        scope["state"].request_id = req_id
+        scope["state"].correlation_id = corr_id
 
         # F-02 AC19: Link X-Request-ID to active OpenTelemetry span
         try:
@@ -74,28 +95,31 @@ class CorrelationIDMiddleware(BaseHTTPMiddleware):
         except Exception:
             pass
 
-        # Store in request state for access in route handlers
-        request.state.request_id = req_id
-
+        method = scope.get("method", "?")
+        path = scope.get("path", "?")
         start_time = time.time()
-        method = request.method
-        path = request.url.path
+        status_code = 0
+
+        async def send_wrapper(message):
+            nonlocal status_code
+            if message["type"] == "http.response.start":
+                status_code = message.get("status", 0)
+                # Inject X-Request-ID into response headers
+                raw_headers = list(message.get("headers", []))
+                raw_headers.append((b"x-request-id", req_id.encode()))
+                message = {**message, "headers": raw_headers}
+            await send(message)
 
         try:
-            response = await call_next(request)
+            await self.app(scope, receive, send_wrapper)
             duration_ms = int((time.time() - start_time) * 1000)
-
             # SYS-L04: Single consolidated log line per request
             logger.info(
-                f"{method} {path} -> {response.status_code} ({duration_ms}ms) "
+                f"{method} {path} -> {status_code} ({duration_ms}ms) "
                 f"[req_id={req_id}]"
             )
-
-            response.headers["X-Request-ID"] = req_id
-            return response
         except Exception as e:
             duration_ms = int((time.time() - start_time) * 1000)
-
             # SYS-L04: Single log line for errors
             logger.error(
                 f"{method} {path} -> ERROR ({duration_ms}ms) "

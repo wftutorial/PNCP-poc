@@ -327,7 +327,7 @@ async def lifespan(app_instance: FastAPI):
     # === STARTUP ===
     # GTM-RESILIENCE-F02: Initialize OpenTelemetry tracing (before anything else)
     from telemetry import init_tracing, shutdown_tracing
-    init_tracing()
+    init_tracing(app_instance)
 
     # AC12-AC14: Validate environment variables
     validate_env_vars()

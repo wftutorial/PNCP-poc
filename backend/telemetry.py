@@ -44,12 +44,15 @@ def _is_otel_available() -> bool:
         return False
 
 
-def init_tracing() -> None:
+def init_tracing(app=None) -> None:
     """Initialize OpenTelemetry tracing.
 
     AC2: Creates TracerProvider with OTLP exporter and configures sampling.
     AC8: Reads OTEL_EXPORTER_OTLP_ENDPOINT — if not set, tracing is no-op.
     AC9: No-op mode has zero overhead (no TracerProvider created).
+
+    Args:
+        app: FastAPI app instance for instrument_app() (required for existing apps).
 
     Called once during application lifespan startup (AC3).
     """
@@ -114,7 +117,7 @@ def init_tracing() -> None:
         )
 
         # AC4: Auto-instrument FastAPI
-        _instrument_fastapi()
+        _instrument_fastapi(app)
 
         # AC5: Auto-instrument httpx
         _instrument_httpx()
@@ -124,11 +127,15 @@ def init_tracing() -> None:
         _noop = True
 
 
-def _instrument_fastapi() -> None:
+def _instrument_fastapi(app=None) -> None:
     """AC4: Auto-instrument FastAPI routes with spans."""
     try:
         from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-        FastAPIInstrumentor.instrument()
+        instrumentor = FastAPIInstrumentor()
+        if app is not None:
+            instrumentor.instrument_app(app)
+        else:
+            instrumentor.instrument()
         logger.info("FastAPI auto-instrumentation enabled")
     except ImportError:
         logger.warning("opentelemetry-instrumentation-fastapi not installed — skipping")

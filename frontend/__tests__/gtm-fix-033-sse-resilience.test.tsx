@@ -305,8 +305,8 @@ describe('GTM-FIX-033: SSE Resilience', () => {
         })
       );
 
-      // Should show the "Finalizando busca..." message
-      expect(screen.getByText(/Finalizando busca/i)).toBeTruthy();
+      // Should show the SSE disconnect message
+      expect(screen.getByText(/progresso em tempo real foi interrompido/i)).toBeTruthy();
     });
 
     test('EnhancedLoadingProgress does not show disconnect message when connected', () => {
@@ -324,7 +324,7 @@ describe('GTM-FIX-033: SSE Resilience', () => {
         })
       );
 
-      expect(screen.queryByText(/Finalizando busca/i)).toBeNull();
+      expect(screen.queryByText(/progresso em tempo real foi interrompido/i)).toBeNull();
     });
   });
 

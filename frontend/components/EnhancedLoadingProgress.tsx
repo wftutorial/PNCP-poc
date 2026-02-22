@@ -54,25 +54,25 @@ const STAGES: Stage[] = [
     id: 1,
     label: 'Consultando fontes oficiais',
     progressTarget: 10,
-    description: 'Consultando fontes oficiais de contratacoes publicas',
+    description: 'Consultando fontes oficiais de contratações públicas',
   },
   {
     id: 2,
     label: 'Buscando dados',
     progressTarget: 10,
-    description: 'Coletando licitacoes dos estados selecionados',
+    description: 'Coletando licitações dos estados selecionados',
   },
   {
     id: 3,
     label: 'Filtrando resultados',
     progressTarget: 70,
-    description: 'Aplicando filtros de setor, valor e relevancia',
+    description: 'Aplicando filtros de setor, valor e relevância',
   },
   {
     id: 4,
     label: 'Avaliando oportunidades',
     progressTarget: 90,
-    description: 'Gerando avaliacao estrategica por IA',
+    description: 'Gerando avaliação estratégica por IA',
   },
   {
     id: 5,
@@ -104,16 +104,16 @@ function getOvertimeMessage(overBySeconds: number, stateCount: number, estimated
 
   // Fallback for no SSE
   if (elapsedTime > estimatedTime * 2) {
-    return 'Esta busca esta demorando mais que o normal. Pode ficar nesta pagina — os resultados serao exibidos automaticamente.';
+    return 'Esta busca está demorando mais que o normal. Pode ficar nesta página — os resultados serão exibidos automaticamente.';
   }
   if (overBySeconds < 15) return 'Quase pronto, finalizando...';
-  if (overBySeconds < 45) return 'Estamos trabalhando nisso, so mais um instante!';
+  if (overBySeconds < 45) return 'Estamos trabalhando nisso, só mais um instante!';
   if (overBySeconds < 90) {
     return stateCount > 10
       ? 'Ainda processando. Buscas com muitos estados demoram mais.'
       : 'Processando, aguarde mais um momento.';
   }
-  return 'Esta busca esta demorando mais que o normal. Pode ficar nesta pagina — os resultados serao exibidos automaticamente.';
+  return 'Esta busca está demorando mais que o normal. Pode ficar nesta página — os resultados serão exibidos automaticamente.';
 }
 
 export function EnhancedLoadingProgress({
@@ -277,8 +277,8 @@ export function EnhancedLoadingProgress({
       role="status"
       aria-live="polite"
       aria-label={isDegraded
-        ? `Resultados disponiveis com ressalvas`
-        : `Buscando licitacoes, ${Math.floor(progressPercentage)}% completo`}
+        ? `Resultados disponíveis com ressalvas`
+        : `Buscando licitações, ${Math.floor(progressPercentage)}% completo`}
       data-testid={isDegraded ? 'degraded-progress' : 'loading-progress'}
     >
       {/* CRIT-005 AC22: Timeout overlay */}
@@ -412,7 +412,7 @@ export function EnhancedLoadingProgress({
           <svg className="w-4 h-4 flex-shrink-0 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
           </svg>
-          {degradedMessage || 'Resultados disponiveis com ressalvas'}
+          {degradedMessage || 'Resultados disponíveis com ressalvas'}
         </div>
       )}
 
@@ -468,7 +468,7 @@ export function EnhancedLoadingProgress({
       {sseDisconnected && (
         <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/40 rounded-lg text-sm text-blue-800 dark:text-blue-200 flex items-center gap-2">
           <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
-          O progresso em tempo real foi interrompido. A busca continua no servidor e os resultados serao exibidos quando prontos.
+          O progresso em tempo real foi interrompido. A busca continua no servidor e os resultados serão exibidos quando prontos.
         </div>
       )}
 

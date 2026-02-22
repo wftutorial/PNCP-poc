@@ -479,7 +479,7 @@ describe('EnhancedLoadingProgress Component', () => {
         />
       );
 
-      expect(screen.getByText(/Finalizando busca/)).toBeInTheDocument();
+      expect(screen.getByText(/progresso em tempo real foi interrompido/)).toBeInTheDocument();
     });
   });
 

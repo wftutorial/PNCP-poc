@@ -19,9 +19,9 @@ restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
 # Zero-downtime: keep old container running 30s after new one is healthy
 # (longer than frontend — SSE streams + search requests need time to drain)
-overlapSeconds = "30"
+overlapSeconds = 30
 # Graceful shutdown: 15s for in-flight SSE/search requests after SIGTERM
-drainingSeconds = "15"
+drainingSeconds = 15
 
 # =============================================================================
 # Environment Variables (Set in Railway Dashboard)

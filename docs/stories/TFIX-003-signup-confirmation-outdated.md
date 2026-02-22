@@ -1,6 +1,6 @@
 # TFIX-003: Atualizar signup-confirmation.test.tsx para formulário simplificado
 
-**Status:** Pending
+**Status:** Done
 **Prioridade:** Alta
 **Estimativa:** 1h
 **Arquivos afetados:** 2 test files
@@ -32,10 +32,10 @@ O `sector-sync.test.tsx` tenta parsear `SECTORS` de `signup/page.tsx`, mas essa 
 
 ## Critérios de Aceitação
 
-- [ ] AC1: `signupAndGetToConfirmation()` helper atualizado para preencher apenas Nome, Email, Senha
-- [ ] AC2: Todos 12 testes de `signup-confirmation.test.tsx` passam
-- [ ] AC3: `sector-sync.test.tsx` AC2 atualizado ou removido (SECTORS não existe mais no signup)
-- [ ] AC4: `SignupPage.test.tsx` continua passando (33/33)
+- [x] AC1: `signupAndGetToConfirmation()` helper atualizado para preencher apenas Nome, Email, Senha
+- [x] AC2: Todos 12 testes de `signup-confirmation.test.tsx` passam
+- [x] AC3: `sector-sync.test.tsx` AC2 atualizado ou removido (SECTORS não existe mais no signup)
+- [x] AC4: `SignupPage.test.tsx` continua passando (33/33)
 
 ## Solução
 

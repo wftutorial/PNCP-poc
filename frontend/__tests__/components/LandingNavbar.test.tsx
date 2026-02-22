@@ -5,7 +5,7 @@
  * Tests:
  * - AC21: Component uses useAuth hook
  * - AC22: Logged-in user sees "Ir para Busca" button
- * - AC23: Not-logged-in user sees "Entrar" and "Criar conta"
+ * - AC23: Not-logged-in user sees "Entrar" and "Comece Gratis" (UX-345)
  * - AC24: Loading state has no layout shift (placeholder rendered)
  */
 
@@ -57,14 +57,14 @@ describe('LandingNavbar Component', () => {
       const placeholder = container.querySelector('.w-\\[180px\\]');
       expect(placeholder).toBeInTheDocument();
 
-      // Should NOT show Login or Criar conta during loading
-      expect(screen.queryByRole('link', { name: /Login/i })).not.toBeInTheDocument();
-      expect(screen.queryByRole('link', { name: /Criar conta/i })).not.toBeInTheDocument();
+      // Should NOT show Entrar or Comece Gratis during loading
+      expect(screen.queryByRole('link', { name: /Entrar/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: /Comece Gratis/i })).not.toBeInTheDocument();
       expect(screen.queryByRole('link', { name: /Ir para Busca/i })).not.toBeInTheDocument();
     });
   });
 
-  describe('AC23: Not-logged-in user state', () => {
+  describe('AC23: Not-logged-in user state (UX-345 updated copy)', () => {
     beforeEach(() => {
       mockUseAuth.mockReturnValue({
         user: null,
@@ -72,20 +72,20 @@ describe('LandingNavbar Component', () => {
       });
     });
 
-    it('should show Login link when not authenticated', () => {
+    it('should show "Entrar" link when not authenticated', () => {
       render(<LandingNavbar />);
 
-      const loginLink = screen.getByRole('link', { name: /Login/i });
-      expect(loginLink).toBeInTheDocument();
-      expect(loginLink).toHaveAttribute('href', '/login');
+      const entrarLink = screen.getByRole('link', { name: /Entrar/i });
+      expect(entrarLink).toBeInTheDocument();
+      expect(entrarLink).toHaveAttribute('href', '/login');
     });
 
-    it('should show Criar conta link when not authenticated', () => {
+    it('should show "Comece Gratis" link when not authenticated', () => {
       render(<LandingNavbar />);
 
-      const signupLink = screen.getByRole('link', { name: /Criar conta/i });
+      const signupLink = screen.getByRole('link', { name: /Comece Gratis/i });
       expect(signupLink).toBeInTheDocument();
-      expect(signupLink).toHaveAttribute('href', '/signup?source=landing-cta');
+      expect(signupLink).toHaveAttribute('href', '/signup?source=header-cta');
     });
 
     it('should NOT show "Ir para Busca" when not authenticated', () => {
@@ -111,16 +111,16 @@ describe('LandingNavbar Component', () => {
       expect(buscarLink).toHaveAttribute('href', '/buscar');
     });
 
-    it('should NOT show Login link when authenticated', () => {
+    it('should NOT show "Entrar" link when authenticated', () => {
       render(<LandingNavbar />);
 
-      expect(screen.queryByRole('link', { name: /^Login$/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: /Entrar/i })).not.toBeInTheDocument();
     });
 
-    it('should NOT show Criar conta link when authenticated', () => {
+    it('should NOT show "Comece Gratis" link when authenticated', () => {
       render(<LandingNavbar />);
 
-      expect(screen.queryByRole('link', { name: /Criar conta/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: /Comece Gratis/i })).not.toBeInTheDocument();
     });
 
     it('should maintain button styling consistency for logged-in state', () => {

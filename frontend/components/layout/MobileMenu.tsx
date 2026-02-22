@@ -149,16 +149,16 @@ export default function MobileMenu({ isOpen, onClose, user, scrollToSection }: M
                            rounded-lg transition-colors
                            focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)]"
               >
-                Login
+                Entrar
               </Link>
               <Link
-                href="/signup?source=landing-mobile"
+                href="/signup?source=header-cta-mobile"
                 onClick={onClose}
                 className="block w-full min-h-[44px] px-4 py-3 text-center text-base font-semibold
                            bg-[var(--brand-navy)] hover:bg-[var(--brand-blue-hover)] text-white rounded-lg
                            transition-all focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2"
               >
-                Criar conta
+                Comece Gratis
               </Link>
             </div>
           )}

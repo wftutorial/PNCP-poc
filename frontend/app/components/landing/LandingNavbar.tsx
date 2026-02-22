@@ -89,15 +89,15 @@ export default function LandingNavbar({ className = '' }: LandingNavbarProps) {
                 <>
                   <Link
                     href="/login"
-                    className="text-brand-navy hover:text-brand-blue font-semibold transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] rounded px-2 py-1"
+                    className="border border-brand-navy text-brand-navy hover:bg-brand-navy/5 font-semibold px-4 py-2 rounded-button transition-all focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2"
                   >
-                    Login
+                    Entrar
                   </Link>
                   <Link
-                    href="/signup?source=landing-cta"
+                    href="/signup?source=header-cta"
                     className="bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-4 py-2 rounded-button transition-all hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2"
                   >
-                    Criar conta
+                    Comece Gratis
                   </Link>
                 </>
               )}

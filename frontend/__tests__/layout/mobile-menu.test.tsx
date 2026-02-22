@@ -43,18 +43,18 @@ describe('MobileMenu', () => {
     expect(screen.getByText('Suporte')).toBeInTheDocument();
   });
 
-  // AC3: Menu includes Login and Criar conta when not logged in
-  it('shows Login and Criar conta for unauthenticated users', () => {
+  // AC3: Menu includes Entrar and Comece Gratis when not logged in (UX-345 updated copy)
+  it('shows Entrar and Comece Gratis for unauthenticated users', () => {
     render(<MobileMenu {...defaultProps} user={null} />);
-    expect(screen.getByText('Login')).toBeInTheDocument();
-    expect(screen.getByText('Criar conta')).toBeInTheDocument();
+    expect(screen.getByText('Entrar')).toBeInTheDocument();
+    expect(screen.getByText('Comece Gratis')).toBeInTheDocument();
   });
 
   // AC3: Menu shows "Ir para Busca" when logged in
   it('shows Ir para Busca for authenticated users', () => {
     render(<MobileMenu {...defaultProps} user={{ email: 'test@test.com' }} />);
     expect(screen.getByText('Ir para Busca')).toBeInTheDocument();
-    expect(screen.queryByText('Login')).not.toBeInTheDocument();
+    expect(screen.queryByText('Entrar')).not.toBeInTheDocument();
   });
 
   // AC4: Overlay closes menu when clicked

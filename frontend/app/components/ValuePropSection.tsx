@@ -21,10 +21,10 @@ export default function ValuePropSection() {
   const { ref, isVisible } = useScrollAnimation(0.1);
 
   const props = [
-    { ...valueProps.prioritization, size: 'large' as const },  // 2x2
+    { ...valueProps.prioritization, size: 'medium' as const }, // 2x1
     { ...valueProps.analysis, size: 'medium' as const },       // 2x1
     { ...valueProps.uncertainty, size: 'medium' as const },    // 2x1
-    { ...valueProps.coverage, size: 'full' as const },         // 4x1 (full width)
+    { ...valueProps.coverage, size: 'medium' as const },       // 2x1
   ];
 
   return (

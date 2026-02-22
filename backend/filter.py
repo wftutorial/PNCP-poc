@@ -3,6 +3,8 @@
 import logging
 import random
 import re
+import time
+import threading
 import unicodedata
 import uuid
 from datetime import datetime, timezone
@@ -2791,12 +2793,26 @@ def aplicar_todos_filtros(
 
     if resultado_llm_candidates:
         from llm_arbiter import classify_contract_primary_match
+        from concurrent.futures import ThreadPoolExecutor, as_completed
 
-        for lic in resultado_llm_candidates:
-            objeto = lic.get("objetoCompra", "")
-            valor = lic.get("valorTotalEstimado") or lic.get("valorEstimado") or 0
-            trace_id = lic.get("_trace_id", "unknown")
-            prompt_level = lic.get("_llm_prompt_level", "standard")
+        # CRIT-FLT-002: Resolve sector name ONCE before dispatching threads
+        _arbiter_setor_name = None
+        if setor:
+            from sectors import get_sector
+            try:
+                _arbiter_setor_config = get_sector(setor)
+                _arbiter_setor_name = _arbiter_setor_config.name
+            except KeyError:
+                logger.warning(f"Setor '{setor}' não encontrado para LLM arbiter")
+
+        # CRIT-FLT-002 AC3: Thread-safe stats lock
+        _arbiter_stats_lock = threading.Lock()
+
+        def _classify_one_arbiter(lic_item):
+            """Classify a single gray-zone bid via LLM arbiter (thread-safe)."""
+            objeto = lic_item.get("objetoCompra", "")
+            valor = lic_item.get("valorTotalEstimado") or lic_item.get("valorEstimado") or 0
+            prompt_level = lic_item.get("_llm_prompt_level", "standard")
 
             # Convert valor to float if needed
             if isinstance(valor, str):
@@ -2807,93 +2823,107 @@ def aplicar_todos_filtros(
             else:
                 valor = float(valor) if valor else 0.0
 
-            # Determine mode: sector-based or custom-terms-based
-            setor_name = None
             termos = None
+            if not _arbiter_setor_name:
+                termos = lic_item.get("_matched_terms", [])
 
-            if setor:
-                from sectors import get_sector
-                try:
-                    setor_config = get_sector(setor)
-                    setor_name = setor_config.name
-                except KeyError:
-                    logger.warning(f"Setor '{setor}' não encontrado para LLM arbiter")
-
-            if not setor_name:
-                termos = lic.get("_matched_terms", [])
-
-            # STORY-181 AC3 + STORY-251 AC2: Call LLM arbiter with prompt level and setor_id
-            # D-02: Now returns dict with is_primary, confidence, evidence, rejection_reason
-            stats["llm_arbiter_calls"] += 1
             llm_result = classify_contract_primary_match(
                 objeto=objeto,
                 valor=valor,
-                setor_name=setor_name,
+                setor_name=_arbiter_setor_name,
                 termos_busca=termos,
                 prompt_level=prompt_level,
-                setor_id=setor if setor_name else None,
+                setor_id=setor if _arbiter_setor_name else None,
             )
-            is_primary = llm_result.get("is_primary", False) if isinstance(llm_result, dict) else llm_result
+            return lic_item, llm_result, valor
 
-            if is_primary:
-                stats["aprovadas_llm_arbiter"] += 1
-                # GTM-FIX-028 AC8: Tag relevance source based on prompt level
-                lic["_relevance_source"] = f"llm_{prompt_level}"
-                # D-02 AC4: Confidence from LLM structured output
-                if isinstance(llm_result, dict):
-                    lic["_confidence_score"] = llm_result.get("confidence", 70)
-                    lic["_llm_evidence"] = llm_result.get("evidence", [])
-                else:
-                    lic["_confidence_score"] = 70
-                    lic["_llm_evidence"] = []
-                resultado_densidade.append(lic)
-                logger.debug(
-                    f"[{trace_id}] Camada 3A: ACCEPT (LLM={prompt_level}) "
-                    f"conf={lic.get('_confidence_score')} "
-                    f"density={lic.get('_term_density', 0):.1%} "
-                    f"objeto={objeto[:80]}"
-                )
-            else:
-                stats["rejeitadas_llm_arbiter"] += 1
-                # D-02 AC6: Store rejection reason for audit
-                if isinstance(llm_result, dict):
-                    lic["_llm_rejection_reason"] = llm_result.get("rejection_reason", "")
-                logger.debug(
-                    f"[{trace_id}] Camada 3A: REJECT (LLM={prompt_level}) "
-                    f"density={lic.get('_term_density', 0):.1%} "
-                    f"valor=R$ {valor:,.2f} objeto={objeto[:80]}"
-                )
-                # STORY-248 AC9: Record LLM rejection
+        # CRIT-FLT-002 AC1+AC5: Parallel execution with timing
+        t0_arbiter = time.monotonic()
+
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = {
+                executor.submit(_classify_one_arbiter, lic): lic
+                for lic in resultado_llm_candidates
+            }
+            for future in as_completed(futures):
+                with _arbiter_stats_lock:
+                    stats["llm_arbiter_calls"] += 1
                 try:
-                    _get_tracker().record_rejection(
-                        "llm_reject",
-                        sector=setor,
-                        description_preview=objeto[:100],
-                    )
-                except Exception:
-                    pass
+                    lic, llm_result, valor = future.result()
+                    trace_id = lic.get("_trace_id", "unknown")
+                    prompt_level = lic.get("_llm_prompt_level", "standard")
+                    objeto = lic.get("objetoCompra", "")
+                    is_primary = llm_result.get("is_primary", False) if isinstance(llm_result, dict) else llm_result
 
-            # STORY-181 AC7: QA Audit sampling
-            # D-02 AC6: Now includes evidence and confidence in audit log
-            if random.random() < QA_AUDIT_SAMPLE_RATE:
-                lic["_qa_audit"] = True
-                lic["_qa_audit_decision"] = {
-                    "trace_id": trace_id,
-                    "llm_response": "SIM" if is_primary else "NAO",
-                    "prompt_level": prompt_level,
-                    "density": lic.get("_term_density", 0),
-                    "matched_terms": lic.get("_matched_terms", []),
-                    "valor": valor,
-                    "confidence": llm_result.get("confidence") if isinstance(llm_result, dict) else None,
-                    "evidence": llm_result.get("evidence") if isinstance(llm_result, dict) else None,
-                    "rejection_reason": llm_result.get("rejection_reason") if isinstance(llm_result, dict) else None,
-                }
+                    if is_primary:
+                        with _arbiter_stats_lock:
+                            stats["aprovadas_llm_arbiter"] += 1
+                        # GTM-FIX-028 AC8: Tag relevance source based on prompt level
+                        lic["_relevance_source"] = f"llm_{prompt_level}"
+                        # D-02 AC4: Confidence from LLM structured output
+                        if isinstance(llm_result, dict):
+                            lic["_confidence_score"] = llm_result.get("confidence", 70)
+                            lic["_llm_evidence"] = llm_result.get("evidence", [])
+                        else:
+                            lic["_confidence_score"] = 70
+                            lic["_llm_evidence"] = []
+                        resultado_densidade.append(lic)
+                        logger.debug(
+                            f"[{trace_id}] Camada 3A: ACCEPT (LLM={prompt_level}) "
+                            f"conf={lic.get('_confidence_score')} "
+                            f"density={lic.get('_term_density', 0):.1%} "
+                            f"objeto={objeto[:80]}"
+                        )
+                    else:
+                        with _arbiter_stats_lock:
+                            stats["rejeitadas_llm_arbiter"] += 1
+                        # D-02 AC6: Store rejection reason for audit
+                        if isinstance(llm_result, dict):
+                            lic["_llm_rejection_reason"] = llm_result.get("rejection_reason", "")
+                        logger.debug(
+                            f"[{trace_id}] Camada 3A: REJECT (LLM={prompt_level}) "
+                            f"density={lic.get('_term_density', 0):.1%} "
+                            f"valor=R$ {valor:,.2f} objeto={objeto[:80]}"
+                        )
+                        # STORY-248 AC9: Record LLM rejection
+                        try:
+                            _get_tracker().record_rejection(
+                                "llm_reject",
+                                sector=setor,
+                                description_preview=objeto[:100],
+                            )
+                        except Exception:
+                            pass
 
+                    # STORY-181 AC7: QA Audit sampling (AC2: preserved in parallel)
+                    # D-02 AC6: Now includes evidence and confidence in audit log
+                    if random.random() < QA_AUDIT_SAMPLE_RATE:
+                        lic["_qa_audit"] = True
+                        lic["_qa_audit_decision"] = {
+                            "trace_id": trace_id,
+                            "llm_response": "SIM" if is_primary else "NAO",
+                            "prompt_level": prompt_level,
+                            "density": lic.get("_term_density", 0),
+                            "matched_terms": lic.get("_matched_terms", []),
+                            "valor": valor,
+                            "confidence": llm_result.get("confidence") if isinstance(llm_result, dict) else None,
+                            "evidence": llm_result.get("evidence") if isinstance(llm_result, dict) else None,
+                            "rejection_reason": llm_result.get("rejection_reason") if isinstance(llm_result, dict) else None,
+                        }
+
+                except Exception as e:
+                    # AC4: Fallback on LLM failure = REJECT (zero-noise philosophy)
+                    with _arbiter_stats_lock:
+                        stats["rejeitadas_llm_arbiter"] += 1
+                    logger.error(f"Camada 3A: LLM FAILED (REJECT fallback): {e}")
+
+        elapsed_arbiter = time.monotonic() - t0_arbiter
         logger.info(
             f"Camada 3A resultado: "
             f"{stats['aprovadas_llm_arbiter']} aprovadas, "
             f"{stats['rejeitadas_llm_arbiter']} rejeitadas, "
-            f"{stats['llm_arbiter_calls']} chamadas LLM"
+            f"{stats['llm_arbiter_calls']} chamadas LLM, "
+            f"elapsed={elapsed_arbiter:.2f}s (parallel, {len(resultado_llm_candidates)} bids)"
         )
 
     resultado_keyword = resultado_densidade

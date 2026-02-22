@@ -670,6 +670,97 @@ _ADMIN_EXEMPT_SECTORS: Set[str] = {
     "software",
 }
 
+# =============================================================================
+# CRIT-FLT-010: Per-Sector Red Flags (Cross-Domain False Positive Prevention)
+# =============================================================================
+# Each sector has specific "impostor" phrases — terms that match sector keywords
+# but actually belong to a different domain. Threshold=1 (more specific than
+# generic red flags which need 2+).
+
+# NOTE: All terms MUST be pre-normalized (no accents, lowercase) since they
+# are compared against normalize_text() output.
+RED_FLAGS_PER_SECTOR: Dict[str, List[str]] = {
+    "alimentos": [
+        "alimentacao de dados", "alimentacao ininterrupta",
+        "fonte de alimentacao", "alimentacao eletrica",
+        "alimentar processo", "alimentar sistema",
+    ],
+    "informatica": [
+        "equipamento medico", "equipamento hospitalar",
+        "equipamento odontologico", "equipamento laboratorial",
+        "equipamento de protecao", "equipamento esportivo",
+    ],
+    "software": [
+        "sistema de registro de precos", "sistema de ar condicionado",
+        "sistema de combate a incendio", "sistema de irrigacao",
+        "sistema viario", "sistema de drenagem", "sistema de esgoto",
+    ],
+    "engenharia": [
+        "engenharia de software", "engenharia genetica",
+        "engenharia financeira", "engenharia reversa",
+    ],
+    "facilities": [
+        "manutencao de veiculos", "manutencao de software",
+        "manutencao de equipamentos medicos", "manutencao rodoviaria",
+    ],
+    "vigilancia": [
+        "vigilancia sanitaria", "vigilancia epidemiologica",
+        "vigilancia ambiental", "vigilancia em saude",
+    ],
+    "transporte": [
+        "transporte de dados", "transporte de residuos",
+        "transporte de materiais perigosos", "transporte de energia",
+    ],
+    "mobiliario": [
+        "cadeira de rodas", "cadeira odontologica",
+        "cadeira cirurgica", "mesa cirurgica", "mesa de bilhar",
+    ],
+    "papelaria": [
+        "material cirurgico", "material de construcao",
+        "material eletrico", "material hidraulico",
+        "material hospitalar", "material belico",
+    ],
+    "manutencao_predial": [
+        "manutencao de software", "manutencao de veiculos",
+        "manutencao de equipamentos de ti",
+    ],
+    "materiais_eletricos": [
+        "cabo de rede ethernet", "cabo de aco",
+        "material eletronico", "equipamento eletronico",
+    ],
+    "materiais_hidraulicos": [
+        "hidratante", "hidromassagem", "hidroterapia",
+    ],
+    # Sectors with sufficiently specific keywords — generic red flags are enough
+    "vestuario": [],
+    "saude": [],
+    "engenharia_rodoviaria": [],
+}
+
+
+def has_sector_red_flags(
+    objeto_norm: str,
+    setor: str,
+) -> Tuple[bool, List[str]]:
+    """
+    Check sector-specific red flags (CRIT-FLT-010).
+
+    Unlike generic red flags (threshold=2), sector red flags are highly specific
+    phrases that unambiguously indicate cross-domain context. Threshold=1.
+
+    Args:
+        objeto_norm: Normalized procurement object description.
+        setor: Sector ID to look up per-sector red flags.
+
+    Returns:
+        Tuple of (has_flags, matched_flags).
+    """
+    flags = RED_FLAGS_PER_SECTOR.get(setor, [])
+    if not flags:
+        return False, []
+    matched = [flag for flag in flags if flag in objeto_norm]
+    return len(matched) > 0, matched
+
 
 def has_red_flags(
     objeto_norm: str,
@@ -2691,6 +2782,11 @@ def aplicar_todos_filtros(
     resultado_llm_standard: List[dict] = []  # density 2-5%: LLM standard prompt
     resultado_llm_conservative: List[dict] = []  # density 1-2%: LLM conservative prompt
     stats["rejeitadas_red_flags"] = 0
+    stats["rejeitadas_red_flags_setorial"] = 0
+
+    # CRIT-FLT-010: Check feature flag once per batch
+    from config import get_feature_flag
+    _sector_red_flags_enabled = get_feature_flag("SECTOR_RED_FLAGS_ENABLED")
 
     for lic in resultado_keyword:
         density = lic.get("_term_density", 0)
@@ -2732,9 +2828,29 @@ def aplicar_todos_filtros(
                 pass
         elif density >= TERM_DENSITY_MEDIUM_THRESHOLD:
             # Medium-high zone (2-5%) - LLM with standard prompt
-            # STORY-181 AC6: Check red flags BEFORE sending to LLM
-            # CRIT-020: Pass setor to exempt infrastructure/medical sectors
             objeto_norm = normalize_text(lic.get("objetoCompra", ""))
+
+            # CRIT-FLT-010: Sector-specific red flags (threshold=1, before generic)
+            if _sector_red_flags_enabled and setor:
+                s_flagged, s_flags = has_sector_red_flags(objeto_norm, setor)
+                if s_flagged:
+                    stats["rejeitadas_red_flags_setorial"] += 1
+                    logger.debug(
+                        f"[{trace_id}] Camada 2A: REJECT (sector red flags: {s_flags}) "
+                        f"density={density:.1%} objeto={objeto_preview}"
+                    )
+                    try:
+                        _get_tracker().record_rejection(
+                            "red_flags_sector",
+                            sector=setor,
+                            description_preview=objeto_preview,
+                        )
+                    except Exception:
+                        pass
+                    continue
+
+            # STORY-181 AC6: Generic red flags (threshold=2)
+            # CRIT-020: Pass setor to exempt infrastructure/medical sectors
             flagged, flag_terms = has_red_flags(
                 objeto_norm,
                 [RED_FLAGS_MEDICAL, RED_FLAGS_ADMINISTRATIVE, RED_FLAGS_INFRASTRUCTURE],
@@ -2753,9 +2869,29 @@ def aplicar_todos_filtros(
             resultado_llm_standard.append(lic)
         else:
             # Low-medium zone (1-2%) - LLM with conservative prompt
-            # STORY-181 AC6: Check red flags BEFORE sending to LLM
-            # CRIT-020: Pass setor to exempt infrastructure/medical sectors
             objeto_norm = normalize_text(lic.get("objetoCompra", ""))
+
+            # CRIT-FLT-010: Sector-specific red flags (threshold=1, before generic)
+            if _sector_red_flags_enabled and setor:
+                s_flagged, s_flags = has_sector_red_flags(objeto_norm, setor)
+                if s_flagged:
+                    stats["rejeitadas_red_flags_setorial"] += 1
+                    logger.debug(
+                        f"[{trace_id}] Camada 2A: REJECT (sector red flags: {s_flags}) "
+                        f"density={density:.1%} objeto={objeto_preview}"
+                    )
+                    try:
+                        _get_tracker().record_rejection(
+                            "red_flags_sector",
+                            sector=setor,
+                            description_preview=objeto_preview,
+                        )
+                    except Exception:
+                        pass
+                    continue
+
+            # STORY-181 AC6: Generic red flags (threshold=2)
+            # CRIT-020: Pass setor to exempt infrastructure/medical sectors
             flagged, flag_terms = has_red_flags(
                 objeto_norm,
                 [RED_FLAGS_MEDICAL, RED_FLAGS_ADMINISTRATIVE, RED_FLAGS_INFRASTRUCTURE],
@@ -2781,6 +2917,7 @@ def aplicar_todos_filtros(
         f"{len(resultado_llm_standard)} duvidosas (LLM standard), "
         f"{len(resultado_llm_conservative)} duvidosas (LLM conservative), "
         f"{stats.get('rejeitadas_red_flags', 0)} rejeitadas (red flags), "
+        f"{stats.get('rejeitadas_red_flags_setorial', 0)} rejeitadas (sector red flags), "
         f"{stats['rejeitadas_baixa_densidade']} rejeitadas (baixa densidade)"
     )
 

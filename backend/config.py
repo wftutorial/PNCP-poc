@@ -404,6 +404,7 @@ _FEATURE_FLAG_REGISTRY: dict[str, tuple[str, str]] = {
     "USER_FEEDBACK_ENABLED": ("USER_FEEDBACK_ENABLED", "true"),
     "PROXIMITY_CONTEXT_ENABLED": ("PROXIMITY_CONTEXT_ENABLED", "true"),
     "RATE_LIMITING_ENABLED": ("RATE_LIMITING_ENABLED", "true"),
+    "SECTOR_RED_FLAGS_ENABLED": ("SECTOR_RED_FLAGS_ENABLED", "true"),
 }
 
 # ============================================

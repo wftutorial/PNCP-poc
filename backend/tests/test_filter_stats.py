@@ -228,5 +228,6 @@ class TestReasonCodeConstants:
             "uf_mismatch",
             "status_mismatch",
             "co_occurrence",
+            "red_flags_sector",
         }
         assert set(ALL_REASON_CODES) == expected

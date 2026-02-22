@@ -30,8 +30,8 @@ Esses red flags genéricos detectam contextos médicos/admin/infra, mas **não c
 
 ## Acceptance Criteria
 
-- [ ] **AC1:** Criar `RED_FLAGS_PER_SECTOR` dict no `filter.py` com red flags específicas por setor
-- [ ] **AC2:** Red flags setoriais para cada um dos 15 setores:
+- [x] **AC1:** Criar `RED_FLAGS_PER_SECTOR` dict no `filter.py` com red flags específicas por setor
+- [x] **AC2:** Red flags setoriais para cada um dos 15 setores:
 
 ### Red Flags por Setor
 
@@ -80,12 +80,12 @@ Esses red flags genéricos detectam contextos médicos/admin/infra, mas **não c
 **materiais_hidraulicos:**
 - `["hidratante", "hidromassagem", "hidroterapia"]`
 
-- [ ] **AC3:** Integrar `RED_FLAGS_PER_SECTOR` na Camada 2A (antes de enviar ao LLM):
+- [x] **AC3:** Integrar `RED_FLAGS_PER_SECTOR` na Camada 2A (antes de enviar ao LLM):
   - Se keyword matched + sector-specific red flag matched → REJECT (sem LLM)
   - Threshold: 1 red flag setorial (mais específicos que genéricos, não precisa 2+)
-- [ ] **AC4:** Testes unitários para cada setor: 1 caso com red flag → REJECT, 1 caso sem → PASS
-- [ ] **AC5:** Adicionar stat `rejeitadas_red_flags_setorial` ao filter stats
-- [ ] **AC6:** Feature flag `SECTOR_RED_FLAGS_ENABLED` (default: true) para rollback
+- [x] **AC4:** Testes unitários para cada setor: 1 caso com red flag → REJECT, 1 caso sem → PASS
+- [x] **AC5:** Adicionar stat `rejeitadas_red_flags_setorial` ao filter stats
+- [x] **AC6:** Feature flag `SECTOR_RED_FLAGS_ENABLED` (default: true) para rollback
 
 ## Impacto
 

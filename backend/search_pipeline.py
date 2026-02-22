@@ -1540,6 +1540,7 @@ class SearchPipeline:
             exclusions=ctx.active_exclusions,
             context_required=ctx.active_context_required,
             min_match_floor=ctx.min_match_floor_value,
+            setor=ctx.request.setor_id,  # CRIT-019 AC1: pass sector to enable 6 classification paths
             modo_busca=request.modo_busca or "publicacao",
         )
 
@@ -1572,6 +1573,7 @@ class SearchPipeline:
                 exclusions=ctx.active_exclusions,
                 context_required=ctx.active_context_required,
                 min_match_floor=None,
+                setor=ctx.request.setor_id,  # CRIT-019 AC2: pass sector in relaxed retry too
                 modo_busca=request.modo_busca or "publicacao",
             )
             ctx.hidden_by_min_match = 0

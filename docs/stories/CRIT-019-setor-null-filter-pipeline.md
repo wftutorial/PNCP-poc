@@ -3,7 +3,7 @@
 **Tipo:** Bug Critico / Recall Killer
 **Prioridade:** P0 (Afeta TODOS os 15 setores em producao)
 **Criada:** 2026-02-22
-**Status:** Pendente
+**Status:** Concluido
 **Origem:** Investigacao P0 — busca de engenharia retornando 0 resultados
 **Dependencias:** Nenhuma
 **Estimativa:** XS (2 linhas de codigo + testes)
@@ -42,12 +42,12 @@ Todas as features abaixo estao **desabilitadas em producao para todos os 15 seto
 
 ### Criterios de Aceitacao
 
-- [ ] **AC1:** `search_pipeline.py:1530` passa `setor=ctx.request.setor_id` para `aplicar_todos_filtros()`
-- [ ] **AC2:** `search_pipeline.py:1562` (retry relaxado) passa `setor=ctx.request.setor_id` para `aplicar_todos_filtros()`
-- [ ] **AC3:** Teste unitario confirma que `aplicar_todos_filtros` recebe `setor` != None quando `request.setor_id` existe
-- [ ] **AC4:** Teste de integracao confirma que LLM Zero-Match (Camada 3B) e ativado quando `setor` e passado
-- [ ] **AC5:** Teste confirma que `filter_stats.record_rejection()` recebe `sector` != None
-- [ ] **AC6:** Teste de regressao — busca por setor que ja funcionava continua retornando resultados
+- [x] **AC1:** `search_pipeline.py:1530` passa `setor=ctx.request.setor_id` para `aplicar_todos_filtros()`
+- [x] **AC2:** `search_pipeline.py:1562` (retry relaxado) passa `setor=ctx.request.setor_id` para `aplicar_todos_filtros()`
+- [x] **AC3:** Teste unitario confirma que `aplicar_todos_filtros` recebe `setor` != None quando `request.setor_id` existe
+- [x] **AC4:** Teste de integracao confirma que LLM Zero-Match (Camada 3B) e ativado quando `setor` e passado
+- [x] **AC5:** Teste confirma que `filter_stats.record_rejection()` recebe `sector` != None
+- [x] **AC6:** Teste de regressao — busca por setor que ja funcionava continua retornando resultados
 
 ### Verificacao Pos-Deploy
 

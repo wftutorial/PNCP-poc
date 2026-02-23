@@ -158,31 +158,31 @@ beforeEach(() => {
 describe("CRIT-018: Dashboard Retry Storm", () => {
 
   // ─────────────────────────────────────────────────────────────────────
-  // AC11: After 5 failures, component stops making requests
+  // AC11: After 3 failures (CRIT-031), component stops making requests
   // ─────────────────────────────────────────────────────────────────────
-  describe("AC11: Stops after 5 failures", () => {
-    it("should show final error state after 5 failed attempts", async () => {
+  describe("AC11: Stops after 3 failures", () => {
+    it("should show final error state after 3 failed attempts", async () => {
       jest.useFakeTimers();
       (global.fetch as jest.Mock).mockRejectedValue(new Error("Server down"));
 
       render(<DashboardPage />);
 
-      // Advance through 5 retries: 0→err, wait 2s, 1→err, wait 4s, 2→err, wait 8s, 3→err, wait 16s, 4→err
-      for (let i = 0; i < 5; i++) {
+      // Advance through 3 retries (CRIT-031: reduced from 5 to 3)
+      for (let i = 0; i < 4; i++) {
         await act(async () => {
-          jest.advanceTimersByTime(i === 0 ? 100 : BACKOFF_DEFAULTS.initialDelayMs * Math.pow(2, i - 1));
-          await Promise.resolve(); // flush microtasks
+          jest.advanceTimersByTime(i === 0 ? 100 : 10_000);
+          await Promise.resolve();
           await Promise.resolve();
         });
       }
 
       await waitFor(() => {
-        expect(screen.getByTestId("dashboard-error-state")).toBeInTheDocument();
-        expect(screen.getByText("Painel temporariamente indisponível")).toBeInTheDocument();
-        expect(screen.getByText(/Nossos servidores estão sendo atualizados/)).toBeInTheDocument();
+        expect(screen.getByTestId("dashboard-empty-state")).toBeInTheDocument();
+        expect(screen.getByText("Dados temporariamente indisponíveis")).toBeInTheDocument();
+        expect(screen.getByText(/Tente novamente em alguns minutos/)).toBeInTheDocument();
       });
 
-      // Count total fetch calls — should be exactly 5 (initial + 4 retries)
+      // Count total fetch calls
       const fetchCalls = (global.fetch as jest.Mock).mock.calls.length;
 
       // Advance more time — no new requests should happen
@@ -236,14 +236,14 @@ describe("CRIT-018: Dashboard Retry Storm", () => {
   // AC13: Manual retry works after auto-retry exhaustion
   // ─────────────────────────────────────────────────────────────────────
   describe("AC13: Manual retry after exhaustion", () => {
-    it("should allow manual retry after 5 automatic failures", async () => {
+    it("should allow manual retry after 3 automatic failures", async () => {
       jest.useFakeTimers();
       (global.fetch as jest.Mock).mockRejectedValue(new Error("Server down"));
 
       render(<DashboardPage />);
 
-      // Exhaust all retries
-      for (let i = 0; i < 6; i++) {
+      // Exhaust all retries (CRIT-031: 3 retries)
+      for (let i = 0; i < 4; i++) {
         await act(async () => {
           jest.advanceTimersByTime(i === 0 ? 100 : 30_000);
           await Promise.resolve();
@@ -252,14 +252,14 @@ describe("CRIT-018: Dashboard Retry Storm", () => {
       }
 
       await waitFor(() => {
-        expect(screen.getByTestId("dashboard-error-state")).toBeInTheDocument();
+        expect(screen.getByTestId("dashboard-empty-state")).toBeInTheDocument();
       });
 
       // Now mock success
       mockFetchSuccess();
 
       // Click manual retry
-      fireEvent.click(screen.getByTestId("dashboard-manual-retry"));
+      fireEvent.click(screen.getByTestId("dashboard-retry-button"));
 
       await act(async () => {
         jest.advanceTimersByTime(100);
@@ -446,14 +446,14 @@ describe("CRIT-018: Dashboard Retry Storm", () => {
   // AC8: Error state visual
   // ─────────────────────────────────────────────────────────────────────
   describe("AC8: Error state visual", () => {
-    it("should show cloud icon, correct messages, and Atualizar agora button", async () => {
+    it("should show cloud icon, correct messages, and Tentar novamente button", async () => {
       jest.useFakeTimers();
       (global.fetch as jest.Mock).mockRejectedValue(new Error("fail"));
 
       render(<DashboardPage />);
 
-      // Exhaust all retries
-      for (let i = 0; i < 6; i++) {
+      // Exhaust all retries (CRIT-031: 3 retries)
+      for (let i = 0; i < 4; i++) {
         await act(async () => {
           jest.advanceTimersByTime(i === 0 ? 100 : 30_000);
           await Promise.resolve();
@@ -462,19 +462,19 @@ describe("CRIT-018: Dashboard Retry Storm", () => {
       }
 
       await waitFor(() => {
-        const errorState = screen.getByTestId("dashboard-error-state");
+        const errorState = screen.getByTestId("dashboard-empty-state");
         expect(errorState).toBeInTheDocument();
 
         // Cloud icon (SVG with path)
         const svg = errorState.querySelector("svg");
         expect(svg).toBeTruthy();
 
-        // Correct messages
-        expect(screen.getByText("Painel temporariamente indisponível")).toBeInTheDocument();
-        expect(screen.getByText(/Nossos servidores estão sendo atualizados/)).toBeInTheDocument();
+        // Correct messages (CRIT-031 AC2)
+        expect(screen.getByText("Dados temporariamente indisponíveis")).toBeInTheDocument();
+        expect(screen.getByText(/Tente novamente em alguns minutos/)).toBeInTheDocument();
 
-        // "Atualizar agora" button
-        expect(screen.getByText("Atualizar agora")).toBeInTheDocument();
+        // "Tentar novamente" button (CRIT-031 AC3)
+        expect(screen.getByText("Tentar novamente")).toBeInTheDocument();
       });
 
       jest.useRealTimers();

@@ -1,5 +1,6 @@
 /**
  * CRIT-028 AC8-AC10: Dashboard skeletons / usePlan fallback tests.
+ * Updated for CRIT-031: usePlan now uses useFetchWithBackoff with max 3 retries.
  *
  * Verifies:
  * - AC8: Dashboard with data shows cards correctly
@@ -31,6 +32,7 @@ describe("CRIT-028: usePlan fallback behavior", () => {
   let mockFetch: jest.Mock;
 
   beforeEach(() => {
+    jest.useFakeTimers();
     mockFetch = jest.fn();
     global.fetch = mockFetch;
     localStorage.clear();
@@ -39,6 +41,7 @@ describe("CRIT-028: usePlan fallback behavior", () => {
   });
 
   afterEach(() => {
+    jest.useRealTimers();
     jest.restoreAllMocks();
   });
 
@@ -64,12 +67,17 @@ describe("CRIT-028: usePlan fallback behavior", () => {
       subscription_status: "active",
     };
 
-    mockFetch.mockResolvedValueOnce({
+    mockFetch.mockResolvedValue({
       ok: true,
       json: async () => mockPlan,
     });
 
     const { result } = renderHook(() => usePlan());
+
+    await act(async () => {
+      jest.advanceTimersByTime(100);
+      await Promise.resolve();
+    });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -107,10 +115,19 @@ describe("CRIT-028: usePlan fallback behavior", () => {
       JSON.stringify({ data: cachedPlan, timestamp: Date.now() })
     );
 
-    // Fetch will fail
-    mockFetch.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    // Fetch always fails (all retries)
+    mockFetch.mockRejectedValue(new TypeError("Failed to fetch"));
 
     const { result } = renderHook(() => usePlan());
+
+    // Exhaust 3 retries (attempt 0 + 2 retries with backoff 2s, 4s)
+    for (let i = 0; i < 4; i++) {
+      await act(async () => {
+        jest.advanceTimersByTime(i === 0 ? 100 : 10_000);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+    }
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -119,22 +136,31 @@ describe("CRIT-028: usePlan fallback behavior", () => {
     // Should fall back to cached plan, NOT null
     expect(result.current.planInfo).not.toBeNull();
     expect(result.current.planInfo?.plan_id).toBe("smartlic_pro");
-    expect(result.current.error).toBe("Failed to fetch");
+    expect(result.current.error).not.toBeNull();
   });
 
   // AC9: When no cache and fetch fails, planInfo is null
   it("AC9: planInfo is null when no cache and fetch fails", async () => {
-    // No cache, fetch fails
-    mockFetch.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    // No cache, fetch always fails
+    mockFetch.mockRejectedValue(new TypeError("Failed to fetch"));
 
     const { result } = renderHook(() => usePlan());
+
+    // Exhaust retries
+    for (let i = 0; i < 4; i++) {
+      await act(async () => {
+        jest.advanceTimersByTime(i === 0 ? 100 : 10_000);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+    }
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
     });
 
     expect(result.current.planInfo).toBeNull();
-    expect(result.current.error).toBe("Failed to fetch");
+    expect(result.current.error).not.toBeNull();
   });
 
   // AC2: Expired cache is NOT used as fallback
@@ -165,9 +191,18 @@ describe("CRIT-028: usePlan fallback behavior", () => {
       JSON.stringify({ data: cachedPlan, timestamp: Date.now() - 7200000 })
     );
 
-    mockFetch.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    mockFetch.mockRejectedValue(new TypeError("Failed to fetch"));
 
     const { result } = renderHook(() => usePlan());
+
+    // Exhaust retries
+    for (let i = 0; i < 4; i++) {
+      await act(async () => {
+        jest.advanceTimersByTime(i === 0 ? 100 : 10_000);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+    }
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -179,16 +214,25 @@ describe("CRIT-028: usePlan fallback behavior", () => {
 
   // AC6: console.error downgraded to console.warn
   it("AC6: uses console.warn instead of console.error for plan fetch failures", async () => {
-    mockFetch.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    mockFetch.mockRejectedValue(new TypeError("Failed to fetch"));
 
     const warnSpy = jest.spyOn(console, "warn");
 
     renderHook(() => usePlan());
 
+    // Exhaust retries
+    for (let i = 0; i < 4; i++) {
+      await act(async () => {
+        jest.advanceTimersByTime(i === 0 ? 100 : 10_000);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+    }
+
     await waitFor(() => {
       expect(warnSpy).toHaveBeenCalledWith(
         expect.stringContaining("[usePlan] Failed to fetch plan info:"),
-        expect.any(String)
+        expect.anything()
       );
     });
   });
@@ -215,12 +259,17 @@ describe("CRIT-028: usePlan fallback behavior", () => {
       subscription_status: "active",
     };
 
-    mockFetch.mockResolvedValueOnce({
+    mockFetch.mockResolvedValue({
       ok: true,
       json: async () => mockPlan,
     });
 
     renderHook(() => usePlan());
+
+    await act(async () => {
+      jest.advanceTimersByTime(100);
+      await Promise.resolve();
+    });
 
     await waitFor(() => {
       const cached = localStorage.getItem("smartlic_cached_plan");

@@ -3,7 +3,7 @@
 **Severity:** P2 — Important
 **Origin:** UX Production Audit 2026-02-23 (Observações de Infra)
 **Parent:** CRIT-028, CRIT-018
-**Status:** [ ] Pending
+**Status:** [x] Completed
 
 ---
 
@@ -30,30 +30,53 @@ A página `/conta` gera 12 console warnings (`[usePlan] Backend error — using 
 ## Acceptance Criteria
 
 ### Dashboard Skeletons
-- [ ] **AC1**: Após 10s sem resposta do analytics, skeletons resolvem para empty state
-- [ ] **AC2**: Empty state exibe "Dados temporariamente indisponíveis. Tente novamente em alguns minutos."
-- [ ] **AC3**: Botão "Tentar novamente" no empty state
-- [ ] **AC4**: Se dados parciais disponíveis em cache, exibi-los com badge "Dados podem estar desatualizados"
+- [x] **AC1**: Após 10s sem resposta do analytics, skeletons resolvem para empty state
+- [x] **AC2**: Empty state exibe "Dados temporariamente indisponíveis. Tente novamente em alguns minutos."
+- [x] **AC3**: Botão "Tentar novamente" no empty state
+- [x] **AC4**: Se dados parciais disponíveis em cache, exibi-los com badge "Dados podem estar desatualizados"
 
 ### usePlan Backoff
-- [ ] **AC5**: `usePlan` usa `useFetchWithBackoff` (ou lógica equivalente de backoff exponencial)
-- [ ] **AC6**: Máximo 3 retries com backoff (2s → 4s → 8s), não 6 retries instantâneos
-- [ ] **AC7**: Console warnings limitados a max 3 (não 12)
+- [x] **AC5**: `usePlan` usa `useFetchWithBackoff` (ou lógica equivalente de backoff exponencial)
+- [x] **AC6**: Máximo 3 retries com backoff (2s → 4s → 8s), não 6 retries instantâneos
+- [x] **AC7**: Console warnings limitados a max 3 (não 12)
 
 ### Testes
-- [ ] **AC8**: Teste: analytics API retorna 503 → após 10s, dashboard mostra empty state
-- [ ] **AC9**: Teste: usePlan com backend 503 → max 3 retries com delays crescentes
-- [ ] **AC10**: Zero regressão no baseline
+- [x] **AC8**: Teste: analytics API retorna 503 → após 10s, dashboard mostra empty state
+- [x] **AC9**: Teste: usePlan com backend 503 → max 3 retries com delays crescentes
+- [x] **AC10**: Zero regressão no baseline
 
-## Arquivos Prováveis
+## Arquivos Modificados
 
 ### Dashboard Skeletons
-- `frontend/app/dashboard/page.tsx` — skeleton rendering, timeout logic
-- `frontend/hooks/useFetchWithBackoff.ts` — reuse for dashboard fetches
+- `frontend/app/dashboard/page.tsx` — maxRetries 5→3, error state split (!data → empty state, data → stale banner), loading guard `!data`
+- `frontend/__tests__/crit-031-dashboard-skeleton.test.tsx` — NEW: 13 tests (AC1-AC4)
+- `frontend/__tests__/dashboard.test.tsx` — Updated for new copy/testids
+- `frontend/__tests__/dashboard-retry.test.tsx` — Updated for maxRetries=3 and new copy/testids
 
 ### usePlan Backoff
-- `frontend/hooks/usePlan.ts` — plan fetch logic
-- `frontend/hooks/useFetchWithBackoff.ts` — backoff hook to integrate
+- `frontend/hooks/usePlan.ts` — Full refactor: useFetchWithBackoff integration, stable deps, cache fallback via useMemo
+- `frontend/__tests__/crit-031-usePlan-backoff.test.tsx` — NEW: 6 tests (AC5-AC7 + degradation)
+- `frontend/__tests__/crit-028-dashboard-skeletons.test.tsx` — Updated for backoff timing
+
+## Implementação
+
+### Dashboard (AC1-AC4)
+- `maxRetries: 5` → `maxRetries: 3` — resolves faster (~6s for fast 503, vs ~30s before)
+- Error state split: `error && hasExhaustedRetries && !data` → empty state; `error && hasExhaustedRetries && data` → stale banner
+- Empty state copy: "Dados temporariamente indisponíveis. Tente novamente em alguns minutos."
+- Stale banner: yellow dot + "Dados podem estar desatualizados" + "Tentar novamente" button
+- Loading guard: `loading && !data` prevents skeletons when previous data exists
+
+### usePlan (AC5-AC7)
+- Replaced manual fetch+setState with `useFetchWithBackoff` (maxRetries=3, 2s→4s→8s)
+- Stable dependencies: `[session?.access_token, user?.id]` instead of `[session, user]`
+- Cache fallback via `useMemo` (not in catch block) — fires once per error state change
+- Console warnings: 1 per error (not 12) via `useEffect` on `[fetchError, data]`
+- Degradation detection (CRIT-028) preserved inside fetchFn
+
+### Test Results
+- 19 new tests (13 dashboard + 6 usePlan), all pass
+- 49 fail / 2443 pass — matches pre-existing baseline, zero regressions
 
 ## Referência
 

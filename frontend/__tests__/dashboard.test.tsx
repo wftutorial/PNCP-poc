@@ -270,8 +270,8 @@ describe("DashboardPage — UX-338", () => {
 
       render(<DashboardPage />);
 
-      // Exhaust all 5 retry attempts
-      for (let i = 0; i < 6; i++) {
+      // Exhaust all 3 retry attempts (CRIT-031: reduced from 5 to 3)
+      for (let i = 0; i < 4; i++) {
         await act(async () => {
           jest.advanceTimersByTime(i === 0 ? 100 : 30_000);
           await Promise.resolve();
@@ -281,7 +281,7 @@ describe("DashboardPage — UX-338", () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText("Painel temporariamente indisponível")
+          screen.getByText("Dados temporariamente indisponíveis")
         ).toBeInTheDocument();
       });
 
@@ -296,8 +296,8 @@ describe("DashboardPage — UX-338", () => {
 
       render(<DashboardPage />);
 
-      // Exhaust retries
-      for (let i = 0; i < 6; i++) {
+      // Exhaust retries (CRIT-031: reduced from 5 to 3)
+      for (let i = 0; i < 4; i++) {
         await act(async () => {
           jest.advanceTimersByTime(i === 0 ? 100 : 30_000);
           await Promise.resolve();
@@ -306,12 +306,12 @@ describe("DashboardPage — UX-338", () => {
       }
 
       await waitFor(() => {
-        expect(screen.getByTestId("dashboard-error-state")).toBeInTheDocument();
+        expect(screen.getByTestId("dashboard-empty-state")).toBeInTheDocument();
       });
 
       // Now set fetch to succeed for manual retry
       mockFetchSuccess();
-      fireEvent.click(screen.getByTestId("dashboard-manual-retry"));
+      fireEvent.click(screen.getByTestId("dashboard-retry-button"));
 
       await act(async () => {
         jest.advanceTimersByTime(100);

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useMemo, useEffect } from "react";
 import { useAuth } from "../app/components/AuthProvider";
+import { useFetchWithBackoff } from "./useFetchWithBackoff";
 
 /**
  * Plan capabilities from backend PLAN_CAPABILITIES
@@ -35,7 +36,7 @@ interface UsePlanReturn {
   planInfo: PlanInfo | null;
   loading: boolean;
   error: string | null;
-  refresh: () => Promise<void>;
+  refresh: () => void;
 }
 
 const CACHE_KEY = "smartlic_cached_plan";
@@ -46,31 +47,49 @@ interface CachedPlan {
   timestamp: number;
 }
 
+/** Read cached plan from localStorage (returns null if expired or missing) */
+function getCachedPlan(): PlanInfo | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const cached = localStorage.getItem(CACHE_KEY);
+    if (!cached) return null;
+    const parsed: CachedPlan = JSON.parse(cached);
+    if (Date.now() - parsed.timestamp >= CACHE_TTL) return null;
+    return parsed.data;
+  } catch {
+    return null;
+  }
+}
+
+/** Write plan to localStorage cache */
+function setCachedPlan(plan: PlanInfo): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ data: plan, timestamp: Date.now() }));
+  } catch {
+    // Ignore storage errors
+  }
+}
+
 /**
  * Hook to fetch user's plan information and capabilities.
- * Replaces useQuota for new plan-based pricing system.
- * Includes localStorage caching to prevent transient backend errors from downgrading paid users.
+ * CRIT-031 AC5-AC7: Uses useFetchWithBackoff for exponential backoff (max 3 retries, 2s→4s→8s).
+ * CRIT-028: Falls back to cached plan on error (fail to last known plan).
  */
 export function usePlan(): UsePlanReturn {
   const { session, user } = useAuth();
-  const [planInfo, setPlanInfo] = useState<PlanInfo | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  const fetchPlanInfo = useCallback(async () => {
-    if (!session?.access_token || !user) {
-      setPlanInfo(null);
-      return;
-    }
+  // Use stable primitives to avoid re-fetch on object identity changes
+  const accessToken = session?.access_token;
+  const userId = user?.id;
 
-    setLoading(true);
-    setError(null);
+  const fetchPlan = useCallback(
+    async (signal: AbortSignal): Promise<PlanInfo | null> => {
+      if (!accessToken || !userId) return null;
 
-    try {
       const response = await fetch("/api/me", {
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
+        headers: { Authorization: `Bearer ${accessToken}` },
+        signal,
       });
 
       if (!response.ok) {
@@ -79,89 +98,68 @@ export function usePlan(): UsePlanReturn {
 
       const data: PlanInfo = await response.json();
 
-      // Check if backend returned degraded data (free_trial) but we have a cached paid plan
-      if (data.plan_id === "free_trial" && typeof window !== "undefined") {
-        try {
-          const cached = localStorage.getItem(CACHE_KEY);
-          if (cached) {
-            const parsedCache: CachedPlan = JSON.parse(cached);
-            const cacheAge = Date.now() - parsedCache.timestamp;
-
-            // If cache is valid (< 1 hour) and contains a paid plan, use cached data
-            if (
-              cacheAge < CACHE_TTL &&
-              parsedCache.data.plan_id !== "free_trial" &&
-              parsedCache.data.plan_id !== "free"
-            ) {
-              console.warn(
-                "[usePlan] Backend returned free_trial but cached paid plan exists. Using cached data to prevent transient downgrade.",
-                {
-                  cachedPlan: parsedCache.data.plan_id,
-                  cacheAge: Math.round(cacheAge / 1000) + "s",
-                }
-              );
-              setPlanInfo(parsedCache.data);
-              setLoading(false);
-              return;
-            }
-          }
-        } catch (cacheErr) {
-          console.error("[usePlan] Error reading cache:", cacheErr);
+      // CRIT-028: Degradation detection — backend returned free_trial but cached paid plan exists
+      if (data.plan_id === "free_trial") {
+        const cached = getCachedPlan();
+        if (cached && cached.plan_id !== "free_trial" && cached.plan_id !== "free") {
+          console.warn(
+            "[usePlan] Backend returned free_trial but cached paid plan exists. Using cached.",
+            { cachedPlan: cached.plan_id }
+          );
+          return cached;
         }
       }
 
-      // If data is from a paid plan (not free_trial, not free), cache it
-      if (data.plan_id !== "free_trial" && data.plan_id !== "free" && typeof window !== "undefined") {
-        try {
-          const cacheData: CachedPlan = {
-            data,
-            timestamp: Date.now(),
-          };
-          localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
-        } catch (cacheErr) {
-          console.error("[usePlan] Error writing cache:", cacheErr);
-        }
+      // Cache paid plans for fallback
+      if (data.plan_id !== "free_trial" && data.plan_id !== "free") {
+        setCachedPlan(data);
       }
 
-      setPlanInfo(data);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Erro desconhecido";
-      setError(errorMessage);
+      return data;
+    },
+    [accessToken, userId]
+  );
 
-      // CRIT-028 AC1-AC2: On error, fall back to cached plan (fail to last known plan)
-      // instead of setting planInfo to null, which causes skeletons/empty states
-      if (typeof window !== "undefined") {
-        try {
-          const cached = localStorage.getItem(CACHE_KEY);
-          if (cached) {
-            const parsedCache: CachedPlan = JSON.parse(cached);
-            const cacheAge = Date.now() - parsedCache.timestamp;
-            if (cacheAge < CACHE_TTL) {
-              console.warn("[usePlan] Backend error — using cached plan info:", parsedCache.data.plan_id);
-              setPlanInfo(parsedCache.data);
-            } else {
-              setPlanInfo(null);
-            }
-          } else {
-            setPlanInfo(null);
-          }
-        } catch {
-          setPlanInfo(null);
-        }
-      } else {
-        setPlanInfo(null);
-      }
+  // CRIT-031 AC5-AC7: Exponential backoff — max 3 retries (2s → 4s → 8s)
+  const {
+    data,
+    loading,
+    error: fetchError,
+    manualRetry,
+  } = useFetchWithBackoff<PlanInfo | null>(fetchPlan, {
+    enabled: !!accessToken && !!userId,
+    maxRetries: 3,
+    initialDelayMs: 2000,
+    maxDelayMs: 8000,
+    timeoutMs: 10000,
+  });
 
-      // CRIT-028 AC6: Downgrade to warn to avoid console error spam on transient failures
-      console.warn("[usePlan] Failed to fetch plan info:", errorMessage);
-    } finally {
-      setLoading(false);
+  // CRIT-028 AC1-AC2: On error, fall back to cached plan (fail to last known plan)
+  const effectivePlanInfo = useMemo(() => {
+    if (data) return data;
+    if (fetchError) {
+      return getCachedPlan();
     }
-  }, [session, user]);
+    return null;
+  }, [data, fetchError]);
 
+  // CRIT-031 AC7: Limited console warnings (max 1 per error state change, not 12)
   useEffect(() => {
-    fetchPlanInfo();
-  }, [fetchPlanInfo]);
+    if (fetchError && !data) {
+      const cached = getCachedPlan();
+      if (cached) {
+        console.warn("[usePlan] Backend error — using cached plan info:", cached.plan_id);
+      } else {
+        // CRIT-028 AC6: Downgrade to warn to avoid console error spam
+        console.warn("[usePlan] Failed to fetch plan info:", fetchError);
+      }
+    }
+  }, [fetchError, data]);
 
-  return { planInfo, loading, error, refresh: fetchPlanInfo };
+  return {
+    planInfo: effectivePlanInfo,
+    loading,
+    error: fetchError,
+    refresh: manualRetry,
+  };
 }

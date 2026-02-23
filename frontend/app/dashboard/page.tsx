@@ -255,7 +255,7 @@ export default function DashboardPage() {
     manualRetry,
   } = useFetchWithBackoff<DashboardData>(fetchDashboard, {
     enabled: !authLoading && !!session && backendStatus !== "offline",
-    maxRetries: 5,
+    maxRetries: 3,
     initialDelayMs: 2000,
     maxDelayMs: 30000,
     timeoutMs: LOADING_TIMEOUT_MS,
@@ -336,11 +336,11 @@ export default function DashboardPage() {
   // CRIT-018 AC8: Error state with cloud+X icon + manual retry
   // ──────────────────────────────────────────────────────────────────────────
 
-  if (error && hasExhaustedRetries) {
+  // CRIT-031 AC1-AC3: Error state with no cached data → empty state
+  if (error && hasExhaustedRetries && !data) {
     return (
       <div className="min-h-screen bg-[var(--canvas)] py-8 px-4">
-        <div className="max-w-6xl mx-auto text-center py-16" data-testid="dashboard-error-state">
-          {/* AC8: Cloud with X icon */}
+        <div className="max-w-6xl mx-auto text-center py-16" data-testid="dashboard-empty-state">
           <div className="mx-auto mb-6 w-16 h-16 flex items-center justify-center rounded-full bg-[var(--surface-1)]">
             <svg
               aria-hidden="true"
@@ -359,17 +359,17 @@ export default function DashboardPage() {
             </svg>
           </div>
           <p className="text-lg font-display font-semibold text-[var(--ink)] mb-2">
-            Painel temporariamente indisponível
+            Dados temporariamente indisponíveis
           </p>
           <p className="text-sm text-[var(--ink-secondary)] mb-6 max-w-md mx-auto">
-            Nossos servidores estão sendo atualizados. Seus dados estarão disponíveis em breve.
+            Tente novamente em alguns minutos.
           </p>
           <button
             onClick={manualRetry}
             className="px-5 py-2.5 bg-[var(--brand-navy)] text-white rounded-button hover:bg-[var(--brand-blue)] transition-colors font-medium"
-            data-testid="dashboard-manual-retry"
+            data-testid="dashboard-retry-button"
           >
-            Atualizar agora
+            Tentar novamente
           </button>
         </div>
       </div>
@@ -383,7 +383,7 @@ export default function DashboardPage() {
         <div className="max-w-6xl mx-auto text-center py-16" data-testid="dashboard-retrying">
           <div className="mx-auto mb-4 w-8 h-8 border-2 border-[var(--brand-blue)] border-t-transparent rounded-full animate-spin" />
           <p className="text-sm text-[var(--ink-secondary)]">
-            Tentando reconectar... ({retryCount}/5)
+            Tentando reconectar... ({retryCount}/3)
           </p>
         </div>
       </div>
@@ -394,7 +394,7 @@ export default function DashboardPage() {
   // Loading state (AC9/AC10: skeletons shown only on initial load, max 10s)
   // ──────────────────────────────────────────────────────────────────────────
 
-  if (loading) {
+  if (loading && !data) {
     return (
       <div className="min-h-screen bg-[var(--canvas)] py-8 px-4">
         <div className="max-w-6xl mx-auto">
@@ -473,6 +473,27 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-[var(--canvas)]">
+      {/* CRIT-031 AC4: Stale data banner when showing cached data after error */}
+      {error && hasExhaustedRetries && data && (
+        <div className="max-w-6xl mx-auto px-4 pt-4" data-testid="stale-data-banner">
+          <div className="flex items-center justify-between p-3 rounded-card border border-[var(--border)] bg-[var(--surface-1)]">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-[var(--warning)] flex-shrink-0" />
+              <span className="text-sm text-[var(--ink-secondary)]">
+                Dados podem estar desatualizados
+              </span>
+            </div>
+            <button
+              onClick={manualRetry}
+              className="text-sm font-medium text-[var(--brand-blue)] hover:underline"
+              data-testid="stale-data-retry"
+            >
+              Tentar novamente
+            </button>
+          </div>
+        </div>
+      )}
+
       <PageHeader
         title="Dashboard"
         extraControls={

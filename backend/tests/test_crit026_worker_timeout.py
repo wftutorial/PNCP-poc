@@ -157,13 +157,13 @@ class TestStartShConfig:
             content = f.read()
         assert "GUNICORN_TIMEOUT:-900" in content, "Default timeout should be 900s"
 
-    def test_start_sh_has_3_workers(self):
-        """AC4: WEB_CONCURRENCY default is 3."""
+    def test_start_sh_has_4_workers(self):
+        """CRIT-034 AC1: WEB_CONCURRENCY default is 4."""
         import os
         start_sh_path = os.path.join(os.path.dirname(__file__), "..", "start.sh")
         with open(start_sh_path) as f:
             content = f.read()
-        assert "WEB_CONCURRENCY:-3" in content, "Default workers should be 3"
+        assert "WEB_CONCURRENCY:-4" in content, "Default workers should be 4 (CRIT-034 AC1)"
 
     def test_start_sh_has_keep_alive(self):
         """AC2: start.sh has --keep-alive flag."""

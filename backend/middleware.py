@@ -1,5 +1,6 @@
 """Request correlation, observability, and security middleware."""
 import logging
+import re
 import time
 import uuid
 from contextvars import ContextVar
@@ -9,6 +10,16 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 logger = logging.getLogger(__name__)
+
+# CRIT-034: Worker timeout tracking — graceful import
+try:
+    from worker_lifecycle import set_active_request, clear_active_request
+    _HAS_LIFECYCLE = True
+except ImportError:
+    _HAS_LIFECYCLE = False
+
+# CRIT-034: Extract search_id from URL paths like /buscar-progress/{id} or /v1/search/{id}/...
+_SEARCH_ID_PATH_RE = re.compile(r"/(?:buscar-progress|v1/search)/([^/]+)")
 
 # Context variable for request ID (accessible from any async context)
 request_id_var: ContextVar[str] = ContextVar("request_id", default="-")
@@ -100,6 +111,16 @@ class CorrelationIDMiddleware:
         start_time = time.time()
         status_code = 0
 
+        # CRIT-034: Track active request for worker timeout diagnostics.
+        # Extracts search_id from X-Search-ID header or URL path.
+        if _HAS_LIFECYCLE:
+            raw_search_id = headers.get(b"x-search-id", b"").decode() or ""
+            if not raw_search_id:
+                m = _SEARCH_ID_PATH_RE.search(path)
+                if m:
+                    raw_search_id = m.group(1)
+            set_active_request(path, raw_search_id or None)
+
         async def send_wrapper(message):
             nonlocal status_code
             if message["type"] == "http.response.start":
@@ -126,6 +147,10 @@ class CorrelationIDMiddleware:
                 f"[req_id={req_id}] {type(e).__name__}: {str(e)}"
             )
             raise
+        finally:
+            # CRIT-034: Always clear active request tracking
+            if _HAS_LIFECYCLE:
+                clear_active_request()
 
 
 class DeprecationMiddleware(BaseHTTPMiddleware):

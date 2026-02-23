@@ -26,18 +26,21 @@ case "$PROCESS_TYPE" in
       echo "  --preload enabled: app loaded in master before forking workers"
     fi
 
-    # CRIT-026 AC1+AC2+AC4: Increased timeout 600→900s for SSE long-lived streams,
-    # WEB_CONCURRENCY 2→3 to prevent total downtime when 1 worker dies,
-    # added --keep-alive for persistent connections.
-    echo "  timeout=${GUNICORN_TIMEOUT:-900}s, workers=${WEB_CONCURRENCY:-3}, graceful=${GUNICORN_GRACEFUL_TIMEOUT:-120}s"
+    # CRIT-034 AC1+AC3: WEB_CONCURRENCY 3→4 (Railway 1GB supports 4 uvicorn workers),
+    # keep-alive 5→75 (default 2s too low for SSE long-lived connections).
+    # CRIT-026 AC2+AC4: timeout=900s, graceful-timeout=120s (unchanged).
+    # CRIT-034 AC5+AC7: -c gunicorn_conf.py for worker lifecycle hooks
+    # (SIGABRT handler for structured timeout logging + Sentry capture).
+    echo "  timeout=${GUNICORN_TIMEOUT:-900}s, workers=${WEB_CONCURRENCY:-4}, graceful=${GUNICORN_GRACEFUL_TIMEOUT:-120}s, keep-alive=${GUNICORN_KEEP_ALIVE:-75}s"
 
     exec gunicorn main:app \
       -k uvicorn.workers.UvicornWorker \
-      -w "${WEB_CONCURRENCY:-3}" \
+      -w "${WEB_CONCURRENCY:-4}" \
       --bind "0.0.0.0:${PORT:-8000}" \
       --timeout "${GUNICORN_TIMEOUT:-900}" \
       --graceful-timeout "${GUNICORN_GRACEFUL_TIMEOUT:-120}" \
-      --keep-alive "${GUNICORN_KEEP_ALIVE:-5}" \
+      --keep-alive "${GUNICORN_KEEP_ALIVE:-75}" \
+      -c gunicorn_conf.py \
       $PRELOAD_FLAG
     ;;
   worker)

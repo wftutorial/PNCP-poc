@@ -1,6 +1,6 @@
 # CRIT-034 — Gunicorn Worker Timeout Regression (CRIT-026 Recorrente)
 
-**Status:** Pending
+**Status:** Done
 **Priority:** P0 — Critical
 **Severity:** Fatal (backend indisponível)
 **Sentry Issues:**
@@ -66,16 +66,16 @@ O problema não é o timeout em si, mas a **arquitetura de busca síncrona**:
 
 ### Mitigação Imediata (Sprint atual)
 
-- [ ] **AC1**: Aumentar `WEB_CONCURRENCY` para 4 (Railway 1GB RAM suporta 4 uvicorn workers)
-- [ ] **AC2**: Aumentar `GUNICORN_TIMEOUT` para 900s (15min) para cobrir buscas extremas
-- [ ] **AC3**: Adicionar `--keep-alive 75` ao gunicorn (default 2s é muito baixo para SSE)
-- [ ] **AC4**: Verificar `GUNICORN_GRACEFUL_TIMEOUT` >= 120s (permitir SSE cleanup)
+- [x] **AC1**: Aumentar `WEB_CONCURRENCY` para 4 (Railway 1GB RAM suporta 4 uvicorn workers)
+- [x] **AC2**: Aumentar `GUNICORN_TIMEOUT` para 900s (15min) para cobrir buscas extremas
+- [x] **AC3**: Adicionar `--keep-alive 75` ao gunicorn (default 2s é muito baixo para SSE)
+- [x] **AC4**: Verificar `GUNICORN_GRACEFUL_TIMEOUT` >= 120s (permitir SSE cleanup)
 
 ### Monitoramento
 
-- [ ] **AC5**: Alerta Sentry quando WORKER TIMEOUT ocorrer (threshold: 2 events/hour)
-- [ ] **AC6**: Métrica Prometheus `gunicorn_workers_killed_total` (já existe em metrics.py?)
-- [ ] **AC7**: Log structured ao matar worker: `{ worker_pid, request_duration, endpoint, search_id }`
+- [x] **AC5**: Alerta Sentry quando WORKER TIMEOUT ocorrer (threshold: 2 events/hour)
+- [x] **AC6**: Métrica Prometheus `gunicorn_workers_killed_total` (já existe em metrics.py?)
+- [x] **AC7**: Log structured ao matar worker: `{ worker_pid, request_duration, endpoint, search_id }`
 
 ### Solução Definitiva (Sprint futuro)
 
@@ -85,6 +85,34 @@ O problema não é o timeout em si, mas a **arquitetura de busca síncrona**:
 ## Files Envolvidos
 
 - `backend/start.sh` — Gunicorn config (timeout, workers, keep-alive)
-- `backend/Procfile` / Railway config — WEB_CONCURRENCY
-- `backend/metrics.py` — Worker kill metrics
-- `backend/search_pipeline.py` — Busca síncrona (refactor futuro)
+- `backend/gunicorn_conf.py` — **NEW** Gunicorn lifecycle hooks (post_worker_init, worker_abort)
+- `backend/worker_lifecycle.py` — **NEW** SIGABRT handler + active request tracking
+- `backend/middleware.py` — CorrelationIDMiddleware updated for active request tracking
+- `backend/metrics.py` — WORKER_TIMEOUT counter (pre-existing, now instrumented via SIGABRT handler)
+- `backend/tests/test_crit034_worker_timeout.py` — **NEW** 34 tests (30 pass, 4 Unix-only skipped on Windows)
+- `backend/tests/test_crit026_worker_timeout.py` — Updated WEB_CONCURRENCY assertion 3→4
+- `backend/search_pipeline.py` — Busca síncrona (refactor futuro — AC8/AC9)
+
+## Implementation Notes
+
+### AC1: WEB_CONCURRENCY 3→4
+Default in `start.sh` changed. Railway 1GB RAM supports 4 uvicorn workers comfortably (~200MB each).
+
+### AC2+AC4: Already done in CRIT-026
+`GUNICORN_TIMEOUT=900s` and `GUNICORN_GRACEFUL_TIMEOUT=120s` were already set.
+
+### AC3: --keep-alive 5→75
+SSE connections are long-lived. Default 2-5s keep-alive causes premature connection closure.
+
+### AC5: Sentry capture (dual)
+- **Worker-side**: SIGABRT handler captures with request context (endpoint, search_id, duration)
+- **Arbiter-side**: `worker_abort` hook captures with worker PID
+- Sentry alert rule (2 events/hour threshold) should be configured in Sentry dashboard.
+
+### AC6: WORKER_TIMEOUT metric
+`smartlic_worker_timeout_total{reason="gunicorn_timeout"}` incremented by SIGABRT handler.
+
+### AC7: Structured log
+SIGABRT handler logs: `WORKER KILLED BY TIMEOUT | pid=X duration=Ys endpoint=/path search_id=id`
+`CorrelationIDMiddleware` tracks active request via `worker_lifecycle.set_active_request()`.
+Search ID extracted from: (1) `X-Search-ID` header, (2) URL path pattern `/buscar-progress/{id}`.

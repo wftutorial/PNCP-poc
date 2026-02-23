@@ -45,7 +45,7 @@ async def create_checkout(
 
     stripe_key = os.getenv("STRIPE_SECRET_KEY")
     if not stripe_key:
-        raise HTTPException(status_code=500, detail="Stripe not configured")
+        raise HTTPException(status_code=500, detail="Erro ao processar pagamento. Tente novamente.")
     # NOTE: stripe_lib.api_key NOT set globally (thread safety - STORY-221 Track 2)
     # Pass api_key= parameter to Stripe API calls instead
 
@@ -58,7 +58,7 @@ async def create_checkout(
     price_id_key = f"stripe_price_id_{billing_period}"
     stripe_price_id = plan.get(price_id_key) or plan.get("stripe_price_id")
     if not stripe_price_id:
-        raise HTTPException(status_code=400, detail="Plano sem preco Stripe configurado")
+        raise HTTPException(status_code=400, detail="Plano sem configuração de preço")
 
     is_subscription = plan_id in ("smartlic_pro", "consultor_agil", "maquina", "sala_guerra")
     frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
@@ -102,7 +102,7 @@ async def create_billing_portal_session(
 
     stripe_key = os.getenv("STRIPE_SECRET_KEY")
     if not stripe_key:
-        raise HTTPException(status_code=500, detail="Stripe not configured")
+        raise HTTPException(status_code=500, detail="Erro ao processar pagamento. Tente novamente.")
 
     frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
 

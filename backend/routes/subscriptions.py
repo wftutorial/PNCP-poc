@@ -93,7 +93,7 @@ async def update_billing_period(
             )
 
         if not stripe_subscription_id:
-            raise HTTPException(status_code=400, detail="Assinatura sem Stripe subscription_id")
+            raise HTTPException(status_code=400, detail="Assinatura sem identificador de cobrança")
 
     except HTTPException:
         raise
@@ -132,7 +132,7 @@ async def update_billing_period(
         logger.info(f"Updated Stripe subscription for user {mask_user_id(user_id)}")
     except Exception as e:
         logger.error(f"Stripe update failed for user {mask_user_id(user_id)}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Erro ao atualizar no Stripe")
+        raise HTTPException(status_code=500, detail="Erro ao atualizar assinatura. Tente novamente.")
 
     # Step 4: Update Supabase subscription
     try:
@@ -206,7 +206,7 @@ async def cancel_subscription(
         stripe_subscription_id = subscription.get("stripe_subscription_id")
 
         if not stripe_subscription_id:
-            raise HTTPException(status_code=400, detail="Assinatura sem Stripe subscription_id")
+            raise HTTPException(status_code=400, detail="Assinatura sem identificador de cobrança")
 
     except HTTPException:
         raise
@@ -229,7 +229,7 @@ async def cancel_subscription(
         logger.info(f"Stripe subscription {stripe_subscription_id} set to cancel at {ends_at_iso}")
     except stripe_lib.error.StripeError as e:
         logger.error(f"Stripe cancellation failed for user {mask_user_id(user_id)}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Erro ao cancelar no Stripe")
+        raise HTTPException(status_code=500, detail="Erro ao cancelar assinatura. Tente novamente.")
     except Exception as e:
         logger.error(f"Unexpected error during Stripe cancellation for user {mask_user_id(user_id)}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Erro ao processar cancelamento")

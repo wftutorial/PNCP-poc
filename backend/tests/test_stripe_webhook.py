@@ -202,7 +202,7 @@ class TestSignatureValidation:
             await stripe_webhook(mock_request_no_signature)
 
         assert exc_info.value.status_code == 400
-        assert "Missing stripe-signature" in exc_info.value.detail
+        assert "webhook" in exc_info.value.detail.lower()
 
     @pytest.mark.asyncio
     @patch('webhooks.stripe.STRIPE_WEBHOOK_SECRET', 'whsec_test')
@@ -220,7 +220,7 @@ class TestSignatureValidation:
             await stripe_webhook(mock_request)
 
         assert exc_info.value.status_code == 400
-        assert "Invalid signature" in exc_info.value.detail
+        assert "webhook" in exc_info.value.detail.lower()
 
     @pytest.mark.asyncio
     @patch('webhooks.stripe.STRIPE_WEBHOOK_SECRET', 'whsec_test')
@@ -257,7 +257,7 @@ class TestSignatureValidation:
             await stripe_webhook(mock_request)
 
         assert exc_info.value.status_code == 400
-        assert "Invalid payload" in exc_info.value.detail
+        assert "webhook" in exc_info.value.detail.lower()
 
 
 # ═══════════════════════════════════════════════════════════════════════

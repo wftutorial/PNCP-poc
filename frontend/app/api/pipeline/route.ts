@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sanitizeProxyError, sanitizeNetworkError } from "../../../lib/proxy-error-handler";
 
-const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
+const BACKEND_URL = process.env.BACKEND_URL;
 
 function getAuthHeader(request: NextRequest): string | null {
   const authHeader = request.headers.get("authorization");
@@ -35,6 +35,11 @@ async function safeProxyResponse(
 }
 
 export async function GET(request: NextRequest) {
+  if (!BACKEND_URL) {
+    console.error("BACKEND_URL environment variable is not configured");
+    return NextResponse.json({ message: "Serviço temporariamente indisponível" }, { status: 503 });
+  }
+
   const auth = getAuthHeader(request);
   if (!auth) {
     return NextResponse.json({ message: "Autenticação necessária." }, { status: 401 });
@@ -67,6 +72,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  if (!BACKEND_URL) {
+    console.error("BACKEND_URL environment variable is not configured");
+    return NextResponse.json({ message: "Serviço temporariamente indisponível" }, { status: 503 });
+  }
+
   const auth = getAuthHeader(request);
   if (!auth) {
     return NextResponse.json({ message: "Autenticação necessária." }, { status: 401 });
@@ -97,6 +107,11 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
+  if (!BACKEND_URL) {
+    console.error("BACKEND_URL environment variable is not configured");
+    return NextResponse.json({ message: "Serviço temporariamente indisponível" }, { status: 503 });
+  }
+
   const auth = getAuthHeader(request);
   if (!auth) {
     return NextResponse.json({ message: "Autenticação necessária." }, { status: 401 });
@@ -128,6 +143,11 @@ export async function PATCH(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  if (!BACKEND_URL) {
+    console.error("BACKEND_URL environment variable is not configured");
+    return NextResponse.json({ message: "Serviço temporariamente indisponível" }, { status: 503 });
+  }
+
   const auth = getAuthHeader(request);
   if (!auth) {
     return NextResponse.json({ message: "Autenticação necessária." }, { status: 401 });

@@ -1,8 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-
-const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
+import { sanitizeProxyError, sanitizeNetworkError } from "../../../lib/proxy-error-handler";
 
 export async function GET(request: NextRequest) {
+  const backendUrl = process.env.BACKEND_URL;
+  if (!backendUrl) {
+    console.error("BACKEND_URL environment variable is not configured");
+    return NextResponse.json(
+      { message: "Serviço temporariamente indisponível" },
+      { status: 503 }
+    );
+  }
+
   const authHeader = request.headers.get("authorization");
   if (!authHeader) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -19,15 +27,20 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const response = await fetch(`${BACKEND_URL}/v1/subscription/status`, { headers });
+    const response = await fetch(`${backendUrl}/v1/subscription/status`, { headers });
 
-    const data = await response.json();
-    return NextResponse.json(data, { status: response.status });
+    const body = await response.text();
+    const sanitized = sanitizeProxyError(response.status, body, response.headers.get("content-type"));
+    if (sanitized) return sanitized;
+
+    try {
+      const data = JSON.parse(body);
+      return NextResponse.json(data, { status: response.status });
+    } catch {
+      return NextResponse.json({ message: "Erro temporário de comunicação" }, { status: response.status });
+    }
   } catch (error) {
-    console.error("Subscription status proxy error:", error);
-    return NextResponse.json(
-      { status: "pending", plan_id: null, activated_at: null },
-      { status: 200 }
-    );
+    console.error("[subscription-status] Network error:", error instanceof Error ? error.message : error);
+    return sanitizeNetworkError(error);
   }
 }

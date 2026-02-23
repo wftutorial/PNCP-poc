@@ -1,7 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRefreshedToken } from "../../../../lib/serverAuth";
+import { sanitizeProxyError, sanitizeNetworkError } from "../../../../lib/proxy-error-handler";
 
 export async function POST(request: NextRequest) {
+  const backendUrl = process.env.BACKEND_URL;
+  if (!backendUrl) {
+    console.error("BACKEND_URL environment variable is not configured");
+    return NextResponse.json(
+      { message: "Serviço temporariamente indisponível" },
+      { status: 503 }
+    );
+  }
+
   try {
     const refreshedToken = await getRefreshedToken();
     const authHeader = refreshedToken
@@ -18,7 +28,6 @@ export async function POST(request: NextRequest) {
     // CRIT-004 AC4: Forward X-Correlation-ID for end-to-end tracing
     const correlationId = request.headers.get("X-Correlation-ID");
 
-    const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
     const res = await fetch(`${backendUrl}/v1/api/subscriptions/cancel`, {
       method: "POST",
       headers: {
@@ -28,18 +37,18 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    const data = await res.json();
+    const body = await res.text();
+    const sanitized = sanitizeProxyError(res.status, body, res.headers.get("content-type"));
+    if (sanitized) return sanitized;
 
-    if (!res.ok) {
+    try {
+      const data = JSON.parse(body);
       return NextResponse.json(data, { status: res.status });
+    } catch {
+      return NextResponse.json({ message: "Erro temporário de comunicação" }, { status: res.status });
     }
-
-    return NextResponse.json(data);
   } catch (error) {
-    console.error("[api/subscriptions/cancel] Error:", error);
-    return NextResponse.json(
-      { message: "Erro interno ao processar cancelamento." },
-      { status: 500 }
-    );
+    console.error("[api/subscriptions/cancel] Network error:", error instanceof Error ? error.message : error);
+    return sanitizeNetworkError(error);
   }
 }

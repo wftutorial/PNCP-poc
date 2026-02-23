@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sanitizeProxyError, sanitizeNetworkError } from "../../../../../../lib/proxy-error-handler";
 
 const backendUrl = process.env.BACKEND_URL;
 
@@ -28,9 +29,21 @@ export async function PATCH(
         body: JSON.stringify(body),
       },
     );
+    if (!res.ok) {
+      const resBody = await res.text();
+      const sanitized = sanitizeProxyError(res.status, resBody, res.headers.get("content-type"));
+      if (sanitized) return sanitized;
+      try {
+        const data = JSON.parse(resBody);
+        return NextResponse.json(data, { status: res.status });
+      } catch {
+        return NextResponse.json({ message: "Erro temporário de comunicação" }, { status: res.status });
+      }
+    }
     const data = await res.json().catch(() => ({}));
     return NextResponse.json(data, { status: res.status });
-  } catch {
-    return NextResponse.json({ message: "Erro ao conectar com servidor" }, { status: 503 });
+  } catch (error) {
+    console.error("[messages/conversations/[id]/status] Network error:", error instanceof Error ? error.message : error);
+    return sanitizeNetworkError(error);
   }
 }

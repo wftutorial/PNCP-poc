@@ -67,7 +67,6 @@ export async function POST(request: NextRequest) {
     }
 
     // Chamar backend Python
-    // BACKEND_URL must be set via environment variable - no localhost fallback
     const backendUrl = process.env.BACKEND_URL;
     if (!backendUrl) {
       console.error("BACKEND_URL environment variable is not configured");

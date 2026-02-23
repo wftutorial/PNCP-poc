@@ -36,8 +36,10 @@ from log_sanitizer import mask_email, mask_token, mask_user_id, mask_ip_address,
 # Load environment variables from .env file
 load_dotenv()
 
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from config import setup_logging, ENABLE_NEW_PRICING, get_cors_origins, log_feature_flags, validate_env_vars, METRICS_TOKEN
 from pncp_client import PNCPClient
 from sectors import list_sectors
@@ -542,6 +544,45 @@ app.include_router(onboarding_router)  # GTM-004: First analysis
 app.include_router(auth_email_router)  # GTM-FIX-009: Email confirmation recovery
 app.include_router(cache_health_router)  # UX-303: Cache health
 app.include_router(feedback_router)  # GTM-RESILIENCE-D05: User feedback loop
+
+# ============================================================================
+# GTM-PROXY-001 AC9-AC11: Global exception handlers for error sanitization
+# ============================================================================
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """AC9: Return validation errors in Portuguese instead of raw Pydantic English."""
+    logger.warning(f"Validation error on {request.url.path}: {exc.errors()}")
+    return JSONResponse(
+        status_code=422,
+        content={"detail": "Dados inválidos. Verifique os campos e tente novamente."},
+    )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """AC10+AC11: Catch-all for Stripe and RLS errors that leak English text."""
+    error_msg = str(exc).lower()
+
+    # AC11: Supabase RLS policy errors
+    if "rls" in error_msg or "row-level security" in error_msg or "policy" in error_msg and "permission" in error_msg:
+        logger.error(f"RLS error on {request.url.path}: {exc}")
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "Erro de permissão. Faça login novamente."},
+        )
+
+    # AC10: Stripe errors that weren't caught by specific handlers
+    if "stripe" in error_msg or "stripeerror" in type(exc).__name__.lower():
+        logger.error(f"Unhandled Stripe error on {request.url.path}: {exc}")
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Erro ao processar pagamento. Tente novamente."},
+        )
+
+    # Let other exceptions propagate to default handler / Sentry
+    raise exc
+
 
 # ============================================================================
 # GTM-RESILIENCE-E03: Prometheus /metrics endpoint

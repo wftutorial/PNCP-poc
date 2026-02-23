@@ -150,7 +150,7 @@ class TestUpdateBillingPeriod:
         })
 
         assert resp.status_code == 400
-        assert "stripe" in resp.json()["detail"].lower()
+        assert "identificador" in resp.json()["detail"].lower() or "cobrança" in resp.json()["detail"].lower()
 
     @patch("cache.redis_cache")
     @patch("routes.subscriptions.update_stripe_subscription_billing_period")
@@ -232,7 +232,7 @@ class TestUpdateBillingPeriod:
         })
 
         assert resp.status_code == 500
-        assert "stripe" in resp.json()["detail"].lower()
+        assert "atualizar" in resp.json()["detail"].lower() or "assinatura" in resp.json()["detail"].lower()
 
     @patch("supabase_client.get_supabase")
     def test_plan_not_found_404(self, mock_get_sb):

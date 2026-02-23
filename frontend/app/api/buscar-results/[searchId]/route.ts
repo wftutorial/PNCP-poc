@@ -6,6 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { sanitizeProxyError, sanitizeNetworkError } from "../../../../lib/proxy-error-handler";
 
 export const runtime = "nodejs";
 
@@ -50,20 +51,21 @@ export async function GET(
     );
 
     if (!backendResponse.ok) {
-      const errorBody = await backendResponse.text().catch(() => "");
-      return NextResponse.json(
-        { error: errorBody || "Backend error" },
-        { status: backendResponse.status },
-      );
+      const body = await backendResponse.text();
+      const sanitized = sanitizeProxyError(backendResponse.status, body, backendResponse.headers.get("content-type"));
+      if (sanitized) return sanitized;
+      try {
+        const data = JSON.parse(body);
+        return NextResponse.json(data, { status: backendResponse.status });
+      } catch {
+        return NextResponse.json({ message: "Erro temporário de comunicação" }, { status: backendResponse.status });
+      }
     }
 
     const data = await backendResponse.json();
     return NextResponse.json(data);
   } catch (error) {
-    console.error("[buscar-results proxy] Error:", error);
-    return NextResponse.json(
-      { error: "Failed to connect to backend" },
-      { status: 502 },
-    );
+    console.error("[buscar-results proxy] Error:", error instanceof Error ? error.message : error);
+    return sanitizeNetworkError(error);
   }
 }

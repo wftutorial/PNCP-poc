@@ -203,6 +203,53 @@ export function isTransientError(httpStatus: number | null, message?: string): b
 }
 
 /**
+ * GTM-PROXY-001 AC4-AC8: Centralized Supabase Auth error translations.
+ * Maps English auth errors from Supabase to user-friendly Portuguese messages.
+ * Used by login, signup, and any other auth-related flows.
+ */
+export const AUTH_ERROR_MAP: Record<string, string> = {
+  // AC4: Invalid credentials
+  "Invalid login credentials": "Email ou senha incorretos",
+  // AC5: Duplicate registration
+  "User already registered": "Este email já está cadastrado",
+  // AC6: Unconfirmed email
+  "Email not confirmed": "Confirme seu email antes de fazer login",
+  // AC7: Password policy
+  "Password should be at least 6 characters": "A senha deve ter pelo menos 6 caracteres",
+  // Additional common Supabase auth errors
+  "Error sending magic link email": "Este email ainda não está cadastrado. Crie sua conta para começar.",
+  "For security purposes, you can only request this after": "Por segurança, aguarde alguns segundos antes de tentar novamente.",
+  "Email rate limit exceeded": "Muitas tentativas. Aguarde alguns minutos.",
+  "User not found": "Usuário não encontrado. Verifique o email ou crie uma conta.",
+  "Signups not allowed for this instance": "Cadastros não permitidos no momento.",
+  "Unable to validate email address: invalid format": "Formato de email inválido.",
+  // Network errors (shared with ERROR_MAP)
+  "fetch failed": "Erro de conexão. Verifique sua internet.",
+  "Failed to fetch": "Erro de conexão. Verifique sua internet.",
+  "NetworkError": "Erro de conexão. Verifique sua internet.",
+  "network error": "Erro de conexão. Verifique sua internet.",
+};
+
+/**
+ * GTM-PROXY-001 AC8: Translate Supabase auth error to Portuguese.
+ * Checks exact match first, then partial match.
+ * Returns original message if no translation found.
+ */
+export function translateAuthError(message: string): string {
+  // Exact match
+  if (AUTH_ERROR_MAP[message]) {
+    return AUTH_ERROR_MAP[message];
+  }
+  // Partial match
+  for (const [key, value] of Object.entries(AUTH_ERROR_MAP)) {
+    if (message.toLowerCase().includes(key.toLowerCase())) {
+      return value;
+    }
+  }
+  return message;
+}
+
+/**
  * CRIT-009 AC11: Maps backend SearchErrorCode values to user-friendly Portuguese messages.
  * These are more specific than getUserFriendlyError() and take precedence when error_code is present.
  */

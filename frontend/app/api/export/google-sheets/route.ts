@@ -7,10 +7,18 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-
-const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
+import { sanitizeProxyError, sanitizeNetworkError } from "../../../../lib/proxy-error-handler";
 
 export async function POST(request: NextRequest) {
+  const backendUrl = process.env.BACKEND_URL;
+  if (!backendUrl) {
+    console.error("BACKEND_URL environment variable is not configured");
+    return NextResponse.json(
+      { message: "Serviço temporariamente indisponível" },
+      { status: 503 }
+    );
+  }
+
   try {
     const authHeader = request.headers.get("authorization");
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -32,32 +40,27 @@ export async function POST(request: NextRequest) {
       headers["X-Correlation-ID"] = correlationId;
     }
 
-    const res = await fetch(`${BACKEND_URL}/api/export/google-sheets`, {
+    const res = await fetch(`${backendUrl}/api/export/google-sheets`, {
       method: "POST",
       headers,
       body: JSON.stringify(body),
     });
 
-    const contentType = res.headers.get("content-type") || "";
-    const isJson = contentType.includes("application/json");
+    const responseBody = await res.text();
+    const sanitized = sanitizeProxyError(res.status, responseBody, res.headers.get("content-type"));
+    if (sanitized) return sanitized;
 
-    if (!isJson) {
-      // Backend returned HTML or non-JSON (e.g., error page)
-      const text = await res.text();
-      console.error(`[google-sheets-proxy] Non-JSON response (${res.status}): ${text.slice(0, 200)}`);
+    try {
+      const data = JSON.parse(responseBody);
+      return NextResponse.json(data, { status: res.status });
+    } catch {
       return NextResponse.json(
         { detail: "Erro ao exportar para Google Sheets. Tente novamente." },
         { status: res.status >= 400 ? res.status : 502 },
       );
     }
-
-    const data = await res.json();
-    return NextResponse.json(data, { status: res.status });
   } catch (error) {
-    console.error("Google Sheets export proxy error:", error);
-    return NextResponse.json(
-      { detail: "Erro de conexão ao exportar para Google Sheets." },
-      { status: 502 },
-    );
+    console.error("[google-sheets-proxy] Network error:", error instanceof Error ? error.message : error);
+    return sanitizeNetworkError(error);
   }
 }

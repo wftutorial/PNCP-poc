@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sanitizeProxyError, sanitizeNetworkError } from "../../../lib/proxy-error-handler";
 
-const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
+const BACKEND_URL = process.env.BACKEND_URL;
 
 // CRIT-017: Shared helper to safely parse response with infrastructure error sanitization
 async function safeProxyResponse(
@@ -35,6 +35,11 @@ async function safeProxyResponse(
 }
 
 export async function POST(request: NextRequest) {
+  if (!BACKEND_URL) {
+    console.error("BACKEND_URL environment variable is not configured");
+    return NextResponse.json({ message: "Serviço temporariamente indisponível" }, { status: 503 });
+  }
+
   try {
     const body = await request.json();
     const authHeader = request.headers.get("authorization") || "";
@@ -63,6 +68,11 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  if (!BACKEND_URL) {
+    console.error("BACKEND_URL environment variable is not configured");
+    return NextResponse.json({ message: "Serviço temporariamente indisponível" }, { status: 503 });
+  }
+
   try {
     const { searchParams } = new URL(request.url);
     const feedbackId = searchParams.get("id");

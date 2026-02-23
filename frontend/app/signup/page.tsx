@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../components/AuthProvider";
 import { useAnalytics, getStoredUTMParams } from "../../hooks/useAnalytics";
-import { getUserFriendlyError } from "../../lib/error-messages";
+import { translateAuthError } from "../../lib/error-messages";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -129,7 +129,8 @@ export default function SignupPage() {
       // AC9: identifyUser skipped here — user must confirm email first.
       // Identity will be linked on first login (AC7).
     } catch (err: unknown) {
-      setError(getUserFriendlyError(err));
+      const rawMessage = err instanceof Error ? err.message : "Erro ao criar conta";
+      setError(translateAuthError(rawMessage));
     } finally {
       setLoading(false);
     }

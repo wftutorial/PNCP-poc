@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sanitizeProxyError, sanitizeNetworkError } from "../../../../lib/proxy-error-handler";
 
 export async function GET(request: NextRequest) {
   const backendUrl = process.env.BACKEND_URL;
@@ -29,11 +30,18 @@ export async function GET(request: NextRequest) {
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      return NextResponse.json(
-        { message: error.detail || "Erro ao exportar dados" },
-        { status: response.status }
-      );
+      const body = await response.text();
+      const sanitized = sanitizeProxyError(response.status, body, response.headers.get("content-type"));
+      if (sanitized) return sanitized;
+      try {
+        const data = JSON.parse(body);
+        return NextResponse.json(
+          { message: data.detail || "Erro ao exportar dados" },
+          { status: response.status }
+        );
+      } catch {
+        return NextResponse.json({ message: "Erro temporário de comunicação" }, { status: response.status });
+      }
     }
 
     // Forward the JSON file response with content-disposition header
@@ -49,10 +57,7 @@ export async function GET(request: NextRequest) {
 
     return new NextResponse(body, { status: 200, headers });
   } catch (error) {
-    console.error("Error exporting user data:", error);
-    return NextResponse.json(
-      { message: "Erro ao conectar com servidor" },
-      { status: 503 }
-    );
+    console.error("Error exporting user data:", error instanceof Error ? error.message : error);
+    return sanitizeNetworkError(error);
   }
 }

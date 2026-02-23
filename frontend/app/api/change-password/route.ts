@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sanitizeProxyError, sanitizeNetworkError } from "../../../lib/proxy-error-handler";
 
 export async function POST(request: NextRequest) {
   const backendUrl = process.env.BACKEND_URL;
@@ -36,20 +37,24 @@ export async function POST(request: NextRequest) {
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      return NextResponse.json(
-        { detail: error.detail || "Erro ao alterar senha" },
-        { status: response.status }
-      );
+      const responseBody = await response.text();
+      const sanitized = sanitizeProxyError(response.status, responseBody, response.headers.get("content-type"));
+      if (sanitized) return sanitized;
+      try {
+        const data = JSON.parse(responseBody);
+        return NextResponse.json(
+          { detail: data.detail || "Erro ao alterar senha" },
+          { status: response.status }
+        );
+      } catch {
+        return NextResponse.json({ message: "Erro temporário de comunicação" }, { status: response.status });
+      }
     }
 
     const data = await response.json().catch(() => ({}));
     return NextResponse.json(data);
   } catch (error) {
-    console.error("Error changing password:", error);
-    return NextResponse.json(
-      { detail: "Erro ao conectar com servidor" },
-      { status: 503 }
-    );
+    console.error("Error changing password:", error instanceof Error ? error.message : error);
+    return sanitizeNetworkError(error);
   }
 }

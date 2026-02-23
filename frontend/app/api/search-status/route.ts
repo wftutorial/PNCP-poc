@@ -5,10 +5,18 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-
-const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
+import { sanitizeProxyError, sanitizeNetworkError } from "../../../lib/proxy-error-handler";
 
 export async function GET(request: NextRequest) {
+  const backendUrl = process.env.BACKEND_URL;
+  if (!backendUrl) {
+    console.error("BACKEND_URL environment variable is not configured");
+    return NextResponse.json(
+      { message: "Serviço temporariamente indisponível" },
+      { status: 503 }
+    );
+  }
+
   const searchId = request.nextUrl.searchParams.get("search_id");
 
   if (!searchId) {
@@ -33,17 +41,22 @@ export async function GET(request: NextRequest) {
 
   try {
     const res = await fetch(
-      `${BACKEND_URL}/v1/search/${encodeURIComponent(searchId)}/status`,
+      `${backendUrl}/v1/search/${encodeURIComponent(searchId)}/status`,
       { headers, cache: "no-store" }
     );
 
-    const data = await res.json();
-    return NextResponse.json(data, { status: res.status });
-  } catch (err) {
-    console.error("Search status proxy error:", err);
-    return NextResponse.json(
-      { error: "Failed to fetch search status" },
-      { status: 502 }
-    );
+    const body = await res.text();
+    const sanitized = sanitizeProxyError(res.status, body, res.headers.get("content-type"));
+    if (sanitized) return sanitized;
+
+    try {
+      const data = JSON.parse(body);
+      return NextResponse.json(data, { status: res.status });
+    } catch {
+      return NextResponse.json({ message: "Erro temporário de comunicação" }, { status: res.status });
+    }
+  } catch (error) {
+    console.error("[search-status] Network error:", error instanceof Error ? error.message : error);
+    return sanitizeNetworkError(error);
   }
 }

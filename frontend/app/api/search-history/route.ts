@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRefreshedToken } from "../../../lib/serverAuth";
+import { sanitizeProxyError, sanitizeNetworkError } from "../../../lib/proxy-error-handler";
 
 // ---------------------------------------------------------------------------
 // STORY-257B AC11: API route to fetch user's latest saved search
@@ -71,15 +72,19 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Handle backend unavailability
-    if (response.status >= 500) {
-      console.error(
-        `[search-history] Backend returned ${response.status}: ${await response.text()}`
-      );
-      return NextResponse.json(
-        { message: "Servico temporariamente indisponivel. Tente novamente em instantes." },
-        { status: 503 }
-      );
+    if (!response.ok) {
+      const body = await response.text();
+      const sanitized = sanitizeProxyError(response.status, body, response.headers.get("content-type"));
+      if (sanitized) return sanitized;
+      try {
+        const data = JSON.parse(body);
+        return NextResponse.json(data, { status: response.status });
+      } catch {
+        return NextResponse.json(
+          { message: "Servico temporariamente indisponivel. Tente novamente em instantes." },
+          { status: response.status }
+        );
+      }
     }
 
     // Parse and forward response
@@ -87,10 +92,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(data, { status: response.status });
 
   } catch (error) {
-    console.error("[search-history] Error fetching latest search:", error);
-    return NextResponse.json(
-      { message: "Erro interno do servidor" },
-      { status: 500 }
-    );
+    console.error("[search-history] Error fetching latest search:", error instanceof Error ? error.message : error);
+    return sanitizeNetworkError(error);
   }
 }

@@ -85,7 +85,7 @@ async def stripe_webhook(request: Request):
 
     if not sig_header:
         logger.warning("Webhook rejected: Missing stripe-signature header")
-        raise HTTPException(status_code=400, detail="Missing stripe-signature header")
+        raise HTTPException(status_code=400, detail="Assinatura de webhook inválida")
 
     # CRITICAL: Verify signature (prevents fake webhooks)
     try:
@@ -94,10 +94,10 @@ async def stripe_webhook(request: Request):
         )
     except ValueError as e:
         logger.error(f"Webhook payload invalid: {e}")
-        raise HTTPException(status_code=400, detail="Invalid payload")
+        raise HTTPException(status_code=400, detail="Dados de webhook inválidos")
     except stripe.error.SignatureVerificationError as e:
         logger.error(f"Webhook signature verification failed: {e}")
-        raise HTTPException(status_code=400, detail="Invalid signature")
+        raise HTTPException(status_code=400, detail="Assinatura de webhook inválida")
 
     logger.info(f"Received Stripe webhook: event_id={event.id}, type={event.type}")
 

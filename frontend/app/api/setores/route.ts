@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sanitizeProxyError, sanitizeNetworkError } from "../../../lib/proxy-error-handler";
 
 export async function GET(request: NextRequest) {
   const backendUrl = process.env.BACKEND_URL;
@@ -21,10 +22,18 @@ export async function GET(request: NextRequest) {
     const response = await fetch(`${backendUrl}/v1/setores`, { headers });
 
     if (!response.ok) {
-      return NextResponse.json(
-        { message: "Erro ao buscar setores" },
-        { status: response.status }
-      );
+      const body = await response.text();
+      const sanitized = sanitizeProxyError(response.status, body, response.headers.get("content-type"));
+      if (sanitized) return sanitized;
+      try {
+        JSON.parse(body);
+        return NextResponse.json(
+          { message: "Erro ao buscar setores" },
+          { status: response.status }
+        );
+      } catch {
+        return NextResponse.json({ message: "Erro temporário de comunicação" }, { status: response.status });
+      }
     }
 
     const data = await response.json().catch(() => null);
@@ -36,10 +45,7 @@ export async function GET(request: NextRequest) {
     }
     return NextResponse.json(data);
   } catch (error) {
-    console.error("Erro ao buscar setores:", error);
-    return NextResponse.json(
-      { message: "Backend indisponível" },
-      { status: 503 }
-    );
+    console.error("Erro ao buscar setores:", error instanceof Error ? error.message : error);
+    return sanitizeNetworkError(error);
   }
 }

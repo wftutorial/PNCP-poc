@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sanitizeProxyError, sanitizeNetworkError } from "../../../../lib/proxy-error-handler";
 
 const backendUrl = process.env.BACKEND_URL;
 
@@ -23,10 +24,22 @@ export async function GET(request: NextRequest) {
     const res = await fetch(url, {
       headers: { Authorization: authHeader, "Content-Type": "application/json", ...(correlationId && { "X-Correlation-ID": correlationId }) },
     });
+    if (!res.ok) {
+      const body = await res.text();
+      const sanitized = sanitizeProxyError(res.status, body, res.headers.get("content-type"));
+      if (sanitized) return sanitized;
+      try {
+        const data = JSON.parse(body);
+        return NextResponse.json(data, { status: res.status });
+      } catch {
+        return NextResponse.json({ message: "Erro temporário de comunicação" }, { status: res.status });
+      }
+    }
     const data = await res.json().catch(() => ({}));
     return NextResponse.json(data, { status: res.status });
-  } catch {
-    return errorResponse("Erro ao conectar com servidor", 503);
+  } catch (error) {
+    console.error("[messages/conversations] Network error:", error instanceof Error ? error.message : error);
+    return sanitizeNetworkError(error);
   }
 }
 
@@ -46,9 +59,21 @@ export async function POST(request: NextRequest) {
       headers: { Authorization: authHeader, "Content-Type": "application/json", ...(correlationId && { "X-Correlation-ID": correlationId }) },
       body: JSON.stringify(body),
     });
+    if (!res.ok) {
+      const resBody = await res.text();
+      const sanitized = sanitizeProxyError(res.status, resBody, res.headers.get("content-type"));
+      if (sanitized) return sanitized;
+      try {
+        const data = JSON.parse(resBody);
+        return NextResponse.json(data, { status: res.status });
+      } catch {
+        return NextResponse.json({ message: "Erro temporário de comunicação" }, { status: res.status });
+      }
+    }
     const data = await res.json().catch(() => ({}));
     return NextResponse.json(data, { status: res.status });
-  } catch {
-    return errorResponse("Erro ao conectar com servidor", 503);
+  } catch (error) {
+    console.error("[messages/conversations] Network error:", error instanceof Error ? error.message : error);
+    return sanitizeNetworkError(error);
   }
 }

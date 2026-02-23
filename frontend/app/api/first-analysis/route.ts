@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sanitizeProxyError, sanitizeNetworkError } from "../../../lib/proxy-error-handler";
 
 const getBackendUrl = () => process.env.BACKEND_URL;
 
@@ -32,20 +33,24 @@ export async function POST(request: NextRequest) {
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      return NextResponse.json(
-        { message: error.detail || "Erro ao iniciar analise" },
-        { status: response.status },
-      );
+      const responseBody = await response.text();
+      const sanitized = sanitizeProxyError(response.status, responseBody, response.headers.get("content-type"));
+      if (sanitized) return sanitized;
+      try {
+        const data = JSON.parse(responseBody);
+        return NextResponse.json(
+          { message: data.detail || "Erro ao iniciar analise" },
+          { status: response.status },
+        );
+      } catch {
+        return NextResponse.json({ message: "Erro temporário de comunicação" }, { status: response.status });
+      }
     }
 
     const data = await response.json();
     return NextResponse.json(data);
   } catch (error) {
-    console.error("Error starting first analysis:", error);
-    return NextResponse.json(
-      { message: "Erro ao conectar com servidor" },
-      { status: 503 },
-    );
+    console.error("Error starting first analysis:", error instanceof Error ? error.message : error);
+    return sanitizeNetworkError(error);
   }
 }

@@ -82,12 +82,12 @@ export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get("token");
 
   if (!searchId) {
-    return new Response("search_id is required", { status: 400 });
+    return new Response("search_id é obrigatório", { status: 400 });
   }
 
   const backendUrl = process.env.BACKEND_URL;
   if (!backendUrl) {
-    return new Response("Server not configured", { status: 503 });
+    return new Response("Serviço temporariamente indisponível", { status: 503 });
   }
 
   // CRIT-004 AC2: Forward Authorization + X-Correlation-ID
@@ -134,13 +134,13 @@ export async function GET(request: NextRequest) {
       );
 
       if (!backendResponse.ok) {
-        return new Response("Backend error", {
+        return new Response("Erro no servidor", {
           status: backendResponse.status,
         });
       }
 
       if (!backendResponse.body) {
-        return new Response("No stream body", { status: 502 });
+        return new Response("Erro de conexão com o servidor", { status: 502 });
       }
 
       // Proxy the SSE stream directly to the browser
@@ -175,7 +175,7 @@ export async function GET(request: NextRequest) {
 
       // CRIT-012 AC5: AbortError from client disconnect — not retryable
       if (errorName === "AbortError") {
-        return new Response("Client disconnected", { status: 499 });
+        return new Response("Conexão encerrada pelo cliente", { status: 499 });
       }
 
       // CRIT-026 AC7: Retry once on transient stream errors
@@ -199,9 +199,9 @@ export async function GET(request: NextRequest) {
   if (isRetryableStreamError(lastError)) {
     return new Response(
       JSON.stringify({
-        error: "SSE stream timeout",
+        error: "Tempo limite de conexão excedido",
         detail:
-          "Backend stream was silent too long or connection was terminated",
+          "A conexão com o servidor ficou silenciosa por muito tempo ou foi encerrada",
         error_type: errorName,
         search_id: searchId,
         elapsed_ms: elapsed,
@@ -214,5 +214,5 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  return new Response("Failed to connect to backend", { status: 502 });
+  return new Response("Erro ao conectar com o servidor", { status: 502 });
 }

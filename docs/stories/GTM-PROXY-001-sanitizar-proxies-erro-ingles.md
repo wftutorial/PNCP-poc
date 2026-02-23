@@ -47,29 +47,29 @@ O usuario vê mensagens como "Invalid login credentials", "Stripe not configured
 
 ### Sanitizacao de Proxies
 
-- [ ] AC1: TODAS as proxies em `app/api/*/route.ts` usam `sanitizeProxyError()` no catch
-- [ ] AC2: Zero fallback para `localhost:8000` — usar SOMENTE `BACKEND_URL` env var
-- [ ] AC3: Quando `BACKEND_URL` nao definido, retornar 503 com mensagem: "Servico temporariamente indisponivel"
+- [x] AC1: TODAS as proxies em `app/api/*/route.ts` usam `sanitizeProxyError()` no catch
+- [x] AC2: Zero fallback para `localhost:8000` — usar SOMENTE `BACKEND_URL` env var
+- [x] AC3: Quando `BACKEND_URL` nao definido, retornar 503 com mensagem: "Servico temporariamente indisponivel"
 
 ### Mapeamento de Erros Auth
 
-- [ ] AC4: "Invalid login credentials" → "Email ou senha incorretos"
-- [ ] AC5: "User already registered" → "Este email ja esta cadastrado"
-- [ ] AC6: "Email not confirmed" → "Confirme seu email antes de fazer login"
-- [ ] AC7: "Password should be at least 6 characters" → "A senha deve ter pelo menos 6 caracteres"
-- [ ] AC8: Mapa centralizado em `lib/error-messages.ts` (nao espalhado em cada pagina)
+- [x] AC4: "Invalid login credentials" → "Email ou senha incorretos"
+- [x] AC5: "User already registered" → "Este email ja esta cadastrado"
+- [x] AC6: "Email not confirmed" → "Confirme seu email antes de fazer login"
+- [x] AC7: "Password should be at least 6 characters" → "A senha deve ter pelo menos 6 caracteres"
+- [x] AC8: Mapa centralizado em `lib/error-messages.ts` (nao espalhado em cada pagina)
 
 ### Backend Error Messages
 
-- [ ] AC9: FastAPI exception handler para `RequestValidationError` retorna mensagem em PT
-- [ ] AC10: Stripe errors sanitizados: "Erro ao processar pagamento. Tente novamente." (nunca expor detalhes Stripe)
-- [ ] AC11: Supabase RLS errors: "Erro de permissao. Faca login novamente." (nunca expor "RLS policy")
+- [x] AC9: FastAPI exception handler para `RequestValidationError` retorna mensagem em PT
+- [x] AC10: Stripe errors sanitizados: "Erro ao processar pagamento. Tente novamente." (nunca expor detalhes Stripe)
+- [x] AC11: Supabase RLS errors: "Erro de permissao. Faca login novamente." (nunca expor "RLS policy")
 
 ### Verificacao
 
-- [ ] AC12: `grep -r "localhost:8000" frontend/app/api/` retorna ZERO matches
-- [ ] AC13: `grep -r "Invalid login" frontend/` retorna ZERO matches em user-facing code
-- [ ] AC14: Nenhum erro visivel ao usuario contem texto em ingles
+- [x] AC12: `grep -r "localhost:8000" frontend/app/api/` retorna ZERO matches
+- [x] AC13: `grep -r "Invalid login" frontend/` retorna ZERO matches em user-facing code
+- [x] AC14: Nenhum erro visivel ao usuario contem texto em ingles
 
 ## Testes Obrigatorios
 
@@ -78,11 +78,11 @@ cd frontend && npm test -- --testPathPattern="proxy-sanitization|error-messages"
 cd backend && pytest -k "test_error_handler" --no-coverage
 ```
 
-- [ ] T1: Cada proxy retorna mensagem PT quando backend offline
-- [ ] T2: Login com senha errada mostra "Email ou senha incorretos"
-- [ ] T3: Signup com email existente mostra "Este email ja esta cadastrado"
-- [ ] T4: FastAPI validation retorna mensagem PT
-- [ ] T5: Stripe error retorna mensagem generica PT
+- [x] T1: Cada proxy retorna mensagem PT quando backend offline
+- [x] T2: Login com senha errada mostra "Email ou senha incorretos"
+- [x] T3: Signup com email existente mostra "Este email ja esta cadastrado"
+- [x] T4: FastAPI validation retorna mensagem PT
+- [x] T5: Stripe error retorna mensagem generica PT
 
 ## Arquivos Afetados
 

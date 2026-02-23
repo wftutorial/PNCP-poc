@@ -222,6 +222,13 @@ CACHE_REFRESH_DURATION = _create_histogram(
     buckets=[10, 30, 60, 120, 300, 600],
 )
 
+# GTM-ARCH-001 AC18: Async search job duration histogram
+SEARCH_JOB_DURATION = _create_histogram(
+    "smartlic_search_job_duration_seconds",
+    "Async search job duration in ARQ Worker",
+    buckets=[5, 10, 15, 30, 60, 120, 300],
+)
+
 # ============================================================================
 # Gauges
 # ============================================================================

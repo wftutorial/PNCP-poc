@@ -186,8 +186,9 @@ class TestWorkerSettings:
         assert WorkerSettings.max_tries == 3
 
     def test_job_timeout(self):
+        # GTM-ARCH-001: Increased from 60 to 300 to support search_job (multi-UF up to 300s)
         from job_queue import WorkerSettings
-        assert WorkerSettings.job_timeout == 60
+        assert WorkerSettings.job_timeout == 300
 
     def test_max_jobs(self):
         from job_queue import WorkerSettings

@@ -132,6 +132,12 @@ export async function POST(request: NextRequest) {
 
         clearTimeout(timeout);
 
+        // GTM-ARCH-001: 202 Accepted = async search queued — forward immediately
+        if (response.status === 202) {
+          const queuedData = await response.json();
+          return NextResponse.json(queuedData, { status: 202 });
+        }
+
         // If successful or non-retryable error, break out
         if (response.ok || !RETRYABLE_STATUSES.includes(response.status)) {
           break;

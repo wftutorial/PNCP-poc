@@ -159,10 +159,33 @@ def store_background_results(search_id: str, response: BuscaResponse) -> None:
 
 
 def get_background_results(search_id: str) -> Optional[BuscaResponse]:
-    """Retrieve background fetch results if available and not expired."""
+    """Retrieve background fetch results if available and not expired.
+
+    GTM-ARCH-001: Also checks Redis for results persisted by ARQ Worker.
+    """
+    # Check in-memory first (A-04 cache-first pattern)
     entry = _background_results.get(search_id)
     if entry and sync_time.time() - entry["stored_at"] < _RESULTS_TTL:
         return entry["response"]
+    return None
+
+
+async def get_background_results_async(search_id: str) -> Optional[Dict[str, Any]]:
+    """GTM-ARCH-001: Retrieve search results from Redis (set by ARQ Worker).
+
+    Falls back to in-memory results for backward compatibility.
+    """
+    # Check in-memory first
+    sync_result = get_background_results(search_id)
+    if sync_result:
+        return sync_result
+
+    # Check Redis (results persisted by search_job Worker)
+    from job_queue import get_job_result
+    redis_result = await get_job_result(search_id, "search_result")
+    if redis_result:
+        return redis_result
+
     return None
 
 
@@ -279,7 +302,7 @@ async def buscar_progress_stream(
                                 event_data = _json.loads(message["data"])
                                 yield f"data: {_json.dumps(event_data)}\n\n"
 
-                                if event_data.get("stage") in ("complete", "degraded", "error", "refresh_available"):
+                                if event_data.get("stage") in ("complete", "degraded", "error", "refresh_available", "search_complete"):
                                     break
 
                         except _asyncio.TimeoutError:
@@ -312,7 +335,7 @@ async def buscar_progress_stream(
                         )
                         yield f"data: {_json.dumps(event.to_dict())}\n\n"
 
-                        if event.stage in ("complete", "degraded", "error", "refresh_available"):
+                        if event.stage in ("complete", "degraded", "error", "refresh_available", "search_complete"):
                             break
 
                     except _asyncio.TimeoutError:
@@ -399,12 +422,13 @@ async def get_search_results(
     search_id: str,
     user: dict = Depends(require_auth),
 ):
-    """Return results of a background fetch for cache-first progressive delivery.
+    """Return results of a background fetch or async search.
 
     A-04 AC5: Called by frontend when user clicks "Atualizar resultados" banner.
-    Returns 404 if search_id not found or expired (10min TTL).
+    GTM-ARCH-001 AC3: Also serves results from ARQ Worker (via Redis).
+    Returns 404 if search_id not found or expired.
     """
-    result = get_background_results(search_id)
+    result = await get_background_results_async(search_id)
     if result is None:
         raise HTTPException(
             status_code=404,
@@ -518,6 +542,76 @@ async def _execute_background_fetch(
 
 
 # ---------------------------------------------------------------------------
+# GTM-ARCH-001 AC13: Watchdog fallback for async search
+# ---------------------------------------------------------------------------
+
+async def _search_fallback_watchdog(
+    search_id: str,
+    request: "BuscaRequest",
+    user: dict,
+    deps: "SimpleNamespace",
+    tracker,
+    state_machine,
+    fallback_timeout: int = 30,
+) -> None:
+    """AC13: If Worker doesn't produce results within fallback_timeout, run inline.
+
+    Spawned as asyncio.create_task() after enqueue. Sleeps for fallback_timeout
+    seconds, then checks if the Worker already completed. If not, executes the
+    pipeline inline so the user never loses their search.
+    """
+    await asyncio.sleep(fallback_timeout)
+
+    # Check if Worker already completed (via Redis)
+    from job_queue import get_job_result
+    result = await get_job_result(search_id, "search_result")
+    if result:
+        logger.debug(f"ARCH-001: Watchdog — Worker completed for {search_id}, no fallback needed")
+        return
+
+    # Check if tracker already completed (Worker emitted terminal event)
+    existing_tracker = await get_tracker(search_id)
+    if existing_tracker and existing_tracker._is_complete:
+        logger.debug(f"ARCH-001: Watchdog — tracker complete for {search_id}, no fallback needed")
+        return
+
+    logger.warning(
+        f"ARCH-001: Worker didn't complete within {fallback_timeout}s for {search_id} — "
+        f"executing inline fallback"
+    )
+
+    try:
+        pipeline = SearchPipeline(deps)
+        ctx = SearchContext(
+            request=request,
+            user=user,
+            tracker=existing_tracker or tracker,
+            start_time=sync_time.time(),
+            quota_pre_consumed=True,  # Quota already consumed in POST
+        )
+
+        response = await pipeline.run(ctx)
+
+        # Store for /buscar-results retrieval
+        store_background_results(search_id, response)
+
+        if existing_tracker or tracker:
+            active_tracker = existing_tracker or tracker
+            await active_tracker.emit_search_complete(search_id, response.total_filtrado)
+            await remove_tracker(search_id)
+
+    except Exception as e:
+        logger.error(
+            f"ARCH-001: Inline fallback also failed for {search_id}: "
+            f"{type(e).__name__}: {e}"
+        )
+        active_tracker = existing_tracker or tracker
+        if active_tracker:
+            await active_tracker.emit_error(f"Erro no processamento: {type(e).__name__}")
+            await remove_tracker(search_id)
+
+
+# ---------------------------------------------------------------------------
 # Main search endpoint
 # ---------------------------------------------------------------------------
 
@@ -573,6 +667,97 @@ async def buscar_licitacoes(
         KEYWORDS_EXCLUSAO=KEYWORDS_EXCLUSAO,
         validate_terms=validate_terms,
     )
+
+    # -----------------------------------------------------------------------
+    # GTM-ARCH-001: Async search — enqueue to ARQ Worker, return 202
+    # -----------------------------------------------------------------------
+    from config import get_feature_flag, SEARCH_WORKER_FALLBACK_TIMEOUT
+    from job_queue import is_queue_available, enqueue_job
+    from starlette.responses import JSONResponse as StarletteJSONResponse
+
+    if get_feature_flag("SEARCH_ASYNC_ENABLED"):
+        queue_available = await is_queue_available()
+        if queue_available:
+            logger.info(f"ARCH-001: Async mode — enqueueing search job for {request.search_id}")
+
+            # AC8: Consume quota in POST (before enqueue, not in Worker)
+            try:
+                import quota as _quota
+                from authorization import get_admin_ids as _get_admin_ids
+
+                _is_admin = user["id"].lower() in _get_admin_ids()
+                _is_master = False
+                if not _is_admin:
+                    _is_admin, _is_master = await check_user_roles(user["id"])
+
+                if not (_is_admin or _is_master):
+                    _quota_info = _quota.check_quota(user["id"])
+                    if not _quota_info.allowed:
+                        if tracker:
+                            await tracker.emit_error(_quota_info.error_message)
+                            await remove_tracker(request.search_id)
+                        raise HTTPException(status_code=403, detail=_quota_info.error_message)
+
+                    _allowed, _new_used, _remaining = _quota.check_and_increment_quota_atomic(
+                        user["id"],
+                        _quota_info.capabilities["max_requests_per_month"],
+                    )
+                    if not _allowed:
+                        if tracker:
+                            await tracker.emit_error("Suas buscas acabaram.")
+                            await remove_tracker(request.search_id)
+                        raise HTTPException(
+                            status_code=403,
+                            detail=(
+                                f"Limite de {_quota_info.capabilities['max_requests_per_month']} "
+                                f"buscas mensais atingido."
+                            ),
+                        )
+            except HTTPException:
+                raise
+            except Exception as quota_err:
+                logger.warning(f"ARCH-001: Quota check failed, falling through to sync: {quota_err}")
+                # Fall through to sync path
+                queue_available = False
+
+            if queue_available:
+                # AC7: Reuse search_id generated in POST
+                request_data = request.model_dump(mode="json")
+                queued_at = sync_time.time()
+
+                job = await enqueue_job(
+                    "search_job",
+                    request.search_id,
+                    request_data,
+                    user,
+                    _job_id=f"search:{request.search_id}",
+                    _queued_at=queued_at,
+                )
+
+                if job:
+                    # AC13: Start watchdog — fallback to inline if Worker doesn't complete in 30s
+                    asyncio.create_task(
+                        _search_fallback_watchdog(
+                            search_id=request.search_id,
+                            request=request,
+                            user=user,
+                            deps=deps,
+                            tracker=tracker,
+                            state_machine=state_machine,
+                            fallback_timeout=SEARCH_WORKER_FALLBACK_TIMEOUT,
+                        )
+                    )
+
+                    # AC1: Return 202 Accepted with search_id in <2s
+                    logger.info(
+                        f"ARCH-001: Search job enqueued for {request.search_id} — returning 202"
+                    )
+                    return StarletteJSONResponse(
+                        status_code=202,
+                        content={"search_id": request.search_id, "status": "queued"},
+                    )
+                else:
+                    logger.warning(f"ARCH-001: Enqueue failed for {request.search_id} — falling back to sync")
 
     # -----------------------------------------------------------------------
     # A-04 AC1: Cache-first — check cascade before running full pipeline

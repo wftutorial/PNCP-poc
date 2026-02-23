@@ -398,6 +398,116 @@ async def excel_generation_job(
 
 
 # ==========================================================================
+# GTM-ARCH-001: Async Search Job
+# ==========================================================================
+
+async def search_job(
+    ctx: dict,
+    search_id: str,
+    request_data: dict,
+    user_data: dict,
+    **kwargs,
+) -> dict:
+    """GTM-ARCH-001 AC2: Background job — execute full search pipeline.
+
+    Runs the 7-stage SearchPipeline in the ARQ Worker, completely decoupled
+    from the HTTP request cycle. Railway's ~120s proxy timeout becomes
+    irrelevant because POST /buscar already returned 202.
+
+    AC18: Emits search_job_duration_seconds histogram metric.
+    AC19: Structured log with search_id, queued_at, started_at, completed_at, status.
+    AC17: Worker uses existing tracker for heartbeat emission.
+
+    Args:
+        ctx: ARQ worker context dict.
+        search_id: UUID correlating POST → SSE → Worker.
+        request_data: Serialized BuscaRequest (from model_dump()).
+        user_data: User dict (id, plan, roles).
+        **kwargs: Trace context (_trace_id, _span_id).
+
+    Returns:
+        Dict with status, total_results, duration_ms.
+    """
+    from middleware import search_id_var, request_id_var
+    search_id_var.set(search_id)
+    request_id_var.set(kwargs.get("_trace_id", search_id))
+
+    from search_pipeline import executar_busca_completa
+    from progress import get_tracker, remove_tracker
+    from metrics import SEARCH_JOB_DURATION
+    from datetime import datetime, timezone
+
+    started_at = datetime.now(timezone.utc)
+    start_mono = time.monotonic()
+
+    logger.info(json.dumps({
+        "event": "search_job_started",
+        "search_id": search_id,
+        "queued_at": kwargs.get("_queued_at"),
+        "started_at": started_at.isoformat(),
+        "ufs": request_data.get("ufs", []),
+    }))
+
+    tracker = await get_tracker(search_id)
+    status = "completed"
+
+    try:
+        response = await executar_busca_completa(
+            search_id=search_id,
+            request_data=request_data,
+            user_data=user_data,
+            tracker=tracker,
+            quota_pre_consumed=True,  # AC8: Quota consumed in POST before enqueue
+        )
+
+        total_results = response.total_filtrado if response else 0
+
+        # Persist full result for /buscar-results/{search_id} retrieval
+        if response:
+            await persist_job_result(
+                search_id, "search_result", response.model_dump()
+            )
+
+        # Emit search_complete via SSE (AC3, AC16)
+        tracker = await get_tracker(search_id)
+        if tracker:
+            await tracker.emit_search_complete(search_id, total_results)
+            await remove_tracker(search_id)
+
+        logger.info(f"[Search Job] Completed: search_id={search_id}, results={total_results}")
+        return {"status": "completed", "total_results": total_results}
+
+    except Exception as e:
+        status = "failed"
+        logger.error(
+            f"[Search Job] Failed: search_id={search_id}, "
+            f"error={type(e).__name__}: {e}",
+            exc_info=True,
+        )
+        # Emit error via SSE (AC20)
+        tracker = await get_tracker(search_id)
+        if tracker:
+            from schemas import SearchErrorCode
+            await tracker.emit_error(str(e)[:300])
+            await remove_tracker(search_id)
+        raise
+
+    finally:
+        duration_s = time.monotonic() - start_mono
+        duration_ms = int(duration_s * 1000)
+        SEARCH_JOB_DURATION.observe(duration_s)
+        completed_at = datetime.now(timezone.utc)
+        logger.info(json.dumps({
+            "event": "search_job_finished",
+            "search_id": search_id,
+            "started_at": started_at.isoformat(),
+            "completed_at": completed_at.isoformat(),
+            "duration_ms": duration_ms,
+            "status": status,
+        }))
+
+
+# ==========================================================================
 # CRIT-032: Periodic Cache Refresh Job
 # ==========================================================================
 
@@ -581,11 +691,11 @@ class WorkerSettings:
         cd backend && arq job_queue.WorkerSettings
     """
 
-    functions = [llm_summary_job, excel_generation_job, cache_refresh_job]
+    functions = [llm_summary_job, excel_generation_job, cache_refresh_job, search_job]
     cron_jobs = _worker_cron_jobs  # CRIT-032 AC2: periodic cache refresh
     redis_settings = _worker_redis_settings
     max_jobs = 10
-    job_timeout = 60   # AC16: worst case (Excel can take longer than LLM)
+    job_timeout = 300  # GTM-ARCH-001: search_job needs up to 300s for multi-UF
     max_tries = 3      # AC10/AC15: 1 initial + 2 retries
     health_check_interval = 30
     retry_delay = 2.0  # seconds between retries

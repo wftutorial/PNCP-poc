@@ -4283,13 +4283,6 @@
         },
         "ValidationError": {
           "properties": {
-            "ctx": {
-              "title": "Context",
-              "type": "object"
-            },
-            "input": {
-              "title": "Input"
-            },
             "loc": {
               "items": {
                 "anyOf": [
@@ -6125,7 +6118,7 @@
       },
       "/buscar-results/{search_id}": {
         "get": {
-          "description": "Return results of a background fetch for cache-first progressive delivery.\n\nA-04 AC5: Called by frontend when user clicks \"Atualizar resultados\" banner.\nReturns 404 if search_id not found or expired (10min TTL).",
+          "description": "Return results of a background fetch or async search.\n\nA-04 AC5: Called by frontend when user clicks \"Atualizar resultados\" banner.\nGTM-ARCH-001 AC3: Also serves results from ARQ Worker (via Redis).\nReturns 404 if search_id not found or expired.",
           "operationId": "get_search_results_buscar_results__search_id__get",
           "parameters": [
             {
@@ -8938,7 +8931,7 @@
       },
       "/v1/buscar-results/{search_id}": {
         "get": {
-          "description": "Return results of a background fetch for cache-first progressive delivery.\n\nA-04 AC5: Called by frontend when user clicks \"Atualizar resultados\" banner.\nReturns 404 if search_id not found or expired (10min TTL).",
+          "description": "Return results of a background fetch or async search.\n\nA-04 AC5: Called by frontend when user clicks \"Atualizar resultados\" banner.\nGTM-ARCH-001 AC3: Also serves results from ARQ Worker (via Redis).\nReturns 404 if search_id not found or expired.",
           "operationId": "get_search_results_v1_buscar_results__search_id__get",
           "parameters": [
             {
@@ -12615,6 +12608,22 @@
               "description": "Source that provided this record",
               "title": "Source"
             },
+            "_value_source": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "estimated",
+                    "missing"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Whether the bid's estimated value was reported ('estimated') or missing ('missing')",
+              "title": "Value Source"
+            },
             "confidence": {
               "anyOf": [
                 {
@@ -12695,7 +12704,7 @@
               "title": "Dias Restantes"
             },
             "link": {
-              "description": "Direct link to PNCP portal",
+              "description": "Direct link to bid source (priority: linkSistemaOrigem > constructed PNCP URL)",
               "title": "Link",
               "type": "string"
             },
@@ -14608,7 +14617,7 @@
     },
     "info": {
       "description": "API para busca e an\u00e1lise de licita\u00e7\u00f5es em fontes oficiais. Permite filtrar oportunidades por estado, valor e setor, gerando relat\u00f3rios Excel e avalia\u00e7\u00e3o estrat\u00e9gica via IA.",
-      "title": "BidIQ Uniformes API",
+      "title": "SmartLic API",
       "version": "dev"
     },
     "openapi": "3.1.0",

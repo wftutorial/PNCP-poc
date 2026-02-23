@@ -4282,13 +4282,6 @@
       },
       "ValidationError": {
         "properties": {
-          "ctx": {
-            "title": "Context",
-            "type": "object"
-          },
-          "input": {
-            "title": "Input"
-          },
           "loc": {
             "items": {
               "anyOf": [
@@ -6124,7 +6117,7 @@
     },
     "/buscar-results/{search_id}": {
       "get": {
-        "description": "Return results of a background fetch for cache-first progressive delivery.\n\nA-04 AC5: Called by frontend when user clicks \"Atualizar resultados\" banner.\nReturns 404 if search_id not found or expired (10min TTL).",
+        "description": "Return results of a background fetch or async search.\n\nA-04 AC5: Called by frontend when user clicks \"Atualizar resultados\" banner.\nGTM-ARCH-001 AC3: Also serves results from ARQ Worker (via Redis).\nReturns 404 if search_id not found or expired.",
         "operationId": "get_search_results_buscar_results__search_id__get",
         "parameters": [
           {
@@ -8937,7 +8930,7 @@
     },
     "/v1/buscar-results/{search_id}": {
       "get": {
-        "description": "Return results of a background fetch for cache-first progressive delivery.\n\nA-04 AC5: Called by frontend when user clicks \"Atualizar resultados\" banner.\nReturns 404 if search_id not found or expired (10min TTL).",
+        "description": "Return results of a background fetch or async search.\n\nA-04 AC5: Called by frontend when user clicks \"Atualizar resultados\" banner.\nGTM-ARCH-001 AC3: Also serves results from ARQ Worker (via Redis).\nReturns 404 if search_id not found or expired.",
         "operationId": "get_search_results_v1_buscar_results__search_id__get",
         "parameters": [
           {

@@ -258,6 +258,16 @@ class SearchErrorCode(str, Enum):
     INTERNAL_ERROR = "INTERNAL_ERROR"
 
 
+class SearchQueuedResponse(BaseModel):
+    """GTM-ARCH-001 AC1: Response schema for 202 Accepted (async search queued).
+
+    Returned when SEARCH_ASYNC_ENABLED=true and ARQ worker is available.
+    POST /buscar returns this in <2s instead of processing inline.
+    """
+    search_id: str = Field(..., description="UUID for SSE correlation")
+    status: Literal["queued"] = Field("queued", description="Job status")
+
+
 class BuscaRequest(BaseModel):
     """
     Request schema for /buscar endpoint.

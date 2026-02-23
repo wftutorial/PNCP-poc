@@ -191,12 +191,50 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
   // A-04: Keep searchId alive for SSE after cache-first
   const liveFetchSearchIdRef = useRef<string | null>(null);
 
+  // GTM-ARCH-001: Async search mode (202 Accepted — results via SSE)
+  const [asyncSearchActive, setAsyncSearchActive] = useState(false);
+  const asyncSearchIdRef = useRef<string | null>(null);
+
   // UX-350 AC1-AC4: LLM summary timeout — show fallback after 30s if AI summary not ready
   const llmTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // F-01 AC21: Handle background job completion via SSE
-  const handleSseEvent = (event: SearchProgressEvent) => {
-    if (event.stage === 'llm_ready' && event.detail.resumo) {
+  // GTM-ARCH-001 AC3/AC4: Also handles search_complete from async Worker
+  const handleSseEvent = async (event: SearchProgressEvent) => {
+    if (event.stage === 'search_complete' && event.detail.has_results) {
+      // GTM-ARCH-001 AC3: Async search completed — fetch results from /buscar-results
+      const sid = event.detail.search_id || asyncSearchIdRef.current;
+      if (sid) {
+        try {
+          const headers: Record<string, string> = {};
+          if (session?.access_token) headers["Authorization"] = `Bearer ${session.access_token}`;
+
+          const response = await fetch(`/api/buscar-results/${encodeURIComponent(sid)}`, { headers });
+          if (response.ok) {
+            const fetchedData = await response.json() as BuscaResult;
+            setResult(fetchedData);
+            setRawCount(fetchedData.total_raw || 0);
+
+            if (session?.access_token) await refreshQuota();
+
+            trackEvent('search_completed', {
+              time_elapsed_ms: Date.now() - (fetchedData as any)?._searchStartTime || 0,
+              total_raw: fetchedData.total_raw || 0,
+              total_filtered: fetchedData.total_filtrado || 0,
+              search_mode: filters.searchMode,
+              async_mode: true,
+            });
+          }
+        } catch (e) {
+          console.warn('[ARCH-001] Error fetching async search results:', e);
+        } finally {
+          setAsyncSearchActive(false);
+          asyncSearchIdRef.current = null;
+          setLoading(false);
+          setSearchId(null);
+        }
+      }
+    } else if (event.stage === 'llm_ready' && event.detail.resumo) {
       // AC3: AI summary arrived — clear timeout and update silently
       if (llmTimeoutRef.current) {
         clearTimeout(llmTimeoutRef.current);
@@ -215,6 +253,21 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
         download_url: event.detail.download_url || null,
         excel_status: (event.detail.excel_status === 'failed' ? 'failed' : 'ready') as BuscaResult['excel_status'],
       } : prev);
+    } else if (event.stage === 'error' && asyncSearchActive) {
+      // GTM-ARCH-001: Worker error during async search
+      setAsyncSearchActive(false);
+      asyncSearchIdRef.current = null;
+      setLoading(false);
+      setError({
+        message: event.detail.error || event.message || 'Erro no processamento da busca',
+        rawMessage: event.detail.error || event.message || '',
+        errorCode: event.detail.error_code || null,
+        searchId: searchId,
+        correlationId: null,
+        requestId: null,
+        httpStatus: null,
+        timestamp: new Date().toISOString(),
+      });
     }
   };
 
@@ -228,8 +281,8 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
     isDegraded, degradedDetail, partialProgress, refreshAvailable,
     ufStatuses, ufTotalFound, ufAllComplete, batchProgress,
   } = useSearchSSE({
-    searchId: liveFetchInProgress ? liveFetchSearchIdRef.current : searchId,
-    enabled: (loading && !!searchId) || liveFetchInProgress || hasProcessingJobs,
+    searchId: asyncSearchActive ? asyncSearchIdRef.current : (liveFetchInProgress ? liveFetchSearchIdRef.current : searchId),
+    enabled: (loading && !!searchId) || liveFetchInProgress || hasProcessingJobs || asyncSearchActive,
     authToken: session?.access_token,
     selectedUfs: Array.from(filters.ufsSelecionadas),
     onEvent: handleSseEvent,
@@ -271,8 +324,9 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
     // UX-350: Clear LLM timeout on cancel
     if (llmTimeoutRef.current) { clearTimeout(llmTimeoutRef.current); llmTimeoutRef.current = null; }
     // CRIT-006 AC16: Notify backend of cancellation
-    if (searchId && session?.access_token) {
-      fetch(`/api/v1/search/${encodeURIComponent(searchId)}/cancel`, {
+    const activeId = asyncSearchIdRef.current || searchId;
+    if (activeId && session?.access_token) {
+      fetch(`/api/v1/search/${encodeURIComponent(activeId)}/cancel`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${session.access_token}` },
       }).catch(() => {}); // Fire-and-forget
@@ -280,6 +334,9 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
     setLoading(false);
     setSearchId(null);
     setUseRealProgress(false);
+    // GTM-ARCH-001: Clean up async state on cancel
+    setAsyncSearchActive(false);
+    asyncSearchIdRef.current = null;
   };
 
   // CRIT-006 AC18: Retry cooldown scaling by error type
@@ -338,6 +395,9 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
     // CRIT-030 AC4: Clear live fetch state from previous search
     setLiveFetchInProgress(false);
     liveFetchSearchIdRef.current = null;
+    // GTM-ARCH-001: Clear async state from previous search
+    setAsyncSearchActive(false);
+    asyncSearchIdRef.current = null;
     // CRIT-027 AC1 + CRIT-030 AC1: Set loading AFTER clearing result
     setLoading(true);
     setLoadingStep(1);
@@ -429,6 +489,17 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
           })
         });
 
+        // GTM-ARCH-001 AC4: Handle 202 Accepted (async search queued)
+        if (response.status === 202) {
+          const queued = await response.json();
+          // Search is queued — results will arrive via SSE search_complete event
+          setAsyncSearchActive(true);
+          asyncSearchIdRef.current = queued.search_id || newSearchId;
+          // Keep loading=true, SSE will drive completion
+          data = null;
+          break;
+        }
+
         if (!response.ok) {
           if ((response.status === 500 || response.status === 502 || response.status === 503) && clientAttempt < MAX_CLIENT_RETRIES) continue;
 
@@ -490,6 +561,11 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
         break;
       }
 
+      // GTM-ARCH-001: null data is expected for 202 async mode — results come via SSE
+      if (!data && asyncSearchActive) {
+        // Async mode — skip result processing, SSE will handle it
+        return;
+      }
       if (!data) throw new Error("Nao foi possivel obter os resultados. Tente novamente.");
 
       setResult(data);
@@ -603,13 +679,17 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
       trackEvent('search_failed', { error_message: friendlyMessage, error_code: errorCode, search_mode: filters.searchMode, force_fresh: forceFresh });
     } finally {
       cleanupInterval();
-      setLoading(false);
+      // GTM-ARCH-001: Keep loading active for async mode (SSE will complete it)
+      if (!asyncSearchActive && !asyncSearchIdRef.current) {
+        setLoading(false);
+      }
       setLoadingStep(1);
       setStatesProcessed(0);
       // A-04: Don't kill searchId when live fetch is running in background
       // F-01: Don't kill searchId when background jobs are still processing
+      // GTM-ARCH-001: Don't kill searchId when async search is active
       const hasJobsRunning = data?.llm_status === 'processing' || data?.excel_status === 'processing';
-      if (!liveFetchInProgress && !liveFetchSearchIdRef.current && !hasJobsRunning) {
+      if (!liveFetchInProgress && !liveFetchSearchIdRef.current && !hasJobsRunning && !asyncSearchActive) {
         setSearchId(null);
       }
       setUseRealProgress(false);

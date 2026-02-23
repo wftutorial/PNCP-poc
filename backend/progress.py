@@ -279,6 +279,28 @@ class ProgressTracker:
         if self._use_redis:
             await self._publish_to_redis(event)
 
+    async def emit_search_complete(self, search_id: str, total_results: int) -> None:
+        """GTM-ARCH-001 AC3: Signal async search completed — results available via /buscar-results.
+
+        Emits stage="search_complete" so frontend can fetch full results.
+        Terminal event — SSE stream closes after this.
+        Maintains existing event contract (AC16).
+        """
+        self._is_complete = True
+        event = ProgressEvent(
+            stage="search_complete",
+            progress=100,
+            message=f"Busca concluída — {total_results} resultados",
+            detail={
+                "search_id": search_id,
+                "total_results": total_results,
+                "has_results": True,
+            },
+        )
+        await self.queue.put(event)
+        if self._use_redis:
+            await self._publish_to_redis(event)
+
     async def emit_error(self, error_message: str) -> None:
         """Signal search error."""
         self._is_complete = True

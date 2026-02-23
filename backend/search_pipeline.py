@@ -639,6 +639,12 @@ class SearchPipeline:
             )
             ctx.session_id = None
 
+        # GTM-ARCH-001 AC8: Skip quota consumption if already done in POST (async path)
+        if ctx.quota_pre_consumed:
+            logger.debug(f"ARCH-001: Quota pre-consumed for {mask_user_id(ctx.user['id'])} — skipping quota check")
+            ctx.quota_info = quota.check_quota(ctx.user["id"])
+            return
+
         # Quota resolution
         if ctx.is_admin or ctx.is_master:
             role = "ADMIN" if ctx.is_admin else "MASTER"
@@ -2257,3 +2263,91 @@ class SearchPipeline:
             return ctx.response
 
         return ctx.response
+
+
+# ============================================================================
+# GTM-ARCH-001: Standalone functions for ARQ Worker consumption
+# ============================================================================
+
+def build_default_deps() -> SimpleNamespace:
+    """GTM-ARCH-001 AC2: Build default deps namespace for Worker context.
+
+    The Worker process doesn't have the route-level module imports, so we
+    import everything directly here. These are the same deps that
+    routes/search.py passes via SimpleNamespace.
+    """
+    from config import ENABLE_NEW_PRICING
+    from pncp_client import PNCPClient, buscar_todas_ufs_paralelo
+    from filter import (
+        aplicar_todos_filtros,
+        match_keywords,
+        KEYWORDS_UNIFORMES,
+        KEYWORDS_EXCLUSAO,
+        validate_terms,
+    )
+    from excel import create_excel
+    from rate_limiter import rate_limiter
+    from authorization import check_user_roles
+
+    return SimpleNamespace(
+        ENABLE_NEW_PRICING=ENABLE_NEW_PRICING,
+        PNCPClient=PNCPClient,
+        buscar_todas_ufs_paralelo=buscar_todas_ufs_paralelo,
+        aplicar_todos_filtros=aplicar_todos_filtros,
+        create_excel=create_excel,
+        rate_limiter=rate_limiter,
+        check_user_roles=check_user_roles,
+        match_keywords=match_keywords,
+        KEYWORDS_UNIFORMES=KEYWORDS_UNIFORMES,
+        KEYWORDS_EXCLUSAO=KEYWORDS_EXCLUSAO,
+        validate_terms=validate_terms,
+    )
+
+
+async def executar_busca_completa(
+    search_id: str,
+    request_data: dict,
+    user_data: dict,
+    tracker=None,
+    quota_pre_consumed: bool = False,
+) -> "BuscaResponse":
+    """GTM-ARCH-001 AC2: Execute full search pipeline — designed for ARQ Worker.
+
+    Reconstructs the BuscaRequest and SearchContext from serializable dicts,
+    builds default deps, and runs the full 7-stage pipeline.
+
+    Args:
+        search_id: UUID for SSE correlation and result persistence.
+        request_data: Serialized BuscaRequest dict (from model_dump()).
+        user_data: User dict with id, plan, roles, etc.
+        tracker: Optional ProgressTracker (if None, creates one from Redis).
+        quota_pre_consumed: AC8 — True when quota consumed in POST before enqueue.
+
+    Returns:
+        BuscaResponse with full search results.
+    """
+    from schemas import BuscaRequest
+    from progress import get_tracker, create_tracker
+    import time as _time
+
+    # Reconstruct request from serialized data
+    request = BuscaRequest(**request_data)
+    request.search_id = search_id
+
+    # Get or create tracker
+    if tracker is None:
+        tracker = await get_tracker(search_id)
+    if tracker is None:
+        tracker = await create_tracker(search_id, len(request.ufs))
+
+    deps = build_default_deps()
+    pipeline = SearchPipeline(deps)
+    ctx = SearchContext(
+        request=request,
+        user=user_data,
+        tracker=tracker,
+        start_time=_time.time(),
+        quota_pre_consumed=quota_pre_consumed,
+    )
+
+    return await pipeline.run(ctx)

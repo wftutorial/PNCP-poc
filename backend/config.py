@@ -406,6 +406,7 @@ _FEATURE_FLAG_REGISTRY: dict[str, tuple[str, str]] = {
     "RATE_LIMITING_ENABLED": ("RATE_LIMITING_ENABLED", "true"),
     "SECTOR_RED_FLAGS_ENABLED": ("SECTOR_RED_FLAGS_ENABLED", "true"),
     "CACHE_REFRESH_ENABLED": ("CACHE_REFRESH_ENABLED", "false"),
+    "SEARCH_ASYNC_ENABLED": ("SEARCH_ASYNC_ENABLED", "false"),
 }
 
 # ============================================
@@ -415,6 +416,12 @@ CACHE_REFRESH_ENABLED: bool = str_to_bool(os.getenv("CACHE_REFRESH_ENABLED", "fa
 CACHE_REFRESH_INTERVAL_HOURS: int = int(os.getenv("CACHE_REFRESH_INTERVAL_HOURS", "12"))
 CACHE_REFRESH_BATCH_SIZE: int = int(os.getenv("CACHE_REFRESH_BATCH_SIZE", "25"))
 CACHE_REFRESH_STAGGER_SECONDS: int = int(os.getenv("CACHE_REFRESH_STAGGER_SECONDS", "5"))
+
+# ============================================
+# GTM-ARCH-001: Async Search via ARQ Worker
+# ============================================
+SEARCH_ASYNC_ENABLED: bool = str_to_bool(os.getenv("SEARCH_ASYNC_ENABLED", "false"))
+SEARCH_WORKER_FALLBACK_TIMEOUT: int = int(os.getenv("SEARCH_WORKER_FALLBACK_TIMEOUT", "30"))
 
 # ============================================
 # D-05: User Feedback Loop

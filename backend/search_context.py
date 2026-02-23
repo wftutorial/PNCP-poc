@@ -27,6 +27,9 @@ class SearchContext:
     start_time: float = field(default_factory=time.time)
     tracker: Any = None  # progress.ProgressTracker
 
+    # === GTM-ARCH-001: Async search flags ===
+    quota_pre_consumed: bool = False  # AC8: True when quota consumed in POST before enqueue
+
     # === Stage 1: ValidateRequest outputs ===
     is_admin: bool = False
     is_master: bool = False

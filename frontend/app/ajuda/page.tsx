@@ -39,7 +39,7 @@ const FAQ_DATA: FAQCategory[] = [
       {
         question: "Como faço uma busca por oportunidades de licitação?",
         answer:
-          "Acesse a página de Busca, selecione os estados (UFs) de interesse, defina o período desejado e clique em \"Buscar\". O sistema consultará automaticamente as fontes oficiais de contratações públicas e retornará as oportunidades filtradas para o seu setor.",
+          "Acesse a página de Busca, selecione os estados (UFs) de interesse e clique em \"Buscar\". O sistema consultará automaticamente as fontes oficiais de contratações públicas e retornará as oportunidades filtradas para o seu setor.",
       },
       {
         question: "Posso buscar em mais de um estado ao mesmo tempo?",
@@ -54,7 +54,7 @@ const FAQ_DATA: FAQCategory[] = [
       {
         question: "Quanto tempo leva uma busca?",
         answer:
-          "A duração varia conforme o número de estados selecionados e o período de busca. Normalmente, uma busca leva entre 10 segundos e 2 minutos. Você acompanha o progresso em tempo real na tela.",
+          "A duração varia conforme o número de estados selecionados. Normalmente, uma busca leva entre 10 segundos e 2 minutos. Você acompanha o progresso em tempo real na tela.",
       },
       {
         question: "Como faço download dos resultados em Excel?",
@@ -80,12 +80,12 @@ const FAQ_DATA: FAQCategory[] = [
       {
         question: "Qual a diferença entre o período de avaliação e o SmartLic Pro?",
         answer:
-          "Durante os 7 dias de avaliação, você usa o produto completo: Excel, Pipeline, IA completa e histórico de 1 ano. A única diferença é o limite de 3 análises. O SmartLic Pro oferece até 1.000 análises por mês e histórico de 5 anos.",
+          "Durante os 7 dias de avaliação gratuita, você usa o produto completo sem restrições: Excel, Pipeline, IA completa e histórico. Após o período de avaliação, assine o SmartLic Pro para continuar com acesso completo.",
       },
       {
         question: "Posso testar antes de assinar?",
         answer:
-          "Sim! Ao criar sua conta, você experimenta o produto completo por 7 dias com 3 análises incluídas. Não é necessário informar dados de pagamento.",
+          "Sim! Ao criar sua conta, você experimenta o produto completo por 7 dias gratuitamente, sem limites. Não é necessário informar dados de pagamento.",
       },
       {
         question: "Como faço upgrade do meu plano?",
@@ -98,9 +98,9 @@ const FAQ_DATA: FAQCategory[] = [
           "Sim, você pode alterar para um plano inferior a qualquer momento pela página de Planos. Note que ao fazer downgrade, alguns recursos do plano atual deixarão de estar disponíveis.",
       },
       {
-        question: "O que acontece quando meus créditos de busca acabam?",
+        question: "O que acontece quando minhas análises mensais acabam?",
         answer:
-          "Quando seus créditos mensais se esgotam, você pode aguardar a renovação no próximo ciclo de faturamento ou fazer upgrade para um plano com mais buscas.",
+          "Quando suas análises mensais se esgotam, elas são renovadas automaticamente no próximo ciclo de faturamento.",
       },
     ],
   },

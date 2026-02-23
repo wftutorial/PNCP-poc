@@ -12,22 +12,22 @@ const PLAN_DETAILS: Record<string, { name: string; icon: React.ReactNode; messag
   smartlic_pro: {
     name: "SmartLic Pro",
     icon: <Trophy className="w-5 h-5 inline-block" />,
-    message: "Você agora tem 1.000 análises/mês, exportação Excel completa e histórico de 5 anos.",
+    message: "Você agora tem 1.000 análises/mês, exportação Excel completa e histórico completo.",
   },
   consultor_agil: {
     name: "SmartLic Pro",
     icon: <Trophy className="w-5 h-5 inline-block" />,
-    message: "Você agora tem 1.000 análises/mês, exportação Excel completa e histórico de 5 anos.",
+    message: "Você agora tem 1.000 análises/mês, exportação Excel completa e histórico completo.",
   },
   maquina: {
     name: "SmartLic Pro",
     icon: <Trophy className="w-5 h-5 inline-block" />,
-    message: "Você agora tem 1.000 análises/mês, exportação Excel completa e histórico de 5 anos.",
+    message: "Você agora tem 1.000 análises/mês, exportação Excel completa e histórico completo.",
   },
   sala_guerra: {
     name: "SmartLic Pro",
     icon: <Trophy className="w-5 h-5 inline-block" />,
-    message: "Você agora tem 1.000 análises/mês, exportação Excel completa e histórico de 5 anos.",
+    message: "Você agora tem 1.000 análises/mês, exportação Excel completa e histórico completo.",
   },
 };
 

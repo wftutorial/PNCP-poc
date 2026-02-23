@@ -258,7 +258,7 @@ describe('PlanosPage Component', () => {
       expect(screen.getByText(/Pipeline de acompanhamento/i)).toBeInTheDocument();
       // This text appears in both plan description and features list - use getAllByText
       expect(screen.getAllByText(/Inteligência de decisão completa/i).length).toBeGreaterThan(0);
-      expect(screen.getByText(/5 anos de histórico/i)).toBeInTheDocument();
+      expect(screen.getByText(/Histórico completo/i)).toBeInTheDocument();
       expect(screen.getByText(/15 setores e 27 estados/i)).toBeInTheDocument();
       expect(screen.getByText(/Filtragem com 1\.000\+ regras/i)).toBeInTheDocument();
     });

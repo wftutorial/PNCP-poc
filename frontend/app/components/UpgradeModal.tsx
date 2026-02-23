@@ -80,7 +80,7 @@ export function UpgradeModal({ isOpen, onClose, source }: UpgradeModalProps) {
             "Exportação Excel completa",
             "Pipeline de acompanhamento",
             "Inteligência de decisão completa",
-            "5 anos de histórico",
+            "Histórico completo",
             "Cobertura nacional — 27 estados",
           ].map((feature) => (
             <li key={feature} className="flex items-start gap-2 text-sm">

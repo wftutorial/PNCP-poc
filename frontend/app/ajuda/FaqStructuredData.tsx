@@ -10,7 +10,7 @@ import Script from 'next/script';
 const FAQ_ITEMS = [
   {
     q: "Como faço uma busca por oportunidades de licitação?",
-    a: "Acesse a página de Busca, selecione os estados (UFs) de interesse, defina o período desejado e clique em Buscar. O sistema consultará automaticamente as fontes oficiais e retornará as oportunidades filtradas para o seu setor.",
+    a: "Acesse a página de Busca, selecione os estados (UFs) de interesse e clique em Buscar. O sistema consultará automaticamente as fontes oficiais e retornará as oportunidades filtradas para o seu setor.",
   },
   {
     q: "Posso buscar em mais de um estado ao mesmo tempo?",
@@ -22,7 +22,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "Quanto tempo leva uma busca?",
-    a: "A duração varia conforme o número de estados selecionados e o período de busca. Normalmente, uma busca leva entre 10 segundos e 2 minutos. Você acompanha o progresso em tempo real na tela.",
+    a: "A duração varia conforme o número de estados selecionados. Normalmente, uma busca leva entre 10 segundos e 2 minutos. Você acompanha o progresso em tempo real na tela.",
   },
   {
     q: "Como faço download dos resultados em Excel?",
@@ -34,11 +34,11 @@ const FAQ_ITEMS = [
   },
   {
     q: "Qual a diferença entre o período de avaliação e o SmartLic Pro?",
-    a: "Durante os 7 dias de avaliação, você usa o produto completo. A única diferença é o limite de 3 análises. O SmartLic Pro oferece até 1.000 análises por mês e histórico de 5 anos.",
+    a: "Durante os 7 dias de avaliação gratuita, você usa o produto completo sem restrições: Excel, Pipeline, IA completa e histórico. Após o período de avaliação, assine o SmartLic Pro para continuar com acesso completo.",
   },
   {
     q: "Posso testar antes de assinar?",
-    a: "Sim! Ao criar sua conta, você experimenta o produto completo por 7 dias com 3 análises incluídas. Não é necessário informar dados de pagamento.",
+    a: "Sim! Ao criar sua conta, você experimenta o produto completo por 7 dias gratuitamente, sem limites. Não é necessário informar dados de pagamento.",
   },
   {
     q: "Posso cancelar a qualquer momento?",

@@ -111,7 +111,7 @@ describe('UpgradeModal - GTM-002 Single Plan Model', () => {
       expect(screen.getByText('Exportação Excel completa')).toBeInTheDocument();
       expect(screen.getByText('Pipeline de acompanhamento')).toBeInTheDocument();
       expect(screen.getByText('Inteligência de decisão completa')).toBeInTheDocument();
-      expect(screen.getByText('5 anos de histórico')).toBeInTheDocument();
+      expect(screen.getByText('Histórico completo')).toBeInTheDocument();
       expect(screen.getByText('Cobertura nacional — 27 estados')).toBeInTheDocument();
     });
 

@@ -30,7 +30,7 @@ const FEATURES = [
   { text: "Exportação Excel completa", detail: "Relatórios detalhados para sua equipe" },
   { text: "Pipeline de acompanhamento", detail: "Gerencie oportunidades do início ao fim" },
   { text: "Resumos executivos com IA avançada", detail: "Análise estratégica de cada oportunidade" },
-  { text: "5 anos de histórico", detail: "Acesso a oportunidades desde 2021" },
+  { text: "Histórico completo", detail: "Acesso a oportunidades publicadas nos portais oficiais" },
   { text: "15 setores e 27 estados", detail: "Cobertura nacional integrada de fontes oficiais" },
   { text: "Filtragem com 1.000+ regras", detail: "Precisão setorial para seu mercado" },
 ];
@@ -47,7 +47,7 @@ const FAQ_ITEMS = [
   },
   {
     question: "O que acontece se eu cancelar?",
-    answer: "Você mantém acesso completo até o fim do período atual. Depois, sua conta volta ao modo de avaliação com 3 análises.",
+    answer: "Você mantém acesso completo até o fim do período atual. Depois, sua conta volta ao modo de avaliação gratuita.",
   },
   {
     question: "Como funciona a cobrança semestral e anual?",

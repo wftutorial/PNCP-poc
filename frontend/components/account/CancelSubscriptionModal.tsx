@@ -105,7 +105,7 @@ export function CancelSubscriptionModal({
             <svg aria-hidden="true" className="w-4 h-4 text-[var(--error,#dc2626)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
-            Histórico de 5 anos (1825 dias)
+            Histórico completo
           </li>
           <li className="flex items-center gap-2">
             <svg aria-hidden="true" className="w-4 h-4 text-[var(--error,#dc2626)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">

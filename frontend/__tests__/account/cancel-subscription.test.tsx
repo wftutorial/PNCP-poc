@@ -41,7 +41,7 @@ describe("CancelSubscriptionModal", () => {
   it("shows retention benefits list", () => {
     render(<CancelSubscriptionModal {...defaultProps} />);
     expect(screen.getByText("1000 análises mensais")).toBeInTheDocument();
-    expect(screen.getByText(/Histórico de 5 anos/)).toBeInTheDocument();
+    expect(screen.getByText(/Histórico completo/)).toBeInTheDocument();
     expect(screen.getByText(/Exportação Excel/)).toBeInTheDocument();
     expect(screen.getByText(/Filtros avançados/)).toBeInTheDocument();
   });

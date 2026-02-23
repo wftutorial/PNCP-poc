@@ -31,28 +31,28 @@ Esta story cria um smoke test suite em Playwright que valida a jornada completa 
 
 ### Suite Playwright
 
-- [ ] AC1: Teste E2E "Trial User First 5 Minutes": signup → onboarding (setor+UFs) → busca automatica → resultados em tela → download Excel
-- [ ] AC2: Teste E2E "Post-Payment": login pagante → busca → resultado → pipeline drag-and-drop → dashboard com dados
-- [ ] AC3: Teste E2E "Error Recovery": busca com backend offline simulado → error state visivel → backend volta → retry funciona → resultados aparecem
+- [x] AC1: Teste E2E "Trial User First 5 Minutes": signup → onboarding (setor+UFs) → busca automatica → resultados em tela → download Excel
+- [x] AC2: Teste E2E "Post-Payment": login pagante → busca → resultado → pipeline drag-and-drop → dashboard com dados
+- [x] AC3: Teste E2E "Error Recovery": busca com backend offline simulado → error state visivel → backend volta → retry funciona → resultados aparecem
 
 ### Validacoes Automaticas
 
-- [ ] AC4: Assertion: zero texto em ingles em qualquer elemento visivel durante os fluxos (grep DOM por patterns: /Invalid|Error|Failed|unauthorized|not found/i excluindo termos tecnicos)
-- [ ] AC5: Assertion: maximo 1 banner informativo visivel em qualquer momento (nunca 2+ empilhados)
-- [ ] AC6: Assertion: nenhum botao desabilitado sem tooltip explicando por que
-- [ ] AC7: Assertion: trial user recebe resultado em <30s (busca completa, nao apenas parcial)
+- [x] AC4: Assertion: zero texto em ingles em qualquer elemento visivel durante os fluxos (grep DOM por patterns: /Invalid|Error|Failed|unauthorized|not found/i excluindo termos tecnicos)
+- [x] AC5: Assertion: maximo 1 banner informativo visivel em qualquer momento (nunca 2+ empilhados)
+- [x] AC6: Assertion: nenhum botao desabilitado sem tooltip explicando por que
+- [x] AC7: Assertion: trial user recebe resultado em <30s (busca completa, nao apenas parcial)
 
 ### Execucao por Tier
 
-- [ ] AC8: Executar suite apos Tier 1 completo (ARCH-001 + ARCH-002 + PROXY-001) — validar busca async + cache + erros PT
-- [ ] AC9: Executar suite apos Tier 2 completo (UX-001/002/003/004) — validar banner unico + error states + retry + subscription
-- [ ] AC10: Executar suite apos Tier 3 completo (INFRA-001/002/003) — validar resiliencia sob falha simulada
-- [ ] AC11: Executar suite completa pre-GTM launch — validacao final
+- [x] AC8: Executar suite apos Tier 1 completo (ARCH-001 + ARCH-002 + PROXY-001) — validar busca async + cache + erros PT
+- [x] AC9: Executar suite apos Tier 2 completo (UX-001/002/003/004) — validar banner unico + error states + retry + subscription
+- [x] AC10: Executar suite apos Tier 3 completo (INFRA-001/002/003) — validar resiliencia sob falha simulada
+- [x] AC11: Executar suite completa pre-GTM launch — validacao final
 
 ### CI Integration
 
-- [ ] AC12: Suite integrada ao GitHub Actions — executa em PR para `main` quando stories GTM-ROOT tocam arquivos afetados
-- [ ] AC13: Failure na suite bloqueia merge (quality gate)
+- [x] AC12: Suite integrada ao GitHub Actions — executa em PR para `main` quando stories GTM-ROOT tocam arquivos afetados
+- [x] AC13: Failure na suite bloqueia merge (quality gate)
 
 ## Testes (a propria story E os testes)
 
@@ -60,18 +60,20 @@ Esta story cria um smoke test suite em Playwright que valida a jornada completa 
 cd frontend && npm run test:e2e -- --grep "smoke"
 ```
 
-- [ ] T1: Fluxo trial signup→busca→resultado completa em <60s
-- [ ] T2: Zero texto ingles em erros durante fluxo
-- [ ] T3: Maximo 1 banner visivel simultaneamente
-- [ ] T4: Recovery funciona apos erro simulado
+- [x] T1: Fluxo trial signup→busca→resultado completa em <60s
+- [x] T2: Zero texto ingles em erros durante fluxo
+- [x] T3: Maximo 1 banner visivel simultaneamente
+- [x] T4: Recovery funciona apos erro simulado
 
 ## Arquivos Afetados
 
 | Arquivo | Tipo de Mudanca |
 |---------|----------------|
-| `frontend/e2e-tests/smoke-gtm-root-cause.spec.ts` | Criar — suite de smoke tests |
-| `.github/workflows/e2e.yml` | Modificar — adicionar trigger para stories GTM-ROOT |
-| `frontend/playwright.config.ts` | Modificar — adicionar project "smoke" se necessario |
+| `frontend/e2e-tests/smoke-gtm-root-cause.spec.ts` | Criar — suite de smoke tests (11 testes) |
+| `frontend/e2e-tests/helpers/smoke-helpers.ts` | Criar — helpers especializados para smoke tests |
+| `frontend/e2e-tests/helpers/index.ts` | Modificar — exportar smoke helpers |
+| `.github/workflows/e2e.yml` | Modificar — adicionar trigger para stories GTM-ROOT + quality gate |
+| `frontend/playwright.config.ts` | Modificar — adicionar project "smoke" |
 
 ## Dependencias
 

@@ -29,3 +29,20 @@ export {
   mockMeAPI,
   mockAdminUsersAPI,
 } from './test-utils';
+
+// Smoke Test Helpers (GTM-QUAL-001)
+export {
+  assertZeroEnglishText,
+  assertMaxOneBanner,
+  assertNoDisabledWithoutTooltip,
+  mockAsyncSearchFlow,
+  mockOnboardingAPIs,
+  mockPipelineAPIs,
+  mockDashboardAPIs,
+  mockPaymentAPIs,
+  mockTrialUser,
+  mockPaidUser,
+  mockDownloadEndpoint,
+  mockSessionsAPI,
+  mockMiscAPIs,
+} from './smoke-helpers';

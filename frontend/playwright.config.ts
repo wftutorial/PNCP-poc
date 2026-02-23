@@ -67,6 +67,13 @@ export default defineConfig({
       name: 'Mobile Safari',
       use: { ...devices['iPhone 13'] },
     },
+    /* GTM-QUAL-001: Smoke tests run on Chromium only for speed */
+    {
+      name: 'smoke',
+      testMatch: /smoke-.*\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'] },
+      retries: process.env.CI ? 1 : 0,
+    },
   ],
 
   /* Run local dev server before starting the tests */

@@ -5,13 +5,31 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+    # GTM-QUAL-001 AC12: Trigger when GTM-ROOT stories touch affected files
+    paths:
+      - 'frontend/app/buscar/**'
+      - 'frontend/hooks/useSearch*.ts'
+      - 'frontend/hooks/useSearchSSE.ts'
+      - 'frontend/hooks/useSearchPolling.ts'
+      - 'frontend/app/layout.tsx'
+      - 'frontend/app/onboarding/**'
+      - 'frontend/app/pipeline/**'
+      - 'frontend/app/dashboard/**'
+      - 'frontend/app/planos/**'
+      - 'frontend/components/billing/**'
+      - 'frontend/e2e-tests/**'
+      - 'backend/routes/search.py'
+      - 'backend/search_pipeline.py'
+      - 'backend/progress.py'
+      - 'backend/job_queue.py'
+      - 'backend/main.py'
   workflow_dispatch: # Allow manual trigger
 
 jobs:
   e2e-tests:
     name: Playwright E2E Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 15 # AC5: Set reasonable timeout
+    timeout-minutes: 15
 
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'sk-test-fallback-key' }}
@@ -47,7 +65,7 @@ jobs:
 
       - name: Install Playwright browsers
         working-directory: frontend
-        run: npx playwright install --with-deps chromium webkit # AC5: Install only needed browsers
+        run: npx playwright install --with-deps chromium webkit
 
       - name: Start backend server
         working-directory: backend
@@ -59,14 +77,14 @@ jobs:
           # Wait for backend to be ready (max 30 seconds)
           for i in {1..30}; do
             if curl -f http://localhost:8000/health > /dev/null 2>&1; then
-              echo "✅ Backend is ready"
+              echo "Backend is ready"
               exit 0
             fi
             echo "Waiting for backend... ($i/30)"
             sleep 1
           done
 
-          echo "❌ Backend failed to start"
+          echo "Backend failed to start"
           cat backend.log
           exit 1
 
@@ -81,20 +99,27 @@ jobs:
           # Wait for frontend to be ready (max 60 seconds)
           for i in {1..60}; do
             if curl -f http://localhost:3000 > /dev/null 2>&1; then
-              echo "✅ Frontend is ready"
+              echo "Frontend is ready"
               exit 0
             fi
             echo "Waiting for frontend... ($i/60)"
             sleep 1
           done
 
-          echo "❌ Frontend failed to start"
+          echo "Frontend failed to start"
           cat frontend.log
           exit 1
 
       - name: Run E2E tests
         working-directory: frontend
-        run: npm run test:e2e # AC1: Tests run automatically
+        run: npm run test:e2e
+        env:
+          CI: true
+
+      # GTM-QUAL-001 AC13: Smoke test failure blocks merge (quality gate)
+      - name: Run Smoke tests (quality gate)
+        working-directory: frontend
+        run: npx playwright test --project=smoke --reporter=list
         env:
           CI: true
 
@@ -105,12 +130,12 @@ jobs:
           [ -n "$FRONTEND_PID" ] && kill $FRONTEND_PID || true
 
       - name: Upload Playwright report
-        if: failure() # AC3: Upload only on failure (save storage)
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
           path: frontend/playwright-report/
-          retention-days: 7 # AC6: 7-day retention
+          retention-days: 7
 
       - name: Upload test results
         if: always()
@@ -118,7 +143,7 @@ jobs:
         with:
           name: e2e-test-results
           path: frontend/test-results/
-          retention-days: 7 # AC6: 7-day retention
+          retention-days: 7
 
       - name: Upload server logs
         if: failure()

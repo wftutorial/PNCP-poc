@@ -47,6 +47,10 @@ export interface SearchProgressEvent {
     download_url?: string;
     /** F-01 AC20: Excel status from background job */
     excel_status?: string;
+    /** GTM-ARCH-001 AC3: Async search completion metadata */
+    search_id?: string;
+    total_results?: number;
+    has_results?: boolean;
   };
 }
 

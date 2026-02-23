@@ -77,11 +77,11 @@ export function EmptyState({
         </div>
       )}
 
-      {/* Context with filter breakdown (STORY-173 AC3) */}
+      {/* UX-348 AC9: Positive framing for empty state */}
       {rawCount > 0 && rejectionBreakdown.length > 0 ? (
         <div className="mb-6">
-          <p className="text-ink-secondary mb-4">
-            Nossos filtros eliminaram {rawCount.toLocaleString("pt-BR")} resultados irrelevantes para entregar apenas o que importa. Tente ajustar os filtros ou escolher outro setor:
+          <p className="text-ink-secondary mb-4" data-testid="empty-state-message">
+            Analisamos {rawCount.toLocaleString("pt-BR")} editais e nenhum correspondeu ao seu perfil no momento. Volte amanhã para novas oportunidades.
           </p>
           <div className="text-left max-w-md mx-auto space-y-2">
             {rejectionBreakdown.map((item, i) => (
@@ -98,12 +98,12 @@ export function EmptyState({
           </div>
         </div>
       ) : rawCount > 0 ? (
-        <p className="text-ink-secondary mb-4">
-          Nossos filtros de precisão eliminaram {rawCount.toLocaleString("pt-BR")} resultados não relevantes para o setor de {sectorName.toLowerCase()}. Ajuste os critérios ou tente outro setor.
+        <p className="text-ink-secondary mb-4" data-testid="empty-state-message">
+          Analisamos {rawCount.toLocaleString("pt-BR")} editais e nenhum correspondeu ao seu perfil no momento. Volte amanhã para novas oportunidades.
         </p>
       ) : (
-        <p className="text-ink-secondary mb-4">
-          Nenhuma oportunidade encontrada para o período e estados selecionados. Tente ampliar a busca.
+        <p className="text-ink-secondary mb-4" data-testid="empty-state-message">
+          Analisamos os editais disponíveis e nenhum correspondeu ao seu perfil no momento. Volte amanhã para novas oportunidades.
         </p>
       )}
 

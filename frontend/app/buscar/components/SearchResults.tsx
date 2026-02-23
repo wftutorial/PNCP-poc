@@ -503,15 +503,15 @@ export default function SearchResults({
             coverageMetadata={result.coverage_metadata}
           />
 
-          {/* Results header with ordering (GTM-FIX-028 AC13) */}
+          {/* UX-348 AC7-AC8: Results header with positive framing */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-strong">
             <div>
-              <h2 className="text-lg font-semibold text-ink">
-                Resultados da Busca
+              <h2 className="text-lg font-semibold text-ink" data-testid="results-header">
+                {result.resumo.total_oportunidades} {result.resumo.total_oportunidades === 1 ? 'oportunidade selecionada' : 'oportunidades selecionadas'}{rawCount > 0 ? ` de ${rawCount.toLocaleString("pt-BR")} analisadas` : ''}
               </h2>
               {rawCount > 0 && (
-                <p className="text-sm text-ink-secondary mt-0.5">
-                  {rawCount.toLocaleString("pt-BR")} analisadas, {result.resumo.total_oportunidades} relevantes{searchMode === "setor" && sectorName ? ` para ${sectorName.toLowerCase()}` : ""}
+                <p className="text-sm text-ink-secondary mt-0.5" data-testid="results-subtitle">
+                  Analisamos {rawCount.toLocaleString("pt-BR")} editais em {ufsSelecionadas.size} {ufsSelecionadas.size === 1 ? 'estado' : 'estados'} e selecionamos {result.resumo.total_oportunidades} com maior aderência ao seu perfil
                   {/* C-02 AC9: Confidence distribution counts */}
                   {(() => {
                     const counts = { high: 0, medium: 0, low: 0 };
@@ -880,7 +880,7 @@ export default function SearchResults({
           <div className="text-xs sm:text-sm text-ink-muted text-center space-y-1">
             {rawCount > 0 && (
               <p>
-                {result.resumo.total_oportunidades} de {rawCount.toLocaleString("pt-BR")} {rawCount === 1 ? 'licitação compatível' : 'licitações compatíveis'} com os filtros selecionados nesta busca
+                {result.resumo.total_oportunidades} {result.resumo.total_oportunidades === 1 ? 'oportunidade selecionada' : 'oportunidades selecionadas'} de {rawCount.toLocaleString("pt-BR")} analisadas
                 {searchMode === "setor" && sectorName !== "Licitações" ? ` para o setor ${sectorName.toLowerCase()}` : ''}
                 {/* AC19: Source count summary with tooltip */}
                 {result.sources_used && result.sources_used.length > 1 && (

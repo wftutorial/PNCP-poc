@@ -221,17 +221,17 @@ export function LicitacoesPreview({
     if (urgencia === "encerrada" || (dias != null && dias < 0)) {
       colorClasses = "bg-gray-100 dark:bg-gray-800 text-gray-500 line-through";
       label = `Encerrada: ${formatDate(item.data_encerramento)}`;
-    } else if (urgencia === "critica" || (dias != null && dias < 7)) {
+    } else if (urgencia === "critica" || (dias != null && dias < 8)) {
+      // UX-348 AC11: red (<8 days)
       colorClasses = "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300";
       label = `Urgente: ${formatDate(item.data_encerramento)} (${dias}d)`;
-    } else if (urgencia === "alta" || (dias != null && dias < 14)) {
+    } else if (urgencia === "alta" || (dias != null && dias <= 15)) {
+      // UX-348 AC11: yellow (8-15 days)
       colorClasses = "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300";
       label = `Atenção: ${formatDate(item.data_encerramento)} (${dias}d)`;
-    } else if (urgencia === "media" || (dias != null && dias <= 30)) {
-      colorClasses = "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300";
-      label = `Prazo final: ${formatDate(item.data_encerramento)} (${dias}d)`;
     } else {
-      colorClasses = "bg-surface-2 text-ink-secondary";
+      // UX-348 AC11: green (>15 days)
+      colorClasses = "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300";
       label = `Prazo final: ${formatDate(item.data_encerramento)}${dias != null ? ` (${dias}d)` : ''}`;
     }
 
@@ -303,10 +303,11 @@ export function LicitacoesPreview({
                       href={item.link}
                       target="_blank"
                       rel="noopener noreferrer"
-                      aria-label="Ver na fonte (abre em nova janela)"
+                      aria-label="Ver edital completo (abre em nova janela)"
                       className="inline-flex items-center gap-1 px-3 py-1.5 bg-brand-navy text-white text-sm font-medium rounded-button hover:bg-brand-blue-hover transition-colors"
+                      data-testid="link-edital"
                     >
-                      Ver na fonte
+                      Ver edital completo
                       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                               d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
@@ -418,6 +419,7 @@ export function LicitacoesPreview({
                     {getRelevanceBadge(item.relevance_score)}
                     {getRelevanceSourceBadge(item.relevance_source)}
                     {getConfidenceBadge(item.confidence)}
+                    <ViabilityBadge level={item.viability_level} score={item.viability_score} factors={item.viability_factors} valueSource={item._value_source} />
                     {getSourceBadge(item._source ?? undefined)}
                     <span className="inline-flex items-center px-2 py-0.5 rounded bg-brand-blue-subtle text-brand-navy text-xs font-medium">
                       {item.uf}
@@ -447,10 +449,11 @@ export function LicitacoesPreview({
                         href={item.link}
                         target="_blank"
                         rel="noopener noreferrer"
-                        aria-label="Ver na fonte (abre em nova janela)"
+                        aria-label="Ver edital completo (abre em nova janela)"
                         className="inline-flex items-center gap-1 px-3 py-1.5 bg-brand-navy text-white text-sm font-medium rounded-button hover:bg-brand-blue-hover transition-colors"
+                        data-testid="link-edital"
                       >
-                        Ver na fonte
+                        Ver edital completo
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                                 d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />

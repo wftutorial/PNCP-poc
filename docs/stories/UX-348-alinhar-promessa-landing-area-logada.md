@@ -1,6 +1,6 @@
 # UX-348 — Alinhar Promessa da Landing Page com Entrega da Area Logada
 
-**Status:** pending
+**Status:** completed
 **Priority:** P0 — Churn direto (expectation mismatch)
 **Created:** 2026-02-22
 **Origin:** Auditoria UX area logada (2026-02-22-ux-audit-area-logada.md)
@@ -36,30 +36,30 @@ Ativar funcionalidades existentes no backend que ja foram implementadas mas esta
 ### Criterios de Aceitacao
 
 **Viabilidade (ja implementada no backend — D04)**
-- [ ] **AC1:** Ligar feature flag `VIABILITY_ASSESSMENT_ENABLED=true` em producao
-- [ ] **AC2:** Badge de viabilidade (Alta/Media/Baixa) visivel em cada card de resultado
-- [ ] **AC3:** Tooltip do badge mostra os 4 fatores (modalidade, prazo, valor, geografia)
+- [x] **AC1:** Ligar feature flag `VIABILITY_ASSESSMENT_ENABLED=true` em producao
+- [x] **AC2:** Badge de viabilidade (Alta/Media/Baixa) visivel em cada card de resultado
+- [x] **AC3:** Tooltip do badge mostra os 4 fatores (modalidade, prazo, valor, geografia)
 
 **Links para fonte oficial**
-- [ ] **AC4:** Cada resultado tem botao/link "Ver edital completo" que abre URL do PNCP/ComprasGov
-- [ ] **AC5:** URL construida a partir do `link_edital` ou `numero_controle` presente na resposta da API
-- [ ] **AC6:** Link abre em nova aba (target="_blank" com rel="noopener")
+- [x] **AC4:** Cada resultado tem botao/link "Ver edital completo" que abre URL do PNCP/ComprasGov
+- [x] **AC5:** URL construida a partir do `link_edital` ou `numero_controle` presente na resposta da API
+- [x] **AC6:** Link abre em nova aba (target="_blank" com rel="noopener")
 
 **Framing positivo**
-- [ ] **AC7:** Header de resultados: "X oportunidades selecionadas de Y analisadas" (nao "Y eliminados")
-- [ ] **AC8:** Subtitulo: "Analisamos Y editais em Z estados e selecionamos X com maior aderencia ao seu perfil"
-- [ ] **AC9:** Se 0 resultados: "Analisamos Y editais e nenhum correspondeu ao seu perfil no momento. Volte amanha para novas oportunidades."
+- [x] **AC7:** Header de resultados: "X oportunidades selecionadas de Y analisadas" (nao "Y eliminados")
+- [x] **AC8:** Subtitulo: "Analisamos Y editais em Z estados e selecionamos X com maior aderencia ao seu perfil"
+- [x] **AC9:** Se 0 resultados: "Analisamos Y editais e nenhum correspondeu ao seu perfil no momento. Volte amanha para novas oportunidades."
 
 **Metadados nos cards de resultado**
-- [ ] **AC10:** Cada card mostra: valor estimado, UF, prazo restante, modalidade (como na landing)
-- [ ] **AC11:** Prazo com cor: verde (>15 dias), amarelo (8-15 dias), vermelho (<8 dias)
-- [ ] **AC12:** Valor formatado em R$ com separador de milhar
+- [x] **AC10:** Cada card mostra: valor estimado, UF, prazo restante, modalidade (como na landing)
+- [x] **AC11:** Prazo com cor: verde (>15 dias), amarelo (8-15 dias), vermelho (<8 dias)
+- [x] **AC12:** Valor formatado em R$ com separador de milhar
 
 **Testes**
-- [ ] **AC13:** Teste: viability badge renderiza com dados corretos
-- [ ] **AC14:** Teste: link para fonte oficial presente em cada card
-- [ ] **AC15:** Teste: framing positivo com contagem correta
-- [ ] **AC16:** Zero regressoes
+- [x] **AC13:** Teste: viability badge renderiza com dados corretos
+- [x] **AC14:** Teste: link para fonte oficial presente em cada card
+- [x] **AC15:** Teste: framing positivo com contagem correta
+- [x] **AC16:** Zero regressoes
 
 ---
 

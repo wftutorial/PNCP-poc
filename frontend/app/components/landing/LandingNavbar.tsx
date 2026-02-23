@@ -34,45 +34,45 @@ export default function LandingNavbar({ className = '' }: LandingNavbarProps) {
     <header
       className={`sticky top-0 z-50 transition-all duration-300 ${
         isScrolled
-          ? 'bg-surface-0/95 backdrop-blur-md shadow-glass border-b border-[var(--border)]'
+          ? 'bg-surface-0/70 backdrop-blur-xl shadow-[0_1px_3px_rgba(0,0,0,0.04)] border-b border-[var(--border)]/50'
           : 'bg-transparent'
       } ${className}`}
     >
-      <nav className="max-w-landing mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
+      <nav className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-14">
           {/* Logo */}
           <div className="flex-shrink-0">
             <Link
               href="/"
-              className="text-2xl font-bold text-brand-navy hover:text-brand-blue transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 rounded-button px-1"
+              className="text-xl font-semibold text-brand-navy hover:text-brand-blue transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 rounded-button px-1 tracking-tight"
             >
-              SmartLic<span className="text-brand-blue">.tech</span>
+              SmartLic<span className="text-brand-blue font-normal">.tech</span>
             </Link>
           </div>
 
           {/* Navigation Links — hidden on mobile */}
-          <div className="hidden md:flex items-center space-x-8">
+          <div className="hidden md:flex items-center space-x-6">
             <Link
               href="/planos"
-              className="text-ink-secondary hover:text-ink transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] rounded px-2 py-1"
+              className="text-sm text-ink-secondary/80 hover:text-ink transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] rounded px-2 py-1"
             >
               Planos
             </Link>
             <button
               onClick={() => scrollToSection('como-funciona')}
-              className="text-ink-secondary hover:text-ink transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] rounded px-2 py-1"
+              className="text-sm text-ink-secondary/80 hover:text-ink transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] rounded px-2 py-1"
             >
               Como Funciona
             </button>
             <Link
               href="/sobre"
-              className="text-ink-secondary hover:text-ink transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] rounded px-2 py-1"
+              className="text-sm text-ink-secondary/80 hover:text-ink transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] rounded px-2 py-1"
             >
               Sobre
             </Link>
             <Link
               href="#suporte"
-              className="text-ink-secondary hover:text-ink transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] rounded px-2 py-1"
+              className="text-sm text-ink-secondary/80 hover:text-ink transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] rounded px-2 py-1"
             >
               Suporte
             </Link>
@@ -81,13 +81,13 @@ export default function LandingNavbar({ className = '' }: LandingNavbarProps) {
           {/* CTA Buttons (desktop) + Hamburger (mobile) */}
           <div className="flex items-center space-x-4">
             {/* Desktop CTA — hidden on mobile */}
-            <div className="hidden md:flex items-center space-x-4">
+            <div className="hidden md:flex items-center space-x-3">
               {loading ? (
-                <div className="w-[180px]" />
+                <div className="w-[160px]" />
               ) : user ? (
                 <Link
                   href="/buscar"
-                  className="bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-4 py-2 rounded-button transition-all hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2"
+                  className="bg-brand-navy hover:bg-brand-blue-hover text-white text-sm font-medium px-4 py-1.5 rounded-button transition-all hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2"
                 >
                   Ir para Busca
                 </Link>
@@ -95,13 +95,13 @@ export default function LandingNavbar({ className = '' }: LandingNavbarProps) {
                 <>
                   <Link
                     href="/login"
-                    className="border border-brand-navy text-brand-navy hover:bg-brand-navy/5 font-semibold px-4 py-2 rounded-button transition-all focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2"
+                    className="text-sm text-ink-secondary/80 hover:text-ink font-medium px-3 py-1.5 rounded-button transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2"
                   >
                     Entrar
                   </Link>
                   <Link
                     href="/signup?source=header-cta"
-                    className="bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-4 py-2 rounded-button transition-all hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2"
+                    className="bg-brand-navy hover:bg-brand-blue-hover text-white text-sm font-medium px-4 py-1.5 rounded-button transition-all hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2"
                   >
                     Comece Gratis
                   </Link>

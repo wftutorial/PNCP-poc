@@ -51,6 +51,8 @@ export interface SearchProgressEvent {
     search_id?: string;
     total_results?: number;
     has_results?: boolean;
+    /** GTM-ARCH-001: Error code from async search worker */
+    error_code?: string;
   };
 }
 

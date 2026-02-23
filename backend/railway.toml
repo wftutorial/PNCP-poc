@@ -14,14 +14,15 @@ watchPatterns = ["**"]
 # NOTE: Using Dockerfile CMD instead of startCommand for proper $PORT expansion
 # startCommand = "uvicorn main:app --host 0.0.0.0 --port $PORT"
 healthcheckPath = "/health/ready"
-healthcheckTimeout = 120
+# SLA-001: 300s timeout for cold starts (Python + Gunicorn preload + model init)
+healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
-restartPolicyMaxRetries = 3
-# Zero-downtime: keep old container running 30s after new one is healthy
-# (longer than frontend — SSE streams + search requests need time to drain)
-overlapSeconds = 30
-# Graceful shutdown: 15s for in-flight SSE/search requests after SIGTERM
-drainingSeconds = 15
+# SLA-001: 10 retries before giving up (was 3 — too aggressive for transient OOM)
+restartPolicyMaxRetries = 10
+# SLA-001: 45s overlap for zero-downtime deploys (SSE streams + long-running searches)
+overlapSeconds = 45
+# SLA-001: 30s drain for in-flight SSE/search requests after SIGTERM (was 15s)
+drainingSeconds = 30
 
 # =============================================================================
 # Environment Variables (Set in Railway Dashboard)

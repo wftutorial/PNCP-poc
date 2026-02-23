@@ -79,14 +79,17 @@ describe('GET /api/health', () => {
       expect(data.backend).toBe('unreachable');
     });
 
-    it('AC14: should return 503 when BACKEND_URL is undefined', async () => {
+    it('SLA-001: should return 200 even when BACKEND_URL is undefined (liveness probe must never fail)', async () => {
       const response = await GET();
       const data = await response.json();
 
-      expect(response.status).toBe(503);
-      expect(data.status).toBe('misconfigured');
-      expect(data.backend).toBe('not configured');
-      expect(data.error).toBe('BACKEND_URL missing');
+      // SLA-001: Railway treats non-200 as unhealthy → "train not arrived" 404
+      // Liveness probe MUST return 200 if the process is alive
+      expect(response.status).toBe(200);
+      expect(data.status).toBe('healthy');
+      expect(data.backend).toBe('not_configured');
+      expect(data.backend_url_valid).toBe(false);
+      expect(data.warning).toBe('BACKEND_URL missing');
       expect(global.fetch).not.toHaveBeenCalled();
     });
   });

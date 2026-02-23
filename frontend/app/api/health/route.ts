@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 
 /**
- * Liveness health check — always returns 200 if the frontend process is up.
+ * Liveness health check — ALWAYS returns 200 if the frontend process is up.
+ *
+ * CRITICAL: This endpoint is used by Railway as healthcheckPath.
+ * Railway treats ANY non-200 response as "unhealthy" and removes the
+ * container from the load balancer, causing "train has not arrived at the
+ * station" 404 errors. Therefore this endpoint MUST return 200 in ALL cases.
  *
  * Backend connectivity is reported as informational metadata but does NOT
  * block the healthcheck. This prevents Railway deployment failures caused
@@ -10,6 +15,7 @@ import { NextResponse } from "next/server";
  * CRIT-008 AC7-AC8: Structured telemetry + descriptive logging.
  * CRIT-010 AC8: Checks backend `ready` field to distinguish "starting" from "healthy".
  * CRIT-006 AC4-AC7: Classify connection errors (DNS vs timeout) and set backend_url_valid flag.
+ * SLA-001: Always return 200 — liveness probe must never fail if process is alive.
  */
 
 // AC7: Rate limit telemetry events to max 1 per minute
@@ -48,11 +54,14 @@ function classifyConnectionError(error: unknown): {
 export async function GET() {
   const backendUrl = process.env.BACKEND_URL;
 
+  // SLA-001: NEVER return non-200 from healthcheck — Railway will pull the container
+  // from the load balancer, causing "train has not arrived" 404 for ALL users.
+  // Backend misconfiguration is logged but does NOT fail the liveness probe.
   if (!backendUrl) {
-    console.error("[HEALTH] CRITICAL: BACKEND_URL not configured");
+    console.error("[HEALTH] CRITICAL: BACKEND_URL not configured — backend proxy will fail but frontend is alive");
     return NextResponse.json(
-      { status: "misconfigured", backend: "not configured", error: "BACKEND_URL missing" },
-      { status: 503 }
+      { status: "healthy", backend: "not_configured", backend_url_valid: false, warning: "BACKEND_URL missing" },
+      { status: 200 }
     );
   }
 

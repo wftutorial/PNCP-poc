@@ -127,6 +127,10 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
+# SLA-001: Copy graceful shutdown wrapper script
+COPY --chown=nextjs:nodejs start.sh ./start.sh
+RUN chmod +x start.sh
+
 # Switch to non-root user
 USER nextjs
 
@@ -140,5 +144,5 @@ ENV HOSTNAME="0.0.0.0"
 # Railway has its own healthcheck system - no need for Docker HEALTHCHECK
 # This avoids conflicts and lets Railway manage the health monitoring
 
-# Start the application
-CMD ["node", "server.js"]
+# SLA-001: Use shell wrapper for proper SIGTERM handling during deploys
+CMD ["/app/start.sh"]

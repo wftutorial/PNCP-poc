@@ -902,6 +902,37 @@ async def register_search_session(
         except Exception:
             pass  # Fall through to insert
 
+    # CRIT-029 AC1-AC3: Parameter-based dedup — prevent duplicate history entries
+    # when same search params are executed within 5 minutes (e.g. cache hits, retries).
+    # Checks (user_id + sectors + ufs + date_range) instead of search_id only.
+    try:
+        from datetime import datetime, timezone, timedelta
+        cutoff = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
+        sorted_ufs = sorted(ufs)
+        existing_params = (
+            sb.table("search_sessions")
+            .select("id, created_at")
+            .eq("user_id", user_id)
+            .eq("sectors", sectors)
+            .eq("ufs", sorted_ufs)
+            .eq("data_inicial", data_inicial)
+            .eq("data_final", data_final)
+            .gte("created_at", cutoff)
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        if existing_params.data and len(existing_params.data) > 0:
+            existing_id = existing_params.data[0]["id"]
+            logger.info(
+                f"CRIT-029: Dedup match on params for user {mask_user_id(user_id)}, "
+                f"reusing session {existing_id[:8]}***"
+            )
+            return existing_id
+    except Exception as dedup_err:
+        logger.debug(f"CRIT-029: Param dedup check failed (proceeding to insert): {dedup_err}")
+        pass  # Fall through to insert
+
     for attempt in range(2):
         try:
             data = {

@@ -435,7 +435,8 @@ export default function SearchResults({
       )}
 
       {/* A-04 AC8: Refresh banner when background fetch completes */}
-      {refreshAvailable && onRefreshResults && (
+      {/* CRIT-030 AC4: Guard with !loading to prevent bleed from previous search */}
+      {!loading && refreshAvailable && onRefreshResults && (
         <div className="mt-4">
           <RefreshBanner
             refreshInfo={refreshAvailable}
@@ -456,7 +457,8 @@ export default function SearchResults({
       )}
 
       {/* STORY-257B AC8: Cache banner when results come from cache (only when NOT live-fetching) */}
-      {result && result.cached && result.cached_at && !liveFetchInProgress && !refreshAvailable && (
+      {/* CRIT-030 AC4: Guard with !loading to prevent bleed from previous search */}
+      {!loading && result && result.cached && result.cached_at && !liveFetchInProgress && !refreshAvailable && (
         <CacheBanner
           cachedAt={result.cached_at}
           onRefresh={onRetryForceFresh || onSearch}
@@ -468,7 +470,8 @@ export default function SearchResults({
       )}
 
       {/* CRIT-006 AC22-24: PartialTimeoutBanner — shown when result has failed UFs */}
-      {result && result.failed_ufs && result.failed_ufs.length > 0 && succeededUfs.length > 0 && (
+      {/* CRIT-030 AC4: Guard with !loading to prevent bleed from previous search */}
+      {!loading && result && result.failed_ufs && result.failed_ufs.length > 0 && succeededUfs.length > 0 && (
         <div className="mt-4">
           <PartialTimeoutBanner
             succeededUfs={succeededUfs}

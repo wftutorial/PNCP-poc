@@ -327,16 +327,21 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
     // UX-350: Clear any existing LLM timeout from previous search
     if (llmTimeoutRef.current) { clearTimeout(llmTimeoutRef.current); llmTimeoutRef.current = null; }
 
-    setLoading(true);
-    setLoadingStep(1);
-    setStatesProcessed(0);
-    setError(null);
-    setQuotaError(null);
-    // CRIT-027 AC1: Clear previous result immediately to prevent stale data display
-    // Save reference for error recovery (CRIT-005 AC23) before clearing
+    // CRIT-030 AC1: Clear ALL previous state FIRST — prevents stale empty state
+    // from previous search bleeding into loading state of new search.
+    // Save reference for error recovery (CRIT-005 AC23) before clearing.
     const previousResultFallback = result;
     setResult(null);
     setRawCount(0);
+    setError(null);
+    setQuotaError(null);
+    // CRIT-030 AC4: Clear live fetch state from previous search
+    setLiveFetchInProgress(false);
+    liveFetchSearchIdRef.current = null;
+    // CRIT-027 AC1 + CRIT-030 AC1: Set loading AFTER clearing result
+    setLoading(true);
+    setLoadingStep(1);
+    setStatesProcessed(0);
 
     const newSearchId = crypto.randomUUID();
     setSearchId(newSearchId);

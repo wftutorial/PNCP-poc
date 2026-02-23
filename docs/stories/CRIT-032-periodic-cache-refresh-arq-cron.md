@@ -3,7 +3,7 @@
 **Tipo:** Enhancement / Resilience
 **Prioridade:** P1 — UX + Dados frescos para usuarios recorrentes
 **Criada:** 2026-02-22
-**Status:** Pendente
+**Status:** Concluída
 **Origem:** Decisao estrategica — manter cache proativamente quente
 **Componentes:** backend/job_queue.py, backend/search_cache.py, backend/config.py, backend/metrics.py
 **Research:** `docs/sessions/2026-02/2026-02-22-periodic-cache-refresh-research.md`
@@ -99,35 +99,35 @@ ARQ Worker (cron: 00:00, 12:00 UTC)
 
 ### Job ARQ Periodico
 
-- [ ] **AC1:** Nova funcao `cache_refresh_job(ctx)` registrada em `WorkerSettings.functions` e `WorkerSettings.cron_jobs`
-- [ ] **AC2:** Job executa a cada 12h (configuravel via `CACHE_REFRESH_INTERVAL_HOURS`); usa `arq.cron()` nativo
-- [ ] **AC3:** Feature flag `CACHE_REFRESH_ENABLED` (default `false`) controla ativacao; se `false`, job retorna imediatamente com log.info
+- [x] **AC1:** Nova funcao `cache_refresh_job(ctx)` registrada em `WorkerSettings.functions` e `WorkerSettings.cron_jobs`
+- [x] **AC2:** Job executa a cada 12h (configuravel via `CACHE_REFRESH_INTERVAL_HOURS`); usa `arq.cron()` nativo
+- [x] **AC3:** Feature flag `CACHE_REFRESH_ENABLED` (default `false`) controla ativacao; se `false`, job retorna imediatamente com log.info
 
 ### Query de Entries Candidatas
 
-- [ ] **AC4:** Nova funcao `get_stale_entries_for_refresh(batch_size)` em `search_cache.py`
-- [ ] **AC5:** Query seleciona entries HOT + WARM com `fetched_at` anterior a `CACHE_FRESH_HOURS` (6h)
-- [ ] **AC6:** Query **tambem** seleciona entries com `total_results = 0` (caches vazios), **independente de prioridade**, como candidatas prioritarias
-- [ ] **AC7:** Entries vazias aparecem **antes** de entries stale no ordenamento (vazios primeiro, depois HOT, depois WARM)
-- [ ] **AC8:** Entries com `degraded_until > NOW()` sao excluidas (respeita backoff existente)
-- [ ] **AC9:** Limite de entries por ciclo configuravel via `CACHE_REFRESH_BATCH_SIZE` (default 25)
+- [x] **AC4:** Nova funcao `get_stale_entries_for_refresh(batch_size)` em `search_cache.py`
+- [x] **AC5:** Query seleciona entries HOT + WARM com `fetched_at` anterior a `CACHE_FRESH_HOURS` (6h)
+- [x] **AC6:** Query **tambem** seleciona entries com `total_results = 0` (caches vazios), **independente de prioridade**, como candidatas prioritarias
+- [x] **AC7:** Entries vazias aparecem **antes** de entries stale no ordenamento (vazios primeiro, depois HOT, depois WARM)
+- [x] **AC8:** Entries com `degraded_until > NOW()` sao excluidas (respeita backoff existente)
+- [x] **AC9:** Limite de entries por ciclo configuravel via `CACHE_REFRESH_BATCH_SIZE` (default 25)
 
 ### Replay de Buscas
 
-- [ ] **AC10:** Para cada entry, constroi `request_data` com datas `date.today() - 10 dias` ate `date.today()`
-- [ ] **AC11:** Chama `trigger_background_revalidation()` existente (reusa todos pre-checks: circuit breaker, cooldown 10min, budget max 3 concorrentes)
-- [ ] **AC12:** Stagger de 5s (`asyncio.sleep(5)`) entre dispatches de entries consecutivas para evitar burst no PNCP
-- [ ] **AC13:** Se circuit breaker PNCP degradado, job para o ciclo imediatamente (nao tenta proximas entries) com log.warning
+- [x] **AC10:** Para cada entry, constroi `request_data` com datas `date.today() - 10 dias` ate `date.today()`
+- [x] **AC11:** Chama `trigger_background_revalidation()` existente (reusa todos pre-checks: circuit breaker, cooldown 10min, budget max 3 concorrentes)
+- [x] **AC12:** Stagger de 5s (`asyncio.sleep(5)`) entre dispatches de entries consecutivas para evitar burst no PNCP
+- [x] **AC13:** Se circuit breaker PNCP degradado, job para o ciclo imediatamente (nao tenta proximas entries) com log.warning
 
 ### Graceful Degradation
 
-- [ ] **AC14:** Se Redis indisponivel, job faz log.warning e retorna sem erro (nao crasheia o worker)
-- [ ] **AC15:** Se Supabase indisponivel (query falha), job faz log.error e retorna sem erro
-- [ ] **AC16:** Job timeout adequado ao batch size: `job_timeout = max(300, CACHE_REFRESH_BATCH_SIZE * 10)` segundos
+- [x] **AC14:** Se Redis indisponivel, job faz log.warning e retorna sem erro (nao crasheia o worker)
+- [x] **AC15:** Se Supabase indisponivel (query falha), job faz log.error e retorna sem erro
+- [x] **AC16:** Job timeout adequado ao batch size: `job_timeout = max(300, CACHE_REFRESH_BATCH_SIZE * 10)` segundos
 
 ### Observabilidade
 
-- [ ] **AC17:** Log estruturado ao final de cada ciclo:
+- [x] **AC17:** Log estruturado ao final de cada ciclo:
   ```json
   {
     "event": "cache_refresh_cycle",
@@ -142,38 +142,38 @@ ARQ Worker (cron: 00:00, 12:00 UTC)
     "duration_ms": 45000
   }
   ```
-- [ ] **AC18:** Metricas Prometheus:
+- [x] **AC18:** Metricas Prometheus:
   - `cache_refresh_total` (Counter, labels: `result={success,skipped,failed,empty_retry}`)
   - `cache_refresh_duration_seconds` (Histogram)
-- [ ] **AC19:** Metricas usam pattern existente de `metrics.py` (NoopMetric fallback se prometheus_client indisponivel)
+- [x] **AC19:** Metricas usam pattern existente de `metrics.py` (NoopMetric fallback se prometheus_client indisponivel)
 
 ### Configuracao
 
-- [ ] **AC20:** Env vars em `config.py`:
+- [x] **AC20:** Env vars em `config.py`:
   - `CACHE_REFRESH_ENABLED` (bool, default `false`)
   - `CACHE_REFRESH_INTERVAL_HOURS` (int, default `12`)
   - `CACHE_REFRESH_BATCH_SIZE` (int, default `25`)
   - `CACHE_REFRESH_STAGGER_SECONDS` (int, default `5`)
-- [ ] **AC21:** Env vars documentadas em `.env.example`
+- [x] **AC21:** Env vars documentadas em `.env.example`
 
 ### Testes
 
-- [ ] **AC22:** Teste: `get_stale_entries_for_refresh()` retorna entries HOT+WARM stale ordenadas por prioridade
-- [ ] **AC23:** Teste: entries com `total_results=0` aparecem na query independente de prioridade, e **antes** de entries stale
-- [ ] **AC24:** Teste: entries com `degraded_until` no futuro sao excluidas
-- [ ] **AC25:** Teste: `cache_refresh_job` com feature flag `false` retorna imediatamente
-- [ ] **AC26:** Teste: `cache_refresh_job` chama `trigger_background_revalidation()` para cada entry com datas corretas (hoje-10d, hoje)
-- [ ] **AC27:** Teste: job para ciclo se circuit breaker PNCP degradado (AC13)
-- [ ] **AC28:** Teste: job graceful quando Redis indisponivel (AC14) e Supabase indisponivel (AC15)
-- [ ] **AC29:** Teste: stagger de 5s entre dispatches (mock asyncio.sleep)
-- [ ] **AC30:** Teste: metricas Prometheus emitidas corretamente (success, skipped, failed, empty_retry)
-- [ ] **AC31:** Zero regressoes nos testes existentes (baseline: ~10 fail backend / ~4300 pass)
+- [x] **AC22:** Teste: `get_stale_entries_for_refresh()` retorna entries HOT+WARM stale ordenadas por prioridade
+- [x] **AC23:** Teste: entries com `total_results=0` aparecem na query independente de prioridade, e **antes** de entries stale
+- [x] **AC24:** Teste: entries com `degraded_until` no futuro sao excluidas
+- [x] **AC25:** Teste: `cache_refresh_job` com feature flag `false` retorna imediatamente
+- [x] **AC26:** Teste: `cache_refresh_job` chama `trigger_background_revalidation()` para cada entry com datas corretas (hoje-10d, hoje)
+- [x] **AC27:** Teste: job para ciclo se circuit breaker PNCP degradado (AC13)
+- [x] **AC28:** Teste: job graceful quando Redis indisponivel (AC14) e Supabase indisponivel (AC15)
+- [x] **AC29:** Teste: stagger de 5s entre dispatches (mock asyncio.sleep)
+- [x] **AC30:** Teste: metricas Prometheus emitidas corretamente (success, skipped, failed, empty_retry)
+- [x] **AC31:** Zero regressoes nos testes existentes (baseline: ~10 fail backend / ~4300 pass)
 
 ### Nao-Escopo (v1)
 
-- [ ] **AC32:** Nenhuma mudanca no frontend (cache e transparente)
-- [ ] **AC33:** Nenhuma migration de banco (usa tabela existente `search_results_cache`)
-- [ ] **AC34:** Nenhuma notificacao ao usuario sobre refresh (silencioso)
+- [x] **AC32:** Nenhuma mudanca no frontend (cache e transparente)
+- [x] **AC33:** Nenhuma migration de banco (usa tabela existente `search_results_cache`)
+- [x] **AC34:** Nenhuma notificacao ao usuario sobre refresh (silencioso)
 
 ---
 

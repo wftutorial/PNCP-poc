@@ -33,28 +33,28 @@ def _read_start_sh() -> str:
 
 
 class TestAC1WebConcurrency:
-    """AC1: WEB_CONCURRENCY default increased from 3 to 4."""
+    """AC1: WEB_CONCURRENCY default (SLA-002: reduced to 2)."""
 
-    def test_default_workers_is_4(self):
+    def test_default_workers_is_2(self):
         content = _read_start_sh()
-        assert "WEB_CONCURRENCY:-4" in content
+        assert "WEB_CONCURRENCY:-2" in content
 
     def test_workers_flag_uses_env_var(self):
         content = _read_start_sh()
-        assert '-w "${WEB_CONCURRENCY:-4}"' in content
+        assert '-w "${WEB_CONCURRENCY:-2}"' in content
 
 
 # ============================================================================
-# AC2: GUNICORN_TIMEOUT = 900s (unchanged, verify still present)
+# AC2: GUNICORN_TIMEOUT = 180s (GTM-INFRA-001: reduced from 900s)
 # ============================================================================
 
 
 class TestAC2Timeout:
-    """AC2: GUNICORN_TIMEOUT remains 900s."""
+    """AC2: GUNICORN_TIMEOUT reduced to 180s (GTM-INFRA-001)."""
 
-    def test_timeout_900s(self):
+    def test_timeout_180s(self):
         content = _read_start_sh()
-        assert "GUNICORN_TIMEOUT:-900" in content
+        assert "GUNICORN_TIMEOUT:-180" in content
 
 
 # ============================================================================

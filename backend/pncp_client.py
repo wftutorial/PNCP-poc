@@ -46,10 +46,12 @@ class PNCPDegradedError(PNCPAPIError):
 
 # Configurable via environment variables (GTM-FIX-005)
 PNCP_CIRCUIT_BREAKER_THRESHOLD: int = int(
-    os.environ.get("PNCP_CIRCUIT_BREAKER_THRESHOLD", "50")  # 27 UFs × 4 mods = 108 slots; 18% ≈ 20 → raised to 50
+    # GTM-INFRA-001 AC4: Reduced from 50 to 15 — trips in ~30s instead of ~3min
+    os.environ.get("PNCP_CIRCUIT_BREAKER_THRESHOLD", "15")
 )
 PNCP_CIRCUIT_BREAKER_COOLDOWN: int = int(
-    os.environ.get("PNCP_CIRCUIT_BREAKER_COOLDOWN", "120")
+    # GTM-INFRA-001 AC5: Reduced proportionally from 120s to 60s
+    os.environ.get("PNCP_CIRCUIT_BREAKER_COOLDOWN", "60")
 )
 PCP_CIRCUIT_BREAKER_THRESHOLD: int = int(
     os.environ.get("PCP_CIRCUIT_BREAKER_THRESHOLD", "30")  # Conservative: PCP API stability unknown
@@ -2289,11 +2291,15 @@ class PNCPLegacyAdapter:
             else:
                 results = fetch_result
         else:
+            # GTM-INFRA-001 AC1/AC3: Wrap sync PNCPClient in asyncio.to_thread()
+            # to prevent blocking the event loop with requests.Session + time.sleep()
             client = PNCPClient()
-            results = list(client.fetch_all(
-                data_inicial=data_inicial, data_final=data_final,
-                ufs=_ufs, modalidades=self._modalidades,
-            ))
+            results = await asyncio.to_thread(
+                lambda: list(client.fetch_all(
+                    data_inicial=data_inicial, data_final=data_final,
+                    ufs=_ufs, modalidades=self._modalidades,
+                ))
+            )
         for item in results:
             # GTM-FIX-017: Parse date fields from PNCP response
             data_pub = None

@@ -149,21 +149,21 @@ class TestSSEGeneratorAbruptLogging:
 class TestStartShConfig:
     """Validate start.sh configuration values."""
 
-    def test_start_sh_has_900s_timeout(self):
-        """AC2: GUNICORN_TIMEOUT default is 900s."""
+    def test_start_sh_has_180s_timeout(self):
+        """GTM-INFRA-001 AC7: GUNICORN_TIMEOUT default is 180s (was 900s)."""
         import os
         start_sh_path = os.path.join(os.path.dirname(__file__), "..", "start.sh")
         with open(start_sh_path) as f:
             content = f.read()
-        assert "GUNICORN_TIMEOUT:-900" in content, "Default timeout should be 900s"
+        assert "GUNICORN_TIMEOUT:-180" in content, "Default timeout should be 180s (GTM-INFRA-001)"
 
-    def test_start_sh_has_4_workers(self):
-        """CRIT-034 AC1: WEB_CONCURRENCY default is 4."""
+    def test_start_sh_has_2_workers(self):
+        """SLA-002: WEB_CONCURRENCY default is 2."""
         import os
         start_sh_path = os.path.join(os.path.dirname(__file__), "..", "start.sh")
         with open(start_sh_path) as f:
             content = f.read()
-        assert "WEB_CONCURRENCY:-4" in content, "Default workers should be 4 (CRIT-034 AC1)"
+        assert "WEB_CONCURRENCY:-2" in content, "Default workers should be 2 (SLA-002)"
 
     def test_start_sh_has_keep_alive(self):
         """AC2: start.sh has --keep-alive flag."""

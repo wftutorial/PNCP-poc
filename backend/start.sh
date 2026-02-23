@@ -29,16 +29,16 @@ case "$PROCESS_TYPE" in
     # SLA-002: WEB_CONCURRENCY 4→2 (Railway 1GB can't sustain 4 FastAPI workers
     # with in-memory caches + cron jobs + warmup — causes OOM kills).
     # --max-requests 1000 + jitter 50: recycle workers to prevent memory leaks.
-    # CRIT-026 AC2+AC4: timeout=900s, graceful-timeout=120s (unchanged).
+    # GTM-INFRA-001 AC7/AC8: timeout=180s (was 900s — dead code, Railway hard timeout ~120s).
     # CRIT-034 AC5+AC7: -c gunicorn_conf.py for worker lifecycle hooks.
-    echo "  timeout=${GUNICORN_TIMEOUT:-900}s, workers=${WEB_CONCURRENCY:-2}, graceful=${GUNICORN_GRACEFUL_TIMEOUT:-120}s, keep-alive=${GUNICORN_KEEP_ALIVE:-75}s"
+    echo "  timeout=${GUNICORN_TIMEOUT:-180}s, workers=${WEB_CONCURRENCY:-2}, graceful=${GUNICORN_GRACEFUL_TIMEOUT:-120}s, keep-alive=${GUNICORN_KEEP_ALIVE:-75}s"
     echo "  max-requests=${GUNICORN_MAX_REQUESTS:-1000}, jitter=${GUNICORN_MAX_REQUESTS_JITTER:-50}"
 
     exec gunicorn main:app \
       -k uvicorn.workers.UvicornWorker \
       -w "${WEB_CONCURRENCY:-2}" \
       --bind "0.0.0.0:${PORT:-8000}" \
-      --timeout "${GUNICORN_TIMEOUT:-900}" \
+      --timeout "${GUNICORN_TIMEOUT:-180}" \
       --graceful-timeout "${GUNICORN_GRACEFUL_TIMEOUT:-120}" \
       --keep-alive "${GUNICORN_KEEP_ALIVE:-75}" \
       --max-requests "${GUNICORN_MAX_REQUESTS:-1000}" \

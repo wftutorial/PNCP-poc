@@ -785,14 +785,14 @@ class TestEnvironmentConfiguration:
         assert PNCP_MODALITY_RETRY_BACKOFF == 3.0
 
     def test_circuit_breaker_default_threshold(self):
-        """Default PNCP circuit breaker threshold is 50 (GTM-FIX-005)."""
+        """Default PNCP circuit breaker threshold is 15 (GTM-INFRA-001 AC4)."""
         cb = PNCPCircuitBreaker()
-        assert cb.threshold == 50
+        assert cb.threshold == 15
 
     def test_circuit_breaker_default_cooldown(self):
-        """Default circuit breaker cooldown is 120s (2 minutes)."""
+        """Default circuit breaker cooldown is 60s (GTM-INFRA-001 AC5)."""
         cb = PNCPCircuitBreaker()
-        assert cb.cooldown_seconds == 120
+        assert cb.cooldown_seconds == 60
 
 
 # ---------------------------------------------------------------------------
@@ -806,11 +806,11 @@ class TestGTMFIX005CircuitBreaker:
         _circuit_breaker.reset()
         _pcp_circuit_breaker.reset()
 
-    # AC1: Threshold defaults
-    def test_pncp_threshold_default_is_50(self):
-        """PNCP circuit breaker threshold defaults to 50."""
-        assert PNCP_CIRCUIT_BREAKER_THRESHOLD == 50
-        assert _circuit_breaker.threshold == 50
+    # AC1: Threshold defaults (GTM-INFRA-001: reduced from 50 to 15)
+    def test_pncp_threshold_default_is_15(self):
+        """PNCP circuit breaker threshold defaults to 15 (GTM-INFRA-001 AC4)."""
+        assert PNCP_CIRCUIT_BREAKER_THRESHOLD == 15
+        assert _circuit_breaker.threshold == 15
 
     def test_pcp_threshold_default_is_30(self):
         """PCP circuit breaker threshold defaults to 30."""

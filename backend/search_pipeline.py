@@ -1338,23 +1338,31 @@ class SearchPipeline:
                     raise  # Re-raise to be handled by outer try/except
                 except Exception as e:
                     logger.warning(f"Parallel fetch failed, falling back to sequential: {e}")
+                    # GTM-INFRA-001 AC1/AC3: Wrap sync PNCPClient in asyncio.to_thread()
+                    # to prevent blocking the event loop with requests.Session + time.sleep()
                     client = deps.PNCPClient()
-                    return list(
+                    return await asyncio.to_thread(
+                        lambda: list(
+                            client.fetch_all(
+                                data_inicial=request.data_inicial,
+                                data_final=request.data_final,
+                                ufs=request.ufs,
+                                modalidades=modalidades_to_fetch,
+                            )
+                        )
+                    )
+            else:
+                # GTM-INFRA-001 AC1/AC3: Wrap sync PNCPClient in asyncio.to_thread()
+                # to prevent blocking the event loop with requests.Session + time.sleep()
+                client = deps.PNCPClient()
+                return await asyncio.to_thread(
+                    lambda: list(
                         client.fetch_all(
                             data_inicial=request.data_inicial,
                             data_final=request.data_final,
                             ufs=request.ufs,
                             modalidades=modalidades_to_fetch,
                         )
-                    )
-            else:
-                client = deps.PNCPClient()
-                return list(
-                    client.fetch_all(
-                        data_inicial=request.data_inicial,
-                        data_final=request.data_final,
-                        ufs=request.ufs,
-                        modalidades=modalidades_to_fetch,
                     )
                 )
 

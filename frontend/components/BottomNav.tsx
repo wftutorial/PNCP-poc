@@ -63,7 +63,7 @@ const icons = {
 const MAIN_ITEMS: BottomNavItem[] = [
   { href: "/buscar", label: "Buscar", icon: icons.search },
   { href: "/pipeline", label: "Pipeline", icon: icons.pipeline },
-  { href: "/historico", label: "Historico", icon: icons.history },
+  { href: "/historico", label: "Histórico", icon: icons.history },
   { href: "/mensagens", label: "Msg", icon: icons.messages },
 ];
 
@@ -94,7 +94,7 @@ export function BottomNav() {
       <nav
         data-testid="bottom-nav"
         className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-[var(--surface-0)] border-t border-[var(--border)] shadow-[0_-2px_10px_rgba(0,0,0,0.05)]"
-        aria-label="Navegacao mobile"
+        aria-label="Navegação mobile"
       >
         <div className="flex items-center justify-around h-16 px-1">
           {MAIN_ITEMS.map((item) => {

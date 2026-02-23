@@ -1,6 +1,6 @@
 # CRIT-027 — Estado da Busca Corrompido: Empty State Prematuro + Resultados Stale
 
-**Status:** pending
+**Status:** done
 **Priority:** P0 — Blocker (impede uso do produto)
 **Created:** 2026-02-22
 **Origin:** Auditoria UX area logada (2026-02-22-ux-audit-area-logada.md)
@@ -41,25 +41,25 @@ Corrigir a maquina de estado da busca no frontend (`useSearch.ts` + `page.tsx`).
 ### Criterios de Aceitacao
 
 **Estado da busca**
-- [ ] **AC1:** Estado `result` e limpo (null) ao iniciar nova busca — nenhum resultado anterior visivel
-- [ ] **AC2:** Empty state "Nenhuma Oportunidade" so aparece APOS busca concluir (status `completed` ou `error`)
-- [ ] **AC3:** Enquanto busca esta em andamento, mostrar loading state adequado (nao empty state)
+- [x] **AC1:** Estado `result` e limpo (null) ao iniciar nova busca — nenhum resultado anterior visivel
+- [x] **AC2:** Empty state "Nenhuma Oportunidade" so aparece APOS busca concluir (status `completed` ou `error`)
+- [x] **AC3:** Enquanto busca esta em andamento, mostrar loading state adequado (nao empty state)
 
 **Grid de UFs (progresso)**
-- [ ] **AC4:** Grid de UFs persiste durante TODA a busca, nao some apos 1s
-- [ ] **AC5:** Contador "Encontradas: X oportunidades ate agora" atualiza em tempo real via SSE
-- [ ] **AC6:** UFs transitam de "Aguardando" -> "Consultando" -> "Sucesso/Falhou" progressivamente
+- [x] **AC4:** Grid de UFs persiste durante TODA a busca, nao some apos 1s
+- [x] **AC5:** Contador "Encontradas: X oportunidades ate agora" atualiza em tempo real via SSE
+- [x] **AC6:** UFs transitam de "Aguardando" -> "Consultando" -> "Sucesso/Falhou" progressivamente
 
 **Banner de status**
-- [ ] **AC7:** "Atualizando dados em tempo real..." desaparece quando busca conclui
-- [ ] **AC8:** Se busca falha ou timeout (>180s), mostrar mensagem clara com botao "Tentar novamente"
-- [ ] **AC9:** Se busca retorna 0 resultados APOS conclusao, empty state mostra "Analisamos X editais de Y estados e nenhum correspondeu ao seu perfil" (framing informativo, nao negativo)
+- [x] **AC7:** "Atualizando dados em tempo real..." desaparece quando busca conclui
+- [x] **AC8:** Se busca falha ou timeout (>180s), mostrar mensagem clara com botao "Tentar novamente"
+- [x] **AC9:** Se busca retorna 0 resultados APOS conclusao, empty state mostra "Analisamos X editais de Y estados e nenhum correspondeu ao seu perfil" (framing informativo, nao negativo)
 
 **Testes**
-- [ ] **AC10:** Teste: nova busca limpa resultados anteriores
-- [ ] **AC11:** Teste: empty state nao aparece durante loading
-- [ ] **AC12:** Teste: grid de UFs permanece visivel ate conclusao
-- [ ] **AC13:** Zero regressoes (baseline: ~50 fail FE)
+- [x] **AC10:** Teste: nova busca limpa resultados anteriores
+- [x] **AC11:** Teste: empty state nao aparece durante loading
+- [x] **AC12:** Teste: grid de UFs permanece visivel ate conclusao
+- [x] **AC13:** Zero regressoes (baseline: ~50 fail FE)
 
 ---
 

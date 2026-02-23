@@ -178,8 +178,8 @@ describe("CRIT-018: Dashboard Retry Storm", () => {
 
       await waitFor(() => {
         expect(screen.getByTestId("dashboard-error-state")).toBeInTheDocument();
-        expect(screen.getByText("Painel temporariamente indisponivel")).toBeInTheDocument();
-        expect(screen.getByText(/Nossos servidores estao sendo atualizados/)).toBeInTheDocument();
+        expect(screen.getByText("Painel temporariamente indisponível")).toBeInTheDocument();
+        expect(screen.getByText(/Nossos servidores estão sendo atualizados/)).toBeInTheDocument();
       });
 
       // Count total fetch calls — should be exactly 5 (initial + 4 retries)
@@ -470,8 +470,8 @@ describe("CRIT-018: Dashboard Retry Storm", () => {
         expect(svg).toBeTruthy();
 
         // Correct messages
-        expect(screen.getByText("Painel temporariamente indisponivel")).toBeInTheDocument();
-        expect(screen.getByText(/Nossos servidores estao sendo atualizados/)).toBeInTheDocument();
+        expect(screen.getByText("Painel temporariamente indisponível")).toBeInTheDocument();
+        expect(screen.getByText(/Nossos servidores estão sendo atualizados/)).toBeInTheDocument();
 
         // "Atualizar agora" button
         expect(screen.getByText("Atualizar agora")).toBeInTheDocument();
@@ -554,7 +554,7 @@ describe("CRIT-018: Dashboard Retry Storm", () => {
       render(<DashboardPage />);
 
       await waitFor(() => {
-        expect(screen.getByText("Seu Painel de Inteligencia")).toBeInTheDocument();
+        expect(screen.getByText("Seu Painel de Inteligência")).toBeInTheDocument();
       });
     });
   });

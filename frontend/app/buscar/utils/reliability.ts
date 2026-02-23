@@ -2,10 +2,10 @@
  * Reliability score calculation for search results (GTM-RESILIENCE-A05 AC9).
  *
  * Score = coverage (50%) + freshness (30%) + method (20%)
- * Labels: "Alta" (>0.8), "Media" (0.5-0.8), "Baixa" (<0.5)
+ * Labels: "Alta" (>0.8), "Média" (0.5-0.8), "Baixa" (<0.5)
  */
 
-export type ReliabilityLevel = "Alta" | "Media" | "Baixa";
+export type ReliabilityLevel = "Alta" | "Média" | "Baixa";
 
 export type ResponseMethod = "live" | "cache_fresh" | "cache_stale";
 
@@ -77,7 +77,7 @@ export function calculateReliability(
   if (score > 0.8) {
     level = "Alta";
   } else if (score >= 0.5) {
-    level = "Media";
+    level = "Média";
   } else {
     level = "Baixa";
   }

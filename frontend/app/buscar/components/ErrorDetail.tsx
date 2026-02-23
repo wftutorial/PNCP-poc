@@ -105,17 +105,17 @@ export function ErrorDetail({ error, searchId, errorMessage, timestamp }: ErrorD
         >
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
         </svg>
-        Detalhes tecnicos
+        Detalhes técnicos
       </button>
 
       {isOpen && (
         <div className="mt-2 p-3 bg-surface-1 rounded-md text-xs text-ink-muted font-mono space-y-1">
           {effectiveSearchId && <p>ID da busca: {effectiveSearchId}</p>}
-          {requestId && <p>ID da requisicao: {requestId}</p>}
-          {correlationId && <p>ID de correlacao: {correlationId}</p>}
-          {errorCode && <p>Codigo do erro: {errorCode}</p>}
+          {requestId && <p>ID da requisição: {requestId}</p>}
+          {correlationId && <p>ID de correlação: {correlationId}</p>}
+          {errorCode && <p>Código do erro: {errorCode}</p>}
           {httpStatus && <p>Status HTTP: {httpStatus}</p>}
-          <p>Horario: {effectiveTimestamp}</p>
+          <p>Horário: {effectiveTimestamp}</p>
           {effectiveMessage && <p>Mensagem original: {effectiveMessage}</p>}
           <button
             onClick={handleCopy}

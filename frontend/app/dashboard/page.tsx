@@ -359,10 +359,10 @@ export default function DashboardPage() {
             </svg>
           </div>
           <p className="text-lg font-display font-semibold text-[var(--ink)] mb-2">
-            Painel temporariamente indisponivel
+            Painel temporariamente indisponível
           </p>
           <p className="text-sm text-[var(--ink-secondary)] mb-6 max-w-md mx-auto">
-            Nossos servidores estao sendo atualizados. Seus dados estarao disponiveis em breve.
+            Nossos servidores estão sendo atualizados. Seus dados estarão disponíveis em breve.
           </p>
           <button
             onClick={manualRetry}
@@ -430,10 +430,10 @@ export default function DashboardPage() {
               </svg>
             </div>
             <h2 className="text-xl font-display font-semibold text-[var(--ink)] mb-3">
-              Seu Painel de Inteligencia
+              Seu Painel de Inteligência
             </h2>
             <p className="text-[var(--ink-secondary)] mb-6 max-w-md mx-auto">
-              Apos suas primeiras buscas, voce vera aqui:
+              Após suas primeiras buscas, você verá aqui:
             </p>
             <ul className="text-left max-w-sm mx-auto mb-8 space-y-2">
               <li className="flex items-center gap-2 text-sm text-[var(--ink-secondary)]">
@@ -442,7 +442,7 @@ export default function DashboardPage() {
               </li>
               <li className="flex items-center gap-2 text-sm text-[var(--ink-secondary)]">
                 <span className="w-1.5 h-1.5 rounded-full bg-[var(--brand-blue)] flex-shrink-0" />
-                Tendencias do seu setor
+                Tendências do seu setor
               </li>
               <li className="flex items-center gap-2 text-sm text-[var(--ink-secondary)]">
                 <span className="w-1.5 h-1.5 rounded-full bg-[var(--brand-blue)] flex-shrink-0" />
@@ -456,6 +456,7 @@ export default function DashboardPage() {
               data-testid="empty-state-cta"
             >
               Fazer primeira busca
+
               <svg aria-hidden="true" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
               </svg>

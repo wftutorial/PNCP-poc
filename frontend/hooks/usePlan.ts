@@ -127,8 +127,33 @@ export function usePlan(): UsePlanReturn {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Erro desconhecido";
       setError(errorMessage);
-      setPlanInfo(null);
-      console.error("Error fetching plan info:", err);
+
+      // CRIT-028 AC1-AC2: On error, fall back to cached plan (fail to last known plan)
+      // instead of setting planInfo to null, which causes skeletons/empty states
+      if (typeof window !== "undefined") {
+        try {
+          const cached = localStorage.getItem(CACHE_KEY);
+          if (cached) {
+            const parsedCache: CachedPlan = JSON.parse(cached);
+            const cacheAge = Date.now() - parsedCache.timestamp;
+            if (cacheAge < CACHE_TTL) {
+              console.warn("[usePlan] Backend error — using cached plan info:", parsedCache.data.plan_id);
+              setPlanInfo(parsedCache.data);
+            } else {
+              setPlanInfo(null);
+            }
+          } else {
+            setPlanInfo(null);
+          }
+        } catch {
+          setPlanInfo(null);
+        }
+      } else {
+        setPlanInfo(null);
+      }
+
+      // CRIT-028 AC6: Downgrade to warn to avoid console error spam on transient failures
+      console.warn("[usePlan] Failed to fetch plan info:", errorMessage);
     } finally {
       setLoading(false);
     }

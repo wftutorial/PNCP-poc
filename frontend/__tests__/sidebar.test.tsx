@@ -62,8 +62,8 @@ describe("Sidebar", () => {
     expect(screen.getByText("Buscar")).toBeInTheDocument();
     expect(screen.getByText("Dashboard")).toBeInTheDocument();
     expect(screen.getByText("Pipeline")).toBeInTheDocument();
-    expect(screen.getByText("Historico")).toBeInTheDocument();
-    expect(screen.getByText("Mensagens")).toBeInTheDocument();
+    expect(screen.getByText("Histórico")).toBeInTheDocument();
+    expect(screen.getByText("Suporte")).toBeInTheDocument();
     expect(screen.getByText("Minha Conta")).toBeInTheDocument();
     expect(screen.getByText("Ajuda")).toBeInTheDocument();
   });
@@ -164,6 +164,6 @@ describe("Sidebar", () => {
   // Navigation aria-label
   it("has accessible navigation label", () => {
     render(<Sidebar />);
-    expect(screen.getByLabelText("Navegacao principal")).toBeInTheDocument();
+    expect(screen.getByLabelText("Navegação principal")).toBeInTheDocument();
   });
 });

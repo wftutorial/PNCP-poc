@@ -146,11 +146,11 @@ export default function PipelinePage() {
               </svg>
             }
             title="Seu Pipeline de Oportunidades"
-            description="Aqui voce acompanha licitacoes do inicio ao fim."
+            description="Aqui você acompanha licitações do início ao fim."
             steps={[
-              'Busque licitacoes em "Buscar"',
+              'Busque licitações em "Buscar"',
               'Clique em "Acompanhar" numa oportunidade',
-              "Arraste entre as colunas conforme avanca",
+              "Arraste entre as colunas conforme avança",
             ]}
             ctaLabel="Buscar oportunidades"
             ctaHref="/buscar"

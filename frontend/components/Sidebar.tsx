@@ -72,8 +72,8 @@ const PRIMARY_NAV: NavItem[] = [
   { href: "/buscar", label: "Buscar", icon: icons.search },
   { href: "/dashboard", label: "Dashboard", icon: icons.dashboard },
   { href: "/pipeline", label: "Pipeline", icon: icons.pipeline },
-  { href: "/historico", label: "Historico", icon: icons.history },
-  { href: "/mensagens", label: "Mensagens", icon: icons.messages },
+  { href: "/historico", label: "Histórico", icon: icons.history },
+  { href: "/mensagens", label: "Suporte", icon: icons.messages },
 ];
 
 const SECONDARY_NAV: NavItem[] = [
@@ -161,7 +161,7 @@ export function Sidebar() {
       </div>
 
       {/* Primary Navigation */}
-      <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-1" aria-label="Navegacao principal">
+      <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-1" aria-label="Navegação principal">
         {PRIMARY_NAV.map(renderNavItem)}
       </nav>
 

@@ -1,6 +1,6 @@
 # UX-353 — Acentuacao, Labels e Consistencia Textual da Area Logada
 
-**Status:** pending
+**Status:** done
 **Priority:** P2 — Polish pre-GTM
 **Created:** 2026-02-22
 **Origin:** Auditoria UX area logada (2026-02-22-ux-audit-area-logada.md)
@@ -40,33 +40,33 @@ A area logada tem dezenas de textos sem acentuacao correta e inconsistencias com
 ### Criterios de Aceitacao
 
 **Sidebar e navegacao**
-- [ ] **AC1:** "Historico" → "Historico" (sidebar e todas as paginas)
-- [ ] **AC2:** "Mensagens" → "Suporte" (sidebar) — manter rota /mensagens internamente
-- [ ] **AC3:** aria-label "Navegacao principal" → "Navegacao principal"
+- [x] **AC1:** "Historico" → "Historico" (sidebar e todas as paginas)
+- [x] **AC2:** "Mensagens" → "Suporte" (sidebar) — manter rota /mensagens internamente
+- [x] **AC3:** aria-label "Navegacao principal" → "Navegacao principal"
 
 **Historico**
-- [ ] **AC4:** Header "Historico" com acento
-- [ ] **AC5:** Badge "Concluida" com acento
-- [ ] **AC6:** Badges de setor com acentuacao (vestuario, etc.)
+- [x] **AC4:** Header "Historico" com acento
+- [x] **AC5:** Badge "Concluida" com acento
+- [x] **AC6:** Badges de setor com acentuacao (vestuario, etc.)
 
 **Pipeline**
-- [ ] **AC7:** Todos os textos do empty state com acentuacao correta
+- [x] **AC7:** Todos os textos do empty state com acentuacao correta
 
 **Badges e resultados**
-- [ ] **AC8:** "confianca" → corrigido (acentuacao)
-- [ ] **AC9:** "Recomendacoes" → corrigido
-- [ ] **AC10:** "tecnicos" → corrigido
+- [x] **AC8:** "confianca" → corrigido (acentuacao)
+- [x] **AC9:** "Recomendacoes" → corrigido
+- [x] **AC10:** "tecnicos" → corrigido
 
 **Footer**
-- [ ] **AC11:** Footer da area logada alinhado com footer da landing page
-- [ ] **AC12:** Remover "Sistema desenvolvido por servidores publicos" (incorreto)
+- [x] **AC11:** Footer da area logada alinhado com footer da landing page
+- [x] **AC12:** Remover "Sistema desenvolvido por servidores publicos" (incorreto)
 
 **Feedback**
-- [ ] **AC13:** "Ja encerrada" → corrigido
+- [x] **AC13:** "Ja encerrada" → corrigido
 
 **Testes**
-- [ ] **AC14:** Busca textual no codebase por strings sem acento conhecidas retorna 0
-- [ ] **AC15:** Zero regressoes
+- [x] **AC14:** Busca textual no codebase por strings sem acento conhecidas retorna 0
+- [x] **AC15:** Zero regressoes
 
 ---
 

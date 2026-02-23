@@ -361,8 +361,9 @@ export default function SearchResults({
         </div>
       )}
 
+      {/* CRIT-027 AC2-AC3: Only show result states AFTER search completes (not during loading) */}
       {/* CRIT-005 AC5-7: Route by response_state — empty_failure gets SourcesUnavailable */}
-      {result && result.response_state === "empty_failure" && (
+      {!loading && result && result.response_state === "empty_failure" && (
         <SourcesUnavailable
           onRetry={onSearch}
           onLoadLastSearch={onLoadLastSearch || (() => {})}
@@ -373,7 +374,7 @@ export default function SearchResults({
       )}
 
       {/* GTM-RESILIENCE-A01 AC7 + STORY-257B AC10: All sources down (partial with zero results, not empty_failure) */}
-      {result && result.response_state !== "empty_failure" && result.is_partial && (result.total_raw || 0) === 0 && result.resumo.total_oportunidades === 0 && !result.cached && (
+      {!loading && result && result.response_state !== "empty_failure" && result.is_partial && (result.total_raw || 0) === 0 && result.resumo.total_oportunidades === 0 && !result.cached && (
         <SourcesUnavailable
           onRetry={onSearch}
           onLoadLastSearch={onLoadLastSearch || (() => {})}
@@ -384,7 +385,7 @@ export default function SearchResults({
       )}
 
       {/* STORY-252 AC23: Partial results, but all filtered out (total_raw>0, total_filtrado=0, is_partial=true) */}
-      {result && result.is_partial && (result.total_raw || 0) > 0 && result.resumo.total_oportunidades === 0 && (
+      {!loading && result && result.is_partial && (result.total_raw || 0) > 0 && result.resumo.total_oportunidades === 0 && (
         <>
           <OperationalStateBanner
             coveragePct={result.coverage_pct ?? 100}
@@ -405,8 +406,8 @@ export default function SearchResults({
         </>
       )}
 
-      {/* Empty State — legitimate zero results (not caused by API failure) */}
-      {result && !result.is_partial && result.response_state !== "empty_failure" && result.resumo.total_oportunidades === 0 && (
+      {/* CRIT-027 AC2: Empty state only after search completes — legitimate zero results (not caused by API failure) */}
+      {!loading && result && !result.is_partial && result.response_state !== "empty_failure" && result.resumo.total_oportunidades === 0 && (
         <EmptyState
           onAdjustSearch={() => window.scrollTo({ top: 0, behavior: "smooth" })}
           rawCount={rawCount}
@@ -426,8 +427,8 @@ export default function SearchResults({
         </div>
       )}
 
-      {/* A-04 AC6: "Atualizando..." indicator when cache-first + live fetch running */}
-      {liveFetchInProgress && !refreshAvailable && result && (
+      {/* CRIT-027 AC7: "Atualizando..." only when live fetch actually in progress AND not loading a new search */}
+      {!loading && liveFetchInProgress && !refreshAvailable && result && (
         <div className="mt-4 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-200" role="status">
           <svg className="h-4 w-4 animate-spin flex-shrink-0" viewBox="0 0 24 24" fill="none">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -461,8 +462,8 @@ export default function SearchResults({
         </div>
       )}
 
-      {/* Result Display */}
-      {result && result.resumo.total_oportunidades > 0 && (
+      {/* Result Display — CRIT-027 AC2: only after loading completes */}
+      {!loading && result && result.resumo.total_oportunidades > 0 && (
         <div className={`mt-6 sm:mt-8 space-y-4 sm:space-y-6 ${!showGrid ? 'animate-fade-in-up' : ''}`}>
           {/* STORY-257B AC7: Failed UFs banner */}
           {result.failed_ufs && result.failed_ufs.length > 0 && (
@@ -523,7 +524,7 @@ export default function SearchResults({
                     if (!hasAny) return null;
                     const parts: string[] = [];
                     if (counts.high > 0) parts.push(`${counts.high} alta`);
-                    if (counts.medium > 0) parts.push(`${counts.medium} media`);
+                    if (counts.medium > 0) parts.push(`${counts.medium} média`);
                     if (counts.low > 0) parts.push(`${counts.low} baixa`);
                     return <span className="text-ink-muted"> ({parts.join(", ")})</span>;
                   })()}
@@ -715,7 +716,7 @@ export default function SearchResults({
             {/* AC10: Recommendation Cards */}
             {result.resumo.recomendacoes && result.resumo.recomendacoes.length > 0 && (
               <div className="mt-4 sm:mt-6">
-                <h4 className="text-base sm:text-lg font-semibold font-display text-ink mb-3 sm:mb-4">Recomendacoes do Consultor:</h4>
+                <h4 className="text-base sm:text-lg font-semibold font-display text-ink mb-3 sm:mb-4">Recomendações do Consultor:</h4>
                 <div className="space-y-3">
                   {result.resumo.recomendacoes.map((rec, i) => (
                     <div
@@ -799,7 +800,7 @@ export default function SearchResults({
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
                 </svg>
-                Excel indisponivel — tente nova busca
+                Excel indisponível — tente nova busca
               </button>
             ) : result.excel_status === 'processing' ? (
               <button
@@ -818,7 +819,7 @@ export default function SearchResults({
               <button
                 onClick={onDownload}
                 disabled={downloadLoading}
-                aria-label={`Baixar Excel com ${result.resumo.total_oportunidades} ${result.resumo.total_oportunidades === 1 ? 'licitacao' : 'licitacoes'}`}
+                aria-label={`Baixar Excel com ${result.resumo.total_oportunidades} ${result.resumo.total_oportunidades === 1 ? 'licitação' : 'licitações'}`}
                 className="w-full bg-brand-navy text-white py-3 sm:py-4 rounded-button text-base sm:text-lg font-semibold
                            hover:bg-brand-blue-hover active:bg-brand-blue
                            disabled:bg-ink-faint disabled:text-ink-muted disabled:cursor-not-allowed
@@ -838,7 +839,7 @@ export default function SearchResults({
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                     </svg>
-                    Baixar Excel ({result.resumo.total_oportunidades} {result.resumo.total_oportunidades === 1 ? 'licitacao' : 'licitacoes'})
+                    Baixar Excel ({result.resumo.total_oportunidades} {result.resumo.total_oportunidades === 1 ? 'licitação' : 'licitações'})
                   </>
                 )}
               </button>
@@ -879,8 +880,8 @@ export default function SearchResults({
           <div className="text-xs sm:text-sm text-ink-muted text-center space-y-1">
             {rawCount > 0 && (
               <p>
-                {result.resumo.total_oportunidades} de {rawCount.toLocaleString("pt-BR")} {rawCount === 1 ? 'licitacao compativel' : 'licitacoes compativeis'} com os filtros selecionados nesta busca
-                {searchMode === "setor" && sectorName !== "Licitacoes" ? ` para o setor ${sectorName.toLowerCase()}` : ''}
+                {result.resumo.total_oportunidades} de {rawCount.toLocaleString("pt-BR")} {rawCount === 1 ? 'licitação compatível' : 'licitações compatíveis'} com os filtros selecionados nesta busca
+                {searchMode === "setor" && sectorName !== "Licitações" ? ` para o setor ${sectorName.toLowerCase()}` : ''}
                 {/* AC19: Source count summary with tooltip */}
                 {result.sources_used && result.sources_used.length > 1 && (
                   <span
@@ -898,7 +899,7 @@ export default function SearchResults({
             {/* AC21: Partial failure — simple message without technical source names */}
             {result.is_partial && !result.cached && result.sources_used && result.sources_used.length > 0 && (
               <p className="text-amber-600 dark:text-amber-400">
-                Busca concluida | Fonte temporariamente indisponivel (dados podem estar incompletos)
+                Busca concluída | Fonte temporariamente indisponível (dados podem estar incompletos)
               </p>
             )}
             {/* AC22: Source badges — hidden by default, toggle for power users */}

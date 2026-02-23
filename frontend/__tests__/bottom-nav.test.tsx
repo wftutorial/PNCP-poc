@@ -45,7 +45,7 @@ describe("BottomNav", () => {
 
     expect(screen.getByText("Buscar")).toBeInTheDocument();
     expect(screen.getByText("Pipeline")).toBeInTheDocument();
-    expect(screen.getByText("Historico")).toBeInTheDocument();
+    expect(screen.getByText("Histórico")).toBeInTheDocument();
     expect(screen.getByText("Msg")).toBeInTheDocument();
     expect(screen.getByText("Mais")).toBeInTheDocument();
   });
@@ -61,7 +61,7 @@ describe("BottomNav", () => {
   it("each item displays both icon and label text", () => {
     render(<BottomNav />);
     // All items should have visible text labels
-    const items = ["Buscar", "Pipeline", "Historico", "Msg", "Mais"];
+    const items = ["Buscar", "Pipeline", "Histórico", "Msg", "Mais"];
     items.forEach((label) => {
       const el = screen.getByText(label);
       expect(el).toBeInTheDocument();
@@ -151,7 +151,7 @@ describe("BottomNav", () => {
   // Accessible label
   it("has accessible navigation label", () => {
     render(<BottomNav />);
-    expect(screen.getByLabelText("Navegacao mobile")).toBeInTheDocument();
+    expect(screen.getByLabelText("Navegação mobile")).toBeInTheDocument();
   });
 
   // Spacer for content

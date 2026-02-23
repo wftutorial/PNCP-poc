@@ -414,7 +414,7 @@ describe("T7-T10: SearchResults retry countdown UI", () => {
   };
 
   const transientError = {
-    message: "O servidor esta temporariamente indisponivel.",
+    message: "O servidor está temporariamente indisponível.",
     rawMessage: "Bad Gateway",
     errorCode: "SOURCE_UNAVAILABLE",
     searchId: "test-search-123",

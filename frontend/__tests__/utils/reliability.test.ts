@@ -83,14 +83,14 @@ describe("calculateReliability", () => {
   it("coverage=78%, freshness=30min, method=live -> Media", () => {
     const result = calculateReliability(78, 30, "live");
     // 0.78*0.5 + 0.7*0.3 + 1.0*0.2 = 0.39 + 0.21 + 0.20 = 0.80
-    expect(result.level).toBe("Media");
+    expect(result.level).toBe("Média");
     expect(result.score).toBe(0.8);
   });
 
   it("coverage=0%, -> Baixa", () => {
     const result = calculateReliability(0, 0, "live");
     // 0*0.5 + 1.0*0.3 + 1.0*0.2 = 0 + 0.30 + 0.20 = 0.50
-    expect(result.level).toBe("Media");
+    expect(result.level).toBe("Média");
     expect(result.score).toBe(0.5);
   });
 

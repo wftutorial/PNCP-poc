@@ -42,7 +42,7 @@ const CATEGORIES: { value: FeedbackCategory; label: string }[] = [
   { value: "irrelevant_modality", label: "Modalidade irrelevante" },
   { value: "too_small", label: "Valor muito baixo" },
   { value: "too_large", label: "Valor muito alto" },
-  { value: "closed", label: "Ja encerrada" },
+  { value: "closed", label: "Já encerrada" },
   { value: "other", label: "Outro motivo" },
 ];
 

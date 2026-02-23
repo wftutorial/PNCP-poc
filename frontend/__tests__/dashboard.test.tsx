@@ -199,10 +199,10 @@ describe("DashboardPage — UX-338", () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText("Seu Painel de Inteligencia")
+          screen.getByText("Seu Painel de Inteligência")
         ).toBeInTheDocument();
         expect(
-          screen.getByText(/Apos suas primeiras buscas/i)
+          screen.getByText(/Após suas primeiras buscas/i)
         ).toBeInTheDocument();
       });
     });
@@ -281,7 +281,7 @@ describe("DashboardPage — UX-338", () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText("Painel temporariamente indisponivel")
+          screen.getByText("Painel temporariamente indisponível")
         ).toBeInTheDocument();
       });
 

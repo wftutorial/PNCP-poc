@@ -236,7 +236,7 @@ export default function ContaPage() {
               aria-label="Aviso" className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
-            <span>Ao alterar sua senha, voce sera desconectado e precisara fazer login novamente.</span>
+            <span>Ao alterar sua senha, você será desconectado e precisará fazer login novamente.</span>
           </div>
 
           <form onSubmit={handleChangePassword} className="space-y-4">
@@ -355,7 +355,7 @@ export default function ContaPage() {
                 <span className="text-sm text-[var(--ink-muted)]">Status:</span>
                 {planInfo.plan_id === "free_trial" ? (
                   <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
-                    Periodo de avaliacao
+                    Período de avaliação
                   </span>
                 ) : planInfo.subscription_status === "active" ? (
                   <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">
@@ -383,7 +383,7 @@ export default function ContaPage() {
                       <span className="font-medium text-[var(--ink)]">{daysLeft} de {totalTrialDays}</span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-[var(--ink-secondary)]">Analises usadas</span>
+                      <span className="text-[var(--ink-secondary)]">Análises usadas</span>
                       <span className="font-medium text-[var(--ink)]">{used} de {total}</span>
                     </div>
                     <div className="w-full h-2 bg-[var(--surface-1)] rounded-full overflow-hidden">
@@ -408,14 +408,14 @@ export default function ContaPage() {
                     <span className="font-medium text-[var(--ink)]">{getPlanDisplayName(planInfo.plan_id, planInfo.plan_name)}</span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-[var(--ink-secondary)]">Analises este mes</span>
+                    <span className="text-[var(--ink-secondary)]">Análises este mês</span>
                     <span className="font-medium text-[var(--ink)]">
                       {planInfo.quota_used} de {planInfo.capabilities.max_requests_per_month === -1 ? "ilimitado" : planInfo.capabilities.max_requests_per_month}
                     </span>
                   </div>
                   {planInfo.quota_reset_date && (
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-[var(--ink-secondary)]">Proxima renovacao</span>
+                      <span className="text-[var(--ink-secondary)]">Próxima renovação</span>
                       <span className="font-medium text-[var(--ink)]">
                         {new Date(planInfo.quota_reset_date).toLocaleDateString("pt-BR", { day: "2-digit", month: "long" })}
                       </span>
@@ -432,10 +432,10 @@ export default function ContaPage() {
                   </svg>
                   <div>
                     <p className="text-sm font-medium text-[var(--warning,#856404)]">
-                      Ativo ate {new Date(cancellingEndsAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}
+                      Ativo até {new Date(cancellingEndsAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}
                     </p>
                     <p className="text-xs text-[var(--ink-muted)] mt-0.5">
-                      Voce mantem acesso completo ate esta data.
+                      Você mantém acesso completo até esta data.
                     </p>
                   </div>
                 </div>

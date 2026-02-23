@@ -1,6 +1,6 @@
 # CRIT-028 — Dashboard Vazio: Skeletons Eternos + Erros de Console
 
-**Status:** pending
+**Status:** done
 **Priority:** P0 — Blocker (pagina core inacessivel)
 **Created:** 2026-02-22
 **Origin:** Auditoria UX area logada (2026-02-22-ux-audit-area-logada.md)
@@ -34,22 +34,22 @@ Diagnosticar e corrigir o fetch de plan info. Garantir que dashboard mostra empt
 ### Criterios de Aceitacao
 
 **Diagnostico**
-- [ ] **AC1:** Identificar causa raiz de "Error fetching plan info" (endpoint retornando erro? CORS? Token?)
-- [ ] **AC2:** Corrigir o erro para que plan info carregue corretamente
+- [x] **AC1:** Identificar causa raiz de "Error fetching plan info" (endpoint retornando erro? CORS? Token?)
+- [x] **AC2:** Corrigir o erro para que plan info carregue corretamente
 
 **Dashboard funcional**
-- [ ] **AC3:** Dashboard carrega e exibe dados do usuario (ou empty state se nao ha dados)
-- [ ] **AC4:** Empty state educativo: "Faca sua primeira busca para ver seus dados aqui" com CTA para /buscar
-- [ ] **AC5:** Skeleton loading tem timeout de 10s — se nao carregar, mostra empty state (nao skeleton eterno)
+- [x] **AC3:** Dashboard carrega e exibe dados do usuario (ou empty state se nao ha dados)
+- [x] **AC4:** Empty state educativo: "Faca sua primeira busca para ver seus dados aqui" com CTA para /buscar
+- [x] **AC5:** Skeleton loading tem timeout de 10s — se nao carregar, mostra empty state (nao skeleton eterno)
 
 **Console limpo**
-- [ ] **AC6:** Zero erros de console relacionados a plan info em navegacao normal
-- [ ] **AC7:** SSE warning tratado gracefully (nao visivel ao usuario)
+- [x] **AC6:** Zero erros de console relacionados a plan info em navegacao normal
+- [x] **AC7:** SSE warning tratado gracefully (nao visivel ao usuario)
 
 **Testes**
-- [ ] **AC8:** Teste: dashboard com dados mostra cards corretamente
-- [ ] **AC9:** Teste: dashboard sem dados mostra empty state com CTA
-- [ ] **AC10:** Zero regressoes
+- [x] **AC8:** Teste: dashboard com dados mostra cards corretamente
+- [x] **AC9:** Teste: dashboard sem dados mostra empty state com CTA
+- [x] **AC10:** Zero regressoes
 
 ---
 

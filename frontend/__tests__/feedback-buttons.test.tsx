@@ -83,7 +83,7 @@ test("thumbs-down opens category dropdown", () => {
   expect(screen.getByText("Modalidade irrelevante")).toBeInTheDocument();
   expect(screen.getByText("Valor muito baixo")).toBeInTheDocument();
   expect(screen.getByText("Valor muito alto")).toBeInTheDocument();
-  expect(screen.getByText("Ja encerrada")).toBeInTheDocument();
+  expect(screen.getByText("Já encerrada")).toBeInTheDocument();
   expect(screen.getByText("Outro motivo")).toBeInTheDocument();
 });
 

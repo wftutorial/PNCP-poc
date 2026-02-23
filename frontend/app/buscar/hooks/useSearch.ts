@@ -319,13 +319,11 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
     setStatesProcessed(0);
     setError(null);
     setQuotaError(null);
-    // CRIT-005 AC23: Preserve previous result as visual fallback
-    // Don't clear immediately — only replace when new data arrives or on non-recoverable error
+    // CRIT-027 AC1: Clear previous result immediately to prevent stale data display
+    // Save reference for error recovery (CRIT-005 AC23) before clearing
     const previousResultFallback = result;
-    if (!forceFresh) {
-      // Don't setResult(null) here — keep previous results visible during loading
-      setRawCount(0);
-    }
+    setResult(null);
+    setRawCount(0);
 
     const newSearchId = crypto.randomUUID();
     setSearchId(newSearchId);

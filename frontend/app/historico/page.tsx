@@ -43,7 +43,7 @@ const STATUS_CONFIG: Record<SearchSessionStatus, {
   icon: string;
 }> = {
   completed: {
-    label: "Concluida",
+    label: "Concluída",
     bgClass: "bg-emerald-100 dark:bg-emerald-900/30",
     textClass: "text-emerald-700 dark:text-emerald-400",
     icon: "check",
@@ -216,7 +216,7 @@ export default function HistoricoPage() {
   return (
     <div className="min-h-screen bg-[var(--canvas)]">
       <PageHeader
-        title="Historico"
+        title="Histórico"
         extraControls={
           <Link
             href="/buscar"
@@ -243,8 +243,8 @@ export default function HistoricoPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
               </svg>
             }
-            title="Historico de Buscas"
-            description="Cada busca que voce faz fica salva aqui. Voce pode revisitar resultados anteriores sem gastar uma nova analise."
+            title="Histórico de Buscas"
+            description="Cada busca que você faz fica salva aqui. Você pode revisitar resultados anteriores sem gastar uma nova análise."
             ctaLabel="Fazer primeira busca"
             ctaHref="/buscar"
           />

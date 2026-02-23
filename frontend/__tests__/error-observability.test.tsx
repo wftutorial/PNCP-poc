@@ -133,14 +133,14 @@ describe("T9: ErrorDetail renders all available fields", () => {
     render(<ErrorDetail error={error} />);
 
     // Expand the details
-    const toggle = screen.getByText("Detalhes tecnicos");
+    const toggle = screen.getByText("Detalhes técnicos");
     fireEvent.click(toggle);
 
     // All fields should be visible
     expect(screen.getByText(/ID da busca: search-abc/)).toBeInTheDocument();
-    expect(screen.getByText(/ID da requisicao: req-ghi/)).toBeInTheDocument();
-    expect(screen.getByText(/ID de correlacao: corr-def/)).toBeInTheDocument();
-    expect(screen.getByText(/Codigo do erro: SOURCE_UNAVAILABLE/)).toBeInTheDocument();
+    expect(screen.getByText(/ID da requisição: req-ghi/)).toBeInTheDocument();
+    expect(screen.getByText(/ID de correlação: corr-def/)).toBeInTheDocument();
+    expect(screen.getByText(/Código do erro: SOURCE_UNAVAILABLE/)).toBeInTheDocument();
     expect(screen.getByText(/Status HTTP: 502/)).toBeInTheDocument();
     expect(screen.getByText(/2026-02-20T10:30:00Z/)).toBeInTheDocument();
     expect(screen.getByText(/PNCP returned 502/)).toBeInTheDocument();
@@ -163,16 +163,16 @@ describe("T10: ErrorDetail hides null/undefined fields", () => {
     render(<ErrorDetail error={error} />);
 
     // Expand
-    fireEvent.click(screen.getByText("Detalhes tecnicos"));
+    fireEvent.click(screen.getByText("Detalhes técnicos"));
 
     // Present fields
     expect(screen.getByText(/ID da busca: search-only/)).toBeInTheDocument();
     expect(screen.getByText(/2026-02-20T11:00:00Z/)).toBeInTheDocument();
 
     // Absent fields (null) — should NOT be rendered
-    expect(screen.queryByText(/ID da requisicao/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/ID de correlacao/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Codigo do erro/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/ID da requisição/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/ID de correlação/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Código do erro/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Status HTTP/)).not.toBeInTheDocument();
   });
 });
@@ -202,7 +202,7 @@ describe("T11: Copy details button", () => {
     render(<ErrorDetail error={error} />);
 
     // Expand and click copy
-    fireEvent.click(screen.getByText("Detalhes tecnicos"));
+    fireEvent.click(screen.getByText("Detalhes técnicos"));
     const copyButton = screen.getByLabelText(/Copiar detalhes/);
     fireEvent.click(copyButton);
 

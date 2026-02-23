@@ -193,7 +193,7 @@ describe("Pipeline empty state (AC1-AC3)", () => {
     render(<PipelinePage />);
 
     expect(screen.getByText("Seu Pipeline de Oportunidades")).toBeInTheDocument();
-    expect(screen.getByText(/Busque licitacoes em/)).toBeInTheDocument();
+    expect(screen.getByText(/Busque licitações em/)).toBeInTheDocument();
     expect(screen.getByText(/Clique em "Acompanhar"/)).toBeInTheDocument();
     expect(screen.getByText(/Arraste entre as colunas/)).toBeInTheDocument();
   });
@@ -255,7 +255,7 @@ describe("Historico empty state (AC4-AC6)", () => {
     render(<HistoricoPage />);
 
     await waitFor(() => {
-      expect(screen.getByText("Historico de Buscas")).toBeInTheDocument();
+      expect(screen.getByText("Histórico de Buscas")).toBeInTheDocument();
     });
   });
 
@@ -263,7 +263,7 @@ describe("Historico empty state (AC4-AC6)", () => {
     render(<HistoricoPage />);
 
     await waitFor(() => {
-      expect(screen.getByText(/sem gastar uma nova analise/)).toBeInTheDocument();
+      expect(screen.getByText(/sem gastar uma nova análise/)).toBeInTheDocument();
     });
   });
 
@@ -271,7 +271,7 @@ describe("Historico empty state (AC4-AC6)", () => {
     render(<HistoricoPage />);
 
     await waitFor(() => {
-      expect(screen.getByText("Historico de Buscas")).toBeInTheDocument();
+      expect(screen.getByText("Histórico de Buscas")).toBeInTheDocument();
     });
 
     const cta = screen.getByTestId("empty-state-cta");
@@ -325,11 +325,11 @@ describe("Dashboard empty state (AC7-AC8)", () => {
     render(<DashboardPage />);
 
     await waitFor(() => {
-      expect(screen.getByText("Seu Painel de Inteligencia")).toBeInTheDocument();
+      expect(screen.getByText("Seu Painel de Inteligência")).toBeInTheDocument();
     });
 
     expect(screen.getByText(/Resumo de oportunidades encontradas/)).toBeInTheDocument();
-    expect(screen.getByText(/Tendencias do seu setor/)).toBeInTheDocument();
+    expect(screen.getByText(/Tendências do seu setor/)).toBeInTheDocument();
     expect(screen.getByText(/Valor total de oportunidades analisadas/)).toBeInTheDocument();
   });
 
@@ -337,7 +337,7 @@ describe("Dashboard empty state (AC7-AC8)", () => {
     render(<DashboardPage />);
 
     await waitFor(() => {
-      expect(screen.getByText("Seu Painel de Inteligencia")).toBeInTheDocument();
+      expect(screen.getByText("Seu Painel de Inteligência")).toBeInTheDocument();
     });
 
     const cta = screen.getByTestId("empty-state-cta");
@@ -374,7 +374,7 @@ describe("Conta plan section (AC9-AC13)", () => {
     render(<ContaPage />);
 
     expect(screen.getByTestId("plan-section")).toBeInTheDocument();
-    expect(screen.getByText("Periodo de avaliacao")).toBeInTheDocument();
+    expect(screen.getByText("Período de avaliação")).toBeInTheDocument();
   });
 
   it("AC9: shows active status badge for subscribers", () => {
@@ -413,7 +413,7 @@ describe("Conta plan section (AC9-AC13)", () => {
     render(<ContaPage />);
 
     expect(screen.getByText("Dias restantes")).toBeInTheDocument();
-    expect(screen.getByText("Analises usadas")).toBeInTheDocument();
+    expect(screen.getByText("Análises usadas")).toBeInTheDocument();
     expect(screen.getByText("1 de 3")).toBeInTheDocument();
   });
 
@@ -434,8 +434,8 @@ describe("Conta plan section (AC9-AC13)", () => {
     render(<ContaPage />);
 
     expect(screen.getByText("SmartLic Pro")).toBeInTheDocument();
-    expect(screen.getByText("Analises este mes")).toBeInTheDocument();
-    expect(screen.getByText("Proxima renovacao")).toBeInTheDocument();
+    expect(screen.getByText("Análises este mês")).toBeInTheDocument();
+    expect(screen.getByText("Próxima renovação")).toBeInTheDocument();
   });
 
   it("AC12: trial user sees 'Assinar SmartLic Pro' as primary CTA", () => {

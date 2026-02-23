@@ -666,7 +666,7 @@ function HomePageContent() {
           <div className="border-t border-[var(--border-strong)] pt-8">
             <div className="flex flex-col md:flex-row items-center justify-between gap-4">
               <p className="text-sm text-ink-secondary">© 2026 {APP_NAME}. Todos os direitos reservados.</p>
-              <p className="text-sm text-ink-secondary">Sistema desenvolvido por servidores públicos</p>
+              <p className="text-sm text-ink-secondary">CONFENGE Avaliações e Inteligência Artificial LTDA</p>
             </div>
           </div>
         </div>

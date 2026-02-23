@@ -1,0 +1,55 @@
+# CRIT-038 — CI: Zero-Failure Gate (impedir regressão futura)
+
+**Status:** Open
+**Priority:** P1 — High
+**Severity:** Processo
+**Created:** 2026-02-23
+**Depends on:** CRIT-036, CRIT-037 (baseline limpo é pré-requisito)
+
+---
+
+## Problema
+
+Hoje, testes quebrados são tratados como "pre-existing baseline". Isso cria um ciclo vicioso:
+
+```
+Story implementada → testes passam (menos os "pre-existing") → merge
+→ novo código quebra mais testes → viram "pre-existing" → merge
+→ ninguém sabe o que é regressão real vs. ruído antigo
+```
+
+**Resultado:** 93 testes falhando (25 BE + 68 FE) que ninguém investiga porque "sempre foram assim".
+
+---
+
+## Acceptance Criteria
+
+### GitHub Actions CI
+
+- [ ] **AC1:** Workflow `backend-tests.yml` — `pytest` DEVE retornar exit code 0 (0 failures). Se falhar, PR não pode ser merged.
+- [ ] **AC2:** Workflow `frontend-tests.yml` — `npm test` DEVE retornar exit code 0 (0 failures). Se falhar, PR não pode ser merged.
+- [ ] **AC3:** Branch protection rule em `main` — Require status checks `backend-tests` e `frontend-tests` para merge.
+
+### Prevenir Re-Acúmulo
+
+- [ ] **AC4:** Adicionar comentário no PR template: "Se testes falharem, corrija os testes — não adicione ao baseline."
+- [ ] **AC5:** Coverage thresholds mantidos: 70% backend, 60% frontend (já existem, verificar que estão enforced no CI).
+
+### Documentação
+
+- [ ] **AC6:** Atualizar `CLAUDE.md` seção "Testing Strategy" — remover conceito de "pre-existing failures baseline". Nova regra: **0 failures é o único baseline aceitável.**
+
+---
+
+## Estimativa
+
+**Esforço:** ~1 hora (CI config + branch protection)
+**Risco:** Nenhum (apenas ativa gates que já deveriam existir)
+**Pré-requisito:** CRIT-036 e CRIT-037 completas
+
+## Files
+
+- `.github/workflows/backend-tests.yml` (criar ou atualizar)
+- `.github/workflows/frontend-tests.yml` (criar ou atualizar)
+- `.github/pull_request_template.md` (criar ou atualizar)
+- `CLAUDE.md` (atualizar seção Testing Strategy)

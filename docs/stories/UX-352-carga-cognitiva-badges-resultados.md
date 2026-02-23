@@ -1,6 +1,6 @@
 # UX-352 — Reduzir Carga Cognitiva: Badges, Alertas e Hierarquia Visual
 
-**Status:** pending
+**Status:** completed
 **Priority:** P2 — Polish pre-GTM
 **Created:** 2026-02-22
 **Origin:** Auditoria UX area logada (2026-02-22-ux-audit-area-logada.md)
@@ -31,27 +31,27 @@ Quando resultados carregam, TUDO aparece simultaneamente: summary card + badges 
 ### Criterios de Aceitacao
 
 **Badges**
-- [ ] **AC1:** Remover badge "FONTE OFICIAL" (redundante — todas sao oficiais)
-- [ ] **AC2:** Remover badge "Palavra-chave" (jargao interno)
-- [ ] **AC3:** "Alta-confianca" → "Alta relevancia" (com cedilha correta: "Alta relevancia")
-- [ ] **AC4:** Manter badges que AGREGAM: viabilidade (Alta/Media/Baixa) e prazo (dias restantes com cor)
+- [x] **AC1:** Remover badge "FONTE OFICIAL" (redundante — todas sao oficiais)
+- [x] **AC2:** Remover badge "Palavra-chave" (jargao interno)
+- [x] **AC3:** "Alta-confianca" → "Alta relevancia" (com cedilha correta: "Alta relevancia")
+- [x] **AC4:** Manter badges que AGREGAM: viabilidade (Alta/Media/Baixa) e prazo (dias restantes com cor)
 
 **Hierarquia visual da dobra de resultados**
-- [ ] **AC5:** Summary hero card primeiro (resumo executivo + valor total + contagem de oportunidades)
-- [ ] **AC6:** Separacao clara entre summary e lista de oportunidades (divider visual ou espaco)
-- [ ] **AC7:** Lista de oportunidades com cards que tem informacao ESSENCIAL visivel: titulo, valor, UF, prazo, viabilidade
-- [ ] **AC8:** Detalhes adicionais em expansao/collapse por card (nao tudo visivel de uma vez)
+- [x] **AC5:** Summary hero card primeiro (resumo executivo + valor total + contagem de oportunidades)
+- [x] **AC6:** Separacao clara entre summary e lista de oportunidades (divider visual ou espaco)
+- [x] **AC7:** Lista de oportunidades com cards que tem informacao ESSENCIAL visivel: titulo, valor, UF, prazo, viabilidade
+- [x] **AC8:** Detalhes adicionais em expansao/collapse por card (nao tudo visivel de uma vez)
 
 **Remover jargao tecnico**
-- [ ] **AC9:** "Ultimos 10 dias" → remover ou substituir por "Oportunidades recentes"
-- [ ] **AC10:** "Dados de cache" → "Atualizado em [hora]" ou remover
-- [ ] **AC11:** Adicionar convite: "Novas oportunidades sao publicadas diariamente. Volte amanha para conferir."
-- [ ] **AC12:** "302 resultados eliminados" → ja tratado em UX-348 AC7 (framing positivo)
+- [x] **AC9:** "Ultimos 10 dias" → remover ou substituir por "Oportunidades recentes"
+- [x] **AC10:** "Dados de cache" → "Atualizado em [hora]" ou remover
+- [x] **AC11:** Adicionar convite: "Novas oportunidades sao publicadas diariamente. Volte amanha para conferir."
+- [x] **AC12:** "302 resultados eliminados" → ja tratado em UX-348 AC7 (framing positivo)
 
 **Testes**
-- [ ] **AC13:** Teste: badges "FONTE OFICIAL" e "Palavra-chave" nao renderizam
-- [ ] **AC14:** Teste: relevancia badge com acentuacao correta
-- [ ] **AC15:** Zero regressoes
+- [x] **AC13:** Teste: badges "FONTE OFICIAL" e "Palavra-chave" nao renderizam
+- [x] **AC14:** Teste: relevancia badge com acentuacao correta
+- [x] **AC15:** Zero regressoes
 
 ---
 

@@ -132,20 +132,19 @@ export function CacheBanner({
           <p className={`text-sm sm:text-base font-medium ${textColor}`}>
             {isFresh ? (
               <>
-                Resultados de <strong>{relativeTime}</strong>
+                Atualizado <strong>{relativeTime}</strong>
                 {sourceNames && <> ({sourceNames})</>}
-                . Cache atualizado.
               </>
             ) : sourceNames ? (
               <>
-                Resultados de <strong>{relativeTime}</strong>
+                Atualizado <strong>{relativeTime}</strong>
                 {sourceNames && <> ({sourceNames})</>}
-                . Dados podem estar desatualizados.
+                . Podem existir oportunidades mais recentes.
               </>
             ) : (
               <>
                 Nossas fontes estão temporariamente lentas. Mostrando resultados de{" "}
-                <strong>{relativeTime}</strong>. Dados podem estar desatualizados.
+                <strong>{relativeTime}</strong>. Podem existir oportunidades mais recentes.
               </>
             )}
           </p>

@@ -35,20 +35,20 @@ function makeLicitacao(overrides: Partial<LicitacaoItem> = {}): LicitacaoItem {
 }
 
 describe("C-02 Confidence Badge", () => {
-  it("AC10.1: renders 'Alta confianca' badge when confidence='high'", () => {
+  it("AC10.1: renders 'Alta relevância' badge when confidence='high'", () => {
     const licitacoes = [makeLicitacao({ confidence: "high" })];
     render(
       <LicitacoesPreview licitacoes={licitacoes} previewCount={5} excelAvailable={true} />
     );
-    expect(screen.getByText("Alta confianca")).toBeInTheDocument();
+    expect(screen.getByText("Alta relevância")).toBeInTheDocument();
   });
 
-  it("AC10.2: renders 'Confianca media' badge when confidence='medium'", () => {
+  it("AC10.2: renders 'Relevância média' badge when confidence='medium'", () => {
     const licitacoes = [makeLicitacao({ confidence: "medium" })];
     render(
       <LicitacoesPreview licitacoes={licitacoes} previewCount={5} excelAvailable={true} />
     );
-    expect(screen.getByText("Confianca media")).toBeInTheDocument();
+    expect(screen.getByText("Relevância média")).toBeInTheDocument();
   });
 
   it("AC10.3: renders 'Avaliado por IA' badge when confidence='low'", () => {
@@ -64,8 +64,8 @@ describe("C-02 Confidence Badge", () => {
     render(
       <LicitacoesPreview licitacoes={licitacoes} previewCount={5} excelAvailable={true} />
     );
-    expect(screen.queryByText("Alta confianca")).not.toBeInTheDocument();
-    expect(screen.queryByText("Confianca media")).not.toBeInTheDocument();
+    expect(screen.queryByText("Alta relevância")).not.toBeInTheDocument();
+    expect(screen.queryByText("Relevância média")).not.toBeInTheDocument();
     expect(screen.queryByText("Avaliado por IA")).not.toBeInTheDocument();
   });
 
@@ -74,8 +74,8 @@ describe("C-02 Confidence Badge", () => {
     render(
       <LicitacoesPreview licitacoes={licitacoes} previewCount={5} excelAvailable={true} />
     );
-    expect(screen.queryByText("Alta confianca")).not.toBeInTheDocument();
-    expect(screen.queryByText("Confianca media")).not.toBeInTheDocument();
+    expect(screen.queryByText("Alta relevância")).not.toBeInTheDocument();
+    expect(screen.queryByText("Relevância média")).not.toBeInTheDocument();
     expect(screen.queryByText("Avaliado por IA")).not.toBeInTheDocument();
   });
 });
@@ -86,7 +86,7 @@ describe("C-02 Confidence Tooltips", () => {
     render(
       <LicitacoesPreview licitacoes={licitacoes} previewCount={5} excelAvailable={true} />
     );
-    const badge = screen.getByText("Alta confianca");
+    const badge = screen.getByText("Alta relevância");
     expect(badge.closest("[title]")).toHaveAttribute(
       "title",
       "Alta densidade de termos relevantes para o setor selecionado"
@@ -98,10 +98,10 @@ describe("C-02 Confidence Tooltips", () => {
     render(
       <LicitacoesPreview licitacoes={licitacoes} previewCount={5} excelAvailable={true} />
     );
-    const badge = screen.getByText("Confianca media");
+    const badge = screen.getByText("Relevância média");
     expect(badge.closest("[title]")).toHaveAttribute(
       "title",
-      "Relevancia confirmada por avaliacao de inteligencia artificial"
+      "Relevância confirmada por avaliação de inteligência artificial"
     );
   });
 
@@ -113,7 +113,7 @@ describe("C-02 Confidence Tooltips", () => {
     const badge = screen.getByText("Avaliado por IA");
     expect(badge.closest("[title]")).toHaveAttribute(
       "title",
-      "Resultado com relevancia possivel, verificado por IA. Recomendamos revisar manualmente"
+      "Resultado com relevância possível, verificado por IA. Recomendamos revisar manualmente"
     );
   });
 });
@@ -129,14 +129,14 @@ describe("C-02 Accessibility", () => {
       <LicitacoesPreview licitacoes={licitacoes} previewCount={5} excelAvailable={true} />
     );
 
-    const highBadge = screen.getByText("Alta confianca").closest("[aria-label]");
-    expect(highBadge).toHaveAttribute("aria-label", "Confianca alta na relevancia deste resultado");
+    const highBadge = screen.getByText("Alta relevância").closest("[aria-label]");
+    expect(highBadge).toHaveAttribute("aria-label", "Relevância alta deste resultado para o seu perfil");
 
-    const medBadge = screen.getByText("Confianca media").closest("[aria-label]");
-    expect(medBadge).toHaveAttribute("aria-label", "Confianca media na relevancia deste resultado");
+    const medBadge = screen.getByText("Relevância média").closest("[aria-label]");
+    expect(medBadge).toHaveAttribute("aria-label", "Relevância média deste resultado para o seu perfil");
 
     const lowBadge = screen.getByText("Avaliado por IA").closest("[aria-label]");
-    expect(lowBadge).toHaveAttribute("aria-label", "Confianca baixa na relevancia deste resultado");
+    expect(lowBadge).toHaveAttribute("aria-label", "Relevância baixa — verificado por IA, recomendamos revisar");
   });
 
   it("AC11.2: badges are focusable via keyboard", () => {
@@ -144,7 +144,7 @@ describe("C-02 Accessibility", () => {
     render(
       <LicitacoesPreview licitacoes={licitacoes} previewCount={5} excelAvailable={true} />
     );
-    const badge = screen.getByText("Alta confianca").closest("[tabindex]");
+    const badge = screen.getByText("Alta relevância").closest("[tabindex]");
     expect(badge).toHaveAttribute("tabindex", "0");
   });
 
@@ -159,7 +159,7 @@ describe("C-02 Accessibility", () => {
     );
 
     // Each badge should have an SVG inside it
-    const badges = container.querySelectorAll("[aria-label*='Confianca']");
+    const badges = container.querySelectorAll("[aria-label*='Relevância']");
     expect(badges).toHaveLength(3);
 
     // Verify each badge has an SVG icon

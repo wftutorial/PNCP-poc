@@ -85,9 +85,9 @@ describe("CacheBanner (GTM-FIX-010)", () => {
     );
   });
 
-  it("shows 'desatualizados' warning", () => {
+  it("shows stale data warning", () => {
     render(<CacheBanner {...defaultProps} />);
-    expect(screen.getByRole("alert")).toHaveTextContent(/desatualizados/);
+    expect(screen.getByRole("alert")).toHaveTextContent(/oportunidades mais recentes/);
   });
 
   it("has amber styling for warning appearance", () => {

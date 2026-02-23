@@ -147,7 +147,7 @@ export default function SearchForm({
     }
     // Period
     if (modoBusca === 'abertas') {
-      parts.push(`Últimos ${DEFAULT_SEARCH_DAYS} dias`);
+      parts.push("Oportunidades recentes");
     } else if (dataInicial && dataFinal) {
       const days = dateDiffInDays(dataInicial, dataFinal);
       parts.push(`${days} dia${days !== 1 ? 's' : ''}`);
@@ -565,7 +565,7 @@ export default function SearchForm({
                     {dateLabel}
                   </p>
                   <p className="text-xs text-ink-secondary mt-1">
-                    Buscando nos últimos {DEFAULT_SEARCH_DAYS} dias — somente licitações com prazo aberto
+                    Oportunidades recentes — somente licitações com prazo aberto
                   </p>
                 </div>
               ) : (

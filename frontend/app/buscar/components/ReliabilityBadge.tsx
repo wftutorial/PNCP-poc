@@ -33,7 +33,7 @@ export function ReliabilityBadge({
   return (
     <span
       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${levelStyles[level]}`}
-      title={`Confiabilidade: ${level} (${Math.round(score * 100)}%)`}
+      title={`Relevância: ${level} (${Math.round(score * 100)}%)`}
     >
       <svg
         className="w-3 h-3"

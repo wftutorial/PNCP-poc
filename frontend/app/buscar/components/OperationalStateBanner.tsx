@@ -99,7 +99,7 @@ export function OperationalStateBanner({
           <span className={`text-sm font-semibold ${config.text}`}>
             {state === "operational" && "Cobertura completa — todos os estados processados"}
             {state === "partial" && `${coveragePct}% de cobertura`}
-            {state === "degraded" && "Dados de cache — atualizando em background"}
+            {state === "degraded" && "Resultados salvos — atualizando automaticamente"}
             {state === "unavailable" && "Fontes indisponíveis — tente novamente em 5 min"}
           </span>
         </div>

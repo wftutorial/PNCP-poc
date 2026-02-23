@@ -87,7 +87,7 @@ const mockFilters = {
   searchMode: "setor" as const,
   setSearchMode: jest.fn(),
   modoBusca: "abertas" as const,
-  dateLabel: "Últimos 10 dias",
+  dateLabel: "Mostrando licitações abertas para proposta",
   termosArray: [] as string[],
   termoInput: "",
   setTermoInput: jest.fn(),
@@ -289,7 +289,7 @@ describe("UX-346: First-Use Experience", () => {
       const summary = screen.getByTestId("compact-summary");
       expect(summary).toHaveTextContent(/todo o brasil/i);
       expect(summary).toHaveTextContent(/abertas/i);
-      expect(summary).toHaveTextContent(/últimos 10 dias/i);
+      expect(summary).toHaveTextContent(/oportunidades recentes/i);
     });
 
     it("shows UF count for subset of UFs", () => {

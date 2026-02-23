@@ -38,7 +38,7 @@ describe("CacheBanner — UX-303 Enhanced", () => {
     render(
       <CacheBanner {...baseProps} cacheStatus="fresh" cachedSources={["PNCP"]} />
     );
-    expect(screen.getByRole("alert")).toHaveTextContent(/Cache atualizado/);
+    expect(screen.getByRole("alert")).toHaveTextContent(/Atualizado/);
   });
 
   it("does NOT show refresh button for fresh cache", () => {
@@ -64,7 +64,7 @@ describe("CacheBanner — UX-303 Enhanced", () => {
     render(
       <CacheBanner {...baseProps} cacheStatus="stale" cachedSources={["PNCP"]} />
     );
-    expect(screen.getByRole("alert")).toHaveTextContent(/desatualizados/);
+    expect(screen.getByRole("alert")).toHaveTextContent(/oportunidades mais recentes/);
   });
 
   it("shows refresh button for stale cache", () => {

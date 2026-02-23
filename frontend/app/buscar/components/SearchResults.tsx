@@ -835,6 +835,11 @@ export default function SearchResults({
             />
           )}
 
+          {/* UX-352 AC6: Clear visual separator between summary and opportunities list */}
+          {result.licitacoes && result.licitacoes.length > 0 && (
+            <div className="border-t border-strong" />
+          )}
+
           {/* Licitacoes Preview */}
           {result.licitacoes && result.licitacoes.length > 0 && (
             <LicitacoesPreview
@@ -1025,10 +1030,15 @@ export default function SearchResults({
                 <svg className="w-3.5 h-3.5 inline mr-1 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                Ultima atualizacao: {new Date(result.ultima_atualizacao).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                Atualizado em {new Date(result.ultima_atualizacao).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
               </p>
             )}
           </div>
+
+          {/* UX-352 AC11: Encouraging return message */}
+          <p className="text-center text-sm text-ink-muted py-2" data-testid="return-invitation">
+            Novas oportunidades são publicadas diariamente. Volte amanhã para conferir.
+          </p>
         </div>
       )}
     </>

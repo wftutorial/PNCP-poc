@@ -12,7 +12,7 @@
  * - No badge when relevance_source is null/undefined
  */
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { LicitacoesPreview } from "../app/components/LicitacoesPreview";
 import { EmptyState } from "../app/components/EmptyState";
@@ -44,7 +44,7 @@ describe("GTM-FIX-028: LLM Zero-Match Frontend Tests", () => {
       ...overrides,
     });
 
-    it("shows blue 'Validado por IA' badge when relevance_source is 'llm_zero_match'", () => {
+    it("shows blue 'Validado por IA' badge when relevance_source is 'llm_zero_match' (in details)", () => {
       const bids = [createMockBid({ relevance_source: "llm_zero_match" })];
       render(
         <LicitacoesPreview
@@ -55,6 +55,9 @@ describe("GTM-FIX-028: LLM Zero-Match Frontend Tests", () => {
         />
       );
 
+      // UX-352 AC8: Badge is now in expandable details
+      fireEvent.click(screen.getByText("Ver detalhes"));
+
       const badge = screen.getByText("Validado por IA");
       expect(badge).toBeInTheDocument();
 
@@ -64,7 +67,7 @@ describe("GTM-FIX-028: LLM Zero-Match Frontend Tests", () => {
       expect(badgeSpan?.className).toContain("text-blue-700");
     });
 
-    it("shows blue 'Validado por IA' badge when relevance_source is 'llm_standard'", () => {
+    it("shows blue 'Validado por IA' badge when relevance_source is 'llm_standard' (in details)", () => {
       const bids = [createMockBid({ relevance_source: "llm_standard" })];
       render(
         <LicitacoesPreview
@@ -75,10 +78,12 @@ describe("GTM-FIX-028: LLM Zero-Match Frontend Tests", () => {
         />
       );
 
+      // UX-352 AC8: Expand details to see badge
+      fireEvent.click(screen.getByText("Ver detalhes"));
       expect(screen.getByText("Validado por IA")).toBeInTheDocument();
     });
 
-    it("shows blue 'Validado por IA' badge when relevance_source is 'llm_conservative'", () => {
+    it("shows blue 'Validado por IA' badge when relevance_source is 'llm_conservative' (in details)", () => {
       const bids = [createMockBid({ relevance_source: "llm_conservative" })];
       render(
         <LicitacoesPreview
@@ -89,10 +94,12 @@ describe("GTM-FIX-028: LLM Zero-Match Frontend Tests", () => {
         />
       );
 
+      // UX-352 AC8: Expand details to see badge
+      fireEvent.click(screen.getByText("Ver detalhes"));
       expect(screen.getByText("Validado por IA")).toBeInTheDocument();
     });
 
-    it("shows green 'Palavra-chave' badge when relevance_source is 'keyword'", () => {
+    it("UX-352 AC2: 'Palavra-chave' badge removed — keyword source shows no badge", () => {
       const bids = [createMockBid({ relevance_source: "keyword" })];
       render(
         <LicitacoesPreview
@@ -103,13 +110,8 @@ describe("GTM-FIX-028: LLM Zero-Match Frontend Tests", () => {
         />
       );
 
-      const badge = screen.getByText("Palavra-chave");
-      expect(badge).toBeInTheDocument();
-
-      // Check for green styling
-      const badgeSpan = badge.closest("span");
-      expect(badgeSpan?.className).toContain("bg-green-100");
-      expect(badgeSpan?.className).toContain("text-green-700");
+      // UX-352 AC2: "Palavra-chave" badge was removed as internal jargon
+      expect(screen.queryByText("Palavra-chave")).not.toBeInTheDocument();
     });
 
     it("shows no relevance source badge when relevance_source is null", () => {
@@ -142,9 +144,9 @@ describe("GTM-FIX-028: LLM Zero-Match Frontend Tests", () => {
       expect(screen.queryByText("Palavra-chave")).not.toBeInTheDocument();
     });
 
-    it("displays checkmark icon in 'Palavra-chave' badge", () => {
+    it("UX-352 AC2: 'Palavra-chave' badge no longer rendered", () => {
       const bids = [createMockBid({ relevance_source: "keyword" })];
-      const { container } = render(
+      render(
         <LicitacoesPreview
           licitacoes={bids}
           previewCount={5}
@@ -153,16 +155,13 @@ describe("GTM-FIX-028: LLM Zero-Match Frontend Tests", () => {
         />
       );
 
-      // Check for SVG checkmark icon in the badge
-      const badge = screen.getByText("Palavra-chave").closest("span");
-      const svgIcon = badge?.querySelector("svg");
-      expect(svgIcon).toBeInTheDocument();
-      expect(svgIcon?.querySelector("path")).toHaveAttribute("d", "M5 13l4 4L19 7");
+      // UX-352: Removed — no checkmark badge for keyword source
+      expect(screen.queryByText("Palavra-chave")).not.toBeInTheDocument();
     });
 
-    it("displays computer monitor icon in 'Validado por IA' badge", () => {
+    it("displays computer monitor icon in 'Validado por IA' badge (in details)", () => {
       const bids = [createMockBid({ relevance_source: "llm_zero_match" })];
-      const { container } = render(
+      render(
         <LicitacoesPreview
           licitacoes={bids}
           previewCount={5}
@@ -170,6 +169,9 @@ describe("GTM-FIX-028: LLM Zero-Match Frontend Tests", () => {
           searchTerms={[]}
         />
       );
+
+      // UX-352 AC8: Expand details to see badge
+      fireEvent.click(screen.getByText("Ver detalhes"));
 
       // Check for SVG monitor icon in the badge
       const badge = screen.getByText("Validado por IA").closest("span");
@@ -179,7 +181,7 @@ describe("GTM-FIX-028: LLM Zero-Match Frontend Tests", () => {
       expect(svgIcon?.querySelector("path")).toBeInTheDocument();
     });
 
-    it("shows correct badges for mixed relevance sources in multiple bids", () => {
+    it("UX-352: mixed sources — keyword has no badge, LLM has badge in details", () => {
       const bids = [
         createMockBid({ pncp_id: "test-001", relevance_source: "keyword" }),
         createMockBid({ pncp_id: "test-002", relevance_source: "llm_zero_match" }),
@@ -194,46 +196,34 @@ describe("GTM-FIX-028: LLM Zero-Match Frontend Tests", () => {
         />
       );
 
-      // Should have 1 "Palavra-chave" badge
-      const keywordBadges = screen.getAllByText("Palavra-chave");
-      expect(keywordBadges).toHaveLength(1);
-
-      // Should have 1 "Validado por IA" badge
-      const llmBadges = screen.getAllByText("Validado por IA");
-      expect(llmBadges).toHaveLength(1);
-
-      // Third bid (null) should have no relevance badge
-      // (This is implicit - only 2 badges total)
+      // UX-352 AC2: "Palavra-chave" badge removed
+      expect(screen.queryByText("Palavra-chave")).not.toBeInTheDocument();
+      // UX-352 AC1: "Fonte Oficial" badge removed
+      expect(screen.queryByText("Fonte Oficial")).not.toBeInTheDocument();
     });
 
-    it("renders badge within visible items, not blurred items", () => {
+    it("UX-352: keyword source badges are absent in all items", () => {
       const bids = [
         createMockBid({ pncp_id: "test-001", relevance_source: "llm_zero_match" }),
         createMockBid({ pncp_id: "test-002", relevance_source: "keyword" }),
         createMockBid({ pncp_id: "test-003", relevance_source: "llm_standard" }),
         createMockBid({ pncp_id: "test-004", relevance_source: "keyword" }),
         createMockBid({ pncp_id: "test-005", relevance_source: "keyword" }),
-        createMockBid({ pncp_id: "test-006", relevance_source: "llm_conservative" }), // Blurred (previewCount=5)
+        createMockBid({ pncp_id: "test-006", relevance_source: "llm_conservative" }),
       ];
       render(
         <LicitacoesPreview
           licitacoes={bids}
           previewCount={5}
-          excelAvailable={false} // Triggers blur effect for items beyond previewCount
+          excelAvailable={false}
           searchTerms={[]}
         />
       );
 
-      // Should have 2 "Validado por IA" badges (test-001, test-003) - visible items only
-      const llmBadges = screen.getAllByText("Validado por IA");
-      expect(llmBadges).toHaveLength(2);
-
-      // Should have 3 "Palavra-chave" badges (test-002, test-004, test-005) - visible items only
-      const keywordBadges = screen.getAllByText("Palavra-chave");
-      expect(keywordBadges).toHaveLength(3);
-
-      // The 6th item (llm_conservative) should NOT appear in visible badges
-      // This is implicit - we only count visible badges above
+      // UX-352 AC2: No "Palavra-chave" badges at all
+      expect(screen.queryByText("Palavra-chave")).not.toBeInTheDocument();
+      // UX-352 AC1: No "Fonte Oficial" badges
+      expect(screen.queryByText("Fonte Oficial")).not.toBeInTheDocument();
     });
   });
 
@@ -498,7 +488,7 @@ describe("GTM-FIX-028: LLM Zero-Match Frontend Tests", () => {
   });
 
   describe("Badge Accessibility", () => {
-    it("'Validado por IA' badge has proper contrast for light mode", () => {
+    it("'Validado por IA' badge has proper contrast for light mode (in details)", () => {
       const bids = [
         {
           pncp_id: "test-001",
@@ -517,7 +507,7 @@ describe("GTM-FIX-028: LLM Zero-Match Frontend Tests", () => {
         },
       ];
 
-      const { container } = render(
+      render(
         <LicitacoesPreview
           licitacoes={bids}
           previewCount={5}
@@ -526,13 +516,16 @@ describe("GTM-FIX-028: LLM Zero-Match Frontend Tests", () => {
         />
       );
 
+      // UX-352 AC8: Expand details to see badge
+      fireEvent.click(screen.getByText("Ver detalhes"));
+
       // Blue badge should have sufficient contrast
       const badge = screen.getByText("Validado por IA").closest("span");
       expect(badge?.className).toContain("bg-blue-100");
       expect(badge?.className).toContain("text-blue-700");
     });
 
-    it("'Palavra-chave' badge has proper contrast for light mode", () => {
+    it("UX-352 AC2: 'Palavra-chave' badge no longer exists — keyword source renders no badge", () => {
       const bids = [
         {
           pncp_id: "test-001",
@@ -551,7 +544,7 @@ describe("GTM-FIX-028: LLM Zero-Match Frontend Tests", () => {
         },
       ];
 
-      const { container } = render(
+      render(
         <LicitacoesPreview
           licitacoes={bids}
           previewCount={5}
@@ -560,10 +553,8 @@ describe("GTM-FIX-028: LLM Zero-Match Frontend Tests", () => {
         />
       );
 
-      // Green badge should have sufficient contrast
-      const badge = screen.getByText("Palavra-chave").closest("span");
-      expect(badge?.className).toContain("bg-green-100");
-      expect(badge?.className).toContain("text-green-700");
+      // UX-352: "Palavra-chave" badge completely removed
+      expect(screen.queryByText("Palavra-chave")).not.toBeInTheDocument();
     });
   });
 });

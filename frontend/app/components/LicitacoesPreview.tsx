@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import type { LicitacaoItem } from "../types";
 import ViabilityBadge from "../buscar/components/ViabilityBadge";
@@ -80,20 +80,8 @@ export function LicitacoesPreview({
     );
   };
 
-  const getSourceBadge = (source?: string) => {
-    if (!source) return null;
-    const sourceConfig: Record<string, { label: string; bg: string; text: string }> = {
-      PNCP: { label: "Fonte Oficial", bg: "bg-blue-100 dark:bg-blue-900/30", text: "text-blue-700 dark:text-blue-300" },
-      COMPRAS_GOV: { label: "ComprasGov", bg: "bg-green-100 dark:bg-green-900/30", text: "text-green-700 dark:text-green-300" },
-      PORTAL_COMPRAS: { label: "Portal", bg: "bg-purple-100 dark:bg-purple-900/30", text: "text-purple-700 dark:text-purple-300" },
-    };
-    const cfg = sourceConfig[source] || { label: source, bg: "bg-gray-100 dark:bg-gray-800", text: "text-gray-600 dark:text-gray-400" };
-    return (
-      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide ${cfg.bg} ${cfg.text}`}>
-        {cfg.label}
-      </span>
-    );
-  };
+  // UX-352 AC1: Removed "Fonte Oficial" badge — all sources are official, badge was redundant
+  const getSourceBadge = (_source?: string) => null;
 
   /** C-02 AC5-AC7, AC11: Confidence badge with 3 visual levels + tooltip + accessibility */
   const getConfidenceBadge = (confidence?: "high" | "medium" | "low" | null) => {
@@ -107,9 +95,9 @@ export function LicitacoesPreview({
       icon: React.ReactNode;
     }> = {
       high: {
-        label: "Alta confianca",
+        label: "Alta relevância",
         tooltip: "Alta densidade de termos relevantes para o setor selecionado",
-        ariaLabel: "Confianca alta na relevancia deste resultado",
+        ariaLabel: "Relevância alta deste resultado para o seu perfil",
         bg: "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300",
         icon: (
           <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
@@ -118,9 +106,9 @@ export function LicitacoesPreview({
         ),
       },
       medium: {
-        label: "Confianca media",
-        tooltip: "Relevancia confirmada por avaliacao de inteligencia artificial",
-        ariaLabel: "Confianca media na relevancia deste resultado",
+        label: "Relevância média",
+        tooltip: "Relevância confirmada por avaliação de inteligência artificial",
+        ariaLabel: "Relevância média deste resultado para o seu perfil",
         bg: "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300",
         icon: (
           <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
@@ -130,8 +118,8 @@ export function LicitacoesPreview({
       },
       low: {
         label: "Avaliado por IA",
-        tooltip: "Resultado com relevancia possivel, verificado por IA. Recomendamos revisar manualmente",
-        ariaLabel: "Confianca baixa na relevancia deste resultado",
+        tooltip: "Resultado com relevância possível, verificado por IA. Recomendamos revisar manualmente",
+        ariaLabel: "Relevância baixa — verificado por IA, recomendamos revisar",
         bg: "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400",
         icon: (
           <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
@@ -158,17 +146,11 @@ export function LicitacoesPreview({
     );
   };
 
-  /** GTM-FIX-028 AC12: Badge based on relevance_source */
+  /** GTM-FIX-028 AC12 + UX-352 AC2: Badge based on relevance_source
+   *  AC2: Removed "Palavra-chave" badge (internal jargon). Only LLM badge remains. */
   const getRelevanceSourceBadge = (source?: string | null) => {
     if (!source) return null;
-    if (source === "keyword") {
-      return (
-        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
-          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-          Palavra-chave
-        </span>
-      );
-    }
+    // UX-352 AC2: "keyword" badge removed — was internal jargon meaningless to users
     // All LLM variants get the same blue "Validado por IA" badge
     if (source.startsWith("llm")) {
       return (
@@ -254,83 +236,27 @@ export function LicitacoesPreview({
         Oportunidades Encontradas
       </h3>
 
-      {/* Visible items with full info */}
+      {/* UX-352 AC7-AC8: Visible items — essential info visible, details expandable */}
       <div className="space-y-3">
         {visibleItems.map((item, index) => (
-          <div
+          <BidCard
             key={item.pncp_id || index}
-            className="p-4 bg-surface-0 border border-strong rounded-card hover:border-brand-blue transition-colors"
-          >
-            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-              <div className="flex-1 min-w-0">
-                <h4 className="text-base font-medium text-ink line-clamp-2 mb-1">
-                  {highlightTerms(item.objeto, item.matched_terms || searchTerms)}
-                </h4>
-                <p className="text-sm text-ink-secondary truncate">
-                  {item.orgao}
-                </p>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {getRelevanceBadge(item.relevance_score)}
-                  {getRelevanceSourceBadge(item.relevance_source)}
-                  {getConfidenceBadge(item.confidence)}
-                  <ViabilityBadge level={item.viability_level} score={item.viability_score} factors={item.viability_factors} valueSource={item._value_source} />
-                  {getSourceBadge(item._source ?? undefined)}
-                  <span className="inline-flex items-center px-2 py-0.5 rounded bg-brand-blue-subtle text-brand-navy text-xs font-medium">
-                    {item.uf}
-                    {item.municipio && ` - ${item.municipio}`}
-                  </span>
-                  {item.modalidade && (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded bg-surface-2 text-ink-secondary text-xs">
-                      {item.modalidade}
-                    </span>
-                  )}
-                  {getUrgenciaBadge(item)}
-                  {item.data_abertura && (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded bg-surface-2 text-ink-secondary text-xs">
-                      Propostas desde: {formatDate(item.data_abertura)}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex flex-col items-end gap-2 shrink-0">
-                <span className="text-lg font-bold font-data text-brand-navy">
-                  {formatCurrency(item.valor)}
-                </span>
-                <div className="flex items-center gap-2">
-                  {item.link && (
-                    <a
-                      href={item.link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label="Ver edital completo (abre em nova janela)"
-                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-brand-navy text-white text-sm font-medium rounded-button hover:bg-brand-blue-hover transition-colors"
-                      data-testid="link-edital"
-                    >
-                      Ver edital completo
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                              d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                    </a>
-                  )}
-                  {searchId && (
-                    <FeedbackButtons
-                      searchId={searchId}
-                      bidId={item.pncp_id || `bid-${index}`}
-                      setorId={setorId}
-                      bidObjeto={item.objeto}
-                      bidValor={item.valor}
-                      bidUf={item.uf}
-                      confidenceScore={typeof item.confidence === "string" ? (item.confidence === "high" ? 90 : item.confidence === "medium" ? 60 : 30) : undefined}
-                      relevanceSource={item.relevance_source || undefined}
-                      accessToken={accessToken}
-                    />
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
+            item={item}
+            index={index}
+            highlightTerms={highlightTerms}
+            searchTerms={searchTerms}
+            formatCurrency={formatCurrency}
+            formatDate={formatDate}
+            getRelevanceBadge={getRelevanceBadge}
+            getRelevanceSourceBadge={getRelevanceSourceBadge}
+            getConfidenceBadge={getConfidenceBadge}
+            getSourceBadge={getSourceBadge}
+            getUrgenciaBadge={getUrgenciaBadge}
+            searchId={searchId}
+            setorId={setorId}
+            accessToken={accessToken}
+            idPrefix="bid"
+          />
         ))}
       </div>
 
@@ -403,83 +329,175 @@ export function LicitacoesPreview({
       {blurredItems.length > 0 && excelAvailable && (
         <div className="space-y-3">
           {blurredItems.map((item, index) => (
-            <div
+            <BidCard
               key={item.pncp_id || `extra-${index}`}
-              className="p-4 bg-surface-0 border border-strong rounded-card hover:border-brand-blue transition-colors"
-            >
-              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-base font-medium text-ink line-clamp-2 mb-1">
-                    {highlightTerms(item.objeto, item.matched_terms || searchTerms)}
-                  </h4>
-                  <p className="text-sm text-ink-secondary truncate">
-                    {item.orgao}
-                  </p>
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {getRelevanceBadge(item.relevance_score)}
-                    {getRelevanceSourceBadge(item.relevance_source)}
-                    {getConfidenceBadge(item.confidence)}
-                    <ViabilityBadge level={item.viability_level} score={item.viability_score} factors={item.viability_factors} valueSource={item._value_source} />
-                    {getSourceBadge(item._source ?? undefined)}
-                    <span className="inline-flex items-center px-2 py-0.5 rounded bg-brand-blue-subtle text-brand-navy text-xs font-medium">
-                      {item.uf}
-                      {item.municipio && ` - ${item.municipio}`}
-                    </span>
-                    {item.modalidade && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded bg-surface-2 text-ink-secondary text-xs">
-                        {item.modalidade}
-                      </span>
-                    )}
-                    {getUrgenciaBadge(item)}
-                    {item.data_abertura && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded bg-surface-2 text-ink-secondary text-xs">
-                        Propostas desde: {formatDate(item.data_abertura)}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex flex-col items-end gap-2 shrink-0">
-                  <span className="text-lg font-bold font-data text-brand-navy">
-                    {formatCurrency(item.valor)}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    {item.link && (
-                      <a
-                        href={item.link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        aria-label="Ver edital completo (abre em nova janela)"
-                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-brand-navy text-white text-sm font-medium rounded-button hover:bg-brand-blue-hover transition-colors"
-                        data-testid="link-edital"
-                      >
-                        Ver edital completo
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                        </svg>
-                      </a>
-                    )}
-                    {searchId && (
-                      <FeedbackButtons
-                        searchId={searchId}
-                        bidId={item.pncp_id || `extra-${index}`}
-                        setorId={setorId}
-                        bidObjeto={item.objeto}
-                        bidValor={item.valor}
-                        bidUf={item.uf}
-                        confidenceScore={typeof item.confidence === "string" ? (item.confidence === "high" ? 90 : item.confidence === "medium" ? 60 : 30) : undefined}
-                        relevanceSource={item.relevance_source || undefined}
-                        accessToken={accessToken}
-                      />
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
+              item={item}
+              index={index}
+              highlightTerms={highlightTerms}
+              searchTerms={searchTerms}
+              formatCurrency={formatCurrency}
+              formatDate={formatDate}
+              getRelevanceBadge={getRelevanceBadge}
+              getRelevanceSourceBadge={getRelevanceSourceBadge}
+              getConfidenceBadge={getConfidenceBadge}
+              getSourceBadge={getSourceBadge}
+              getUrgenciaBadge={getUrgenciaBadge}
+              searchId={searchId}
+              setorId={setorId}
+              accessToken={accessToken}
+              idPrefix="extra"
+            />
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* UX-352 AC7-AC8: BidCard — essential info visible, details expandable       */
+/* -------------------------------------------------------------------------- */
+
+interface BidCardProps {
+  item: LicitacaoItem;
+  index: number;
+  highlightTerms: (text: string, terms: string[]) => ReactNode;
+  searchTerms: string[];
+  formatCurrency: (value: number) => string;
+  formatDate: (dateStr: string | null) => string;
+  getRelevanceBadge: (score?: number | null) => ReactNode;
+  getRelevanceSourceBadge: (source?: string | null) => ReactNode;
+  getConfidenceBadge: (confidence?: "high" | "medium" | "low" | null) => ReactNode;
+  getSourceBadge: (source?: string) => ReactNode;
+  getUrgenciaBadge: (item: LicitacaoItem) => ReactNode;
+  searchId?: string;
+  setorId?: string;
+  accessToken?: string | null;
+  idPrefix: string;
+}
+
+function BidCard({
+  item,
+  index,
+  highlightTerms,
+  searchTerms,
+  formatCurrency,
+  formatDate,
+  getRelevanceBadge,
+  getRelevanceSourceBadge,
+  getConfidenceBadge,
+  getSourceBadge,
+  getUrgenciaBadge,
+  searchId,
+  setorId,
+  accessToken,
+  idPrefix,
+}: BidCardProps) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div
+      className="p-4 bg-surface-0 border border-strong rounded-card hover:border-brand-blue transition-colors"
+      data-testid="bid-card"
+    >
+      {/* AC7: Essential info always visible — title, value, UF, prazo, viability */}
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <h4 className="text-base font-medium text-ink line-clamp-2 mb-1">
+            {highlightTerms(item.objeto, item.matched_terms || searchTerms)}
+          </h4>
+          <div className="flex flex-wrap items-center gap-2 mt-2">
+            <ViabilityBadge level={item.viability_level} score={item.viability_score} factors={item.viability_factors} valueSource={item._value_source} />
+            {getUrgenciaBadge(item)}
+            <span className="inline-flex items-center px-2 py-0.5 rounded bg-brand-blue-subtle text-brand-navy text-xs font-medium">
+              {item.uf}
+              {item.municipio && ` - ${item.municipio}`}
+            </span>
+            {getConfidenceBadge(item.confidence)}
+          </div>
+        </div>
+
+        <div className="flex flex-col items-end gap-2 shrink-0">
+          <span className="text-lg font-bold font-data text-brand-navy">
+            {formatCurrency(item.valor)}
+          </span>
+          {item.link && (
+            <a
+              href={item.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Ver edital completo (abre em nova janela)"
+              className="inline-flex items-center gap-1 px-3 py-1.5 bg-brand-navy text-white text-sm font-medium rounded-button hover:bg-brand-blue-hover transition-colors"
+              data-testid="link-edital"
+            >
+              Ver edital
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+            </a>
+          )}
+        </div>
+      </div>
+
+      {/* AC8: Expandable details section */}
+      <div className="mt-2">
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="text-xs text-ink-muted hover:text-ink-secondary transition-colors flex items-center gap-1"
+          aria-expanded={expanded}
+          data-testid="expand-details-btn"
+        >
+          <svg
+            className={`w-3.5 h-3.5 transition-transform ${expanded ? 'rotate-90' : ''}`}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            aria-hidden="true"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+          {expanded ? 'Ocultar detalhes' : 'Ver detalhes'}
+        </button>
+
+        {expanded && (
+          <div className="mt-3 pt-3 border-t border-border space-y-2 animate-fade-in" data-testid="bid-details">
+            <p className="text-sm text-ink-secondary">
+              <span className="font-medium text-ink">Órgão:</span> {item.orgao}
+            </p>
+            {item.modalidade && (
+              <p className="text-sm text-ink-secondary">
+                <span className="font-medium text-ink">Modalidade:</span> {item.modalidade}
+              </p>
+            )}
+            {item.data_abertura && (
+              <p className="text-sm text-ink-secondary">
+                <span className="font-medium text-ink">Propostas desde:</span> {formatDate(item.data_abertura)}
+              </p>
+            )}
+            <div className="flex flex-wrap gap-2 mt-1">
+              {getRelevanceBadge(item.relevance_score)}
+              {getRelevanceSourceBadge(item.relevance_source)}
+              {getSourceBadge(item._source ?? undefined)}
+            </div>
+            {searchId && (
+              <div className="pt-2">
+                <FeedbackButtons
+                  searchId={searchId}
+                  bidId={item.pncp_id || `${idPrefix}-${index}`}
+                  setorId={setorId}
+                  bidObjeto={item.objeto}
+                  bidValor={item.valor}
+                  bidUf={item.uf}
+                  confidenceScore={typeof item.confidence === "string" ? (item.confidence === "high" ? 90 : item.confidence === "medium" ? 60 : 30) : undefined}
+                  relevanceSource={item.relevance_source || undefined}
+                  accessToken={accessToken}
+                />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

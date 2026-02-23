@@ -61,7 +61,7 @@ describe("OperationalStateBanner", () => {
 
     const banner = container.querySelector("[role='status']");
     expect(banner?.className).toContain("bg-orange-50");
-    expect(screen.getByText(/Dados de cache/)).toBeInTheDocument();
+    expect(screen.getByText(/Resultados salvos/)).toBeInTheDocument();
   });
 
   it("AC16: response_state=empty_failure -> red (unavailable)", () => {

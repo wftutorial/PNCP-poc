@@ -594,7 +594,7 @@ describe("T8: pt-BR accents and i18n", () => {
     );
     const text = container.textContent || "";
     expect(text).toContain("temporariamente");
-    expect(text).toContain("desatualizados");
+    expect(text).toContain("oportunidades mais recentes");
     expect(text).toContain("Tentar atualizar");
   });
 });

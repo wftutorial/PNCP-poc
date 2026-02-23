@@ -20,6 +20,7 @@ import asyncio
 import json
 import logging
 import os
+import time
 from typing import Any, Optional
 from urllib.parse import urlparse
 
@@ -28,6 +29,10 @@ logger = logging.getLogger(__name__)
 # Singleton pool
 _arq_pool = None
 _pool_lock = asyncio.Lock()
+
+# CRIT-033: Worker liveness cache (monotonic_time, is_alive)
+_worker_alive_cache: tuple[float, bool] = (0.0, False)
+_WORKER_CHECK_INTERVAL = 60  # seconds — avoid Redis round-trip every call
 
 
 def _get_redis_settings():
@@ -96,19 +101,59 @@ async def close_arq_pool() -> None:
         logger.info("ARQ pool closed")
 
 
+async def _check_worker_alive(pool) -> bool:
+    """CRIT-033: Check if any ARQ worker is actively running.
+
+    ARQ workers periodically write a health-check key to Redis
+    (default: ``arq:queue:health-check``, TTL = 2× health_check_interval).
+    If this key is absent, no worker is consuming jobs and queue mode
+    should NOT be used.
+
+    Result is cached for ``_WORKER_CHECK_INTERVAL`` seconds to avoid
+    a Redis round-trip on every search.
+    """
+    global _worker_alive_cache
+
+    now = time.monotonic()
+    last_check, last_result = _worker_alive_cache
+    if now - last_check < _WORKER_CHECK_INTERVAL:
+        return last_result
+
+    try:
+        # ARQ default queue_name is "arq:queue", health-check key = "<queue>:health-check"
+        alive = bool(await pool.exists("arq:queue:health-check"))
+        _worker_alive_cache = (now, alive)
+        if not alive:
+            logger.info(
+                "CRIT-033: No active ARQ worker detected (arq:queue:health-check absent) "
+                "— pipeline will use inline mode"
+            )
+        return alive
+    except Exception as e:
+        logger.debug(f"CRIT-033: Worker health check failed: {e}")
+        _worker_alive_cache = (now, False)
+        return False
+
+
 async def is_queue_available() -> bool:
     """Check if the job queue is healthy and ready to accept work.
 
     Used by the pipeline to decide between queue mode and inline mode.
+
+    CRIT-033: Now also verifies that at least one ARQ worker is alive
+    (via Redis health-check key) — prevents entering queue mode when
+    no worker is consuming jobs.
     """
     pool = await get_arq_pool()
     if pool is None:
         return False
     try:
         await pool.ping()
-        return True
     except Exception:
         return False
+
+    # CRIT-033: Redis is up, but is a worker actually running?
+    return await _check_worker_alive(pool)
 
 
 async def enqueue_job(
@@ -151,6 +196,14 @@ async def enqueue_job(
             _job_id=_job_id,
             **kwargs,
         )
+        # CRIT-033: ARQ returns None when a job with the same _job_id
+        # already exists (dedup) or when the queue is in an invalid state.
+        if job is None:
+            logger.warning(
+                f"CRIT-033: pool.enqueue_job returned None for {function_name} "
+                f"(job_id={_job_id}) — job may already exist or worker unavailable"
+            )
+            return None
         logger.info(f"Enqueued job: {function_name} (id={job.job_id})")
         return job
     except Exception as e:

@@ -1867,25 +1867,41 @@ class SearchPipeline:
             ctx.llm_status = "processing"
             ctx.llm_source = "processing"  # CRIT-005 AC13: LLM queued for background
 
-            # Enqueue LLM job
-            await enqueue_job(
+            # CRIT-033: Enqueue LLM job — check return to detect enqueue failure
+            llm_enqueued = await enqueue_job(
                 "llm_summary_job",
                 search_id,
                 ctx.licitacoes_filtradas,
                 ctx.sector.name,
                 _job_id=f"llm:{search_id}",
             )
+            if llm_enqueued is None:
+                # CRIT-033: Enqueue failed — mark as fallback, not "processing"
+                logger.warning(
+                    f"CRIT-033: LLM enqueue failed for search_id={search_id} — "
+                    "using fallback summary (llm_ready SSE will not fire)"
+                )
+                ctx.llm_status = "ready"
+                ctx.llm_source = "fallback"
 
-            # Enqueue Excel job (or skip if plan doesn't allow)
+            # CRIT-033: Enqueue Excel job — check return for failure
             if ctx.excel_available:
-                ctx.excel_status = "processing"
-                await enqueue_job(
+                excel_enqueued = await enqueue_job(
                     "excel_generation_job",
                     search_id,
                     ctx.licitacoes_filtradas,
                     ctx.excel_available,
                     _job_id=f"excel:{search_id}",
                 )
+                if excel_enqueued is not None:
+                    ctx.excel_status = "processing"
+                else:
+                    # CRIT-033: Excel enqueue failed — mark as failed, not "processing"
+                    logger.warning(
+                        f"CRIT-033: Excel enqueue failed for search_id={search_id} — "
+                        "excel_ready SSE will not fire"
+                    )
+                    ctx.excel_status = "failed"
             else:
                 ctx.excel_status = "skipped"
                 ctx.upgrade_message = "Exportar Excel disponível no plano Máquina (R$ 597/mês)."

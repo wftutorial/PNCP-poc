@@ -25,6 +25,7 @@ export default function LandingPage() {
       <main id="main-content">
         <HeroSection />
         <ProofOfValue />
+        <AnalysisExamplesCarousel />
         <ValuePropSection />
         <OpportunityCost />
         <BeforeAfter />
@@ -36,7 +37,6 @@ export default function LandingPage() {
           <DataSourcesSection />
         </section>
         <SectorsGrid />
-        <AnalysisExamplesCarousel />
         <TrustCriteria />
 
         {/* GTM-COPY-005 AC6: Credibility badge */}

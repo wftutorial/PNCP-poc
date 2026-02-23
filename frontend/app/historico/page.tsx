@@ -11,29 +11,8 @@ import { getUserFriendlyError } from "../../lib/error-messages";
 
 const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || "SmartLic.tech";
 
-// UX-354 AC2-AC3: Sector slug → display name mapping (all 15 sectors)
-const SECTOR_NAMES: Record<string, string> = {
-  vestuario: "Vestuário e Uniformes",
-  alimentos: "Alimentos e Merenda",
-  informatica: "Hardware e Equipamentos de TI",
-  mobiliario: "Mobiliário",
-  papelaria: "Papelaria e Material de Escritório",
-  engenharia: "Engenharia, Projetos e Obras",
-  software: "Software e Sistemas",
-  facilities: "Facilities e Manutenção",
-  saude: "Saúde",
-  vigilancia: "Vigilância e Segurança Patrimonial",
-  transporte: "Transporte e Veículos",
-  manutencao_predial: "Manutenção e Conservação Predial",
-  engenharia_rodoviaria: "Engenharia Rodoviária e Infraestrutura Viária",
-  materiais_eletricos: "Materiais Elétricos e Instalações",
-  materiais_hidraulicos: "Materiais Hidráulicos e Saneamento",
-};
-
-/** Maps sector slug to display name, falls back to raw slug */
-function getSectorDisplayName(slug: string): string {
-  return SECTOR_NAMES[slug] || slug;
-}
+// UX-354 → UX-356: Shared sector slug → display name mapping
+import { getSectorDisplayName } from "../../lib/constants/sector-names";
 
 // All 27 Brazilian UFs
 const ALL_UFS = [

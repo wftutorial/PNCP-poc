@@ -64,6 +64,7 @@ type Period = "day" | "week" | "month";
 // ============================================================================
 
 import { UF_NAMES } from "../../lib/constants/uf-names";
+import { getSectorDisplayName } from "../../lib/constants/sector-names";
 
 const CHART_COLORS = [
   "#116dff", "#0d5ad4", "#0a1e3f", "#3b8bff", "#6aa7ff",
@@ -282,7 +283,7 @@ export default function DashboardPage() {
       ...dimensions.top_ufs.map((u) => [u.name, String(u.count), String(u.value)]),
       [""],
       ["Top Setores", "Buscas", "Valor"],
-      ...dimensions.top_sectors.map((s) => [s.name, String(s.count), String(s.value)]),
+      ...dimensions.top_sectors.map((s) => [getSectorDisplayName(s.name), String(s.count), String(s.value)]),
     ];
 
     const csv = rows.map((r) => r.join(",")).join("\n");
@@ -303,6 +304,16 @@ export default function DashboardPage() {
         name: UF_NAMES[u.name] || u.name,
         value: u.count,
         fill: CHART_COLORS[i % CHART_COLORS.length],
+      })) || [],
+    [dimensions]
+  );
+
+  // UX-356 AC1-AC2: Map sector slugs to display names
+  const sectorChartData = useMemo(
+    () =>
+      dimensions?.top_sectors?.map((s) => ({
+        ...s,
+        name: getSectorDisplayName(s.name),
       })) || [],
     [dimensions]
   );
@@ -679,10 +690,10 @@ export default function DashboardPage() {
             <h2 className="text-lg font-display font-semibold text-[var(--ink)] mb-4">
               Setores mais buscados
             </h2>
-            {dimensions && dimensions.top_sectors.length > 0 ? (
+            {sectorChartData.length > 0 ? (
               <ResponsiveContainer width="100%" height={200}>
                 <BarChart
-                  data={dimensions.top_sectors}
+                  data={sectorChartData}
                   layout="vertical"
                   margin={{ left: 10, right: 20 }}
                 >
@@ -691,8 +702,9 @@ export default function DashboardPage() {
                   <YAxis
                     type="category"
                     dataKey="name"
-                    width={120}
+                    width={160}
                     tick={{ fill: "var(--ink-secondary)", fontSize: 11 }}
+                    tickFormatter={(v: string) => v.length > 22 ? v.slice(0, 20) + "…" : v}
                   />
                   <Tooltip content={<ChartTooltip />} />
                   <Bar dataKey="count" fill="#116dff" radius={[0, 4, 4, 0]} name="Buscas" />

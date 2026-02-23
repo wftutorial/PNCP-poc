@@ -1,6 +1,6 @@
 # UX-356 — Dashboard: Gráfico "Setores" Exibe Slugs em vez de Nomes Completos
 
-**Status:** Pending
+**Status:** Done
 **Priority:** P3 — Cosmetic
 **Severity:** Visual (dados corretos, label errado)
 **Created:** 2026-02-23
@@ -38,12 +38,12 @@ O endpoint `/api/analytics?endpoint=top-dimensions` retorna slugs do backend. O 
 
 ## Acceptance Criteria
 
-- [ ] **AC1**: Gráfico "Setores mais buscados" exibe nomes completos (ex: "Engenharia, Projetos e Obras")
-- [ ] **AC2**: Todos 15 slugs mapeados (usar mesmo SECTOR_NAMES do /historico)
-- [ ] **AC3**: Slug desconhecido exibe o slug original como fallback (não quebra)
-- [ ] **AC4**: Nomes longos truncam com ellipsis se necessário (não quebrar layout)
-- [ ] **AC5**: Test: render chart com slug "vestuario" → exibe "Vestuário e Uniformes"
-- [ ] **AC6**: Zero regression nos outros gráficos do dashboard
+- [x] **AC1**: Gráfico "Setores mais buscados" exibe nomes completos (ex: "Engenharia, Projetos e Obras")
+- [x] **AC2**: Todos 15 slugs mapeados (usar mesmo SECTOR_NAMES do /historico)
+- [x] **AC3**: Slug desconhecido exibe o slug original como fallback (não quebra)
+- [x] **AC4**: Nomes longos truncam com ellipsis se necessário (não quebrar layout)
+- [x] **AC5**: Test: render chart com slug "vestuario" → exibe "Vestuário e Uniformes"
+- [x] **AC6**: Zero regression nos outros gráficos do dashboard
 
 ## Solução Proposta
 
@@ -67,9 +67,10 @@ Depois usar no componente do chart em `app/dashboard/page.tsx`.
 
 ## Files Envolvidos
 
-- `frontend/app/dashboard/page.tsx` — Chart rendering
-- `frontend/app/historico/page.tsx` — Já tem o mapeamento (source of truth)
-- `frontend/utils/sector-names.ts` — Novo shared utility (ou extrair de historico)
+- `frontend/lib/constants/sector-names.ts` — NEW: Shared utility (SECTOR_DISPLAY_NAMES + getSectorDisplayName)
+- `frontend/app/dashboard/page.tsx` — Chart rendering (uses sectorChartData + tickFormatter truncation)
+- `frontend/app/historico/page.tsx` — Now imports from shared utility
+- `frontend/__tests__/dashboard-sector-names.test.tsx` — NEW: 10 tests covering AC1-AC6
 
 ## Screenshot de Evidência
 

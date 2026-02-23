@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "../components/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
+import { ErrorStateWithRetry } from "../../components/ErrorStateWithRetry";
 import { getUserFriendlyError } from "../../lib/error-messages";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -62,6 +63,7 @@ export default function MensagensPage() {
   const [loading, setLoading] = useState(true);
   const [loadingThread, setLoadingThread] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fetchError, setFetchError] = useState(false);
 
   // New conversation form
   const [showNew, setShowNew] = useState(false);
@@ -93,6 +95,7 @@ export default function MensagensPage() {
     if (!authHeader) return;
     setLoading(true);
     setError(null);
+    setFetchError(false);
     try {
       const params = new URLSearchParams();
       if (statusFilter) params.set("status", statusFilter);
@@ -106,6 +109,7 @@ export default function MensagensPage() {
       setConversations(data.conversations || []);
     } catch (err) {
       setError(getUserFriendlyError(err));
+      setFetchError(true);
     } finally {
       setLoading(false);
     }
@@ -339,6 +343,12 @@ export default function MensagensPage() {
               <div className="flex justify-center py-8">
                 <div className="w-6 h-6 border-2 border-[var(--brand-blue)] border-t-transparent rounded-full animate-spin" />
               </div>
+            ) : fetchError ? (
+              <ErrorStateWithRetry
+                message="Nao foi possivel carregar suas conversas."
+                onRetry={fetchConversations}
+                compact
+              />
             ) : conversations.length === 0 ? (
               <div className="p-8 text-center text-[var(--ink-secondary)] text-sm">
                 <svg

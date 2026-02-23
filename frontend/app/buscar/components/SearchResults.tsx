@@ -20,6 +20,7 @@ import GoogleSheetsExportButton from "../../../components/GoogleSheetsExportButt
 import { LlmSourceBadge } from "./LlmSourceBadge";
 import { ErrorDetail } from "./ErrorDetail";
 import type { SearchError } from "../hooks/useSearch";
+import { ZeroResultsSuggestions } from "./ZeroResultsSuggestions";
 // GTM-UX-001: PartialTimeoutBanner replaced by DataQualityBanner
 
 export interface SearchResultsProps {
@@ -118,6 +119,12 @@ export interface SearchResultsProps {
   retryCountdown?: number | null;
   onRetryNow?: () => void;
   onCancelRetry?: () => void;
+
+  // GTM-UX-002 AC10-12: Zero results actionable suggestions
+  onAdjustPeriod?: () => void;
+  onAddNeighborStates?: () => void;
+  nearbyResultsCount?: number;
+  onViewNearbyResults?: () => void;
 }
 
 export default function SearchResults({
@@ -142,6 +149,8 @@ export default function SearchResults({
   isProfileComplete = true,
   // CRIT-008
   retryCountdown, onRetryNow, onCancelRetry,
+  // GTM-UX-002 AC10-12
+  onAdjustPeriod, onAddNeighborStates, nearbyResultsCount, onViewNearbyResults,
 }: SearchResultsProps) {
   // STORY-257B AC4: Track transition from grid to results
   const [showGrid, setShowGrid] = useState(false);
@@ -425,14 +434,17 @@ export default function SearchResults({
         </>
       )}
 
-      {/* CRIT-027 AC2: Empty state only after search completes — legitimate zero results (not caused by API failure) */}
+      {/* GTM-UX-002 AC10-12: Zero results with actionable suggestions — legitimate zero results (not caused by API failure) */}
       {!loading && result && !result.is_partial && result.response_state !== "empty_failure" && result.resumo.total_oportunidades === 0 && (
-        <EmptyState
-          onAdjustSearch={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-          rawCount={rawCount}
-          stateCount={ufsSelecionadas.size}
-          filterStats={result.filter_stats}
+        <ZeroResultsSuggestions
           sectorName={sectorName}
+          ufCount={ufsSelecionadas.size}
+          dayRange={30}
+          onAdjustPeriod={onAdjustPeriod}
+          onAddNeighborStates={onAddNeighborStates}
+          onChangeSector={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          nearbyResultsCount={nearbyResultsCount}
+          onViewNearbyResults={onViewNearbyResults}
         />
       )}
 

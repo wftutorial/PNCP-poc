@@ -20,6 +20,7 @@ import { PipelineColumn } from "./PipelineColumn";
 import { PipelineCard } from "./PipelineCard";
 import { PageHeader } from "../../components/PageHeader";
 import { EmptyState } from "../../components/EmptyState";
+import { ErrorStateWithRetry } from "../../components/ErrorStateWithRetry";
 import { useAuth } from "../components/AuthProvider";
 import { getUserFriendlyError } from "../../lib/error-messages";
 import { toast } from "sonner";
@@ -29,16 +30,32 @@ export default function PipelinePage() {
   const { items, loading, error, fetchItems, updateItem, removeItem } = usePipeline();
   const [activeItem, setActiveItem] = useState<PipelineItem | null>(null);
   const [optimisticItems, setOptimisticItems] = useState<PipelineItem[]>([]);
+  const [initialLoadFailed, setInitialLoadFailed] = useState(false);
 
   useEffect(() => {
     setOptimisticItems(items);
   }, [items]);
 
+  const wrappedFetchItems = useCallback(async () => {
+    setInitialLoadFailed(false);
+    await fetchItems();
+  }, [fetchItems]);
+
+  // Track initial load failure: if fetchItems finishes with an error
+  // and there are no items loaded, the initial load failed.
+  useEffect(() => {
+    if (error && !loading && items.length === 0) {
+      setInitialLoadFailed(true);
+    } else if (!error || items.length > 0) {
+      setInitialLoadFailed(false);
+    }
+  }, [error, loading, items.length]);
+
   useEffect(() => {
     if (session?.access_token) {
-      fetchItems();
+      wrappedFetchItems();
     }
-  }, [session?.access_token, fetchItems]);
+  }, [session?.access_token, wrappedFetchItems]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -99,13 +116,16 @@ export default function PipelinePage() {
     }
   };
 
+  // Determine if we are in read-only error mode (stale data visible but API errored)
+  const isReadOnlyError = Boolean(error) && optimisticItems.length > 0;
+
   if (!session?.access_token) {
     return (
       <>
         <PageHeader title="Pipeline" />
         <div className="max-w-7xl mx-auto px-4 py-16 text-center">
           <h1 className="text-2xl font-bold mb-4">Pipeline de Oportunidades</h1>
-          <p className="text-[var(--text-secondary)]">Faça login para acessar seu pipeline.</p>
+          <p className="text-[var(--text-secondary)]">Fa\u00e7a login para acessar seu pipeline.</p>
         </div>
       </>
     );
@@ -119,7 +139,7 @@ export default function PipelinePage() {
           <div>
             <h1 className="text-2xl font-bold text-[var(--text-primary)]">Pipeline de Oportunidades</h1>
             <p className="text-sm text-[var(--text-secondary)] mt-1">
-              Arraste as licitações entre os estágios para acompanhar seu progresso.
+              Arraste as licita\u00e7\u00f5es entre os est\u00e1gios para acompanhar seu progresso.
             </p>
           </div>
           <div className="text-sm text-[var(--text-secondary)]">
@@ -127,18 +147,18 @@ export default function PipelinePage() {
           </div>
         </div>
 
-        {error && (
-          <div className="bg-red-50/80 dark:bg-red-900/20 backdrop-blur-sm border border-red-200/50 dark:border-red-800/50 rounded-lg p-4 mb-6">
-            <p className="text-red-700 dark:text-red-300 text-sm">{error}</p>
-          </div>
-        )}
-
-        {loading && optimisticItems.length === 0 ? (
+        {/* AC8+AC14: Error state with retry when initial load fails (no data at all) */}
+        {initialLoadFailed && !loading && optimisticItems.length === 0 ? (
+          <ErrorStateWithRetry
+            message="N\u00e3o foi poss\u00edvel carregar seu pipeline."
+            onRetry={wrappedFetchItems}
+          />
+        ) : loading && optimisticItems.length === 0 ? (
           <div className="flex items-center justify-center py-20">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-blue" />
             <span className="ml-3 text-[var(--text-secondary)]">Carregando pipeline...</span>
           </div>
-        ) : !loading && optimisticItems.length === 0 ? (
+        ) : !loading && optimisticItems.length === 0 && !error ? (
           <EmptyState
             icon={
               <svg aria-hidden="true" className="w-8 h-8 text-[var(--brand-blue)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -146,15 +166,45 @@ export default function PipelinePage() {
               </svg>
             }
             title="Seu Pipeline de Oportunidades"
-            description="Aqui você acompanha licitações do início ao fim."
+            description="Aqui voc\u00ea acompanha licita\u00e7\u00f5es do in\u00edcio ao fim."
             steps={[
-              'Busque licitações em "Buscar"',
+              'Busque licita\u00e7\u00f5es em "Buscar"',
               'Clique em "Acompanhar" numa oportunidade',
-              "Arraste entre as colunas conforme avança",
+              "Arraste entre as colunas conforme avan\u00e7a",
             ]}
             ctaLabel="Buscar oportunidades"
             ctaHref="/buscar"
           />
+        ) : isReadOnlyError ? (
+          /* AC9: Read-only mode when error occurs but stale data exists.
+             DndContext with no sensors disables drag-and-drop while still
+             providing context for useDroppable inside PipelineColumn. */
+          <>
+            <div className="mb-4 p-3 bg-[var(--error-subtle)] border border-[var(--error)]/20 rounded-card flex items-center justify-between" role="alert">
+              <p className="text-sm text-[var(--error)]">
+                Pipeline em modo leitura. Arraste desabilitado temporariamente.
+              </p>
+              <button
+                onClick={wrappedFetchItems}
+                className="text-sm font-medium text-[var(--brand-blue)] hover:underline"
+              >
+                Tentar novamente
+              </button>
+            </div>
+            <DndContext>
+              <div className="flex gap-4 overflow-x-auto pb-4 min-h-[calc(100vh-200px)]">
+                {STAGES_ORDER.map((stage) => (
+                  <PipelineColumn
+                    key={stage}
+                    stage={stage}
+                    items={getItemsByStage(stage)}
+                    onRemove={() => {}}
+                    onUpdateNotes={() => {}}
+                  />
+                ))}
+              </div>
+            </DndContext>
+          </>
         ) : (
           <DndContext
             sensors={sensors}

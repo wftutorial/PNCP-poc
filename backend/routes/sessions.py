@@ -23,18 +23,23 @@ async def get_sessions(
     db=Depends(get_db),
 ):
     """Get user's search session history."""
-    result = (
-        db.table("search_sessions")
-        .select("*", count="exact")
-        .eq("user_id", user["id"])
-        .order("created_at", desc=True)
-        .range(offset, offset + limit - 1)
-        .execute()
-    )
+    try:
+        result = (
+            db.table("search_sessions")
+            .select("*", count="exact")
+            .eq("user_id", user["id"])
+            .order("created_at", desc=True)
+            .range(offset, offset + limit - 1)
+            .execute()
+        )
 
-    return {
-        "sessions": result.data,
-        "total": result.count or 0,
-        "limit": limit,
-        "offset": offset,
-    }
+        return {
+            "sessions": result.data,
+            "total": result.count or 0,
+            "limit": limit,
+            "offset": offset,
+        }
+    except Exception as e:
+        logger.error(f"Error fetching sessions for user {user['id']}: {e}")
+        from fastapi import HTTPException
+        raise HTTPException(status_code=503, detail="Historico temporariamente indisponivel")

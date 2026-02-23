@@ -90,38 +90,28 @@ class TestAnalyticsSummary:
 
 
 class TestAnalyticsSummaryRPCDegradation:
-    """CRIT-004 AC15: Analytics returns degraded response (not 500) when RPC fails."""
+    """GTM-UX-002 AC3: Analytics returns 503 (not 200 with zeros) when Supabase unavailable."""
 
-    def test_summary_returns_200_when_rpc_fails(self, client, mock_supabase):
-        """When get_analytics_summary RPC raises, endpoint returns 200 with zeros."""
+    def test_summary_returns_503_when_rpc_fails(self, client, mock_supabase):
+        """When get_analytics_summary RPC raises, endpoint returns 503."""
         mock_supabase.rpc.side_effect = Exception("RPC get_analytics_summary not found (404)")
 
         res = client.get("/analytics/summary", headers={"Authorization": "Bearer fake"})
-        assert res.status_code == 200, f"Expected 200 degraded, got {res.status_code}"
-        data = res.json()
-        assert data["total_searches"] == 0
-        assert data["total_opportunities"] == 0
-        assert data["total_value_discovered"] == 0.0
-        assert "member_since" in data
+        assert res.status_code == 503, f"Expected 503, got {res.status_code}"
 
-    def test_searches_over_time_returns_200_when_db_fails(self, client, mock_supabase):
-        """When DB query fails, searches-over-time returns 200 with empty data."""
+    def test_searches_over_time_returns_503_when_db_fails(self, client, mock_supabase):
+        """When DB query fails, searches-over-time returns 503."""
         mock_supabase.table.side_effect = Exception("DB connection lost")
 
         res = client.get("/analytics/searches-over-time?period=week", headers={"Authorization": "Bearer fake"})
-        assert res.status_code == 200, f"Expected 200 degraded, got {res.status_code}"
-        data = res.json()
-        assert data["data"] == []
+        assert res.status_code == 503, f"Expected 503, got {res.status_code}"
 
-    def test_top_dimensions_returns_200_when_db_fails(self, client, mock_supabase):
-        """When DB query fails, top-dimensions returns 200 with empty lists."""
+    def test_top_dimensions_returns_503_when_db_fails(self, client, mock_supabase):
+        """When DB query fails, top-dimensions returns 503."""
         mock_supabase.table.side_effect = Exception("DB connection lost")
 
         res = client.get("/analytics/top-dimensions", headers={"Authorization": "Bearer fake"})
-        assert res.status_code == 200, f"Expected 200 degraded, got {res.status_code}"
-        data = res.json()
-        assert data["top_ufs"] == []
-        assert data["top_sectors"] == []
+        assert res.status_code == 503, f"Expected 503, got {res.status_code}"
 
 
 class TestSearchesOverTime:
@@ -190,3 +180,14 @@ class TestTopDimensions:
         data = res.json()
         assert data["top_ufs"] == []
         assert data["top_sectors"] == []
+
+
+class TestSessionsErrorHandling:
+    """GTM-UX-002 AC3: Sessions returns 503 when Supabase unavailable."""
+
+    def test_sessions_returns_503_when_db_fails(self, client, mock_supabase):
+        """When DB query fails, /sessions returns 503 instead of swallowing error."""
+        mock_supabase.table.side_effect = Exception("DB connection lost")
+
+        res = client.get("/sessions", headers={"Authorization": "Bearer fake"})
+        assert res.status_code == 503, f"Expected 503, got {res.status_code}"

@@ -39,35 +39,35 @@ Historico, Dashboard, Mensagens e Pipeline retornam dados vazios quando a API fa
 
 ### Historico
 
-- [ ] AC1: Quando `/api/sessions` falha, mostrar error state: "Nao foi possivel carregar seu historico. [Tentar novamente]"
-- [ ] AC2: Distinguir visualmente "Nenhuma busca salva" (empty, tom informativo) de "Erro ao carregar" (error, tom warning)
+- [x] AC1: Quando `/api/sessions` falha, mostrar error state: "Nao foi possivel carregar seu historico. [Tentar novamente]"
+- [x] AC2: Distinguir visualmente "Nenhuma busca salva" (empty, tom informativo) de "Erro ao carregar" (error, tom warning)
 
 ### Dashboard
 
-- [ ] AC3: Quando `/api/analytics` falha, backend retorna 503 (nao 200 com zeros)
-- [ ] AC4: Frontend mostra error state em cada card do dashboard: "Dados indisponiveis. [Tentar novamente]"
-- [ ] AC5: Cards individuais podem falhar independentemente (1 card com erro, outros funcionando)
+- [x] AC3: Quando `/api/analytics` falha, backend retorna 503 (nao 200 com zeros)
+- [x] AC4: Frontend mostra error state em cada card do dashboard: "Dados indisponiveis. [Tentar novamente]"
+- [x] AC5: Cards individuais podem falhar independentemente (1 card com erro, outros funcionando)
 
 ### Mensagens
 
-- [ ] AC6: Quando `/api/messages` falha, mostrar error state com retry
-- [ ] AC7: Distinguir "Sem conversas" (empty) de "Erro ao carregar" (error)
+- [x] AC6: Quando `/api/messages` falha, mostrar error state com retry
+- [x] AC7: Distinguir "Sem conversas" (empty) de "Erro ao carregar" (error)
 
 ### Pipeline
 
-- [ ] AC8: Quando `/api/pipeline` falha, mostrar error state com retry
-- [ ] AC9: Pipeline em modo leitura durante erro (pode ver colunas, nao pode drag-and-drop)
+- [x] AC8: Quando `/api/pipeline` falha, mostrar error state com retry
+- [x] AC9: Pipeline em modo leitura durante erro (pode ver colunas, nao pode drag-and-drop)
 
 ### Zero Resultados (Busca)
 
-- [ ] AC10: Quando busca retorna 0 resultados, mostrar estado especifico: "Nenhuma oportunidade encontrada para [setor] em [UFs] nos ultimos [N] dias." + sugestoes acionaveis: "Ampliar periodo", "Adicionar estados vizinhos", "Verificar setor"
-- [ ] AC11: Se 0 resultados E existe cache global para parametros similares (mesmo setor, UFs vizinhas), mostrar: "Encontramos X oportunidades em estados proximos. [Ver resultados]"
-- [ ] AC12: Sugestoes sao botoes clicaveis que ajustam filtros e re-executam busca (nao texto passivo)
+- [x] AC10: Quando busca retorna 0 resultados, mostrar estado especifico: "Nenhuma oportunidade encontrada para [setor] em [UFs] nos ultimos [N] dias." + sugestoes acionaveis: "Ampliar periodo", "Adicionar estados vizinhos", "Verificar setor"
+- [x] AC11: Se 0 resultados E existe cache global para parametros similares (mesmo setor, UFs vizinhas), mostrar: "Encontramos X oportunidades em estados proximos. [Ver resultados]"
+- [x] AC12: Sugestoes sao botoes clicaveis que ajustam filtros e re-executam busca (nao texto passivo)
 
 ### Padrao Comum
 
-- [ ] AC13: Componente reutilizavel `ErrorStateWithRetry.tsx` com: icone, mensagem, botao retry, timestamp do erro
-- [ ] AC14: Cada pagina com data fetching implementa 3 estados: loading → data | empty | error
+- [x] AC13: Componente reutilizavel `ErrorStateWithRetry.tsx` com: icone, mensagem, botao retry, timestamp do erro
+- [x] AC14: Cada pagina com data fetching implementa 3 estados: loading → data | empty | error
 
 ## Testes Obrigatorios
 
@@ -76,13 +76,13 @@ cd frontend && npm test -- --testPathPattern="error-state|historico|dashboard" -
 cd backend && pytest -k "test_analytics_error" --no-coverage
 ```
 
-- [ ] T1: Historico mostra error state quando API falha
-- [ ] T2: Dashboard mostra error state (nao zeros) quando API falha
-- [ ] T3: Backend analytics retorna 503 quando Supabase indisponivel
-- [ ] T4: Retry button funciona e recarrega dados
-- [ ] T5: Empty state diferente de error state visualmente
-- [ ] T6: Zero resultados mostra sugestoes acionaveis (ampliar periodo, estados vizinhos)
-- [ ] T7: Botao "Ver resultados" de estados proximos ajusta filtros e re-executa
+- [x] T1: Historico mostra error state quando API falha
+- [x] T2: Dashboard mostra error state (nao zeros) quando API falha
+- [x] T3: Backend analytics retorna 503 quando Supabase indisponivel
+- [x] T4: Retry button funciona e recarrega dados
+- [x] T5: Empty state diferente de error state visualmente
+- [x] T6: Zero resultados mostra sugestoes acionaveis (ampliar periodo, estados vizinhos)
+- [x] T7: Botao "Ver resultados" de estados proximos ajusta filtros e re-executa
 
 ## Arquivos Afetados
 

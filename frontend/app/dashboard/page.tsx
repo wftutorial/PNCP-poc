@@ -6,6 +6,7 @@ import { useAnalytics } from "../../hooks/useAnalytics";
 import { useBackendStatusContext } from "../../components/BackendStatusIndicator";
 import { useFetchWithBackoff } from "../../hooks/useFetchWithBackoff";
 import { PageHeader } from "../../components/PageHeader";
+import { ErrorStateWithRetry } from "../../components/ErrorStateWithRetry";
 import Link from "next/link";
 import {
   BarChart,
@@ -142,7 +143,7 @@ function QuotaRing({ used, total }: { used: number; total: number }) {
     <div className="flex flex-col items-center">
       <svg
               role="img"
-              aria-label="Ícone" width="100" height="100" viewBox="0 0 100 100">
+              aria-label={"\u00CDcone"} width="100" height="100" viewBox="0 0 100 100">
         <circle cx="50" cy="50" r="40" fill="none" stroke="var(--border)" strokeWidth="8" />
         <circle
           cx="50" cy="50" r="40" fill="none"
@@ -196,10 +197,14 @@ function ChartTooltip({ active, payload, label }: ChartTooltipProps) {
 const LOADING_TIMEOUT_MS = 10_000;
 
 // CRIT-018: Dashboard data bundle returned by the fetch hook
+// AC4/AC5: Per-section error flags for independent failure handling
 interface DashboardData {
   summary: AnalyticsSummary | null;
   timeSeries: TimeSeriesPoint[];
   dimensions: TopDimensions | null;
+  summaryError?: boolean;
+  timeSeriesError?: boolean;
+  dimensionsError?: boolean;
 }
 
 export default function DashboardPage() {
@@ -229,18 +234,22 @@ export default function DashboardPage() {
   );
 
   // CRIT-018 AC1-AC6: Fetch function consumed by useFetchWithBackoff
+  // AC4/AC5: Use Promise.allSettled so individual sections can fail independently
   const fetchDashboard = useCallback(
     async (signal: AbortSignal): Promise<DashboardData> => {
-      const [summaryData, timeData, dimData] = await Promise.all([
+      const results = await Promise.allSettled([
         fetchAnalytics("summary", undefined, signal),
         fetchAnalytics("searches-over-time", { period, range_days: "90" }, signal),
         fetchAnalytics("top-dimensions", { limit: "7" }, signal),
       ]);
       trackEvent("dashboard_viewed", { period });
       return {
-        summary: summaryData,
-        timeSeries: timeData?.data || [],
-        dimensions: dimData,
+        summary: results[0].status === "fulfilled" ? results[0].value : null,
+        timeSeries: results[1].status === "fulfilled" ? (results[1].value?.data || []) : [],
+        dimensions: results[2].status === "fulfilled" ? results[2].value : null,
+        summaryError: results[0].status === "rejected",
+        timeSeriesError: results[1].status === "rejected",
+        dimensionsError: results[2].status === "rejected",
       };
     },
     [period, fetchAnalytics, trackEvent]
@@ -265,6 +274,11 @@ export default function DashboardPage() {
   const summary = data?.summary ?? null;
   const timeSeries = data?.timeSeries ?? [];
   const dimensions = data?.dimensions ?? null;
+
+  // AC4/AC5: Per-section error flags
+  const summaryError = data?.summaryError ?? false;
+  const timeSeriesError = data?.timeSeriesError ?? false;
+  const dimensionsError = data?.dimensionsError ?? false;
 
   // CSV export
   const handleExportCSV = useCallback(() => {
@@ -334,7 +348,7 @@ export default function DashboardPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[var(--canvas)]">
         <div className="text-center">
-          <p className="text-[var(--ink-secondary)] mb-4">Faça login para acessar o dashboard</p>
+          <p className="text-[var(--ink-secondary)] mb-4">{`Fa\u00E7a login para acessar o dashboard`}</p>
           <Link href="/login" className="text-[var(--brand-blue)] hover:underline">
             Ir para login
           </Link>
@@ -347,7 +361,9 @@ export default function DashboardPage() {
   // CRIT-018 AC8: Error state with cloud+X icon + manual retry
   // ──────────────────────────────────────────────────────────────────────────
 
-  // CRIT-031 AC1-AC3: Error state with no cached data → empty state
+  // CRIT-031 AC1-AC3: Full-page error state only when ALL sections failed and no data at all
+  // AC5: If at least some data loaded (partial success via allSettled), show per-card errors instead
+  const allSectionsFailed = summaryError && timeSeriesError && dimensionsError;
   if (error && hasExhaustedRetries && !data) {
     return (
       <div className="min-h-screen bg-[var(--canvas)] py-8 px-4">
@@ -370,7 +386,47 @@ export default function DashboardPage() {
             </svg>
           </div>
           <p className="text-lg font-display font-semibold text-[var(--ink)] mb-2">
-            Dados temporariamente indisponíveis
+            {`Dados temporariamente indispon\u00EDveis`}
+          </p>
+          <p className="text-sm text-[var(--ink-secondary)] mb-6 max-w-md mx-auto">
+            Tente novamente em alguns minutos.
+          </p>
+          <button
+            onClick={manualRetry}
+            className="px-5 py-2.5 bg-[var(--brand-navy)] text-white rounded-button hover:bg-[var(--brand-blue)] transition-colors font-medium"
+            data-testid="dashboard-retry-button"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Also show full-page error when data came back but ALL sections failed
+  if (data && allSectionsFailed) {
+    return (
+      <div className="min-h-screen bg-[var(--canvas)] py-8 px-4">
+        <div className="max-w-6xl mx-auto text-center py-16" data-testid="dashboard-empty-state">
+          <div className="mx-auto mb-6 w-16 h-16 flex items-center justify-center rounded-full bg-[var(--surface-1)]">
+            <svg
+              aria-hidden="true"
+              className="w-8 h-8 text-[var(--ink-muted)]"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={1.5}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M2 15a5 5 0 005 5h9a5 5 0 10-4.5-7.17A4 4 0 002 15z"
+              />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 12.5l5 5m0-5l-5 5" />
+            </svg>
+          </div>
+          <p className="text-lg font-display font-semibold text-[var(--ink)] mb-2">
+            {`Dados temporariamente indispon\u00EDveis`}
           </p>
           <p className="text-sm text-[var(--ink-secondary)] mb-6 max-w-md mx-auto">
             Tente novamente em alguns minutos.
@@ -388,7 +444,8 @@ export default function DashboardPage() {
   }
 
   // Transient error during retries (still retrying automatically)
-  if (error && !hasExhaustedRetries) {
+  // Only show full-page retrying state when we have no data at all
+  if (error && !hasExhaustedRetries && !data) {
     return (
       <div className="min-h-screen bg-[var(--canvas)] py-8 px-4">
         <div className="max-w-6xl mx-auto text-center py-16" data-testid="dashboard-retrying">
@@ -441,10 +498,10 @@ export default function DashboardPage() {
               </svg>
             </div>
             <h2 className="text-xl font-display font-semibold text-[var(--ink)] mb-3">
-              Seu Painel de Inteligência
+              {`Seu Painel de Intelig\u00EAncia`}
             </h2>
             <p className="text-[var(--ink-secondary)] mb-6 max-w-md mx-auto">
-              Após suas primeiras buscas, você verá aqui:
+              {`Ap\u00F3s suas primeiras buscas, voc\u00EA ver\u00E1 aqui:`}
             </p>
             <ul className="text-left max-w-sm mx-auto mb-8 space-y-2">
               <li className="flex items-center gap-2 text-sm text-[var(--ink-secondary)]">
@@ -453,7 +510,7 @@ export default function DashboardPage() {
               </li>
               <li className="flex items-center gap-2 text-sm text-[var(--ink-secondary)]">
                 <span className="w-1.5 h-1.5 rounded-full bg-[var(--brand-blue)] flex-shrink-0" />
-                Tendências do seu setor
+                {`Tend\u00EAncias do seu setor`}
               </li>
               <li className="flex items-center gap-2 text-sm text-[var(--ink-secondary)]">
                 <span className="w-1.5 h-1.5 rounded-full bg-[var(--brand-blue)] flex-shrink-0" />
@@ -530,34 +587,44 @@ export default function DashboardPage() {
           </p>
         )}
 
-        {/* Stat Cards */}
-        {summary && (
+        {/* AC4/AC5: Stat Cards — show per-card error if summary fetch failed */}
+        {summaryError ? (
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 mb-8">
+            <div className="col-span-full bg-[var(--surface-0)] border border-[var(--border)] rounded-card" data-testid="summary-error">
+              <ErrorStateWithRetry
+                message={`Dados indispon\u00EDveis.`}
+                onRetry={manualRetry}
+                compact
+              />
+            </div>
+          </div>
+        ) : summary && (
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 mb-8">
             <StatCard
-              icon="🔍"
+              icon={"\uD83D\uDD0D"}
               label="Buscas realizadas"
               value={formatNumber(summary.total_searches)}
             />
             <StatCard
-              icon="📋"
+              icon={"\uD83D\uDCCB"}
               label="Oportunidades encontradas"
               value={formatNumber(summary.total_opportunities)}
               subtitle={`~${summary.avg_results_per_search} por busca`}
             />
             <StatCard
-              icon="💰"
+              icon={"\uD83D\uDCB0"}
               label="Valor total descoberto"
               value={formatCurrency(summary.total_value_discovered)}
               accent
             />
             <StatCard
-              icon="⏱️"
+              icon={"\u23F1\uFE0F"}
               label="Horas economizadas"
               value={`${formatNumber(summary.estimated_hours_saved)}h`}
               subtitle="vs busca manual em portais"
             />
             <StatCard
-              icon="✅"
+              icon={"\u2705"}
               label="Taxa de sucesso"
               value={`${summary.success_rate}%`}
               subtitle={`${summary.total_downloads} com resultados`}
@@ -565,161 +632,199 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Time Series Chart */}
-        <div className="bg-[var(--surface-0)] border border-[var(--border)] rounded-card p-6 mb-8">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-display font-semibold text-[var(--ink)]">
+        {/* AC4/AC5: Time Series Chart — show per-card error if time series fetch failed */}
+        {timeSeriesError ? (
+          <div className="bg-[var(--surface-0)] border border-[var(--border)] rounded-card p-6 mb-8" data-testid="timeseries-error">
+            <h2 className="text-lg font-display font-semibold text-[var(--ink)] mb-4">
               Buscas ao longo do tempo
             </h2>
-            <div className="flex bg-[var(--surface-1)] rounded-button p-0.5">
-              {(["day", "week", "month"] as Period[]).map((p) => (
-                <button
-                  key={p}
-                  onClick={() => setPeriod(p)}
-                  className={`px-3 py-1 text-xs rounded-button transition-colors ${
-                    period === p
-                      ? "bg-[var(--brand-blue)] text-white"
-                      : "text-[var(--ink-secondary)] hover:text-[var(--ink)]"
-                  }`}
-                >
-                  {p === "day" ? "Dia" : p === "week" ? "Semana" : "Mês"}
-                </button>
-              ))}
-            </div>
+            <ErrorStateWithRetry
+              message={`Dados indispon\u00EDveis.`}
+              onRetry={manualRetry}
+              compact
+            />
           </div>
-
-          {timeSeries.length > 0 ? (
-            <ResponsiveContainer width="100%" height={280}>
-              <LineChart data={timeSeries}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis
-                  dataKey="label"
-                  tick={{ fill: "var(--ink-muted)", fontSize: 12 }}
-                  axisLine={{ stroke: "var(--border)" }}
-                />
-                <YAxis
-                  tick={{ fill: "var(--ink-muted)", fontSize: 12 }}
-                  axisLine={{ stroke: "var(--border)" }}
-                />
-                <Tooltip content={<ChartTooltip />} />
-                <Line
-                  type="monotone"
-                  dataKey="searches"
-                  stroke="#116dff"
-                  strokeWidth={2}
-                  dot={{ fill: "#116dff", r: 4 }}
-                  name="Buscas"
-                />
-                <Line
-                  type="monotone"
-                  dataKey="opportunities"
-                  stroke="#16a34a"
-                  strokeWidth={2}
-                  dot={{ fill: "#16a34a", r: 4 }}
-                  name="Oportunidades"
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-64 flex items-center justify-center text-[var(--ink-muted)]">
-              Sem dados para o período selecionado
-            </div>
-          )}
-        </div>
-
-        {/* Top Dimensions */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          {/* Top UFs */}
-          <div className="bg-[var(--surface-0)] border border-[var(--border)] rounded-card p-6">
-            <h2 className="text-lg font-display font-semibold text-[var(--ink)] mb-4">
-              Estados mais buscados
-            </h2>
-            {dimensions && dimensions.top_ufs.length > 0 ? (
-              <div className="flex gap-6">
-                <div className="flex-1">
-                  <ResponsiveContainer width="100%" height={200}>
-                    <PieChart>
-                      <Pie
-                        data={ufPieData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={40}
-                        outerRadius={80}
-                        dataKey="value"
-                        stroke="none"
-                      >
-                        {ufPieData.map((entry, i) => (
-                          <Cell key={i} fill={entry.fill} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="flex-1 space-y-2">
-                  {dimensions.top_ufs.map((uf, i) => (
-                    <div key={uf.name} className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="w-3 h-3 rounded-full"
-                          style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }}
-                        />
-                        <span className="text-sm text-[var(--ink)]">
-                          {uf.name}
-                        </span>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-sm font-data font-semibold text-[var(--ink)]">
-                          {uf.count}
-                        </span>
-                        <span className="text-xs text-[var(--ink-muted)] ml-2">
-                          {formatCurrency(uf.value)}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+        ) : (
+          <div className="bg-[var(--surface-0)] border border-[var(--border)] rounded-card p-6 mb-8">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-display font-semibold text-[var(--ink)]">
+                Buscas ao longo do tempo
+              </h2>
+              <div className="flex bg-[var(--surface-1)] rounded-button p-0.5">
+                {(["day", "week", "month"] as Period[]).map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => setPeriod(p)}
+                    className={`px-3 py-1 text-xs rounded-button transition-colors ${
+                      period === p
+                        ? "bg-[var(--brand-blue)] text-white"
+                        : "text-[var(--ink-secondary)] hover:text-[var(--ink)]"
+                    }`}
+                  >
+                    {p === "day" ? "Dia" : p === "week" ? "Semana" : `M\u00EAs`}
+                  </button>
+                ))}
               </div>
-            ) : (
-              <p className="text-[var(--ink-muted)] text-sm">Sem dados ainda</p>
-            )}
-          </div>
+            </div>
 
-          {/* Top Sectors */}
-          <div className="bg-[var(--surface-0)] border border-[var(--border)] rounded-card p-6">
-            <h2 className="text-lg font-display font-semibold text-[var(--ink)] mb-4">
-              Setores mais buscados
-            </h2>
-            {sectorChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart
-                  data={sectorChartData}
-                  layout="vertical"
-                  margin={{ left: 10, right: 20 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
-                  <XAxis type="number" tick={{ fill: "var(--ink-muted)", fontSize: 11 }} />
+            {timeSeries.length > 0 ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <LineChart data={timeSeries}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fill: "var(--ink-muted)", fontSize: 12 }}
+                    axisLine={{ stroke: "var(--border)" }}
+                  />
                   <YAxis
-                    type="category"
-                    dataKey="name"
-                    width={160}
-                    tick={{ fill: "var(--ink-secondary)", fontSize: 11 }}
-                    tickFormatter={(v: string) => v.length > 22 ? v.slice(0, 20) + "…" : v}
+                    tick={{ fill: "var(--ink-muted)", fontSize: 12 }}
+                    axisLine={{ stroke: "var(--border)" }}
                   />
                   <Tooltip content={<ChartTooltip />} />
-                  <Bar dataKey="count" fill="#116dff" radius={[0, 4, 4, 0]} name="Buscas" />
-                </BarChart>
+                  <Line
+                    type="monotone"
+                    dataKey="searches"
+                    stroke="#116dff"
+                    strokeWidth={2}
+                    dot={{ fill: "#116dff", r: 4 }}
+                    name="Buscas"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="opportunities"
+                    stroke="#16a34a"
+                    strokeWidth={2}
+                    dot={{ fill: "#16a34a", r: 4 }}
+                    name="Oportunidades"
+                  />
+                </LineChart>
               </ResponsiveContainer>
             ) : (
-              <p className="text-[var(--ink-muted)] text-sm">Sem dados ainda</p>
+              <div className="h-64 flex items-center justify-center text-[var(--ink-muted)]">
+                {`Sem dados para o per\u00EDodo selecionado`}
+              </div>
             )}
           </div>
-        </div>
+        )}
+
+        {/* AC4/AC5: Top Dimensions — show per-card error if dimensions fetch failed */}
+        {dimensionsError ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div className="bg-[var(--surface-0)] border border-[var(--border)] rounded-card p-6" data-testid="dimensions-error">
+              <h2 className="text-lg font-display font-semibold text-[var(--ink)] mb-4">
+                Estados mais buscados
+              </h2>
+              <ErrorStateWithRetry
+                message={`Dados indispon\u00EDveis.`}
+                onRetry={manualRetry}
+                compact
+              />
+            </div>
+            <div className="bg-[var(--surface-0)] border border-[var(--border)] rounded-card p-6" data-testid="dimensions-error">
+              <h2 className="text-lg font-display font-semibold text-[var(--ink)] mb-4">
+                Setores mais buscados
+              </h2>
+              <ErrorStateWithRetry
+                message={`Dados indispon\u00EDveis.`}
+                onRetry={manualRetry}
+                compact
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            {/* Top UFs */}
+            <div className="bg-[var(--surface-0)] border border-[var(--border)] rounded-card p-6">
+              <h2 className="text-lg font-display font-semibold text-[var(--ink)] mb-4">
+                Estados mais buscados
+              </h2>
+              {dimensions && dimensions.top_ufs.length > 0 ? (
+                <div className="flex gap-6">
+                  <div className="flex-1">
+                    <ResponsiveContainer width="100%" height={200}>
+                      <PieChart>
+                        <Pie
+                          data={ufPieData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={40}
+                          outerRadius={80}
+                          dataKey="value"
+                          stroke="none"
+                        >
+                          {ufPieData.map((entry, i) => (
+                            <Cell key={i} fill={entry.fill} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="flex-1 space-y-2">
+                    {dimensions.top_ufs.map((uf, i) => (
+                      <div key={uf.name} className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }}
+                          />
+                          <span className="text-sm text-[var(--ink)]">
+                            {uf.name}
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-sm font-data font-semibold text-[var(--ink)]">
+                            {uf.count}
+                          </span>
+                          <span className="text-xs text-[var(--ink-muted)] ml-2">
+                            {formatCurrency(uf.value)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-[var(--ink-muted)] text-sm">Sem dados ainda</p>
+              )}
+            </div>
+
+            {/* Top Sectors */}
+            <div className="bg-[var(--surface-0)] border border-[var(--border)] rounded-card p-6">
+              <h2 className="text-lg font-display font-semibold text-[var(--ink)] mb-4">
+                Setores mais buscados
+              </h2>
+              {sectorChartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart
+                    data={sectorChartData}
+                    layout="vertical"
+                    margin={{ left: 10, right: 20 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+                    <XAxis type="number" tick={{ fill: "var(--ink-muted)", fontSize: 11 }} />
+                    <YAxis
+                      type="category"
+                      dataKey="name"
+                      width={160}
+                      tick={{ fill: "var(--ink-secondary)", fontSize: 11 }}
+                      tickFormatter={(v: string) => v.length > 22 ? v.slice(0, 20) + "\u2026" : v}
+                    />
+                    <Tooltip content={<ChartTooltip />} />
+                    <Bar dataKey="count" fill="#116dff" radius={[0, 4, 4, 0]} name="Buscas" />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="text-[var(--ink-muted)] text-sm">Sem dados ainda</p>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Quick Links */}
         <div className="bg-[var(--surface-0)] border border-[var(--border)] rounded-card p-6">
           <h2 className="text-lg font-display font-semibold text-[var(--ink)] mb-4">
-            Acesso rápido
+            {`Acesso r\u00E1pido`}
           </h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Link
@@ -727,7 +832,7 @@ export default function DashboardPage() {
               className="flex items-center gap-3 p-3 rounded-card border border-[var(--border)]
                          hover:border-[var(--border-strong)] hover:bg-[var(--surface-1)] transition-colors"
             >
-              <span className="text-xl">🔍</span>
+              <span className="text-xl">{"\uD83D\uDD0D"}</span>
               <span className="text-sm text-[var(--ink)]">Nova Busca</span>
             </Link>
             <Link
@@ -735,15 +840,15 @@ export default function DashboardPage() {
               className="flex items-center gap-3 p-3 rounded-card border border-[var(--border)]
                          hover:border-[var(--border-strong)] hover:bg-[var(--surface-1)] transition-colors"
             >
-              <span className="text-xl">📜</span>
-              <span className="text-sm text-[var(--ink)]">Histórico</span>
+              <span className="text-xl">{"\uD83D\uDCDC"}</span>
+              <span className="text-sm text-[var(--ink)]">{`Hist\u00F3rico`}</span>
             </Link>
             <Link
               href="/conta"
               className="flex items-center gap-3 p-3 rounded-card border border-[var(--border)]
                          hover:border-[var(--border-strong)] hover:bg-[var(--surface-1)] transition-colors"
             >
-              <span className="text-xl">⚙️</span>
+              <span className="text-xl">{"\u2699\uFE0F"}</span>
               <span className="text-sm text-[var(--ink)]">Minha Conta</span>
             </Link>
             <Link
@@ -751,7 +856,7 @@ export default function DashboardPage() {
               className="flex items-center gap-3 p-3 rounded-card border border-[var(--border)]
                          hover:border-[var(--border-strong)] hover:bg-[var(--surface-1)] transition-colors"
             >
-              <span className="text-xl">💎</span>
+              <span className="text-xl">{"\uD83D\uDC8E"}</span>
               <span className="text-sm text-[var(--ink)]">Planos</span>
             </Link>
           </div>

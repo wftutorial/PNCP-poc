@@ -1,6 +1,6 @@
 # CRIT-033 — ARQ Job Enqueue Falha: NoneType (Worker Não Ativo)
 
-**Status:** Done (code fix) / Pending (infra: worker deploy)
+**Status:** Done (code fix + infra deploy)
 **Priority:** P1 — High
 **Severity:** Error (silencioso — busca completa mas sem LLM summary/Excel)
 **Sentry Issues:**
@@ -54,8 +54,11 @@ Após deploy do F-01 (ARQ Job Queue), os jobs de LLM summary e Excel generation 
 
 - [x] **AC1**: Verificar se `PROCESS_TYPE=worker` está configurado como serviço separado no Railway
   - **Verificado:** Não existe. Apenas `bidiq-backend` (web) está deployado. PROCESS_TYPE não está setado (default=web).
-- [ ] **AC2**: Se worker não existe, criar Railway service com `PROCESS_TYPE=worker` usando mesmo Dockerfile
-  - **Pendente (infra):** Requer Railway Dashboard → New Service → Same repo → Set `PROCESS_TYPE=worker`
+- [x] **AC2**: Se worker não existe, criar Railway service com `PROCESS_TYPE=worker` usando mesmo Dockerfile
+  - **Done:** `bidiq-worker` service criado no Railway (same repo, root `/backend`, Dockerfile builder).
+  - Env vars: `PROCESS_TYPE=worker`, `REDIS_URL`, `OPENAI_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`, `SENTRY_DSN`, `ENVIRONMENT=production`, `ENCRYPTION_KEY`, `ADMIN_USER_IDS`.
+  - Config: `backend/railway-worker.toml` (no healthcheck — worker is not HTTP server).
+  - Deployment `885d1279` active and Online (Feb 23, 2026 10:06 AM).
 - [x] **AC3**: Se worker existe, verificar logs do worker para erros de conexão/startup
   - **N/A** — Worker não existe. Logs do web service confirmam apenas web process rodando.
 - [x] **AC4**: `pool.enqueue_job()` deve retornar Job object (não None) — testar com log do job_id
@@ -63,11 +66,11 @@ Após deploy do F-01 (ARQ Job Queue), os jobs de LLM summary e Excel generation 
   - **Fix:** `is_queue_available()` agora verifica `arq:queue:health-check` — pipeline não entra em queue mode sem worker.
   - **Fix:** `search_pipeline.py` checa retorno do enqueue — se None, marca status como `ready`/`fallback` em vez de `processing`.
 - [ ] **AC5**: Após fix, LLM summary via SSE (`llm_ready` event) funciona em produção
-  - **Pendente:** Requer AC2 (deploy do worker service)
+  - **Worker deployed.** Requer teste manual em smartlic.tech para confirmar SSE `llm_ready` events.
 - [ ] **AC6**: Após fix, Excel via SSE (`excel_ready` event) funciona em produção
-  - **Pendente:** Requer AC2 (deploy do worker service)
+  - **Worker deployed.** Requer teste manual em smartlic.tech para confirmar SSE `excel_ready` events.
 - [ ] **AC7**: Sentry issues SMARTLIC-BACKEND-1F e 1E marcados como resolved
-  - **Pendente:** Resolver manualmente após deploy. Com o fix, os errors não devem mais ocorrer.
+  - **Worker deployed.** Com o fix + worker ativo, os errors não devem mais ocorrer. Resolver manualmente no Sentry após confirmar.
 - [x] **AC8**: Fallback continua funcionando se ARQ/Redis indisponível (zero regression)
   - **Verificado:** 17 novos testes + 42 existentes + 17 integration = 76 testes passando. Full suite: 5022 pass / 14 fail (pre-existing).
 
@@ -96,20 +99,21 @@ Pipeline agora verifica retorno de `enqueue_job()`:
 - `TestPipelineEnqueueFallback` (3): LLM fail, Excel fail, both success
 - `TestInlineFallbackRegression` (2): Queue unavailable, no search_id
 
-## Próximos Passos (Infra — AC2, AC5, AC6, AC7)
+## Infra Deploy (AC2 — Done)
+
+Worker service `bidiq-worker` deployed on Railway:
+- **Service ID:** `8de70e9f-df61-455a-8d15-c3948293796a`
+- **Config:** `backend/railway-worker.toml` (Dockerfile builder, no healthcheck, ON_FAILURE restart x10)
+- **Root directory:** `/backend`
+- **Branch:** `main` (auto-deploy)
+- **Status:** Online (deployment `885d1279`, Feb 23 2026 10:06 AM)
+
+### Próximos Passos (AC5, AC6, AC7 — Validação Manual)
 
 ```bash
-# Railway Dashboard → New Service → Same repo → Environment variables:
-PROCESS_TYPE=worker
-REDIS_URL=<same as bidiq-backend>
-OPENAI_API_KEY=<same as bidiq-backend>
-SUPABASE_URL=<same as bidiq-backend>
-SUPABASE_SERVICE_KEY=<same as bidiq-backend>
-
-# Verificar após deploy:
-railway logs --service bidiq-worker  # Should show "Starting ARQ worker process..."
-# Search no smartlic.tech → verify llm_ready + excel_ready SSE events
-# Sentry → resolve SMARTLIC-BACKEND-1F e 1E
+# Teste em produção:
+# 1. Search no smartlic.tech → verify llm_ready + excel_ready SSE events
+# 2. Sentry → resolve SMARTLIC-BACKEND-1F e 1E
 ```
 
 ## Files Envolvidos
@@ -118,4 +122,5 @@ railway logs --service bidiq-worker  # Should show "Starting ARQ worker process.
 - `backend/start.sh` — PROCESS_TYPE routing (web vs worker)
 - `backend/search_pipeline.py` — Job dispatch call site + enqueue return check
 - `backend/tests/test_crit033_enqueue_fix.py` — 17 new tests
-- Railway config — Service configuration (pendente)
+- `backend/railway-worker.toml` — Worker-specific Railway config (no healthcheck)
+- Railway service `bidiq-worker` — PROCESS_TYPE=worker, same Dockerfile

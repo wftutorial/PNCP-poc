@@ -32,7 +32,7 @@ export function calculateReadingTime(wordCount: number): string {
  * Central article metadata registry.
  *
  * STORY-262: 15 B2G articles (empresas-b2g cluster)
- * STORY-263: Consultorias articles (future)
+ * STORY-263: 15 Consultorias articles (consultorias-de-licitacao cluster)
  */
 export const BLOG_ARTICLES: BlogArticleMeta[] = [
   // ──────────────────────────────────────────────
@@ -400,32 +400,366 @@ export const BLOG_ARTICLES: BlogArticleMeta[] = [
   },
 
   // ──────────────────────────────────────────────
-  // STORY-263: Consultorias de Licitação
+  // STORY-263: Consultorias de Licitação — 15 articles
   // ──────────────────────────────────────────────
 
+  // CONS-01
   {
-    slug: 'consultoria-licitacao-ferramenta-digital',
-    title: 'Ferramentas Digitais para Consultorias de Licitação',
+    slug: 'aumentar-retencao-clientes-inteligencia-editais',
+    title: 'Como Aumentar a Retenção dos seus Clientes com Inteligência em Editais',
     description:
-      'Como consultorias especializadas em licitações podem escalar suas operações com inteligência artificial e automação.',
+      'Consultorias que entregam inteligência sobre editais retêm clientes por 3x mais tempo. Veja o framework que transforma análise em diferencial.',
     category: 'Consultorias de Licitação',
-    tags: [
-      'consultoria',
-      'ferramentas digitais',
-      'automação',
-      'inteligência artificial',
-    ],
+    tags: ['retenção de clientes', 'inteligência em editais', 'churn', 'consultoria'],
     publishDate: '2026-02-24',
-    readingTime: calculateReadingTime(2200),
-    wordCount: 2200,
+    readingTime: calculateReadingTime(2800),
+    wordCount: 2800,
     keywords: [
-      'consultoria de licitação',
-      'ferramenta para licitação',
-      'automação licitações públicas',
+      'retenção de clientes consultoria licitação',
+      'fidelizar clientes B2G',
+      'consultoria de licitação diferencial',
+      'inteligência em editais',
     ],
     relatedSlugs: [
+      'entregar-mais-resultado-clientes-sem-aumentar-equipe',
+      'aumentar-taxa-sucesso-clientes-20-porcento',
       'como-aumentar-taxa-vitoria-licitacoes',
+    ],
+  },
+
+  // CONS-02
+  {
+    slug: 'analise-edital-diferencial-competitivo-consultoria',
+    title: 'Análise de Edital como Diferencial Competitivo para Consultorias',
+    description:
+      'A análise de editais pode ser commodity ou diferencial. Veja como consultorias estão reposicionando esse serviço para cobrar mais e reter melhor.',
+    category: 'Consultorias de Licitação',
+    tags: ['diferencial competitivo', 'análise de edital', 'precificação', 'posicionamento'],
+    publishDate: '2026-02-24',
+    readingTime: calculateReadingTime(2800),
+    wordCount: 2800,
+    keywords: [
+      'diferencial consultoria licitação',
+      'análise de edital como serviço',
+      'reposicionar consultoria B2G',
+      'valor agregado consultoria',
+    ],
+    relatedSlugs: [
+      'consultorias-modernas-inteligencia-priorizar-oportunidades',
+      'triagem-editais-vantagem-estrategica-clientes',
+      'diagnostico-eficiencia-licitacao-servico-premium',
+    ],
+  },
+
+  // CONS-03
+  {
+    slug: 'entregar-mais-resultado-clientes-sem-aumentar-equipe',
+    title: 'Como Entregar mais Resultado aos seus Clientes sem Aumentar sua Equipe',
+    description:
+      'Consultorias de licitação podem dobrar a entrega de análises sem contratar — usando triagem inteligente e automação de viabilidade.',
+    category: 'Consultorias de Licitação',
+    tags: ['produtividade', 'escalar consultoria', 'automação', 'modelo operacional'],
+    publishDate: '2026-02-24',
+    readingTime: calculateReadingTime(2300),
+    wordCount: 2300,
+    keywords: [
+      'escalar consultoria licitação',
+      'produtividade consultoria',
+      'entregar mais sem contratar',
+      'automação consultoria licitação',
+    ],
+    relatedSlugs: [
+      'escalar-consultoria-sem-depender-horas-tecnicas',
+      'aumentar-retencao-clientes-inteligencia-editais',
+      'reduzir-ruido-aumentar-performance-pregoes',
+    ],
+  },
+
+  // CONS-04
+  {
+    slug: 'clientes-perdem-pregoes-boa-documentacao',
+    title: 'Por que seus Clientes Perdem Pregões mesmo com Boa Documentação',
+    description:
+      'Documentação impecável não garante vitória em pregões. O problema está antes: na seleção do edital. A triagem é mais crítica que a proposta.',
+    category: 'Consultorias de Licitação',
+    tags: ['perda de pregão', 'documentação', 'triagem', 'viabilidade'],
+    publishDate: '2026-02-24',
+    readingTime: calculateReadingTime(2300),
+    wordCount: 2300,
+    keywords: [
+      'perder pregão com documentação certa',
+      'por que perco licitação',
+      'seleção de edital para pregão',
+      'triagem antes da proposta',
+    ],
+    relatedSlugs: [
+      'aumentar-retencao-clientes-inteligencia-editais',
       'erro-operacional-perder-contratos-publicos',
+      'escolher-editais-maior-probabilidade-vitoria',
+    ],
+  },
+
+  // CONS-05
+  {
+    slug: 'usar-dados-provar-eficiencia-licitacoes',
+    title: 'Como Usar Dados para Provar Eficiência no Setor de Licitações',
+    description:
+      'Consultorias que apresentam dados objetivos de performance — taxa de vitória, economia de tempo, ROI — conquistam e retêm mais clientes.',
+    category: 'Consultorias de Licitação',
+    tags: ['KPIs', 'dados de performance', 'ROI', 'reporting'],
+    publishDate: '2026-02-24',
+    readingTime: calculateReadingTime(2800),
+    wordCount: 2800,
+    keywords: [
+      'KPIs consultoria licitação',
+      'medir eficiência licitação',
+      'ROI consultoria B2G',
+      'dados de performance licitação',
+    ],
+    relatedSlugs: [
+      'aumentar-taxa-sucesso-clientes-20-porcento',
+      'aumentar-retencao-clientes-inteligencia-editais',
+      'analise-edital-diferencial-competitivo-consultoria',
+    ],
+  },
+
+  // CONS-06
+  {
+    slug: 'consultorias-modernas-inteligencia-priorizar-oportunidades',
+    title: 'Consultorias Modernas Estão Usando Inteligência para Priorizar Oportunidades',
+    description:
+      'O mercado de consultoria de licitação está se dividindo: operacional vs. inteligente. O que consultorias de alta performance fazem diferente.',
+    category: 'Consultorias de Licitação',
+    tags: ['consultoria moderna', 'inteligência artificial', 'priorização', 'alta performance'],
+    publishDate: '2026-02-24',
+    readingTime: calculateReadingTime(2800),
+    wordCount: 2800,
+    keywords: [
+      'consultoria de licitação moderna',
+      'inteligência artificial consultoria',
+      'priorizar oportunidades licitação',
+      'consultoria licitação 2026',
+    ],
+    relatedSlugs: [
+      'inteligencia-artificial-consultoria-licitacao-2026',
+      'nova-geracao-ferramentas-mercado-licitacoes',
+      'analise-edital-diferencial-competitivo-consultoria',
+    ],
+  },
+
+  // CONS-07
+  {
+    slug: 'triagem-editais-vantagem-estrategica-clientes',
+    title: 'Como Transformar Triagem de Editais em Vantagem Estratégica para seus Clientes',
+    description:
+      'A triagem de editais não precisa ser custo operacional — pode ser o serviço de maior valor percebido da sua consultoria.',
+    category: 'Consultorias de Licitação',
+    tags: ['triagem de editais', 'vantagem estratégica', 'curadoria', 'precificação'],
+    publishDate: '2026-02-24',
+    readingTime: calculateReadingTime(2300),
+    wordCount: 2300,
+    keywords: [
+      'triagem de editais como serviço',
+      'vantagem estratégica consultoria',
+      'valor da triagem licitação',
+      'curadoria de editais',
+    ],
+    relatedSlugs: [
+      'analise-edital-diferencial-competitivo-consultoria',
+      'diagnostico-eficiencia-licitacao-servico-premium',
+      'vale-a-pena-disputar-pregao',
+    ],
+  },
+
+  // CONS-08
+  {
+    slug: 'nova-geracao-ferramentas-mercado-licitacoes',
+    title: 'A Nova Geração de Ferramentas que Estão Mudando o Mercado de Licitações',
+    description:
+      'GovTech, IA classificadora e análise de viabilidade: as ferramentas que estão transformando como empresas e consultorias operam em 2026.',
+    category: 'Consultorias de Licitação',
+    tags: ['GovTech', 'ferramentas de licitação', 'IA', 'evolução do mercado'],
+    publishDate: '2026-02-24',
+    readingTime: calculateReadingTime(2800),
+    wordCount: 2800,
+    keywords: [
+      'ferramentas para licitação',
+      'GovTech Brasil',
+      'tecnologia licitação 2026',
+      'plataforma de licitação inteligente',
+    ],
+    relatedSlugs: [
+      'inteligencia-artificial-consultoria-licitacao-2026',
+      'consultorias-modernas-inteligencia-priorizar-oportunidades',
+      'licitacao-volume-ou-inteligencia',
+    ],
+  },
+
+  // CONS-09
+  {
+    slug: 'reduzir-ruido-aumentar-performance-pregoes',
+    title: 'Como Reduzir Ruído e Aumentar Performance nos Clientes que Disputam Pregões',
+    description:
+      'O excesso de editais irrelevantes é o maior inimigo da performance. Veja como consultorias aplicam filtros inteligentes para aumentar a taxa de vitória.',
+    category: 'Consultorias de Licitação',
+    tags: ['reduzir ruído', 'performance', 'filtros inteligentes', 'sinal vs ruído'],
+    publishDate: '2026-02-24',
+    readingTime: calculateReadingTime(2300),
+    wordCount: 2300,
+    keywords: [
+      'reduzir ruído editais',
+      'performance em pregões',
+      'filtrar editais relevantes',
+      'produtividade licitação',
+    ],
+    relatedSlugs: [
+      'entregar-mais-resultado-clientes-sem-aumentar-equipe',
+      'reduzir-tempo-analisando-editais-irrelevantes',
+      'equipe-40-horas-mes-editais-descartados',
+    ],
+  },
+
+  // CONS-10
+  {
+    slug: 'inteligencia-artificial-consultoria-licitacao-2026',
+    title: 'O Papel da Inteligência Artificial na Consultoria de Licitação em 2026',
+    description:
+      'Como a IA está transformando consultorias de licitação: classificação setorial, análise de viabilidade, priorização e geração de relatórios.',
+    category: 'Consultorias de Licitação',
+    tags: ['inteligência artificial', 'IA em licitações', 'LLM', 'automação'],
+    publishDate: '2026-02-24',
+    readingTime: calculateReadingTime(3200),
+    wordCount: 3200,
+    keywords: [
+      'IA em licitações',
+      'inteligência artificial consultoria',
+      'IA para consultoria de licitação',
+      'automação de licitações com IA',
+    ],
+    relatedSlugs: [
+      'consultorias-modernas-inteligencia-priorizar-oportunidades',
+      'nova-geracao-ferramentas-mercado-licitacoes',
+      'como-aumentar-taxa-vitoria-licitacoes',
+    ],
+  },
+
+  // CONS-11
+  {
+    slug: 'escalar-consultoria-sem-depender-horas-tecnicas',
+    title: 'Como Escalar sua Consultoria sem Depender Apenas de Horas Técnicas',
+    description:
+      'O modelo de horas técnicas limita o crescimento. Conheça 4 modelos de escala que permitem atender mais clientes com a mesma equipe.',
+    category: 'Consultorias de Licitação',
+    tags: ['escalar consultoria', 'modelo de negócio', 'produtização', 'receita recorrente'],
+    publishDate: '2026-02-24',
+    readingTime: calculateReadingTime(2800),
+    wordCount: 2800,
+    keywords: [
+      'escalar consultoria de licitação',
+      'modelo de negócio consultoria',
+      'crescer consultoria B2G',
+      'consultoria escalável',
+    ],
+    relatedSlugs: [
+      'entregar-mais-resultado-clientes-sem-aumentar-equipe',
+      'diagnostico-eficiencia-licitacao-servico-premium',
+      'analise-edital-diferencial-competitivo-consultoria',
+    ],
+  },
+
+  // CONS-12
+  {
+    slug: 'identificar-clientes-gargalo-operacional-licitacoes',
+    title: 'Como Identificar Clientes com Gargalo Operacional em Licitações',
+    description:
+      'Guia para consultorias identificarem prospects com dor operacional: os 7 sinais de que uma empresa precisa da sua ajuda e como abordar cada perfil.',
+    category: 'Consultorias de Licitação',
+    tags: ['prospecção', 'gargalo operacional', 'diagnóstico', 'abordagem comercial'],
+    publishDate: '2026-02-24',
+    readingTime: calculateReadingTime(2800),
+    wordCount: 2800,
+    keywords: [
+      'prospectar clientes consultoria licitação',
+      'gargalo operacional licitação',
+      'identificar prospects B2G',
+      'vender consultoria de licitação',
+    ],
+    relatedSlugs: [
+      'diagnostico-eficiencia-licitacao-servico-premium',
+      'usar-dados-provar-eficiencia-licitacoes',
+      'aumentar-retencao-clientes-inteligencia-editais',
+    ],
+  },
+
+  // CONS-13
+  {
+    slug: 'diagnostico-eficiencia-licitacao-servico-premium',
+    title: 'Diagnóstico de Eficiência em Licitação — Novo Serviço Premium para Consultorias',
+    description:
+      'Como criar e precificar um serviço de diagnóstico de eficiência em licitação: metodologia, entregáveis e como transformá-lo em contratos recorrentes.',
+    category: 'Consultorias de Licitação',
+    tags: ['diagnóstico', 'serviço premium', 'metodologia', 'funil de vendas'],
+    publishDate: '2026-02-24',
+    readingTime: calculateReadingTime(3200),
+    wordCount: 3200,
+    keywords: [
+      'diagnóstico de eficiência em licitação',
+      'serviço premium consultoria',
+      'como vender consultoria de licitação',
+      'assessment licitação',
+    ],
+    relatedSlugs: [
+      'identificar-clientes-gargalo-operacional-licitacoes',
+      'usar-dados-provar-eficiencia-licitacoes',
+      'triagem-editais-vantagem-estrategica-clientes',
+    ],
+  },
+
+  // CONS-14
+  {
+    slug: 'aumentar-taxa-sucesso-clientes-20-porcento',
+    title: 'Como Aumentar a Taxa de Sucesso dos seus Clientes em até 20%',
+    description:
+      'Framework comprovado para consultorias aumentarem a taxa de adjudicação dos seus clientes B2G: da triagem à análise pós-pregão, em 5 etapas.',
+    category: 'Consultorias de Licitação',
+    tags: ['taxa de sucesso', 'framework', 'adjudicação', 'melhoria contínua'],
+    publishDate: '2026-02-24',
+    readingTime: calculateReadingTime(2800),
+    wordCount: 2800,
+    keywords: [
+      'aumentar taxa de vitória clientes',
+      'consultoria que dá resultado',
+      'melhorar performance licitação',
+      'taxa de adjudicação',
+    ],
+    relatedSlugs: [
+      'aumentar-retencao-clientes-inteligencia-editais',
+      'usar-dados-provar-eficiencia-licitacoes',
+      'como-aumentar-taxa-vitoria-licitacoes',
+    ],
+  },
+
+  // CONS-15
+  {
+    slug: 'consultorias-dados-retem-mais-clientes-b2g',
+    title: 'Por que Consultorias que Usam Dados Retêm mais Clientes B2G',
+    description:
+      'Consultorias data-driven retêm 3x mais clientes B2G do que as tradicionais. Veja os dados, o framework e como implementar uma cultura de dados.',
+    category: 'Consultorias de Licitação',
+    tags: ['data-driven', 'retenção', 'relatórios', 'cultura de dados'],
+    publishDate: '2026-02-24',
+    readingTime: calculateReadingTime(2800),
+    wordCount: 2800,
+    keywords: [
+      'consultoria data-driven',
+      'retenção de clientes B2G',
+      'dados em consultoria de licitação',
+      'cultura de dados consultoria',
+    ],
+    relatedSlugs: [
+      'aumentar-retencao-clientes-inteligencia-editais',
+      'usar-dados-provar-eficiencia-licitacoes',
+      'aumentar-taxa-sucesso-clientes-20-porcento',
     ],
   },
 ];

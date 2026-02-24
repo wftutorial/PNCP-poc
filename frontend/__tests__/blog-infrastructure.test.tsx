@@ -117,7 +117,7 @@ describe('lib/blog.ts utilities', () => {
     it('returns article when slug matches', () => {
       const article = getArticleBySlug('como-aumentar-taxa-vitoria-licitacoes');
       expect(article).toBeDefined();
-      expect(article?.title).toBe('Como Aumentar sua Taxa de Vitória em Licitações');
+      expect(article?.title).toBe('Como Aumentar sua Taxa de Vitória em Licitações sem Contratar mais Analistas');
     });
 
     it('returns undefined for non-existent slug', () => {

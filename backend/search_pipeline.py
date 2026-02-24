@@ -645,6 +645,47 @@ class SearchPipeline:
             ctx.quota_info = quota.check_quota(ctx.user["id"])
             return
 
+        # GTM-INFRA-003 AC5-AC8: Check cache BEFORE quota — skip quota if fully cached
+        if not (ctx.is_admin or ctx.is_master) and deps.ENABLE_NEW_PRICING:
+            try:
+                _cache_params = {
+                    "setor_id": ctx.request.setor_id,
+                    "ufs": ctx.request.ufs,
+                    "status": ctx.request.status.value if ctx.request.status else None,
+                    "modalidades": ctx.request.modalidades,
+                    "modo_busca": ctx.request.modo_busca if hasattr(ctx.request, "modo_busca") else None,
+                }
+                _cache_result = await _supabase_get_cache(ctx.user["id"], _cache_params)
+                if _cache_result and _cache_result.get("results"):
+                    # AC5: Cache hit — skip quota consumption entirely
+                    ctx.from_cache = True
+                    ctx.quota_info = quota.check_quota(ctx.user["id"])
+                    if not ctx.quota_info.allowed:
+                        raise HTTPException(status_code=403, detail=ctx.quota_info.error_message)
+                    # AC10: Structured log
+                    from search_cache import compute_search_hash
+                    _ph = compute_search_hash(_cache_params)
+                    logger.info(
+                        f"Quota skipped for user {mask_user_id(ctx.user['id'])}: "
+                        f"response fully cached (params_hash={_ph[:12]})"
+                    )
+                    # AC9: Increment metric
+                    from metrics import CACHE_QUOTA_SKIPPED
+                    CACHE_QUOTA_SKIPPED.inc()
+                    # CRIT-002 AC7: Still mark session as processing
+                    if ctx.session_id:
+                        asyncio.create_task(
+                            quota.update_search_session_status(
+                                ctx.session_id, status="processing", pipeline_stage="validate"
+                            )
+                        )
+                    return
+            except HTTPException:
+                raise
+            except Exception as cache_check_err:
+                # Cache check failed — proceed with normal quota flow
+                logger.debug(f"INFRA-003: Pre-quota cache check failed (proceeding normally): {cache_check_err}")
+
         # Quota resolution
         if ctx.is_admin or ctx.is_master:
             role = "ADMIN" if ctx.is_admin else "MASTER"
@@ -1837,6 +1878,7 @@ class SearchPipeline:
                 succeeded_ufs=ctx.succeeded_ufs,
                 total_ufs_requested=len(ctx.request.ufs),
                 cached=ctx.cached,
+                from_cache=ctx.from_cache,
                 cached_at=ctx.cached_at,
                 cached_sources=ctx.cached_sources,
                 cache_status=ctx.cache_status,
@@ -2048,6 +2090,7 @@ class SearchPipeline:
             succeeded_ufs=ctx.succeeded_ufs,
             total_ufs_requested=len(ctx.request.ufs),
             cached=ctx.cached,
+            from_cache=ctx.from_cache,
             cached_at=ctx.cached_at,
             cached_sources=ctx.cached_sources,
             cache_status=ctx.cache_status,

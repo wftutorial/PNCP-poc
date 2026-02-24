@@ -216,6 +216,12 @@ CACHE_REFRESH_TOTAL = _create_counter(
     labelnames=["result"],  # success, skipped, failed, empty_retry
 )
 
+# GTM-INFRA-003 AC9: Quota skipped due to cache hit
+CACHE_QUOTA_SKIPPED = _create_counter(
+    "smartlic_cache_quota_skipped_total",
+    "Times quota was skipped because response came from cache",
+)
+
 CACHE_REFRESH_DURATION = _create_histogram(
     "smartlic_cache_refresh_duration_seconds",
     "Cache refresh cycle duration",

@@ -1015,6 +1015,10 @@ class BuscaResponse(BaseModel):
         default=False,
         description="True when results are served from cache (STORY-257A AC9)"
     )
+    from_cache: bool = Field(
+        default=False,
+        description="GTM-INFRA-003 AC6: True when response came 100% from cache (quota was NOT consumed)"
+    )
     cached_at: Optional[str] = Field(
         default=None,
         description="ISO timestamp of when cached results were generated"

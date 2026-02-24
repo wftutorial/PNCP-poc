@@ -1354,24 +1354,75 @@ async def _fetch_multi_source_for_revalidation(request_data: dict) -> tuple[list
     except Exception as e:
         logger.warning(f"Multi-source revalidation failed, falling back to PNCP-only: {e}")
 
-    # Fallback: PNCP-only (original behavior)
-    import pncp_client as _pncp
+    # GTM-INFRA-003 AC4: Fallback — PCP+ComprasGov only (without PNCP)
+    try:
+        from consolidation import ConsolidationService
+        from source_config.sources import get_source_config
 
-    fetch_result = await _pncp.buscar_todas_ufs_paralelo(
-        ufs=request_data["ufs"],
-        data_inicial=request_data["data_inicial"],
-        data_final=request_data["data_final"],
-        modalidades=request_data.get("modalidades"),
-    )
+        source_config = get_source_config()
+        fallback_adapters = {}
 
-    if hasattr(fetch_result, "items"):
-        results = fetch_result.items
-    elif isinstance(fetch_result, list):
-        results = fetch_result
-    else:
-        results = list(fetch_result)
+        if source_config.compras_gov.enabled:
+            from clients.compras_gov_client import ComprasGovAdapter
+            fallback_adapters["COMPRAS_GOV"] = ComprasGovAdapter(timeout=source_config.compras_gov.timeout)
 
-    return results, ["PNCP"]
+        if source_config.portal.enabled and source_config.portal.credentials.has_api_key():
+            from clients.portal_compras_client import PortalComprasAdapter
+            fallback_adapters["PORTAL_COMPRAS"] = PortalComprasAdapter(
+                api_key=source_config.portal.credentials.api_key,
+                timeout=source_config.portal.timeout,
+            )
+
+        if fallback_adapters:
+            logger.info(f"Revalidation fallback: trying {list(fallback_adapters.keys())} without PNCP")
+            svc = ConsolidationService(
+                adapters=fallback_adapters,
+                timeout_per_source=60,
+                timeout_global=120,
+                fail_on_all_errors=False,
+            )
+            try:
+                consolidation_result = await svc.fetch_all(
+                    data_inicial=request_data["data_inicial"],
+                    data_final=request_data["data_final"],
+                    ufs=set(request_data["ufs"]),
+                )
+                sources = [sr.source_code for sr in consolidation_result.source_results if sr.status == "success"]
+                if consolidation_result.records:
+                    return consolidation_result.records, sources or ["fallback"]
+            finally:
+                await svc.close()
+
+    except ImportError:
+        pass
+    except Exception as e:
+        logger.warning(f"PCP+ComprasGov fallback revalidation failed: {e}")
+
+    # AC4 level 3: PNCP-only fallback (original behavior)
+    try:
+        import pncp_client as _pncp
+
+        fetch_result = await _pncp.buscar_todas_ufs_paralelo(
+            ufs=request_data["ufs"],
+            data_inicial=request_data["data_inicial"],
+            data_final=request_data["data_final"],
+            modalidades=request_data.get("modalidades"),
+        )
+
+        if hasattr(fetch_result, "items"):
+            results = fetch_result.items
+        elif isinstance(fetch_result, list):
+            results = fetch_result
+        else:
+            results = list(fetch_result)
+
+        if results:
+            return results, ["PNCP"]
+    except Exception as e:
+        logger.warning(f"PNCP-only fallback revalidation failed: {e}")
+
+    # AC4 final fallback: return empty — caller keeps stale cache
+    return [], []
 
 
 # ============================================================================

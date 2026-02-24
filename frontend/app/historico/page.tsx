@@ -5,6 +5,7 @@ import { useAuth } from "../components/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { EmptyState } from "../../components/EmptyState";
 import { ErrorStateWithRetry } from "../../components/ErrorStateWithRetry";
+import { AuthLoadingScreen } from "../../components/AuthLoadingScreen";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAnalytics } from "../../hooks/useAnalytics";
@@ -241,12 +242,9 @@ export default function HistoricoPage() {
     };
   }, [sessions, fetchSessions]);
 
+  // GTM-POLISH-001 AC1-AC3: Unified auth loading
   if (authLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--canvas)]">
-        <p className="text-[var(--ink-secondary)]">Carregando...</p>
-      </div>
-    );
+    return <AuthLoadingScreen />;
   }
 
   if (!session) {

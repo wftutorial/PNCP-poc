@@ -89,7 +89,8 @@ describe('HistoricoPage Component', () => {
 
       render(<HistoricoPage />);
 
-      expect(screen.getByText('Carregando...')).toBeInTheDocument();
+      // GTM-POLISH-001 AC1: Unified AuthLoadingScreen replaces generic "Carregando..."
+      expect(screen.getByTestId('auth-loading-screen')).toBeInTheDocument();
     });
   });
 

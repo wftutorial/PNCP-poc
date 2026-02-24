@@ -667,8 +667,8 @@ function HomePageContent() {
         >Entendi</button>
       </Dialog>
 
-      {/* UX-346 AC7: Footer only visible after results to save viewport space */}
-      <footer className={`bg-surface-1 text-ink border-t border-[var(--border)] mt-12${!search.result ? ' hidden' : ''}`} role="contentinfo">
+      {/* GTM-POLISH-001 AC8: Footer always visible (not hidden without results) */}
+      <footer className="bg-surface-1 text-ink border-t border-[var(--border)] mt-12" role="contentinfo">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <div className="grid md:grid-cols-4 gap-8 mb-8">
             <div>

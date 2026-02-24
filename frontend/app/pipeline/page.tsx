@@ -18,15 +18,19 @@ import { usePipeline } from "../../hooks/usePipeline";
 import { STAGES_ORDER, STAGE_CONFIG, type PipelineItem, type PipelineStage } from "./types";
 import { PipelineColumn } from "./PipelineColumn";
 import { PipelineCard } from "./PipelineCard";
+import { PipelineMobileTabs } from "./PipelineMobileTabs";
 import { PageHeader } from "../../components/PageHeader";
 import { EmptyState } from "../../components/EmptyState";
 import { ErrorStateWithRetry } from "../../components/ErrorStateWithRetry";
+import { AuthLoadingScreen } from "../../components/AuthLoadingScreen";
 import { useAuth } from "../components/AuthProvider";
+import { useIsMobile } from "../../hooks/useIsMobile";
 import { getUserFriendlyError } from "../../lib/error-messages";
 import { toast } from "sonner";
 
 export default function PipelinePage() {
-  const { session } = useAuth();
+  const { session, loading: authLoading } = useAuth();
+  const isMobile = useIsMobile();
   const { items, loading, error, fetchItems, updateItem, removeItem } = usePipeline();
   const [activeItem, setActiveItem] = useState<PipelineItem | null>(null);
   const [optimisticItems, setOptimisticItems] = useState<PipelineItem[]>([]);
@@ -119,6 +123,11 @@ export default function PipelinePage() {
   // Determine if we are in read-only error mode (stale data visible but API errored)
   const isReadOnlyError = Boolean(error) && optimisticItems.length > 0;
 
+  // GTM-POLISH-001 AC1-AC3: Unified auth loading
+  if (authLoading) {
+    return <AuthLoadingScreen />;
+  }
+
   if (!session?.access_token) {
     return (
       <>
@@ -154,11 +163,26 @@ export default function PipelinePage() {
             onRetry={wrappedFetchItems}
           />
         ) : loading && optimisticItems.length === 0 ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-blue" />
-            <span className="ml-3 text-[var(--text-secondary)]">Carregando pipeline...</span>
+          /* GTM-POLISH-001 AC4: Skeleton cards in kanban columns during loading */
+          <div className="flex gap-4 overflow-x-auto pb-4" data-testid="pipeline-skeleton">
+            {STAGES_ORDER.map((stage) => (
+              <div key={stage} className="flex-shrink-0 w-72 rounded-xl bg-[var(--surface-0)] border border-[var(--border)]">
+                <div className="p-3 border-b border-[var(--border)]">
+                  <div className="flex items-center gap-2">
+                    <div className="h-5 w-5 bg-[var(--surface-1)] rounded animate-pulse" />
+                    <div className="h-4 w-24 bg-[var(--surface-1)] rounded animate-pulse" />
+                  </div>
+                </div>
+                <div className="p-2 space-y-2">
+                  {[1, 2].map((i) => (
+                    <div key={i} className="h-24 bg-[var(--surface-1)] rounded-lg animate-pulse" style={{ animationDelay: `${i * 150}ms` }} />
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         ) : !loading && optimisticItems.length === 0 && !error ? (
+          /* GTM-POLISH-001 AC10: Pipeline empty state with visual drag hint */
           <EmptyState
             icon={
               <svg aria-hidden="true" className="w-8 h-8 text-[var(--brand-blue)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -166,7 +190,7 @@ export default function PipelinePage() {
               </svg>
             }
             title="Seu Pipeline de Oportunidades"
-            description="Aqui voc\u00ea acompanha licita\u00e7\u00f5es do in\u00edcio ao fim."
+            description="Arraste licita\u00e7\u00f5es para c\u00e1 e acompanhe do in\u00edcio ao fim."
             steps={[
               'Busque licita\u00e7\u00f5es em "Buscar"',
               'Clique em "Acompanhar" numa oportunidade',
@@ -206,6 +230,14 @@ export default function PipelinePage() {
             </DndContext>
           </>
         ) : (
+          /* GTM-POLISH-002 AC5-AC8: Mobile tabs, Desktop kanban */
+          isMobile ? (
+            <PipelineMobileTabs
+              items={optimisticItems}
+              onUpdateItem={updateItem}
+              onRemoveItem={removeItem}
+            />
+          ) : (
           <DndContext
             sensors={sensors}
             collisionDetection={closestCorners}
@@ -229,6 +261,7 @@ export default function PipelinePage() {
               {activeItem ? <PipelineCard item={activeItem} isDragging /> : null}
             </DragOverlay>
           </DndContext>
+          )
         )}
       </main>
     </>

@@ -165,7 +165,8 @@ export default function RootLayout({
                   <NavigationShell>
                     {children}
                   </NavigationShell>
-                  <Toaster position="top-right" richColors closeButton />
+                  {/* GTM-POLISH-002 AC4: bottom-center for proper mobile stacking */}
+                  <Toaster position="bottom-center" richColors closeButton />
                   <CookieConsentBanner />
                 </BackendStatusProvider>
               </NProgressProvider>

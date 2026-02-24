@@ -327,11 +327,12 @@ describe("UX-346: First-Use Experience", () => {
   // ---------- AC7: Footer visibility ----------
 
   describe("AC7: Footer visibility", () => {
-    it("footer is hidden before search results", () => {
+    // GTM-POLISH-001 AC8: Footer is always visible (not hidden before results)
+    it("footer is always visible even without search results", () => {
       render(<HomePage />);
 
       const footer = screen.getByRole("contentinfo");
-      expect(footer.className).toContain("hidden");
+      expect(footer.className).not.toContain("hidden");
     });
 
     it("footer is visible after search results", () => {

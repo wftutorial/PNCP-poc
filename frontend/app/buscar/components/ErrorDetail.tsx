@@ -109,14 +109,15 @@ export function ErrorDetail({ error, searchId, errorMessage, timestamp }: ErrorD
       </button>
 
       {isOpen && (
-        <div className="mt-2 p-3 bg-surface-1 rounded-md text-xs text-ink-muted font-mono space-y-1">
+        /* GTM-POLISH-002 AC3: Scrollable error detail on mobile (no truncation) */
+        <div className="mt-2 p-3 bg-surface-1 rounded-md text-xs text-ink-muted font-mono space-y-1 max-h-48 overflow-y-auto overflow-x-hidden break-all">
           {effectiveSearchId && <p>ID da busca: {effectiveSearchId}</p>}
           {requestId && <p>ID da requisição: {requestId}</p>}
           {correlationId && <p>ID de correlação: {correlationId}</p>}
           {errorCode && <p>Código do erro: {errorCode}</p>}
           {httpStatus && <p>Status HTTP: {httpStatus}</p>}
           <p>Horário: {effectiveTimestamp}</p>
-          {effectiveMessage && <p>Mensagem original: {effectiveMessage}</p>}
+          {effectiveMessage && <p className="break-words">Mensagem original: {effectiveMessage}</p>}
           <button
             onClick={handleCopy}
             aria-label="Copiar detalhes técnicos do erro para a área de transferência"

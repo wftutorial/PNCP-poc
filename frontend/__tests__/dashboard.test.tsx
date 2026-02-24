@@ -429,7 +429,8 @@ describe("DashboardPage — UX-338", () => {
 
       render(<DashboardPage />);
 
-      expect(screen.getByText(/Carregando/i)).toBeInTheDocument();
+      // GTM-POLISH-001 AC1: Unified AuthLoadingScreen replaces generic "Carregando..."
+      expect(screen.getByTestId("auth-loading-screen")).toBeInTheDocument();
     });
   });
 

@@ -12,6 +12,9 @@ P3
 ## Estimativa
 6h
 
+## Status
+COMPLETED (2026-02-24)
+
 ## Descricao
 
 O sistema tem 5 padroes diferentes de auth loading, pipeline sem skeleton, footer escondido ate ter resultados, e mensagens com empty state minimal. Falta consistencia visual entre paginas durante carregamento.
@@ -40,22 +43,22 @@ O sistema tem 5 padroes diferentes de auth loading, pipeline sem skeleton, foote
 
 ### Auth Loading Padronizado
 
-- [ ] AC1: Componente `AuthLoadingScreen.tsx` unico usado em TODAS as paginas protegidas
-- [ ] AC2: Visual consistente: logo + skeleton da pagina (nao spinner generico)
-- [ ] AC3: Transicao suave auth loading → pagina carregada (fade, nao flash)
+- [x] AC1: Componente `AuthLoadingScreen.tsx` unico usado em TODAS as paginas protegidas
+- [x] AC2: Visual consistente: logo + skeleton da pagina (nao spinner generico)
+- [x] AC3: Transicao suave auth loading → pagina carregada (fade, nao flash)
 
 ### Skeleton Screens
 
-- [ ] AC4: Pipeline: skeleton cards nas colunas do kanban durante loading
-- [ ] AC5: Historico: skeleton rows na tabela durante loading
-- [ ] AC6: Dashboard: skeleton cards nos graficos durante loading
-- [ ] AC7: Mensagens: skeleton rows na lista de conversas
+- [x] AC4: Pipeline: skeleton cards nas colunas do kanban durante loading
+- [x] AC5: Historico: skeleton rows na tabela durante loading
+- [x] AC6: Dashboard: skeleton cards nos graficos durante loading
+- [x] AC7: Mensagens: skeleton rows na lista de conversas
 
 ### Footer e Empty States
 
-- [ ] AC8: Footer sempre visivel (nao esconder quando sem resultados)
-- [ ] AC9: Mensagens empty state: icone + "Nenhuma conversa ainda" + acao sugerida
-- [ ] AC10: Pipeline empty state: "Arraste licitacoes para ca" com visual de dica
+- [x] AC8: Footer sempre visivel (nao esconder quando sem resultados)
+- [x] AC9: Mensagens empty state: icone + "Nenhuma conversa ainda" + acao sugerida
+- [x] AC10: Pipeline empty state: "Arraste licitacoes para ca" com visual de dica
 
 ## Testes Obrigatorios
 
@@ -63,20 +66,26 @@ O sistema tem 5 padroes diferentes de auth loading, pipeline sem skeleton, foote
 cd frontend && npm test -- --testPathPattern="loading-consistency" --no-coverage
 ```
 
-- [ ] T1: AuthLoadingScreen renderiza com logo + skeleton
-- [ ] T2: Pipeline mostra skeleton durante loading
-- [ ] T3: Footer visivel mesmo sem resultados
+- [x] T1: AuthLoadingScreen renderiza com logo + skeleton
+- [x] T2: Pipeline mostra skeleton durante loading
+- [x] T3: Footer visivel mesmo sem resultados
 
 ## Arquivos Afetados
 
 | Arquivo | Tipo de Mudanca |
 |---------|----------------|
 | `frontend/components/AuthLoadingScreen.tsx` | Criar — loading padronizado |
-| `frontend/app/pipeline/page.tsx` | Modificar — skeleton loading |
-| `frontend/app/historico/page.tsx` | Modificar — skeleton loading |
-| `frontend/app/dashboard/page.tsx` | Modificar — skeleton loading |
-| `frontend/app/mensagens/page.tsx` | Modificar — skeleton + empty state |
-| `frontend/app/components/Footer.tsx` | Modificar — sempre visivel |
+| `frontend/hooks/useIsMobile.ts` | Criar — hook de deteccao mobile |
+| `frontend/app/pipeline/page.tsx` | Modificar — skeleton loading + AuthLoadingScreen |
+| `frontend/app/historico/page.tsx` | Modificar — AuthLoadingScreen |
+| `frontend/app/dashboard/page.tsx` | Modificar — AuthLoadingScreen |
+| `frontend/app/mensagens/page.tsx` | Modificar — skeleton + empty state + AuthLoadingScreen |
+| `frontend/app/buscar/page.tsx` | Modificar — footer sempre visivel |
+| `frontend/__tests__/polish/loading-consistency.test.tsx` | Criar — 15 testes |
+| `frontend/__tests__/dashboard.test.tsx` | Modificar — atualizar expectativa auth loading |
+| `frontend/__tests__/pages/HistoricoPage.test.tsx` | Modificar — atualizar expectativa auth loading |
+| `frontend/__tests__/gtm-ux-002-error-states.test.tsx` | Modificar — atualizar expectativa empty state |
+| `frontend/__tests__/search-first-use.test.tsx` | Modificar — atualizar expectativa footer |
 
 ## Dependencias
 

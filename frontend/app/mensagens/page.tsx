@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "../components/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { ErrorStateWithRetry } from "../../components/ErrorStateWithRetry";
+import { AuthLoadingScreen } from "../../components/AuthLoadingScreen";
 import { getUserFriendlyError } from "../../lib/error-messages";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -221,7 +222,12 @@ export default function MensagensPage() {
     }
   };
 
-  if (authLoading || !user) {
+  // GTM-POLISH-001 AC1-AC3: Unified auth loading
+  if (authLoading) {
+    return <AuthLoadingScreen />;
+  }
+
+  if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[var(--canvas)]">
         <div className="w-8 h-8 border-2 border-[var(--brand-blue)] border-t-transparent rounded-full animate-spin" />
@@ -340,8 +346,22 @@ export default function MensagensPage() {
           {/* Conversation list */}
           <div className="flex-1 overflow-y-auto">
             {loading ? (
-              <div className="flex justify-center py-8">
-                <div className="w-6 h-6 border-2 border-[var(--brand-blue)] border-t-transparent rounded-full animate-spin" />
+              /* GTM-POLISH-001 AC7: Skeleton rows in conversation list */
+              <div className="space-y-0" data-testid="mensagens-skeleton">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="px-4 py-3 border-b border-[var(--border)]">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="h-4 w-3/4 bg-[var(--surface-1)] rounded animate-pulse mb-2" style={{ animationDelay: `${i * 100}ms` }} />
+                        <div className="flex items-center gap-2">
+                          <div className="h-3 w-16 bg-[var(--surface-1)] rounded animate-pulse" />
+                          <div className="h-3 w-14 bg-[var(--surface-1)] rounded animate-pulse" />
+                        </div>
+                      </div>
+                      <div className="h-3 w-8 bg-[var(--surface-1)] rounded animate-pulse" />
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : fetchError ? (
               <ErrorStateWithRetry
@@ -350,15 +370,33 @@ export default function MensagensPage() {
                 compact
               />
             ) : conversations.length === 0 ? (
-              <div className="p-8 text-center text-[var(--ink-secondary)] text-sm">
-                <svg
-              role="img"
-              aria-label="Ícone" className="w-10 h-10 mx-auto mb-3 text-[var(--ink-muted)]" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
-                </svg>
-                Nenhuma mensagem ainda.
-                <br />
-                Clique em &quot;Nova mensagem&quot; para iniciar.
+              /* GTM-POLISH-001 AC9: Enhanced empty state with icon + description + action hint */
+              <div className="p-8 text-center" data-testid="mensagens-empty-state">
+                <div className="mx-auto mb-4 w-14 h-14 flex items-center justify-center rounded-full bg-[var(--brand-blue-subtle)]">
+                  <svg
+                    role="img"
+                    aria-label="Nenhuma conversa"
+                    className="w-7 h-7 text-[var(--brand-blue)]"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={1.5}
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
+                  </svg>
+                </div>
+                <h3 className="text-base font-semibold text-[var(--ink)] mb-2">
+                  Nenhuma conversa ainda
+                </h3>
+                <p className="text-sm text-[var(--ink-secondary)] mb-4 max-w-xs mx-auto">
+                  Envie uma mensagem para nossa equipe de suporte. Respondemos em poucas horas.
+                </p>
+                <button
+                  onClick={() => setShowNew(true)}
+                  className="px-4 py-2 bg-[var(--brand-navy)] text-white rounded-button text-sm font-medium hover:bg-[var(--brand-blue)] transition-colors"
+                >
+                  Iniciar conversa
+                </button>
               </div>
             ) : (
               conversations.map((c) => (

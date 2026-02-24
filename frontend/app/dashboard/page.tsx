@@ -7,6 +7,7 @@ import { useBackendStatusContext } from "../../components/BackendStatusIndicator
 import { useFetchWithBackoff } from "../../hooks/useFetchWithBackoff";
 import { PageHeader } from "../../components/PageHeader";
 import { ErrorStateWithRetry } from "../../components/ErrorStateWithRetry";
+import { AuthLoadingScreen } from "../../components/AuthLoadingScreen";
 import Link from "next/link";
 import {
   BarChart,
@@ -336,12 +337,9 @@ export default function DashboardPage() {
   // Auth guard
   // ──────────────────────────────────────────────────────────────────────────
 
+  // GTM-POLISH-001 AC1-AC3: Unified auth loading
   if (authLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--canvas)]">
-        <p className="text-[var(--ink-secondary)]">Carregando...</p>
-      </div>
-    );
+    return <AuthLoadingScreen />;
   }
 
   if (!session) {

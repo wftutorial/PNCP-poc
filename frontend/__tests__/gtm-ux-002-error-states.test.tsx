@@ -242,7 +242,8 @@ describe("T5: Empty state different from error state visually", () => {
     render(<MensagensPage />);
 
     await waitFor(() => {
-      expect(screen.getByText(/Nenhuma mensagem ainda/)).toBeInTheDocument();
+      // GTM-POLISH-001 AC9: Updated empty state text
+      expect(screen.getByText(/Nenhuma conversa ainda/)).toBeInTheDocument();
       expect(screen.queryByTestId("error-state")).not.toBeInTheDocument();
     });
   });

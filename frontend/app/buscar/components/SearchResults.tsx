@@ -250,19 +250,19 @@ export default function SearchResults({
         </div>
       )}
 
-      {/* GTM-UX-003 AC1/AC8: Unified retry — simple numeric countdown (no circular SVG) */}
+      {/* GTM-UX-003 AC1/AC8 + GTM-POLISH-002 AC1-AC2: Unified retry — responsive 375px, no overflow */}
       {error && !quotaError && retryCountdown != null && retryCountdown > 0 && (
-        <div className="mt-6 sm:mt-8 p-4 sm:p-5 bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-card animate-fade-in-up" role="alert" data-testid="retry-countdown">
-          <p className="text-sm sm:text-base font-medium text-blue-700 dark:text-blue-300 mb-1" data-testid="retry-message">
-            {retryMessage || 'Serviço temporariamente indisponível. Tentando novamente...'}
+        <div className="mt-4 sm:mt-8 mx-0 p-3 sm:p-5 bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-card animate-fade-in-up max-w-full overflow-hidden" role="alert" data-testid="retry-countdown">
+          <p className="text-sm sm:text-base font-medium text-blue-700 dark:text-blue-300 mb-1 break-words" data-testid="retry-message">
+            {retryMessage || 'Temporariamente indisponível. Tentando novamente...'}
           </p>
-          <p className="text-sm text-blue-600/70 dark:text-blue-400/70 mb-3" data-testid="retry-countdown-text">
+          <p className="text-xs sm:text-sm text-blue-600/70 dark:text-blue-400/70 mb-3" data-testid="retry-countdown-text">
             Tentando em {retryCountdown}s...
           </p>
-          <div className="flex gap-3">
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
             <button
               onClick={onRetryNow}
-              className="px-4 py-2 bg-blue-600 text-white rounded-button text-sm font-medium hover:bg-blue-700 transition-colors"
+              className="px-4 py-2 bg-blue-600 text-white rounded-button text-sm font-medium hover:bg-blue-700 transition-colors w-full sm:w-auto"
               type="button"
               data-testid="retry-now-button"
             >
@@ -270,7 +270,7 @@ export default function SearchResults({
             </button>
             <button
               onClick={onCancelRetry}
-              className="px-4 py-2 bg-transparent text-blue-600 dark:text-blue-300 border border-blue-300 dark:border-blue-700 rounded-button text-sm font-medium hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
+              className="px-4 py-2 bg-transparent text-blue-600 dark:text-blue-300 border border-blue-300 dark:border-blue-700 rounded-button text-sm font-medium hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors w-full sm:w-auto"
               type="button"
             >
               Cancelar
@@ -279,13 +279,13 @@ export default function SearchResults({
         </div>
       )}
 
-      {/* GTM-UX-003 AC9: After 3 failed retries — show exhaustion state with partial results option */}
+      {/* GTM-UX-003 AC9 + GTM-POLISH-002 AC1: Exhaustion state — responsive 375px */}
       {error && !quotaError && retryExhausted && (retryCountdown == null || retryCountdown <= 0) && (
-        <div className="mt-6 sm:mt-8 p-4 sm:p-5 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-card animate-fade-in-up" role="alert" data-testid="retry-exhausted">
-          <p className="text-sm sm:text-base font-medium text-amber-700 dark:text-amber-300 mb-3">
-            Não foi possível completar a busca.
+        <div className="mt-4 sm:mt-8 mx-0 p-3 sm:p-5 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-card animate-fade-in-up max-w-full overflow-hidden" role="alert" data-testid="retry-exhausted">
+          <p className="text-sm sm:text-base font-medium text-amber-700 dark:text-amber-300 mb-3 break-words">
+            Busca indisponível no momento.
           </p>
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
             <button
               onClick={onSearch}
               disabled={loading}

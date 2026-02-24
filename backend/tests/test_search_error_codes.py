@@ -35,6 +35,15 @@ def mock_auth():
     app.dependency_overrides.pop(require_auth, None)
 
 
+@pytest.fixture(autouse=True)
+def mock_require_active_plan():
+    """STORY-265: Bypass require_active_plan in error code tests (not testing trial blocking here)."""
+    async def _passthrough(user):
+        return user
+    with patch("quota.require_active_plan", side_effect=_passthrough):
+        yield
+
+
 @pytest.fixture
 def client():
     return TestClient(app, raise_server_exceptions=False)

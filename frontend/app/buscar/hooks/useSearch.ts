@@ -553,8 +553,15 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
           }
 
           if (response.status === 403) {
-            setQuotaError(err.message || "Suas buscas acabaram.");
-            throw attachMeta(new Error(err.message || "Quota excedida"));
+            // STORY-265 AC13: Detect trial_expired specifically
+            const isTrialExpired = err.error === "trial_expired" || err.detail?.error === "trial_expired";
+            const errorMessage = err.detail?.message || err.message || "Suas buscas acabaram.";
+            if (isTrialExpired) {
+              setQuotaError("trial_expired");
+            } else {
+              setQuotaError(errorMessage);
+            }
+            throw attachMeta(new Error(errorMessage));
           }
 
           if (err.error_code === 'DATE_RANGE_EXCEEDED') {

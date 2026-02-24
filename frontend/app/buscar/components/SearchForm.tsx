@@ -103,6 +103,9 @@ export interface SearchFormProps {
   customizeOpen: boolean;
   setCustomizeOpen: (open: boolean) => void;
 
+  // STORY-265 AC14: Trial expired state
+  isTrialExpired?: boolean;
+
   // UX-346 AC5: First-use tip
   showFirstUseTip?: boolean;
   onDismissFirstUseTip?: () => void;
@@ -127,6 +130,7 @@ export default function SearchForm({
   planInfo, onShowUpgradeModal, clearResult,
   customizeOpen, setCustomizeOpen,
   showFirstUseTip, onDismissFirstUseTip,
+  isTrialExpired,
 }: SearchFormProps) {
   // UX-346 AC3/AC4: Build compact summary text
   const compactSummary = (() => {
@@ -421,9 +425,10 @@ export default function SearchForm({
         <button
           ref={searchButtonRef}
           onClick={buscar}
-          disabled={loading || !canSearch}
+          disabled={loading || !canSearch || isTrialExpired}
           type="button"
           aria-busy={loading}
+          title={isTrialExpired ? "Seu trial expirou. Ative um plano para continuar buscando." : undefined}
           className="w-full bg-brand-navy text-white py-3.5 sm:py-4 rounded-button text-base sm:text-lg font-semibold
                      hover:bg-brand-blue-hover active:bg-brand-blue
                      disabled:bg-ink-faint disabled:text-ink-muted disabled:cursor-not-allowed

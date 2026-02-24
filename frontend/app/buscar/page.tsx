@@ -173,6 +173,14 @@ function HomePageContent() {
     }
   }, [isTrialExpired, fetchTrialValue]);
 
+  // STORY-265 AC13: Show TrialConversionScreen when API returns 403 trial_expired
+  useEffect(() => {
+    if (search.quotaError === "trial_expired") {
+      setShowTrialConversion(true);
+      fetchTrialValue();
+    }
+  }, [search.quotaError, fetchTrialValue]);
+
   // CRIT-008 AC9-AC10: Backend connectivity status
   const backendStatus = useBackendStatusContext();
   const queuedSearchRef = useRef<(() => void) | null>(null);
@@ -490,6 +498,7 @@ function HomePageContent() {
               setCustomizeOpen={setCustomizeOpen}
               showFirstUseTip={showFirstUseTip}
               onDismissFirstUseTip={dismissFirstUseTip}
+              isTrialExpired={isTrialExpired || search.quotaError === "trial_expired"}
             />
 
             {/* GTM-004: Auto-search banners */}
@@ -580,6 +589,8 @@ function HomePageContent() {
                 retryExhausted={search.retryExhausted}
                 onRetryNow={search.retryNow}
                 onCancelRetry={search.cancelRetry}
+                // STORY-265 AC16: Disable Excel download when trial expired
+                isTrialExpired={isTrialExpired || search.quotaError === "trial_expired"}
               />
             </SearchErrorBoundary>
           </div>

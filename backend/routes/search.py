@@ -622,6 +622,9 @@ async def buscar_licitacoes(
     user: dict = Depends(require_auth),
     _rl=Depends(require_rate_limit(SEARCH_RATE_LIMIT_PER_MINUTE, 60)),  # GTM-GO-002 AC1
 ):
+    # STORY-265 AC1: Block expired trials BEFORE any processing
+    from quota import require_active_plan
+    await require_active_plan(user)
     """
     Main search endpoint — thin wrapper that delegates to SearchPipeline.
 

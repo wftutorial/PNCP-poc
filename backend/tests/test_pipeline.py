@@ -12,8 +12,13 @@ from auth import require_auth
 from routes.pipeline import router
 
 
-async def _noop_check_pipeline_access(user):
-    """Async no-op mock for _check_pipeline_access."""
+async def _noop_check_pipeline_read_access(user):
+    """Async no-op mock for _check_pipeline_read_access."""
+    return None
+
+
+async def _noop_check_pipeline_write_access(user):
+    """Async no-op mock for _check_pipeline_write_access."""
     return None
 
 
@@ -86,7 +91,8 @@ SAMPLE_ITEM = {
 
 class TestCreatePipelineItem:
 
-    @patch("routes.pipeline._check_pipeline_access", _noop_check_pipeline_access)
+    @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
+    @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
     @patch("routes.pipeline.get_supabase")
     def test_create_success(self, mock_get_sb):
         sb = _mock_sb()
@@ -110,7 +116,8 @@ class TestCreatePipelineItem:
         assert body["pncp_id"] == PNCP_ID
         assert body["stage"] == "descoberta"
 
-    @patch("routes.pipeline._check_pipeline_access", _noop_check_pipeline_access)
+    @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
+    @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
     @patch("routes.pipeline.get_supabase")
     def test_create_duplicate_409(self, mock_get_sb):
         """Test duplicate pncp_id for same user returns 409."""
@@ -131,7 +138,8 @@ class TestCreatePipelineItem:
         assert resp.status_code == 409
         assert "já está no seu pipeline" in resp.json()["detail"]
 
-    @patch("routes.pipeline._check_pipeline_access", _noop_check_pipeline_access)
+    @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
+    @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
     @patch("routes.pipeline.get_supabase")
     def test_create_duplicate_23505_error_code(self, mock_get_sb):
         """Test PostgreSQL unique violation error code 23505."""
@@ -163,7 +171,8 @@ class TestCreatePipelineItem:
 
         assert resp.status_code == 422
 
-    @patch("routes.pipeline._check_pipeline_access", _noop_check_pipeline_access)
+    @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
+    @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
     @patch("routes.pipeline.get_supabase")
     def test_create_empty_data_failure(self, mock_get_sb):
         """Test database failure (empty result.data) returns 500."""
@@ -190,7 +199,8 @@ class TestCreatePipelineItem:
 
 class TestListPipelineItems:
 
-    @patch("routes.pipeline._check_pipeline_access", _noop_check_pipeline_access)
+    @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
+    @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
     @patch("routes.pipeline.get_supabase")
     def test_list_success(self, mock_get_sb):
         sb = _mock_sb()
@@ -208,7 +218,8 @@ class TestListPipelineItems:
         assert body["limit"] == 50
         assert body["offset"] == 0
 
-    @patch("routes.pipeline._check_pipeline_access", _noop_check_pipeline_access)
+    @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
+    @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
     @patch("routes.pipeline.get_supabase")
     def test_list_with_stage_filter(self, mock_get_sb):
         sb = _mock_sb()
@@ -224,7 +235,8 @@ class TestListPipelineItems:
         assert len(body["items"]) == 1
         assert body["items"][0]["stage"] == "analise"
 
-    @patch("routes.pipeline._check_pipeline_access", _noop_check_pipeline_access)
+    @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
+    @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
     @patch("routes.pipeline.get_supabase")
     def test_list_invalid_stage_422(self, mock_get_sb):
         client = _create_client()
@@ -234,7 +246,8 @@ class TestListPipelineItems:
         assert resp.status_code == 422
         assert "Stage inválido" in resp.json()["detail"]
 
-    @patch("routes.pipeline._check_pipeline_access", _noop_check_pipeline_access)
+    @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
+    @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
     @patch("routes.pipeline.get_supabase")
     def test_list_with_pagination(self, mock_get_sb):
         sb = _mock_sb()
@@ -250,7 +263,8 @@ class TestListPipelineItems:
         assert body["offset"] == 5
         assert body["total"] == 10
 
-    @patch("routes.pipeline._check_pipeline_access", _noop_check_pipeline_access)
+    @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
+    @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
     @patch("routes.pipeline.get_supabase")
     def test_list_empty(self, mock_get_sb):
         sb = _mock_sb()
@@ -272,7 +286,8 @@ class TestListPipelineItems:
 
 class TestUpdatePipelineItem:
 
-    @patch("routes.pipeline._check_pipeline_access", _noop_check_pipeline_access)
+    @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
+    @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
     @patch("routes.pipeline.get_supabase")
     def test_update_stage_success(self, mock_get_sb):
         sb = _mock_sb()
@@ -289,7 +304,8 @@ class TestUpdatePipelineItem:
         body = resp.json()
         assert body["stage"] == "analise"
 
-    @patch("routes.pipeline._check_pipeline_access", _noop_check_pipeline_access)
+    @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
+    @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
     @patch("routes.pipeline.get_supabase")
     def test_update_notes_success(self, mock_get_sb):
         sb = _mock_sb()
@@ -306,7 +322,8 @@ class TestUpdatePipelineItem:
         body = resp.json()
         assert body["notes"] == "Importante: verificar requisitos técnicos"
 
-    @patch("routes.pipeline._check_pipeline_access", _noop_check_pipeline_access)
+    @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
+    @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
     @patch("routes.pipeline.get_supabase")
     def test_update_both_stage_and_notes(self, mock_get_sb):
         sb = _mock_sb()
@@ -339,7 +356,8 @@ class TestUpdatePipelineItem:
         assert isinstance(detail, list)
         assert detail[0]["loc"] == ["body", "stage"]
 
-    @patch("routes.pipeline._check_pipeline_access", _noop_check_pipeline_access)
+    @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
+    @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
     @patch("routes.pipeline.get_supabase")
     def test_update_empty_payload_422(self, mock_get_sb):
         client = _create_client()
@@ -349,7 +367,8 @@ class TestUpdatePipelineItem:
         assert resp.status_code == 422
         assert "Nenhum campo para atualizar" in resp.json()["detail"]
 
-    @patch("routes.pipeline._check_pipeline_access", _noop_check_pipeline_access)
+    @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
+    @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
     @patch("routes.pipeline.get_supabase")
     def test_update_not_found_404(self, mock_get_sb):
         sb = _mock_sb()
@@ -371,7 +390,8 @@ class TestUpdatePipelineItem:
 
 class TestDeletePipelineItem:
 
-    @patch("routes.pipeline._check_pipeline_access", _noop_check_pipeline_access)
+    @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
+    @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
     @patch("routes.pipeline.get_supabase")
     def test_delete_success(self, mock_get_sb):
         sb = _mock_sb()
@@ -386,7 +406,8 @@ class TestDeletePipelineItem:
         assert body["success"] is True
         assert "removido" in body["message"]
 
-    @patch("routes.pipeline._check_pipeline_access", _noop_check_pipeline_access)
+    @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
+    @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
     @patch("routes.pipeline.get_supabase")
     def test_delete_not_found_404(self, mock_get_sb):
         sb = _mock_sb()
@@ -407,9 +428,9 @@ class TestDeletePipelineItem:
 class TestPipelineAlerts:
 
     @patch("routes.pipeline.get_supabase")
-    @patch("routes.pipeline._check_pipeline_access")
-    def test_alerts_success(self, mock_check_access, mock_get_sb):
-        mock_check_access.return_value = None  # Allow access
+    @patch("routes.pipeline._check_pipeline_read_access")
+    def test_alerts_success(self, mock_check_read_access, mock_get_sb):
+        mock_check_read_access.return_value = None  # Allow access
         sb = _mock_sb()
         # Item with approaching deadline
         alert_item = {**SAMPLE_ITEM, "data_encerramento": "2026-02-16T23:59:59"}
@@ -426,9 +447,9 @@ class TestPipelineAlerts:
         assert body["items"][0]["pncp_id"] == PNCP_ID
 
     @patch("routes.pipeline.get_supabase")
-    @patch("routes.pipeline._check_pipeline_access")
-    def test_alerts_empty(self, mock_check_access, mock_get_sb):
-        mock_check_access.return_value = None  # Allow access
+    @patch("routes.pipeline._check_pipeline_read_access")
+    def test_alerts_empty(self, mock_check_read_access, mock_get_sb):
+        mock_check_read_access.return_value = None  # Allow access
         sb = _mock_sb()
         sb.execute.return_value = Mock(data=[])
         mock_get_sb.return_value = sb
@@ -454,7 +475,11 @@ class TestPipelineAccessControl:
     def test_access_smartlic_pro_allowed(self, mock_get_sb, mock_has_master, mock_check_quota):
         """GTM-FIX-015: SmartLic Pro plan users can access pipeline."""
         mock_has_master.return_value = False
-        mock_check_quota.return_value = Mock(plan_id="smartlic_pro")
+        mock_check_quota.return_value = Mock(
+            plan_id="smartlic_pro",
+            allowed=True,
+            capabilities={"allow_pipeline": True},
+        )
         sb = _mock_sb()
         sb.execute.return_value = Mock(data=[], count=0)
         mock_get_sb.return_value = sb
@@ -470,7 +495,11 @@ class TestPipelineAccessControl:
     def test_access_maquina_allowed(self, mock_get_sb, mock_has_master, mock_check_quota):
         """Maquina plan users can access pipeline."""
         mock_has_master.return_value = False
-        mock_check_quota.return_value = Mock(plan_id="maquina")
+        mock_check_quota.return_value = Mock(
+            plan_id="maquina",
+            allowed=True,
+            capabilities={"allow_pipeline": True},
+        )
         sb = _mock_sb()
         sb.execute.return_value = Mock(data=[], count=0)
         mock_get_sb.return_value = sb
@@ -486,7 +515,11 @@ class TestPipelineAccessControl:
     def test_access_sala_guerra_allowed(self, mock_get_sb, mock_has_master, mock_check_quota):
         """Sala de Guerra plan users can access pipeline."""
         mock_has_master.return_value = False
-        mock_check_quota.return_value = Mock(plan_id="sala_guerra")
+        mock_check_quota.return_value = Mock(
+            plan_id="sala_guerra",
+            allowed=True,
+            capabilities={"allow_pipeline": True},
+        )
         sb = _mock_sb()
         sb.execute.return_value = Mock(data=[], count=0)
         mock_get_sb.return_value = sb
@@ -499,27 +532,34 @@ class TestPipelineAccessControl:
     @patch("quota.check_quota")
     @patch("authorization.has_master_access")
     @patch("routes.pipeline.get_supabase")
-    def test_access_free_trial_denied_403(self, mock_get_sb, mock_has_master, mock_check_quota):
-        """Free trial users get 403 with upgrade CTA."""
+    def test_access_free_trial_read_allowed(self, mock_get_sb, mock_has_master, mock_check_quota):
+        """STORY-265 AC3: Free trial users can READ pipeline (allow_pipeline=True since STORY-264)."""
         mock_has_master.return_value = False
-        mock_check_quota.return_value = Mock(plan_id="free_trial")
+        mock_check_quota.return_value = Mock(
+            plan_id="free_trial",
+            allowed=True,
+            capabilities={"allow_pipeline": True},
+        )
+        sb = _mock_sb()
+        sb.execute.return_value = Mock(data=[], count=0)
+        mock_get_sb.return_value = sb
         client = _create_client()
 
         resp = client.get("/pipeline")
 
-        assert resp.status_code == 403
-        body = resp.json()
-        assert body["detail"]["error_code"] == "pipeline_not_available"
-        assert body["detail"]["upgrade_cta"] == "Assinar SmartLic Pro"
-        assert body["detail"]["suggested_plan"] == "smartlic_pro"
+        assert resp.status_code == 200
 
     @patch("quota.check_quota")
     @patch("authorization.has_master_access")
     @patch("routes.pipeline.get_supabase")
     def test_access_consultor_agil_denied_403(self, mock_get_sb, mock_has_master, mock_check_quota):
-        """Consultor Ágil users get 403 with upgrade CTA."""
+        """Consultor Ágil users (no allow_pipeline) get 403 with upgrade CTA."""
         mock_has_master.return_value = False
-        mock_check_quota.return_value = Mock(plan_id="consultor_agil")
+        mock_check_quota.return_value = Mock(
+            plan_id="consultor_agil",
+            allowed=True,
+            capabilities={"allow_pipeline": False},
+        )
         client = _create_client()
 
         resp = client.get("/pipeline")
@@ -545,9 +585,15 @@ class TestPipelineAccessControl:
     @patch("quota.check_quota")
     @patch("authorization.has_master_access")
     def test_create_access_denied_403(self, mock_has_master, mock_check_quota):
-        """Access control applies to POST /pipeline as well."""
+        """STORY-265 AC2: Expired free trial cannot POST /pipeline."""
         mock_has_master.return_value = False
-        mock_check_quota.return_value = Mock(plan_id="free_trial")
+        mock_check_quota.return_value = Mock(
+            plan_id="free_trial",
+            allowed=False,
+            capabilities={"allow_pipeline": True},
+            trial_expires_at=None,
+            error_message="Seu trial expirou.",
+        )
         client = _create_client()
 
         resp = client.post("/pipeline", json={
@@ -563,9 +609,15 @@ class TestPipelineAccessControl:
     @patch("quota.check_quota")
     @patch("authorization.has_master_access")
     def test_update_access_denied_403(self, mock_has_master, mock_check_quota):
-        """Access control applies to PATCH /pipeline/{item_id}."""
+        """STORY-265 AC2: Expired free trial cannot PATCH /pipeline."""
         mock_has_master.return_value = False
-        mock_check_quota.return_value = Mock(plan_id="free_trial")
+        mock_check_quota.return_value = Mock(
+            plan_id="free_trial",
+            allowed=False,
+            capabilities={"allow_pipeline": True},
+            trial_expires_at=None,
+            error_message="Seu trial expirou.",
+        )
         client = _create_client()
 
         resp = client.patch(f"/pipeline/{ITEM_ID}", json={
@@ -577,9 +629,15 @@ class TestPipelineAccessControl:
     @patch("quota.check_quota")
     @patch("authorization.has_master_access")
     def test_delete_access_denied_403(self, mock_has_master, mock_check_quota):
-        """Access control applies to DELETE /pipeline/{item_id}."""
+        """STORY-265 AC2: Expired free trial cannot DELETE /pipeline."""
         mock_has_master.return_value = False
-        mock_check_quota.return_value = Mock(plan_id="free_trial")
+        mock_check_quota.return_value = Mock(
+            plan_id="free_trial",
+            allowed=False,
+            capabilities={"allow_pipeline": True},
+            trial_expires_at=None,
+            error_message="Seu trial expirou.",
+        )
         client = _create_client()
 
         resp = client.delete(f"/pipeline/{ITEM_ID}")
@@ -588,12 +646,20 @@ class TestPipelineAccessControl:
 
     @patch("quota.check_quota")
     @patch("authorization.has_master_access")
-    def test_alerts_access_denied_403(self, mock_has_master, mock_check_quota):
-        """Access control applies to GET /pipeline/alerts."""
+    @patch("routes.pipeline.get_supabase")
+    def test_alerts_access_read_allowed(self, mock_get_sb, mock_has_master, mock_check_quota):
+        """STORY-265 AC3: Free trial (even expired) can read /pipeline/alerts."""
         mock_has_master.return_value = False
-        mock_check_quota.return_value = Mock(plan_id="free_trial")
+        mock_check_quota.return_value = Mock(
+            plan_id="free_trial",
+            allowed=False,
+            capabilities={"allow_pipeline": True},
+        )
+        sb = _mock_sb()
+        sb.execute.return_value = Mock(data=[])
+        mock_get_sb.return_value = sb
         client = _create_client()
 
         resp = client.get("/pipeline/alerts")
 
-        assert resp.status_code == 403
+        assert resp.status_code == 200

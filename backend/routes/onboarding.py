@@ -47,9 +47,13 @@ async def first_analysis(
     """
     Execute first automatic analysis based on onboarding profile.
 
+    STORY-265 AC5: Trial expired cannot initiate analysis.
     GTM-004 AC1-4: Maps CNAE to sector, builds BuscaRequest automatically,
     executes search in background, and returns search_id for SSE tracking.
     """
+    # STORY-265 AC5: Block expired trials before processing
+    from quota import require_active_plan
+    await require_active_plan(user)
     user_id = user.get("id", "unknown")
     search_id = str(uuid.uuid4())
 

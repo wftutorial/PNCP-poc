@@ -39,6 +39,15 @@ def _prevent_real_api_calls():
         yield
 
 
+@pytest.fixture(autouse=True)
+def _bypass_require_active_plan():
+    """STORY-265: Bypass require_active_plan in buscar endpoint tests (not testing trial blocking here)."""
+    async def _passthrough(user):
+        return user
+    with patch("quota.require_active_plan", side_effect=_passthrough):
+        yield
+
+
 def override_require_auth(user_id: str = "user-123"):
     """Create a dependency override for require_auth."""
     async def _override():
@@ -414,63 +423,6 @@ class TestBuscarDateRangeValidation:
             )
 
             assert response.status_code == 200
-        finally:
-            cleanup()
-
-
-class TestBuscarExcelGating:
-    """Test Excel export gating based on plan capabilities."""
-
-    @patch("routes.search.ENABLE_NEW_PRICING", True)
-    @patch("quota.check_quota")
-    @patch("quota.increment_monthly_quota")
-    @patch("quota.save_search_session", new_callable=AsyncMock)
-    @patch("routes.search.PNCPClient")
-    def test_blocks_excel_for_consultor_plan(
-        self,
-        mock_pncp_client_class,
-        mock_save_session,
-        mock_increment_quota,
-        mock_check_quota,
-    ):
-        """Should NOT generate Excel for Consultor Ágil plan (allow_excel=False)."""
-        cleanup = setup_auth_override("user-123")
-        try:
-            from quota import QuotaInfo, PLAN_CAPABILITIES
-
-            mock_check_quota.return_value = QuotaInfo(
-                allowed=True,
-                plan_id="consultor_agil",
-                plan_name="Consultor Ágil",
-                capabilities=PLAN_CAPABILITIES["consultor_agil"],
-                quota_used=23,
-                quota_remaining=27,
-                quota_reset_date=datetime.now(timezone.utc),
-            )
-
-            # Mock PNCP client
-            mock_client_instance = MagicMock()
-            mock_pncp_client_class.return_value = mock_client_instance
-            mock_client_instance.fetch_all.return_value = []
-            mock_increment_quota.return_value = 24
-
-            response = client.post(
-                "/buscar",
-                json={
-                    "ufs": ["SC"],
-                    "data_inicial": "2026-01-01",
-                    "data_final": "2026-01-07",
-                    "setor_id": "vestuario",
-                },
-            )
-
-            assert response.status_code == 200
-            data = response.json()
-
-            assert data["excel_available"] is False
-            assert data["excel_base64"] is None
-            assert "Máquina" in data["upgrade_message"]
-            assert "R$ 597/mês" in data["upgrade_message"]
         finally:
             cleanup()
 

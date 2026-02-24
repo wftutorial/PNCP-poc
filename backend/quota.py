@@ -742,6 +742,114 @@ class QuotaExceededError(Exception):
     pass
 
 
+# ============================================================================
+# STORY-265 AC7-AC9: require_active_plan dependency
+# ============================================================================
+
+async def require_active_plan(user: dict) -> dict:
+    """FastAPI dependency: ensures user has an active plan (valid trial OR paid subscription).
+
+    STORY-265 AC7: Encapsulates verification of active plan status.
+    STORY-265 AC8: Returns HTTP 403 with structured body on expired trial/plan.
+    STORY-265 AC9: Read-only endpoints (GET /pipeline, GET /sessions, GET /me)
+                   should NOT use this dependency.
+
+    Usage:
+        @router.post("/endpoint")
+        async def my_endpoint(user: dict = Depends(require_active_plan)):
+            ...
+
+    Note: Must be composed with require_auth. Use as:
+        from auth import require_auth
+        from fastapi import Depends
+        user = Depends(require_active_plan)
+        # This dependency receives a pre-authenticated user dict.
+        # It should be used via _require_active_plan_dep() which chains with require_auth.
+
+    Returns:
+        dict: The authenticated user dict (pass-through on success).
+
+    Raises:
+        HTTPException(403): If trial expired or plan inactive.
+    """
+    from fastapi import HTTPException
+    from authorization import has_master_access
+
+    user_id = user["id"]
+
+    # Admins/masters always bypass plan checks
+    try:
+        if await has_master_access(user_id):
+            return user
+    except Exception:
+        pass
+
+    quota_info = check_quota(user_id)
+
+    if not quota_info.allowed:
+        # STORY-265 AC12: Structured logging for trial blocks
+        is_trial = quota_info.plan_id == "free_trial"
+        error_type = "trial_expired" if is_trial else "plan_expired"
+
+        days_overdue = 0
+        if quota_info.trial_expires_at:
+            delta = datetime.now(timezone.utc) - quota_info.trial_expires_at
+            days_overdue = max(0, delta.days)
+
+        logger.info(
+            "trial_blocked",
+            extra={
+                "user_id": mask_user_id(user_id),
+                "error_type": error_type,
+                "plan_id": quota_info.plan_id,
+                "expired_at": quota_info.trial_expires_at.isoformat() if quota_info.trial_expires_at else None,
+                "days_overdue": days_overdue,
+            },
+        )
+
+        # STORY-265 AC8: Structured 403 response
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": error_type,
+                "message": quota_info.error_message or "Seu acesso expirou. Ative um plano para continuar.",
+                "upgrade_url": "/planos",
+            },
+        )
+
+    return user
+
+
+async def _require_active_plan_dep(user: dict = None) -> dict:
+    """Internal: chains require_auth + require_active_plan for use as Depends().
+
+    Usage in routes:
+        from quota import get_active_plan_dependency
+        @router.post("/endpoint")
+        async def my_endpoint(user: dict = Depends(get_active_plan_dependency())):
+            ...
+    """
+    return await require_active_plan(user)
+
+
+def get_active_plan_dependency():
+    """Create a FastAPI dependency that chains require_auth → require_active_plan.
+
+    STORY-265 AC7: Use this on endpoints that must block expired trials.
+    STORY-265 AC9: Do NOT use on read-only endpoints.
+
+    Returns:
+        A FastAPI Depends-compatible callable.
+    """
+    from fastapi import Depends
+    from auth import require_auth
+
+    async def _dep(user: dict = Depends(require_auth)):
+        return await require_active_plan(user)
+
+    return _dep
+
+
 def decrement_credits(subscription_id: Optional[str], user_id: str) -> None:
     """
     Decrement one search credit after successful search.

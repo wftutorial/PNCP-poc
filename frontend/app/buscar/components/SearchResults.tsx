@@ -129,6 +129,9 @@ export interface SearchResultsProps {
   onAddNeighborStates?: () => void;
   nearbyResultsCount?: number;
   onViewNearbyResults?: () => void;
+
+  // STORY-265 AC16: Trial expired — disable Excel download
+  isTrialExpired?: boolean;
 }
 
 export default function SearchResults({
@@ -155,6 +158,8 @@ export default function SearchResults({
   retryCountdown, retryMessage, retryExhausted, onRetryNow, onCancelRetry,
   // GTM-UX-002 AC10-12
   onAdjustPeriod, onAddNeighborStates, nearbyResultsCount, onViewNearbyResults,
+  // STORY-265 AC16
+  isTrialExpired,
 }: SearchResultsProps) {
   // STORY-257B AC4: Track transition from grid to results
   const [showGrid, setShowGrid] = useState(false);
@@ -859,7 +864,21 @@ export default function SearchResults({
           )}
 
           {/* Download Button — UX-349 AC1-AC5: Excel always visible when results exist */}
-          {planInfo?.capabilities.allow_excel ? (
+          {/* STORY-265 AC16: Trial expired → disabled download with upgrade message */}
+          {isTrialExpired ? (
+            <Link
+              href="/planos"
+              className="w-full bg-surface-0 border-2 border-amber-500 text-amber-700 dark:text-amber-300 py-3 sm:py-4 rounded-button text-base sm:text-lg font-semibold
+                         hover:bg-amber-50 dark:hover:bg-amber-900/10 transition-all duration-200
+                         flex items-center justify-center gap-3"
+              data-testid="excel-trial-expired-button"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+              Ative seu plano para exportar
+            </Link>
+          ) : planInfo?.capabilities.allow_excel ? (
             (() => {
               const hasDownload = !!(result.download_url || result.download_id);
               const isFailed = (result.excel_status === 'failed' || excelTimedOut) && !hasDownload;
@@ -949,8 +968,8 @@ export default function SearchResults({
             </Link>
           )}
 
-          {/* Google Sheets Export */}
-          {planInfo?.capabilities.allow_excel && (
+          {/* Google Sheets Export — STORY-265: also disabled when trial expired */}
+          {planInfo?.capabilities.allow_excel && !isTrialExpired && (
             <GoogleSheetsExportButton
               licitacoes={result.licitacoes}
               searchLabel={`${sectorName} - ${Array.from(ufsSelecionadas).join(', ')}`}

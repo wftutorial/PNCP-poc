@@ -27,11 +27,11 @@ router = APIRouter(tags=["pipeline"])
 VALID_STAGES = {"descoberta", "analise", "preparando", "enviada", "resultado"}
 
 
-async def _check_pipeline_access(user: dict) -> None:
-    """Check if user's plan allows pipeline access (AC12).
+async def _check_pipeline_read_access(user: dict) -> None:
+    """Check if user's plan allows pipeline READ access.
 
-    Pipeline is available for maquina and sala_guerra plans.
-    Free trial and consultor_agil get upgrade prompt (AC13).
+    STORY-265 AC3: Trial expired users can VIEW pipeline (read-only).
+    This incentivizes conversion by showing saved opportunities.
     """
     from quota import check_quota
     from authorization import has_master_access
@@ -48,11 +48,51 @@ async def _check_pipeline_access(user: dict) -> None:
 
     # Check plan capabilities
     quota_info = check_quota(user_id)
-    plan_id = quota_info.plan_id
+    caps = quota_info.capabilities
 
-    # Pipeline available for smartlic_pro and legacy plans
-    allowed_plans = {"smartlic_pro", "maquina", "sala_guerra"}
-    if plan_id not in allowed_plans:
+    # STORY-265 AC3: Allow read access for expired trials (read-only incentive)
+    # Only block if the plan doesn't have pipeline capability at all
+    if not caps.get("allow_pipeline", False) and quota_info.allowed:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "message": "Pipeline de oportunidades disponível para assinantes SmartLic Pro.",
+                "error_code": "pipeline_not_available",
+                "upgrade_cta": "Assinar SmartLic Pro",
+                "suggested_plan": "smartlic_pro",
+                "suggested_plan_name": "SmartLic Pro",
+                "suggested_plan_price": "R$ 1.999/mês",
+            },
+        )
+
+
+async def _check_pipeline_write_access(user: dict) -> None:
+    """Check if user's plan allows pipeline WRITE access (POST/PATCH/DELETE).
+
+    STORY-265 AC2: Trial expired cannot add/modify/delete pipeline items.
+    Uses require_active_plan for trial expiry check, then capability check.
+    """
+    from quota import require_active_plan, check_quota
+    from authorization import has_master_access
+
+    user_id = user["id"]
+
+    # Masters/admins always have access
+    try:
+        is_master = await has_master_access(user_id)
+        if is_master:
+            return
+    except Exception:
+        pass
+
+    # STORY-265 AC2: Block expired trials (raises 403 with trial_expired)
+    await require_active_plan(user)
+
+    # Check plan capabilities for pipeline access
+    quota_info = check_quota(user_id)
+    caps = quota_info.capabilities
+
+    if not caps.get("allow_pipeline", False):
         raise HTTPException(
             status_code=403,
             detail={
@@ -73,9 +113,10 @@ async def create_pipeline_item(
 ):
     """Add a procurement opportunity to the user's pipeline (AC2).
 
+    STORY-265 AC2: Trial expired cannot add items.
     Returns 409 if the item already exists (UNIQUE constraint on user_id + pncp_id).
     """
-    await _check_pipeline_access(user)
+    await _check_pipeline_write_access(user)
 
     user_id = user["id"]
     sb = get_supabase()
@@ -126,9 +167,10 @@ async def list_pipeline_items(
 ):
     """List pipeline items for the authenticated user (AC3).
 
+    STORY-265 AC3: Trial expired can VIEW pipeline (read-only).
     Supports filtering by stage and pagination via limit/offset.
     """
-    await _check_pipeline_access(user)
+    await _check_pipeline_read_access(user)
 
     user_id = user["id"]
     sb = get_supabase()
@@ -171,10 +213,11 @@ async def update_pipeline_item(
 ):
     """Update stage and/or notes of a pipeline item (AC4).
 
+    STORY-265 AC2: Trial expired cannot modify items.
     Validates that stage is a valid enum value.
     Returns 404 if item doesn't exist or doesn't belong to user.
     """
-    await _check_pipeline_access(user)
+    await _check_pipeline_write_access(user)
 
     user_id = user["id"]
     sb = get_supabase()
@@ -226,9 +269,10 @@ async def delete_pipeline_item(
 ):
     """Remove an item from the pipeline (AC5).
 
+    STORY-265 AC2: Trial expired cannot delete items.
     Returns 404 if item doesn't exist or doesn't belong to user.
     """
-    await _check_pipeline_access(user)
+    await _check_pipeline_write_access(user)
 
     user_id = user["id"]
     sb = get_supabase()
@@ -264,10 +308,11 @@ async def get_pipeline_alerts(
 ):
     """Get pipeline items with deadlines within 3 days (AC6).
 
+    STORY-265 AC3: Trial expired can view alerts (read-only).
     Returns items where data_encerramento < now() + 3 days
     and stage is NOT in ('enviada', 'resultado').
     """
-    await _check_pipeline_access(user)
+    await _check_pipeline_read_access(user)
 
     user_id = user["id"]
     sb = get_supabase()

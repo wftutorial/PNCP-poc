@@ -15,6 +15,7 @@ import {
 } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { usePipeline } from "../../hooks/usePipeline";
+import { usePlan } from "../../hooks/usePlan";
 import { STAGES_ORDER, STAGE_CONFIG, type PipelineItem, type PipelineStage } from "./types";
 import { PipelineColumn } from "./PipelineColumn";
 import { PipelineCard } from "./PipelineCard";
@@ -30,8 +31,12 @@ import { toast } from "sonner";
 
 export default function PipelinePage() {
   const { session, loading: authLoading } = useAuth();
+  const { planInfo } = usePlan();
   const isMobile = useIsMobile();
   const { items, loading, error, fetchItems, updateItem, removeItem } = usePipeline();
+
+  // STORY-265 AC15: Detect trial expired for read-only mode
+  const isTrialExpired = planInfo?.plan_id === "free_trial" && planInfo?.subscription_status === "expired";
   const [activeItem, setActiveItem] = useState<PipelineItem | null>(null);
   const [optimisticItems, setOptimisticItems] = useState<PipelineItem[]>([]);
   const [initialLoadFailed, setInitialLoadFailed] = useState(false);
@@ -123,6 +128,9 @@ export default function PipelinePage() {
   // Determine if we are in read-only error mode (stale data visible but API errored)
   const isReadOnlyError = Boolean(error) && optimisticItems.length > 0;
 
+  // STORY-265 AC15: Trial expired = read-only mode (no drag, no add, no delete)
+  const isTrialReadOnly = isTrialExpired && optimisticItems.length > 0;
+
   // GTM-POLISH-001 AC1-AC3: Unified auth loading
   if (authLoading) {
     return <AuthLoadingScreen />;
@@ -199,6 +207,39 @@ export default function PipelinePage() {
             ctaLabel="Buscar oportunidades"
             ctaHref="/buscar"
           />
+        ) : isTrialReadOnly ? (
+          /* STORY-265 AC15: Trial expired read-only mode */
+          <>
+            <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-card flex items-center justify-between" role="alert">
+              <div className="flex items-center gap-2">
+                <svg className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                </svg>
+                <p className="text-sm text-amber-800 dark:text-amber-200">
+                  Seu trial expirou. O pipeline est\u00e1 em modo leitura. Ative um plano para continuar gerenciando suas oportunidades.
+                </p>
+              </div>
+              <a
+                href="/planos"
+                className="text-sm font-medium text-[var(--brand-blue)] hover:underline whitespace-nowrap ml-3"
+              >
+                Ver planos
+              </a>
+            </div>
+            <DndContext>
+              <div className="flex gap-4 overflow-x-auto pb-4 min-h-[calc(100vh-200px)]">
+                {STAGES_ORDER.map((stage) => (
+                  <PipelineColumn
+                    key={stage}
+                    stage={stage}
+                    items={getItemsByStage(stage)}
+                    onRemove={() => {}}
+                    onUpdateNotes={() => {}}
+                  />
+                ))}
+              </div>
+            </DndContext>
+          </>
         ) : isReadOnlyError ? (
           /* AC9: Read-only mode when error occurs but stale data exists.
              DndContext with no sensors disables drag-and-drop while still

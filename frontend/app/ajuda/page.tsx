@@ -93,9 +93,9 @@ const FAQ_DATA: FAQCategory[] = [
           "Acesse a página de Planos e Preços, escolha o plano desejado e clique em \"Fazer upgrade\". Você será redirecionado para o checkout seguro. A mudança de plano é imediata após a confirmação do pagamento.",
       },
       {
-        question: "Posso fazer downgrade do meu plano?",
+        question: "O que acontece se eu cancelar meu acesso?",
         answer:
-          "Sim, você pode alterar para um plano inferior a qualquer momento pela página de Planos. Note que ao fazer downgrade, alguns recursos do plano atual deixarão de estar disponíveis.",
+          "Você mantém acesso completo até o fim do período já pago. Após essa data, o acesso ao sistema é encerrado. O período de avaliação gratuita é exclusivo para os primeiros 7 dias após o cadastro inicial e não é reativado após um cancelamento.",
       },
       {
         question: "O que acontece quando minhas análises mensais acabam?",
@@ -126,7 +126,7 @@ const FAQ_DATA: FAQCategory[] = [
       {
         question: "Como cancelo minha assinatura?",
         answer:
-          "Você pode cancelar sua assinatura a qualquer momento acessando Minha Conta. O acesso ao plano pago permanece ativo até o final do período já pago.",
+          "Você pode cancelar a qualquer momento acessando Minha Conta. O acesso permanece ativo até o final do período já pago. Após essa data, o acesso ao sistema é encerrado.",
       },
       {
         question: "Receberei nota fiscal?",

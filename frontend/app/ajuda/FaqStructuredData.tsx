@@ -42,7 +42,11 @@ const FAQ_ITEMS = [
   },
   {
     q: "Posso cancelar a qualquer momento?",
-    a: "Sim. Sem contrato de fidelidade. Cancele quando quiser e mantenha o acesso até o fim do período já pago.",
+    a: "Sim. Sem contrato de fidelidade. Cancele quando quiser e mantenha o acesso até o fim do período já pago. Após essa data, o acesso ao sistema é encerrado.",
+  },
+  {
+    q: "O que acontece se eu cancelar meu acesso?",
+    a: "Você mantém acesso completo até o fim do período já pago. Após essa data, o acesso ao sistema é encerrado. O período de avaliação gratuita é exclusivo para os primeiros 7 dias após o cadastro inicial e não é reativado.",
   },
   {
     q: "Existe desconto para pagamento anual?",

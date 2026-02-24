@@ -222,7 +222,7 @@ export default function Footer() {
 
             {/* Developer Attribution */}
             <p className="text-sm text-ink-secondary">
-              Solução da CONFENGE
+              Uma Solução CONFENGE
             </p>
           </div>
         </div>

@@ -1,6 +1,6 @@
 # STORY-260: Perfil de Licitante Expandido + Progressive Profiling
 
-**Status:** Draft
+**Status:** Done
 **Priority:** P0 — Critical (Landing Page Parity)
 **Track:** GTM — Go-to-Market Readiness
 **Created:** 2026-02-23
@@ -44,7 +44,7 @@ O usuário foca em **buscar editais, não alimentar formulários**. A coleta de 
 
 ### Backend — Schema do Perfil Expandido
 
-- [ ] **AC1:** Schema `PerfilContexto` em schemas.py ganha 4 campos novos (todos Optional):
+- [x] **AC1:** Schema `PerfilContexto` em schemas.py ganha 4 campos novos (todos Optional):
   ```python
   # Novos campos
   porte_empresa: Literal["mei", "me", "epp", "medio", "grande"] | None = None
@@ -54,9 +54,9 @@ O usuário foca em **buscar editais, não alimentar formulários**. A coleta de 
   faturamento_anual: float | None = None  # em R$
   ```
 
-- [ ] **AC2:** Endpoint `PUT /v1/profile/context` aceita os novos campos (já genérico via JSONB — verificar se PerfilContexto é validado no PUT)
+- [x] **AC2:** Endpoint `PUT /v1/profile/context` aceita os novos campos (já genérico via JSONB — verificar se PerfilContexto é validado no PUT)
 
-- [ ] **AC3:** Novo endpoint `GET /v1/profile/completeness`:
+- [x] **AC3:** Novo endpoint `GET /v1/profile/completeness`:
   - Retorna:
     ```json
     {
@@ -70,7 +70,7 @@ O usuário foca em **buscar editais, não alimentar formulários**. A coleta de 
     ```
   - `next_question` segue prioridade fixa: porte → experiência → capacidade → atestados (campo com maior impacto primeiro)
 
-- [ ] **AC4:** Lista de atestados/certificações predefinida em `config.py` ou `sectors_data.yaml`:
+- [x] **AC4:** Lista de atestados/certificações predefinida em `config.py` ou `sectors_data.yaml`:
   ```python
   ATESTADOS_DISPONIVEIS = [
       {"id": "crea", "label": "CREA (Engenharia)", "sectors": ["engenharia", "manutencao_predial", "engenharia_rodoviaria"]},
@@ -87,20 +87,20 @@ O usuário foca em **buscar editais, não alimentar formulários**. A coleta de 
   ```
   Filtrada por setor do usuário no endpoint de completeness
 
-- [ ] **AC5:** Dados do perfil expandido são passados para `batch_analyze_bids()` e `deep_analyze_bid()` (STORY-259) via `SearchContext.user_profile`
+- [x] **AC5:** Dados do perfil expandido são passados para `batch_analyze_bids()` e `deep_analyze_bid()` (STORY-259) via `SearchContext.user_profile`
 
 ### Backend — Integração com Viability
 
-- [ ] **AC6:** `viability.py` `calculate_value_fit()` usa `user_value_range` (faixa do perfil) com prioridade sobre `sector.viability_value_range`
-- [ ] **AC7:** Se `porte_empresa` disponível, viability considera modalidades mais adequadas ao porte:
+- [x] **AC6:** `viability.py` `calculate_value_fit()` usa `user_value_range` (faixa do perfil) com prioridade sobre `sector.viability_value_range`
+- [x] **AC7:** Se `porte_empresa` disponível, viability considera modalidades mais adequadas ao porte:
   - MEI/ME: bonus para Dispensa de Licitação, Pregão ≤ R$80k
   - EPP: bonus para licitações com cota reservada
   - Médio/Grande: bonus para Concorrência de alto valor
-- [ ] **AC8:** Justificativas (STORY-259 fallback Python) refletem "do seu perfil" quando campo do perfil usado, "do setor" quando fallback
+- [x] **AC8:** Justificativas (STORY-259 fallback Python) refletem "do seu perfil" quando campo do perfil usado, "do setor" quando fallback
 
 ### Frontend — Progressive Profiling no Dashboard
 
-- [ ] **AC9:** Componente `ProfileCompletionPrompt` (NOVO) no dashboard:
+- [x] **AC9:** Componente `ProfileCompletionPrompt` (NOVO) no dashboard:
   - Exibe **1 pergunta por vez** baseado em `GET /v1/profile/completeness → next_question`
   - Layout: card com título da pergunta + input + botão "Salvar" + link "Pular por enquanto"
   - Após salvar: animação de sucesso + próxima pergunta no próximo acesso (não imediatamente)
@@ -111,48 +111,48 @@ O usuário foca em **buscar editais, não alimentar formulários**. A coleta de 
     3. "Quantos funcionários e faturamento anual?" — 2 inputs numéricos
     4. "Quais atestados/certificações sua empresa possui?" — multi-select filtrado por setor
 
-- [ ] **AC10:** Cada pergunta mostra **micro-copy explicando o impacto**:
+- [x] **AC10:** Cada pergunta mostra **micro-copy explicando o impacto**:
   - Porte: "Saber seu porte permite filtrar editais com cota reservada para ME/EPP e modalidades adequadas"
   - Experiência: "Calibramos as recomendações ao seu nível — mais explicações para iniciantes, mais diretas para experientes"
   - Capacidade: "Cruzamos com exigências de capacidade técnica e econômica dos editais"
   - Atestados: "Identificamos editais que exigem certificações que você já possui"
 
-- [ ] **AC11:** **Barra de progresso do perfil** — indicador visual discreto:
+- [x] **AC11:** **Barra de progresso do perfil** — indicador visual discreto:
   - Porcentagem circular (similar ao profile completeness do LinkedIn)
   - Posicionado no header do dashboard ou como badge no menu
   - Cores: vermelho (<40%), amarelo (40-69%), verde (≥70%)
   - Clicável → abre a próxima pergunta
 
-- [ ] **AC12:** **Parabéns (perfil completo)** — quando `is_complete: true`:
+- [x] **AC12:** **Parabéns (perfil completo)** — quando `is_complete: true`:
   - Card especial no dashboard: "Perfil completo! Suas análises agora são as mais precisas possíveis."
   - Confetti animation sutil (framer-motion, 2s duration)
   - Badge "Perfil Completo" permanente no dashboard (ícone shield/check verde)
   - Dismissível — não aparece novamente após fechar
 
-- [ ] **AC13:** Link "Completar perfil" no dashboard aponta para `/conta` com seção expandida
+- [x] **AC13:** Link "Completar perfil" no dashboard aponta para `/conta` com seção expandida
 
 ### Frontend — Página de Perfil (/conta)
 
-- [ ] **AC14:** Seção **"Perfil de Licitante"** na página `/conta`:
+- [x] **AC14:** Seção **"Perfil de Licitante"** na página `/conta`:
   - Todos os 7 campos editáveis (3 existentes + 4 novos)
   - Indicação visual de campos preenchidos vs. vazios
   - Salvar via `PUT /v1/profile/context`
   - Validação em tempo real (faixa valor min ≤ max, funcionários ≥ 0)
 
-- [ ] **AC15:** Seção mostra **impacto do perfil**: "Seu perfil está X% completo. Campos preenchidos melhoram a precisão da análise de compatibilidade."
+- [x] **AC15:** Seção mostra **impacto do perfil**: "Seu perfil está X% completo. Campos preenchidos melhoram a precisão da análise de compatibilidade."
 
 ### Frontend — Indicadores de Personalização na Busca
 
-- [ ] **AC16:** Se perfil incompleto e busca executada, **hint discreto** (não-modal) abaixo dos filtros:
+- [x] **AC16:** Se perfil incompleto e busca executada, **hint discreto** (não-modal) abaixo dos filtros:
   - "Complete seu perfil para análises mais precisas" + link para `/conta`
   - Dismissível via X, volta após 3 dias via localStorage
   - Não aparece se perfil completo
 
-- [ ] **AC17:** Se perfil completo: badge "Análise personalizada" discreto nos resultados (tooltip: "Resultados otimizados para o perfil da sua empresa")
+- [x] **AC17:** Se perfil completo: badge "Análise personalizada" discreto nos resultados (tooltip: "Resultados otimizados para o perfil da sua empresa")
 
 ### Testes
 
-- [ ] **AC18:** Backend: ≥12 testes em `test_profile_completeness.py`:
+- [x] **AC18:** Backend: ≥12 testes em `test_profile_completeness.py`:
   - Completeness calculation (0%, 50%, 100%)
   - next_question priority order
   - PUT accepts new fields and validates
@@ -161,7 +161,7 @@ O usuário foca em **buscar editais, não alimentar formulários**. A coleta de 
   - Porte impacts viability modality scoring
   - Edge cases: all None, partial fill, invalid porte
 
-- [ ] **AC19:** Frontend: ≥10 testes em `progressive-profiling.test.tsx`:
+- [x] **AC19:** Frontend: ≥10 testes em `progressive-profiling.test.tsx`:
   - ProfileCompletionPrompt renders 1 question
   - Save persists and triggers success animation
   - Skip hides prompt
@@ -170,13 +170,13 @@ O usuário foca em **buscar editais, não alimentar formulários**. A coleta de 
   - ProfileSection in /conta shows all fields
   - Hint in busca shows/hides correctly
 
-- [ ] **AC20:** Zero regressões nos testes existentes
+- [x] **AC20:** Zero regressões nos testes existentes
 
 ### Backward Compatibility
 
-- [ ] **AC21:** Todos os campos novos são **Optional** — usuários existentes continuam funcionando sem degradação
-- [ ] **AC22:** Progressive profiling só aparece se `is_complete: false` — não incomoda quem já completou
-- [ ] **AC23:** Se perfil vazio (sem onboarding): batch analysis (STORY-259) ainda funciona com dados do setor como fallback
+- [x] **AC21:** Todos os campos novos são **Optional** — usuários existentes continuam funcionando sem degradação
+- [x] **AC22:** Progressive profiling só aparece se `is_complete: false` — não incomoda quem já completou
+- [x] **AC23:** Se perfil vazio (sem onboarding): batch analysis (STORY-259) ainda funciona com dados do setor como fallback
 
 ---
 

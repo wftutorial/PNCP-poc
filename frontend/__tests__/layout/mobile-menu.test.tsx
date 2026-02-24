@@ -1,5 +1,8 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
+
+// Mock window.scrollTo (not implemented in jsdom)
+Object.defineProperty(window, 'scrollTo', { value: jest.fn(), writable: true });
 
 // Mock next/link
 jest.mock('next/link', () => {
@@ -18,10 +21,30 @@ describe('MobileMenu', () => {
     scrollToSection: jest.fn(),
   };
 
+  let pushStateSpy: jest.SpyInstance;
+
   beforeEach(() => {
     jest.clearAllMocks();
-    document.body.style.overflow = '';
+    jest.useFakeTimers();
+    document.body.style.position = '';
+    document.body.style.top = '';
+    document.body.style.width = '';
+    document.body.removeAttribute('data-mobile-menu-open');
+    pushStateSpy = jest.spyOn(window.history, 'pushState').mockImplementation(() => {});
   });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    pushStateSpy.mockRestore();
+    document.body.style.position = '';
+    document.body.style.top = '';
+    document.body.style.width = '';
+    document.body.removeAttribute('data-mobile-menu-open');
+  });
+
+  // ========================================
+  // EXISTING TESTS (updated for new behavior)
+  // ========================================
 
   // AC2: Menu opens from right
   it('renders slide-out panel when isOpen is true', () => {
@@ -34,7 +57,7 @@ describe('MobileMenu', () => {
     expect(screen.queryByTestId('mobile-menu-panel')).not.toBeInTheDocument();
   });
 
-  // AC3: Menu includes all navigation links
+  // Navigation links
   it('includes Home, Planos, Como Funciona, Suporte links', () => {
     render(<MobileMenu {...defaultProps} />);
     expect(screen.getByText('Home')).toBeInTheDocument();
@@ -43,35 +66,33 @@ describe('MobileMenu', () => {
     expect(screen.getByText('Suporte')).toBeInTheDocument();
   });
 
-  // AC3: Menu includes Entrar and Comece Gratis when not logged in (UX-345 updated copy)
   it('shows Entrar and Comece Gratis for unauthenticated users', () => {
     render(<MobileMenu {...defaultProps} user={null} />);
     expect(screen.getByText('Entrar')).toBeInTheDocument();
     expect(screen.getByText('Comece Gratis')).toBeInTheDocument();
   });
 
-  // AC3: Menu shows "Ir para Busca" when logged in
   it('shows Ir para Busca for authenticated users', () => {
     render(<MobileMenu {...defaultProps} user={{ email: 'test@test.com' }} />);
     expect(screen.getByText('Ir para Busca')).toBeInTheDocument();
     expect(screen.queryByText('Entrar')).not.toBeInTheDocument();
   });
 
-  // AC4: Overlay closes menu when clicked
+  // Overlay closes menu
   it('calls onClose when overlay is clicked', () => {
     render(<MobileMenu {...defaultProps} />);
     fireEvent.click(screen.getByTestId('mobile-menu-overlay'));
     expect(defaultProps.onClose).toHaveBeenCalledTimes(1);
   });
 
-  // AC5: Close button
+  // Close button
   it('calls onClose when close button is clicked', () => {
     render(<MobileMenu {...defaultProps} />);
     fireEvent.click(screen.getByTestId('mobile-menu-close'));
     expect(defaultProps.onClose).toHaveBeenCalledTimes(1);
   });
 
-  // AC6: Nav links close menu after click
+  // Nav links close menu
   it('calls onClose when a nav link is clicked', () => {
     render(<MobileMenu {...defaultProps} />);
     fireEvent.click(screen.getByText('Home'));
@@ -85,23 +106,26 @@ describe('MobileMenu', () => {
     expect(defaultProps.onClose).toHaveBeenCalled();
   });
 
-  // Escape key closes menu
+  // Escape key
   it('closes on Escape key', () => {
     render(<MobileMenu {...defaultProps} />);
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(defaultProps.onClose).toHaveBeenCalledTimes(1);
   });
 
-  // Body scroll lock
-  it('locks body scroll when open', () => {
+  // AC2: Body scroll lock — position:fixed approach (updated)
+  it('locks body scroll when open using position:fixed', () => {
     render(<MobileMenu {...defaultProps} isOpen={true} />);
-    expect(document.body.style.overflow).toBe('hidden');
+    expect(document.body.style.position).toBe('fixed');
+    expect(document.body.style.width).toBe('100%');
   });
 
   it('unlocks body scroll on unmount', () => {
     const { unmount } = render(<MobileMenu {...defaultProps} isOpen={true} />);
     unmount();
-    expect(document.body.style.overflow).toBe('');
+    expect(document.body.style.position).toBe('');
+    expect(document.body.style.top).toBe('');
+    expect(document.body.style.width).toBe('');
   });
 
   // Accessibility
@@ -117,11 +141,116 @@ describe('MobileMenu', () => {
     expect(screen.getByLabelText('Fechar menu')).toBeInTheDocument();
   });
 
-  // WCAG touch targets — all interactive elements must be >= 44px
-  it('all buttons and links have min-h-[44px] touch targets', () => {
+  // AC5: WCAG touch targets — close button >= 48px (updated from 44px)
+  it('close button has min-h-[48px] min-w-[48px] touch targets', () => {
     render(<MobileMenu {...defaultProps} />);
     const closeBtn = screen.getByTestId('mobile-menu-close');
-    expect(closeBtn.className).toContain('min-h-[44px]');
-    expect(closeBtn.className).toContain('min-w-[44px]');
+    expect(closeBtn.className).toContain('min-h-[48px]');
+    expect(closeBtn.className).toContain('min-w-[48px]');
+  });
+
+  // ========================================
+  // NEW TESTS (AC7)
+  // ========================================
+
+  // AC5: "Fechar" text on close button
+  it('close button shows "Fechar" text', () => {
+    render(<MobileMenu {...defaultProps} />);
+    const closeBtn = screen.getByTestId('mobile-menu-close');
+    expect(closeBtn).toHaveTextContent('Fechar');
+  });
+
+  // AC6: data-mobile-menu-open attribute
+  it('sets data-mobile-menu-open attribute when open', () => {
+    render(<MobileMenu {...defaultProps} isOpen={true} />);
+    expect(document.body.getAttribute('data-mobile-menu-open')).toBe('true');
+  });
+
+  it('removes data-mobile-menu-open attribute on unmount', () => {
+    const { unmount } = render(<MobileMenu {...defaultProps} isOpen={true} />);
+    expect(document.body.getAttribute('data-mobile-menu-open')).toBe('true');
+    unmount();
+    expect(document.body.hasAttribute('data-mobile-menu-open')).toBe(false);
+  });
+
+  // AC3/AC7: Back button (History API) closes menu
+  it('pushes history state when menu opens', () => {
+    render(<MobileMenu {...defaultProps} isOpen={true} />);
+    expect(pushStateSpy).toHaveBeenCalledWith({ mobileMenu: true }, '');
+  });
+
+  it('closes menu on popstate event (back button)', () => {
+    render(<MobileMenu {...defaultProps} isOpen={true} />);
+    act(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    expect(defaultProps.onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not push history state when menu is closed', () => {
+    render(<MobileMenu {...defaultProps} isOpen={false} />);
+    expect(pushStateSpy).not.toHaveBeenCalled();
+  });
+
+  // AC3: History API cleanup on unmount
+  it('cleans up popstate listener on unmount', () => {
+    const removeListenerSpy = jest.spyOn(window, 'removeEventListener');
+    const { unmount } = render(<MobileMenu {...defaultProps} isOpen={true} />);
+    unmount();
+    expect(removeListenerSpy).toHaveBeenCalledWith('popstate', expect.any(Function));
+    removeListenerSpy.mockRestore();
+  });
+
+  // AC7: Scroll lock removed on unexpected unmount
+  it('removes scroll lock on unexpected unmount while still open', () => {
+    const { unmount } = render(<MobileMenu {...defaultProps} isOpen={true} />);
+    expect(document.body.style.position).toBe('fixed');
+    unmount();
+    expect(document.body.style.position).toBe('');
+    expect(document.body.getAttribute('data-mobile-menu-open')).toBeNull();
+  });
+
+  // AC7: Timeout de seguranca emite warning
+  it('emits console.warn after 10s without interaction', () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    render(<MobileMenu {...defaultProps} isOpen={true} />);
+
+    // Advance time to trigger the interval (fires at 5s intervals, checks >10s elapsed)
+    act(() => {
+      jest.advanceTimersByTime(15_000);
+    });
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Menu open >10s without interaction')
+    );
+    warnSpy.mockRestore();
+  });
+
+  it('emits stuck state warning after 15s without interaction', () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    render(<MobileMenu {...defaultProps} isOpen={true} />);
+
+    // Advance to 20s so elapsed > 15000
+    act(() => {
+      jest.advanceTimersByTime(20_000);
+    });
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Scroll lock active >15s')
+    );
+    warnSpy.mockRestore();
+  });
+
+  // AC7: Overlay without backdrop-blur
+  it('overlay does not use backdrop-blur', () => {
+    render(<MobileMenu {...defaultProps} />);
+    const overlay = screen.getByTestId('mobile-menu-overlay');
+    expect(overlay.className).not.toContain('backdrop-blur');
+  });
+
+  it('overlay uses bg-black/60 for opaque background', () => {
+    render(<MobileMenu {...defaultProps} />);
+    const overlay = screen.getByTestId('mobile-menu-overlay');
+    expect(overlay.className).toContain('bg-black/60');
   });
 });

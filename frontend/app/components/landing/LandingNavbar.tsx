@@ -34,7 +34,7 @@ export default function LandingNavbar({ className = '' }: LandingNavbarProps) {
     <header
       className={`sticky top-0 z-50 transition-all duration-300 ${
         isScrolled
-          ? 'bg-surface-0/70 backdrop-blur-xl shadow-[0_1px_3px_rgba(0,0,0,0.04)] border-b border-[var(--border)]/50'
+          ? 'bg-[var(--surface-0)] md:bg-surface-0/70 md:backdrop-blur-xl shadow-[0_1px_3px_rgba(0,0,0,0.04)] border-b border-[var(--border)]/50'
           : 'bg-transparent'
       } ${className}`}
     >

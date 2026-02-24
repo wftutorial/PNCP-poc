@@ -83,9 +83,20 @@ async function fillForm(
   });
 }
 
+// Mock fetch for STORY-258 email/phone check endpoints
+const mockFetch = jest.fn().mockResolvedValue({
+  ok: true,
+  json: async () => ({ is_disposable: false, is_corporate: false, available: true, already_registered: false }),
+});
+
 describe('SignupPage Component', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    global.fetch = mockFetch;
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   describe('Initial render', () => {

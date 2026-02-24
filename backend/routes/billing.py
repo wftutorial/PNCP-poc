@@ -170,7 +170,7 @@ async def get_subscription_status(
         )
     except Exception as e:
         logger.error(f"Failed to check subscription status: {e}")
-        raise HTTPException(status_code=503, detail="Status de assinatura temporariamente indisponivel")
+        raise HTTPException(status_code=503, detail="Status de assinatura temporariamente indisponível")
 
     if sub_result.data and sub_result.data[0].get("subscription_status") == "active":
         sub = sub_result.data[0]
@@ -191,7 +191,7 @@ async def get_subscription_status(
         )
     except Exception as e:
         logger.error(f"Failed to check profile plan_type: {e}")
-        raise HTTPException(status_code=503, detail="Status de assinatura temporariamente indisponivel")
+        raise HTTPException(status_code=503, detail="Status de assinatura temporariamente indisponível")
 
     if profile_result.data and profile_result.data.get("plan_type") not in (None, "free_trial"):
         return {
@@ -218,7 +218,7 @@ async def get_subscription_status(
             except Exception as e:
                 # CRIT-005 AC25: Surface Stripe errors instead of swallowing
                 logger.warning(f"Stripe subscription check failed: {e}")
-                raise HTTPException(status_code=503, detail="Status de assinatura temporariamente indisponivel")
+                raise HTTPException(status_code=503, detail="Status de assinatura temporariamente indisponível")
 
     return {
         "status": "pending",

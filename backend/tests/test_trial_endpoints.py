@@ -140,7 +140,7 @@ def test_trial_value_db_error(client, mock_db):
 
     # CRIT-005 AC26: Surface error instead of swallowing with zero defaults
     assert response.status_code == 503
-    assert "indisponivel" in response.json()["detail"].lower()
+    assert "indisponível" in response.json()["detail"].lower()
 
 
 # ============================================================================
@@ -245,7 +245,7 @@ def test_trial_status_db_error(client, mock_db):
 
     # CRIT-005 AC24: Surface error instead of swallowing with defaults
     assert response.status_code == 503
-    assert "indisponivel" in response.json()["detail"].lower()
+    assert "indisponível" in response.json()["detail"].lower()
 
 
 def test_trial_expired_message_updated():

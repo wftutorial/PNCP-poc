@@ -361,7 +361,7 @@ class TestEmptyFailureState:
                     "Tente novamente em alguns minutos ou reduza o número de estados."
                 )
                 ctx.degradation_reason = (
-                    "PNCP ficou indisponivel durante a busca (circuit breaker ativado). "
+                    "PNCP ficou indisponível durante a busca (circuit breaker ativado). "
                     "Tente novamente em alguns minutos."
                 )
 

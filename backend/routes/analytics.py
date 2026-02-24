@@ -335,5 +335,5 @@ async def get_trial_value(user: dict = Depends(require_auth), db=Depends(get_db)
         from fastapi import HTTPException as _HTTPException
         raise _HTTPException(
             status_code=503,
-            detail="Informacao de valor do trial temporariamente indisponivel"
+            detail="Informação de valor do trial temporariamente indisponível"
         )

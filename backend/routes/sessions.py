@@ -42,4 +42,4 @@ async def get_sessions(
     except Exception as e:
         logger.error(f"Error fetching sessions for user {user['id']}: {e}")
         from fastapi import HTTPException
-        raise HTTPException(status_code=503, detail="Historico temporariamente indisponivel")
+        raise HTTPException(status_code=503, detail="Histórico temporariamente indisponível")

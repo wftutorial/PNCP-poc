@@ -236,6 +236,11 @@ class TestCheckQuotaFreeTrial:
 class TestCheckQuotaPaidPlans:
     """Test suite for check_quota with paid plan subscribers."""
 
+    def setup_method(self):
+        """Clear plan capabilities cache to prevent test pollution."""
+        from quota import clear_plan_capabilities_cache
+        clear_plan_capabilities_cache()
+
     def test_consultor_agil_with_quota_remaining(self):
         """Should return allowed=True for Consultor Ágil with quota remaining."""
         from quota import check_quota
@@ -339,6 +344,11 @@ class TestCheckQuotaPaidPlans:
 
 class TestCheckQuotaExhausted:
     """Test suite for check_quota when quota is exhausted."""
+
+    def setup_method(self):
+        """Clear plan capabilities cache to prevent test pollution."""
+        from quota import clear_plan_capabilities_cache
+        clear_plan_capabilities_cache()
 
     def test_quota_exhausted_returns_not_allowed(self):
         """Should return allowed=False when monthly quota exhausted."""

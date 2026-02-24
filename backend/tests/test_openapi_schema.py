@@ -27,6 +27,10 @@ def schema_snapshot_path():
 class TestOpenAPISchema:
     """Test OpenAPI schema validation and drift detection."""
 
+    def setup_method(self):
+        """Clear cached OpenAPI schema to prevent test pollution."""
+        app.openapi_schema = None
+
     def test_openapi_schema_matches_snapshot(self, client, schema_snapshot_path):
         """
         Verify that the OpenAPI schema matches the stored snapshot.

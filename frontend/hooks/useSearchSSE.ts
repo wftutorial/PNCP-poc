@@ -52,6 +52,13 @@ export interface SearchProgressEvent {
     has_results?: boolean;
     /** GTM-ARCH-001: Error code from async search worker */
     error_code?: string;
+    /** STORY-259: Per-bid intelligence analysis from batch LLM job */
+    bid_analysis?: Array<{
+      bid_id: string;
+      justificativas: string[];
+      acao_recomendada: string;
+      compatibilidade_pct: number;
+    }>;
   };
 }
 

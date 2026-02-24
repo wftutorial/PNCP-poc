@@ -255,6 +255,15 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
         llm_status: 'ready' as const,
         llm_source: 'ai' as const,
       } : prev);
+    } else if (event.stage === 'bid_analysis_ready' && event.detail.bid_analysis) {
+      // STORY-259 AC4: Per-bid intelligence analysis arrived
+      // Cast to BidAnalysisItem[] — backend guarantees the enum constraint
+      const analysisData = event.detail.bid_analysis as BuscaResult['bid_analysis'];
+      setResult(prev => prev ? {
+        ...prev,
+        bid_analysis: analysisData,
+        bid_analysis_status: 'ready' as const,
+      } : prev);
     } else if (event.stage === 'excel_ready') {
       // Update the result's download_url when Excel is ready
       setResult(prev => prev ? {

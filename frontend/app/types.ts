@@ -157,6 +157,33 @@ export interface BuscaResult {
   excel_status?: "ready" | "processing" | "skipped" | "failed" | null;
   /** CRIT-005 AC13: LLM summary provenance */
   llm_source?: "ai" | "fallback" | "processing" | null;
+  /** STORY-259 AC4: Per-bid intelligence analysis results */
+  bid_analysis?: BidAnalysisItem[];
+  /** STORY-259: Bid analysis status */
+  bid_analysis_status?: "ready" | "processing" | null;
+}
+
+/** STORY-259: Per-bid analysis from batch LLM call */
+export interface BidAnalysisItem {
+  bid_id: string;
+  justificativas: string[];
+  acao_recomendada: "PARTICIPAR" | "AVALIAR COM CAUTELA" | "NÃO PARTICIPAR";
+  compatibilidade_pct: number;
+}
+
+/** STORY-259: Deep on-demand analysis result */
+export interface DeepBidAnalysis {
+  bid_id: string;
+  score: number;
+  decisao_sugerida: string;
+  compatibilidade_pct: number;
+  analise_prazo: string;
+  analise_requisitos: string[];
+  analise_competitividade: string;
+  riscos: string[];
+  justificativas_favoraveis: string[];
+  justificativas_contra: string[];
+  recomendacao_final: string;
 }
 
 // ============================================================================

@@ -221,9 +221,12 @@ describe("SearchResults - Source Indicators (GTM-FIX-011 AC32)", () => {
       const props = createMockProps({ result, rawCount: 100 });
       const { container } = render(<SearchResults {...props} />);
 
-      // Find the tooltip element with title attribute
-      const tooltipElement = container.querySelector('[title]');
-      expect(tooltipElement).toBeInTheDocument();
+      // Find the source-stats tooltip element (not the personalized-analysis badge)
+      const allTitled = container.querySelectorAll('[title]');
+      const tooltipElement = Array.from(allTitled).find(el =>
+        el.getAttribute('title')?.includes('registros')
+      );
+      expect(tooltipElement).toBeTruthy();
 
       // Check tooltip content includes source codes and record counts
       const title = tooltipElement?.getAttribute("title");

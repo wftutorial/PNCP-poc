@@ -841,6 +841,16 @@ class SearchPipeline:
             ctx.active_exclusions = set()
             ctx.active_context_required = None
 
+        # STORY-260 AC5: Load user profile for LLM analysis
+        try:
+            from supabase_client import get_supabase
+            _db = get_supabase()
+            _profile_row = _db.table("profiles").select("context_data").eq("id", ctx.user["id"]).single().execute()
+            ctx.user_profile = (_profile_row.data or {}).get("context_data") or {}
+        except Exception as _prof_err:
+            logger.debug(f"Could not load user profile: {_prof_err}")
+            ctx.user_profile = None
+
         # SSE: Sector ready
         if ctx.tracker:
             await ctx.tracker.emit("connecting", 8, f"Setor '{ctx.sector.name}' configurado, conectando ao PNCP...")
@@ -1469,7 +1479,7 @@ class SearchPipeline:
                 ctx.is_partial = True
                 ctx.response_state = "cached"  # GTM-RESILIENCE-A01 AC6
                 ctx.degradation_reason = (
-                    "PNCP ficou indisponivel durante a busca (circuit breaker ativado). "
+                    "PNCP ficou indisponível durante a busca (circuit breaker ativado). "
                     "Mostrando resultados do cache."
                 )
                 ctx.data_sources = [
@@ -1486,7 +1496,7 @@ class SearchPipeline:
                     "Tente novamente em alguns minutos ou reduza o número de estados."
                 )
                 ctx.degradation_reason = (
-                    "PNCP ficou indisponivel durante a busca (circuit breaker ativado). "
+                    "PNCP ficou indisponível durante a busca (circuit breaker ativado). "
                     "Tente novamente em alguns minutos."
                 )
                 ctx.data_sources = [
@@ -1709,7 +1719,7 @@ class SearchPipeline:
             if ctx.sector and hasattr(ctx.sector, "viability_value_range"):
                 vr = ctx.sector.viability_value_range
             ufs_busca = set(ctx.request.ufs) if ctx.request.ufs else set()
-            viability_assess_batch(ctx.licitacoes_filtradas, ufs_busca, vr)
+            viability_assess_batch(ctx.licitacoes_filtradas, ufs_busca, vr, user_profile=ctx.user_profile)
             # CRIT-FLT-003 AC4: Log zero-value proportion
             total = len(ctx.licitacoes_filtradas)
             zero_count = sum(
@@ -1961,6 +1971,22 @@ class SearchPipeline:
             else:
                 ctx.excel_status = "skipped"
                 ctx.upgrade_message = "Exportar Excel disponível no plano Máquina (R$ 597/mês)."
+
+            # STORY-259 AC3: Dispatch bid analysis job (parallel to LLM + Excel)
+            from config import get_feature_flag as _gff
+            if _gff("BID_ANALYSIS_ENABLED"):
+                bid_analysis_enqueued = await enqueue_job(
+                    "bid_analysis_job",
+                    search_id,
+                    ctx.licitacoes_filtradas,
+                    user_profile=ctx.user_profile,
+                    sector_name=ctx.sector.name,
+                    _job_id=f"bid_analysis:{search_id}",
+                )
+                if bid_analysis_enqueued is not None:
+                    ctx.bid_analysis_status = "processing"
+                else:
+                    ctx.bid_analysis_status = None
 
             # SSE: Notify frontend that results are ready (LLM/Excel arriving later)
             if ctx.tracker:

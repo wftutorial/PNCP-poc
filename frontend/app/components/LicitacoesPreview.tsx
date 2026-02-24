@@ -2,9 +2,12 @@
 
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
-import type { LicitacaoItem } from "../types";
+import type { LicitacaoItem, BidAnalysisItem } from "../types";
 import ViabilityBadge from "../buscar/components/ViabilityBadge";
 import FeedbackButtons from "../buscar/components/FeedbackButtons";
+import CompatibilityBadge from "../buscar/components/CompatibilityBadge";
+import ActionLabel from "../buscar/components/ActionLabel";
+import DeepAnalysisModal from "../buscar/components/DeepAnalysisModal";
 
 interface LicitacoesPreviewProps {
   /** List of bid items to display */
@@ -23,6 +26,10 @@ interface LicitacoesPreviewProps {
   setorId?: string;
   /** D-05: Access token for authenticated feedback */
   accessToken?: string | null;
+  /** STORY-259: Per-bid analysis from batch LLM call */
+  bidAnalysis?: BidAnalysisItem[];
+  /** STORY-259: Status of bid analysis batch job */
+  bidAnalysisStatus?: "ready" | "processing" | null;
 }
 
 /**
@@ -40,7 +47,13 @@ export function LicitacoesPreview({
   searchId,
   setorId,
   accessToken,
+  bidAnalysis,
+  bidAnalysisStatus,
 }: LicitacoesPreviewProps) {
+  /** STORY-259: Index bid analysis by bid_id for O(1) lookup */
+  const bidAnalysisMap = bidAnalysis
+    ? new Map(bidAnalysis.map((a) => [a.bid_id, a]))
+    : null;
   /** AC5.4: Relevance badge based on score */
   const getRelevanceBadge = (score?: number | null) => {
     if (score == null) return null;
@@ -256,6 +269,8 @@ export function LicitacoesPreview({
             setorId={setorId}
             accessToken={accessToken}
             idPrefix="bid"
+            bidAnalysis={bidAnalysisMap?.get(item.pncp_id || "") ?? null}
+            bidAnalysisStatus={bidAnalysisStatus}
           />
         ))}
       </div>
@@ -346,6 +361,8 @@ export function LicitacoesPreview({
               setorId={setorId}
               accessToken={accessToken}
               idPrefix="extra"
+              bidAnalysis={bidAnalysisMap?.get(item.pncp_id || "") ?? null}
+              bidAnalysisStatus={bidAnalysisStatus}
             />
           ))}
         </div>
@@ -374,6 +391,10 @@ interface BidCardProps {
   setorId?: string;
   accessToken?: string | null;
   idPrefix: string;
+  /** STORY-259: Per-bid analysis data (null = not yet available) */
+  bidAnalysis?: BidAnalysisItem | null;
+  /** STORY-259: Global analysis batch status */
+  bidAnalysisStatus?: "ready" | "processing" | null;
 }
 
 function BidCard({
@@ -392,112 +413,203 @@ function BidCard({
   setorId,
   accessToken,
   idPrefix,
+  bidAnalysis,
+  bidAnalysisStatus,
 }: BidCardProps) {
   const [expanded, setExpanded] = useState(false);
+  const [deepModalOpen, setDeepModalOpen] = useState(false);
+
+  /** STORY-259: true while analysis batch is still running and no data for this bid yet */
+  const isAnalysisLoading = bidAnalysisStatus === "processing" && !bidAnalysis;
 
   return (
-    <div
-      className="p-4 bg-surface-0 border border-strong rounded-card hover:border-brand-blue transition-colors"
-      data-testid="bid-card"
-    >
-      {/* AC7: Essential info always visible — title, value, UF, prazo, viability */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <h4 className="text-base font-medium text-ink line-clamp-2 mb-1">
-            {highlightTerms(item.objeto, item.matched_terms || searchTerms)}
-          </h4>
-          <div className="flex flex-wrap items-center gap-2 mt-2">
-            <ViabilityBadge level={item.viability_level} score={item.viability_score} factors={item.viability_factors} valueSource={item._value_source} />
-            {getUrgenciaBadge(item)}
-            <span className="inline-flex items-center px-2 py-0.5 rounded bg-brand-blue-subtle text-brand-navy text-xs font-medium">
-              {item.uf}
-              {item.municipio && ` - ${item.municipio}`}
+    <>
+      <div
+        className="p-4 bg-surface-0 border border-strong rounded-card hover:border-brand-blue transition-colors"
+        data-testid="bid-card"
+      >
+        {/* AC7: Essential info always visible — title, value, UF, prazo, viability */}
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <h4 className="text-base font-medium text-ink line-clamp-2 mb-1">
+              {highlightTerms(item.objeto, item.matched_terms || searchTerms)}
+            </h4>
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              <ViabilityBadge level={item.viability_level} score={item.viability_score} factors={item.viability_factors} valueSource={item._value_source} />
+              {getUrgenciaBadge(item)}
+              <span className="inline-flex items-center px-2 py-0.5 rounded bg-brand-blue-subtle text-brand-navy text-xs font-medium">
+                {item.uf}
+                {item.municipio && ` - ${item.municipio}`}
+              </span>
+              {getConfidenceBadge(item.confidence)}
+
+              {/* STORY-259: Bid intelligence badges — always-visible row */}
+              {isAnalysisLoading && (
+                <span
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+                  data-testid="analysis-loading-badge"
+                  aria-label="Analisando compatibilidade"
+                >
+                  <svg
+                    className="w-3 h-3 animate-spin"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    aria-hidden="true"
+                  >
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Analisando...
+                </span>
+              )}
+              {bidAnalysis && (
+                <>
+                  <CompatibilityBadge compatibilidade_pct={bidAnalysis.compatibilidade_pct} />
+                  <ActionLabel acao_recomendada={bidAnalysis.acao_recomendada} />
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            <span className="text-lg font-bold font-data text-brand-navy">
+              {formatCurrency(item.valor)}
             </span>
-            {getConfidenceBadge(item.confidence)}
+            {item.link && (
+              <a
+                href={item.link}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Ver edital completo (abre em nova janela)"
+                className="inline-flex items-center gap-1 px-3 py-1.5 bg-brand-navy text-white text-sm font-medium rounded-button hover:bg-brand-blue-hover transition-colors"
+                data-testid="link-edital"
+              >
+                Ver edital
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+              </a>
+            )}
           </div>
         </div>
 
-        <div className="flex flex-col items-end gap-2 shrink-0">
-          <span className="text-lg font-bold font-data text-brand-navy">
-            {formatCurrency(item.valor)}
-          </span>
-          {item.link && (
-            <a
-              href={item.link}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Ver edital completo (abre em nova janela)"
-              className="inline-flex items-center gap-1 px-3 py-1.5 bg-brand-navy text-white text-sm font-medium rounded-button hover:bg-brand-blue-hover transition-colors"
-              data-testid="link-edital"
+        {/* AC8: Expandable details section */}
+        <div className="mt-2">
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="text-xs text-ink-muted hover:text-ink-secondary transition-colors flex items-center gap-1"
+            aria-expanded={expanded}
+            data-testid="expand-details-btn"
+          >
+            <svg
+              className={`w-3.5 h-3.5 transition-transform ${expanded ? 'rotate-90' : ''}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              aria-hidden="true"
             >
-              Ver edital
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                      d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-              </svg>
-            </a>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+            {expanded ? 'Ocultar detalhes' : 'Ver detalhes'}
+          </button>
+
+          {expanded && (
+            <div className="mt-3 pt-3 border-t border-border space-y-2 animate-fade-in" data-testid="bid-details">
+              <p className="text-sm text-ink-secondary">
+                <span className="font-medium text-ink">Órgão:</span> {item.orgao}
+              </p>
+              {item.modalidade && (
+                <p className="text-sm text-ink-secondary">
+                  <span className="font-medium text-ink">Modalidade:</span> {item.modalidade}
+                </p>
+              )}
+              {item.data_abertura && (
+                <p className="text-sm text-ink-secondary">
+                  <span className="font-medium text-ink">Propostas desde:</span> {formatDate(item.data_abertura)}
+                </p>
+              )}
+              <div className="flex flex-wrap gap-2 mt-1">
+                {getRelevanceBadge(item.relevance_score)}
+                {getRelevanceSourceBadge(item.relevance_source)}
+                {getSourceBadge(item._source ?? undefined)}
+              </div>
+
+              {/* STORY-259: "Por que foi recomendado" section with justificativas */}
+              {bidAnalysis && bidAnalysis.justificativas.length > 0 && (
+                <div
+                  className="mt-2 p-3 bg-surface-1 rounded-input space-y-1.5"
+                  data-testid="bid-justificativas"
+                >
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-muted mb-1">
+                    Por que foi recomendado
+                  </p>
+                  <ul className="space-y-1">
+                    {bidAnalysis.justificativas.map((j, i) => (
+                      <li
+                        key={i}
+                        className="flex items-start gap-1.5 text-xs text-ink-secondary"
+                      >
+                        <span className="mt-1 w-1.5 h-1.5 rounded-full bg-brand-navy flex-shrink-0" aria-hidden="true" />
+                        {j}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* STORY-259: "Analisar em detalhe" button */}
+              {(bidAnalysis || bidAnalysisStatus === "ready") && (
+                <div className="pt-1">
+                  <button
+                    onClick={() => setDeepModalOpen(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-brand-navy dark:text-brand-blue border border-brand-navy/30 dark:border-brand-blue/30 rounded-button hover:bg-brand-blue-subtle transition-colors"
+                    data-testid="deep-analysis-btn"
+                    aria-label="Abrir análise detalhada do edital"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                    Analisar em detalhe
+                  </button>
+                </div>
+              )}
+
+              {searchId && (
+                <div className="pt-2">
+                  <FeedbackButtons
+                    searchId={searchId}
+                    bidId={item.pncp_id || `${idPrefix}-${index}`}
+                    setorId={setorId}
+                    bidObjeto={item.objeto}
+                    bidValor={item.valor}
+                    bidUf={item.uf}
+                    confidenceScore={typeof item.confidence === "string" ? (item.confidence === "high" ? 90 : item.confidence === "medium" ? 60 : 30) : undefined}
+                    relevanceSource={item.relevance_source || undefined}
+                    accessToken={accessToken}
+                  />
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>
 
-      {/* AC8: Expandable details section */}
-      <div className="mt-2">
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="text-xs text-ink-muted hover:text-ink-secondary transition-colors flex items-center gap-1"
-          aria-expanded={expanded}
-          data-testid="expand-details-btn"
-        >
-          <svg
-            className={`w-3.5 h-3.5 transition-transform ${expanded ? 'rotate-90' : ''}`}
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            aria-hidden="true"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-          {expanded ? 'Ocultar detalhes' : 'Ver detalhes'}
-        </button>
-
-        {expanded && (
-          <div className="mt-3 pt-3 border-t border-border space-y-2 animate-fade-in" data-testid="bid-details">
-            <p className="text-sm text-ink-secondary">
-              <span className="font-medium text-ink">Órgão:</span> {item.orgao}
-            </p>
-            {item.modalidade && (
-              <p className="text-sm text-ink-secondary">
-                <span className="font-medium text-ink">Modalidade:</span> {item.modalidade}
-              </p>
-            )}
-            {item.data_abertura && (
-              <p className="text-sm text-ink-secondary">
-                <span className="font-medium text-ink">Propostas desde:</span> {formatDate(item.data_abertura)}
-              </p>
-            )}
-            <div className="flex flex-wrap gap-2 mt-1">
-              {getRelevanceBadge(item.relevance_score)}
-              {getRelevanceSourceBadge(item.relevance_source)}
-              {getSourceBadge(item._source ?? undefined)}
-            </div>
-            {searchId && (
-              <div className="pt-2">
-                <FeedbackButtons
-                  searchId={searchId}
-                  bidId={item.pncp_id || `${idPrefix}-${index}`}
-                  setorId={setorId}
-                  bidObjeto={item.objeto}
-                  bidValor={item.valor}
-                  bidUf={item.uf}
-                  confidenceScore={typeof item.confidence === "string" ? (item.confidence === "high" ? 90 : item.confidence === "medium" ? 60 : 30) : undefined}
-                  relevanceSource={item.relevance_source || undefined}
-                  accessToken={accessToken}
-                />
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
+      {/* STORY-259: Deep analysis modal — rendered outside card to avoid clipping */}
+      <DeepAnalysisModal
+        isOpen={deepModalOpen}
+        onClose={() => setDeepModalOpen(false)}
+        bidId={item.pncp_id || `${idPrefix}-${index}`}
+        searchId={searchId}
+        bidData={{
+          objeto: item.objeto,
+          orgao: item.orgao,
+          valor: item.valor,
+          modalidade: item.modalidade ?? undefined,
+          uf: item.uf,
+        }}
+        accessToken={accessToken}
+      />
+    </>
   );
 }

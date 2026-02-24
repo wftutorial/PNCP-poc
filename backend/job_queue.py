@@ -657,6 +657,58 @@ async def cache_refresh_job(ctx: dict) -> dict:
 
 
 # ==========================================================================
+# STORY-259: Bid Analysis Job
+# ==========================================================================
+
+async def bid_analysis_job(
+    ctx: dict,
+    search_id: str,
+    licitacoes: list,
+    user_profile: dict | None = None,
+    sector_name: str = "",
+    **kwargs,
+) -> dict:
+    """Background job: Batch bid analysis via LLM.
+
+    STORY-259 AC3: Generates per-bid justifications and compatibility %.
+    Dispatched in parallel with LLM summary and Excel.
+    """
+    from middleware import search_id_var, request_id_var
+    search_id_var.set(search_id)
+    request_id_var.set(kwargs.get("_trace_id", search_id))
+
+    from bid_analyzer import batch_analyze_bids
+    from progress import get_tracker
+
+    logger.info(f"[BidAnalysis Job] search_id={search_id}, bids={len(licitacoes)}, sector={sector_name}")
+
+    try:
+        results = batch_analyze_bids(
+            bids=licitacoes,
+            user_profile=user_profile,
+            sector_name=sector_name,
+        )
+        result_data = [r.model_dump() for r in results]
+    except Exception as e:
+        logger.warning(f"[BidAnalysis Job] Failed ({type(e).__name__}): {e}")
+        result_data = []
+
+    # Persist result
+    await persist_job_result(search_id, "bid_analysis", result_data)
+
+    # Emit SSE event
+    tracker = await get_tracker(search_id)
+    if tracker:
+        await tracker.emit(
+            "bid_analysis_ready", 90,
+            "Análise de editais pronta",
+            bid_analysis=result_data,
+        )
+
+    return {"status": "completed", "count": len(result_data)}
+
+
+# ==========================================================================
 # ARQ Worker Settings (AC5)
 # ==========================================================================
 
@@ -691,7 +743,7 @@ class WorkerSettings:
         cd backend && arq job_queue.WorkerSettings
     """
 
-    functions = [llm_summary_job, excel_generation_job, cache_refresh_job, search_job]
+    functions = [llm_summary_job, excel_generation_job, cache_refresh_job, search_job, bid_analysis_job]
     cron_jobs = _worker_cron_jobs  # CRIT-032 AC2: periodic cache refresh
     redis_settings = _worker_redis_settings
     max_jobs = 10

@@ -1235,7 +1235,8 @@ class UnreadCountResponse(BaseModel):
 # ============================================================================
 
 class PorteEmpresa(str, Enum):
-    """Company size classification."""
+    """Company size classification (STORY-260: added MEI)."""
+    MEI = "MEI"
     ME = "ME"
     EPP = "EPP"
     MEDIO = "MEDIO"
@@ -1243,9 +1244,10 @@ class PorteEmpresa(str, Enum):
 
 
 class ExperienciaLicitacoes(str, Enum):
-    """Procurement experience level."""
+    """Procurement experience level (STORY-260: added INTERMEDIARIO)."""
     PRIMEIRA_VEZ = "PRIMEIRA_VEZ"
     INICIANTE = "INICIANTE"
+    INTERMEDIARIO = "INTERMEDIARIO"
     EXPERIENTE = "EXPERIENTE"
 
 
@@ -1306,6 +1308,21 @@ class PerfilContexto(BaseModel):
         ge=0,
         description="Desired average ticket in BRL cents",
     )
+    # STORY-260: Expanded profile fields (all Optional for progressive profiling)
+    atestados: Optional[List[str]] = Field(
+        default=None,
+        description="Certifications held (e.g., ['crea', 'iso_9001'])",
+    )
+    capacidade_funcionarios: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description="Number of employees",
+    )
+    faturamento_anual: Optional[float] = Field(
+        default=None,
+        ge=0,
+        description="Annual revenue in BRL",
+    )
 
     @model_validator(mode="after")
     def validate_value_range(self) -> "PerfilContexto":
@@ -1354,6 +1371,16 @@ class PerfilContextoResponse(BaseModel):
         default=False,
         description="Whether onboarding wizard has been completed",
     )
+
+
+class ProfileCompletenessResponse(BaseModel):
+    """STORY-260 AC3: Response for GET /v1/profile/completeness."""
+    completeness_pct: int = Field(ge=0, le=100)
+    total_fields: int
+    filled_fields: int
+    missing_fields: List[str] = Field(default_factory=list)
+    next_question: Optional[str] = None
+    is_complete: bool = False
 
 
 class FirstAnalysisRequest(BaseModel):

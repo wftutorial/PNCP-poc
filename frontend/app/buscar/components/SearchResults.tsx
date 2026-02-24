@@ -202,6 +202,22 @@ export default function SearchResults({
 
   // GTM-UX-001: succeededUfs derivation removed — DataQualityBanner computes internally
 
+  // STORY-260 AC16: Dismissible profile incomplete banner (localStorage, 3-day TTL)
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+
+  useEffect(() => {
+    const dismissed = localStorage.getItem('profile_banner_dismissed');
+    if (dismissed) {
+      const days = (Date.now() - parseInt(dismissed)) / (1000 * 60 * 60 * 24);
+      if (days < 3) setBannerDismissed(true);
+    }
+  }, []);
+
+  const handleDismissBanner = () => {
+    localStorage.setItem('profile_banner_dismissed', String(Date.now()));
+    setBannerDismissed(true);
+  };
+
   return (
     <>
       {/* STORY-257B AC1-3: UF Progress Grid (shown during loading) */}
@@ -481,9 +497,24 @@ export default function SearchResults({
           {/* UX-348 AC7-AC8: Results header with positive framing */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-strong">
             <div>
-              <h2 className="text-lg font-semibold text-ink" data-testid="results-header">
-                {result.resumo.total_oportunidades} {result.resumo.total_oportunidades === 1 ? 'oportunidade selecionada' : 'oportunidades selecionadas'}{rawCount > 0 ? ` de ${rawCount.toLocaleString("pt-BR")} analisadas` : ''}
-              </h2>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-lg font-semibold text-ink" data-testid="results-header">
+                  {result.resumo.total_oportunidades} {result.resumo.total_oportunidades === 1 ? 'oportunidade selecionada' : 'oportunidades selecionadas'}{rawCount > 0 ? ` de ${rawCount.toLocaleString("pt-BR")} analisadas` : ''}
+                </h2>
+                {/* STORY-260 AC17: "Análise personalizada" badge when profile is complete */}
+                {isProfileComplete && result.resumo.total_oportunidades > 0 && (
+                  <div
+                    className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 text-xs rounded-full"
+                    title="Resultados otimizados para o perfil da sua empresa"
+                    data-testid="personalized-analysis-badge"
+                  >
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    {`An\u00E1lise personalizada`}
+                  </div>
+                )}
+              </div>
               {rawCount > 0 && (
                 <p className="text-sm text-ink-secondary mt-0.5" data-testid="results-subtitle">
                   Analisamos {rawCount.toLocaleString("pt-BR")} editais em {ufsSelecionadas.size} {ufsSelecionadas.size === 1 ? 'estado' : 'estados'} e selecionamos {result.resumo.total_oportunidades} com maior aderência ao seu perfil
@@ -694,8 +725,8 @@ export default function SearchResults({
                 {/* AC5: Proper accents in title */}
                 <h4 className="text-base sm:text-lg font-semibold font-display text-ink mb-3 sm:mb-4">Recomendações Estratégicas:</h4>
 
-                {/* AC6: Incomplete profile banner with CTA */}
-                {!isProfileComplete && (
+                {/* AC6/AC16: Incomplete profile banner with CTA — dismissible, localStorage 3-day TTL */}
+                {!isProfileComplete && !bannerDismissed && (
                   <div className="mb-3 p-3 bg-amber-50 dark:bg-amber-900/15 border border-amber-200 dark:border-amber-700/40 rounded-card flex items-center gap-3" data-testid="profile-incomplete-banner">
                     <svg className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -706,6 +737,17 @@ export default function SearchResults({
                         Completar perfil →
                       </Link>
                     </p>
+                    <button
+                      type="button"
+                      onClick={handleDismissBanner}
+                      className="ml-auto flex-shrink-0 text-amber-600 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-100 transition-colors"
+                      aria-label="Fechar aviso"
+                      data-testid="profile-banner-dismiss"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
                   </div>
                 )}
 
@@ -811,6 +853,8 @@ export default function SearchResults({
               searchId={searchId}
               setorId={setorId}
               accessToken={session?.access_token}
+              bidAnalysis={result.bid_analysis}
+              bidAnalysisStatus={result.bid_analysis_status}
             />
           )}
 

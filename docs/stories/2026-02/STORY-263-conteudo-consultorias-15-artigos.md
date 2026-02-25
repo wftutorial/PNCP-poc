@@ -1,6 +1,6 @@
 # STORY-263: Série de Conteúdos — Inteligência em Licitações para Consultorias (15 Artigos)
 
-**Status:** Draft
+**Status:** Done
 **Priority:** P0 — Critical (SEO Authority Building)
 **Track:** GTM — Content Marketing & SEO Authority
 **Created:** 2026-02-24
@@ -240,30 +240,30 @@ Mesmo padrão da série B2G: **rigor institucional, elegância, sobriedade e con
 
 ### Padrão de Qualidade — Todos os Artigos
 
-- [ ] **AC1:** Cada artigo tem entre 2.000 e 3.500 palavras de conteúdo substantivo
-- [ ] **AC2:** Cada artigo segue hierarquia H1 → H2 → H3 sem pulos
-- [ ] **AC3:** Cada artigo contém no mínimo 3 dados/estatísticas verificáveis com fonte
-- [ ] **AC4:** Cada artigo contém no mínimo 1 framework/template prático (box destacado)
-- [ ] **AC5:** Cada artigo termina com seção FAQ (3-5 perguntas) com FAQPage schema JSON-LD
-- [ ] **AC6:** Tom editorial: institucional, sóbrio, consultivo. Fala DE CONSULTOR PARA CONSULTOR
-- [ ] **AC7:** Nenhuma afirmação sem fundamento. Dados sem fonte devem ser "estimativa baseada em [metodologia]"
+- [x] **AC1:** Cada artigo tem entre 2.000 e 3.500 palavras de conteúdo substantivo
+- [x] **AC2:** Cada artigo segue hierarquia H1 → H2 → H3 sem pulos
+- [x] **AC3:** Cada artigo contém no mínimo 3 dados/estatísticas verificáveis com fonte
+- [x] **AC4:** Cada artigo contém no mínimo 1 framework/template prático (box destacado)
+- [x] **AC5:** Cada artigo termina com seção FAQ (3-5 perguntas) com FAQPage schema JSON-LD
+- [x] **AC6:** Tom editorial: institucional, sóbrio, consultivo. Fala DE CONSULTOR PARA CONSULTOR
+- [x] **AC7:** Nenhuma afirmação sem fundamento. Dados sem fonte devem ser "estimativa baseada em [metodologia]"
 
 ### SEO — Todos os Artigos
 
-- [ ] **AC8:** Cada artigo tem `metadata: Metadata` com title (≤60 chars), description (150-160 chars), canonical URL, OG tags
-- [ ] **AC9:** Cada artigo tem BlogPosting JSON-LD: headline, description, author, publisher, datePublished, dateModified, wordCount, articleSection, inLanguage
-- [ ] **AC10:** Cada artigo tem BreadcrumbList JSON-LD: Início > Blog > Consultorias > [Título]
-- [ ] **AC11:** Cada artigo tem FAQPage JSON-LD na seção FAQ
-- [ ] **AC12:** URL slug SEO-friendly: lowercase, hifenizado, sem stop words, ≤60 chars
-- [ ] **AC13:** Keyword primária aparece no H1, first paragraph, e meta description
-- [ ] **AC14:** Alt text descritivo em todas as imagens/diagramas (se houver)
+- [x] **AC8:** Cada artigo tem `metadata: Metadata` com title (≤60 chars), description (150-160 chars), canonical URL, OG tags
+- [x] **AC9:** Cada artigo tem BlogPosting JSON-LD: headline, description, author, publisher, datePublished, dateModified, wordCount, articleSection, inLanguage
+- [x] **AC10:** Cada artigo tem BreadcrumbList JSON-LD: Início > Blog > Consultorias > [Título]
+- [x] **AC11:** Cada artigo tem FAQPage JSON-LD na seção FAQ
+- [x] **AC12:** URL slug SEO-friendly: lowercase, hifenizado, sem stop words, ≤60 chars
+- [x] **AC13:** Keyword primária aparece no H1, first paragraph, e meta description
+- [x] **AC14:** Alt text descritivo em todas as imagens/diagramas (se houver)
 
 ### Internal Linking (Cross-Series)
 
-- [ ] **AC15:** Cada artigo linka para ≥2 artigos do blog (incluindo cross-link com série B2G quando especificado)
-- [ ] **AC16:** Cada artigo linka para ≥1 página de produto (/features, /planos, /buscar, ou /signup)
-- [ ] **AC17:** Sidebar "Artigos Relacionados" mostra os 3 artigos definidos em `Related Articles`
-- [ ] **AC18:** Cross-links B2G↔Consultorias formam content web bidirecional:
+- [x] **AC15:** Cada artigo linka para ≥2 artigos do blog (incluindo cross-link com série B2G quando especificado)
+- [x] **AC16:** Cada artigo linka para ≥1 página de produto (/features, /planos, /buscar, ou /signup)
+- [x] **AC17:** Sidebar "Artigos Relacionados" mostra os 3 artigos definidos em `Related Articles`
+- [x] **AC18:** Cross-links B2G↔Consultorias formam content web bidirecional:
   - CONS-01 → B2G-01 (taxa de vitória)
   - CONS-04 → B2G-02 (erro operacional) + B2G-09 (escolher editais)
   - CONS-06 → B2G-10 (volume vs inteligência)
@@ -275,22 +275,22 @@ Mesmo padrão da série B2G: **rigor institucional, elegância, sobriedade e con
 
 ### CTA Integration
 
-- [ ] **AC19:** Cada artigo tem CTA section com:
+- [x] **AC19:** Cada artigo tem CTA section com:
   - Heading contextual (ex: "Ofereça inteligência, não apenas busca")
   - 1-2 linhas de benefício específico para consultoria
   - Botão "Comece Grátis" → `/signup?source=blog&article={slug}`
   - UTM: `?utm_source=blog&utm_medium=article&utm_campaign=consultorias`
-- [ ] **AC20:** CTA posicionado após conteúdo principal, antes do FAQ
+- [x] **AC20:** CTA posicionado após conteúdo principal, antes do FAQ
 
 ### Data Index
 
-- [ ] **AC21:** Todos os 15 artigos registrados em `lib/blog.ts` com category: "consultorias"
+- [x] **AC21:** Todos os 15 artigos registrados em `lib/blog.ts` com category: "consultorias"
 
 ### Testes
 
-- [ ] **AC22:** 15 artigos renderizam sem erro (smoke test)
-- [ ] **AC23:** Schema JSON-LD válido (BlogPosting + BreadcrumbList + FAQPage)
-- [ ] **AC24:** Zero regressões nos testes existentes
+- [x] **AC22:** 15 artigos renderizam sem erro (smoke test)
+- [x] **AC23:** Schema JSON-LD válido (BlogPosting + BreadcrumbList + FAQPage)
+- [x] **AC24:** Zero regressões nos testes existentes
 
 ---
 
@@ -338,22 +338,22 @@ CONS-14 ←→ B2G-01     (+20% ↔ taxa vitória)
 
 ## File List
 
-| File | Action |
-|------|--------|
-| `frontend/app/blog/content/aumentar-retencao-clientes-inteligencia-editais.tsx` | CREATE |
-| `frontend/app/blog/content/analise-edital-diferencial-competitivo-consultoria.tsx` | CREATE |
-| `frontend/app/blog/content/entregar-mais-resultado-clientes-sem-aumentar-equipe.tsx` | CREATE |
-| `frontend/app/blog/content/clientes-perdem-pregoes-boa-documentacao.tsx` | CREATE |
-| `frontend/app/blog/content/usar-dados-provar-eficiencia-licitacoes.tsx` | CREATE |
-| `frontend/app/blog/content/consultorias-modernas-inteligencia-priorizar-oportunidades.tsx` | CREATE |
-| `frontend/app/blog/content/triagem-editais-vantagem-estrategica-clientes.tsx` | CREATE |
-| `frontend/app/blog/content/nova-geracao-ferramentas-mercado-licitacoes.tsx` | CREATE |
-| `frontend/app/blog/content/reduzir-ruido-aumentar-performance-pregoes.tsx` | CREATE |
-| `frontend/app/blog/content/inteligencia-artificial-consultoria-licitacao-2026.tsx` | CREATE |
-| `frontend/app/blog/content/escalar-consultoria-sem-depender-horas-tecnicas.tsx` | CREATE |
-| `frontend/app/blog/content/identificar-clientes-gargalo-operacional-licitacoes.tsx` | CREATE |
-| `frontend/app/blog/content/diagnostico-eficiencia-licitacao-servico-premium.tsx` | CREATE |
-| `frontend/app/blog/content/aumentar-taxa-sucesso-clientes-20-porcento.tsx` | CREATE |
-| `frontend/app/blog/content/consultorias-dados-retem-mais-clientes-b2g.tsx` | CREATE |
-| `frontend/app/lib/blog.ts` | MODIFY (add 15 Consultorias entries) |
-| `frontend/__tests__/blog-consultorias-articles.test.tsx` | CREATE |
+| File | Action | Status |
+|------|--------|--------|
+| `frontend/app/blog/content/aumentar-retencao-clientes-inteligencia-editais.tsx` | CREATE | DONE |
+| `frontend/app/blog/content/analise-edital-diferencial-competitivo-consultoria.tsx` | CREATE | DONE |
+| `frontend/app/blog/content/entregar-mais-resultado-clientes-sem-aumentar-equipe.tsx` | CREATE | DONE |
+| `frontend/app/blog/content/clientes-perdem-pregoes-boa-documentacao.tsx` | CREATE | DONE |
+| `frontend/app/blog/content/usar-dados-provar-eficiencia-licitacoes.tsx` | CREATE | DONE |
+| `frontend/app/blog/content/consultorias-modernas-inteligencia-priorizar-oportunidades.tsx` | CREATE | DONE |
+| `frontend/app/blog/content/triagem-editais-vantagem-estrategica-clientes.tsx` | CREATE | DONE |
+| `frontend/app/blog/content/nova-geracao-ferramentas-mercado-licitacoes.tsx` | CREATE | DONE |
+| `frontend/app/blog/content/reduzir-ruido-aumentar-performance-pregoes.tsx` | CREATE | DONE |
+| `frontend/app/blog/content/inteligencia-artificial-consultoria-licitacao-2026.tsx` | CREATE | DONE |
+| `frontend/app/blog/content/escalar-consultoria-sem-depender-horas-tecnicas.tsx` | CREATE | DONE |
+| `frontend/app/blog/content/identificar-clientes-gargalo-operacional-licitacoes.tsx` | CREATE | DONE |
+| `frontend/app/blog/content/diagnostico-eficiencia-licitacao-servico-premium.tsx` | CREATE | DONE |
+| `frontend/app/blog/content/aumentar-taxa-sucesso-clientes-20-porcento.tsx` | CREATE | DONE |
+| `frontend/app/blog/content/consultorias-dados-retem-mais-clientes-b2g.tsx` | CREATE | DONE |
+| `frontend/lib/blog.ts` | MODIFY (add 15 Consultorias entries) | DONE |
+| `frontend/__tests__/blog-consultorias-articles.test.tsx` | CREATE | DONE |

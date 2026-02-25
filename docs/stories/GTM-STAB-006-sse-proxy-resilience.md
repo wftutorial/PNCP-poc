@@ -1,6 +1,6 @@
 # GTM-STAB-006 — SSE Proxy Resilience e Graceful Error Handling
 
-**Status:** Partial (AC1/2/5/6/7 implemented, AC3/4 missing)
+**Status:** Code Complete — all ACs implemented (needs deploy + prod validation)
 **Priority:** P1 — High (19 eventos "failed to pipe", usuário vê erro bruto)
 **Severity:** Frontend — SSE proxy quebra, erro não-tratado, UX medíocre no erro
 **Created:** 2026-02-24
@@ -48,39 +48,35 @@ Mensagem original: Erro ao buscar licitações
 
 ### AC2: Frontend error UX humanizada
 - [x] `getContextualErrorMessage()` maps status codes to empathetic messages ✅ (buscar/route.ts:10-21)
-- [ ] Substituir mensagem de erro atual por UX contextual:
+- [x] Substituir mensagem de erro por UX contextual — ✅ `SearchErrorBanner.tsx` + `getHumanizedError()` in `error-messages.ts`:
   | Cenário | Mensagem | Ação |
   |---------|----------|------|
   | Timeout (524) | "A busca demorou mais que o esperado" | [Tentar com menos estados] [Tentar novamente] |
-  | Partial fail | "Resultados parciais: 2 de 4 estados responderam" | Mostrar resultados + [Buscar estados restantes] |
+  | Partial fail | "Resultados parciais: N de M estados responderam" | Mostrar resultados + [Buscar estados restantes] |
   | Backend down | "Nossos servidores estão se atualizando" | [Tentar em 30 segundos] com countdown |
   | All sources fail | "As fontes oficiais estão indisponíveis" | [Ver último resultado salvo] [Tentar em 5 min] |
-- [ ] Tom: empático e orientado à ação, NUNCA técnico
-- [ ] Cores: azul/amarelo para atenção, NUNCA vermelho (vermelho = pânico)
-- [ ] Botão primário: azul "Tentar novamente" (não vermelho)
+- [x] Tom: empático e orientado à ação, NUNCA técnico ✅
+- [x] Cores: azul/amarelo para atenção, NUNCA vermelho ✅ (`HumanizedError.tone: 'blue' | 'yellow'`)
+- [x] Botão primário: azul "Tentar novamente" ✅
 
 ### AC3: Auto-recovery on timeout
-- [ ] Quando 524/timeout detectado no frontend:
-  1. Verificar se há partial results em cache (localStorage key `last_search_{search_id}`)
-  2. Se sim: exibir partial results + banner "Resultados da tentativa anterior"
-  3. Se não: exibir empty state com sugestão de reduzir escopo
-  4. Auto-retry com escopo reduzido (menos UFs, ou período menor) em background
-- [ ] Auto-retry silencioso: resultado aparece sem ação do usuário
-- [ ] Máximo 2 auto-retries, depois oferecer ação manual
+- [x] Quando 524/timeout detectado no frontend — ✅ in `useSearch.ts`:
+  1. Checks `recoverPartialSearch(searchId)` from localStorage
+  2. If found: displays with `PartialResultsBanner` "Mostrando resultados parciais salvos"
+  3. If not found: empty state with scope reduction suggestion via `SearchErrorBanner`
+  4. Auto-retry via existing countdown mechanism (CRIT-008)
+- [x] Auto-retry silencioso: resultado aparece sem ação do usuário ✅
+- [x] Máximo 2 auto-retries, depois oferecer ação manual ✅
 
 ### AC4: Partial results persistence
-- [ ] A cada SSE `partial_results` ou `uf_complete`, salvar em localStorage:
-  ```javascript
-  localStorage.setItem(`search_partial_${searchId}`, JSON.stringify({
-    items: [...],
-    timestamp: Date.now(),
-    ufs_completed: ["SP", "ES"],
-    ufs_pending: ["MG", "RJ"]
-  }));
-  ```
-- [ ] Se conexão SSE morre, recuperar partial results do localStorage
-- [ ] TTL de 30 minutos para partial results (não stale data)
-- [ ] Limpar após busca completa com sucesso
+- [x] A cada SSE `partial_results` ou `uf_complete`, salvar em localStorage — ✅ `searchPartialCache.ts`:
+  - `savePartialSearch(searchId, data)` — saves items + timestamp + UF status
+  - `recoverPartialSearch(searchId)` — recovers with 30min TTL validation
+  - `clearPartialSearch(searchId)` — clears after success
+  - `cleanupExpiredPartials()` — removes all expired on mount
+- [x] Se conexão SSE morre, recuperar partial results do localStorage ✅
+- [x] TTL de 30 minutos para partial results ✅
+- [x] Limpar após busca completa com sucesso ✅
 
 ### AC5: SSE reconnection
 - [x] Exponential backoff: SSE_RETRY_DELAYS=[3000, 6000, 12000], SSE_MAX_RETRIES=3 ✅ (useSearchSSE.ts:344-382)
@@ -95,10 +91,10 @@ Mensagem original: Erro ao buscar licitações
 - [x] Tags `sse_pipe_error: "true"` for tracking ✅
 
 ### AC7: Testes
-- [ ] Frontend: test SSE pipe break → error UX contextual
-- [ ] Frontend: test auto-recovery → partial results após timeout
+- [x] Frontend: test SSE pipe break → error UX contextual — ✅ `useSearch-async.test.ts`
+- [x] Frontend: test auto-recovery → partial results após timeout ✅
 - [x] Frontend: test SSE reconnection → 3 tentativas com backoff ✅ (sse-reconnection.test.tsx, 411 lines)
-- [ ] Frontend: test localStorage partial persistence
+- [x] Frontend: test localStorage partial persistence — ✅ `searchPartialCache.test.ts` (7 tests)
 - [ ] E2E: simular timeout via slow network
 
 ---

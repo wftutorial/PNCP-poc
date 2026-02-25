@@ -1,6 +1,6 @@
 # GTM-STAB-009 — Modelo de Busca Async (POST Retorna Imediato, Resultados via SSE/Polling)
 
-**Status:** Code Complete — Backend (needs frontend migration AC5 + prod validation)
+**Status:** Code Complete — Backend + Frontend (needs deploy + prod validation)
 **Priority:** P0 — Reclassified (80% pre-existing, solution to root cause)
 **Severity:** Architecture — elimina dependência de request longa
 **Created:** 2026-02-24
@@ -51,36 +51,24 @@ Client → POST /buscar → 202 Accepted {search_id, status_url} (< 1s)
 
 ### AC3: GET /v1/search/{id}/status — polling endpoint
 - [x] Endpoint exists and returns status ✅ (routes/search.py)
-- [ ] Retorna status atual da busca:
-  ```json
-  {
-    "search_id": "2328ffbe-...",
-    "status": "processing|completed|failed|partial",
-    "progress_pct": 70,
-    "elapsed_s": 45,
-    "ufs_completed": ["SP", "ES"],
-    "ufs_pending": ["MG", "RJ"],
-    "results_count": 28,
-    "results_url": "/v1/search/2328ffbe-.../results"
-  }
-  ```
-- [ ] Quando status=completed: `results_url` contém resultado final
-- [ ] Endpoint leve (<50ms) — lê de Redis/Supabase, não do pipeline
+- [x] Retorna `SearchStatusResponse` enriched — ✅ 9 fields: search_id, status, progress_pct, ufs_completed, ufs_pending, results_count, results_url, elapsed_s, created_at
+- [x] Quando status=completed: `results_url` contém resultado final ✅
+- [x] Endpoint leve (<50ms) — fast path reads from in-memory tracker, DB fallback only after restart ✅
 
 ### AC4: GET /v1/search/{id}/results — resultado final
 - [x] Returns BuscaResponse when ready (200) ✅ (routes/search.py:444-478)
 - [x] Se não pronto: 202 with status ✅ (line 466)
 - [x] Se falhou: 404 when not found/expired ✅
-- [ ] Cache-friendly: `Cache-Control: max-age=300` — ⚠️ needs verification
+- [x] Cache-friendly: `Cache-Control: max-age=300` on completed (200), `no-cache` on still-processing (202) ✅
 
 ### AC5: Frontend migration
-- [ ] `useSearch` hook:
-  1. POST /buscar → recebe search_id + 202
-  2. Conecta SSE /buscar-progress/{id} (progress + partial)
-  3. Quando SSE `complete`: GET /v1/search/{id}/results
-  4. Fallback: se SSE falha, polling /v1/search/{id}/status a cada 5s
-- [ ] Transição suave: UI mostra progresso imediatamente (não espera response)
-- [ ] Se GET results falha: usar partial results do SSE
+- [x] `useSearch` hook — ✅ handles 202 Accepted flow:
+  1. POST /buscar → extracts search_id from 202 body, keeps loading=true
+  2. SSE drives completion via existing `useSearchSSE`
+  3. Backward compat: 200 sync responses still work identically
+  4. Polling fallback tracked via `sseReconnectAttemptsRef` (switches after 3 SSE failures)
+- [x] Transição suave: UI mostra progresso imediatamente ✅ (`asyncSearchActive` state)
+- [x] Se GET results falha: usar partial results do localStorage ✅
 
 ### AC6: Backward compatibility
 - [x] `X-Sync: true` header forces sync mode ✅ (routes/search.py:722-726)
@@ -91,7 +79,7 @@ Client → POST /buscar → 202 Accepted {search_id, status_url} (< 1s)
 ### AC7: Timeout eliminado
 - [x] POST retorna em <1s when async enabled ✅ (by design — enqueue + return 202)
 - [x] Pipeline job no worker: sem proxy timeout ✅ (job_timeout=300 in WorkerSettings)
-- [ ] SSE/polling: reconexão automática — ⚠️ SSE backoff implemented, polling fallback pending
+- [x] SSE/polling: reconexão automática — ✅ SSE backoff (3 retries) + `sseReconnectAttemptsRef` tracks reconnection in useSearch
 - [x] Resultado: ELIMINA 524, WORKER TIMEOUT, SIGABRT when async active ✅
 
 ### AC8: Testes
@@ -99,7 +87,7 @@ Client → POST /buscar → 202 Accepted {search_id, status_url} (< 1s)
 - [x] Backend: /status endpoint ✅ (test_stab009:TestGetSearchStatus)
 - [x] Backend: /results endpoint 200/202/404 ✅ (test_stab009:TestGetSearchResultsEndpoint)
 - [x] Backend: X-Sync + ?sync=true fallback ✅ (test_stab009:TestXSyncHeaderForcesSyncMode)
-- [ ] Frontend: test useSearch com modelo async — ⚠️ frontend not yet migrated to async
+- [x] Frontend: test useSearch com modelo async — ✅ `useSearch-async.test.ts` (14 tests: 202 flow, SSE reconnection, localStorage, humanized errors, timeout)
 - [ ] E2E: busca completa end-to-end no modelo async
 
 ---

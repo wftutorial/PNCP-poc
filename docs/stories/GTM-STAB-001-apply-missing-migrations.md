@@ -65,9 +65,9 @@ O Sentry mostra 11 eventos de `APIError: insert or update on table "search_resul
 - [ ] Resolver ambos issues no Sentry como "fixed"
 
 ### AC5: Prevenir reincidência
-- [ ] Adicionar step no CI/CD que verifica se todas migrations locais foram aplicadas em produção
+- [x] Adicionar step no CI/CD que verifica se todas migrations locais foram aplicadas em produção — ✅ `migration-check.yml` + pre-deploy gate in `deploy.yml` and `staging-deploy.yml`
 - [ ] OU adicionar warning no `railway up` pre-deploy hook
-- [ ] Documentar processo de migration no CLAUDE.md se ainda não estiver
+- [x] Documentar processo de migration no CLAUDE.md se ainda não estiver — ✅ added to "Before Committing" section
 
 ---
 

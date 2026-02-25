@@ -61,10 +61,10 @@ Para experiência enterprise, as buscas mais comuns devem ser **instantâneas** 
 - [x] Structured log: `cache_warming_cycle` with duration_ms, warmed count ✅ (line 668)
 
 ### AC4: Não interferir com buscas de usuário
-- [ ] Warming jobs usam prioridade BAIXA (PNCP batching com delay extra: 3s entre UFs)
-- [ ] Se busca de usuário em andamento, pausar warming (detectar via `active_searches` gauge)
-- [ ] Circuit breaker: se PNCP rate-limited durante warming, parar imediatamente
-- [ ] User_id para warming: usar user_id do admin ou system UUID especial
+- [x] Warming jobs usam prioridade BAIXA — ✅ `WARMING_BATCH_DELAY_S=3.0` between each request, sequential (not parallel)
+- [x] Se busca de usuário em andamento, pausar warming — ✅ `_warming_wait_for_idle()` checks `ACTIVE_SEARCHES` gauge, 3 pause cycles × 10s
+- [x] Circuit breaker: se PNCP rate-limited durante warming, parar imediatamente — ✅ checks `is_degraded` + 429 detection stops warming entirely
+- [x] User_id para warming: `WARMING_USER_ID = "00000000-0000-0000-0000-000000000000"` ✅
 
 ### AC5: Startup warming (cold start)
 - [x] `warmup_top_params()` in cron_jobs.py (lines 195-239) ✅
@@ -73,10 +73,10 @@ Para experiência enterprise, as buscas mais comuns devem ser **instantâneas** 
 - [x] Covers redeploy scenarios ✅
 
 ### AC6: Testes
-- [ ] Backend: test cache_warming_job executa e salva cache para N combinações
-- [ ] Backend: test smart warming query retorna top combinações por frequência
-- [ ] Backend: test budget timeout para warming em 30min
-- [ ] Backend: test warming pausa quando busca de usuário ativa
+- [x] Backend: test cache_warming_job executa e salva cache para N combinações — ✅ `test_cache_warming_noninterference.py`
+- [x] Backend: test smart warming query retorna top combinações por frequência ✅
+- [x] Backend: test budget timeout para warming em 30min ✅
+- [x] Backend: test warming pausa quando busca de usuário ativa ✅ (8 tests total)
 
 ---
 

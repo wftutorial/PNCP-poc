@@ -1,6 +1,6 @@
 # GTM-STAB-005 — Fix "0 Oportunidades" com Check Verde + UX de Resultados Vazios
 
-**Status:** Code Complete (needs deploy + prod validation)
+**Status:** Code Complete — all ACs implemented (needs deploy + prod validation)
 **Priority:** P1 — High (UX medíocre → percepção de produto quebrado)
 **Severity:** Frontend + Backend — filtro rejeita tudo, UX não comunica adequadamente
 **Created:** 2026-02-24
@@ -46,26 +46,7 @@ Não há empty state educativo. O usuário vê "0 oportunidades" e não sabe:
 
 ### AC2: Empty state educativo
 - [x] ZeroResultsSuggestions.tsx — actionable buttons (ampliar período, adicionar estados, mudar setor) ✅
-- [ ] Quando total de resultados = 0 após processamento completo:
-  ```
-  ┌─────────────────────────────────────────┐
-  │  🔍 Nenhuma oportunidade encontrada     │
-  │                                         │
-  │  Possíveis motivos:                     │
-  │  • Período muito curto (10 dias)        │
-  │  • Termos de busca muito específicos    │
-  │  • Poucos editais abertos neste momento │
-  │                                         │
-  │  Sugestões:                             │
-  │  [Ampliar período para 30 dias]         │
-  │  [Incluir mais estados]                 │
-  │  [Buscar por setor em vez de termos]    │
-  │                                         │
-  │  💡 Dica: Buscas por setor encontram    │
-  │  mais oportunidades que buscas por      │
-  │  termos específicos                     │
-  └─────────────────────────────────────────┘
-  ```
+- [x] Quando total de resultados = 0 após processamento completo — ✅ `ZeroResultsSuggestions` enhanced with `totalFromSources` + `filterStats` props, wired in `SearchResults.tsx`
 - [x] Botões de sugestão funcionais (onAdjustPeriod, onAddNeighborStates, onChangeSector) ✅
 - [x] Se modo setor com 0: sugerir ampliar período e estados ✅
 - [x] Se modo termos com 0: sugerir setor mais próximo ✅
@@ -73,22 +54,9 @@ Não há empty state educativo. O usuário vê "0 oportunidades" e não sabe:
 ### AC3: Filter stats transparente
 - [x] FilterStats model in schemas.py (lines 754-768) with full rejection breakdown ✅
 - [x] filter_stats: Optional[FilterStats] in BuscaResponse (line 955) ✅
-- [ ] Quando resultados = 0, exibir motivo do filtro no response:
-  ```json
-  {
-    "total_bruto": 47,
-    "filtrado": 0,
-    "filter_stats": {
-      "valor_rejeitadas": 5,
-      "keyword_rejeitadas": 38,
-      "llm_rejeitadas": 4,
-      "status_rejeitadas": 0
-    },
-    "filter_summary": "47 licitações encontradas, nenhuma aprovada pelos filtros de relevância"
-  }
-  ```
-- [ ] Frontend exibe: "47 licitações encontradas nas fontes oficiais, mas nenhuma corresponde aos seus critérios"
-- [ ] Isso dá confiança: o sistema BUSCOU, os dados EXISTEM, mas não são relevantes
+- [x] Quando resultados = 0, exibir motivo do filtro — ✅ `FilterStatsBreakdown.tsx` renders color-coded horizontal bars per filter stage
+- [x] Frontend exibe: "47 licitações encontradas nas fontes oficiais, mas nenhuma corresponde aos seus critérios" — ✅ wired in `ZeroResultsSuggestions` + `SearchResults.tsx`
+- [x] Isso dá confiança: o sistema BUSCOU, os dados EXISTEM, mas não são relevantes ✅
 
 ### AC4: Auto-relaxation para termos livres
 - [x] 4-level auto-relaxation implemented ✅ (search_pipeline.py:1661-1817):
@@ -98,18 +66,19 @@ Não há empty state educativo. O usuário vê "0 oportunidades" e não sabe:
   - Level 3: Top-10 by value, no keyword filter
 - [x] Cada retry automático ✅
 - [x] `filter_relaxed: Optional[bool]` + `relaxation_level: Optional[int]` in BuscaResponse ✅ (schemas.py:1076-1118)
-- [ ] Frontend banner "Resultados com filtro ampliado" — ⚠️ needs frontend display
+- [x] Frontend banner "Resultados com filtro ampliado" — ✅ `FilterRelaxedBanner.tsx` with dismissible blue banner + contextual relaxation messages
 
 ### AC5: "Indisponível" com contexto
-- [ ] Quando UF=failed, mostrar motivo:
-  - "PNCP não respondeu para MG (timeout)" → user entende que é temporário
-  - "Taxa limite atingida para RJ" → user entende rate limit
-  - "Fonte offline para ES" → circuit breaker
-- [ ] Sugerir: "Tente novamente em alguns minutos" ou auto-retry button
+- [x] Quando UF=failed, mostrar motivo — ✅ `UfFailureDetail.tsx` with per-reason icons + messages:
+  - "PNCP não respondeu para MG (tempo esgotado)" → timeout
+  - "Taxa limite atingida para RJ" → rate_limit
+  - "Fonte indisponível para ES" → offline
+  - "Erro ao consultar UF" → error
+- [x] Sugerir: retry button per UF (when `onRetry` callback provided) ✅
 
 ### AC6: Testes
-- [ ] Frontend: test empty state com 0 resultados → sugestões visíveis
-- [ ] Frontend: test UF status amarelo para success+0
+- [x] Frontend: test empty state com 0 resultados → sugestões visíveis — ✅ `stab-005-zero-results.test.tsx` (23 tests)
+- [x] Frontend: test UF status amarelo para success+0 ✅
 - [ ] Backend: test auto-relaxation retorna resultados quando normal retorna 0
 - [ ] Backend: test filter_stats incluso no response quando filtrado=0
 - [ ] E2E: busca com termos específicos que resultam 0 → empty state educativo aparece

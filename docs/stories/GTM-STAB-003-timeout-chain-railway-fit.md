@@ -48,7 +48,7 @@ Gunicorn worker:       180s  ← Worker sobrevive, Railway não
 - [x] Atualizar `backend/config.py` ✅ (commit `899ee07`)
 - [x] Atualizar `backend/start.sh` — GUNICORN_TIMEOUT=120, KEEP_ALIVE=75 ✅ (start.sh:34,41)
 - [x] Atualizar `frontend/app/api/buscar/route.ts` — fetch timeout=115s ✅ (route.ts:112)
-- [ ] Atualizar `frontend/app/buscar/page.tsx` — client timeout — ⚠️ needs verification
+- [x] Atualizar `frontend/app/buscar/page.tsx` — client timeout=115s via AbortController in useSearch ✅
 
 ### AC2: Per-UF timeout agressivo com early abort
 - [x] `pncp_client.py` — `PNCP_TIMEOUT_PER_UF`: 30s, DEGRADED: 15s ✅ (pncp_client.py:77-82)
@@ -71,8 +71,8 @@ Gunicorn worker:       180s  ← Worker sobrevive, Railway não
 
 ### AC5: Frontend timeout alignment
 - [x] `route.ts` — AbortController timeout: 115s ✅ (route.ts:112, comment "STAB-003 AC5")
-- [ ] `page.tsx` — useSearch timeout: 115s — ⚠️ needs verification
-- [ ] SSE progress: "Finalizando busca..." after 100s — ⚠️ needs verification
+- [x] `page.tsx` — useSearch timeout: 115s via AbortController + setTimeout ✅
+- [x] SSE progress: "Finalizando busca..." after 100s — `isFinalizing` state in useSearch ✅
 - [x] Ao receber 524: mensagem amigável via `getContextualErrorMessage()` ✅
 
 ### AC6: Gunicorn timeout aligned

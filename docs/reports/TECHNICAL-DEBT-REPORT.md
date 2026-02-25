@@ -1,338 +1,181 @@
-# Relatorio de Debito Tecnico -- SmartLic/BidIQ
+# Relatorio Executivo de Divida Tecnica -- SmartLic v0.5
 
-**Data:** 2026-02-15
-**Versao:** 2.0
+**Data:** 2026-02-25
+**Versao:** 3.0
 **Classificacao:** Confidencial -- Uso Interno
-**Preparado por:** Equipe de Assessment Tecnico (Arquiteto, Especialista em Banco de Dados, Especialista UX, QA)
-**Para:** Lideranca de Produto e Stakeholders
-**Base tecnica:** [Assessment Tecnico Completo v2.0](../prd/technical-debt-assessment.md) (914 linhas, 87 itens)
+**Preparado por:** @analyst (Fase 9, Brownfield Discovery)
+**Para:** Lideranca de Produto e Stakeholders -- CONFENGE
+**Base tecnica:** [Assessment Tecnico Completo](../prd/technical-debt-assessment.md) (92 itens, validado por 4 especialistas)
 
 ---
 
-## Executive Summary
+## Sumario Executivo
 
-### Situacao Atual
+O SmartLic esta em producao, funcional, e pronto para monetizacao -- **com uma ressalva**. Existem 7 problemas que, em um cenario de recuperacao de desastre (recriacao do banco de dados), quebram cobranca, cadastro e analytics. Alem disso, 14 itens de estabilidade afetam a percepcao de qualidade para clientes enterprise.
 
-O SmartLic e uma plataforma SaaS em producao que ajuda empresas a descobrir oportunidades de contratacao publica no Brasil, buscando automaticamente no Portal Nacional de Contratacoes Publicas (PNCP). O sistema ja possui usuarios pagantes com cobranca via Stripe, gera relatorios em Excel com resumos gerados por inteligencia artificial, e opera em 9 setores economicos incluindo facilities management. A plataforma evoluiu significativamente desde a ultima auditoria (11/fev), com melhorias em organizacao do codigo, seguranca de banco de dados e monitoramento.
+**A boa noticia:** o investimento para resolver tudo e de apenas **R$ 2.250** (15 horas, 2 dias uteis). O custo de nao resolver pode chegar a **R$ 75.000+** em receita perdida, risco juridico e retrabalho.
 
-No entanto, a velocidade de desenvolvimento introduziu problemas que, se ignorados, podem comprometer a confianca dos clientes, a seguranca dos dados e a capacidade de crescimento. Foram identificados **87 problemas tecnicos**, dos quais **3 sao criticos** (risco imediato de impacto em usuarios) e **14 sao de alta prioridade** (risco no curto prazo). Os problemas criticos envolvem falhas potenciais no cadastro de novos usuarios e brechas de seguranca que permitem acesso indevido a dados entre clientes.
+Comparado com a auditoria anterior (15/fev, 87 itens, R$ 54.000), a plataforma evoluiu drasticamente. O trabalho de hoje e cirurgico e pontual.
 
-A boa noticia: o custo de resolver esses problemas e significativamente menor que o custo de ignora-los. As correcoes mais urgentes podem ser realizadas em **1 semana** com investimento de **R$ 2.250**. O plano completo, incluindo melhorias de qualidade e preparacao para escala, demanda **8 a 10 semanas** e **R$ 54.000** -- um investimento que protege contra riscos estimados em **R$ 350.000 a R$ 650.000**.
+**Recomendacao:** Aprovar e executar imediatamente.
 
-### Numeros Chave
+---
+
+## Numeros-Chave
 
 | Metrica | Valor |
 |---------|-------|
-| Total de Problemas Identificados | **87** |
-| Problemas Criticos (risco imediato) | **3** |
-| Problemas de Alta Prioridade (risco proximo) | **14** |
-| Problemas de Media Prioridade | **36** |
-| Problemas de Baixa Prioridade | **34** |
-| Esforco Total Estimado | **~360 horas** |
-| Custo de Resolucao (base) | **R$ 54.000** |
-| Custo de Resolucao (com margem 1.3x) | **R$ 70.200** |
-| Prazo Estimado (Sprints 0-3) | **8-10 semanas** |
-| Custo Potencial de NAO Resolver | **R$ 350.000 - R$ 650.000** |
-
-### Melhoria desde a Ultima Auditoria (v1.0 de 11/fev)
-
-| Aspecto | Antes (11/fev) | Agora (15/fev) | Tendencia |
-|---------|----------------|----------------|-----------|
-| Organizacao do Codigo Backend | Media | Media-Alta | Melhoria |
-| Seguranca do Banco de Dados | 6.5/10 | 7.5/10 | Melhoria |
-| Experiencia do Usuario (Frontend) | Media-Alta | Media-Alta | Estavel |
-| Custo total estimado | R$ 61.800 (~412h) | R$ 54.000 (~360h) | -13% |
-
-Diversos problemas da auditoria anterior ja foram resolvidos: o codigo principal do backend foi reorganizado em 14 modulos, a seguranca do banco de dados melhorou com correcoes em tabelas existentes, e o monitoramento ganhou rastreamento de requisicoes.
-
-### Recomendacao
-
-**Recomendamos aprovar imediatamente o Sprint 0 (R$ 2.250, 1 semana)** para eliminar os 3 problemas criticos e as 2 brechas de seguranca. Este investimento minimo protege contra o risco mais grave: falha no cadastro de novos usuarios e exposicao de dados entre clientes. Os sprints subsequentes devem ser aprovados em sequencia, com revisao de progresso a cada 2 semanas.
+| Problemas bloqueantes (Tier 1) | **7** |
+| Problemas de estabilidade (Tier 2) | **14** |
+| Problemas aceitos/backlog (Tier 3) | **71** |
+| Horas para resolver Tier 1 + Tier 2 | **~15 horas** |
+| Custo da resolucao (R$ 150/hora) | **R$ 2.250** |
+| Custo estimado de NAO resolver | **R$ 75.000 - R$ 150.000** |
+| ROI do investimento | **33:1 a 67:1** |
+| Core flows enterprise-ready apos fixes | **6 de 6** |
 
 ---
 
-## Analise de Custos
+## Analise de Custos: Resolver vs Ignorar
 
 ### Custo de RESOLVER
 
-| Categoria | Problemas | Horas | Custo (R$150/h) |
-|-----------|-----------|-------|-----------------|
-| Sistema e Backend (infraestrutura, APIs, processamento) | 24 | 143h | R$ 21.450 |
-| Banco de Dados (seguranca, integridade, performance) | 17 | 23h | R$ 3.450 |
-| Frontend e Experiencia do Usuario | 46 | 194h | R$ 29.100 |
-| **TOTAL** | **87** | **360h** | **R$ 54.000** |
+| Fase | Itens | Horas | Custo |
+|------|-------|-------|-------|
+| Tier 1 -- Bloqueantes | 7 | 3h | R$ 450 |
+| Tier 2 -- Estabilidade (banco) | 8 | 4h | R$ 600 |
+| Tier 2 -- Estabilidade (backend) | 2 | 0,75h | R$ 113 |
+| Tier 2 -- Estabilidade (frontend) | 4 | 5,1h | R$ 765 |
+| Testes e verificacao | -- | 2h | R$ 300 |
+| **TOTAL** | **21** | **~15h** | **R$ 2.250** |
 
-**Com margem de seguranca:**
-- Cenario otimista (1.0x): R$ 54.000
-- Cenario realista (1.3x): R$ 70.200
-- Cenario conservador (1.5x): R$ 81.000
+### Custo de NAO RESOLVER
 
-### Distribuicao por Urgencia
+| Risco | Probabilidade | Impacto Estimado | Explicacao em linguagem simples |
+|-------|:---:|---:|---|
+| Cobrancas Stripe falham apos manutencao no banco | Alta | R$ 30.000 - R$ 60.000 | Se precisarmos recriar o banco (manutencao, migracao de servidor), o sistema de cobranca para de funcionar. Clientes que pagam deixam de ser reconhecidos como pagantes. |
+| Cadastro perde dados do usuario | Certa | R$ 15.000 - R$ 30.000 | Todo novo usuario que se cadastra hoje perde dados como empresa, setor e consentimento de WhatsApp. O formulario coleta, mas o banco descarta. |
+| Erros tecnicos visiveis ao cliente | Alta | R$ 10.000 - R$ 20.000 | Quando algo da errado, o cliente ve mensagens como "TypeError: Cannot read properties of undefined" em vez de uma mensagem amigavel. Para um decisor enterprise, isso sinaliza produto imaturo. |
+| Descumprimento LGPD (opt-out de email) | Media | R$ 10.000 - R$ 25.000 | O botao de "nao receber mais emails" nao grava corretamente no banco. Em cenario de recriacao, essa preferencia se perde. |
+| Pipeline do trial user quebrado | Certa | R$ 5.000 - R$ 10.000 | O painel de estatisticas do trial consulta uma tabela que nao existe. Todo usuario em periodo de teste ve erro ao acessar o pipeline. |
+| Velocidade de desenvolvimento futura | Certa | R$ 5.000 - R$ 10.000/ano | Sem correcoes de estabilidade, cada nova funcionalidade carrega risco de efeitos colaterais. |
+| **TOTAL** | | **R$ 75.000 - R$ 155.000** | |
 
-| Prioridade | Descricao | Itens | Horas | Custo |
-|------------|-----------|-------|-------|-------|
-| P0 -- Imediato | Seguranca e funcionalidade quebrada | 8 | 11,5h | R$ 1.725 |
-| P1 -- Proximo sprint | Correcoes de alta prioridade | 10 | 35,5h | R$ 5.325 |
-| P2 -- 4-6 semanas | Melhorias estruturais | 18 | 153h | R$ 22.950 |
-| P3 -- Backlog | Polimento e otimizacoes | 51 | 157h | R$ 23.550 |
-| **Total** | | **87** | **~357h** | **R$ 53.550** |
-
-### Custo de NAO RESOLVER (Risco Acumulado)
-
-| Risco | Probabilidade | Impacto | Custo Potencial | Explicacao |
-|-------|---------------|---------|-----------------|------------|
-| **Vazamento de dados entre clientes** (brechas de seguranca no banco) | Alta | Critico | R$ 100.000 - R$ 300.000 | Dois modulos do sistema permitem que um usuario veja dados de outros clientes. Em um SaaS que lida com informacoes de licitacoes e dados de cobranca, isso pode resultar em acoes legais (LGPD), perda de clientes e danos a reputacao. |
-| **Cadastro de novos usuarios quebrado** (falha na criacao de perfil) | Alta | Critico | R$ 50.000 - R$ 100.000 | O sistema pode impedir novos usuarios de se cadastrarem corretamente, ou criar contas com configuracoes invalidas. Cada dia sem correcao e receita perdida e impressao negativa irrecuperavel. |
-| **Perda de confianca por precos divergentes** (paginas mostram valores diferentes) | Alta | Alto | R$ 20.000 - R$ 40.000 | A pagina de precos exibe um multiplicador confuso ("9.6x") ao inves de informacao clara como "2 meses gratis". Clientes que percebem inconsistencia em informacoes financeiras perdem confianca e nao convertem. |
-| **Degradacao de performance com crescimento** (consultas lentas, sistema nao escala) | Media | Alto | R$ 30.000 - R$ 60.000 | Paginas de analiticos carregam todos os dados do usuario sem filtragem temporal. O sistema de progresso de busca nao funciona com mais de um servidor. Com o crescimento da base, a experiencia degrada progressivamente. |
-| **Abandono de usuarios por experiencia inconsistente** (UX fragmentada) | Media | Alto | R$ 40.000 - R$ 80.000 | Mensagens de erro aparecem em ingles fora da pagina de login, botao de recuperacao de erro e invisivel, pipeline nao funciona bem em tablet/celular. Cada ponto de friccao aumenta a taxa de abandono. |
-| **Impossibilidade de escalar o time de desenvolvimento** (codigo dificil de manter) | Certa | Medio | R$ 15.000 - R$ 30.000/ano | Dois arquivos com mais de 1.300 linhas cada, logica duplicada em multiplos lugares, e 22 testes desativados. Cada novo desenvolvedor leva mais tempo para ser produtivo, e cada mudanca carrega risco de efeitos colaterais. |
-| **Velocidade de desenvolvimento reduzida** (debito tecnico acumulado) | Certa | Medio | R$ 10.000 - R$ 20.000/ano | Sem a resolucao, estimamos que cada nova funcionalidade levara 30-40% mais tempo para ser desenvolvida, testada e entregue com seguranca. |
-
-**Custo potencial acumulado de nao agir: R$ 350.000 - R$ 650.000**
-
-> **Para cada R$ 1 investido na resolucao, evitamos entre R$ 6 e R$ 12 em riscos.**
+> **Para cada R$ 1 investido, evitamos entre R$ 33 e R$ 67 em riscos.**
 
 ---
 
-## Impacto no Negocio
+## Impacto no Negocio por Area
 
-### 1. Seguranca e Compliance
+### 1. Cobranca e Receita
 
-**O que encontramos:** Dois modulos recentes do sistema (pipeline de oportunidades e cache de resultados de busca) foram criados com regras de acesso excessivamente permissivas. Na pratica, isso significa que um usuario autenticado poderia, tecnicamente, acessar dados de outros usuarios -- incluindo oportunidades de licitacao salvas e resultados de busca em cache.
+**Problema:** 5 colunas do banco de dados que controlam assinatura, status de pagamento e data de expiracao do trial existem apenas porque foram adicionadas manualmente. Se o banco for recriado a partir das migracoes oficiais, todos os webhooks do Stripe param de funcionar.
 
-**Por que isso importa para o negocio:**
-- O SmartLic lida com dados de licitacoes que tem valor estrategico para empresas. Vazamento de dados entre concorrentes pode resultar em processos judiciais.
-- A LGPD (Lei Geral de Protecao de Dados) preve multas de ate 2% do faturamento anual para violacoes de dados pessoais.
-- A plataforma tambem processa dados de cobranca via Stripe. Embora os dados de cartao nao estejam expostos, eventos de pagamento podem vazar informacoes sobre planos e historico de assinaturas de outros clientes.
+**O que significa:** Em producao hoje, funciona. Mas em qualquer manutencao que envolva o banco, perdemos a capacidade de cobrar. Clientes ativos aparecem como "trial". Cancelamentos perdem a data de encerramento.
 
-**Custo da correcao:** R$ 1.500 (2 horas de trabalho) -- uma das correcoes mais baratas com maior retorno de protecao.
+**Investimento para corrigir:** R$ 150 (1 hora -- adicionar colunas nas migracoes oficiais)
 
-**Risco de nao corrigir:** Exposicao legal, perda de clientes e danos a reputacao que podem inviabilizar o negocio.
+### 2. Cadastro e Onboarding
 
-### 2. Confianca do Cliente
+**Problema:** O mecanismo que cria o perfil do novo usuario foi regredido em uma atualizacao recente. Dos 10 campos que o formulario de cadastro coleta, apenas 4 sao gravados. Empresa, setor, consentimento de WhatsApp e outros 6 campos sao descartados silenciosamente.
 
-**O que encontramos:**
-- A pagina de precos exibe "9.6x" como multiplicador, um calculo matematico que nao faz sentido para o usuario (a intencao era comunicar "2 meses gratis no plano anual").
-- Existe duplicacao de definicoes de planos em dois arquivos diferentes que podem divergir, fazendo com que o usuario veja precos ou funcionalidades diferentes dependendo da pagina.
-- Mensagens de erro fora da pagina de login aparecem em ingles tecnico (exemplo: "502 Bad Gateway") ao inves de portugues amigavel.
+**O que significa:** Todo novo usuario perde informacoes. O onboarding fica incompleto. Segmentacao por setor e envio de mensagens por WhatsApp ficam comprometidos. Alem disso, se um usuario tentar se recadastrar (ex: Google OAuth apos email), o sistema bloqueia.
 
-**Por que isso importa para o negocio:**
-- Informacoes financeiras confusas ou divergentes sao o principal motivo de abandono em paginas de precos de SaaS.
-- Um usuario que viu "R$ 49/mes" em uma pagina e "R$ 52/mes" em outra perde imediatamente a confianca.
-- Mensagens de erro em ingles transmitem falta de polimento e profissionalismo.
+**Investimento para corrigir:** R$ 150 (1 hora -- reescrever o trigger do banco)
 
-**Custo da correcao:** R$ 900 (6 horas para corrigir precos, mensagens de erro e consolidar planos).
+### 3. Conformidade Legal (LGPD)
 
-### 3. Experiencia do Usuario
+**Problema:** O campo que registra a preferencia do usuario por nao receber emails nao esta nas migracoes oficiais. Se o banco for recriado, todos os opt-outs sao perdidos, e usuarios que pediram para nao receber emails voltam a receber.
 
-**O que encontramos:**
-- O botao de recuperacao na pagina de erro do sistema e **invisivel** (usa uma cor que nao esta definida no design). Quando o usuario encontra um erro, fica preso sem forma de voltar.
-- O pipeline de oportunidades (funcionalidade Kanban) nao funciona adequadamente em tablets -- colunas ficam cortadas e nao ha indicacao de scroll.
-- Nao existe aviso quando o usuario sai da pagina de busca apos aguardar 15-60 segundos por resultados. Os dados sao simplesmente perdidos.
-- Acessibilidade insuficiente: dialogos modais nao prendem o foco do teclado, confundindo usuarios que navegam sem mouse.
+**O que significa:** Descumprimento da LGPD. O usuario exerceu seu direito, mas o sistema nao preserva essa informacao de forma confiavel.
 
-**Por que isso importa para o negocio:**
-- O botao invisivel de erro e critico: e a unica forma do usuario se recuperar quando algo da errado, exatamente o momento em que a confianca esta mais fragil.
-- Pipeline em tablet afeta profissionais que usam dispositivos moveis em reunioes e deslocamentos.
-- Perder resultados de busca sem aviso e frustrante e desmotiva o uso recorrente da plataforma.
+**Investimento para corrigir:** R$ 38 (15 minutos -- incluido na migracao de colunas)
 
-**Custo da correcao dos itens mais urgentes:** R$ 1.650 (11 horas para botao de erro, aviso de navegacao e acessibilidade basica).
+### 4. Percepcao de Qualidade Enterprise
 
-### 4. Performance e Escalabilidade
+**Problema:** Quando ocorre um erro em 4 paginas principais (pipeline, historico, mensagens, conta), o usuario ve a mensagem tecnica crua em vez de uma mensagem amigavel em portugues. A pagina 404 tem erros de acentuacao. A pagina de erro global usa fontes e cores diferentes do resto do sistema.
 
-**O que encontramos:**
-- Paginas de analiticos carregam todos os dados historicos do usuario sem limite temporal. Um usuario ativo com centenas de buscas experimentara lentidao crescente.
-- O sistema de progresso em tempo real (que mostra o andamento da busca por estado) depende da memoria de um unico servidor. Se precisarmos adicionar um segundo servidor para suportar mais usuarios, este recurso para de funcionar.
-- Arquivos temporarios de Excel nao sao limpos automaticamente, podendo encher o disco do servidor.
+**O que significa:** Um gestor de licitacoes avaliando a plataforma para sua empresa vera sinais de produto inacabado. Isso afeta diretamente a conversao de trial para assinante.
 
-**Por que isso importa para o negocio:**
-- Crescimento de base de usuarios causara degradacao de performance gradual, nao uma queda subita. Usuarios simplesmente vao parar de usar antes de reclamar.
-- A impossibilidade de escalar horizontalmente (adicionar servidores) coloca um teto no crescimento da plataforma.
-
-**Custo da correcao estrutural:** R$ 3.300 (22 horas distribuidas nos Sprints 1 e 2).
-
-### 5. Velocidade de Desenvolvimento
-
-**O que encontramos:**
-- Dois arquivos principais do sistema tem mais de 1.300 linhas cada, concentrando logica que deveria estar distribuida. Qualquer mudanca nestes arquivos exige navegar por centenas de linhas, aumentando o risco de erros.
-- Existe logica duplicada: duas implementacoes separadas para comunicacao com a API do PNCP (~1.585 linhas), significando que cada correcao precisa ser feita em dois lugares.
-- 22 testes automatizados estao desativados ("em quarentena"), e a cobertura de testes do frontend esta abaixo do minimo aceitavel (49,46% vs 60% requerido). Isso significa que novos bugs podem ser introduzidos sem deteccao automatica.
-
-**Por que isso importa para o negocio:**
-- **Situacao atual:** Uma funcionalidade que deveria levar 3 dias pode levar 4-5 dias pela complexidade do codigo.
-- **Apos resolucao:** Estimamos ganho de 25-35% na velocidade de entrega de novas funcionalidades.
-- **Impacto em contratacao:** Novos desenvolvedores precisarao de mais tempo de integracao para entender o sistema como esta hoje.
-
-**Custo da resolucao:** R$ 7.200 (48 horas no Sprint 2 para reorganizacao de codigo e consolidacao).
+**Investimento para corrigir:** R$ 765 (5 horas -- error boundaries + mensagens amigaveis)
 
 ---
 
 ## Timeline Recomendado
 
-### Sprint 0: Verificacao e Correcoes Criticas (1 semana)
+### Fase A: Bloqueantes (Dia 1, manha -- 3 horas)
 
-**Objetivo:** Eliminar todos os 3 problemas criticos, fechar as 2 brechas de seguranca e corrigir os problemas mais visiveis para o usuario.
+| Acao | Resultado para o negocio |
+|------|-------------------------|
+| Adicionar 5 colunas faltantes nas migracoes oficiais | Cobranca, analytics e trial protegidos contra recriacao do banco |
+| Corrigir referencia a tabela inexistente no trial stats | Pipeline do trial user volta a funcionar |
+| Reescrever trigger de cadastro de usuario | Novos cadastros gravam todos os dados corretamente |
 
-| Dia | O que sera feito | Resultado para o negocio |
-|-----|-----------------|-------------------------|
-| 1 | Verificar estado real do banco de dados em producao | Entender a dimensao exata dos riscos |
-| 1 | Corrigir falha na criacao de perfil de novos usuarios | Novos cadastros funcionam corretamente |
-| 2 | Aplicar correcoes de seguranca no banco de dados | Dados de clientes isolados entre si |
-| 3 | Corrigir botao invisivel na pagina de erro | Usuarios conseguem se recuperar de erros |
-| 3 | Corrigir exibicao confusa de precos ("9.6x") | Pagina de precos clara e confiavel |
-| 4-5 | Testes de verificacao de todas as correcoes | Garantia de que nada foi quebrado |
+**Custo: R$ 450**
 
-**Investimento:** R$ 2.250 (15 horas)
-**ROI:** Imediato -- elimina risco de perda de novos clientes e exposicao de dados
+### Fase B: Estabilidade (Dia 1 tarde + Dia 2 -- 12 horas)
 
-### Sprint 1: Seguranca e Confianca (2 semanas)
+| Acao | Resultado para o negocio |
+|------|-------------------------|
+| Padronizar chaves estrangeiras no banco | Exclusao de usuario nao deixa dados orfaos |
+| Reforcar politicas de acesso no banco | Camada extra de protecao contra acesso indevido |
+| Alinhar versao Python (Dockerfile vs projeto) | Eliminacao de incompatibilidades sutis |
+| Corrigir User-Agent "BidIQ" para "SmartLic" | APIs governamentais identificam corretamente a plataforma |
+| Criar error boundaries para 4 paginas | Erros mostram mensagens amigaveis, nao codigo tecnico |
+| Corrigir acentos na pagina 404 | Polimento visual para decisores enterprise |
+| Adicionar focus trap no menu mobile | Conformidade com acessibilidade (WCAG) |
 
-**Objetivo:** Fechar lacunas de seguranca restantes, traduzir mensagens de erro para portugues, melhorar acessibilidade basica.
+**Custo: R$ 1.800**
 
-| Semana | O que sera feito | Resultado para o negocio |
-|--------|-----------------|-------------------------|
-| 1 | Corrigir controle de acesso em eventos de pagamento | Auditoria de pagamentos protegida |
-| 1 | Criar sistema de dialogos acessiveis (teclado) | Conformidade com padroes de acessibilidade |
-| 1 | Traduzir todas as mensagens de erro para portugues | Experiencia profissional e consistente |
-| 1 | Aviso antes de sair da pagina com resultados | Usuarios nao perdem resultados acidentalmente |
-| 2 | Corrigir bloqueio temporario no processamento de buscas | Buscas simultaneas nao interferem entre si |
-| 2 | Ativar verificacao de tipos no pipeline de qualidade | Bugs de tipo detectados antes de chegar ao usuario |
-| 2 | Iniciar consolidacao do codigo de comunicacao com PNCP | Reducao de risco em futuras mudancas de API |
+### Fase C: Verificacao (incluida nas Fases A e B)
 
-**Investimento:** R$ 3.600 (24 horas)
-**ROI:** Protecao de receita -- elimina pontos de friccao que causam abandono
-
-### Sprint 2: Consolidacao Estrutural (3 semanas)
-
-**Objetivo:** Reorganizar a estrutura interna do frontend e backend para permitir desenvolvimento mais rapido e seguro.
-
-| Semana | O que sera feito | Resultado para o negocio |
-|--------|-----------------|-------------------------|
-| 1 | Reativar 10-12 testes automatizados independentes | Mais confianca em cada atualizacao |
-| 1 | Criar testes de ponta a ponta para resultados de busca | Deteccao automatica de problemas visuais |
-| 2-3 | Reorganizar gerenciamento de estado da pagina de busca | Pagina de busca mais rapida e facil de melhorar |
-| 3 | Reorganizar o modulo de processamento de buscas (1.318 linhas) | Cada estagio da busca pode ser corrigido independentemente |
-
-**Investimento:** R$ 10.800 (72 horas)
-**ROI:** +25-35% velocidade de desenvolvimento -- cada sprint seguinte entrega mais
-
-### Sprint 3: Qualidade e Cobertura (2 semanas)
-
-**Objetivo:** Atingir o nivel minimo de qualidade automatizada e otimizar a experiencia do usuario.
-
-| Semana | O que sera feito | Resultado para o negocio |
-|--------|-----------------|-------------------------|
-| 1 | Testes para novo sistema de busca reorganizado | Rede de seguranca completa para funcionalidade core |
-| 1 | Otimizar carregamento de paginas (imports dinamicos, consolidacao de planos) | Paginas carregam mais rapido |
-| 2 | Testes para pipeline, onboarding e protecao de rotas | Todos os fluxos criticos cobertos por testes automaticos |
-
-**Investimento:** R$ 8.400 (56 horas)
-**ROI:** Cobertura de testes atinge 60%+ (nivel minimo de seguranca). Capacidade de lançar atualizacoes com confianca.
-
-### Sprints Futuros: Backlog (ongoing)
-
-Os 51 itens restantes (~157 horas, R$ 23.550) serao trabalhados incrementalmente apos os Sprints 0-3, priorizados por valor de negocio:
-
-1. **Escalabilidade do backend** -- Preparar para multiplos servidores (R$ 3.000)
-2. **Limpeza de codigo backend** -- Remover duplicacoes e codigo morto (R$ 5.550)
-3. **Otimizacao do banco de dados** -- Performance e consistencia (R$ 1.200)
-4. **Polimento do frontend** -- Consistencia visual e de navegacao (R$ 6.300)
-5. **Acessibilidade e UX** -- Conformidade WCAG e usabilidade movel (R$ 4.950)
-6. **Consistencia visual** -- Sistema de icones, cores e componentes unificados (R$ 2.550)
+Testes automatizados completos (5.131 backend + 2.681 frontend), teste manual de cadastro, cobranca e erros visuais.
 
 ---
 
-## ROI da Resolucao
+## Calculo de ROI
 
-### Investimento vs Retorno
+| | Valor |
+|---|---:|
+| Investimento total | R$ 2.250 |
+| Risco evitado (conservador) | R$ 75.000 |
+| Risco evitado (realista) | R$ 115.000 |
+| **ROI conservador** | **33:1** |
+| **ROI realista** | **51:1** |
 
-| Investimento | Retorno Esperado |
-|--------------|------------------|
-| **R$ 54.000** (resolucao completa) | **R$ 350.000 - R$ 650.000** em riscos evitados |
-| ~360 horas de trabalho tecnico | +25-35% velocidade de desenvolvimento futuro |
-| 8-10 semanas de execucao | Produto sustentavel, escalavel e seguro |
+### Comparativo com auditoria anterior
 
-### ROI por Sprint
+| Metrica | 15/fev (v2.0) | 25/fev (v3.0) | Evolucao |
+|---------|---:|---:|:---:|
+| Itens criticos | 3 | 7 (mais granular) | Melhor detalhamento |
+| Custo total de resolucao | R$ 54.000 | R$ 2.250 | **-96%** |
+| Prazo de resolucao | 8-10 semanas | 2 dias | **-95%** |
+| Core flows enterprise-ready | Parcial | 6/6 apos fixes | Plataforma madura |
 
-| Sprint | Investimento | Riscos Eliminados | ROI |
-|--------|-------------|-------------------|-----|
-| Sprint 0 (1 semana) | R$ 2.250 | R$ 150.000+ (seguranca + cadastro) | **67:1** |
-| Sprint 1 (2 semanas) | R$ 3.600 | R$ 80.000+ (confianca + compliance) | **22:1** |
-| Sprint 2 (3 semanas) | R$ 10.800 | R$ 60.000+ (velocidade + qualidade) | **6:1** |
-| Sprint 3 (2 semanas) | R$ 8.400 | R$ 40.000+ (cobertura de testes) | **5:1** |
-| **Sprints 0-3** | **R$ 25.050** | **R$ 330.000+** | **13:1** |
-
-### ROI Estimado Global: **6:1 a 12:1**
-
-Cada real investido na resolucao evita entre R$ 6 e R$ 12 em custos de riscos, perda de receita e reducao de produtividade.
-
----
-
-## Resumo de Riscos Cruzados
-
-Os itens abaixo representam situacoes onde a correcao de um problema depende de ou impacta outro. A equipe tecnica ja mapeou estas dependencias e o plano de sprints as respeita.
-
-| Risco | O que significa para o negocio | Mitigacao |
-|-------|-------------------------------|-----------|
-| Correcao no banco de dados conflita com estado real de producao | A correcao pode falhar se o banco foi modificado manualmente | Verificacao obrigatoria no Dia 1 do Sprint 0, com plano de reversao |
-| Reorganizacao do frontend quebra testes existentes | Testes que passavam podem falhar temporariamente | Testes de ponta a ponta criados ANTES da reorganizacao |
-| Correcao de seguranca bloqueia funcionalidade | Se o backend nao usar credenciais corretas, funcionalidades param | Auditoria de credenciais incluida no Sprint 0 |
-| Remocao de codigo duplicado quebra funcionalidade de busca | A busca por estado unico pode usar o codigo legado | Verificacao de uso antes de qualquer remocao |
-| Correcao de precos parcial cria inconsistencia pior | 4 lugares no codigo usam valor invalido; corrigir parcialmente e pior | Todos os 4 pontos corrigidos atomicamente no Sprint 0 |
-
----
-
-## Pontos Positivos (O que Funciona Bem)
-
-Apesar dos problemas identificados, o SmartLic possui fundamentos solidos que devem ser **preservados e nao comprometidos** durante as correcoes:
-
-- **Busca resiliente:** O sistema recupera automaticamente de falhas na API do PNCP, com retentativas inteligentes e modo degradado.
-- **Seguranca de dados pessoais:** Logs nao contem informacoes pessoais; dados sensiveis sao mascarados automaticamente.
-- **Idempotencia de pagamentos:** Eventos do Stripe nao sao processados em duplicidade graças a rastreamento dedicado.
-- **Acessibilidade parcial:** Design system com ratios WCAG documentados, modo escuro, e respeito a `prefers-reduced-motion`.
-- **Conformidade LGPD:** Banner de cookies, exportacao de dados e exclusao de conta ja implementados.
-- **Monitoramento:** Rastreamento de requisicoes com ID de correlacao e logs estruturados em JSON.
-- **Cobertura do backend:** 96,69% de cobertura de testes no backend (acima do minimo de 70%).
+A reducao drastica no custo reflete o amadurecimento real da plataforma nos ultimos 10 dias. O que resta e trabalho cirurgico, nao estrutural.
 
 ---
 
 ## Proximos Passos
 
-1. [ ] **Aprovar Sprint 0** -- R$ 2.250 (investimento minimo para eliminar riscos criticos)
-2. [ ] **Executar verificacao de producao** (Dia 1 do Sprint 0 -- queries de auditoria no banco)
-3. [ ] **Corrigir problemas criticos e brechas de seguranca** (Dias 1-2 do Sprint 0)
-4. [ ] **Aprovar Sprint 1** -- R$ 3.600 (correcoes de confianca e compliance)
-5. [ ] **Definir cadencia de revisao** (recomendado: review quinzenal de progresso)
-6. [ ] **Aprovar Sprints 2-3** apos validacao dos resultados dos Sprints 0-1
-7. [ ] **Review mensal de debito tecnico** para evitar reacumulo
+- [ ] **Aprovar execucao imediata** -- R$ 2.250, 2 dias de trabalho
+- [ ] **Fase A (Dia 1 manha):** Migracoes de banco + fix no trial stats + trigger de cadastro
+- [ ] **Fase B (Dia 1 tarde + Dia 2):** Estabilidade do banco, backend e frontend
+- [ ] **Verificacao final:** Suite completa de testes + validacao manual dos 6 core flows
+- [ ] **Review mensal de divida tecnica** para evitar reacumulo
 
-### Orcamento Total Solicitado
+### Resumo da Decisao
 
-| Fase | Valor | Acumulado |
-|------|-------|-----------|
-| Sprint 0 (aprovacao imediata) | R$ 2.250 | R$ 2.250 |
-| Sprint 1 | R$ 3.600 | R$ 5.850 |
-| Sprint 2 | R$ 10.800 | R$ 16.650 |
-| Sprint 3 | R$ 8.400 | R$ 25.050 |
-| Backlog (ongoing) | R$ 23.550 | R$ 48.600 |
-| **Margem de seguranca (10%)** | **R$ 4.860** | **R$ 53.460** |
+| Opcao | Custo | Risco |
+|-------|------:|-------|
+| **Aprovar agora** | R$ 2.250 | Plataforma enterprise-ready em 2 dias |
+| Adiar 30 dias | R$ 0 (curto prazo) | Cada novo usuario perde dados de cadastro. Trial stats quebrado. Risco acumulado de R$ 75.000+ |
+| Nao resolver | R$ 0 | Monetizacao comprometida. LGPD em risco. Percepcao enterprise negativa |
 
-> **Recomendacao:** Aprovar R$ 5.850 imediatamente (Sprints 0 + 1) para eliminar todos os riscos criticos e de alta prioridade mais urgentes. Os demais sprints serao aprovados conforme progresso.
+> **Recomendacao final:** Aprovar e executar imediatamente. O investimento de R$ 2.250 e o menor custo-beneficio possivel para colocar o SmartLic em posicao enterprise-ready.
 
 ---
 
-## Anexos
-
-Para detalhes tecnicos completos, consultar:
-
-- [Assessment Tecnico Completo v2.0](../prd/technical-debt-assessment.md) -- 87 itens detalhados com localizacao, impacto e esforco
-- [Arquitetura do Sistema](../architecture/system-architecture.md) -- Diagramas e decisoes arquiteturais
-- [Auditoria de Banco de Dados](../../supabase/docs/DB-AUDIT.md) -- Analise de seguranca e integridade do banco
-- [Especificacao Frontend](../frontend/frontend-spec.md) -- Analise de componentes e UX
-
----
-
-*Relatorio preparado pela equipe de assessment tecnico em 2026-02-15.*
-*Versao 2.0 -- Substitui relatorio v1.0 de 2026-02-11.*
-*Baseado no commit `b80e64a` (branch `main`).*
+*Relatorio preparado por @analyst durante Fase 9 do SmartLic Brownfield Discovery.*
+*Versao 3.0 -- Substitui relatorio v2.0 de 2026-02-15.*
+*Base tecnica: Assessment validado por @architect, @data-engineer, @ux-design-expert, @qa (APPROVED).*

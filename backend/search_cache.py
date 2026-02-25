@@ -213,6 +213,28 @@ async def _save_to_supabase(
     if fetch_duration_ms is not None:
         row["fetch_duration_ms"] = fetch_duration_ms
 
+    # STORY-265 AC2: Application-level JSONB size guard (2 MB limit)
+    # Defense-in-depth: truncates results before DB CHECK constraint rejects the insert
+    JSONB_MAX_BYTES = 2_097_152  # 2 MB — matches chk_results_max_size constraint
+    results_size = len(json.dumps(results).encode("utf-8"))
+    if results_size > JSONB_MAX_BYTES:
+        original_count = len(results)
+        # Truncate from the end until under limit
+        while results and len(json.dumps(results).encode("utf-8")) > JSONB_MAX_BYTES:
+            results = results[: len(results) * 3 // 4]  # Remove 25% each pass
+        row["results"] = results
+        row["total_results"] = len(results)
+        logger.warning(
+            "STORY-265: results JSONB truncated",
+            extra={
+                "original_count": original_count,
+                "truncated_count": len(results),
+                "original_bytes": results_size,
+                "user_id": user_id,
+                "params_hash": params_hash[:12],
+            },
+        )
+
     # CRIT-001 AC12: Filter payload to only known columns
     try:
         from models.cache import SearchResultsCacheRow

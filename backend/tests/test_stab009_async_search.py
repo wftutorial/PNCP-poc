@@ -350,10 +350,15 @@ class TestQueueUnavailableFallsBackToSync:
 # ---------------------------------------------------------------------------
 
 class TestSearchStatusEndpoint:
-    """T5: GET /v1/search/{id}/status returns current state dict."""
+    """T5: GET /v1/search/{id}/status returns enriched SearchStatusResponse.
+
+    STAB-009 AC3: Updated to test enriched response format.
+    The endpoint now returns SearchStatusResponse with mapped status values
+    (e.g., "fetching" → "running") and new field names (progress_pct, etc.).
+    """
 
     def test_search_status_endpoint(self, client):
-        """AC11: Status endpoint returns search state when search_id known."""
+        """AC3: Status endpoint returns enriched response when search_id known (DB fallback)."""
         search_id = str(uuid.uuid4())
         mock_status = {
             "search_id": search_id,
@@ -371,26 +376,30 @@ class TestSearchStatusEndpoint:
             "error_code": None,
         }
 
-        with patch("routes.search.get_search_status", new_callable=AsyncMock, return_value=mock_status):
+        with patch("routes.search.get_tracker", new_callable=AsyncMock, return_value=None), \
+             patch("routes.search.get_state_machine", return_value=None), \
+             patch("routes.search.get_search_status", new_callable=AsyncMock, return_value=mock_status):
             response = client.get(f"/v1/search/{search_id}/status")
 
         assert response.status_code == 200
         data = response.json()
         assert data["search_id"] == search_id
-        assert data["status"] == "fetching"
-        assert data["progress"] == 30
-        assert data["ufs_completed"] == 2
-        assert data["ufs_total"] == 5
+        # AC3: "fetching" maps to "running" in enriched response
+        assert data["status"] == "running"
+        assert data["progress_pct"] == 30
+        assert data["elapsed_s"] == 5.0
 
     def test_search_status_endpoint_not_found(self, client):
-        """AC11: Returns 404 when search_id unknown."""
-        with patch("routes.search.get_search_status", new_callable=AsyncMock, return_value=None):
+        """AC3: Returns 404 when search_id unknown."""
+        with patch("routes.search.get_tracker", new_callable=AsyncMock, return_value=None), \
+             patch("routes.search.get_state_machine", return_value=None), \
+             patch("routes.search.get_search_status", new_callable=AsyncMock, return_value=None):
             response = client.get("/v1/search/nonexistent-id/status")
 
         assert response.status_code == 404
 
     def test_search_status_endpoint_completed(self, client):
-        """AC11: Status shows 'completed' after search finishes."""
+        """AC3: Status shows 'completed' after search finishes."""
         search_id = str(uuid.uuid4())
         mock_status = {
             "search_id": search_id,
@@ -408,13 +417,16 @@ class TestSearchStatusEndpoint:
             "error_code": None,
         }
 
-        with patch("routes.search.get_search_status", new_callable=AsyncMock, return_value=mock_status):
+        with patch("routes.search.get_tracker", new_callable=AsyncMock, return_value=None), \
+             patch("routes.search.get_state_machine", return_value=None), \
+             patch("routes.search.get_search_status", new_callable=AsyncMock, return_value=mock_status):
             response = client.get(f"/v1/search/{search_id}/status")
 
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "completed"
-        assert data["progress"] == 100
+        assert data["progress_pct"] == 100
+        assert data["results_url"] == f"/v1/search/{search_id}/results"
 
     def test_search_status_requires_auth(self):
         """Status endpoint requires authentication."""

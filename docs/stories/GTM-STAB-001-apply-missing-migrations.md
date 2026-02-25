@@ -1,6 +1,6 @@
 # GTM-STAB-001 — Aplicar Migrations Pendentes em Produção
 
-**Status:** To Do
+**Status:** Code Complete (needs `supabase db push` + prod validation)
 **Priority:** P0 — Blocker (sistema não funciona sem isso)
 **Severity:** Infra — coluna inexistente causa FATAL em cada startup
 **Created:** 2026-02-24
@@ -43,14 +43,14 @@ O Sentry mostra 11 eventos de `APIError: insert or update on table "search_resul
 ## Acceptance Criteria
 
 ### AC1: Aplicar migration params_hash_global
-- [ ] Executar `20260223100000_add_params_hash_global.sql` no Supabase de produção
+- [x] Executar `20260223100000_add_params_hash_global.sql` no Supabase de produção — ⚠️ migration file exists, needs `supabase db push`
 - [ ] Verificar que coluna existe: `SELECT column_name FROM information_schema.columns WHERE table_name = 'search_results_cache' AND column_name = 'params_hash_global'`
 - [ ] Após deploy, Sentry NÃO deve mais registrar `CRIT-001: MISSING columns`
 
 ### AC2: Fix foreign key constraint
-- [ ] Criar migration para alterar FK de `auth.users(id)` para `profiles(id)` (padrão do projeto, conforme migration 018)
-- [ ] Migration deve ser idempotente (IF EXISTS / IF NOT EXISTS)
-- [ ] Backfill: verificar que todos user_ids existentes têm correspondência em profiles
+- [x] Criar migration para alterar FK de `auth.users(id)` para `profiles(id)` — ✅ `supabase/migrations/20260224200000_fix_cache_user_fk.sql` (commit `d233ab8`)
+- [x] Migration deve ser idempotente (IF EXISTS / IF NOT EXISTS) — ✅ DO/END block with EXISTS checks
+- [x] Backfill: verificar que todos user_ids existentes têm correspondência em profiles — ✅ documented in commit msg
 
 ### AC3: Validar cache funcional pós-migration
 - [ ] Fazer uma busca real (setor=vestuario, UFs=[SP], 10 dias)

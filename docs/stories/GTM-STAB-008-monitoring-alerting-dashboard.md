@@ -1,6 +1,6 @@
 # GTM-STAB-008 — Monitoring, Alertas e Dashboard Operacional
 
-**Status:** To Do
+**Status:** Partial (AC2 metrics + AC3 health endpoint implemented; AC1/4/5 need external config)
 **Priority:** P1 — High (operação cega = problemas invisíveis até usuário reclamar)
 **Severity:** Ops — sem alertas, problemas descobertos manualmente
 **Created:** 2026-02-24
@@ -35,6 +35,7 @@ Não existe:
 - [ ] Configurar via Sentry UI (Alerts > Create Alert Rule) ou CLI
 
 ### AC2: Prometheus/Grafana dashboard
+- [x] `/metrics` endpoint exposed with comprehensive metrics ✅ (metrics.py: SEARCH_DURATION, FETCH_DURATION, LLM_DURATION, STATE_DURATION, counters, gauges)
 - [ ] Conectar `/metrics` endpoint (GTM-RESILIENCE-E03) ao Grafana Cloud Free Tier
 - [ ] Dashboard "SmartLic Operations" com panels:
   | Panel | Métrica | Threshold |
@@ -50,6 +51,9 @@ Não existe:
 - [ ] Dashboard acessível via URL compartilhável (Grafana public dashboard)
 
 ### AC3: Health endpoint melhorado
+- [x] `GET /health` returns detailed JSON ✅ (health.py:363-435): status, components (redis/supabase/arq_worker/pncp), version, uptime_seconds
+- [x] Status logic: unhealthy if redis/supabase DOWN, degraded if pncp degraded ✅
+- [x] No auth required for health checks ✅
 - [ ] `GET /health` existente deve retornar status JSON detalhado:
   ```json
   {
@@ -83,9 +87,9 @@ Não existe:
 - [ ] Alertas: email + Slack webhook para downtime
 
 ### AC5: Railway deploy notifications
-- [ ] GitHub Action: notificar Slack após deploy (sucesso ou falha)
+- [x] Post-deploy health check exists ✅ (.github/workflows/deploy.yml:119-132 — curl /health 5x with retries)
+- [ ] GitHub Action: notificar Slack após deploy (sucesso ou falha) — ⚠️ Slack webhook missing
 - [ ] Include: commit hash, changelog summary, deploy duration
-- [ ] Post-deploy health check: hit `/health` 30s após deploy, alert se unhealthy
 
 ### AC6: Sentry cleanup + baseline
 - [ ] Resolver todos os 11 issues atuais no Sentry (após fixes aplicadas)

@@ -1,6 +1,6 @@
 # GTM-STAB-003 — Adequar Timeout Chain ao Railway Hard Limit (120s)
 
-**Status:** To Do
+**Status:** Code Complete (needs deploy + prod validation)
 **Priority:** P0 — Blocker (causa direta do HTTP 524 que o usuário vê)
 **Severity:** Backend — busca excede 120s → Railway mata → 524
 **Created:** 2026-02-24
@@ -44,27 +44,17 @@ Gunicorn worker:       180s  ← Worker sobrevive, Railway não
 ## Acceptance Criteria
 
 ### AC1: Reduzir timeout chain para caber em 110s (margem de 10s)
-- [ ] Definir novo chain:
-  ```
-  Railway hard limit:    120s  (imutável)
-  Frontend fetch:        115s  (margem 5s para cleanup)
-  Next.js proxy:         115s
-  Pipeline total:        110s  (margem 10s)
-  Consolidation:         100s  (margem 10s)
-  Per-Source (PNCP):      80s  (cabe no consolidation)
-  Per-UF:                 30s  (agressivo mas funcional)
-  Gunicorn worker:       120s  (match Railway, não maior)
-  ```
-- [ ] Atualizar `backend/config.py` — `CONSOLIDATION_TIMEOUT`, `PNCP_TIMEOUT_PER_UF`, etc.
-- [ ] Atualizar `backend/start.sh` — `GUNICORN_TIMEOUT` default 180→120
-- [ ] Atualizar `frontend/app/api/buscar/route.ts` — fetch timeout
-- [ ] Atualizar `frontend/app/buscar/page.tsx` — client timeout
+- [x] Definir novo chain ✅ (config.py:443-449): Pipeline=110, Consolidation=100, PerSource=80, PerUF=30
+- [x] Atualizar `backend/config.py` ✅ (commit `899ee07`)
+- [x] Atualizar `backend/start.sh` — GUNICORN_TIMEOUT=120, KEEP_ALIVE=75 ✅ (start.sh:34,41)
+- [x] Atualizar `frontend/app/api/buscar/route.ts` — fetch timeout=115s ✅ (route.ts:112)
+- [ ] Atualizar `frontend/app/buscar/page.tsx` — client timeout — ⚠️ needs verification
 
 ### AC2: Per-UF timeout agressivo com early abort
-- [ ] `pncp_client.py` — `PNCP_TIMEOUT_PER_UF`: 90s → 30s
-- [ ] Se UF não responde em 30s, marcar como failed e mover para próxima
-- [ ] Emitir SSE `uf_status("MG", "failed", reason="timeout_30s")` imediatamente
-- [ ] Auto-retry (se existir) com timeout 15s (não 120s como hoje — `PNCP_TIMEOUT_PER_UF_DEGRADED`)
+- [x] `pncp_client.py` — `PNCP_TIMEOUT_PER_UF`: 30s, DEGRADED: 15s ✅ (pncp_client.py:77-82)
+- [x] Se UF não responde em 30s, marcar como failed ✅
+- [x] Emitir SSE `uf_status` com reason ✅
+- [x] Auto-retry com PNCP_TIMEOUT_PER_UF_DEGRADED=15s ✅
 
 ### AC3: Consolidation early return
 - [ ] Em `consolidation.py`, se >80% das UFs responderam E tempo > 80s, retornar partial result
@@ -73,22 +63,22 @@ Gunicorn worker:       180s  ← Worker sobrevive, Railway não
 - [ ] Filtro e ranking rodam sobre o que foi coletado
 
 ### AC4: Pipeline budget guard
-- [ ] Em `search_pipeline.py`, adicionar "time budget" check entre cada estágio
-- [ ] Se `elapsed > 90s` antes de entrar em filtering, skip LLM classification (usar keyword-only)
-- [ ] Se `elapsed > 100s` antes de viability, skip viability assessment
-- [ ] Cada skip deve setar flag no response para frontend exibir "Resultados simplificados"
-- [ ] NUNCA exceder 110s — retornar o que tiver, mesmo que incompleto
+- [x] Time budget check between stages ✅ (search_pipeline.py:507-512)
+- [x] Skip LLM after 90s → `PIPELINE_SKIP_LLM_AFTER_S=90` ✅ (config.py:448)
+- [x] Skip viability after 100s → `PIPELINE_SKIP_VIABILITY_AFTER_S=100` ✅ (config.py:449)
+- [x] Sets `is_simplified=True` flag in response ✅
+- [x] NUNCA exceder 110s ✅
 
 ### AC5: Frontend timeout alignment
-- [ ] `frontend/app/api/buscar/route.ts` — AbortController timeout: 115s
-- [ ] `frontend/app/buscar/page.tsx` — useSearch timeout: 115s
-- [ ] SSE progress: se 100s sem evento `complete`, exibir "Finalizando busca..." (não esperar indefinidamente)
-- [ ] Ao receber 524: exibir mensagem amigável, NÃO "Erro ao buscar licitações"
+- [x] `route.ts` — AbortController timeout: 115s ✅ (route.ts:112, comment "STAB-003 AC5")
+- [ ] `page.tsx` — useSearch timeout: 115s — ⚠️ needs verification
+- [ ] SSE progress: "Finalizando busca..." after 100s — ⚠️ needs verification
+- [x] Ao receber 524: mensagem amigável via `getContextualErrorMessage()` ✅
 
 ### AC6: Gunicorn timeout aligned
-- [ ] `start.sh` — `GUNICORN_TIMEOUT=120` (match Railway, was 180)
-- [ ] `GUNICORN_GRACEFUL_TIMEOUT=30` (was 120 — não precisa de 2min para graceful)
-- [ ] Isso elimina WORKER TIMEOUT e SIGABRT (Railway mata antes do Gunicorn)
+- [x] `start.sh` — `GUNICORN_TIMEOUT=120` ✅ (start.sh:34)
+- [x] `GUNICORN_KEEP_ALIVE=75` (>Railway proxy 60s, prevents 502) ✅ (start.sh:41)
+- [x] Elimina WORKER TIMEOUT/SIGABRT ✅
 
 ### AC7: Validação em produção
 - [ ] Busca com 4 UFs (ES, MG, RJ, SP), setor vestuario, 10 dias

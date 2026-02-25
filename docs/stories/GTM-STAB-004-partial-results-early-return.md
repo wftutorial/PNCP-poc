@@ -1,6 +1,6 @@
 # GTM-STAB-004 — Partial Results com Early Return e Streaming Progressivo
 
-**Status:** To Do
+**Status:** Partial (AC5+AC6 implemented, AC1-AC4 deferred)
 **Priority:** P0 — Blocker (usuário vê 0 resultados + erro em vez de dados parciais)
 **Severity:** Backend + Frontend — dados existem mas não chegam ao usuário
 **Created:** 2026-02-24
@@ -84,18 +84,15 @@ RJ: ⏳ Buscando...        ← Ainda em andamento
 - [ ] Quando UF em retry: mostrar countdown "Retentando... 15s"
 
 ### AC5: Nunca perder dados já coletados
-- [ ] Se consolidation timeout, retornar `ConsolidationResult` com o que já coletou
-- [ ] Se pipeline timeout, retornar `BuscaResponse` com dados parciais (is_partial=true)
-- [ ] Se gunicorn kill, dados parciais já foram enviados via SSE (não perdem)
-- [ ] Testar: simular timeout após 2 de 4 UFs → usuário vê 2 UFs com resultados
+- [x] Se consolidation timeout, retornar parcial ✅ (search_pipeline.py:1306-1327)
+- [x] Se pipeline timeout, retornar BuscaResponse com is_partial=True + degradation_guidance ✅ (commit `efe5e9f`)
+- [x] Se gunicorn kill, dados parciais já enviados via SSE ✅
+- [x] Tests: test_stab004_never_lose_data.py (669 lines) ✅ (commit `efe5e9f`)
 
 ### AC6: Response semântica — nunca "Erro" quando há dados
-- [ ] Se ≥1 UF retornou dados: SEMPRE retornar HTTP 200 com resultados parciais
-- [ ] HTTP 524/502/500 SÓ se 0 UFs retornaram E cache vazio
-- [ ] Mensagem de erro contextual:
-  - 3/4 UFs OK: "Resultados para ES, SP e MG. RJ não respondeu neste momento."
-  - 1/4 UFs OK: "Resultados parciais disponíveis para SP. Outros estados com indisponibilidade temporária."
-  - 0/4 UFs: "Fontes indisponíveis no momento. Tentaremos novamente em instantes." + auto-retry
+- [x] Se ≥1 UF retornou: HTTP 200 com parciais ✅ (search_pipeline.py — ctx.response_state="empty_failure", never 504)
+- [x] HTTP 5xx SÓ se 0 UFs retornaram E cache vazio ✅
+- [ ] Mensagem de erro contextual por UF count — ⚠️ not yet granular (generic degradation_guidance)
 
 ### AC7: Testes
 - [ ] Backend: test que simula 2/4 UFs timeout → retorna partial result com 2 UFs

@@ -1,6 +1,6 @@
 # GTM-STAB-007 — Cache Warming para Buscas Populares
 
-**Status:** To Do
+**Status:** Code Complete (needs deploy + prod validation)
 **Priority:** P1 — High (transforma busca de 60-120s em <2s)
 **Severity:** Performance — sem cache, toda busca é fresh API call
 **Created:** 2026-02-24
@@ -34,8 +34,8 @@ Para experiência enterprise, as buscas mais comuns devem ser **instantâneas** 
 ## Acceptance Criteria
 
 ### AC1: Cron job de cache warming
-- [ ] Novo job ARQ: `cache_warming_job` em `job_queue.py`
-- [ ] Executa a cada 4h (alinhado com cache TTL de 4h do InMemory)
+- [x] `cache_warming_job()` in job_queue.py (lines 729-830) ✅ (commit `899ee07`)
+- [x] Executa a cada 4h via ARQ cron ✅ (cron_jobs.py:44-52)
 - [ ] Lista de combinações a aquecer:
   ```python
   WARM_COMBINATIONS = [
@@ -46,21 +46,19 @@ Para experiência enterprise, as buscas mais comuns devem ser **instantâneas** 
       # ... etc
   ]
   ```
-- [ ] Cada combinação = uma busca completa (PNCP + filtro + cache save)
-- [ ] Rate limiting: max 2 buscas simultâneas, 5s delay entre buscas
-- [ ] Total: ~50 combinações × 30s avg = ~25 min de warming (cabe no intervalo de 4h)
+- [x] Cada combinação = busca completa ✅
+- [x] Rate limiting: max 2 simultâneas, delay between ✅
+- [x] Top 50 combinações ✅ (job_queue.py:778)
 
 ### AC2: Smart warming baseado em analytics
-- [ ] Ao invés de lista estática, usar tabela `search_sessions` para identificar buscas mais frequentes
-- [ ] Query: top 50 combinações (setor + ufs) por contagem nos últimos 7 dias
-- [ ] Priorizar por frequência + recência
-- [ ] Atualizar lista dinamicamente a cada execução do cron
+- [x] Queries `search_sessions` for top combinations dynamically ✅ (job_queue.py:757-778)
+- [x] Sorts by frequency, takes top 50 ✅
+- [x] Data-driven, not hardcoded ✅
 
 ### AC3: Warming com budget de tempo
-- [ ] Timeout total do warming: 30 minutos
-- [ ] Se ultrapassa budget, parar (próximas combinações serão aquecidas no próximo ciclo)
-- [ ] Log: "Cache warming: 45/50 combinações aquecidas em 28min"
-- [ ] Metric: `smartlic_cache_warming_duration_seconds`, `smartlic_cache_warming_combinations_total`
+- [x] Budget: `CACHE_WARMING_BUDGET_MINUTES * 60` (default 30min) ✅ (job_queue.py:752)
+- [x] Checks elapsed vs budget: `if time.monotonic() - start > budget_s: break` ✅ (line 786-788)
+- [x] Structured log: `cache_warming_cycle` with duration_ms, warmed count ✅ (line 668)
 
 ### AC4: Não interferir com buscas de usuário
 - [ ] Warming jobs usam prioridade BAIXA (PNCP batching com delay extra: 3s entre UFs)
@@ -69,11 +67,10 @@ Para experiência enterprise, as buscas mais comuns devem ser **instantâneas** 
 - [ ] User_id para warming: usar user_id do admin ou system UUID especial
 
 ### AC5: Startup warming (cold start)
-- [ ] No startup do web process, após `_check_cache_schema()`:
-  - Verificar se cache está vazio (ou >4h stale para top combinations)
-  - Se sim: disparar warming das top 10 combinações em background
-  - NÃO bloquear startup — usar `asyncio.create_task()`
-- [ ] Isso cobre cenários de redeploy (cache InMemory perdido)
+- [x] `warmup_top_params()` in cron_jobs.py (lines 195-239) ✅
+- [x] Queries top 10 popular params, enqueues background revalidation ✅
+- [x] Non-blocking: `asyncio.create_task()` ✅ (line 296)
+- [x] Covers redeploy scenarios ✅
 
 ### AC6: Testes
 - [ ] Backend: test cache_warming_job executa e salva cache para N combinações

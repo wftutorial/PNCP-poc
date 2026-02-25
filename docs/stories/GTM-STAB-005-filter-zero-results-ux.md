@@ -1,6 +1,6 @@
 # GTM-STAB-005 — Fix "0 Oportunidades" com Check Verde + UX de Resultados Vazios
 
-**Status:** To Do
+**Status:** Code Complete (needs deploy + prod validation)
 **Priority:** P1 — High (UX medíocre → percepção de produto quebrado)
 **Severity:** Frontend + Backend — filtro rejeita tudo, UX não comunica adequadamente
 **Created:** 2026-02-24
@@ -40,17 +40,12 @@ Não há empty state educativo. O usuário vê "0 oportunidades" e não sabe:
 ## Acceptance Criteria
 
 ### AC1: Semântica visual de UF status
-- [ ] UfProgressGrid.tsx — 4 estados visuais distintos:
-  | Estado | Visual | Significado |
-  |--------|--------|-------------|
-  | success + N>0 | ✓ verde, "N oportunidades" | Normal |
-  | success + N=0 | — amarelo, "Sem oportunidades" | API respondeu, filtro zerou |
-  | failed | ✗ vermelho, "Indisponível" | API timeout/error |
-  | retrying | ↻ azul, "Retentando..." | Em retry |
-- [ ] "0 oportunidades" com check verde NÃO deve mais existir
-- [ ] Quando N=0, o card deve ser visivelmente diferente de sucesso (amarelo/cinza, não verde)
+- [x] UfProgressGrid.tsx — 4 estados visuais distintos ✅ (lines 25-52): successWithResults (green), successZero (amber), failed (red), retrying (blue)
+- [x] "0 oportunidades" com check verde NÃO existe mais ✅ (amber/yellow for N=0)
+- [x] Quando N=0, card amarelo/cinza (não verde) ✅
 
 ### AC2: Empty state educativo
+- [x] ZeroResultsSuggestions.tsx — actionable buttons (ampliar período, adicionar estados, mudar setor) ✅
 - [ ] Quando total de resultados = 0 após processamento completo:
   ```
   ┌─────────────────────────────────────────┐
@@ -71,11 +66,13 @@ Não há empty state educativo. O usuário vê "0 oportunidades" e não sabe:
   │  termos específicos                     │
   └─────────────────────────────────────────┘
   ```
-- [ ] Botões de sugestão devem ser funcionais (alteram parâmetros e rebuscam)
-- [ ] Se modo setor com 0 resultados: sugerir ampliar período e estados
-- [ ] Se modo termos com 0 resultados: sugerir setor mais próximo ou ampliar termos
+- [x] Botões de sugestão funcionais (onAdjustPeriod, onAddNeighborStates, onChangeSector) ✅
+- [x] Se modo setor com 0: sugerir ampliar período e estados ✅
+- [x] Se modo termos com 0: sugerir setor mais próximo ✅
 
 ### AC3: Filter stats transparente
+- [x] FilterStats model in schemas.py (lines 754-768) with full rejection breakdown ✅
+- [x] filter_stats: Optional[FilterStats] in BuscaResponse (line 955) ✅
 - [ ] Quando resultados = 0, exibir motivo do filtro no response:
   ```json
   {
@@ -94,13 +91,14 @@ Não há empty state educativo. O usuário vê "0 oportunidades" e não sabe:
 - [ ] Isso dá confiança: o sistema BUSCOU, os dados EXISTEM, mas não são relevantes
 
 ### AC4: Auto-relaxation para termos livres
-- [ ] Quando custom_terms + 0 resultados após filtro normal:
-  1. **Retry 1:** Desabilitar min_match_floor → rodar filtro com floor=0
-  2. **Retry 2:** Desabilitar keyword density threshold → aceitar qualquer menção
-  3. **Retry 3:** Mostrar top-10 por valor (sem filtro keyword) com badge "Resultado ampliado"
-- [ ] Cada retry deve ser automático (não pedir ação do usuário)
-- [ ] Response deve indicar `filter_relaxed: true` e `relaxation_level: N`
-- [ ] Frontend exibe banner: "Resultados com filtro ampliado — seus termos podem não aparecer diretamente"
+- [x] 4-level auto-relaxation implemented ✅ (search_pipeline.py:1661-1817):
+  - Level 0: Normal filtering with min_match_floor
+  - Level 1: Relaxed min-match (floor=0, 1+ match) → `filter_relaxed=True`
+  - Level 2: Keyword-free for term searches
+  - Level 3: Top-10 by value, no keyword filter
+- [x] Cada retry automático ✅
+- [x] `filter_relaxed: Optional[bool]` + `relaxation_level: Optional[int]` in BuscaResponse ✅ (schemas.py:1076-1118)
+- [ ] Frontend banner "Resultados com filtro ampliado" — ⚠️ needs frontend display
 
 ### AC5: "Indisponível" com contexto
 - [ ] Quando UF=failed, mostrar motivo:

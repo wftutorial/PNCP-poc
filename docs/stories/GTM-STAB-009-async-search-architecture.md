@@ -1,7 +1,7 @@
 # GTM-STAB-009 — Modelo de Busca Async (POST Retorna Imediato, Resultados via SSE/Polling)
 
-**Status:** To Do
-**Priority:** P2 — Medium (arquitetural, resolve timeout permanentemente)
+**Status:** Code Complete — Backend (needs frontend migration AC5 + prod validation)
+**Priority:** P0 — Reclassified (80% pre-existing, solution to root cause)
 **Severity:** Architecture — elimina dependência de request longa
 **Created:** 2026-02-24
 **Sprint:** GTM Stabilization (pós-P0/P1)
@@ -37,28 +37,20 @@ Client → POST /buscar → 202 Accepted {search_id, status_url} (< 1s)
 ## Acceptance Criteria
 
 ### AC1: POST /buscar retorna 202 Accepted imediatamente
-- [ ] `POST /buscar` valida request, cria search_id, enqueue pipeline como ARQ job
-- [ ] Response imediata (<1s):
-  ```json
-  {
-    "search_id": "2328ffbe-...",
-    "status": "queued",
-    "status_url": "/v1/search/2328ffbe-.../status",
-    "progress_url": "/buscar-progress/2328ffbe-...",
-    "estimated_duration_s": 45
-  }
-  ```
-- [ ] HTTP 202 (não 200) — semântica correta para async
-- [ ] Pipeline executa em background (ARQ job ou asyncio.create_task)
+- [x] POST /buscar: validates, creates search_id, enqueues via ARQ ✅ (routes/search.py:717-815)
+- [x] Response: search_id, status, status_url, progress_url, estimated_duration_s ✅ (lines 801-815)
+- [x] HTTP 202 when SEARCH_ASYNC_ENABLED=true ✅
+- [x] `estimated_duration_s = min(15 + num_ufs * 8, 120)` ✅
 
 ### AC2: Pipeline como background job
-- [ ] Nova function: `search_pipeline_job(search_id, request_params)` em `job_queue.py`
-- [ ] Job executa todo o pipeline (fetch → filter → classify → score → save)
-- [ ] Progresso emitido via SSE tracker (mesmo mecanismo atual)
-- [ ] Resultado final salvo em Supabase (search_sessions + cache)
-- [ ] Se Redis/ARQ indisponível: fallback para asyncio.create_task no web process
+- [x] `search_job()` in job_queue.py (lines 418-522) ✅
+- [x] Executes full pipeline: `executar_busca_completa()` ✅ (line 469)
+- [x] Progress via SSE tracker + `emit_search_complete()` ✅ (line 488)
+- [x] Result persisted: `persist_job_result()` ✅ (line 482)
+- [x] Fallback: asyncio.create_task when ARQ unavailable ✅
 
 ### AC3: GET /v1/search/{id}/status — polling endpoint
+- [x] Endpoint exists and returns status ✅ (routes/search.py)
 - [ ] Retorna status atual da busca:
   ```json
   {
@@ -76,10 +68,10 @@ Client → POST /buscar → 202 Accepted {search_id, status_url} (< 1s)
 - [ ] Endpoint leve (<50ms) — lê de Redis/Supabase, não do pipeline
 
 ### AC4: GET /v1/search/{id}/results — resultado final
-- [ ] Retorna `BuscaResponse` completo quando pronto
-- [ ] Se não pronto: 202 com status (redireciona para polling)
-- [ ] Se falhou: 200 com partial results (se disponíveis) ou 404
-- [ ] Cache-friendly: response com `Cache-Control: max-age=300` (5 min)
+- [x] Returns BuscaResponse when ready (200) ✅ (routes/search.py:444-478)
+- [x] Se não pronto: 202 with status ✅ (line 466)
+- [x] Se falhou: 404 when not found/expired ✅
+- [ ] Cache-friendly: `Cache-Control: max-age=300` — ⚠️ needs verification
 
 ### AC5: Frontend migration
 - [ ] `useSearch` hook:
@@ -91,23 +83,23 @@ Client → POST /buscar → 202 Accepted {search_id, status_url} (< 1s)
 - [ ] Se GET results falha: usar partial results do SSE
 
 ### AC6: Backward compatibility
-- [ ] `POST /buscar` com header `X-Sync: true` ou query `?sync=true` mantém comportamento síncrono
-- [ ] Frontend antigo (sem atualização) continua funcionando
-- [ ] Transição gradual: flag `ASYNC_SEARCH_ENABLED` (default false inicialmente)
-- [ ] Quando stable, flip para default true
+- [x] `X-Sync: true` header forces sync mode ✅ (routes/search.py:722-726)
+- [x] `?sync=true` query param forces sync mode ✅
+- [x] Flag `SEARCH_ASYNC_ENABLED` (default false) ✅ (config.py:470)
+- [x] Frontend antigo continua funcionando (sync by default) ✅
 
 ### AC7: Timeout eliminado
-- [ ] Com async, POST retorna em <1s → ZERO chance de Railway timeout
-- [ ] Pipeline job no worker: sem timeout de proxy (worker pode rodar por 10min se necessário)
-- [ ] SSE/polling: reconexão automática se desconectar
-- [ ] Resultado: ELIMINA 524, WORKER TIMEOUT, SIGABRT, failed to pipe
+- [x] POST retorna em <1s when async enabled ✅ (by design — enqueue + return 202)
+- [x] Pipeline job no worker: sem proxy timeout ✅ (job_timeout=300 in WorkerSettings)
+- [ ] SSE/polling: reconexão automática — ⚠️ SSE backoff implemented, polling fallback pending
+- [x] Resultado: ELIMINA 524, WORKER TIMEOUT, SIGABRT when async active ✅
 
 ### AC8: Testes
-- [ ] Backend: test POST /buscar retorna 202 com search_id
-- [ ] Backend: test /status endpoint retorna progress
-- [ ] Backend: test /results endpoint retorna BuscaResponse quando ready
-- [ ] Backend: test fallback síncrono com X-Sync: true
-- [ ] Frontend: test useSearch com modelo async
+- [x] Backend: POST 202 with search_id ✅ (test_stab009:TestAsyncEnabledReturns202)
+- [x] Backend: /status endpoint ✅ (test_stab009:TestGetSearchStatus)
+- [x] Backend: /results endpoint 200/202/404 ✅ (test_stab009:TestGetSearchResultsEndpoint)
+- [x] Backend: X-Sync + ?sync=true fallback ✅ (test_stab009:TestXSyncHeaderForcesSyncMode)
+- [ ] Frontend: test useSearch com modelo async — ⚠️ frontend not yet migrated to async
 - [ ] E2E: busca completa end-to-end no modelo async
 
 ---

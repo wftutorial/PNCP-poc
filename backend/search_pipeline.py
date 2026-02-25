@@ -1095,6 +1095,18 @@ class SearchPipeline:
             def source_complete_cb(src_code, count, error):
                 logger.debug(f"[MULTI-SOURCE] {src_code}: {count} records, error={error}")
 
+        # GTM-STAB-003 AC3: Early return callback emits progress event
+        early_return_cb = None
+        if ctx.tracker:
+            async def early_return_cb(ufs_completed, ufs_pending):
+                await ctx.tracker.emit(
+                    "fetching", 55,
+                    "Retornando resultados parciais...",
+                    ufs_completed=ufs_completed,
+                    ufs_pending=ufs_pending,
+                    early_return=True,
+                )
+
         try:
             consolidation_result = await asyncio.wait_for(
                 consolidation_svc.fetch_all(
@@ -1102,6 +1114,7 @@ class SearchPipeline:
                     data_final=request.data_final,
                     ufs=set(request.ufs),
                     on_source_complete=source_complete_cb,
+                    on_early_return=early_return_cb,
                 ),
                 timeout=fetch_timeout,
             )
@@ -1120,6 +1133,11 @@ class SearchPipeline:
             # STORY-252 T8: Map consolidation degradation state to pipeline context
             ctx.is_partial = consolidation_result.is_partial
             ctx.degradation_reason = consolidation_result.degradation_reason
+            # GTM-STAB-003 AC3: Propagate UF tracking from consolidation
+            if consolidation_result.ufs_completed:
+                ctx.succeeded_ufs = consolidation_result.ufs_completed
+            if consolidation_result.ufs_pending:
+                ctx.failed_ufs = consolidation_result.ufs_pending
             ctx.data_sources = [
                 DataSourceStatus(
                     source=sr.source_code,

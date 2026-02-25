@@ -8,7 +8,7 @@ compatible with the existing filter/excel/llm pipeline.
 import asyncio
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Set
 
 import sentry_sdk  # GTM-FIX-002 AC9: Tag source errors
@@ -47,6 +47,9 @@ class ConsolidationResult:
     elapsed_ms: int
     is_partial: bool = False
     degradation_reason: Optional[str] = None
+    # GTM-STAB-003 AC3: UF tracking for early return
+    ufs_completed: List[str] = field(default_factory=list)
+    ufs_pending: List[str] = field(default_factory=list)
 
 
 class AllSourcesFailedError(Exception):
@@ -120,6 +123,8 @@ class ConsolidationService:
         self._timeout_global = timeout_global
         self._fail_on_all_errors = fail_on_all_errors
         self._fallback_adapter = fallback_adapter
+        # GTM-STAB-003 AC3: Exposes last effective global timeout for testing
+        self._last_effective_global_timeout: Optional[int] = None
 
         # GTM-FIX-029 AC10: Warn if per-source timeout is dangerously close to global
         if timeout_per_source > timeout_global * 0.8:
@@ -134,6 +139,7 @@ class ConsolidationService:
         data_final: str,
         ufs: Optional[Set[str]] = None,
         on_source_complete: Optional[Callable] = None,
+        on_early_return: Optional[Callable] = None,
     ) -> ConsolidationResult:
         """
         Fetch from all enabled sources in parallel, deduplicate, and return.
@@ -143,12 +149,15 @@ class ConsolidationService:
         - Degraded mode with partial results (AC14)
         - ComprasGov last-resort fallback (AC15)
         - Detailed per-source status reporting (AC16)
+        - GTM-STAB-003 AC3: Early return when >=80% UFs responded and elapsed >80s
 
         Args:
             data_inicial: Start date YYYY-MM-DD
             data_final: End date YYYY-MM-DD
             ufs: Optional set of UF codes
             on_source_complete: Callback(source_code, count, error) per source
+            on_early_return: Optional async callback(ufs_completed, ufs_pending)
+                called when early return triggers (e.g. to emit progress event)
 
         Returns:
             ConsolidationResult with deduplicated records in legacy format
@@ -158,6 +167,7 @@ class ConsolidationService:
                 and fail_on_all_errors=True
         """
         start_time = time.time()
+        requested_ufs = set(ufs) if ufs else set()
 
         # CRIT-004 AC12: Log search_id from ContextVar for correlation
         from middleware import search_id_var
@@ -187,6 +197,8 @@ class ConsolidationService:
                 f"[CONSOLIDATION] PNCP is {pncp_status} — "
                 f"global timeout increased to {effective_global_timeout}s"
             )
+        # GTM-STAB-003 AC3: Store for testability
+        self._last_effective_global_timeout = effective_global_timeout
 
         # Build per-source timeouts with health-aware adjustments (AC13)
         source_timeouts: Dict[str, int] = {}
@@ -197,49 +209,139 @@ class ConsolidationService:
             else:
                 source_timeouts[code] = self._timeout_per_source
 
+        # GTM-STAB-003 AC3: Early return config
+        from config import EARLY_RETURN_THRESHOLD_PCT, EARLY_RETURN_TIME_S
+
+        # Shared partial collectors per source — used for early return UF inspection
+        source_partial_collectors: Dict[str, List[UnifiedProcurement]] = {
+            code: [] for code in self._adapters
+        }
+
         # Execute all sources in parallel with global timeout
         source_results_map: Dict[str, dict] = {}
-        try:
-            results = await asyncio.wait_for(
-                asyncio.gather(
-                    *[
-                        self._wrap_source(
-                            code, adapter,
-                            data_inicial=data_inicial,
-                            data_final=data_final,
-                            ufs=ufs,
-                            timeout=source_timeouts[code],
-                        )
-                        for code, adapter in self._adapters.items()
-                    ],
-                    return_exceptions=True,
+        early_return_triggered = False
+
+        # Create named tasks so we can track which source each task belongs to
+        source_tasks: Dict[str, asyncio.Task] = {}
+        for code, adapter in self._adapters.items():
+            task = asyncio.create_task(
+                self._wrap_source(
+                    code, adapter,
+                    data_inicial=data_inicial,
+                    data_final=data_final,
+                    ufs=ufs,
+                    timeout=source_timeouts[code],
+                    partial_collector_out=source_partial_collectors[code],
                 ),
-                timeout=effective_global_timeout,
+                name=f"source_{code}",
             )
-            for result in results:
+            source_tasks[code] = task
+
+        # Use asyncio.wait with periodic early return checks instead of gather
+        pending_tasks = set(source_tasks.values())
+        deadline = start_time + effective_global_timeout
+
+        while pending_tasks:
+            remaining_time = deadline - time.time()
+            if remaining_time <= 0:
+                # Global timeout — cancel remaining and collect partial
+                logger.warning(
+                    f"[CONSOLIDATION] Global timeout ({effective_global_timeout}s) reached — collecting partial results"
+                )
+                for task in pending_tasks:
+                    task.cancel()
+                # Wait briefly for cancellation to propagate
+                await asyncio.gather(*pending_tasks, return_exceptions=True)
+                break
+
+            # Wait for at least one task to complete, or check every 2s for early return
+            check_interval = min(2.0, remaining_time)
+            done, pending_tasks = await asyncio.wait(
+                pending_tasks, timeout=check_interval, return_when=asyncio.FIRST_COMPLETED,
+            )
+
+            # Collect results from completed tasks
+            for task in done:
+                try:
+                    result = task.result()
+                except (asyncio.CancelledError, Exception):
+                    result = None
                 if isinstance(result, dict):
                     code = result["code"]
                     source_results_map[code] = result
-                else:
-                    # AC14: Log unexpected non-dict results from gather
+                elif result is not None:
                     logger.warning(
-                        f"[CONSOLIDATION] Unexpected non-dict result from gather: "
+                        f"[CONSOLIDATION] Unexpected non-dict result from task: "
                         f"type={type(result).__name__} value={str(result)[:200]}"
                     )
-        except asyncio.TimeoutError:
-            logger.warning(
-                f"[CONSOLIDATION] Global timeout ({effective_global_timeout}s) reached — collecting partial results"
-            )
-            # GTM-STAB-003 AC3 + STAB-004 AC5: Collect whatever completed before timeout
-            for code, adapter in self._adapters.items():
-                if code not in source_results_map:
-                    source_results_map[code] = {
-                        "code": code,
-                        "records": [],
-                        "duration_ms": int((time.time() - start_time) * 1000),
-                        "status": "timeout",
-                        "error": f"Global timeout ({effective_global_timeout}s)",
-                    }
+
+            # GTM-STAB-003 AC3: Check early return condition
+            if pending_tasks and requested_ufs and not early_return_triggered:
+                elapsed_s = time.time() - start_time
+                if elapsed_s >= EARLY_RETURN_TIME_S:
+                    # Count UFs seen in all partial collectors so far
+                    seen_ufs = set()
+                    for collector in source_partial_collectors.values():
+                        for record in collector:
+                            uf = getattr(record, "uf", None) or ""
+                            if uf:
+                                seen_ufs.add(uf)
+                    # Also count UFs from completed source results
+                    for sr_data in source_results_map.values():
+                        for record in sr_data.get("records", []):
+                            uf = getattr(record, "uf", None) or ""
+                            if uf:
+                                seen_ufs.add(uf)
+
+                    completed_ufs = seen_ufs & requested_ufs
+                    total_requested = len(requested_ufs)
+                    completion_pct = len(completed_ufs) / total_requested if total_requested > 0 else 0
+
+                    if completion_pct >= EARLY_RETURN_THRESHOLD_PCT and completion_pct < 1.0:
+                        pending_uf_list = sorted(requested_ufs - completed_ufs)
+                        completed_uf_list = sorted(completed_ufs)
+                        early_return_triggered = True
+
+                        logger.info(
+                            "early_return_triggered",
+                            extra={
+                                "ufs_completed": completed_uf_list,
+                                "ufs_pending": pending_uf_list,
+                                "elapsed_s": round(elapsed_s, 1),
+                                "completion_pct": round(completion_pct * 100, 1),
+                            },
+                        )
+
+                        # Cancel remaining tasks
+                        for task in pending_tasks:
+                            task.cancel()
+                        # Wait briefly for cancellation to propagate
+                        await asyncio.gather(*pending_tasks, return_exceptions=True)
+
+                        # Emit progress event if callback provided
+                        if on_early_return:
+                            try:
+                                cb_result = on_early_return(completed_uf_list, pending_uf_list)
+                                if asyncio.iscoroutine(cb_result):
+                                    await cb_result
+                            except Exception:
+                                pass
+                        break
+
+        # For any source without a result (timed out or cancelled), mark as timeout
+        for code in self._adapters:
+            if code not in source_results_map:
+                source_results_map[code] = {
+                    "code": code,
+                    "records": [],
+                    "duration_ms": int((time.time() - start_time) * 1000),
+                    "status": "timeout",
+                    "error": (
+                        f"Early return (elapsed {time.time() - start_time:.0f}s)"
+                        if early_return_triggered
+                        else f"Global timeout ({effective_global_timeout}s)"
+                    ),
+                }
 
         # Collect results and metrics, update health registry (AC12)
         all_records: List[UnifiedProcurement] = []
@@ -362,12 +464,21 @@ class ConsolidationService:
         has_data = len(all_records) > 0
         has_failures = len(failed_sources) > 0
         is_partial = has_data and has_failures
+
+        # GTM-STAB-003 AC3: Early return also marks as partial
+        if early_return_triggered and has_data:
+            is_partial = True
+
         degradation_reason: Optional[str] = None
 
-        if is_partial:
+        if early_return_triggered:
+            degradation_reason = "early_return_timeout"
+        elif is_partial:
             degradation_reason = (
                 f"Partial results: sources failed: {', '.join(failed_sources)}"
             )
+
+        if is_partial:
             logger.warning(
                 f"[CONSOLIDATION] Degraded mode — {degradation_reason}"
             )
@@ -386,10 +497,20 @@ class ConsolidationService:
 
         elapsed = int((time.time() - start_time) * 1000)
 
+        # GTM-STAB-003 AC3: Build UF completion lists from collected records
+        seen_ufs_in_results = set()
+        for record in all_records:
+            uf = getattr(record, "uf", None) or ""
+            if uf:
+                seen_ufs_in_results.add(uf)
+        completed_ufs_list = sorted(seen_ufs_in_results & requested_ufs) if requested_ufs else sorted(seen_ufs_in_results)
+        pending_ufs_list = sorted(requested_ufs - seen_ufs_in_results) if requested_ufs else []
+
         logger.info(
             f"[CONSOLIDATION] Complete: {total_before} raw -> {total_after} deduped "
             f"({total_before - total_after} duplicates removed) in {elapsed}ms"
             f"{' [PARTIAL]' if is_partial else ''}"
+            f"{' [EARLY_RETURN]' if early_return_triggered else ''}"
             f"{' [FALLBACK]' if fallback_used else ''}"
         )
 
@@ -402,6 +523,8 @@ class ConsolidationService:
             elapsed_ms=elapsed,
             is_partial=is_partial,
             degradation_reason=degradation_reason,
+            ufs_completed=completed_ufs_list,
+            ufs_pending=pending_ufs_list,
         )
 
     async def _fetch_source(
@@ -432,6 +555,7 @@ class ConsolidationService:
         data_inicial: str, data_final: str,
         ufs: Optional[Set[str]] = None,
         timeout: Optional[int] = None,
+        partial_collector_out: Optional[List] = None,
     ) -> Dict[str, Any]:
         """
         Wrap a source fetch with timeout and error handling.
@@ -448,12 +572,19 @@ class ConsolidationService:
             ufs: Optional UF filter set.
             timeout: Per-source timeout in seconds. Defaults to
                 self._timeout_per_source if not provided.
+            partial_collector_out: Optional external list that receives records
+                as they arrive. Used by early return logic to inspect UF progress
+                from in-progress sources (GTM-STAB-003 AC3).
         """
         effective_timeout = timeout if timeout is not None else self._timeout_per_source
         start = time.time()
         # Shared list: records accumulate here as the generator yields them.
         # On timeout we can still read whatever was collected.
-        partial_records: List[UnifiedProcurement] = []
+        # GTM-STAB-003 AC3: If an external collector is provided, use it so
+        # the early return logic can inspect records while fetch is in progress.
+        partial_records: List[UnifiedProcurement] = (
+            partial_collector_out if partial_collector_out is not None else []
+        )
         # F-02 AC13: Sub-span per source (fetch.pncp, fetch.pcp, etc.)
         source_span_name = f"fetch.{code.lower()}"
         with optional_span(_tracer, source_span_name, {"source.code": code}) as src_span:

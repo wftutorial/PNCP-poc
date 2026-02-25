@@ -264,9 +264,9 @@ class TestAutomaticFailover:
         original_wrap = svc._wrap_source
         captured_timeouts = {}
 
-        async def capturing_wrap(code, adapter, data_inicial=None, data_final=None, ufs=None, timeout=None):
+        async def capturing_wrap(code, adapter, data_inicial=None, data_final=None, ufs=None, timeout=None, **kwargs):
             captured_timeouts[code] = timeout
-            return await original_wrap(code, adapter, data_inicial=data_inicial, data_final=data_final, ufs=ufs, timeout=timeout)
+            return await original_wrap(code, adapter, data_inicial=data_inicial, data_final=data_final, ufs=ufs, timeout=timeout, **kwargs)
 
         svc._wrap_source = capturing_wrap
         await svc.fetch_all("2026-01-01", "2026-01-31")
@@ -295,9 +295,9 @@ class TestAutomaticFailover:
         original_wrap = svc._wrap_source
         captured_timeouts = {}
 
-        async def capturing_wrap(code, adapter, data_inicial=None, data_final=None, ufs=None, timeout=None):
+        async def capturing_wrap(code, adapter, data_inicial=None, data_final=None, ufs=None, timeout=None, **kwargs):
             captured_timeouts[code] = timeout
-            return await original_wrap(code, adapter, data_inicial=data_inicial, data_final=data_final, ufs=ufs, timeout=timeout)
+            return await original_wrap(code, adapter, data_inicial=data_inicial, data_final=data_final, ufs=ufs, timeout=timeout, **kwargs)
 
         svc._wrap_source = capturing_wrap
         await svc.fetch_all("2026-01-01", "2026-01-31")
@@ -502,11 +502,11 @@ class TestComprasGovFallback:
         original_wrap = svc._wrap_source
         fallback_timeout_used = None
 
-        async def capturing_wrap(code, adapter, data_inicial=None, data_final=None, ufs=None, timeout=None):
+        async def capturing_wrap(code, adapter, data_inicial=None, data_final=None, ufs=None, timeout=None, **kwargs):
             nonlocal fallback_timeout_used
             if code == "ComprasGov":
                 fallback_timeout_used = timeout
-            return await original_wrap(code, adapter, data_inicial=data_inicial, data_final=data_final, ufs=ufs, timeout=timeout)
+            return await original_wrap(code, adapter, data_inicial=data_inicial, data_final=data_final, ufs=ufs, timeout=timeout, **kwargs)
 
         svc._wrap_source = capturing_wrap
         await svc.fetch_all("2026-01-01", "2026-01-31")
@@ -645,22 +645,10 @@ class TestGlobalTimeoutAdjustment:
             adapters=adapters, timeout_global=60
         )
 
-        # Patch asyncio.wait_for to capture the global timeout used
-        original_wait_for = asyncio.wait_for
-        captured_global_timeout = None
-
-        async def patched_wait_for(coro, *, timeout=None):
-            nonlocal captured_global_timeout
-            # The first wait_for call in fetch_all is for the gather (global timeout)
-            if captured_global_timeout is None:
-                captured_global_timeout = timeout
-            return await original_wait_for(coro, timeout=timeout)
-
-        with patch("consolidation.asyncio.wait_for", side_effect=patched_wait_for):
-            await svc.fetch_all("2026-01-01", "2026-01-31")
+        await svc.fetch_all("2026-01-01", "2026-01-31")
 
         # STAB-003: DEGRADED_GLOBAL_TIMEOUT reduced from 360s to 110s (stay below Railway's ~120s hard cutoff)
-        assert captured_global_timeout == 110
+        assert svc._last_effective_global_timeout == 110
 
     @pytest.mark.asyncio
     async def test_global_timeout_normal_when_pncp_healthy(self):
@@ -674,19 +662,9 @@ class TestGlobalTimeoutAdjustment:
             adapters=adapters, timeout_global=60
         )
 
-        original_wait_for = asyncio.wait_for
-        captured_global_timeout = None
+        await svc.fetch_all("2026-01-01", "2026-01-31")
 
-        async def patched_wait_for(coro, *, timeout=None):
-            nonlocal captured_global_timeout
-            if captured_global_timeout is None:
-                captured_global_timeout = timeout
-            return await original_wait_for(coro, timeout=timeout)
-
-        with patch("consolidation.asyncio.wait_for", side_effect=patched_wait_for):
-            await svc.fetch_all("2026-01-01", "2026-01-31")
-
-        assert captured_global_timeout == 60
+        assert svc._last_effective_global_timeout == 60
 
     @pytest.mark.asyncio
     async def test_global_timeout_increases_when_pncp_down(self):
@@ -702,20 +680,10 @@ class TestGlobalTimeoutAdjustment:
             adapters=adapters, timeout_global=60
         )
 
-        original_wait_for = asyncio.wait_for
-        captured_global_timeout = None
-
-        async def patched_wait_for(coro, *, timeout=None):
-            nonlocal captured_global_timeout
-            if captured_global_timeout is None:
-                captured_global_timeout = timeout
-            return await original_wait_for(coro, timeout=timeout)
-
-        with patch("consolidation.asyncio.wait_for", side_effect=patched_wait_for):
-            await svc.fetch_all("2026-01-01", "2026-01-31")
+        await svc.fetch_all("2026-01-01", "2026-01-31")
 
         # STAB-003: DEGRADED_GLOBAL_TIMEOUT reduced from 360s to 110s (stay below Railway's ~120s hard cutoff)
-        assert captured_global_timeout == 110
+        assert svc._last_effective_global_timeout == 110
 
 
 # ============ Integration-style Tests ============

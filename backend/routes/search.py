@@ -27,7 +27,7 @@ from starlette.responses import StreamingResponse, JSONResponse as StarletteJSON
 # Tests use @patch("routes.search.X") to mock these names.
 # The thin wrapper passes them to SearchPipeline as deps.
 from config import ENABLE_NEW_PRICING
-from schemas import BuscaRequest, BuscaResponse, SearchErrorCode
+from schemas import BuscaRequest, BuscaResponse, SearchErrorCode, SearchStatusResponse
 from pncp_client import PNCPClient, buscar_todas_ufs_paralelo
 from exceptions import PNCPAPIError, PNCPRateLimitError
 from filter import (
@@ -383,20 +383,121 @@ async def buscar_progress_stream(
 # CRIT-003 AC11: Search status polling endpoint
 # ---------------------------------------------------------------------------
 
-@router.get("/v1/search/{search_id}/status")
+@router.get("/v1/search/{search_id}/status", response_model=SearchStatusResponse)
 async def search_status_endpoint(
     search_id: str,
     user: dict = Depends(require_auth),
 ):
-    """AC11: Return current search state for polling fallback.
+    """GTM-STAB-009 AC3: Enriched status response for polling.
 
-    Called by frontend when SSE disconnects (AC12).
-    Response format matches AC11 specification.
+    LIGHTWEIGHT (<50ms): Reads from in-memory progress tracker + state machine.
+    Falls back to DB-based get_search_status only if in-memory state is unavailable.
+
+    Called by frontend when SSE disconnects (AC12) or for async polling.
     """
-    status = await get_search_status(search_id)
-    if status is None:
+    # --- Fast path: in-memory state (no DB hit) ---
+    tracker = await get_tracker(search_id)
+    state_machine = get_state_machine(search_id)
+
+    if tracker or state_machine:
+        # Determine status from state machine
+        if state_machine and state_machine.current_state:
+            state_val = state_machine.current_state.value
+            # Map state machine states to simplified status strings
+            status_map = {
+                "created": "running",
+                "validating": "running",
+                "fetching": "running",
+                "filtering": "running",
+                "enriching": "running",
+                "generating": "running",
+                "persisting": "running",
+                "completed": "completed",
+                "failed": "failed",
+                "rate_limited": "failed",
+                "timed_out": "timeout",
+            }
+            status = status_map.get(state_val, "running")
+        else:
+            status = "running"
+
+        # Progress from tracker
+        progress_pct = 0
+        ufs_completed: list[str] = []
+        ufs_pending: list[str] = []
+        if tracker:
+            # Estimate progress from tracker's internal counters
+            if tracker._is_complete:
+                progress_pct = 100
+            elif tracker.uf_count > 0:
+                progress_pct = min(95, 10 + int((tracker._ufs_completed / tracker.uf_count) * 85))
+            else:
+                progress_pct = 0
+
+        # Elapsed time
+        elapsed_s = 0.0
+        created_at_str = None
+        if tracker:
+            elapsed_s = round(sync_time.time() - tracker.created_at, 1)
+            from datetime import datetime, timezone
+            created_at_str = datetime.fromtimestamp(tracker.created_at, tz=timezone.utc).isoformat()
+
+        # Results count (from background results store if completed)
+        results_count = 0
+        results_url = None
+        if status == "completed":
+            bg_result = get_background_results(search_id)
+            if bg_result:
+                results_count = getattr(bg_result, "total_filtrado", 0)
+            results_url = f"/v1/search/{search_id}/results"
+
+        return SearchStatusResponse(
+            search_id=search_id,
+            status=status,
+            progress_pct=progress_pct,
+            ufs_completed=ufs_completed,
+            ufs_pending=ufs_pending,
+            results_count=results_count,
+            results_url=results_url,
+            elapsed_s=elapsed_s,
+            created_at=created_at_str,
+        )
+
+    # --- Slow path: fall back to DB-based status (backward compat) ---
+    db_status = await get_search_status(search_id)
+    if db_status is None:
         raise HTTPException(status_code=404, detail="Search not found")
-    return status
+
+    # Map DB status to enriched response
+    raw_status = db_status.get("status", "running")
+    status_map_db = {
+        "created": "running",
+        "processing": "running",
+        "completed": "completed",
+        "failed": "failed",
+        "timed_out": "timeout",
+    }
+    mapped_status = status_map_db.get(raw_status, "running")
+
+    elapsed_ms = db_status.get("elapsed_ms")
+    elapsed_s = round(elapsed_ms / 1000.0, 1) if elapsed_ms else 0.0
+
+    results_url = None
+    results_count = 0
+    if mapped_status == "completed":
+        results_url = f"/v1/search/{search_id}/results"
+
+    return SearchStatusResponse(
+        search_id=search_id,
+        status=mapped_status,
+        progress_pct=db_status.get("progress", 0),
+        ufs_completed=[],
+        ufs_pending=[],
+        results_count=results_count,
+        results_url=results_url,
+        elapsed_s=elapsed_s,
+        created_at=db_status.get("started_at"),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -470,6 +571,7 @@ async def get_search_results_v1(
                 "progress": status.get("progress", 0),
                 "message": "Busca em andamento. Tente novamente em alguns segundos.",
             },
+            headers={"Cache-Control": "no-cache"},
         )
 
     raise HTTPException(

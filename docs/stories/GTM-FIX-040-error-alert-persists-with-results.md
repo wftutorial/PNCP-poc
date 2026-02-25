@@ -1,6 +1,6 @@
 # GTM-FIX-040 — Error Alert Persiste ao Lado de Resultados Válidos
 
-**Status:** Open
+**Status:** Done
 **Priority:** P1 — High (UX contraditória destrói confiança)
 **Severity:** Frontend — estado de erro não é limpo quando resultados chegam
 **Created:** 2026-02-25
@@ -50,23 +50,23 @@ Quando uma busca encontra erro transitório (SSE initial failure, timeout no pri
 ## Acceptance Criteria
 
 ### AC1: Limpar error state quando resultados chegam
-- [ ] Em `useSearch.ts`: quando `setResultados()` é chamado com dados válidos (length > 0), limpar `error` state
-- [ ] Se `error` e `resultados` coexistem, `resultados` tem prioridade (error é descartado)
-- [ ] Transição: error alert faz fade-out quando resultados aparecem
+- [x] Em `useSearch.ts`: quando `setResultados()` é chamado com dados válidos (length > 0), limpar `error` state
+- [x] Se `error` e `resultados` coexistem, `resultados` tem prioridade (error é descartado)
+- [x] Transição: error alert faz fade-out quando resultados aparecem
 
 ### AC2: Limpar error state quando SSE reconecta com sucesso
-- [ ] Quando SSE emite primeiro evento de dados após reconexão, limpar error state
-- [ ] `useSearchSSE.ts`: callback `onReconnectSuccess` → clear error in parent
+- [x] Quando SSE emite primeiro evento de dados após reconexão, limpar error state
+- [x] `useSearchSSE.ts`: callback `onReconnectSuccess` → clear error in parent
 
 ### AC3: Error alert não deve aparecer durante auto-retry
-- [ ] Se auto-retry está em andamento (`retryCountdown > 0`), suprimir error alert
-- [ ] Mostrar apenas o countdown de retry, não o erro completo
-- [ ] Se retry falha e não há mais tentativas, aí sim mostrar error alert
+- [x] Se auto-retry está em andamento (`retryCountdown > 0`), suprimir error alert
+- [x] Mostrar apenas o countdown de retry, não o erro completo
+- [x] Se retry falha e não há mais tentativas, aí sim mostrar error alert
 
 ### AC4: Testes
-- [ ] Frontend: test que simula error → retry success → error alert desaparece
-- [ ] Frontend: test que simula error durante countdown → alert suprimido
-- [ ] Frontend: test que resultados válidos limpam error state
+- [x] Frontend: test que simula error → retry success → error alert desaparece
+- [x] Frontend: test que simula error durante countdown → alert suprimido
+- [x] Frontend: test que resultados válidos limpam error state
 
 ---
 

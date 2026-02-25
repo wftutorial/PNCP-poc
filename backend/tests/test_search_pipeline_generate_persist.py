@@ -345,7 +345,7 @@ class TestStageGenerate:
              patch("search_pipeline.upload_excel"):
             await pipeline.stage_generate(ctx)
 
-        mock_resumo.assert_called_once_with(lics, sector_name="Vestuario")
+        mock_resumo.assert_called_once_with(lics, sector_name="Vestuario", termos_busca=None)
         assert ctx.response is not None
         assert ctx.response.resumo.resumo_executivo == resumo.resumo_executivo
         # Actual totals override LLM values
@@ -379,7 +379,7 @@ class TestStageGenerate:
              patch("search_pipeline.upload_excel"):
             await pipeline.stage_generate(ctx)
 
-        mock_fb.assert_called_once_with(lics, sector_name="Vestuario")
+        mock_fb.assert_called_once_with(lics, sector_name="Vestuario", termos_busca=None)
         assert ctx.response.resumo.resumo_executivo == "Fallback summary"
 
     @pytest.mark.asyncio

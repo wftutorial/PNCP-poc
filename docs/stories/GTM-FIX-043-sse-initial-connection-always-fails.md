@@ -1,6 +1,6 @@
 # GTM-FIX-043 — SSE Initial Connection Falha Sempre (Reconnect Resolve)
 
-**Status:** Open
+**Status:** Done
 **Priority:** P1 — High (toda busca gera erro + retry desnecessário, degrada experiência)
 **Severity:** Frontend + Backend — timing de SSE connect vs search enqueue causa falha sistemática
 **Created:** 2026-02-25
@@ -49,30 +49,30 @@ No modelo sync antigo, o tracker era criado ANTES do SSE connect. No modelo asyn
 ## Acceptance Criteria
 
 ### AC1: Backend — wait-for-tracker no SSE endpoint
-- [ ] `routes/search.py` SSE endpoint: quando tracker não encontrado, aguardar até 5s com polling 200ms
-- [ ] Se tracker aparece durante o wait: iniciar stream normalmente
-- [ ] Se timeout (5s) sem tracker: retornar SSE error event (não HTTP error)
-- [ ] Nota: CRIT-012 já implementou wait-for-tracker com heartbeat — verificar se está funcionando no modo async
+- [x] `routes/search.py` SSE endpoint: quando tracker não encontrado, aguardar até 5s com polling 200ms
+- [x] Se tracker aparece durante o wait: iniciar stream normalmente
+- [x] Se timeout (5s) sem tracker: retornar SSE error event (não HTTP error)
+- [x] Nota: CRIT-012 já implementou wait-for-tracker com heartbeat — verificar se está funcionando no modo async
 
 ### AC2: Frontend — grace period antes de considerar SSE failure
-- [ ] `useSearchSSE.ts`: após POST 202, aguardar 2s antes de abrir SSE connection
-- [ ] OU: tratar primeiro SSE failure como "expected" e não incrementar retry counter
-- [ ] OU: implementar SSE connect com immediate retry (0ms delay) no primeiro failure
+- [x] `useSearchSSE.ts`: após POST 202, aguardar 2s antes de abrir SSE connection
+- [x] OU: tratar primeiro SSE failure como "expected" e não incrementar retry counter
+- [x] OU: implementar SSE connect com immediate retry (0ms delay) no primeiro failure
 
 ### AC3: Diagnóstico — confirmar causa raiz
-- [ ] Adicionar log no SSE endpoint: `search_id={id} tracker_found={bool} elapsed_ms={N}`
-- [ ] Verificar se o wait-for-tracker do CRIT-012 está ativo no modo async
-- [ ] Medir tempo entre POST 202 response e tracker registration no worker
+- [x] Adicionar log no SSE endpoint: `search_id={id} tracker_found={bool} elapsed_ms={N}`
+- [x] Verificar se o wait-for-tracker do CRIT-012 está ativo no modo async
+- [x] Medir tempo entre POST 202 response e tracker registration no worker
 
 ### AC4: Eliminar SSE error noise
-- [ ] Se SSE connect falha por "tracker not found" e search é async: não logar como WARNING
-- [ ] Não incrementar `smartlic_sse_connection_errors_total` para expected race condition
-- [ ] Frontend: não mostrar error state para first SSE failure em async mode
+- [x] Se SSE connect falha por "tracker not found" e search é async: não logar como WARNING
+- [x] Não incrementar `smartlic_sse_connection_errors_total` para expected race condition
+- [x] Frontend: não mostrar error state para first SSE failure em async mode
 
 ### AC5: Testes
-- [ ] Backend: test SSE endpoint com tracker delay (simulate async worker startup)
-- [ ] Frontend: test async mode SSE connection → no error shown on first attempt
-- [ ] Integration: test POST 202 → SSE connect → verify no spurious errors
+- [x] Backend: test SSE endpoint com tracker delay (simulate async worker startup)
+- [x] Frontend: test async mode SSE connection → no error shown on first attempt
+- [x] Integration: test POST 202 → SSE connect → verify no spurious errors
 
 ---
 

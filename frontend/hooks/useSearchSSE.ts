@@ -342,8 +342,10 @@ export function useSearchSSE({
 
     const es = connectSSE(url);
 
-    // GTM-STAB-006 AC5: Exponential backoff reconnection (3s/6s/12s, max 3 attempts)
-    const SSE_RETRY_DELAYS = [3000, 6000, 12000];
+    // GTM-STAB-006 AC5: Exponential backoff reconnection
+    // GTM-FIX-043 AC2: First failure uses immediate retry (0ms) — expected race condition
+    // in async mode where tracker exists but SSE connects before first event is emitted.
+    const SSE_RETRY_DELAYS = [0, 3000, 6000];
     const SSE_MAX_RETRIES = 3;
 
     const scheduleRetry = () => {
@@ -377,7 +379,12 @@ export function useSearchSSE({
     };
 
     es.onerror = () => {
-      console.warn(`SSE initial connection failed`);
+      // GTM-FIX-043 AC4: First failure is expected (async race condition) — log as info
+      if (retryAttemptRef.current === 0) {
+        console.info('SSE initial connection: retrying immediately (expected async race)');
+      } else {
+        console.warn(`SSE connection failed (attempt ${retryAttemptRef.current})`);
+      }
       cleanup();
       scheduleRetry();
     };

@@ -29,7 +29,7 @@ from excel import parse_datetime
 from middleware import request_id_var
 
 
-def gerar_resumo(licitacoes: list[dict[str, Any]], sector_name: str = "uniformes e fardamentos") -> ResumoEstrategico:
+def gerar_resumo(licitacoes: list[dict[str, Any]], sector_name: str = "uniformes e fardamentos", termos_busca: str | None = None) -> ResumoEstrategico:
     """
     Generate AI-powered executive summary of procurement bids using GPT-4.1-nano.
 
@@ -73,15 +73,16 @@ def gerar_resumo(licitacoes: list[dict[str, Any]], sector_name: str = "uniformes
     """
     # Handle empty input
     if not licitacoes:
+        _ctx_label = f"para '{termos_busca}'" if termos_busca else f"de {sector_name}"
         return ResumoEstrategico(
-            resumo_executivo=f"Nenhuma licitação de {sector_name} encontrada no período selecionado.",
+            resumo_executivo=f"Nenhuma licitação {_ctx_label} encontrada no período selecionado.",
             total_oportunidades=0,
             valor_total=0.0,
             destaques=[],
             alerta_urgencia=None,
             recomendacoes=[],
             alertas_urgencia=[],
-            insight_setorial=f"Não foram encontradas oportunidades de {sector_name} nos filtros selecionados. Considere ampliar o período ou os estados de busca.",
+            insight_setorial=f"Não foram encontradas oportunidades {_ctx_label} nos filtros selecionados. Considere ampliar o período ou os estados de busca.",
         )
 
     # Validate API key
@@ -124,10 +125,12 @@ def gerar_resumo(licitacoes: list[dict[str, Any]], sector_name: str = "uniformes
     client = OpenAI(api_key=api_key)
 
     # System prompt with strategic consultant persona (STORY-245)
-    system_prompt = f"""Você é um CONSULTOR ESTRATÉGICO de licitações especializado em {sector_name}.
+    # GTM-FIX-041: Use search terms in prompt when available
+    _especialidade = f"buscas por '{termos_busca}'" if termos_busca else sector_name
+    system_prompt = f"""Você é um CONSULTOR ESTRATÉGICO de licitações especializado em {_especialidade}.
 Seu papel NÃO é apenas descrever — é RECOMENDAR AÇÕES CONCRETAS para o usuário.
 
-PERSONA: Consultor sênior com 15 anos de experiência em licitações públicas no setor de {sector_name}. Você ajuda empresas a decidir em quais licitações participar e como se preparar.
+PERSONA: Consultor sênior com 15 anos de experiência em licitações públicas{"" if termos_busca else f" no setor de {sector_name}"}. Você ajuda empresas a decidir em quais licitações participar e como se preparar.
 
 REGRAS DE RECOMENDAÇÃO:
 1. Para cada oportunidade relevante, forneça uma AÇÃO CONCRETA e uma JUSTIFICATIVA
@@ -159,7 +162,7 @@ FORMATO DO RESUMO EXECUTIVO:
 - Valores sempre em reais (R$) formatados
 
 INSIGHT SETORIAL:
-- Contextualize as oportunidades no mercado de {sector_name}
+- Contextualize as oportunidades no mercado de {_especialidade}
 - Mencione concentração geográfica se houver padrão
 - Se possível, compare com expectativas do setor
 
@@ -168,8 +171,9 @@ ALERTAS DE URGÊNCIA (lista):
 - Inclua prazos curtos, exigências documentais, valores atípicos
 """
 
-    # User prompt with context
-    user_prompt = f"""Analise estas {len(licitacoes)} licitações de {sector_name} como consultor estratégico.
+    # User prompt with context (GTM-FIX-041: use terms when available)
+    _ctx_user = f"para '{termos_busca}'" if termos_busca else f"de {sector_name}"
+    user_prompt = f"""Analise estas {len(licitacoes)} licitações {_ctx_user} como consultor estratégico.
 
 Para cada oportunidade relevante, forneça:
 1. Ação concreta que o usuário deve tomar
@@ -230,7 +234,7 @@ Data atual: {hoje.strftime("%d/%m/%Y")}
     return resumo
 
 
-def gerar_resumo_fallback(licitacoes: list[dict[str, Any]], sector_name: str = "uniformes") -> ResumoEstrategico:
+def gerar_resumo_fallback(licitacoes: list[dict[str, Any]], sector_name: str = "uniformes", termos_busca: str | None = None) -> ResumoEstrategico:
     """
     Generate strategic summary without using LLM (fallback for OpenAI failures).
 
@@ -259,7 +263,8 @@ def gerar_resumo_fallback(licitacoes: list[dict[str, Any]], sector_name: str = "
         >>> resumo.total_oportunidades
         1
     """
-    # Handle empty input
+    # Handle empty input (GTM-FIX-041: use terms when available)
+    _fb_label = f"para '{termos_busca}'" if termos_busca else f"de {sector_name}"
     if not licitacoes:
         return ResumoEstrategico(
             resumo_executivo="Nenhuma licitação encontrada.",
@@ -269,7 +274,7 @@ def gerar_resumo_fallback(licitacoes: list[dict[str, Any]], sector_name: str = "
             alerta_urgencia=None,
             recomendacoes=[],
             alertas_urgencia=[],
-            insight_setorial=f"Não foram encontradas oportunidades de {sector_name} nos filtros selecionados.",
+            insight_setorial=f"Não foram encontradas oportunidades {_fb_label} nos filtros selecionados.",
         )
 
     # Calculate basic statistics
@@ -310,8 +315,10 @@ def gerar_resumo_fallback(licitacoes: list[dict[str, Any]], sector_name: str = "
         orgao = lic.get("nomeOrgao", "Órgão não informado")
         objeto = (lic.get("objetoCompra") or "")[:100]
 
-        # Classify urgency
-        if dias_restantes is not None and dias_restantes < 3:
+        # Classify urgency (GTM-FIX-042 AC3: skip expired bids)
+        if dias_restantes is not None and dias_restantes < 0:
+            urgencia = "baixa"  # expired — no action needed
+        elif dias_restantes is not None and dias_restantes < 3:
             urgencia = "alta"
             alerta_msg = f"⚠️ {orgao}: encerra em {dias_restantes} dia(s) — ação imediata necessária"
             alertas_urgencia.append(alerta_msg)
@@ -353,13 +360,16 @@ def gerar_resumo_fallback(licitacoes: list[dict[str, Any]], sector_name: str = "
     urgencia_order = {"alta": 0, "media": 1, "baixa": 2}
     recomendacoes.sort(key=lambda r: (urgencia_order[r.urgencia], -r.valor))
 
-    # Generate insight setorial from data
+    # Generate insight setorial from data (GTM-FIX-041: use terms when available)
     ufs_str = ", ".join(sorted(dist_uf.keys()))
-    insight = f"Setor de {sector_name}: {total} oportunidades distribuídas em {len(dist_uf)} estado(s) ({ufs_str}), totalizando R$ {valor_total:,.2f}."
+    if termos_busca:
+        insight = f"Busca por '{termos_busca}': {total} oportunidade(s) distribuída(s) em {len(dist_uf)} estado(s) ({ufs_str}), totalizando R$ {valor_total:,.2f}."
+    else:
+        insight = f"Setor de {sector_name}: {total} oportunidades distribuídas em {len(dist_uf)} estado(s) ({ufs_str}), totalizando R$ {valor_total:,.2f}."
 
-    # Consultive resumo executivo
+    # Consultive resumo executivo (GTM-FIX-041)
     urgentes = sum(1 for r in recomendacoes if r.urgencia == "alta")
-    resumo_exec = f"Encontradas {total} licitações de {sector_name} totalizando R$ {valor_total:,.2f}."
+    resumo_exec = f"Encontradas {total} licitações {_fb_label} totalizando R$ {valor_total:,.2f}."
     if urgentes > 0:
         resumo_exec += f" Recomendamos atenção imediata a {urgentes} oportunidade(s) com prazo curto."
     elif recomendacoes:

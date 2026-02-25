@@ -253,6 +253,18 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
             setResult(fetchedData);
             setRawCount(fetchedData.total_raw || 0);
 
+            // GTM-FIX-040 AC1: Clear error state when valid results arrive
+            if (fetchedData.licitacoes?.length > 0) {
+              setError(null);
+              setRetryCountdown(null);
+              setRetryMessage(null);
+              setRetryExhausted(false);
+              if (retryTimerRef.current) {
+                clearInterval(retryTimerRef.current);
+                retryTimerRef.current = null;
+              }
+            }
+
             if (session?.access_token) await refreshQuota();
 
             trackEvent('search_completed', {
@@ -656,6 +668,14 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
 
       setResult(data);
       setRawCount(data.total_raw || 0);
+
+      // GTM-FIX-040 AC1: Clear error state when valid results arrive (safety net for auto-retry)
+      if (data.licitacoes?.length > 0 && error) {
+        setError(null);
+        setRetryCountdown(null);
+        setRetryMessage(null);
+        setRetryExhausted(false);
+      }
 
       // STAB-006 AC4: Clear partial cache on successful complete search
       clearPartialSearch(newSearchId);

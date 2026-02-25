@@ -1,6 +1,6 @@
 # GTM-FIX-041 — Resumo IA Mostra Nome do Setor em Busca por Termos
 
-**Status:** Open
+**Status:** Done
 **Priority:** P2 — Medium (informação incorreta no resumo, não bloqueia uso)
 **Severity:** Backend + Frontend — LLM summary e fallback usam setor_id quando busca é por termos
 **Created:** 2026-02-25
@@ -39,23 +39,23 @@ O prompt do LLM summary (`llm.py`) provavelmente também recebe o setor_nome em 
 ## Acceptance Criteria
 
 ### AC1: Fallback summary usa termos quando search mode = terms
-- [ ] `gerar_resumo_fallback()` — detectar se `termos_busca` está preenchido
-- [ ] Se termos: usar `"para '{termos}'"` em vez de `"de {setor_nome}"`
-- [ ] Se setor: manter behavior atual
-- [ ] Contexto do setor: substituir por "Busca por termos: ..." quando aplicável
+- [x] `gerar_resumo_fallback()` — detectar se `termos_busca` está preenchido
+- [x] Se termos: usar `"para '{termos}'"` em vez de `"de {setor_nome}"`
+- [x] Se setor: manter behavior atual
+- [x] Contexto do setor: substituir por "Busca por termos: ..." quando aplicável
 
 ### AC2: LLM prompt inclui termos de busca
-- [ ] `llm.py` — quando `termos_busca` presente, incluir no system prompt
-- [ ] O resumo gerado por IA deve referenciar os termos, não o setor
-- [ ] Se ambos presentes (termos + setor), priorizar termos no resumo
+- [x] `llm.py` — quando `termos_busca` presente, incluir no system prompt
+- [x] O resumo gerado por IA deve referenciar os termos, não o setor
+- [x] Se ambos presentes (termos + setor), priorizar termos no resumo
 
 ### AC3: Frontend exibe corretamente
-- [ ] Verificar que o componente de resumo renderiza o texto do backend sem alterar
-- [ ] Se `search_mode == "terms"`, header do resumo deve usar os termos
+- [x] Verificar que o componente de resumo renderiza o texto do backend sem alterar
+- [x] Se `search_mode == "terms"`, header do resumo deve usar os termos
 
 ### AC4: Testes
-- [ ] Backend: test fallback summary com termos_busca → output não menciona setor
-- [ ] Backend: test fallback summary com setor → output menciona setor (regressão)
+- [x] Backend: test fallback summary com termos_busca → output não menciona setor
+- [x] Backend: test fallback summary com setor → output menciona setor (regressão)
 
 ---
 

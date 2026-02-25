@@ -1,6 +1,6 @@
 # GTM-FIX-042 — Badge de Urgência Mostra Dias Negativos para Licitações Expiradas
 
-**Status:** Open
+**Status:** Done
 **Priority:** P2 — Medium (informação confusa, não impede uso)
 **Severity:** Frontend — cálculo de dias restantes não trata datas passadas
 **Created:** 2026-02-25
@@ -38,24 +38,24 @@ Cards de licitações exibem badges de urgência com **dias negativos**:
 ## Acceptance Criteria
 
 ### AC1: Frontend — tratar dias negativos no badge
-- [ ] Quando dias restantes < 0: exibir "Encerrada" em cinza (não "Urgente" em vermelho)
-- [ ] Quando dias restantes = 0: exibir "Último dia" em vermelho
-- [ ] Quando dias restantes = 1: exibir "Amanhã" em laranja
-- [ ] Quando dias restantes > 1: exibir "X dias" com gradiente de cor
+- [x] Quando dias restantes < 0: exibir "Encerrada" em cinza (não "Urgente" em vermelho)
+- [x] Quando dias restantes = 0: exibir "Último dia" em vermelho
+- [x] Quando dias restantes = 1: exibir "Amanhã" em laranja
+- [x] Quando dias restantes > 1: exibir "X dias" com gradiente de cor
 
 ### AC2: Backend — filtrar licitações expiradas
-- [ ] Verificar se `status_inference.py` está corretamente marcando licitações com `dataEncerramentoProposta` passada
-- [ ] No filtro pipeline: rejeitar licitações onde data de encerramento < hoje (quando status = "Abertas")
-- [ ] PCP v2: client-side filter deve checar data de encerramento
+- [x] Verificar se `status_inference.py` está corretamente marcando licitações com `dataEncerramentoProposta` passada
+- [x] No filtro pipeline: rejeitar licitações onde data de encerramento < hoje (quando status = "Abertas")
+- [x] PCP v2: client-side filter deve checar data de encerramento
 
 ### AC3: Backend — AI summary não alertar sobre expiradas
-- [ ] `gerar_resumo_fallback()` — não incluir licitações com data passada nos alertas "ação imediata"
-- [ ] Se todas as licitações estão expiradas, não gerar seção de alertas
+- [x] `gerar_resumo_fallback()` — não incluir licitações com data passada nos alertas "ação imediata"
+- [x] Se todas as licitações estão expiradas, não gerar seção de alertas
 
 ### AC4: Testes
-- [ ] Frontend: test badge com dias negativos → mostra "Encerrada"
-- [ ] Frontend: test badge com 0 dias → mostra "Último dia"
-- [ ] Backend: test filtro rejeita licitações com data passada quando modo "Abertas"
+- [x] Frontend: test badge com dias negativos → mostra "Encerrada"
+- [x] Frontend: test badge com 0 dias → mostra "Último dia"
+- [x] Backend: test filtro rejeita licitações com data passada quando modo "Abertas"
 
 ---
 

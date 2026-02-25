@@ -131,10 +131,15 @@ describe('GTM-STAB-006 AC5: useSearchSSE exponential backoff reconnection', () =
   });
 
   // ---------------------------------------------------------------------------
-  // TC2: Exponential backoff delays (3s, 6s, 12s)
+  // TC2: Exponential backoff delays (0ms, 3s, 6s) — GTM-FIX-043 AC2
+  //
+  // SSE_RETRY_DELAYS = [0, 3000, 6000]:
+  //   - First retry: immediate (0ms) — expected async race condition in async mode
+  //   - Second retry: 3000ms
+  //   - Third retry: 6000ms
   // ---------------------------------------------------------------------------
 
-  it('TC2: should use exponential backoff delays (3s, 6s, 12s)', () => {
+  it('TC2: should use exponential backoff delays (0ms, 3s, 6s) [GTM-FIX-043]', () => {
     renderHook(() =>
       useSearchSSE({
         searchId: 'search-002',
@@ -144,7 +149,18 @@ describe('GTM-STAB-006 AC5: useSearchSSE exponential backoff reconnection', () =
 
     expect(mockInstances).toHaveLength(1);
 
-    // Error → retry 1 scheduled at 3000ms.
+    // Error → retry 1 scheduled at 0ms (immediate — GTM-FIX-043 AC2).
+    act(() => {
+      mockInstances[0].onerror?.();
+    });
+
+    // Advance 0ms → retry 1 fires immediately.
+    act(() => {
+      jest.advanceTimersByTime(0);
+    });
+    expect(mockInstances).toHaveLength(2);
+
+    // Trigger re-fire on outer es (counter=1) → retry 2 at 3000ms.
     act(() => {
       mockInstances[0].onerror?.();
     });
@@ -153,15 +169,15 @@ describe('GTM-STAB-006 AC5: useSearchSSE exponential backoff reconnection', () =
     act(() => {
       jest.advanceTimersByTime(2999);
     });
-    expect(mockInstances).toHaveLength(1);
+    expect(mockInstances).toHaveLength(2);
 
-    // Advance 1ms more → 3000ms total → retry 1 fires.
+    // Advance 1ms more → 3000ms total → retry 2 fires.
     act(() => {
       jest.advanceTimersByTime(1);
     });
-    expect(mockInstances).toHaveLength(2);
+    expect(mockInstances).toHaveLength(3);
 
-    // Trigger re-fire on outer es (counter=1) → retry 2 at 6000ms.
+    // Trigger re-fire on outer es (counter=2) → retry 3 at 6000ms.
     act(() => {
       mockInstances[0].onerror?.();
     });
@@ -170,26 +186,9 @@ describe('GTM-STAB-006 AC5: useSearchSSE exponential backoff reconnection', () =
     act(() => {
       jest.advanceTimersByTime(5999);
     });
-    expect(mockInstances).toHaveLength(2);
-
-    // Advance 1ms more → 6000ms total → retry 2 fires.
-    act(() => {
-      jest.advanceTimersByTime(1);
-    });
     expect(mockInstances).toHaveLength(3);
 
-    // Trigger re-fire on outer es (counter=2) → retry 3 at 12000ms.
-    act(() => {
-      mockInstances[0].onerror?.();
-    });
-
-    // Advance 11999ms → no retry yet.
-    act(() => {
-      jest.advanceTimersByTime(11999);
-    });
-    expect(mockInstances).toHaveLength(3);
-
-    // Advance 1ms more → 12000ms total → retry 3 fires.
+    // Advance 1ms more → 6000ms total → retry 3 fires.
     act(() => {
       jest.advanceTimersByTime(1);
     });

@@ -214,8 +214,17 @@ export function LicitacoesPreview({
     let label = `Prazo final: ${formatDate(item.data_encerramento)}`;
 
     if (urgencia === "encerrada" || (dias != null && dias < 0)) {
+      // GTM-FIX-042 AC1: expired bids show "Encerrada" in gray
       colorClasses = "bg-gray-100 dark:bg-gray-800 text-gray-500 line-through";
       label = `Encerrada: ${formatDate(item.data_encerramento)}`;
+    } else if (dias === 0) {
+      // GTM-FIX-042 AC1: last day
+      colorClasses = "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300";
+      label = `Último dia: ${formatDate(item.data_encerramento)}`;
+    } else if (dias === 1) {
+      // GTM-FIX-042 AC1: tomorrow
+      colorClasses = "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300";
+      label = `Amanhã: ${formatDate(item.data_encerramento)}`;
     } else if (urgencia === "critica" || (dias != null && dias < 8)) {
       // UX-348 AC11: red (<8 days)
       colorClasses = "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300";

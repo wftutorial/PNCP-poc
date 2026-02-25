@@ -728,18 +728,34 @@ class TestSearchQueuedResponse:
     """Verify SearchQueuedResponse schema."""
 
     def test_schema_fields(self):
-        """Schema has search_id and status='queued'."""
+        """Schema has search_id, status='queued', and enriched fields."""
         from schemas import SearchQueuedResponse
-        resp = SearchQueuedResponse(search_id="abc-123")
+        resp = SearchQueuedResponse(
+            search_id="abc-123",
+            status_url="/v1/search/abc-123/status",
+            progress_url="/buscar-progress/abc-123",
+        )
         assert resp.search_id == "abc-123"
         assert resp.status == "queued"
+        assert resp.status_url == "/v1/search/abc-123/status"
+        assert resp.progress_url == "/buscar-progress/abc-123"
+        assert resp.estimated_duration_s == 45  # default
 
     def test_schema_serialization(self):
         """Schema serializes correctly for JSON response."""
         from schemas import SearchQueuedResponse
-        resp = SearchQueuedResponse(search_id="xyz-456")
+        resp = SearchQueuedResponse(
+            search_id="xyz-456",
+            status_url="/v1/search/xyz-456/status",
+            progress_url="/buscar-progress/xyz-456",
+            estimated_duration_s=30,
+        )
         data = resp.model_dump()
-        assert data == {"search_id": "xyz-456", "status": "queued"}
+        assert data["search_id"] == "xyz-456"
+        assert data["status"] == "queued"
+        assert data["status_url"] == "/v1/search/xyz-456/status"
+        assert data["progress_url"] == "/buscar-progress/xyz-456"
+        assert data["estimated_duration_s"] == 30
 
 
 class TestSearchJobMetric:

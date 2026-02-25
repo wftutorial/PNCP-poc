@@ -21,7 +21,7 @@ from types import SimpleNamespace
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, HTTPException, Depends, Request, Response
-from starlette.responses import StreamingResponse
+from starlette.responses import StreamingResponse, JSONResponse as StarletteJSONResponse
 
 # === Module-level imports preserved for test mock compatibility (AC11) ===
 # Tests use @patch("routes.search.X") to mock these names.
@@ -438,6 +438,47 @@ async def get_search_results(
 
 
 # ---------------------------------------------------------------------------
+# GTM-STAB-009 AC4: Canonical results endpoint for async search
+# ---------------------------------------------------------------------------
+
+@router.get("/search/{search_id}/results")
+async def get_search_results_v1(
+    search_id: str,
+    user: dict = Depends(require_auth),
+):
+    """GTM-STAB-009 AC4: Return results of async search.
+
+    - 200 with BuscaResponse when results are ready
+    - 202 with status when still processing
+    - 404 when search_id not found or expired
+    """
+    result = await get_background_results_async(search_id)
+    if result is not None:
+        return StarletteJSONResponse(
+            content=result if isinstance(result, dict) else result,
+            headers={"Cache-Control": "max-age=300"},
+        )
+
+    # Not ready yet — check if search is still processing
+    status = await get_search_status(search_id)
+    if status is not None:
+        return StarletteJSONResponse(
+            status_code=202,
+            content={
+                "search_id": search_id,
+                "status": status.get("status", "processing"),
+                "progress": status.get("progress", 0),
+                "message": "Busca em andamento. Tente novamente em alguns segundos.",
+            },
+        )
+
+    raise HTTPException(
+        status_code=404,
+        detail="Resultados não encontrados ou expirados. Execute uma nova busca.",
+    )
+
+
+# ---------------------------------------------------------------------------
 # A-04: Background live fetch task
 # ---------------------------------------------------------------------------
 
@@ -618,6 +659,7 @@ async def _search_fallback_watchdog(
 @router.post("/buscar", response_model=BuscaResponse)
 async def buscar_licitacoes(
     request: BuscaRequest,
+    raw_request: Request,  # GTM-STAB-009 AC6: For X-Sync header inspection
     http_response: Response,  # CRIT-005 AC1-2: Injected for response headers
     user: dict = Depends(require_auth),
     _rl=Depends(require_rate_limit(SEARCH_RATE_LIMIT_PER_MINUTE, 60)),  # GTM-GO-002 AC1
@@ -676,9 +718,14 @@ async def buscar_licitacoes(
     # -----------------------------------------------------------------------
     from config import get_feature_flag, SEARCH_WORKER_FALLBACK_TIMEOUT
     from job_queue import is_queue_available, enqueue_job
-    from starlette.responses import JSONResponse as StarletteJSONResponse
 
-    if get_feature_flag("SEARCH_ASYNC_ENABLED"):
+    # GTM-STAB-009 AC6: X-Sync header forces synchronous mode (backward compat)
+    force_sync = (
+        raw_request.headers.get("x-sync", "").lower() == "true"
+        or raw_request.query_params.get("sync", "").lower() == "true"
+    )
+
+    if get_feature_flag("SEARCH_ASYNC_ENABLED") and not force_sync:
         queue_available = await is_queue_available()
         if queue_available:
             logger.info(f"ARCH-001: Async mode — enqueueing search job for {request.search_id}")
@@ -751,13 +798,20 @@ async def buscar_licitacoes(
                         )
                     )
 
-                    # AC1: Return 202 Accepted with search_id in <2s
+                    # GTM-STAB-009 AC1: Return 202 Accepted with full async response
                     logger.info(
-                        f"ARCH-001: Search job enqueued for {request.search_id} — returning 202"
+                        f"STAB-009: Search job enqueued for {request.search_id} — returning 202"
                     )
+                    num_ufs = len(request.ufs) if request.ufs else 1
                     return StarletteJSONResponse(
                         status_code=202,
-                        content={"search_id": request.search_id, "status": "queued"},
+                        content={
+                            "search_id": request.search_id,
+                            "status": "queued",
+                            "status_url": f"/v1/search/{request.search_id}/status",
+                            "progress_url": f"/buscar-progress/{request.search_id}",
+                            "estimated_duration_s": min(15 + num_ufs * 8, 120),
+                        },
                     )
                 else:
                     logger.warning(f"ARCH-001: Enqueue failed for {request.search_id} — falling back to sync")

@@ -259,13 +259,16 @@ class SearchErrorCode(str, Enum):
 
 
 class SearchQueuedResponse(BaseModel):
-    """GTM-ARCH-001 AC1: Response schema for 202 Accepted (async search queued).
+    """GTM-STAB-009 AC1: Response schema for 202 Accepted (async search queued).
 
     Returned when SEARCH_ASYNC_ENABLED=true and ARQ worker is available.
-    POST /buscar returns this in <2s instead of processing inline.
+    POST /buscar returns this in <1s instead of processing inline.
     """
     search_id: str = Field(..., description="UUID for SSE correlation")
     status: Literal["queued"] = Field("queued", description="Job status")
+    status_url: str = Field(..., description="Polling endpoint for search progress")
+    progress_url: str = Field(..., description="SSE endpoint for real-time progress")
+    estimated_duration_s: int = Field(45, description="Estimated pipeline duration")
 
 
 class BuscaRequest(BaseModel):

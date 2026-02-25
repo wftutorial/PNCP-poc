@@ -239,6 +239,129 @@ async def warmup_top_params() -> dict:
         return {"status": "error", "error": str(e), "warmed": 0}
 
 
+async def warmup_specific_combinations(ufs: list[str], sectors: list[str]) -> dict:
+    """P1.2: Pre-warm cache for specific sector+UF combinations.
+
+    Iterates over each sector x UF pair and dispatches a background
+    revalidation using the system user ID so results land in the global
+    (cross-user) cache tier.  Trial users whose first search matches one
+    of these combos will receive a sub-5-second response from cache.
+
+    Args:
+        ufs: List of UF codes to warm (e.g. ["SP", "RJ", "MG"]).
+        sectors: List of sector IDs to warm (e.g. ["software", "saude"]).
+
+    Returns:
+        dict with keys: dispatched, skipped, failed, total.
+    """
+    from search_cache import trigger_background_revalidation
+    from config import WARMUP_BATCH_DELAY_SECONDS
+
+    dispatched = 0
+    skipped = 0
+    failed = 0
+    total = len(sectors) * len(ufs)
+
+    logger.info(
+        f"P1.2 warmup: starting {total} combinations "
+        f"({len(sectors)} sectors x {len(ufs)} UFs)"
+    )
+
+    for sector_id in sectors:
+        for uf in ufs:
+            try:
+                params = {
+                    "setor_id": sector_id,
+                    "ufs": [uf],
+                    "status": None,
+                    "modalidades": None,
+                    "modo_busca": None,
+                }
+                request_data = {
+                    "ufs": [uf],
+                    "data_inicial": (date.today() - timedelta(days=10)).isoformat(),
+                    "data_final": date.today().isoformat(),
+                    "modalidades": None,
+                }
+
+                dispatched_ok = await trigger_background_revalidation(
+                    user_id="00000000-0000-0000-0000-000000000000",
+                    params=params,
+                    request_data=request_data,
+                )
+
+                if dispatched_ok:
+                    dispatched += 1
+                    logger.debug(f"P1.2 warmup: dispatched sector={sector_id} uf={uf}")
+                else:
+                    skipped += 1
+                    logger.debug(
+                        f"P1.2 warmup: skipped sector={sector_id} uf={uf} "
+                        f"(dedup / cooldown active)"
+                    )
+
+                await asyncio.sleep(WARMUP_BATCH_DELAY_SECONDS)
+
+            except Exception as e:
+                failed += 1
+                logger.warning(
+                    f"P1.2 warmup: failed sector={sector_id} uf={uf}: {e}"
+                )
+
+    logger.info(
+        f"P1.2 warmup: completed — dispatched={dispatched}, "
+        f"skipped={skipped}, failed={failed}, total={total}"
+    )
+    return {"dispatched": dispatched, "skipped": skipped, "failed": failed, "total": total}
+
+
+async def start_warmup_task() -> asyncio.Task:
+    """P1.2: Start the startup cache warm-up background task.
+
+    Waits WARMUP_STARTUP_DELAY_SECONDS (default 120s) after app boot so
+    the process stabilises before issuing warm-up requests.  Fire-and-forget
+    — never blocks the lifespan startup sequence.
+
+    Returns:
+        asyncio.Task that can be cancelled during shutdown.
+    """
+    from config import WARMUP_ENABLED, WARMUP_UFS, WARMUP_SECTORS, WARMUP_STARTUP_DELAY_SECONDS
+
+    if not WARMUP_ENABLED:
+        logger.info("P1.2 warmup: disabled via WARMUP_ENABLED=false — skipping")
+        # Return a no-op task so the caller can still .cancel() safely
+        task = asyncio.create_task(asyncio.sleep(0), name="warmup_noop")
+        return task
+
+    task = asyncio.create_task(
+        _warmup_startup_task(WARMUP_UFS, WARMUP_SECTORS, WARMUP_STARTUP_DELAY_SECONDS),
+        name="cache_warmup",
+    )
+    logger.info(
+        f"P1.2 warmup: task started — "
+        f"delay={WARMUP_STARTUP_DELAY_SECONDS}s, "
+        f"sectors={WARMUP_SECTORS}, ufs={WARMUP_UFS}"
+    )
+    return task
+
+
+async def _warmup_startup_task(
+    ufs: list[str],
+    sectors: list[str],
+    delay_seconds: int,
+) -> None:
+    """P1.2: Internal coroutine — wait, then warm up the cache."""
+    try:
+        logger.info(f"P1.2 warmup: waiting {delay_seconds}s before starting warm-up")
+        await asyncio.sleep(delay_seconds)
+        result = await warmup_specific_combinations(ufs, sectors)
+        logger.info(f"P1.2 warmup: startup warm-up finished: {result}")
+    except asyncio.CancelledError:
+        logger.info("P1.2 warmup: startup warm-up task cancelled (shutdown before completion)")
+    except Exception as e:
+        logger.error(f"P1.2 warmup: startup warm-up task failed: {e}", exc_info=True)
+
+
 async def _session_cleanup_loop() -> None:
     """CRIT-011 AC7: Run session cleanup on startup and every 6 hours."""
     # Run immediately on startup

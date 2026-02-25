@@ -1056,10 +1056,11 @@ class BuscaResponse(BaseModel):
         description="UX-303 AC2: Which cache level served the data — 'supabase', 'redis', or 'local'"
     )
     # GTM-RESILIENCE-A01: Semantic response state
-    response_state: Literal["live", "cached", "degraded", "empty_failure"] = Field(
+    response_state: Literal["live", "cached", "degraded", "empty_failure", "degraded_expired"] = Field(
         default="live",
         description="Semantic state of the response: 'live' (fresh data), 'cached' (stale cache served), "
-                    "'degraded' (partial data), 'empty_failure' (all sources failed, no cache)"
+                    "'degraded' (partial data), 'empty_failure' (all sources failed, no cache), "
+                    "'degraded_expired' (all sources failed, expired cache >24h served as last resort)"
     )
     # GTM-RESILIENCE-A04: Progressive delivery — indicates live fetch running in background
     live_fetch_in_progress: bool = Field(

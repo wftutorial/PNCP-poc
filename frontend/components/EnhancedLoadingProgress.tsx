@@ -150,12 +150,13 @@ export function EnhancedLoadingProgress({
     onStageChangeRef.current = onStageChange;
   }, [onStageChange]);
 
-  // Track SSE progress in ref for fallback smoothing
+  // Track SSE progress in ref for fallback smoothing.
+  // P2.1: Update whenever SSE has real data — do not gate behind useRealProgress.
   useEffect(() => {
-    if (useRealProgress && sseEvent && sseEvent.progress >= 0) {
+    if (sseEvent && sseEvent.progress >= 0) {
       lastSseProgressRef.current = sseEvent.progress;
     }
-  }, [useRealProgress, sseEvent]);
+  }, [sseEvent]);
 
   // Calculate simulated progress based on time elapsed
   useEffect(() => {
@@ -181,8 +182,11 @@ export function EnhancedLoadingProgress({
   // Fetch stage (10%-70%) is proportional to UF completion. Post-fetch stages use SSE or simulation.
   const ufBasedProgress = (() => {
     if (stateCount <= 0) return simulatedProgress;
-    const effectiveStatesProcessed = useRealProgress && sseEvent?.detail?.uf_index
-      ? sseEvent.detail.uf_index
+    // P2.1: Always use real uf_index from SSE when available — do not gate behind useRealProgress.
+    // Falls back to prop statesProcessed (which is updated from SSE in useSearch, or slow timer).
+    const sseUfIndex = sseEvent?.detail?.uf_index;
+    const effectiveStatesProcessed = (typeof sseUfIndex === 'number' && sseUfIndex > 0)
+      ? sseUfIndex
       : statesProcessed;
     if (effectiveStatesProcessed <= 0 && !ufAllComplete) return Math.min(simulatedProgress, 10); // Cap at connecting stage
     const ufRatio = ufAllComplete ? 1 : Math.min(effectiveStatesProcessed / stateCount, 1);
@@ -190,24 +194,27 @@ export function EnhancedLoadingProgress({
     return 10 + (ufRatio * 60);
   })();
 
-  // Determine effective progress, stage, and message from SSE or simulation
+  // Determine effective progress, stage, and message from SSE or simulation.
+  // P2.1: Always prefer real SSE/UF data. Progress must never go backwards (use Math.max).
   let effectiveProgress: number;
-  if (useRealProgress && sseEvent && sseEvent.progress >= 0) {
-    // SSE has real progress — but reconcile with UF data if in fetch stage
+  if (sseEvent && sseEvent.progress >= 0) {
+    // SSE has real progress — reconcile with UF-based progress to avoid contradictions.
+    // In the fetch stage, UF completion gives more accurate granular data than the coarse SSE %.
     if (sseEvent.stage === 'fetching' || (!sseEvent.stage && sseEvent.progress < 70)) {
-      // Use the higher of SSE progress and UF-based progress to avoid contradictions
       effectiveProgress = Math.max(sseEvent.progress, ufBasedProgress);
     } else {
-      effectiveProgress = sseEvent.progress;
+      // Post-fetch stages: trust SSE progress directly, but don't go below UF-based floor.
+      effectiveProgress = Math.max(sseEvent.progress, ufBasedProgress);
     }
   } else {
-    // No SSE — use UF-aware progress (better than pure time simulation)
+    // No SSE — use UF-aware progress (better than pure time simulation).
     effectiveProgress = Math.max(ufBasedProgress, lastSseProgressRef.current);
   }
 
-  // Determine stage from SSE or from effective progress
+  // Determine stage from SSE or from effective progress.
+  // P2.1: Use SSE stage whenever available — do not gate behind useRealProgress.
   let effectiveStageId: number;
-  if (useRealProgress && sseEvent && SSE_STAGE_MAP[sseEvent.stage]) {
+  if (sseEvent && SSE_STAGE_MAP[sseEvent.stage]) {
     effectiveStageId = SSE_STAGE_MAP[sseEvent.stage];
   } else {
     // Derive from effective progress
@@ -232,9 +239,10 @@ export function EnhancedLoadingProgress({
 
   const activeStage = STAGES.find(s => s.id === currentStage) || STAGES[0];
 
-  // GTM-FIX-035 AC4: Contextual status description with source count and time estimate
+  // GTM-FIX-035 AC4: Contextual status description with source count and time estimate.
+  // P2.1: Use SSE message whenever available — do not gate behind useRealProgress.
   const statusDescription = (() => {
-    if (useRealProgress && sseEvent) return sseEvent.message;
+    if (sseEvent?.message) return sseEvent.message;
     if (currentStage === 1) {
       return `Consultando fontes oficiais. Resultados em aproximadamente ${estimatedTime}s.`;
     }
@@ -247,17 +255,20 @@ export function EnhancedLoadingProgress({
     return activeStage.description;
   })();
 
-  // States processed: from SSE detail or from prop
-  const effectiveStatesProcessed = useRealProgress && sseEvent?.detail?.uf_index
-    ? sseEvent.detail.uf_index
+  // States processed: prefer real SSE uf_index, fall back to prop (already SSE-synced in useSearch).
+  // P2.1: Do not gate behind useRealProgress — SSE data is always more accurate than timer.
+  const sseUfIndexForDisplay = sseEvent?.detail?.uf_index;
+  const effectiveStatesProcessed = (typeof sseUfIndexForDisplay === 'number' && sseUfIndexForDisplay > 0)
+    ? sseUfIndexForDisplay
     : statesProcessed;
 
   const progressPercentage = Math.min(100, Math.max(0, effectiveProgress));
   const isOvertime = elapsedTime > estimatedTime;
   const overtimeSeconds = elapsedTime - estimatedTime;
 
-  // CRIT-006 AC20: Get current SSE progress for overtime message
-  const currentSseProgress = useRealProgress && sseEvent && sseEvent.progress >= 0
+  // CRIT-006 AC20: Get current SSE progress for overtime message.
+  // P2.1: Use SSE progress whenever available — do not gate behind useRealProgress.
+  const currentSseProgress = sseEvent && sseEvent.progress >= 0
     ? sseEvent.progress
     : undefined;
 
@@ -472,8 +483,8 @@ export function EnhancedLoadingProgress({
         </div>
       )}
 
-      {/* SSE indicator (subtle) */}
-      {useRealProgress && sseEvent && !sseDisconnected && (
+      {/* SSE indicator (subtle) — show whenever SSE is actively providing data */}
+      {sseEvent && !sseDisconnected && (
         <div className="mt-2 flex items-center gap-1.5 text-[10px] text-ink-muted">
           <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
           Progresso em tempo real

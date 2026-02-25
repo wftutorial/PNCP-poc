@@ -11,7 +11,7 @@ Built on GTM-FIX-010 foundation. Adds:
 TTL policy (unchanged from GTM-FIX-010):
   - Fresh (0-6h): Serve directly
   - Stale (6-24h): Serve as fallback when live sources fail
-  - Expired (>24h): Not served
+  - Expired (>24h): Not served by default; served when allow_expired=True (P1.3 last-resort fallback)
 """
 
 import asyncio
@@ -611,6 +611,8 @@ async def get_from_cache(
 async def get_from_cache_cascade(
     user_id: str,
     params: dict,
+    *,
+    allow_expired: bool = False,
 ) -> Optional[dict]:
     """Unified cache cascade: L2 (InMemory/Redis) → L1 (Supabase) → L3 (Local file).
 
@@ -618,8 +620,12 @@ async def get_from_cache_cascade(
     A-03 AC4: Returns cache_level as "memory" | "supabase" | "local".
     A-03 AC9: Logs event "cache_l3_served" when L3 provides the data.
 
+    P1.3: allow_expired=True — serve entries older than CACHE_STALE_HOURS (>24h) as a
+    last-resort fallback when all live sources have failed. Returned dict includes
+    is_expired=True so callers can set response_state="degraded_expired".
+
     Returns dict with: results, cached_at, cached_sources, cache_age_hours,
-                       is_stale, cache_level, cache_status
+                       is_stale, is_expired (when allow_expired=True), cache_level, cache_status
     Returns None if no valid cache entry exists at any level.
     """
     params_hash = compute_search_hash(params)
@@ -631,11 +637,14 @@ async def get_from_cache_cascade(
         CacheLevel.LOCAL: "local",
     }
 
+    # Select the appropriate hit processor
+    _hit_fn = _process_cache_hit_allow_expired if allow_expired else _process_cache_hit
+
     # L2: Redis/InMemory — O(1) lookup, no I/O
     try:
         data = _get_from_redis(params_hash)
         if data:
-            result = _process_cache_hit(data, params_hash, CacheLevel.REDIS)
+            result = _hit_fn(data, params_hash, CacheLevel.REDIS)
             if result:
                 result["cache_level"] = _level_str[CacheLevel.REDIS]
                 _freshness = result.get("cache_status", "stale")
@@ -648,7 +657,7 @@ async def get_from_cache_cascade(
     try:
         data = await _get_from_supabase(user_id, params_hash)
         if data:
-            result = _process_cache_hit(data, params_hash, CacheLevel.SUPABASE)
+            result = _hit_fn(data, params_hash, CacheLevel.SUPABASE)
             if result:
                 result["cache_level"] = _level_str[CacheLevel.SUPABASE]
                 _freshness = result.get("cache_status", "stale")
@@ -664,7 +673,7 @@ async def get_from_cache_cascade(
     try:
         data = _get_from_local(params_hash)
         if data:
-            result = _process_cache_hit(data, params_hash, CacheLevel.LOCAL)
+            result = _hit_fn(data, params_hash, CacheLevel.LOCAL)
             if result:
                 result["cache_level"] = _level_str[CacheLevel.LOCAL]
                 _freshness = result.get("cache_status", "stale")
@@ -684,7 +693,7 @@ async def get_from_cache_cascade(
     try:
         global_data = await _get_global_fallback_from_supabase(params)
         if global_data:
-            result = _process_cache_hit(global_data, params_hash, CacheLevel.SUPABASE)
+            result = _hit_fn(global_data, params_hash, CacheLevel.SUPABASE)
             if result:
                 result["cache_level"] = "global"
                 METRICS_CACHE_HITS.labels(level="global", freshness=result.get("cache_status", "stale")).inc()
@@ -848,6 +857,64 @@ def _process_cache_hit(data: dict, params_hash: str, level: CacheLevel) -> Optio
         "is_stale": is_stale,
         "cache_level": level,
         "cache_status": status,
+        "cache_priority": cache_priority,
+    }
+
+
+def _process_cache_hit_allow_expired(data: dict, params_hash: str, level: CacheLevel) -> Optional[dict]:
+    """P1.3: Like _process_cache_hit but allows expired (>24h) entries as last-resort fallback.
+
+    Returns a structured dict even when age > CACHE_STALE_HOURS. Sets is_expired=True so
+    callers know this data is beyond the normal TTL boundary.
+    Returns None only when fetched_at is missing (unrecoverable).
+    """
+    fetched_at_str = data.get("fetched_at")
+    if not fetched_at_str:
+        return None
+
+    fetched_at = datetime.fromisoformat(fetched_at_str.replace("Z", "+00:00"))
+    if fetched_at.tzinfo is None:
+        fetched_at = fetched_at.replace(tzinfo=timezone.utc)
+
+    now = datetime.now(timezone.utc)
+    age_hours = (now - fetched_at).total_seconds() / 3600
+
+    is_expired = age_hours > CACHE_STALE_HOURS
+    is_stale = age_hours > CACHE_FRESH_HOURS
+
+    from middleware import search_id_var
+    _search_id = search_id_var.get("-")
+    logger.info(
+        f"Cache EXPIRED HIT L{_level_num(level)}/{level.value} "
+        f"[search={_search_id}] "
+        f"for hash {params_hash[:12]}... "
+        f"(age={age_hours:.1f}h, expired={is_expired}) — allow_expired=True"
+    )
+
+    priority_str = data.get("priority", "cold")
+    access_count = data.get("access_count", 0)
+    last_accessed_str = data.get("last_accessed_at")
+    last_accessed = None
+    if last_accessed_str:
+        try:
+            last_accessed = datetime.fromisoformat(str(last_accessed_str).replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            pass
+    cache_priority = classify_priority(access_count, last_accessed)
+    try:
+        cache_priority = CachePriority(priority_str)
+    except (ValueError, KeyError):
+        pass
+
+    return {
+        "results": data.get("results", []),
+        "cached_at": fetched_at_str,
+        "cached_sources": data.get("sources_json") or ["pncp"],
+        "cache_age_hours": round(age_hours, 1),
+        "is_stale": is_stale,
+        "is_expired": is_expired,
+        "cache_level": level,
+        "cache_status": CacheStatus.STALE if is_stale else CacheStatus.FRESH,
         "cache_priority": cache_priority,
     }
 

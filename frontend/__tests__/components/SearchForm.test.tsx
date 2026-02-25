@@ -170,7 +170,8 @@ describe('SearchForm Component', () => {
     it('should have limpar button', () => {
       render(<SearchForm {...defaultProps} />);
 
-      const clearButton = screen.getByRole('button', { name: /Limpar/i });
+      const clearButtons = screen.getAllByRole('button', { name: /Limpar/i });
+      const clearButton = clearButtons[0];
       fireEvent.click(clearButton);
 
       expect(defaultProps.limparSelecao).toHaveBeenCalled();

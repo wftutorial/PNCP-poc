@@ -377,6 +377,15 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
   // AC21: Use polling event when SSE is disconnected
   const effectiveEvent = sseDisconnected && pollingEvent ? pollingEvent : sseEvent;
 
+  // P2.1: Sync statesProcessed from real SSE uf_index — always prefer real data over timer.
+  // Takes the max of current value and SSE value so progress never goes backwards.
+  useEffect(() => {
+    const ufIndex = effectiveEvent?.detail?.uf_index;
+    if (typeof ufIndex === 'number' && ufIndex > 0) {
+      setStatesProcessed(prev => Math.max(prev, ufIndex));
+    }
+  }, [effectiveEvent?.detail?.uf_index]);
+
   const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || "SmartLic.tech";
 
   const estimateSearchTime = (ufCount: number, dateRangeDays: number): number => {
@@ -505,6 +514,8 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
     const totalStates = filters.ufsSelecionadas.size;
     let stateIntervalId: ReturnType<typeof setInterval> | null = null;
 
+    // Slow fallback timer — only advances when SSE is not providing real uf_index data.
+    // Interval is 10s per UF (intentionally slow) so real SSE data always wins.
     stateIntervalId = setInterval(() => {
       setStatesProcessed(prev => {
         if (prev >= totalStates) {
@@ -513,7 +524,7 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
         }
         return prev + 1;
       });
-    }, totalStates > 0 ? Math.max(2000, (totalStates * 6000) / (totalStates + 1)) : 3000);
+    }, totalStates > 0 ? Math.max(10000, (totalStates * 10000) / (totalStates + 1)) : 10000);
 
     const cleanupInterval = () => {
       if (stateIntervalId) {

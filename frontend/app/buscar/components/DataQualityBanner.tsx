@@ -36,7 +36,7 @@ export interface DataQualityBannerProps {
   sourceNames?: string[];
 
   // Degradation / response state
-  responseState?: "live" | "cached" | "degraded" | "empty_failure";
+  responseState?: "live" | "cached" | "degraded" | "empty_failure" | "degraded_expired";
   coveragePct?: number;
 
   // Actions
@@ -66,7 +66,7 @@ function formatRelativeTime(isoDate: string): string {
 /** Determine banner severity from the worst condition (AC4 priority). */
 function deriveSeverity(props: DataQualityBannerProps): BannerSeverity {
   // Priority 1 — error (red): total failure
-  if (props.responseState === "empty_failure" || props.succeededUfs === 0) {
+  if (props.responseState === "empty_failure" || props.responseState === "degraded_expired" || props.succeededUfs === 0) {
     return "error";
   }
 
@@ -91,7 +91,8 @@ function hasAnythingToReport(props: DataQualityBannerProps): boolean {
   if (props.sourcesAvailable < props.sourcesTotal) return true;
   if (
     props.responseState === "degraded" ||
-    props.responseState === "empty_failure"
+    props.responseState === "empty_failure" ||
+    props.responseState === "degraded_expired"
   ) {
     return true;
   }

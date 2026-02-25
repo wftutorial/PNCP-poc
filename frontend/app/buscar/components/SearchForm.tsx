@@ -136,7 +136,14 @@ export default function SearchForm({
   const compactSummary = (() => {
     const parts: string[] = [];
     // UF count
-    parts.push(ufsSelecionadas.size === 27 ? 'Todo o Brasil' : `${ufsSelecionadas.size} estado${ufsSelecionadas.size !== 1 ? 's' : ''}`);
+    if (ufsSelecionadas.size === 27) {
+      parts.push('Todo o Brasil');
+    } else if (ufsSelecionadas.size === 1) {
+      const uf = Array.from(ufsSelecionadas)[0];
+      parts.push(UF_NAMES[uf] || uf);
+    } else {
+      parts.push(`${ufsSelecionadas.size} estados`);
+    }
     // Status
     const statusLabels: Record<string, string> = {
       recebendo_proposta: 'Abertas',
@@ -528,6 +535,37 @@ export default function SearchForm({
                     Limpar
                   </button>
                 </div>
+              </div>
+
+              {/* "Todo o Brasil" quick-select button */}
+              <div className="flex items-center gap-3 mb-3">
+                <button
+                  type="button"
+                  onClick={selecionarTodos}
+                  aria-pressed={ufsSelecionadas.size === UFS.length}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-button border text-sm font-semibold transition-all duration-200 ${
+                    ufsSelecionadas.size === UFS.length
+                      ? "bg-brand-navy text-white border-brand-navy"
+                      : "bg-surface-0 text-ink border-strong hover:border-accent hover:text-brand-blue hover:bg-brand-blue-subtle"
+                  }`}
+                >
+                  <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 004 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Todo o Brasil (27 estados)
+                  {ufsSelecionadas.size === UFS.length && (
+                    <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={limparSelecao}
+                  className="text-sm font-medium text-ink-muted hover:text-ink transition-colors whitespace-nowrap"
+                >
+                  Limpar seleção
+                </button>
               </div>
 
               <RegionSelector selected={ufsSelecionadas} onToggleRegion={toggleRegion} />

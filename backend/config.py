@@ -453,6 +453,30 @@ EARLY_RETURN_THRESHOLD_PCT: float = float(os.getenv("EARLY_RETURN_THRESHOLD_PCT"
 EARLY_RETURN_TIME_S: float = float(os.getenv("EARLY_RETURN_TIME_S", "80.0"))  # seconds elapsed
 
 # ============================================
+# P1.2: Startup Cache Warm-up (Top Sector+UF Combos)
+# ============================================
+# Enable startup warm-up for top sector+UF combinations (default: true)
+WARMUP_ENABLED: bool = str_to_bool(os.getenv("WARMUP_ENABLED", "true"))
+
+# Comma-separated list of UFs to pre-warm on startup (default: top 5 states by bid volume)
+WARMUP_UFS: list[str] = [
+    uf.strip() for uf in os.getenv("WARMUP_UFS", "SP,RJ,MG,BA,PR").split(",") if uf.strip()
+]
+
+# Comma-separated list of sector IDs to pre-warm on startup (default: top 5 sectors)
+WARMUP_SECTORS: list[str] = [
+    s.strip()
+    for s in os.getenv("WARMUP_SECTORS", "software,informatica,engenharia,saude,facilities").split(",")
+    if s.strip()
+]
+
+# Seconds to wait after startup before starting warm-up (default: 120s — lets app stabilize)
+WARMUP_STARTUP_DELAY_SECONDS: int = int(os.getenv("WARMUP_STARTUP_DELAY_SECONDS", "120"))
+
+# Seconds to sleep between consecutive warm-up dispatches (rate-limiting, default: 2s)
+WARMUP_BATCH_DELAY_SECONDS: float = float(os.getenv("WARMUP_BATCH_DELAY_SECONDS", "2"))
+
+# ============================================
 # GTM-STAB-007: Cache Warming
 # ============================================
 CACHE_WARMING_ENABLED: bool = str_to_bool(os.getenv("CACHE_WARMING_ENABLED", "false"))

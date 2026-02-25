@@ -132,7 +132,7 @@ export interface BuscaResult {
   /** UX-303 AC2: Which cache level served the data (supabase/redis/local) */
   cache_level?: string;
   /** GTM-RESILIENCE-A01 AC4: Semantic response state */
-  response_state?: "live" | "cached" | "degraded" | "empty_failure";
+  response_state?: "live" | "cached" | "degraded" | "empty_failure" | "degraded_expired";
   /** GTM-RESILIENCE-A01 AC5: User-facing guidance for degraded/failed states */
   degradation_guidance?: string;
   /** GTM-RESILIENCE-A05 AC1: Coverage percentage (0-100) */

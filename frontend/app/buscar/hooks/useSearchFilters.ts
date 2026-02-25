@@ -207,10 +207,22 @@ export function useSearchFilters(clearResult: () => void): SearchFiltersState {
     return localStorage.getItem('smartlic-advanced-filters') === 'open';
   });
 
-  // UFs and dates
-  const [ufsSelecionadas, setUfsSelecionadas] = useState<Set<string>>(
-    new Set(UFS as readonly string[])
-  );
+  // UFs and dates — smart default: profile context UFs → SP → all 27
+  const [ufsSelecionadas, setUfsSelecionadas] = useState<Set<string>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('smartlic-profile-context');
+        if (cached) {
+          const ctx = JSON.parse(cached);
+          if (ctx.ufs_atuacao && Array.isArray(ctx.ufs_atuacao) && ctx.ufs_atuacao.length > 0) {
+            const valid = ctx.ufs_atuacao.filter((uf: string) => (UFS as readonly string[]).includes(uf));
+            if (valid.length > 0) return new Set(valid);
+          }
+        }
+      } catch { /* fall through */ }
+    }
+    return new Set(['SP']);
+  });
   // GTM-FIX-032 AC5: Robust timezone-safe date initialization
   const [dataInicial, setDataInicial] = useState(() => addDays(getBrtDate(), -DEFAULT_SEARCH_DAYS));
   const [dataFinal, setDataFinal] = useState(() => getBrtDate());
@@ -276,7 +288,8 @@ export function useSearchFilters(clearResult: () => void): SearchFiltersState {
     }
   }, [user, urlParamsApplied, searchParams]);
 
-  // STORY-247 AC12: Load search defaults from profile context
+  // STORY-247 AC12: Load non-UF search defaults from profile context
+  // (UFs are already applied in the useState initializer above)
   const profileContextAppliedRef = useRef(false);
   useEffect(() => {
     if (profileContextAppliedRef.current) return;
@@ -294,11 +307,6 @@ export function useSearchFilters(clearResult: () => void): SearchFiltersState {
       if (!ctx.porte_empresa) return; // Not completed
 
       profileContextAppliedRef.current = true;
-
-      // Apply UFs from profile
-      if (ctx.ufs_atuacao && Array.isArray(ctx.ufs_atuacao) && ctx.ufs_atuacao.length > 0) {
-        setUfsSelecionadas(new Set(ctx.ufs_atuacao.filter((uf: string) => (UFS as readonly string[]).includes(uf))));
-      }
 
       // Apply value range from profile
       if (ctx.faixa_valor_min != null) setValorMin(ctx.faixa_valor_min);

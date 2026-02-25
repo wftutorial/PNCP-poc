@@ -1190,7 +1190,9 @@ class SearchPipeline:
             )
 
             # A-03 AC7: Unified cache cascade (L2 → L1 → L3)
+            # P1.3: If cascade returns nothing (no fresh/stale cache), retry with allow_expired=True
             stale_cache = None
+            expired_cache_used = False
             if ctx.user and ctx.user.get("id"):
                 try:
                     stale_cache = await get_from_cache_cascade(
@@ -1200,12 +1202,46 @@ class SearchPipeline:
                 except Exception as cache_err:
                     logger.warning(f"Cache cascade failed after AllSourcesFailedError: {cache_err}")
 
+                if stale_cache is None:
+                    # P1.3: Last-resort — try expired cache (>24h) rather than returning empty
+                    try:
+                        stale_cache = await get_from_cache_cascade(
+                            user_id=ctx.user["id"],
+                            params=_build_cache_params(request),
+                            allow_expired=True,
+                        )
+                        if stale_cache:
+                            expired_cache_used = True
+                            logger.warning(json.dumps({
+                                "event": "cache_expired_served_as_fallback",
+                                "cache_age_hours": stale_cache["cache_age_hours"],
+                                "results_count": len(stale_cache.get("results", [])),
+                                "cache_level": str(stale_cache.get("cache_level", "unknown")),
+                                "reason": "all_sources_failed_no_fresh_cache",
+                            }))
+                    except Exception as expired_err:
+                        logger.warning(f"Expired cache fallback failed after AllSourcesFailedError: {expired_err}")
+
             if stale_cache:
-                # AC5: Serve stale cache with cache metadata
-                logger.info(
-                    f"Serving stale cache ({stale_cache['cache_age_hours']}h old) "
-                    f"after all sources failed"
-                )
+                # AC5: Serve stale/expired cache with cache metadata
+                _cache_age = stale_cache["cache_age_hours"]
+                if expired_cache_used:
+                    # P1.3: Expired cache — distinct state so frontend can show appropriate warning
+                    logger.warning(
+                        f"Serving expired cache ({_cache_age}h old) as last-resort fallback "
+                        f"after all sources failed — response_state=degraded_expired"
+                    )
+                    ctx.response_state = "degraded_expired"  # P1.3
+                    ctx.degradation_guidance = (
+                        f"Fontes de dados estão temporariamente indisponíveis. "
+                        f"Exibindo dados do cache com {_cache_age:.0f}h — podem estar desatualizados."
+                    )
+                else:
+                    logger.info(
+                        f"Serving stale cache ({_cache_age}h old) "
+                        f"after all sources failed"
+                    )
+                    ctx.response_state = "cached"  # GTM-RESILIENCE-A01 AC6
                 ctx.licitacoes_raw = stale_cache["results"]
                 ctx.cached = True
                 ctx.cached_at = stale_cache["cached_at"]
@@ -1213,7 +1249,6 @@ class SearchPipeline:
                 ctx.cache_status = stale_cache.get("cache_status", "stale") if isinstance(stale_cache.get("cache_status"), str) else ("stale" if stale_cache.get("is_stale") else "fresh")
                 ctx.cache_level = stale_cache.get("cache_level", "supabase")  # AC8: real level from cascade
                 ctx.is_partial = True
-                ctx.response_state = "cached"  # GTM-RESILIENCE-A01 AC6
                 ctx.degradation_reason = str(e)
                 ctx.data_sources = [
                     DataSourceStatus(

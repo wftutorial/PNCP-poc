@@ -22,6 +22,7 @@ import { ErrorDetail } from "./ErrorDetail";
 import type { SearchError } from "../hooks/useSearch";
 import { ZeroResultsSuggestions } from "./ZeroResultsSuggestions";
 import { FilterRelaxedBanner } from "./FilterRelaxedBanner";
+import { ExpiredCacheBanner } from "./ExpiredCacheBanner";
 // GTM-UX-001: PartialTimeoutBanner replaced by DataQualityBanner
 
 export interface SearchResultsProps {
@@ -389,6 +390,7 @@ export default function SearchResults({
 
       {/* CRIT-027 AC2-AC3: Only show result states AFTER search completes (not during loading) */}
       {/* CRIT-005 AC5-7: Route by response_state — empty_failure gets SourcesUnavailable */}
+      {/* P2.2: degraded_expired is excluded — it has data and gets its own banner below */}
       {!loading && result && result.response_state === "empty_failure" && (
         <SourcesUnavailable
           onRetry={onSearch}
@@ -399,14 +401,26 @@ export default function SearchResults({
         />
       )}
 
-      {/* GTM-RESILIENCE-A01 AC7 + STORY-257B AC10: All sources down (partial with zero results, not empty_failure) */}
-      {!loading && result && result.response_state !== "empty_failure" && result.is_partial && (result.total_raw || 0) === 0 && result.resumo.total_oportunidades === 0 && !result.cached && (
+      {/* GTM-RESILIENCE-A01 AC7 + STORY-257B AC10: All sources down (partial with zero results, not empty_failure or degraded_expired) */}
+      {!loading && result && result.response_state !== "empty_failure" && result.response_state !== "degraded_expired" && result.is_partial && (result.total_raw || 0) === 0 && result.resumo.total_oportunidades === 0 && !result.cached && (
         <SourcesUnavailable
           onRetry={onSearch}
           onLoadLastSearch={onLoadLastSearch || (() => {})}
           hasLastSearch={hasLastSearch}
           retrying={loading}
           degradationGuidance={result.degradation_guidance}
+        />
+      )}
+
+      {/* P2.2: Expired cache fallback — all sources failed but backend has stale cached data.
+           Show a prominent amber warning banner above the results.
+           The main result display block below handles rendering the licitacoes as normal.
+           This banner REPLACES the SourcesUnavailable blank error screen for this state. */}
+      {!loading && result && result.response_state === "degraded_expired" && result.cached_at && (
+        <ExpiredCacheBanner
+          cachedAt={result.cached_at}
+          onRetry={onSearch}
+          loading={loading}
         />
       )}
 
@@ -492,24 +506,27 @@ export default function SearchResults({
       {!loading && result && result.resumo.total_oportunidades > 0 && (
         <div className={`mt-6 sm:mt-8 space-y-4 sm:space-y-6 ${!showGrid ? 'animate-fade-in-up' : ''}`}>
           {/* GTM-UX-001: Single unified DataQualityBanner replaces FailedUfsBanner,
-              TruncationWarningBanner, PartialResultsBanner, OperationalStateBanner, CacheBanner */}
-          <DataQualityBanner
-            totalUfs={ufsSelecionadas.size}
-            succeededUfs={ufsSelecionadas.size - (result.failed_ufs?.length ?? 0)}
-            failedUfs={result.failed_ufs ?? []}
-            isCached={!!result.cached && !liveFetchInProgress && !refreshAvailable}
-            cachedAt={result.cached_at}
-            cacheStatus={result.cache_status}
-            isTruncated={!!result.is_truncated}
-            sourcesTotal={result.source_stats?.length ?? 1}
-            sourcesAvailable={result.source_stats?.filter((s: { status: string }) => s.status === "success" || s.status === "partial").length ?? (result.source_stats?.length ?? 1)}
-            sourceNames={result.source_stats?.map((s: { source_code: string }) => s.source_code)}
-            responseState={result.response_state}
-            coveragePct={result.coverage_pct}
-            onRefresh={onRetryForceFresh || onSearch}
-            onRetry={onSearch}
-            loading={loading}
-          />
+              TruncationWarningBanner, PartialResultsBanner, OperationalStateBanner, CacheBanner
+              P2.2: Skip for degraded_expired — ExpiredCacheBanner is already shown above */}
+          {result.response_state !== "degraded_expired" && (
+            <DataQualityBanner
+              totalUfs={ufsSelecionadas.size}
+              succeededUfs={ufsSelecionadas.size - (result.failed_ufs?.length ?? 0)}
+              failedUfs={result.failed_ufs ?? []}
+              isCached={!!result.cached && !liveFetchInProgress && !refreshAvailable}
+              cachedAt={result.cached_at}
+              cacheStatus={result.cache_status}
+              isTruncated={!!result.is_truncated}
+              sourcesTotal={result.source_stats?.length ?? 1}
+              sourcesAvailable={result.source_stats?.filter((s: { status: string }) => s.status === "success" || s.status === "partial").length ?? (result.source_stats?.length ?? 1)}
+              sourceNames={result.source_stats?.map((s: { source_code: string }) => s.source_code)}
+              responseState={result.response_state}
+              coveragePct={result.coverage_pct}
+              onRefresh={onRetryForceFresh || onSearch}
+              onRetry={onSearch}
+              loading={loading}
+            />
+          )}
 
           {/* UX-348 AC7-AC8: Results header with positive framing */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-strong">

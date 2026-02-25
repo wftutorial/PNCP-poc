@@ -57,10 +57,10 @@ Gunicorn worker:       180s  ← Worker sobrevive, Railway não
 - [x] Auto-retry com PNCP_TIMEOUT_PER_UF_DEGRADED=15s ✅
 
 ### AC3: Consolidation early return
-- [ ] Em `consolidation.py`, se >80% das UFs responderam E tempo > 80s, retornar partial result
-- [ ] Não esperar por UFs lentas — retornar o que temos
-- [ ] `ConsolidationResult.is_partial = True` com `degradation_reason` explicando quais UFs ficaram de fora
-- [ ] Filtro e ranking rodam sobre o que foi coletado
+- [x] Em `consolidation.py`, se >80% das UFs responderam E tempo > 80s, retornar partial result — ✅ `EarlyReturnConfig` with `EARLY_RETURN_THRESHOLD_PCT=0.8` + `EARLY_RETURN_TIME_S=80`
+- [x] Não esperar por UFs lentas — retornar o que temos ✅
+- [x] `ConsolidationResult.is_partial = True` com `degradation_reason` + `ufs_completed` / `ufs_pending` ✅
+- [x] Filtro e ranking rodam sobre o que foi coletado ✅
 
 ### AC4: Pipeline budget guard
 - [x] Time budget check between stages ✅ (search_pipeline.py:507-512)

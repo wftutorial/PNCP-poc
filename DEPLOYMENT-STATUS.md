@@ -51,8 +51,8 @@ curl -s https://bidiq-frontend-production.up.railway.app/auth/callback
 6. **Expected:** User authenticated (email visible in header)
 
 **Test Accounts:**
-- Admin: tiago.sasaki@gmail.com / B1lous234!
-- Master: marinalvabaron@gmail.com / mudar123
+- Admin: tiago.sasaki@gmail.com (password in env var `SEED_ADMIN_PASSWORD`)
+- Master: marinalvabaron@gmail.com (password in env var `SEED_MASTER_PASSWORD`)
 
 ---
 

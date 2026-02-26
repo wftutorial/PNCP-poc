@@ -42,7 +42,7 @@ export default function PrivacidadePage() {
                 <li><strong>Cadastro:</strong> Nome, e-mail, telefone, CPF/CNPJ, cargo e empresa</li>
                 <li><strong>Perfil de Busca:</strong> Setores de interesse, estados/regiões, filtros de valor</li>
                 <li><strong>Comunicação:</strong> Mensagens enviadas através de formulários de contato</li>
-                <li><strong>Pagamento:</strong> Dados de cobrança (processados por Stripe/Mercado Pago)</li>
+                <li><strong>Pagamento:</strong> Dados de cobrança (processados por Stripe)</li>
               </ul>
 
               <h3 className="text-xl font-semibold mb-3 mt-6 text-gray-800 dark:text-gray-200">
@@ -87,7 +87,7 @@ export default function PrivacidadePage() {
                 <strong>Nós NÃO vendemos seus dados pessoais.</strong> Compartilhamos informações apenas nas seguintes situações:
               </p>
               <ul className="list-disc pl-6 space-y-2 text-gray-700 dark:text-gray-300">
-                <li><strong>Prestadores de Serviço:</strong> Supabase (hospedagem), Railway (backend), OpenAI (IA), Stripe/Mercado Pago (pagamentos), Mixpanel (análise de uso — apenas com consentimento)</li>
+                <li><strong>Prestadores de Serviço:</strong> Supabase (hospedagem), Railway (backend), OpenAI (IA), Stripe (pagamentos), Mixpanel (análise de uso — apenas com consentimento)</li>
                 <li><strong>Requisições Legais:</strong> Quando exigido por lei, ordem judicial ou autoridades competentes</li>
                 <li><strong>Proteção de Direitos:</strong> Para proteger nossos direitos, propriedade ou segurança</li>
                 <li><strong>Consentimento:</strong> Quando você autorizar explicitamente</li>

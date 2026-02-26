@@ -3,8 +3,14 @@
 Run once after Supabase project is configured:
     cd backend
     python seed_users.py
+
+Credentials are read from environment variables or interactive prompt:
+    SEED_ADMIN_PASSWORD  — password for the admin user
+    SEED_MASTER_PASSWORD — password for the master user
 """
 
+import os
+import getpass
 
 
 def main():
@@ -12,17 +18,24 @@ def main():
 
     sb = get_supabase()
 
+    admin_password = os.environ.get("SEED_ADMIN_PASSWORD") or getpass.getpass(
+        "Enter password for tiago.sasaki@gmail.com (admin): "
+    )
+    master_password = os.environ.get("SEED_MASTER_PASSWORD") or getpass.getpass(
+        "Enter password for marinalvabaron@gmail.com (master): "
+    )
+
     users_to_create = [
         {
             "email": "tiago.sasaki@gmail.com",
-            "password": "B1lous234!",
+            "password": admin_password,
             "full_name": "TJ Sasaki",
             "plan_id": "master",
             "is_admin": True,
         },
         {
             "email": "marinalvabaron@gmail.com",
-            "password": "mudar123",
+            "password": master_password,
             "full_name": "Mari Baron",
             "plan_id": "master",
             "is_admin": False,

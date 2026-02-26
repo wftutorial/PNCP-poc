@@ -69,9 +69,8 @@ export default function TermosPage() {
                 3.2 Tipos de Conta
               </h3>
               <ul className="list-disc pl-6 space-y-2 text-gray-700 dark:text-gray-300">
-                <li><strong>Free:</strong> Acesso limitado com até 5 buscas/mês</li>
-                <li><strong>Professional:</strong> Buscas ilimitadas, notificações por e-mail, suporte prioritário</li>
-                <li><strong>Enterprise:</strong> API access, white-label, SLA dedicado, suporte técnico 24/7</li>
+                <li><strong>Período de Avaliação:</strong> 7 dias de acesso completo a todas as funcionalidades da plataforma, sem compromisso</li>
+                <li><strong>SmartLic Pro:</strong> Acesso completo à plataforma, incluindo busca multi-fonte, classificação por IA, relatórios em Excel, pipeline de oportunidades e suporte prioritário — R$&nbsp;1.999/mês</li>
               </ul>
 
               <h3 className="text-xl font-semibold mb-3 mt-6 text-gray-800 dark:text-gray-200">
@@ -159,7 +158,7 @@ export default function TermosPage() {
                 <li>Cobranças mensais ou anuais (de acordo com o plano escolhido)</li>
                 <li>Renovação automática, salvo cancelamento prévio</li>
                 <li>Preços sujeitos a alteração mediante aviso prévio de 30 dias</li>
-                <li>Pagamentos processados via Stripe ou Mercado Pago</li>
+                <li>Pagamentos processados via Stripe</li>
               </ul>
 
               <h3 className="text-xl font-semibold mb-3 mt-6 text-gray-800 dark:text-gray-200">
@@ -176,7 +175,7 @@ export default function TermosPage() {
                 6.3 Inadimplência
               </h3>
               <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                Em caso de falha no pagamento, sua conta será downgrade para o plano Free até regularização.
+                Em caso de falha no pagamento, o acesso às funcionalidades do plano será suspenso até regularização.
                 Após 90 dias de inadimplência, podemos encerrar a conta permanentemente.
               </p>
             </section>

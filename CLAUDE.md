@@ -287,8 +287,8 @@ When requested to test the production system, use **MCP Playwright** for browser
 
 | Role | Email | Password | Use Case |
 |------|-------|----------|----------|
-| **Admin** | `tiago.sasaki@gmail.com` | `B1lous234!` | Test admin features, user management, full functionality |
-| **Master** | `marinalvabaron@gmail.com` | `mudar123` | Test master/superadmin features, global settings |
+| **Admin** | `tiago.sasaki@gmail.com` | *(stored in Supabase — use dashboard or env var `SEED_ADMIN_PASSWORD`)* | Test admin features, user management, full functionality |
+| **Master** | `marinalvabaron@gmail.com` | *(stored in Supabase — use dashboard or env var `SEED_MASTER_PASSWORD`)* | Test master/superadmin features, global settings |
 
 #### Testing Protocol
 

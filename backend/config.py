@@ -6,6 +6,14 @@ import logging
 import os
 import sys
 
+# CRIT-038: Import requests exceptions for retryable_exceptions.
+# requests.exceptions.ConnectionError inherits from IOError, NOT builtins.ConnectionError.
+# Without these, fetch_page's except clause silently misses requests errors → Sentry.
+try:
+    import requests.exceptions as _req_exc
+except ImportError:
+    _req_exc = None  # type: ignore[assignment]
+
 
 # PNCP Modality Codes (codigoModalidadeContratacao)
 # Source: https://pncp.gov.br/api/pncp/v1/modalidades
@@ -67,10 +75,23 @@ class RetryConfig:
     )
 
     # Exception types that should trigger retry
+    # CRIT-038: Added requests.exceptions.* — requests raises its OWN ConnectionError
+    # and Timeout classes that inherit from IOError, NOT from builtins.ConnectionError.
+    # Without these, fetch_page's except clause never catches requests timeout/connection
+    # errors, allowing them to bubble up unhandled to Sentry.
     retryable_exceptions: Tuple[Type[Exception], ...] = field(
         default_factory=lambda: (
-            ConnectionError,
-            TimeoutError,
+            ConnectionError,    # builtins.ConnectionError (OSError subclass)
+            TimeoutError,       # builtins.TimeoutError (OSError subclass)
+            *(
+                (
+                    _req_exc.ConnectionError,  # requests — IOError subclass, NOT builtins.ConnectionError
+                    _req_exc.Timeout,          # requests — inherits from requests.ConnectionError
+                    _req_exc.ReadTimeout,      # requests — specific read timeout
+                )
+                if _req_exc is not None
+                else ()
+            ),
         )
     )
 

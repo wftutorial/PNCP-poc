@@ -313,7 +313,7 @@ class SourceConfig:
         code=SourceCode.LICITAR,
         name="Licitar Digital",
         base_url="https://api.licitar.digital/v1",
-        enabled=True,
+        enabled=False,  # No client implementation exists (empty file) + no API key
         timeout=20,
         rate_limit_rps=5.0,
         priority=3,
@@ -401,8 +401,10 @@ class SourceConfig:
         config.portal.enabled = (
             os.getenv("ENABLE_SOURCE_PORTAL", "true").lower() == "true"
         )
+        # Licitar Digital: no client implementation (empty file) + no API key.
+        # Default disabled. Re-enable when client is implemented.
         config.licitar.enabled = (
-            os.getenv("ENABLE_SOURCE_LICITAR", "true").lower() == "true"
+            os.getenv("ENABLE_SOURCE_LICITAR", "false").lower() == "true"
         )
         # GTM-FIX-025 T1: ComprasGov v1 API permanently unstable (503s kill pipeline).
         # Default disabled. Re-enable via env var when v3 migration is ready.

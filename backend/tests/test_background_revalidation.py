@@ -7,8 +7,7 @@ import asyncio
 import json
 import logging
 import pytest
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch, Mock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 # Suppress unawaited coroutine warnings from mocked asyncio.create_task
 pytestmark = pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")

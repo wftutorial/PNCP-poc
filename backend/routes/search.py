@@ -62,7 +62,6 @@ from search_state_manager import (
     get_timeline,
     get_current_state,
 )
-from models.search_state import SearchState
 
 logger = get_sanitized_logger(__name__)
 

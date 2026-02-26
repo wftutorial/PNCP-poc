@@ -3,8 +3,7 @@
 STORY-250: Backend pipeline CRUD routes with access control.
 """
 
-import asyncio
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import Mock, patch
 from fastapi.testclient import TestClient
 from fastapi import FastAPI
 

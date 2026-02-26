@@ -11,9 +11,8 @@ T7: Migration is idempotent (can execute 2x without error)
 
 import os
 import sys
-import asyncio
 from datetime import datetime, timezone, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -95,7 +94,7 @@ class TestSearchIdPersistence:
         mock_sb = MagicMock()
         mock_table = MagicMock()
         mock_insert = MagicMock()
-        mock_execute = MagicMock()
+        MagicMock()
 
         mock_sb.table.return_value = mock_table
         mock_table.insert.return_value = mock_insert

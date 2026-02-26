@@ -8,7 +8,6 @@ Rules validated:
 5. Non-Gmail dots are preserved
 """
 
-import pytest
 from utils.email_normalizer import normalize_email
 
 

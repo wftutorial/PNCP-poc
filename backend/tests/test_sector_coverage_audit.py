@@ -10,13 +10,12 @@ AC7: Precision >= 85%, Recall >= 70%, Cross-sector collision < 10%.
 """
 
 import re
-from collections import Counter
 
 import pytest
 import yaml
 from pathlib import Path
 
-from filter import match_keywords, normalize_text
+from filter import match_keywords
 from sectors import SECTORS, get_sector, list_sectors
 from synonyms import SECTOR_SYNONYMS, find_synonym_matches
 

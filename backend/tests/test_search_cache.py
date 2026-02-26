@@ -15,7 +15,7 @@ Covers:
 import json
 import pytest
 from datetime import datetime, timezone, timedelta
-from unittest.mock import patch, Mock, AsyncMock, MagicMock
+from unittest.mock import patch, Mock, MagicMock
 
 from search_cache import (
     compute_search_hash,
@@ -25,7 +25,6 @@ from search_cache import (
     _get_from_local,
     CACHE_FRESH_HOURS,
     CACHE_STALE_HOURS,
-    LOCAL_CACHE_TTL_HOURS,
 )
 
 
@@ -268,7 +267,6 @@ class TestPipelineCacheFallback:
     async def test_cache_hit_on_all_sources_failure(self):
         """AC10: When all sources fail and cache has data, serve stale."""
         from search_context import SearchContext
-        from schemas import DataSourceStatus
 
         # Simulate what happens in the AllSourcesFailedError handler
         now = datetime.now(timezone.utc)

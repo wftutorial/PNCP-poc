@@ -12,8 +12,6 @@ Tests cover:
 - AC9: All metrics appear in /metrics output
 """
 
-import os
-from unittest.mock import patch
 
 import pytest
 from prometheus_client import REGISTRY, generate_latest

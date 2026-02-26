@@ -7,7 +7,6 @@ Rules:
 4. Result must be 10 digits (fixo) or 11 digits (celular)
 """
 
-import pytest
 from utils.phone_normalizer import normalize_phone, format_phone_display
 
 

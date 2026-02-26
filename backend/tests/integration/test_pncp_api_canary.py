@@ -48,7 +48,7 @@ class TestPncpApiCanary:
         from pncp_client import PNCPClient
         from config import RetryConfig
 
-        client = PNCPClient.__new__(PNCPClient)
+        PNCPClient.__new__(PNCPClient)
         # Verify the class accepts a RetryConfig
         assert hasattr(PNCPClient, '__init__'), "PNCPClient must be instantiable"
 

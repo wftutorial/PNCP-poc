@@ -8,11 +8,10 @@ T4: Gunicorn timeout configured at 180s
 
 import asyncio
 import ast
-import os
 import re
 import time
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -114,7 +113,7 @@ class TestCircuitBreakerThreshold:
         # Record 14 failures — should NOT trip
         for i in range(14):
             await cb.record_failure()
-        assert not cb.is_degraded, f"Should not trip after 14 failures"
+        assert not cb.is_degraded, "Should not trip after 14 failures"
         assert cb.consecutive_failures == 14
 
         # 15th failure — SHOULD trip
@@ -212,7 +211,7 @@ class TestNoTimeSleepInAsyncCode:
                                 )
 
         assert not violations, (
-            f"Found time.sleep() in async functions (must use asyncio.sleep()):\n"
+            "Found time.sleep() in async functions (must use asyncio.sleep()):\n"
             + "\n".join(f"  - {v}" for v in violations)
         )
 
@@ -258,8 +257,8 @@ class TestGunicornTimeout:
 
         # Check the --timeout line uses 120 as default
         assert "GUNICORN_TIMEOUT:-120" in content, (
-            f"start.sh must use GUNICORN_TIMEOUT:-120 (STAB-003: aligned with Railway's ~120s hard cutoff). "
-            f"GTM-INFRA-001 AC7/AC8."
+            "start.sh must use GUNICORN_TIMEOUT:-120 (STAB-003: aligned with Railway's ~120s hard cutoff). "
+            "GTM-INFRA-001 AC7/AC8."
         )
 
         # Ensure old 900 default is gone

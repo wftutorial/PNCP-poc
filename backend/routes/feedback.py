@@ -14,7 +14,7 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 
 from auth import require_auth
 from admin import require_admin
-from config import USER_FEEDBACK_ENABLED, USER_FEEDBACK_RATE_LIMIT, get_feature_flag
+from config import USER_FEEDBACK_RATE_LIMIT, get_feature_flag
 from schemas import (
     FeedbackRequest, FeedbackResponse, FeedbackDeleteResponse,
     FeedbackPatternsResponse,

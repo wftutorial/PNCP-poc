@@ -8,7 +8,6 @@ Tests:
 - Integration test with mixed relevance sources
 """
 
-import pytest
 
 
 class TestConfidenceReranking:

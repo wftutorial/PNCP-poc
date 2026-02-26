@@ -7,7 +7,6 @@ AC9: Circuit breaker works normally when Redis unavailable (in-memory fallback)
 AC10: Multiple circuit breaker instances (pncp, pcp) use different keys
 """
 
-import asyncio
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
 

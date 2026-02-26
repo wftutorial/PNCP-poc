@@ -18,12 +18,10 @@ import asyncio
 import base64
 import json
 import logging
-import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi import FastAPI, Depends, Request, HTTPException
-from fastapi.testclient import TestClient
+from fastapi import FastAPI, Depends, Request
 from httpx import ASGITransport, AsyncClient
 
 # -----------------------------------------------------------------------
@@ -276,7 +274,7 @@ async def test_t7_sse_connection_limit():
 @patch("config.get_feature_flag", return_value=True)
 async def test_t8_prometheus_counter(mock_ff, mock_redis, app_with_rate_limit):
     """T8: Prometheus counter smartlic_rate_limit_exceeded_total increments on 429."""
-    with patch("rate_limiter.RATE_LIMIT_EXCEEDED", create=True) as mock_counter:
+    with patch("rate_limiter.RATE_LIMIT_EXCEEDED", create=True):
         # Need to patch the import in the module
         mock_labels = MagicMock()
         mock_counter_obj = MagicMock()

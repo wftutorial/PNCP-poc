@@ -9,8 +9,7 @@ TestSessionExpiration, TestConcurrentUsers). Fixed TestQuotaLimitReached
 to match current SearchPipeline quota flow + CRIT-009 structured errors.
 """
 
-import pytest
-from unittest.mock import patch, Mock, MagicMock, AsyncMock
+from unittest.mock import patch
 from fastapi.testclient import TestClient
 from datetime import datetime, timezone, timedelta
 from main import app

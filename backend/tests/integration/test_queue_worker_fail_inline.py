@@ -16,7 +16,6 @@ When queue mode is active, the pipeline:
 
 import pytest
 from unittest.mock import patch, AsyncMock, Mock
-from types import SimpleNamespace
 
 from tests.integration.conftest import make_busca_request
 

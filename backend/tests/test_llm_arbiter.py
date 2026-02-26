@@ -14,10 +14,9 @@ Test coverage:
 - D-02: Cost monitoring
 """
 
-import hashlib
 import json
 import os
-from unittest.mock import Mock, patch, PropertyMock
+from unittest.mock import Mock, patch
 
 import pytest
 

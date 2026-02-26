@@ -11,15 +11,12 @@ Tests cover:
 - Startup recovery logic (AC16-AC18)
 """
 
-import asyncio
-import time
 from unittest.mock import patch, MagicMock, AsyncMock
 
 import pytest
 
 from models.search_state import (
     SearchState,
-    VALID_TRANSITIONS,
     TERMINAL_STATES,
     STAGE_TO_STATE,
     StateTransition,
@@ -29,8 +26,6 @@ from models.search_state import (
 from search_state_manager import (
     SearchStateMachine,
     _estimate_progress,
-    _persist_transition,
-    _update_session_state,
     recover_stale_searches,
     create_state_machine,
     get_state_machine,

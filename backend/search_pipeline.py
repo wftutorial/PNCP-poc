@@ -24,7 +24,6 @@ import time as sync_time_module
 from datetime import datetime, timezone as _tz
 from types import SimpleNamespace
 
-import sentry_sdk  # GTM-FIX-002 AC9: Tag errors with data source
 from utils.error_reporting import report_error  # GTM-RESILIENCE-E02: centralized error emission
 import quota  # Module-level import; accessed via quota.func() for mock compatibility
 
@@ -44,9 +43,9 @@ from log_sanitizer import mask_user_id
 from redis_pool import get_fallback_cache
 from search_cache import save_to_cache as _supabase_save_cache, get_from_cache as _supabase_get_cache, get_from_cache_cascade
 from fastapi import HTTPException
-from metrics import SEARCH_DURATION, FETCH_DURATION, CACHE_HITS, CACHE_MISSES, ACTIVE_SEARCHES, SEARCHES, FILTER_DECISIONS, SEARCH_RESPONSE_STATE, SEARCH_ERROR_TYPE
+from metrics import SEARCH_DURATION, FETCH_DURATION, CACHE_HITS, CACHE_MISSES, ACTIVE_SEARCHES, SEARCHES, FILTER_DECISIONS, SEARCH_RESPONSE_STATE
 from viability import assess_batch as viability_assess_batch
-from telemetry import get_tracer, optional_span, get_trace_id
+from telemetry import get_tracer, optional_span
 
 logger = logging.getLogger(__name__)
 
@@ -188,7 +187,6 @@ def _build_coverage_metrics(ctx: "SearchContext") -> tuple[int, list[UfStatusDet
         return 100, []
 
     failed_set = set(ctx.failed_ufs or [])
-    succeeded_set = set(ctx.succeeded_ufs or [])
 
     # Count raw results per UF for results_count
     uf_counts: dict[str, int] = {}
@@ -773,7 +771,7 @@ class SearchPipeline:
         """Load sector, parse custom terms, configure keywords and exclusions."""
         # GTM-FIX-032 AC3: Override dates for "abertas" mode using explicit UTC
         if ctx.request.modo_busca == "abertas":
-            from datetime import date, timedelta, timezone, datetime as dt
+            from datetime import timedelta, timezone, datetime as dt
             today = dt.now(timezone.utc).date()  # AC3.2: explicit UTC
             ctx.request.data_inicial = (today - timedelta(days=10)).isoformat()
             ctx.request.data_final = today.isoformat()
@@ -1879,8 +1877,8 @@ class SearchPipeline:
         ):
             # Level 2: re-run without any keyword exclusions (accept any UF/valor match)
             logger.info(
-                f"[STAB-005] Zero results with custom_terms — "
-                f"attempting keyword-free relaxation (level 2)"
+                "[STAB-005] Zero results with custom_terms — "
+                "attempting keyword-free relaxation (level 2)"
             )
             _l2_filtered, _l2_stats = deps.aplicar_todos_filtros(
                 ctx.licitacoes_raw,
@@ -1909,11 +1907,11 @@ class SearchPipeline:
             else:
                 # Level 3: return top 10 by value without any filter
                 logger.info(
-                    f"[STAB-005] Level-3 relaxation: top 10 by value (no keyword filter)"
+                    "[STAB-005] Level-3 relaxation: top 10 by value (no keyword filter)"
                 )
                 _l3_candidates = sorted(
                     ctx.licitacoes_raw,
-                    key=lambda l: float(l.get("valorTotalEstimado") or l.get("valorEstimado") or 0),
+                    key=lambda bid: float(bid.get("valorTotalEstimado") or bid.get("valorEstimado") or 0),
                     reverse=True,
                 )[:10]
                 if _l3_candidates:
@@ -1949,8 +1947,8 @@ class SearchPipeline:
             # CRIT-FLT-003 AC4: Log zero-value proportion
             total = len(ctx.licitacoes_filtradas)
             zero_count = sum(
-                1 for l in ctx.licitacoes_filtradas
-                if l.get("_value_source") == "missing"
+                1 for bid in ctx.licitacoes_filtradas
+                if bid.get("_value_source") == "missing"
             )
             zero_pct = round(zero_count / total * 100, 1) if total else 0.0
             logger.info(
@@ -1959,9 +1957,9 @@ class SearchPipeline:
             )
             logger.debug(
                 f"D-04: Viability assessed for {total} bids. "
-                f"Alta: {sum(1 for l in ctx.licitacoes_filtradas if l.get('_viability_level') == 'alta')}, "
-                f"Media: {sum(1 for l in ctx.licitacoes_filtradas if l.get('_viability_level') == 'media')}, "
-                f"Baixa: {sum(1 for l in ctx.licitacoes_filtradas if l.get('_viability_level') == 'baixa')}, "
+                f"Alta: {sum(1 for bid in ctx.licitacoes_filtradas if bid.get('_viability_level') == 'alta')}, "
+                f"Media: {sum(1 for bid in ctx.licitacoes_filtradas if bid.get('_viability_level') == 'media')}, "
+                f"Baixa: {sum(1 for bid in ctx.licitacoes_filtradas if bid.get('_viability_level') == 'baixa')}, "
                 f"Zero-value: {zero_count}/{total} ({zero_pct}%)"
             )
 
@@ -1978,7 +1976,7 @@ class SearchPipeline:
         # Falls back to confidence-only when viability is disabled
         if ctx.licitacoes_filtradas:
             viability_active = get_feature_flag("VIABILITY_ASSESSMENT_ENABLED") and any(
-                l.get("_viability_score") is not None for l in ctx.licitacoes_filtradas
+                bid.get("_viability_score") is not None for bid in ctx.licitacoes_filtradas
             )
 
             def _confidence_sort_key(lic: dict) -> tuple:
@@ -2004,9 +2002,9 @@ class SearchPipeline:
             ctx.licitacoes_filtradas.sort(key=_confidence_sort_key)
             logger.debug(
                 f"D-02 AC5: Re-ranked {len(ctx.licitacoes_filtradas)} results by confidence. "
-                f"High(>=80): {sum(1 for l in ctx.licitacoes_filtradas if l.get('_confidence_score', 50) >= 80)}, "
-                f"Medium(50-79): {sum(1 for l in ctx.licitacoes_filtradas if 50 <= l.get('_confidence_score', 50) < 80)}, "
-                f"Low(<50): {sum(1 for l in ctx.licitacoes_filtradas if l.get('_confidence_score', 50) < 50)}"
+                f"High(>=80): {sum(1 for bid in ctx.licitacoes_filtradas if bid.get('_confidence_score', 50) >= 80)}, "
+                f"Medium(50-79): {sum(1 for bid in ctx.licitacoes_filtradas if 50 <= bid.get('_confidence_score', 50) < 80)}, "
+                f"Low(<50): {sum(1 for bid in ctx.licitacoes_filtradas if bid.get('_confidence_score', 50) < 50)}"
             )
 
         # User-requested sorting (applied AFTER confidence re-ranking for non-default)
@@ -2279,7 +2277,7 @@ class SearchPipeline:
                     excel_buffer = deps.create_excel(ctx.licitacoes_filtradas)
                     excel_bytes = excel_buffer.read()
 
-                    with optional_span(_tracer, "generate.upload") as upload_span:
+                    with optional_span(_tracer, "generate.upload"):
                         storage_result = upload_excel(excel_bytes, ctx.request.search_id)
 
                     if storage_result:

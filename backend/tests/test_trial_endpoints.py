@@ -255,7 +255,6 @@ def test_trial_status_db_error(client, mock_db):
 
 def test_trial_expired_message_updated():
     """Test that trial expiration error message matches GTM-010 spec."""
-    from quota import PLAN_CAPABILITIES, PLAN_NAMES
 
     # Verify the message is in the codebase by importing and checking
     # The actual check is done by reading the quota.py source

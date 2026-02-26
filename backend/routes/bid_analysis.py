@@ -12,7 +12,6 @@ from pydantic import BaseModel
 
 from auth import require_auth
 from bid_analyzer import deep_analyze_bid, DeepBidAnalysis
-from config import get_feature_flag
 
 logger = logging.getLogger(__name__)
 

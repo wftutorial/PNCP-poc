@@ -9,7 +9,6 @@ Production scenario: Total infrastructure failure -> user gets clear error, not 
 
 import pytest
 from unittest.mock import patch, AsyncMock, Mock
-from types import SimpleNamespace
 
 from tests.integration.conftest import make_busca_request
 

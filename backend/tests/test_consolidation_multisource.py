@@ -15,7 +15,6 @@ These tests verify that ConsolidationService correctly:
 import asyncio
 from datetime import datetime
 from typing import Any, AsyncGenerator, Dict, List, Optional, Set
-from unittest.mock import AsyncMock
 
 import pytest
 

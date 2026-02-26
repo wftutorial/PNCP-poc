@@ -6,7 +6,6 @@ after application lifespan startup completes.
 """
 
 import time
-import pytest
 
 
 class TestStartupReadiness:

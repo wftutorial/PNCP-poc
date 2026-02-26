@@ -295,8 +295,7 @@ class TestPcpTimeoutIsolation:
              patch("source_config.sources.get_source_config") as mock_config, \
              patch("search_pipeline.enriquecer_com_status_inferido") as mock_enrich, \
              patch("search_pipeline._supabase_save_cache", new_callable=AsyncMock), \
-             patch("search_pipeline._supabase_get_cache", new_callable=AsyncMock, return_value=None), \
-             patch("search_pipeline.sentry_sdk"):
+             patch("search_pipeline._supabase_get_cache", new_callable=AsyncMock, return_value=None):
 
             mock_svc = AsyncMock()
             mock_svc.fetch_all = AsyncMock(return_value=mock_result)

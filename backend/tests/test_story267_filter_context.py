@@ -26,12 +26,11 @@ Patching notes:
 
 from __future__ import annotations
 
-import pytest
 from datetime import datetime, timezone, timedelta
 from typing import Set
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
-from viability import calculate_viability, DEFAULT_VALUE_RANGE
+from viability import calculate_viability
 from filter import aplicar_todos_filtros
 
 

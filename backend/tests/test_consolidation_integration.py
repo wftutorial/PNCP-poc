@@ -4,15 +4,11 @@ Tests the full pipeline: adapter creation → ConsolidationService init →
 fetch → dedup → legacy format → response validation.
 """
 
-import asyncio
 from datetime import datetime, timezone
-from typing import Any, AsyncGenerator, Dict, Optional, Set
-from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from clients.base import (
-    SourceAdapter,
     SourceMetadata,
     SourceCapability,
     SourceStatus,

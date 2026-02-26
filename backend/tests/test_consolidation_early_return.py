@@ -5,8 +5,7 @@ return partial results instead of waiting for remaining UFs.
 """
 
 import asyncio
-import time
-from unittest.mock import patch, AsyncMock
+from unittest.mock import patch
 
 import pytest
 

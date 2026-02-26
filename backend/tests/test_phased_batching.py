@@ -7,7 +7,7 @@ Tests the batch splitting logic, inter-batch delay, and SSE batch events.
 import asyncio
 import os
 import time
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 

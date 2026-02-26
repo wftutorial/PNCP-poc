@@ -13,7 +13,7 @@ Mock strategy:
 
 import os
 import re
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -43,10 +43,8 @@ class TestAC1WarmingUserConfig:
         custom = "11111111-1111-1111-1111-111111111111"
         with patch.dict(os.environ, {"WARMING_USER_ID": custom}):
             # Need to reimport to pick up env var
-            import importlib
             import config as _cfg
 
-            original = _cfg.WARMING_USER_ID
             # Verify the env-var mechanism exists (module-level read)
             assert _cfg.WARMING_USER_ID is not None
             # Restore — don't use importlib.reload to avoid test pollution
@@ -160,7 +158,7 @@ class TestAC4PNCPHealthCanary:
                 return FakeResponse()
 
         with patch("health.httpx.AsyncClient", return_value=FakeClient()):
-            result = await check_source_health("PNCP")
+            await check_source_health("PNCP")
 
         # Date params must be yyyyMMdd (no dashes)
         assert "dataInicial" in captured_params

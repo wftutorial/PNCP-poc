@@ -1,6 +1,5 @@
 """GTM-FIX-027 Track 1: PNCP page size tests."""
 import inspect
-import pytest
 from pncp_client import PNCPClient, AsyncPNCPClient
 
 

@@ -11,10 +11,8 @@ Provides:
 All integration tests use @pytest.mark.integration marker (AC5).
 """
 
-import asyncio
 import os
 import sys
-import time
 import warnings
 import pytest
 from unittest.mock import Mock, AsyncMock, patch, MagicMock
@@ -406,7 +404,7 @@ def integration_app(mock_user, mock_supabase_client, mock_redis, mock_quota_info
         patch("search_state_manager.get_current_state", new_callable=AsyncMock, return_value=None),
     ]
 
-    started = [p.start() for p in patches]
+    [p.start() for p in patches]
 
     client = TestClient(app, raise_server_exceptions=False)
     yield client

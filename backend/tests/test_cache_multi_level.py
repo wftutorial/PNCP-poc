@@ -10,12 +10,9 @@ Covers:
   AC3:  Mixpanel tracking (fire-and-forget)
 """
 
-import json
 import os
 import pytest
-import tempfile
 from datetime import datetime, timezone, timedelta
-from pathlib import Path
 from unittest.mock import patch, Mock, MagicMock, AsyncMock
 
 from search_cache import (
@@ -27,14 +24,11 @@ from search_cache import (
     get_local_cache_stats,
     CacheLevel,
     CacheStatus,
-    CACHE_FRESH_HOURS,
-    CACHE_STALE_HOURS,
     _save_to_redis,
     _get_from_redis,
     _save_to_local,
     _get_from_local,
     _process_cache_hit,
-    LOCAL_CACHE_DIR,
 )
 
 

@@ -8,8 +8,7 @@ Validates:
 """
 
 import logging
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from utils.error_reporting import report_error
 

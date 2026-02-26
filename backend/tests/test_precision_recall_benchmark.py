@@ -6,18 +6,16 @@ a manually curated ground truth dataset of 450+ labeled procurement descriptions
 Run: pytest tests/test_precision_recall_benchmark.py -v
 """
 
-import json
 import os
 import sys
-from datetime import datetime
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Tuple
 
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from filter import match_keywords, normalize_text
-from sectors import SECTORS, get_sector
+from filter import match_keywords
+from sectors import get_sector
 
 
 # =============================================================================

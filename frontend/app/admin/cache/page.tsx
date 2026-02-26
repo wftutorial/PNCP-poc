@@ -204,6 +204,12 @@ export default function AdminCachePage() {
             >
               Usuários
             </Link>
+            <Link
+              href="/admin/metrics"
+              className="px-4 py-2 border border-[var(--border)] rounded-button text-sm hover:bg-[var(--surface-1)] text-[var(--ink-secondary)]"
+            >
+              Metrics
+            </Link>
             <button
               onClick={fetchMetrics}
               disabled={loading}

@@ -1,7 +1,7 @@
 """GTM-FIX-027 Track 3: PCP v2 config + diagnostic logging tests."""
 import pytest
 import logging
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from source_config.sources import SourceConfig, get_source_config
 
 
@@ -55,7 +55,7 @@ async def test_consolidation_logs_via_report_error(caplog):
     )
 
     with caplog.at_level(logging.WARNING):
-        result = await service.fetch_all(
+        await service.fetch_all(
             data_inicial="2026-01-01",
             data_final="2026-02-17",
         )

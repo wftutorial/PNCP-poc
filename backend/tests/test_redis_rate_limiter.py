@@ -4,7 +4,6 @@ Tests use mock Redis to verify token bucket behavior.
 When Redis is unavailable, verifies fail-open behavior.
 """
 
-import asyncio
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
 

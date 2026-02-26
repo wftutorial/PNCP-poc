@@ -3,7 +3,6 @@
 import logging
 from unittest.mock import patch, MagicMock
 
-import pytest
 
 
 class TestTrackEvent:

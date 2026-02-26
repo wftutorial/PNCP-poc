@@ -13,10 +13,9 @@ return empty → every search creates a new session → duplicates.
 Fix: Use .filter("col", "eq", "{val1,val2}") with explicit PG array literals.
 """
 
-import asyncio
 import pytest
 from datetime import datetime, timezone, timedelta
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 
 # ---------------------------------------------------------------------------

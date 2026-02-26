@@ -8,11 +8,9 @@ Tests:
     T5: Revalidation does NOT consume user quota
 """
 
-import asyncio
-import json
 import pytest
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch, Mock
+from unittest.mock import AsyncMock, MagicMock, patch
 from types import SimpleNamespace
 
 # Suppress unawaited coroutine warnings from mocked asyncio.create_task

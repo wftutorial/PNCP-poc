@@ -8,7 +8,6 @@ Validates:
 """
 
 import os
-import logging
 import pytest
 from unittest.mock import patch, MagicMock
 
@@ -16,7 +15,6 @@ from quota import (
     PLAN_CAPABILITIES,
     PLAN_NAMES,
     PlanPriority,
-    _UNKNOWN_PLAN_DEFAULTS,
     _load_plan_capabilities_from_db,
 )
 from sectors import get_sector, SECTORS, _load_sectors_from_yaml
@@ -129,7 +127,6 @@ class TestAC2LicitarClientDeleted:
 
     def test_no_import_references_licitar_client(self):
         """No Python file should import from licitar_client."""
-        import ast
         import glob
 
         backend_dir = os.path.dirname(os.path.dirname(__file__))

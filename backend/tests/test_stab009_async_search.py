@@ -11,7 +11,7 @@ Tests the async search flow end-to-end:
 
 import uuid
 import pytest
-from unittest.mock import patch, Mock, AsyncMock, MagicMock
+from unittest.mock import patch, Mock, AsyncMock
 from fastapi.testclient import TestClient
 
 from main import app

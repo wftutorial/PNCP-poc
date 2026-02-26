@@ -5,9 +5,8 @@ _is_digest_due(), and _query_recent_opportunities().
 """
 
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import MagicMock
 from datetime import datetime, timezone, timedelta
-from types import SimpleNamespace
 
 
 # ============================================================================
@@ -124,7 +123,6 @@ class TestBuildDigestForUser:
         profile_result = MagicMock()
         profile_result.data = {}
 
-        call_count = [0]
         def table_side_effect(name):
             mock_table = MagicMock()
             if name == "alert_preferences":

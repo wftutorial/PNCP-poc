@@ -255,7 +255,7 @@ describe('PlanosPage Component', () => {
 
       expect(screen.getByText(/1\.000 análises por mês/i)).toBeInTheDocument();
       expect(screen.getByText(/Exportação Excel completa/i)).toBeInTheDocument();
-      expect(screen.getByText(/Pipeline de acompanhamento/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/Pipeline de acompanhamento/i).length).toBeGreaterThan(0);
       // This text appears in both plan description and features list - use getAllByText
       expect(screen.getAllByText(/Inteligência de decisão completa/i).length).toBeGreaterThan(0);
       expect(screen.getByText(/Histórico completo/i)).toBeInTheDocument();

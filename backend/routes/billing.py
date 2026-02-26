@@ -9,7 +9,6 @@ import os
 from fastapi import APIRouter, HTTPException, Depends, Query
 from auth import require_auth
 from database import get_db
-from log_sanitizer import log_user_action
 from schemas import BillingPlansResponse, CheckoutResponse
 
 logger = logging.getLogger(__name__)

@@ -30,6 +30,7 @@ markers = [
     "integration: Integration tests (external dependencies)",
     "slow: Slow tests (> 1s)",
     "asyncio: Async tests",
+    "benchmark: Performance benchmarks (require pytest-benchmark, skipped in CI)",
 ]
 
 # pytest-asyncio configuration

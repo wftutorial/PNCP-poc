@@ -8,8 +8,8 @@ AC20: Test with zero usage (stats all zeros — message adapts).
 """
 
 import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
-from datetime import datetime, timezone, timedelta
+from unittest.mock import patch, MagicMock
+from datetime import datetime, timezone
 
 # ============================================================================
 # AC16: Template rendering tests
@@ -260,7 +260,7 @@ class TestCheckTrialReminders:
         """AC18: Correctly identifies day-3 users and sends midpoint email."""
         from cron_jobs import check_trial_reminders
 
-        now = datetime.now(timezone.utc)
+        datetime.now(timezone.utc)
 
         mock_sb = MagicMock()
         # Mock profiles query — return one user at day 3
@@ -330,7 +330,7 @@ class TestCheckTrialReminders:
              patch("supabase_client.get_supabase", return_value=mock_sb), \
              patch("services.trial_stats.get_trial_usage_stats", return_value=mock_stats), \
              patch("email_service.send_email_async") as mock_send, \
-             patch("metrics.TRIAL_EMAILS_SENT") as mock_metric:
+             patch("metrics.TRIAL_EMAILS_SENT"):
 
             result = await check_trial_reminders()
 

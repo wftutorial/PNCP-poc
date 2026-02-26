@@ -16,7 +16,7 @@ Covers all 10 ACs:
 import json
 import pytest
 from datetime import datetime, timezone, timedelta
-from unittest.mock import patch, Mock, AsyncMock, MagicMock
+from unittest.mock import patch, Mock, MagicMock
 
 from search_cache import (
     calculate_backoff_minutes,
@@ -24,7 +24,6 @@ from search_cache import (
     record_cache_fetch_failure,
     is_cache_key_degraded,
     get_from_cache,
-    compute_search_hash,
 )
 
 
@@ -398,7 +397,7 @@ class TestHealthEndpointDegradation:
         """Health response includes degraded_keys_count and avg_fail_streak."""
         from routes.health import _check_cache_degradation
 
-        now_iso = datetime.now(timezone.utc).isoformat()
+        datetime.now(timezone.utc).isoformat()
 
         mock_sb = MagicMock()
         mock_sb.table.return_value = mock_sb

@@ -426,7 +426,6 @@ async def recover_stale_searches(max_age_minutes: int = 10) -> int:
             # Build update dict — only include columns that exist
             if session_time < cutoff:
                 # AC17: Old search — timed_out
-                update_data: dict = {}
                 # Only set status/error columns if they exist (may not in production)
                 try:
                     sb.table("search_sessions").update({

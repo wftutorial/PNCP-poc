@@ -45,6 +45,7 @@ jobs:
         run: |
           cd backend
           pytest tests/ \
+            -m "not benchmark" \
             --cov=. \
             --cov-report=term-missing \
             --cov-fail-under=70 \

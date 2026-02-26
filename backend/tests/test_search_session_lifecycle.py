@@ -15,13 +15,11 @@ Mock patterns:
     search_pipeline.quota.register_search_session when testing pipeline integration
 """
 
-import asyncio
 import json
 import logging
 import os
 import pytest
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, Mock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch
 
 
 # ---------------------------------------------------------------------------
@@ -954,8 +952,8 @@ class TestPipelineStatusTransitions:
             elif stage:
                 status_calls.append(("update_stage", stage))
 
-        with patch("quota.register_search_session", side_effect=mock_register) as mock_reg, \
-             patch("quota.update_search_session_status", side_effect=mock_update) as mock_upd:
+        with patch("quota.register_search_session", side_effect=mock_register), \
+             patch("quota.update_search_session_status", side_effect=mock_update):
 
             from quota import register_search_session, update_search_session_status
 

@@ -374,7 +374,7 @@ async def lifespan(app_instance: FastAPI):
 
     # CRIT-004: Validate schema contract for critical tables
     # SLA-002: NEVER crash on schema validation — degraded service > no service
-    from schema_contract import validate_schema_contract, emit_degradation_warning
+    from schema_contract import validate_schema_contract
     try:
         from supabase_client import get_supabase
         db = get_supabase()
@@ -387,7 +387,7 @@ async def lifespan(app_instance: FastAPI):
             # SLA-002: Do NOT raise SystemExit — a degraded service that responds
             # is infinitely better than a crashed service showing Railway 404.
         else:
-            logger.info(f"CRIT-004: Schema contract validated — 0 missing columns")
+            logger.info("CRIT-004: Schema contract validated — 0 missing columns")
     except Exception as e:
         logger.warning(f"CRIT-004: Schema validation could not run ({e}) — proceeding with caution")
 
@@ -647,7 +647,6 @@ from metrics import get_metrics_app
 
 _metrics_app = get_metrics_app()
 if _metrics_app:
-    from starlette.requests import Request as StarletteRequest
     from starlette.responses import JSONResponse as StarletteJSONResponse
 
     @app.middleware("http")

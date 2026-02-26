@@ -8,7 +8,6 @@ Tests:
 - Integration with Camada 2A (aplicar_todos_filtros)
 """
 
-import pytest
 from unittest.mock import patch
 
 from filter import (

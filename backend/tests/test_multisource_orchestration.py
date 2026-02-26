@@ -4,7 +4,6 @@ import asyncio
 import time
 
 import pytest
-from unittest.mock import patch
 
 from consolidation import (
     AllSourcesFailedError,

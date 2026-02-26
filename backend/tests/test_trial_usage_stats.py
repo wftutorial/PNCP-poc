@@ -8,7 +8,6 @@ Validates:
 - AC20: Zero-usage user returns all-zero stats
 """
 
-import pytest
 from unittest.mock import patch, MagicMock
 
 from services.trial_stats import get_trial_usage_stats, TrialUsageStats

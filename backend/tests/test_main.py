@@ -161,8 +161,6 @@ class TestHealthEndpoint:
 
     def test_health_timestamp_changes(self, client):
         """Health endpoint timestamp should update on each request."""
-        import time
-        from datetime import datetime, timezone
 
         # Generate distinct timestamps for two sequential requests by overriding the mock
         ts1 = "2026-01-01T00:00:00+00:00"

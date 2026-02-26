@@ -11,7 +11,6 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Set
 
-import sentry_sdk  # GTM-FIX-002 AC9: Tag source errors
 from utils.error_reporting import report_error  # GTM-RESILIENCE-E02: centralized error emission
 from clients.base import SourceAdapter, SourceStatus, UnifiedProcurement, SourceError
 from source_config.sources import source_health_registry

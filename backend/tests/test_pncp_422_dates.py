@@ -8,10 +8,9 @@ Tests cover:
 - AC3: Pipeline date normalization (stage_prepare)
 """
 
-import asyncio
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
-from datetime import date, datetime, timezone, timedelta
+from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import date, datetime, timezone
 
 from pncp_client import (
     _validate_date_params,
@@ -203,7 +202,7 @@ class TestStagePrepareNormalization:
         from search_pipeline import SearchPipeline
 
         # Mock a fixed UTC time: 2026-02-18 03:00 UTC (= 2026-02-18 00:00 BRT)
-        fixed_now = datetime(2026, 2, 18, 3, 0, 0, tzinfo=timezone.utc)
+        datetime(2026, 2, 18, 3, 0, 0, tzinfo=timezone.utc)
 
         mock_request = MagicMock()
         mock_request.modo_busca = "abertas"
@@ -221,7 +220,7 @@ class TestStagePrepareNormalization:
         pipeline = SearchPipeline.__new__(SearchPipeline)
         pipeline.deps = MagicMock()
 
-        with patch("search_pipeline.datetime") as mock_dt_module:
+        with patch("search_pipeline.datetime"):
             # This won't work for deferred import — patch the right target
             pass
 

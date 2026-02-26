@@ -14,7 +14,6 @@ from collections import defaultdict
 from fastapi import APIRouter, HTTPException, Request, Query
 
 from utils.disposable_emails import is_disposable_email, is_corporate_email
-from utils.email_normalizer import normalize_email
 from utils.phone_normalizer import normalize_phone
 
 logger = logging.getLogger(__name__)

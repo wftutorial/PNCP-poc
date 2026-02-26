@@ -1,6 +1,5 @@
 """GTM-RESILIENCE-C03 AC3: Tests for CoverageMetadata population."""
 
-import pytest
 from unittest.mock import MagicMock
 from schemas import CoverageMetadata
 

@@ -7,11 +7,10 @@ interface expected by ConsolidationService.
 
 import asyncio
 import inspect
-from typing import Set
 
 import pytest
 
-from clients.base import SourceAdapter, SourceMetadata, SourceStatus
+from clients.base import SourceMetadata, SourceStatus
 from clients.portal_compras_client import PortalComprasAdapter
 from clients.compras_gov_client import ComprasGovAdapter
 from pncp_client import PNCPLegacyAdapter

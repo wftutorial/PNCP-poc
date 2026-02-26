@@ -5,7 +5,6 @@ Tests webhook event handling, status updates, email sending, and edge cases.
 
 import pytest
 from unittest.mock import Mock, patch, MagicMock
-from datetime import datetime, timezone
 
 
 class TestInvoicePaymentFailedWebhook:

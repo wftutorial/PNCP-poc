@@ -16,7 +16,6 @@ so we patch at the SOURCE module, not at job_queue:
   - supabase_client.get_supabase (for search_cache tests)
 """
 
-import asyncio
 import sys
 from datetime import datetime, timezone, timedelta, date
 from unittest.mock import AsyncMock, MagicMock, patch

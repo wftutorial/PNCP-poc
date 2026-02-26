@@ -12,6 +12,8 @@ Compare runs: pytest-benchmark compare
 import pytest
 from filter import normalize_text, match_keywords, filter_licitacao, KEYWORDS_UNIFORMES, KEYWORDS_EXCLUSAO
 
+pytestmark = pytest.mark.benchmark
+
 
 # ============================================================================
 # Fixtures - Sample data

@@ -10,7 +10,6 @@ Covers:
 
 import json
 import pytest
-from datetime import datetime, timezone
 from unittest.mock import patch, MagicMock, Mock
 
 

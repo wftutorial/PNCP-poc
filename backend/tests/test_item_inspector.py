@@ -4,7 +4,6 @@ Tests for GTM-RESILIENCE-D01 — Item Inspection for Gray Zone Bids.
 AC9: 8 tests covering fetch, majority rule, domain signals, budget, timeout, cache.
 """
 
-import time
 from unittest.mock import patch, MagicMock
 
 import pytest

@@ -3,7 +3,6 @@
 Tests render_daily_digest_email() output for various scenarios.
 """
 
-import pytest
 
 
 class TestRenderDailyDigestEmail:

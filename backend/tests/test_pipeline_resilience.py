@@ -10,7 +10,6 @@ Validates that the search pipeline gracefully handles:
 - Generic exception handler (AC5-AC9)
 """
 
-import asyncio
 import sys
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -22,8 +21,8 @@ for _mod_name in ("openai",):
     if _mod_name not in sys.modules:
         sys.modules[_mod_name] = MagicMock()
 
-from search_context import SearchContext
-from search_pipeline import SearchPipeline
+from search_context import SearchContext  # noqa: E402
+from search_pipeline import SearchPipeline  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -168,7 +167,7 @@ class TestFallbackAdapterNone:
         mock_sentry, mock_config,
     ):
         """AC2: ConsolidationService receives fallback_adapter=None."""
-        from source_config.sources import SourceConfig, SingleSourceConfig, SourceCode, ConsolidationConfig
+        from source_config.sources import SourceConfig
 
         # Setup minimal source config with only PNCP enabled
         sc = MagicMock(spec=SourceConfig)
@@ -185,7 +184,6 @@ class TestFallbackAdapterNone:
 
         captured_kwargs = {}
 
-        original_init = None
 
         # Patch ConsolidationService to capture its init args
         with patch("consolidation.ConsolidationService") as MockCS:
@@ -227,7 +225,7 @@ class TestComprasGov503Resilience:
     async def test_ac19_compras_gov_failure_preserves_other_sources(self):
         """AC19: ComprasGov 503 doesn't kill pipeline — PNCP+PCP results survive."""
         from consolidation import ConsolidationService
-        from clients.base import UnifiedProcurement, SourceAdapter, SourceMetadata, SourceStatus
+        from clients.base import UnifiedProcurement, SourceMetadata, SourceStatus
 
         # Create a mock PNCP adapter that returns good data
         class GoodAdapter:
@@ -408,7 +406,6 @@ class TestGenericExceptionHandler:
     ):
         """AC9: No HTTP 500 — empty results returned instead."""
         from source_config.sources import SourceConfig
-        from fastapi import HTTPException
 
         sc = MagicMock(spec=SourceConfig)
         sc.pncp = MagicMock(enabled=True)
@@ -535,7 +532,6 @@ class TestPNCPPageSize:
 
         async with AsyncPNCPClient(max_concurrent=2) as client:
             # Mock _fetch_page_async to capture its arguments
-            original_fetch = client._fetch_page_async
 
             async def mock_fetch(*args, **kwargs):
                 captured_kwargs_list.append(kwargs)
@@ -569,7 +565,6 @@ class TestPNCPPageSize:
         captured_params = {}
 
         async with AsyncPNCPClient(max_concurrent=1) as client:
-            original_get = client._client.get
 
             async def mock_get(url, params=None, **kwargs):
                 captured_params.update(params or {})

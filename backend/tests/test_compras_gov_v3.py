@@ -15,8 +15,8 @@ Tests cover:
 """
 
 import asyncio
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
+from datetime import datetime
+from unittest.mock import AsyncMock, MagicMock, patch
 from typing import Any, Dict, List
 
 import httpx

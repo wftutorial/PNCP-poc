@@ -3,7 +3,6 @@
 Tests send_batch_email() function in email_service.py.
 """
 
-import pytest
 from unittest.mock import patch, MagicMock
 
 

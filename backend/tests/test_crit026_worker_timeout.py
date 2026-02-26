@@ -5,7 +5,6 @@ AC8: SSE generator logs abrupt disconnection
 """
 
 import asyncio
-import json
 import logging
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
@@ -69,7 +68,6 @@ class TestSSEGeneratorAbruptLogging:
     async def test_generator_exception_logged(self, mock_auth, mock_sse_limits, caplog):
         """AC8: Unexpected exception in SSE generator is logged and increments metric."""
         from main import app
-        from progress import ProgressEvent
 
         mock_tracker = MagicMock()
         mock_tracker._use_redis = False

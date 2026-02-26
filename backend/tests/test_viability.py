@@ -4,13 +4,10 @@ Covers all 11 ACs with unit tests for each factor calculator,
 independence from relevance, combined scoring, and batch assessment.
 """
 
-import pytest
 from datetime import datetime, timezone, timedelta
 from unittest.mock import patch
 
 from viability import (
-    ViabilityAssessment,
-    ViabilityFactors,
     _score_modalidade,
     _score_timeline,
     _score_value_fit,
@@ -19,7 +16,6 @@ from viability import (
     assess_batch,
     REGION_MAP,
     _UF_TO_REGION,
-    DEFAULT_VALUE_RANGE,
 )
 
 

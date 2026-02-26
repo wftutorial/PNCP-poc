@@ -11,7 +11,6 @@ Coverage targets:
 - Empty result for unknown terms with no synonyms
 """
 
-import pytest
 from unittest.mock import patch, MagicMock
 from synonyms import find_term_synonym_matches
 

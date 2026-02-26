@@ -7,9 +7,7 @@ After E-01 consolidation, a typical search should emit ~15-25 INFO lines
 (down from 70-120 pre-E01), well within Railway's 20K/day budget at 1K searches/day.
 """
 
-import asyncio
 import logging
-import os
 import sys
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -21,10 +19,10 @@ for _mod_name in ("openai",):
     if _mod_name not in sys.modules:
         sys.modules[_mod_name] = MagicMock()
 
-from pncp_client import ParallelFetchResult
-from schemas import ResumoEstrategico
-from search_context import SearchContext
-from search_pipeline import SearchPipeline
+from pncp_client import ParallelFetchResult  # noqa: E402
+from schemas import ResumoEstrategico  # noqa: E402
+from search_context import SearchContext  # noqa: E402
+from search_pipeline import SearchPipeline  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -246,7 +244,7 @@ class TestLogVolume5UFs:
         counter = LogCounter(HOT_PATH_LOGGERS)
         try:
             patches = [p.start() for p in [patch.object(type(p), '__enter__', p.start) or p for p in []]]  # noqa
-            ctx_managers = [p.start() for p in COMMON_PATCHES]
+            [p.start() for p in COMMON_PATCHES]
             try:
                 pipeline = SearchPipeline(deps)
                 await pipeline.run(ctx)

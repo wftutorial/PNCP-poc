@@ -9,10 +9,9 @@ Tests cover all 6 ACs:
 - AC6: Fallback message when all formats fail
 """
 
-import asyncio
 import time
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from pncp_client import (
     DateFormat,
@@ -262,7 +261,6 @@ class TestAsyncFormatRotation:
         client = self._make_client()
         client._client = mock_client
 
-        import pncp_client
         with patch("pncp_client._circuit_breaker"):
             result = await client._fetch_page_async(
                 "2026-02-08", "2026-02-18", 6, uf="SP"
@@ -277,7 +275,6 @@ class TestAsyncFormatRotation:
     @pytest.mark.asyncio
     async def test_cached_format_used_first(self):
         """When a format is cached, it's tried first."""
-        import pncp_client
 
         # Pre-cache BR_SLASH as the accepted format
         _set_cached_date_format(DateFormat.BR_SLASH)

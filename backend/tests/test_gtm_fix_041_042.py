@@ -8,7 +8,6 @@ GTM-FIX-042: Negative days badge in fallback summary
 from datetime import datetime, timedelta, timezone
 
 from llm import gerar_resumo_fallback
-from schemas import ResumoEstrategico
 
 
 # ─────────────────────────────────────────────────────────────────────────────

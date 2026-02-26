@@ -26,7 +26,6 @@ from enum import Enum
 from pathlib import Path
 from typing import Optional
 
-import sentry_sdk
 from utils.error_reporting import report_error  # GTM-RESILIENCE-E02: centralized error emission
 from metrics import CACHE_HITS as METRICS_CACHE_HITS, CACHE_MISSES as METRICS_CACHE_MISSES
 
@@ -276,7 +275,6 @@ async def _get_from_supabase(user_id: str, params_hash: str) -> Optional[dict]:
 
     # CRIT-001 AC11: Validate expected fields are present, use defaults if missing
     try:
-        from models.cache import SearchResultsCacheRow
         expected_fields = {"results", "total_results", "sources_json", "fetched_at", "priority", "access_count", "last_accessed_at"}
         missing_fields = expected_fields - set(row.keys())
         if missing_fields:
@@ -1404,7 +1402,6 @@ async def _fetch_multi_source_for_revalidation(request_data: dict) -> tuple[list
 
     Returns (results_list, sources_used_list).
     """
-    import os
 
     # AC8: Try ConsolidationService (multi-source) first
     try:

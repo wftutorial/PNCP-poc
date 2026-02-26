@@ -6,7 +6,6 @@ for personalized trial reminder emails.
 
 import logging
 from pydantic import BaseModel
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 

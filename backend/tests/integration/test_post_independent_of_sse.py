@@ -7,7 +7,6 @@ Production scenario: Mobile client or bot that only uses REST, no EventSource.
 
 import pytest
 from unittest.mock import patch, AsyncMock, Mock
-from types import SimpleNamespace
 
 from tests.integration.conftest import make_busca_request
 

@@ -18,18 +18,15 @@ for _mod_name in ("openai",):
     if _mod_name not in sys.modules:
         sys.modules[_mod_name] = _MagicMock()
 
-import pytest
-import asyncio
-from datetime import datetime, timezone, timedelta
-from unittest.mock import patch, MagicMock, AsyncMock, Mock
-from types import SimpleNamespace
+import pytest  # noqa: E402
+from datetime import datetime, timezone, timedelta  # noqa: E402
+from unittest.mock import patch, MagicMock, AsyncMock  # noqa: E402
+from types import SimpleNamespace  # noqa: E402
 
-from fastapi import HTTPException
+from fastapi import HTTPException  # noqa: E402
 
-from search_context import SearchContext
-from search_pipeline import SearchPipeline
-from schemas import BuscaResponse, ResumoEstrategico
-from consolidation import AllSourcesFailedError
+from search_context import SearchContext  # noqa: E402
+from schemas import BuscaResponse, ResumoEstrategico  # noqa: E402
 
 
 # ============================================================================
@@ -116,8 +113,7 @@ class TestTimeoutWithCacheFallback:
         """Multi-source path: asyncio.TimeoutError → cache hit → HTTP 200 + response_state='cached'."""
 
         ctx = make_ctx()
-        request = ctx.request
-        deps = make_deps()
+        make_deps()
         cache_data = make_cache_data()
 
         with patch("search_pipeline._supabase_get_cache", new_callable=AsyncMock, return_value=cache_data), \
@@ -230,8 +226,7 @@ class TestTimeoutWithoutCacheRaises504:
     async def test_multi_source_timeout_no_cache_raises_504(self):
         """Multi-source timeout with no cache available → HTTPException 504."""
 
-        ctx = make_ctx()
-        request = ctx.request
+        make_ctx()
 
         with patch("search_pipeline._supabase_get_cache", new_callable=AsyncMock, return_value=None), \
              patch("search_pipeline._read_cache", return_value=None):
@@ -283,18 +278,16 @@ class TestTimeoutWithoutCacheRaises504:
         ctx = make_ctx()
         ctx.tracker = MagicMock()
         ctx.tracker.emit_error = AsyncMock()
-        request = ctx.request
 
         with patch("search_pipeline._supabase_get_cache", new_callable=AsyncMock, return_value=None), \
              patch("search_pipeline._read_cache", return_value=None), \
-             patch("progress.remove_tracker") as mock_remove:
+             patch("progress.remove_tracker"):
 
             # Simulate timeout handler with tracker cleanup (L815-822)
             if ctx.tracker:
                 await ctx.tracker.emit_error("Busca expirou por tempo")
                 # In real code, remove_tracker is called here
 
-            stale_cache = None
 
             # Would raise 504 here
 
@@ -314,7 +307,6 @@ class TestEmptyFailureState:
         """AllSourcesFailedError with no cache → response_state='empty_failure' + guidance."""
 
         ctx = make_ctx()
-        request = ctx.request
 
         with patch("search_pipeline._supabase_get_cache", new_callable=AsyncMock, return_value=None), \
              patch("search_pipeline._read_cache", return_value=None):

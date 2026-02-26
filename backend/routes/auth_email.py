@@ -10,7 +10,7 @@ Endpoints:
 
 import logging
 import time
-from typing import Dict, Tuple
+from typing import Dict
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, EmailStr

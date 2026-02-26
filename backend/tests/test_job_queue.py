@@ -419,7 +419,7 @@ class TestLlmSummaryJob:
             with patch("llm.gerar_resumo_fallback", return_value=mock_fallback) as mock_fb:
                 with patch("redis_pool.get_redis_pool", new_callable=lambda: AsyncMock(return_value=AsyncMock(set=AsyncMock()))):
                     with patch("progress.get_tracker", new_callable=lambda: AsyncMock(return_value=None)):
-                        result = await llm_summary_job({}, "s1", [{"valorTotalEstimado": 10}], "limpeza")
+                        await llm_summary_job({}, "s1", [{"valorTotalEstimado": 10}], "limpeza")
 
         mock_fb.assert_called_once()
 

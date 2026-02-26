@@ -6,7 +6,6 @@ GET /v1/health/cache — Returns status of each cache level with latency.
 import logging
 import time
 from datetime import datetime, timezone
-from typing import Optional
 
 from fastapi import APIRouter
 

@@ -5,7 +5,7 @@ Requests without it return HTTP 400. These tests verify our guards catch this
 before any request leaves the application.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 

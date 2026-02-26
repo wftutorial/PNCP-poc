@@ -11,7 +11,6 @@ Exit codes:
     1: Duplicate prefixes detected
 """
 
-import os
 import re
 import sys
 from collections import defaultdict

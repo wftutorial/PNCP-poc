@@ -11,7 +11,7 @@ AC7: Response body does NOT contain stack trace information
 
 import os
 import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 
@@ -85,7 +85,7 @@ class TestAuthConfigFailureReturns401:
             client = TestClient(test_app)
 
             with caplog.at_level("ERROR"):
-                response = client.get(
+                client.get(
                     "/protected",
                     headers={"Authorization": "Bearer fake-token-456"},
                 )

@@ -29,22 +29,18 @@ Outputs (AC6):
 """
 
 import argparse
-import asyncio
 import json
 import logging
-import re
 import sys
 import time
-from collections import Counter, defaultdict
+from collections import Counter
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Any, Optional
 
 # Add backend to path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from config import (
-    RetryConfig,
     TERM_DENSITY_HIGH_THRESHOLD,
     TERM_DENSITY_MEDIUM_THRESHOLD,
     TERM_DENSITY_LOW_THRESHOLD,
@@ -54,9 +50,8 @@ from filter import (
     aplicar_todos_filtros,
     match_keywords,
     normalize_text,
-    check_co_occurrence,
 )
-from sectors import SECTORS, SectorConfig, get_sector
+from sectors import SECTORS, SectorConfig
 from synonyms import find_synonym_matches
 
 setup_logging("WARNING")
@@ -400,7 +395,6 @@ def analyze_cross_sector(
     ufs: list[str],
 ) -> dict:
     """Analyze items that match multiple sectors (AC4)."""
-    ufs_set = set(ufs)
     collision_items = []
     pair_counts: Counter = Counter()
     sector_match_counts: Counter = Counter()
@@ -923,18 +917,18 @@ def main():
         )
 
     # ---- Step 3: Cross-sector analysis ----
-    print(f"\n[4/5] Cross-sector collision analysis...")
+    print("\n[4/5] Cross-sector collision analysis...")
     cross_sector = analyze_cross_sector(pncp_items, sector_ids, ufs)
     print(f"  Collisions: {cross_sector['total_collisions']} ({cross_sector['collision_rate']:.2%})")
 
     # ---- Step 4: PCP v2 analysis ----
-    print(f"\n[5/5] PCP v2 analysis...")
+    print("\n[5/5] PCP v2 analysis...")
     pcp_analysis = analyze_pcp_v2(pcp_items, sector_ids)
 
     elapsed = time.time() - start_time
 
     # ---- Step 5: Generate outputs (AC6) ----
-    print(f"\nGenerating outputs...")
+    print("\nGenerating outputs...")
 
     # Output 1: Markdown report (AC3)
     config_info = {"ufs": ufs, "days": args.days, "sectors": sector_ids}

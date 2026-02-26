@@ -12,6 +12,8 @@ import pytest
 from pncp_client import PNCPClient
 from datetime import datetime, timedelta
 
+pytestmark = pytest.mark.benchmark
+
 
 # ============================================================================
 # Fixtures

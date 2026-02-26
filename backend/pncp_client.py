@@ -26,7 +26,7 @@ from urllib3.util.retry import Retry
 from config import RetryConfig, DEFAULT_MODALIDADES, MODALIDADES_EXCLUIDAS
 from exceptions import PNCPAPIError
 from middleware import request_id_var
-from metrics import CIRCUIT_BREAKER_STATE, API_ERRORS
+from metrics import CIRCUIT_BREAKER_STATE
 
 logger = logging.getLogger(__name__)
 

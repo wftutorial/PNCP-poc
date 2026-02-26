@@ -107,7 +107,7 @@ class TestWaitForTrackerHeartbeat:
         with patch("routes.search.get_tracker", new_callable=AsyncMock, return_value=None), \
              patch("routes.search.get_current_state", new_callable=AsyncMock, return_value=None), \
              patch("asyncio.sleep", new_callable=AsyncMock), \
-             patch("metrics.SSE_CONNECTION_ERRORS") as mock_metric:
+             patch("metrics.SSE_CONNECTION_ERRORS"):
             transport = ASGITransport(app=app)
             async with AsyncClient(transport=transport, base_url="http://test") as client:
                 response = await client.get("/buscar-progress/nonexistent")

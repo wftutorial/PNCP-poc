@@ -217,7 +217,6 @@ class TestStartupSchemaValidation:
     @pytest.mark.asyncio
     async def test_startup_continues_on_missing_critical_columns(self):
         """SLA-002: Schema contract failure logs CRITICAL but does NOT raise SystemExit."""
-        import logging
 
         # Mock the schema validation to return failure
         with patch("schema_contract.validate_schema_contract") as mock_validate:

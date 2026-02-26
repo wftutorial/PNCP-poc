@@ -8,14 +8,7 @@ AC5: PCP UF filter fix (skip records with empty UF when filter active)
 """
 
 import asyncio
-import json
-import logging
-import os
-import time
-from datetime import datetime, timezone
-from types import SimpleNamespace
-from typing import Any, Dict, List
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -347,7 +340,6 @@ class TestAC2Integration:
         # Track what max_pages was passed
         received_max_pages = []
 
-        original_fetch = client._fetch_uf_all_pages
 
         async def mock_fetch_uf(uf, data_inicial, data_final, modalidades, status=None, max_pages=None):
             received_max_pages.append(max_pages)
@@ -367,7 +359,7 @@ class TestAC2Integration:
             # Mock health canary to return True
             client.health_canary = AsyncMock(return_value=True)
 
-            result = await client.buscar_todas_ufs_paralelo(
+            await client.buscar_todas_ufs_paralelo(
                 ufs=["SP"],
                 data_inicial="2026-01-01",
                 data_final="2026-01-10",

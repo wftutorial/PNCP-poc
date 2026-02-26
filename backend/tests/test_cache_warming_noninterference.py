@@ -19,10 +19,9 @@ so we patch at the SOURCE module:
   - metrics.ACTIVE_SEARCHES, metrics.WARMING_COMBINATIONS_TOTAL, metrics.WARMING_PAUSES_TOTAL
 """
 
-import asyncio
 import sys
 import time
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -99,7 +98,6 @@ async def test_warming_respects_batch_delay():
     mock_gauge = _make_active_searches_gauge(0)
 
     sleep_durations = []
-    original_sleep = asyncio.sleep
 
     async def mock_sleep(duration):
         sleep_durations.append(duration)
@@ -350,7 +348,6 @@ async def test_warming_respects_budget_timeout():
         start_time + 2000,  # second combo: elapsed=2000 > budget=10 (STOP)
     ]
     time_call_idx = [0]
-    original_monotonic = time.monotonic
 
     def mock_monotonic():
         if time_call_idx[0] < len(time_values):

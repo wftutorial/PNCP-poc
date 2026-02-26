@@ -11,7 +11,6 @@ Tests:
 8. DELETE /v1/feedback/{id} removes record
 """
 
-from datetime import datetime, timezone, timedelta
 from unittest.mock import patch, MagicMock
 
 import pytest

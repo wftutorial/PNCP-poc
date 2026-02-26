@@ -14,7 +14,7 @@ Tests:
 import time
 import uuid
 import pytest
-from unittest.mock import patch, Mock, AsyncMock, MagicMock
+from unittest.mock import patch, Mock, AsyncMock
 
 from fastapi.testclient import TestClient
 

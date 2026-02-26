@@ -9,7 +9,7 @@ import json
 import logging
 import time
 from collections import defaultdict
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.responses import Response

@@ -23,8 +23,8 @@ _arq_mod.connections = MagicMock()
 _arq_mod.connections.RedisSettings = MagicMock
 sys.modules["arq.connections"] = _arq_mod.connections
 
-from main import app
-from auth import require_auth
+from main import app  # noqa: E402
+from auth import require_auth  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -121,7 +121,7 @@ class TestAC1AsyncWaitTimeout:
     def test_legacy_alias_fallback(self):
         """AC1: SEARCH_WORKER_FALLBACK_TIMEOUT falls back to SEARCH_ASYNC_WAIT_TIMEOUT."""
         # When neither env var is set, both should be 120 (the new default)
-        from config import SEARCH_WORKER_FALLBACK_TIMEOUT, SEARCH_ASYNC_WAIT_TIMEOUT
+        from config import SEARCH_WORKER_FALLBACK_TIMEOUT
         # The legacy var reads SEARCH_WORKER_FALLBACK_TIMEOUT env, defaulting to SEARCH_ASYNC_WAIT_TIMEOUT
         assert SEARCH_WORKER_FALLBACK_TIMEOUT >= 30  # Must be at least 30 (never less)
 
@@ -129,8 +129,7 @@ class TestAC1AsyncWaitTimeout:
         """AC1: POST /buscar async path passes SEARCH_ASYNC_WAIT_TIMEOUT to watchdog."""
         mock_job = Mock(job_id="job-281-1")
 
-        created_tasks = []
-        original_create_task = asyncio.get_event_loop().create_task if hasattr(asyncio, 'get_event_loop') else None
+        asyncio.get_event_loop().create_task if hasattr(asyncio, 'get_event_loop') else None
 
         with patch("config.get_feature_flag", return_value=True), \
              patch("config.SEARCH_ASYNC_WAIT_TIMEOUT", 120), \
@@ -139,7 +138,7 @@ class TestAC1AsyncWaitTimeout:
              patch("routes.search.check_user_roles", new_callable=AsyncMock, return_value=(False, False)), \
              patch("routes.search.create_tracker", new_callable=AsyncMock, return_value=_make_mock_tracker()), \
              patch("routes.search.create_state_machine", new_callable=AsyncMock, return_value=_make_mock_state_machine()), \
-             patch("routes.search._search_fallback_watchdog", new_callable=AsyncMock) as mock_watchdog:
+             patch("routes.search._search_fallback_watchdog", new_callable=AsyncMock):
 
             response = client.post("/buscar", json=VALID_SEARCH_BODY)
 

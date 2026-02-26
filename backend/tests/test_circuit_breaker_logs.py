@@ -9,7 +9,6 @@ Validates:
 import asyncio
 import logging
 import pytest
-from unittest.mock import patch
 
 from pncp_client import PNCPCircuitBreaker
 

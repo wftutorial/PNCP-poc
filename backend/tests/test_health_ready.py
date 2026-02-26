@@ -1,5 +1,4 @@
 """CRIT-001 + SLA-002: Tests for /health/ready lightweight endpoint."""
-import pytest
 import time
 from unittest.mock import patch
 from fastapi.testclient import TestClient

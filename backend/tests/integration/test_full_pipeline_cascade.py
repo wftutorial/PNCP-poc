@@ -5,9 +5,8 @@ verifying that failures propagate correctly through the pipeline.
 Production scenario: When PNCP API fails, what does the user see?
 """
 
-import os
 import pytest
-from unittest.mock import patch, AsyncMock, Mock
+from unittest.mock import patch, AsyncMock
 from pncp_client import ParallelFetchResult
 
 from tests.integration.conftest import make_busca_request

@@ -5,10 +5,7 @@ correctly through middleware, ContextVars, log filters, progress events,
 module-level reads, and the admin trace endpoint.
 """
 
-import asyncio
 import logging
-import uuid
-from contextvars import copy_context
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest

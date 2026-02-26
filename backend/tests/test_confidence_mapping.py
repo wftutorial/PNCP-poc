@@ -9,7 +9,6 @@ Tests that relevance_source is correctly mapped to confidence level:
 - None -> None (backward compat)
 """
 
-import pytest
 from search_pipeline import _map_confidence
 
 

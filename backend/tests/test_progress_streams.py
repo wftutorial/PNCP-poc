@@ -29,7 +29,6 @@ from progress import (
     _TERMINAL_STAGES,
     _active_trackers,
     create_tracker,
-    get_tracker,
     remove_tracker,
 )
 
@@ -346,7 +345,7 @@ class TestCrossWorkerE2E:
         async def mock_xread(streams, block=None, count=None):
             nonlocal xread_call
             xread_call += 1
-            last_id = streams[stream_key]
+            streams[stream_key]
 
             if xread_call == 1:
                 # First call (id=0): return initial events

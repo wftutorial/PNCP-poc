@@ -9,12 +9,11 @@ Required tests:
   T6: Revalidation uses ConsolidationService (not PNCP-only)
 """
 
-import asyncio
 import hashlib
 import json
 import sys
 from datetime import datetime, timezone, timedelta, date
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -46,7 +45,7 @@ async def test_trial_user_receives_global_cache():
         "data_fim": "2026-02-23",
     }
 
-    global_hash = compute_global_hash(params)
+    compute_global_hash(params)
     now = datetime.now(timezone.utc)
     fetched_at = (now - timedelta(hours=2)).isoformat()
 
@@ -444,7 +443,7 @@ def test_compute_global_hash_handles_missing_dates():
 @pytest.mark.asyncio
 async def test_get_from_cache_cascade_uses_global_fallback():
     """Global fallback works in cascade mode too."""
-    from search_cache import get_from_cache_cascade, compute_global_hash
+    from search_cache import get_from_cache_cascade
 
     params = {
         "setor_id": "vestuario",

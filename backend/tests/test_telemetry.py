@@ -9,7 +9,6 @@ Covers:
   AC28: Existing tests pass without regression (tracing no-op by default)
 """
 
-import importlib
 import os
 from unittest.mock import patch, MagicMock
 

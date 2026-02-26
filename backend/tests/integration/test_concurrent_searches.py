@@ -16,7 +16,7 @@ import uuid
 import time as sync_time
 
 import pytest
-from unittest.mock import patch, AsyncMock, Mock, MagicMock
+from unittest.mock import AsyncMock, Mock
 from types import SimpleNamespace
 
 # Ensure backend is importable
@@ -27,9 +27,9 @@ if backend_dir not in sys.path:
 
 def _make_mock_deps(pncp_return):
     """Build a deps namespace matching what routes/search.py provides."""
-    from schemas import ResumoEstrategico, Recomendacao
+    from schemas import ResumoEstrategico
 
-    resumo = ResumoEstrategico(
+    ResumoEstrategico(
         resumo_executivo="Resumo de teste",
         total_oportunidades=0,
         valor_total=0,
@@ -88,7 +88,6 @@ class TestConcurrentSearches:
         that executing them sequentially does not leak state.
         """
         from search_context import SearchContext
-        from pncp_client import ParallelFetchResult
 
         search_ids = [str(uuid.uuid4()) for _ in range(3)]
         contexts = []

@@ -7,8 +7,6 @@ Tests:
   T4: Batch delay configurável via env
 """
 
-import asyncio
-import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -183,7 +181,6 @@ class TestT4BatchDelayConfigurable:
         from pncp_client import AsyncPNCPClient
 
         sleep_calls = []
-        original_sleep = asyncio.sleep
 
         async def mock_sleep(duration):
             sleep_calls.append(duration)

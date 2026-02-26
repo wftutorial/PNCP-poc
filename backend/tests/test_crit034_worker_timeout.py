@@ -14,7 +14,7 @@ import sys
 import time
 
 import pytest
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import patch, MagicMock
 
 
 # ============================================================================
@@ -168,7 +168,7 @@ class TestGunicornConfig:
         mock_worker = MagicMock()
         mock_worker.pid = 1111
 
-        with patch("gunicorn_conf.logger") as mock_logger, \
+        with patch("gunicorn_conf.logger"), \
              patch.dict(sys.modules, {"worker_lifecycle": None}):
             # Should not raise
             try:

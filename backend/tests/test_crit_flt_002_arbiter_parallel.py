@@ -16,7 +16,7 @@ Coverage:
 
 import os
 import time
-from unittest.mock import MagicMock, Mock, patch, ANY
+from unittest.mock import patch
 
 import pytest
 

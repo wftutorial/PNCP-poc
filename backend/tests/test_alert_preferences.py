@@ -4,7 +4,7 @@ Tests GET/PUT /v1/profile/alert-preferences in routes/user.py.
 """
 
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from routes.user import router

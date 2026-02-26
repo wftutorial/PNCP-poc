@@ -12,7 +12,7 @@ AC6: Regression — search with sector that already worked continues returning r
 
 import pytest
 from types import SimpleNamespace
-from unittest.mock import MagicMock, AsyncMock, patch, call
+from unittest.mock import MagicMock, AsyncMock, patch
 from search_context import SearchContext
 from search_pipeline import SearchPipeline
 

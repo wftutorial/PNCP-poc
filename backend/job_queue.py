@@ -595,7 +595,6 @@ async def search_job(
         # Emit error via SSE (AC20)
         tracker = await get_tracker(search_id)
         if tracker:
-            from schemas import SearchErrorCode
             await tracker.emit_error(str(e)[:300])
             await remove_tracker(search_id)
         raise
@@ -688,7 +687,7 @@ async def cache_refresh_job(ctx: dict) -> dict:
 
     # AC10-13: Replay each entry with stagger
     from datetime import date, timedelta
-    from search_cache import trigger_background_revalidation, compute_search_hash
+    from search_cache import trigger_background_revalidation
 
     today = date.today()
     data_final = today.isoformat()

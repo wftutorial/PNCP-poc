@@ -11,7 +11,7 @@ Validates that all exception types produce structured error bodies with:
 
 import asyncio
 import uuid
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient

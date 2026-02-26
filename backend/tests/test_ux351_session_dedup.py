@@ -4,7 +4,6 @@ AC1: Prevent duplicate session entries for the same search_id.
 AC6-AC7: Error messages stored in Portuguese (search_state_manager).
 """
 
-import asyncio
 import pytest
 from unittest.mock import MagicMock, patch
 

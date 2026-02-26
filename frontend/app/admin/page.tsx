@@ -246,6 +246,12 @@ export default function AdminPage() {
             <p className="text-[var(--ink-secondary)]">{total} usuário{total !== 1 ? "s" : ""}</p>
           </div>
           <div className="flex gap-3">
+            <Link href="/admin/cache" className="px-4 py-2 border border-[var(--border)] rounded-button text-sm hover:bg-[var(--surface-1)] text-[var(--ink-secondary)]">
+              Cache
+            </Link>
+            <Link href="/admin/metrics" className="px-4 py-2 border border-[var(--border)] rounded-button text-sm hover:bg-[var(--surface-1)] text-[var(--ink-secondary)]">
+              Metrics
+            </Link>
             <Link href="/mensagens" className="px-4 py-2 border border-[var(--border)] rounded-button text-sm hover:bg-[var(--surface-1)]">
               Mensagens
             </Link>

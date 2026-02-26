@@ -8,9 +8,8 @@ for _mod_name in ("openai",):
     if _mod_name not in sys.modules:
         sys.modules[_mod_name] = _MagicMock()
 
-import pytest
-from unittest.mock import MagicMock
-from schemas import UfStatusDetail, BuscaResponse
+from unittest.mock import MagicMock  # noqa: E402
+from schemas import UfStatusDetail, BuscaResponse  # noqa: E402
 
 
 class TestBuildCoverageMetrics:

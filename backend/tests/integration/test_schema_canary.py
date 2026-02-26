@@ -87,7 +87,7 @@ class TestSchemaCanary:
         """
         from schemas import BuscaResponse
 
-        field_info = BuscaResponse.model_fields["response_state"]
+        BuscaResponse.model_fields["response_state"]
         # Build a BuscaResponse for each valid state to confirm acceptance
         valid_states = ["live", "cached", "degraded", "empty_failure"]
         for state in valid_states:

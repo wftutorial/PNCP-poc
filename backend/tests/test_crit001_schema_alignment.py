@@ -11,8 +11,7 @@
 
 import logging
 from datetime import datetime, timezone
-from pathlib import Path
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -249,7 +248,7 @@ class TestRuntimeValidation:
         mock_db.table.return_value.upsert.return_value.execute.return_value = MagicMock()
 
         # Monkey-patch to add an unknown key to the row dict
-        original_save = _save_to_supabase.__wrapped__ if hasattr(_save_to_supabase, '__wrapped__') else None
+        _save_to_supabase.__wrapped__ if hasattr(_save_to_supabase, '__wrapped__') else None
 
         with patch("supabase_client.get_supabase", return_value=mock_db):
             with caplog.at_level(logging.WARNING):

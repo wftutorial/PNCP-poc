@@ -11,7 +11,7 @@ Covers:
 
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from main import app
 from auth import require_auth

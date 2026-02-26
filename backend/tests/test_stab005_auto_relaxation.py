@@ -12,7 +12,7 @@ total_from_sources > 0 but after_filter = 0.
 
 import pytest
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from search_context import SearchContext
 from search_pipeline import SearchPipeline
 
@@ -192,7 +192,7 @@ class TestAutoRelaxationReturnsResults:
         assert len(ctx.licitacoes_filtradas) == 10
 
         # Should be sorted by value descending
-        values = [l["valorTotalEstimado"] for l in ctx.licitacoes_filtradas]
+        values = [bid["valorTotalEstimado"] for bid in ctx.licitacoes_filtradas]
         assert values == sorted(values, reverse=True)
         # Highest value is 15 * 10_000 = 150_000
         assert values[0] == 150_000.0

@@ -9,12 +9,8 @@ Validates:
 - Chain invariant: FE(480) > Pipeline(360) > Consolidation(300) > Per-Source(180) > Per-UF(90)
 """
 
-import asyncio
-import os
-import re
 import sys
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -37,7 +33,7 @@ class TestTimeoutChainInvariant:
         Note: FE proxy (115s) is now intentionally BELOW pipeline FETCH_TIMEOUT (360s) because Railway
         hard-kills at ~120s. The FE proxy is the effective cutoff for users; pipeline runs independently.
         """
-        from pncp_client import PNCP_TIMEOUT_PER_UF, PNCP_TIMEOUT_PER_UF_DEGRADED
+        from pncp_client import PNCP_TIMEOUT_PER_UF
         from source_config.sources import ConsolidationConfig
 
         config = ConsolidationConfig.from_env()
@@ -160,7 +156,7 @@ class TestConsolidationTimeouts:
         import logging
         with caplog.at_level(logging.WARNING, logger="consolidation"):
             # per_source=90 is > 80% of global=100
-            svc = ConsolidationService(
+            ConsolidationService(
                 adapters={"test": mock_adapter},
                 timeout_per_source=90,
                 timeout_global=100,
@@ -183,7 +179,7 @@ class TestConsolidationTimeouts:
 
         import logging
         with caplog.at_level(logging.WARNING, logger="consolidation"):
-            svc = ConsolidationService(
+            ConsolidationService(
                 adapters={"test": mock_adapter},
                 timeout_per_source=50,
                 timeout_global=300,

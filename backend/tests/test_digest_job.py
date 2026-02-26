@@ -160,7 +160,7 @@ class TestWorkerSettingsDigest:
             _fake_arq.connections.RedisSettings = _FakeRedisSettings
             _fake_arq.cron = MagicMock()
 
-            from job_queue import WorkerSettings, daily_digest_job
+            from job_queue import WorkerSettings
             func_names = [f.__name__ if callable(f) else str(f) for f in WorkerSettings.functions]
             assert "daily_digest_job" in func_names
 

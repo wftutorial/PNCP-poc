@@ -8,7 +8,6 @@ Coverage:
 - AC15: GET /buscar-results/{search_id} returns stored results
 """
 
-import asyncio
 import time
 
 import pytest

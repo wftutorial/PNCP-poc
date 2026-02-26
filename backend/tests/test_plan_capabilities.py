@@ -1,6 +1,5 @@
 """Tests for plan capabilities system (STORY-165)."""
 
-import pytest
 from datetime import datetime, timezone, timedelta
 from unittest.mock import patch, MagicMock
 from quota import (

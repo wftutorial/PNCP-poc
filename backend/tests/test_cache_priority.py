@@ -13,7 +13,6 @@ Covers all 10 ACs:
   AC10: priority_distribution in health endpoint
 """
 
-import json
 import pytest
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -23,10 +22,7 @@ from search_cache import (
     CachePriority,
     classify_priority,
     REDIS_TTL_BY_PRIORITY,
-    CACHE_FRESH_HOURS,
-    save_to_cache,
     get_from_cache,
-    compute_search_hash,
     _save_to_redis,
     _process_cache_hit,
     CacheLevel,
@@ -311,7 +307,7 @@ class TestReclassification:
         mock_sb.execute.side_effect = read_calls
 
         with patch("supabase_client.get_supabase", return_value=mock_sb):
-            result = await get_from_cache(
+            await get_from_cache(
                 user_id="user-b02",
                 params={"setor_id": 1, "ufs": ["RJ"]},
             )
@@ -355,7 +351,7 @@ class TestReclassification:
         mock_sb.execute.side_effect = read_calls
 
         with patch("supabase_client.get_supabase", return_value=mock_sb):
-            result = await get_from_cache(
+            await get_from_cache(
                 user_id="user-b02",
                 params={"setor_id": 1, "ufs": ["MG"]},
             )

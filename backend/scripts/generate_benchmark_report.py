@@ -17,7 +17,7 @@ from typing import Dict, List, Tuple
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from filter import match_keywords
-from sectors import SECTORS, get_sector
+from sectors import get_sector
 
 # Import ground truth from test file
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tests"))
@@ -102,8 +102,8 @@ def generate_report() -> str:
     lines.append(f"# CRIT-FLT-009: Precision/Recall Benchmark — {date_str}")
     lines.append("")
     lines.append(f"**Generated:** {now.strftime('%Y-%m-%d %H:%M:%S')}")
-    lines.append(f"**Pipeline:** Keyword matching (`filter.py:match_keywords`)")
-    lines.append(f"**Dataset:** 450 labeled procurement descriptions (15 relevant + 15 irrelevant per sector)")
+    lines.append("**Pipeline:** Keyword matching (`filter.py:match_keywords`)")
+    lines.append("**Dataset:** 450 labeled procurement descriptions (15 relevant + 15 irrelevant per sector)")
     lines.append(f"**Sectors:** {len(ALL_SECTORS)}")
     lines.append("")
 

@@ -172,7 +172,6 @@ class TestNoEnglishInErrorMessages:
 
     def test_subscription_status_errors_are_pt(self):
         """Subscription error messages are in Portuguese."""
-        from routes.subscriptions import router
         # Verify by checking route source — all error details must be PT
         import inspect
         import routes.subscriptions as sub_module

@@ -201,7 +201,7 @@ class TestWorkerSettings:
 
     def test_retry_delay(self):
         from job_queue import WorkerSettings
-        assert WorkerSettings.retry_delay == 2.0
+        assert WorkerSettings.retry_delay == 5.0  # CRIT-038: increased for Redis recovery
 
 
 # ============================================================================
@@ -211,7 +211,8 @@ class TestWorkerSettings:
 class _FakeRedisSettings:
     """Minimal stand-in for arq.connections.RedisSettings (not installed locally)."""
     def __init__(self, host="localhost", port=6379, password=None, database=0,
-                 conn_timeout=None, conn_retries=None, conn_retry_delay=None, ssl=False):
+                 conn_timeout=None, conn_retries=None, conn_retry_delay=None, ssl=False,
+                 retry_on_timeout=False, retry_on_error=None, max_connections=None):
         self.host = host
         self.port = port
         self.password = password
@@ -220,6 +221,9 @@ class _FakeRedisSettings:
         self.conn_retries = conn_retries
         self.conn_retry_delay = conn_retry_delay
         self.ssl = ssl
+        self.retry_on_timeout = retry_on_timeout
+        self.retry_on_error = retry_on_error
+        self.max_connections = max_connections
 
 
 class TestRedisSettings:
@@ -245,6 +249,12 @@ class TestRedisSettings:
             assert settings.conn_retries == 5
             assert settings.conn_retry_delay == 2.0
             assert settings.ssl is True
+            # CRIT-038: Verify hardened settings
+            assert settings.retry_on_timeout is True
+            assert settings.max_connections == 50
+            assert TimeoutError in settings.retry_on_error
+            assert ConnectionError in settings.retry_on_error
+            assert OSError in settings.retry_on_error
 
     def test_parses_minimal_url(self):
         from job_queue import _get_redis_settings
@@ -256,6 +266,9 @@ class TestRedisSettings:
             assert settings.conn_retries == 5
             assert settings.conn_retry_delay == 2.0
             assert settings.ssl is False
+            # CRIT-038: Verify hardened settings
+            assert settings.retry_on_timeout is True
+            assert settings.max_connections == 50
 
     def test_raises_without_redis_url(self):
         from job_queue import _get_redis_settings

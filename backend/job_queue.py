@@ -38,6 +38,11 @@ _WORKER_CHECK_INTERVAL = 15  # GTM-STAB-002 AC4: faster failover detection
 def _get_redis_settings():
     """Build ARQ RedisSettings from REDIS_URL env var.
 
+    CRIT-038: Hardened with retry_on_timeout + retry_on_error to prevent
+    worker crash on transient Redis failures during finish_job().
+    Previously only conn_timeout/conn_retries were set (initial connection only),
+    leaving the worker unprotected against operational timeouts.
+
     Returns:
         arq.connections.RedisSettings configured from environment.
 
@@ -61,6 +66,10 @@ def _get_redis_settings():
         conn_retries=5,
         conn_retry_delay=2.0,
         ssl=ssl,
+        # CRIT-038: Prevent worker crash on Redis timeout during finish_job()
+        retry_on_timeout=True,
+        retry_on_error=[TimeoutError, ConnectionError, OSError],
+        max_connections=50,
     )
 
 
@@ -1220,6 +1229,35 @@ except Exception:
     _worker_cron_jobs = []
 
 
+async def _worker_on_startup(ctx: dict) -> None:
+    """CRIT-038: Harden ARQ worker's Redis pool with socket_timeout.
+
+    ARQ's RedisSettings doesn't expose socket_timeout (only conn_timeout which
+    maps to socket_connect_timeout). Without socket_timeout, individual Redis
+    operations (SETEX, DELETE in finish_job) can hang indefinitely on network
+    hiccups, causing the entire worker process to crash.
+
+    This injects the same socket_timeout=30s used by the web process (redis_pool.py)
+    directly into the worker's connection pool kwargs, ensuring all new connections
+    inherit hardened timeout settings.
+    """
+    redis = ctx.get("redis")
+    if redis and hasattr(redis, "connection_pool"):
+        pool = redis.connection_pool
+        if hasattr(pool, "connection_kwargs"):
+            pool.connection_kwargs.setdefault("socket_timeout", 30)
+            pool.connection_kwargs.setdefault("socket_connect_timeout", 10)
+            pool.connection_kwargs.setdefault("socket_keepalive", True)
+            logger.info(
+                "CRIT-038: Worker Redis pool hardened — "
+                f"socket_timeout={pool.connection_kwargs.get('socket_timeout')}s, "
+                f"socket_connect_timeout={pool.connection_kwargs.get('socket_connect_timeout')}s, "
+                f"keepalive={pool.connection_kwargs.get('socket_keepalive')}"
+            )
+    else:
+        logger.warning("CRIT-038: Could not access worker Redis connection pool for hardening")
+
+
 class WorkerSettings:
     """ARQ worker configuration.
 
@@ -1232,9 +1270,10 @@ class WorkerSettings:
 
     functions = [llm_summary_job, excel_generation_job, cache_refresh_job, search_job, bid_analysis_job, cache_warming_job, daily_digest_job]
     cron_jobs = _worker_cron_jobs  # CRIT-032 AC2: periodic cache refresh
+    on_startup = _worker_on_startup  # CRIT-038: Inject socket_timeout into Redis pool
     redis_settings = _worker_redis_settings
     max_jobs = 10
     job_timeout = 300  # GTM-ARCH-001: search_job needs up to 300s for multi-UF
     max_tries = 3      # AC10/AC15: 1 initial + 2 retries
     health_check_interval = 30
-    retry_delay = 2.0  # seconds between retries
+    retry_delay = 5.0  # CRIT-038: Increased from 2.0 → 5.0 to allow Redis recovery

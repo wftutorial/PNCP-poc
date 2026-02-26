@@ -49,7 +49,10 @@ LLM_TEMPERATURE = float(os.getenv("LLM_ARBITER_TEMPERATURE", "0"))
 LLM_ENABLED = os.getenv("LLM_ARBITER_ENABLED", "true").lower() == "true"
 
 # D-02: Structured output max tokens (accommodates JSON + evidence)
-LLM_STRUCTURED_MAX_TOKENS = 150
+# CRIT-038: Increased from 150 → 300. 150 was insufficient for JSON responses
+# with 3 evidence items, causing truncation → D-02 AC3 JSON parse failures (20-30%
+# of calls). Cost impact negligible: +150 tokens × $0.40/M = +R$0.0003/call.
+LLM_STRUCTURED_MAX_TOKENS = 300
 
 # D-02 AC9: gpt-4.1-nano pricing (per million tokens)
 _PRICING_INPUT_PER_M = 0.10   # USD per 1M input tokens
@@ -143,7 +146,7 @@ Responda em JSON com a estrutura exata:
 {"classe": "SIM" ou "NAO", "confianca": 0-100, "evidencias": ["citação 1", "citação 2"], "motivo_exclusao": "razão se NAO", "precisa_mais_dados": false}
 
 REGRAS:
-- evidencias: CITAÇÕES LITERAIS do texto do Objeto (copie trechos exatos, não parafraseie), máximo 3, máx 100 chars cada
+- evidencias: use COPY-PASTE exato de trechos do campo Objeto acima — cada evidência DEVE ser uma substring que aparece literalmente no texto do Objeto, sem alterar, adicionar ou remover nenhuma palavra. Se não encontrar trecho literal relevante, retorne evidencias como lista vazia [].
 - confianca: 100 se palavras-chave primárias presentes, 50 se ambíguo, 0 se claramente fora do setor
 - motivo_exclusao: preencha APENAS quando classe="NAO"
 - precisa_mais_dados: true se a descrição é muito curta/vaga para decidir"""

@@ -163,7 +163,7 @@ describe('TrustSignals Component', () => {
     it('should display LGPD compliance trust signal', () => {
       render(<TrustSignals />);
 
-      expect(screen.getByText(/LGPD compliant/)).toBeInTheDocument();
+      expect(screen.getByText(/Em conformidade com a LGPD/)).toBeInTheDocument();
     });
 
     it('should show checkmarks for trust signals', () => {

@@ -233,7 +233,7 @@ export default function Footer() {
                   clipRule="evenodd"
                 />
               </svg>
-              <span className="text-sm text-ink-secondary">LGPD Compliant</span>
+              <span className="text-sm text-ink-secondary">Em conformidade com a LGPD</span>
             </div>
 
             {/* Developer Attribution */}

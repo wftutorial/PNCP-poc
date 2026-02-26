@@ -1,10 +1,12 @@
 /**
  * GTM-COPY-005: Credibilidade & Autoridade Explícita
+ * STORY-273 AC4: Enhanced /sobre page with team, mission, contact
  *
  * AC1: Página Sobre/Metodologia acessível via header
  * AC2: Seção Quem Somos (CONFENGE)
  * AC3: Seção Metodologia (critérios de avaliação)
  * AC4: Seção Fontes de Dados (fontes oficiais)
+ * AC4-273: Team, Mission/Vision, Contact
  *
  * Static page — no auth required, SEO optimized.
  */
@@ -119,6 +121,73 @@ export default function SobrePage() {
               </p>
               <p className="text-[var(--ink-secondary)] leading-relaxed">
                 O SmartLic nasceu da observação direta do desperdício no mercado de licitações: empresas gastam horas buscando editais manualmente, analisam oportunidades irrelevantes e perdem as que realmente importam. Nossa plataforma resolve isso com tecnologia.
+              </p>
+            </div>
+          </section>
+
+          {/* STORY-273 AC4: Team Section */}
+          <section>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 bg-brand-blue-subtle rounded-xl flex items-center justify-center">
+                <svg className="w-5 h-5 text-brand-blue" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-bold text-[var(--ink)]">
+                Nosso time
+              </h2>
+            </div>
+
+            <div className="bg-[var(--surface-0)] border border-[var(--border)] rounded-2xl p-6 sm:p-8 space-y-4">
+              <p className="text-[var(--ink-secondary)] leading-relaxed">
+                O SmartLic foi fundado por profissionais com experiência em <strong className="text-[var(--ink)]">engenharia de avaliações, inteligência artificial e mercado de licitações públicas</strong>. A equipe combina conhecimento técnico em TI com vivência prática no ecossistema B2G brasileiro.
+              </p>
+              <div className="grid sm:grid-cols-2 gap-4 pt-2">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 bg-brand-blue-subtle rounded-lg flex items-center justify-center flex-shrink-0">
+                    <svg className="w-4 h-4 text-brand-blue" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="font-medium text-[var(--ink)] text-sm">Engenharia e IA</p>
+                    <p className="text-xs text-[var(--ink-muted)]">Desenvolvimento de algoritmos de classificação e pipeline de dados em escala nacional</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 bg-brand-blue-subtle rounded-lg flex items-center justify-center flex-shrink-0">
+                    <svg className="w-4 h-4 text-brand-blue" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="font-medium text-[var(--ink)] text-sm">Mercado B2G</p>
+                    <p className="text-xs text-[var(--ink-muted)]">Vivência prática em contratações públicas e licitações em múltiplos setores</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* STORY-273 AC4: Mission/Vision */}
+          <section>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/20 rounded-xl flex items-center justify-center">
+                <svg className="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-bold text-[var(--ink)]">
+                Nossa missão
+              </h2>
+            </div>
+
+            <div className="bg-[var(--surface-0)] border border-[var(--border)] rounded-2xl p-6 sm:p-8 space-y-4">
+              <p className="text-[var(--ink-secondary)] leading-relaxed">
+                <strong className="text-[var(--ink)]">Democratizar o acesso inteligente a licitações públicas.</strong> Acreditamos que toda empresa que compete no mercado B2G merece ferramentas que transformem decisões de intuitivas para objetivas — independentemente do porte.
+              </p>
+              <p className="text-[var(--ink-secondary)] leading-relaxed">
+                Nossa visão é ser a plataforma de referência em inteligência de licitações no Brasil, eliminando o desperdício de tempo com buscas manuais e análises subjetivas.
               </p>
             </div>
           </section>
@@ -273,6 +342,45 @@ export default function SobrePage() {
                 <p className="text-sm text-[var(--ink-secondary)]">
                   O SmartLic não é afiliado ao governo. Somos uma plataforma independente de inteligência de decisão que agrega e analisa dados públicos para facilitar o acesso a oportunidades de contratações públicas.
                 </p>
+              </div>
+            </div>
+          </section>
+
+          {/* STORY-273 AC4: Contact Information */}
+          <section id="contato">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 bg-brand-blue-subtle rounded-xl flex items-center justify-center">
+                <svg className="w-5 h-5 text-brand-blue" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-bold text-[var(--ink)]">
+                Contato
+              </h2>
+            </div>
+
+            <div className="bg-[var(--surface-0)] border border-[var(--border)] rounded-2xl p-6 sm:p-8">
+              <div className="grid sm:grid-cols-2 gap-6">
+                <div>
+                  <h3 className="font-semibold text-[var(--ink)] mb-3">CONFENGE Avaliações e Inteligência Artificial LTDA</h3>
+                  <div className="space-y-2 text-sm text-[var(--ink-secondary)]">
+                    <p>Av. Pref. Osmar Cunha, 416 - Centro</p>
+                    <p>Florianópolis - SC, 88015-100</p>
+                  </div>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-[var(--ink)] mb-3">Canais de atendimento</h3>
+                  <div className="space-y-2 text-sm text-[var(--ink-secondary)]">
+                    <p>
+                      <Link href="/ajuda#contato" className="text-brand-blue hover:underline">Central de Ajuda</Link>
+                      {' '}— Dúvidas e suporte
+                    </p>
+                    <p>
+                      <Link href="/ajuda" className="text-brand-blue hover:underline">Perguntas Frequentes</Link>
+                      {' '}— Respostas rápidas
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           </section>

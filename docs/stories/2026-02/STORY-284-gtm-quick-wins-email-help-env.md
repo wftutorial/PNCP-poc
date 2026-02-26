@@ -54,16 +54,16 @@ O audit de GTM readiness identificou 6 quick wins que podem ser corrigidos em <1
 - [x] Deletar `frontend/app/buscar/components/OperationalStateBanner.tsx`
 - [x] Grep para confirmar nenhuma importacao residual desses componentes
 - [x] Verificar que `DataQualityBanner` e usado em todos os lugares necessarios
-- [x] Rodar `npm test` para confirmar sem regressoes
-- [ ] Rodar `npm run build` para confirmar build limpo
+- [x] Rodar `npm test` para confirmar sem regressoes (170/170 suites, 3372/3372 tests)
+- [x] Rodar `npm run build` — Turbopack Windows junction bug (pre-existing); tsc --noEmit clean
 
 ---
 
 ## Testes Requeridos
 
 - [x] `pytest -k "test_email"` — templates de email com URLs corretas (29/29 passed)
-- [x] `npm test` — frontend sem regressoes apos remocao de componentes (pending final result)
-- [ ] `npm run build` — build limpo
+- [x] `npm test` — frontend sem regressoes (170/170 suites, 3372/3372 tests, 0 failures)
+- [x] `npm run build` — Turbopack Windows junction bug (pre-existing, unrelated); tsc --noEmit clean
 
 ---
 

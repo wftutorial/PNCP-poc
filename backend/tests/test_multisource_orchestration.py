@@ -633,7 +633,7 @@ class TestGlobalTimeoutAdjustment:
 
     @pytest.mark.asyncio
     async def test_global_timeout_increases_when_pncp_degraded(self):
-        """Global timeout goes from 60s to DEGRADED_GLOBAL_TIMEOUT (110s) when PNCP is degraded (STAB-003: reduced from 360s)."""
+        """Global timeout goes from 60s to DEGRADED_GLOBAL_TIMEOUT (100s) when PNCP is degraded (STORY-271 AC2: reduced from 110s)."""
         # Mark PNCP as degraded
         for _ in range(3):
             source_health_registry.record_failure("PNCP")
@@ -647,8 +647,8 @@ class TestGlobalTimeoutAdjustment:
 
         await svc.fetch_all("2026-01-01", "2026-01-31")
 
-        # STAB-003: DEGRADED_GLOBAL_TIMEOUT reduced from 360s to 110s (stay below Railway's ~120s hard cutoff)
-        assert svc._last_effective_global_timeout == 110
+        # STORY-271 AC2: DEGRADED_GLOBAL_TIMEOUT reduced from 110s to 100s (15s buffer before GUNICORN_TIMEOUT=115s)
+        assert svc._last_effective_global_timeout == 100
 
     @pytest.mark.asyncio
     async def test_global_timeout_normal_when_pncp_healthy(self):
@@ -682,8 +682,8 @@ class TestGlobalTimeoutAdjustment:
 
         await svc.fetch_all("2026-01-01", "2026-01-31")
 
-        # STAB-003: DEGRADED_GLOBAL_TIMEOUT reduced from 360s to 110s (stay below Railway's ~120s hard cutoff)
-        assert svc._last_effective_global_timeout == 110
+        # STORY-271 AC2: DEGRADED_GLOBAL_TIMEOUT reduced from 110s to 100s (15s buffer before GUNICORN_TIMEOUT=115s)
+        assert svc._last_effective_global_timeout == 100
 
 
 # ============ Integration-style Tests ============

@@ -141,14 +141,16 @@ async def check_source_health(
         async with httpx.AsyncClient(timeout=timeout) as client:
             # Use HEAD request if possible, otherwise GET with minimal params
             if source_code == "PNCP":
-                # GTM-INFRA-002 AC1: Use tamanhoPagina=50 (same as production)
+                # STORY-271 AC4: Fix PNCP canary — correct date format (yyyyMMdd),
+                # add required codigoModalidadeContratacao param, use tamanhoPagina=10
                 response = await client.get(
                     endpoint,
                     params={
-                        "dataInicial": "2026-01-01",
-                        "dataFinal": "2026-01-01",
+                        "dataInicial": "20260101",
+                        "dataFinal": "20260101",
+                        "codigoModalidadeContratacao": 6,
                         "pagina": 1,
-                        "tamanhoPagina": 50,
+                        "tamanhoPagina": 10,
                     },
                 )
             else:
@@ -160,7 +162,7 @@ async def check_source_health(
 
             response_time_ms = int((time.time() - start_time) * 1000)
 
-            if response.status_code < 500:
+            if response.status_code < 400:
                 return SourceHealthResult(
                     source_code=source_code,
                     status=HealthStatus.HEALTHY,

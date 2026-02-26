@@ -76,8 +76,8 @@ class ConsolidationService:
 
     # GTM-STAB: Failover timeout reduced from 120→80 — tighter per-source budget
     FAILOVER_TIMEOUT_PER_SOURCE = 80
-    # GTM-STAB: Degraded global timeout reduced from 360→110 — fits Railway 120s limit
-    DEGRADED_GLOBAL_TIMEOUT = 110
+    # STORY-271 AC2: Degraded global timeout 110→100 — 15s buffer before GUNICORN_TIMEOUT=115s
+    DEGRADED_GLOBAL_TIMEOUT = 100
     # Timeout for ComprasGov last-resort fallback (AC15)
     FALLBACK_TIMEOUT = 40
 

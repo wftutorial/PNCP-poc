@@ -23,7 +23,7 @@ The GTM validation squad captured 5 unresolved Sentry issues in production (as o
 ## Acceptance Criteria
 
 ### AC1: Fix Cache Warming FK Violation (Issue #1 — 44 events)
-- [ ] Insert a system profile row for `WARMING_USER_ID`:
+- [x] Insert a system profile row for `WARMING_USER_ID`:
   ```sql
   INSERT INTO profiles (id, full_name, plan_type, is_admin)
   VALUES ('00000000-0000-0000-0000-000000000000', 'System Cache Warmer', 'system', false)
@@ -31,30 +31,30 @@ The GTM validation squad captured 5 unresolved Sentry issues in production (as o
   ```
 - [ ] Verify: cache warming saves to Supabase L2 without FK violation
 - [ ] Resolve Sentry issue after deploy
-- [ ] **File:** New migration in `supabase/migrations/`
+- [x] **File:** New migration in `supabase/migrations/20260226110000_warming_user_profile.sql`
 
 ### AC2: Fix Worker Timeout Root Cause (Issues #2, #3, #4)
-- [ ] Investigate: which search queries trigger >115s execution?
+- [x] Investigate: DEGRADED_GLOBAL_TIMEOUT was 110s, only 5s buffer before GUNICORN_TIMEOUT=115s
 - [ ] Verify `PNCP_TIMEOUT_PER_MODALITY` Railway env var: currently `120` (IGNORED, falls back to 20s safe default). Either remove or set to `20`.
-- [ ] Verify early return is functioning: `EARLY_RETURN_TIME_S=80` + `EARLY_RETURN_THRESHOLD_PCT=0.8`
-- [ ] If worker still times out: reduce `PIPELINE_TIMEOUT` from 110s to 100s (gives 15s buffer before GUNICORN_TIMEOUT=115s)
+- [x] Verify early return is functioning: `EARLY_RETURN_TIME_S=80` + `EARLY_RETURN_THRESHOLD_PCT=0.8`
+- [x] Reduced `DEGRADED_GLOBAL_TIMEOUT` from 110s to 100s (gives 15s buffer before GUNICORN_TIMEOUT=115s)
 - [ ] Mark Sentry issues as resolved after fix
-- [ ] **File:** `backend/config.py`, Railway env vars
+- [x] **File:** `backend/consolidation.py`, `backend/config.py`
 
 ### AC3: Reduce AllSourcesFailedError (Issue #5)
-- [ ] Investigate: was this a transient PNCP outage or systematic?
-- [ ] Verify PNCP health canary is working correctly (see AC4)
-- [ ] Verify circuit breaker thresholds are appropriate (currently: 15 failures, 60s cooldown)
+- [x] Investigate: transient PNCP outage (3 events over 5 days = sporadic, not systematic)
+- [x] Verify PNCP health canary is working correctly (see AC4 — fixed)
+- [x] Verify circuit breaker thresholds are appropriate (currently: 15 failures, 60s cooldown) — confirmed
 - [ ] If PNCP was down: confirm stale cache was served as fallback
 - [ ] If stale cache was NOT served: investigate why SWR fallback didn't trigger
 - [ ] Mark as resolved or downgrade to warning (expected behavior during outages)
 
 ### AC4: Fix PNCP Health Canary (Track D H-2)
-- [ ] PNCP canary in `health.py` uses WRONG date format (`YYYY-MM-DD` instead of `yyyyMMdd`)
-- [ ] PNCP canary is MISSING required `codigoModalidadeContratacao` parameter
-- [ ] HTTP 400 is currently treated as "healthy" (because `< 500`)
-- [ ] Fix: use `yyyyMMdd` format, add `codigoModalidadeContratacao=6`, check `< 400`
-- [ ] **File:** `backend/health.py` (line ~143-153)
+- [x] PNCP canary in `health.py` uses WRONG date format (`YYYY-MM-DD` instead of `yyyyMMdd`) — FIXED
+- [x] PNCP canary is MISSING required `codigoModalidadeContratacao` parameter — FIXED (=6)
+- [x] HTTP 400 is currently treated as "healthy" (because `< 500`) — FIXED (now `< 400`)
+- [x] Fix: use `yyyyMMdd` format, add `codigoModalidadeContratacao=6`, check `< 400`
+- [x] **File:** `backend/health.py` (line ~143-165)
 
 ### AC5: Clean Up Stale Railway Env Var (Track D H-1)
 - [ ] Remove or correct `PNCP_TIMEOUT_PER_MODALITY=120` on Railway
@@ -68,9 +68,9 @@ The GTM validation squad captured 5 unresolved Sentry issues in production (as o
 
 ## Testing Strategy
 
-- [ ] Unit test: cache warming with valid WARMING_USER_ID profile
-- [ ] Unit test: PNCP health canary with correct params
-- [ ] Unit test: pipeline timeout < GUNICORN_TIMEOUT
+- [x] Unit test: cache warming with valid WARMING_USER_ID profile (5 tests)
+- [x] Unit test: PNCP health canary with correct params (5 tests)
+- [x] Unit test: pipeline timeout < GUNICORN_TIMEOUT (5 tests)
 - [ ] Integration: run search, verify no worker timeout in Railway logs
 - [ ] Monitor Sentry post-deploy for 24h
 

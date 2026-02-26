@@ -135,10 +135,10 @@ class TestConsolidationTimeouts:
         config = ConsolidationConfig.from_env()
         assert config.timeout_global == 300
 
-    def test_degraded_global_timeout_360(self):
-        """AC8: DEGRADED_GLOBAL_TIMEOUT = 110s (STAB-003: reduced from 360s to stay below Railway's ~120s hard cutoff)."""
+    def test_degraded_global_timeout_100(self):
+        """AC8: DEGRADED_GLOBAL_TIMEOUT = 100s (STORY-271 AC2: reduced from 110s, 15s buffer before GUNICORN_TIMEOUT=115s)."""
         from consolidation import ConsolidationService
-        assert ConsolidationService.DEGRADED_GLOBAL_TIMEOUT == 110
+        assert ConsolidationService.DEGRADED_GLOBAL_TIMEOUT == 100
 
     def test_failover_timeout_per_source_120(self):
         """AC9: FAILOVER_TIMEOUT_PER_SOURCE = 80s (STAB-003: reduced from 120s)."""

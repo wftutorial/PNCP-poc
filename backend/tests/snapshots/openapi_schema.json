@@ -191,6 +191,51 @@
         "title": "AdminUsersListResponse",
         "type": "object"
       },
+      "AlertPreferencesRequest": {
+        "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "frequency": {
+            "default": "daily",
+            "title": "Frequency",
+            "type": "string"
+          }
+        },
+        "title": "AlertPreferencesRequest",
+        "type": "object"
+      },
+      "AlertPreferencesResponse": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "frequency": {
+            "title": "Frequency",
+            "type": "string"
+          },
+          "last_digest_sent_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Digest Sent At"
+          }
+        },
+        "required": [
+          "frequency",
+          "enabled"
+        ],
+        "title": "AlertPreferencesResponse",
+        "type": "object"
+      },
       "AuthStatusResponse": {
         "properties": {
           "confirmed": {
@@ -4606,6 +4651,13 @@
       },
       "ValidationError": {
         "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
           "loc": {
             "items": {
               "anyOf": [
@@ -7425,6 +7477,78 @@
         "summary": "Get Plans",
         "tags": [
           "billing"
+        ]
+      }
+    },
+    "/profile/alert-preferences": {
+      "get": {
+        "description": "Get user's alert preferences (STORY-278 AC6).",
+        "operationId": "get_alert_preferences_profile_alert_preferences_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertPreferencesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Alert Preferences",
+        "tags": [
+          "user"
+        ]
+      },
+      "put": {
+        "description": "Update user's alert preferences (STORY-278 AC6).",
+        "operationId": "update_alert_preferences_profile_alert_preferences_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AlertPreferencesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertPreferencesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Alert Preferences",
+        "tags": [
+          "user"
         ]
       }
     },
@@ -10471,6 +10595,78 @@
         "summary": "Get Plans",
         "tags": [
           "billing"
+        ]
+      }
+    },
+    "/v1/profile/alert-preferences": {
+      "get": {
+        "description": "Get user's alert preferences (STORY-278 AC6).",
+        "operationId": "get_alert_preferences_v1_profile_alert_preferences_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertPreferencesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Alert Preferences",
+        "tags": [
+          "user"
+        ]
+      },
+      "put": {
+        "description": "Update user's alert preferences (STORY-278 AC6).",
+        "operationId": "update_alert_preferences_v1_profile_alert_preferences_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AlertPreferencesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertPreferencesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Alert Preferences",
+        "tags": [
+          "user"
         ]
       }
     },

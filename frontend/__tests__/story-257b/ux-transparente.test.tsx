@@ -285,41 +285,8 @@ describe("T3: PartialResultsPrompt", () => {
 });
 
 // ---------------------------------------------------------------------------
-// T4: Cache banner displays correct relative time ("há 2 horas")
+// T4: CacheBanner tests removed — component deprecated and deleted (STORY-284 AC6)
 // ---------------------------------------------------------------------------
-import { CacheBanner } from "@/app/buscar/components/CacheBanner";
-
-describe("T4: CacheBanner relative time", () => {
-  it("displays 'há poucos segundos' for very recent cache", () => {
-    render(<CacheBanner cachedAt={new Date().toISOString()} onRefresh={jest.fn()} refreshing={false} />);
-    expect(screen.getByText(/poucos segundos/)).toBeInTheDocument();
-  });
-
-  it("displays minutes for cache < 1 hour old", () => {
-    const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
-    render(<CacheBanner cachedAt={thirtyMinAgo} onRefresh={jest.fn()} refreshing={false} />);
-    expect(screen.getByText(/30 minutos/)).toBeInTheDocument();
-  });
-
-  it("displays hours for cache > 1 hour old", () => {
-    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-    render(<CacheBanner cachedAt={twoHoursAgo} onRefresh={jest.fn()} refreshing={false} />);
-    expect(screen.getByText(/2 horas/)).toBeInTheDocument();
-  });
-
-  it("shows refresh button and calls onRefresh", () => {
-    const onRefresh = jest.fn();
-    render(<CacheBanner cachedAt={new Date().toISOString()} onRefresh={onRefresh} refreshing={false} />);
-    fireEvent.click(screen.getByText("Tentar atualizar"));
-    expect(onRefresh).toHaveBeenCalledTimes(1);
-  });
-
-  it("disables refresh button when refreshing", () => {
-    render(<CacheBanner cachedAt={new Date().toISOString()} onRefresh={jest.fn()} refreshing={true} />);
-    expect(screen.getByText("Atualizando...")).toBeInTheDocument();
-    expect(screen.getByRole("button")).toBeDisabled();
-  });
-});
 
 // ---------------------------------------------------------------------------
 // T5: "Tentar atualizar" sends force_fresh: true
@@ -534,49 +501,11 @@ describe("T7: Client retry on 500/502", () => {
 
 // ---------------------------------------------------------------------------
 // T8: Messages with correct accents (snapshot test in pt-BR)
+// NOTE: DegradationBanner and CacheBanner tests removed — components deprecated and deleted (STORY-284 AC6)
 // ---------------------------------------------------------------------------
-import { DegradationBanner } from "@/app/buscar/components/DegradationBanner";
 import { FailedUfsBanner, PartialResultsBanner } from "@/app/buscar/components/PartialResultsPrompt";
 
 describe("T8: pt-BR accents and i18n", () => {
-  it("DegradationBanner uses correct Portuguese accents", () => {
-    const { container } = render(
-      <DegradationBanner
-        variant="warning"
-        message="Resultados parciais — algumas fontes de dados não responderam."
-        detail="Os dados disponíveis não continham licitações compatíveis."
-      />
-    );
-    const text = container.textContent || "";
-    expect(text).toContain("não");
-    expect(text).toContain("licitações");
-    expect(text).toContain("compatíveis");
-    expect(text).not.toContain("nao responderam");
-    expect(text).not.toContain("licitacoes");
-  });
-
-  it("DegradationBanner source names are user-friendly", () => {
-    const { container } = render(
-      <DegradationBanner
-        variant="warning"
-        message="Resultados parciais"
-        dataSources={[
-          { source: "pncp", status: "ok", records: 10 },
-          { source: "compras_gov", status: "timeout", records: 0 },
-          { source: "transparencia", status: "error", records: 0 },
-          { source: "querido_diario", status: "skipped", records: 0 },
-        ]}
-      />
-    );
-    const text = container.textContent || "";
-    expect(text).toContain("Fonte principal");
-    expect(text).toContain("Fonte secundária");
-    expect(text).toContain("Fonte complementar");
-    expect(text).toContain("Diários oficiais");
-    expect(text).not.toMatch(/\bpncp\b/i);
-    expect(text).not.toMatch(/\bcompras_gov\b/);
-  });
-
   it("FailedUfsBanner uses correct Portuguese", () => {
     const { container } = render(
       <FailedUfsBanner successCount={5} failedUfs={["SP", "RJ"]} onRetryFailed={jest.fn()} loading={false} />
@@ -607,15 +536,6 @@ describe("T8: pt-BR accents and i18n", () => {
     expect(text).not.toContain("indisponiveis");
   });
 
-  it("CacheBanner uses correct Portuguese", () => {
-    const { container } = render(
-      <CacheBanner cachedAt={new Date(Date.now() - 60 * 60 * 1000).toISOString()} onRefresh={jest.fn()} refreshing={false} />
-    );
-    const text = container.textContent || "";
-    expect(text).toContain("temporariamente");
-    expect(text).toContain("oportunidades mais recentes");
-    expect(text).toContain("Tentar atualizar");
-  });
 });
 
 // ---------------------------------------------------------------------------

@@ -45,12 +45,6 @@ jest.mock("../app/components/LoadingResultsSkeleton", () => ({
 jest.mock("../app/components/EmptyState", () => ({
   EmptyState: () => null,
 }));
-jest.mock("../app/buscar/components/DegradationBanner", () => ({
-  DegradationBanner: () => null,
-}));
-jest.mock("../app/buscar/components/OperationalStateBanner", () => ({
-  OperationalStateBanner: () => null,
-}));
 jest.mock("../app/buscar/components/UfProgressGrid", () => ({
   UfProgressGrid: () => null,
 }));
@@ -58,9 +52,6 @@ jest.mock("../app/buscar/components/PartialResultsPrompt", () => ({
   PartialResultsPrompt: () => null,
   PartialResultsBanner: () => null,
   FailedUfsBanner: () => null,
-}));
-jest.mock("../app/buscar/components/CacheBanner", () => ({
-  CacheBanner: () => null,
 }));
 jest.mock("../app/buscar/components/SourcesUnavailable", () => ({
   SourcesUnavailable: () => null,

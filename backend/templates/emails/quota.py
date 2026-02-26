@@ -60,7 +60,7 @@ def render_quota_warning_email(
     </p>
 
     <p style="text-align: center; margin: 24px 0 16px;">
-      <a href="{FRONTEND_URL}/precos"
+      <a href="{FRONTEND_URL}/planos"
          class="btn"
          style="display: inline-block; padding: 14px 32px; background-color: {SMARTLIC_GREEN}; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
         Fazer upgrade
@@ -120,7 +120,7 @@ def render_quota_exhausted_email(
     </p>
 
     <p style="text-align: center; margin: 24px 0 16px;">
-      <a href="{FRONTEND_URL}/precos"
+      <a href="{FRONTEND_URL}/planos"
          class="btn"
          style="display: inline-block; padding: 14px 32px; background-color: {SMARTLIC_GREEN}; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
         Fazer upgrade agora

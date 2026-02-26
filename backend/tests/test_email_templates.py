@@ -280,4 +280,4 @@ class TestCancellationEmail:
             end_date="01/04/2026",
         )
         assert "Reativar" in html
-        assert "/precos" in html
+        assert "/planos" in html

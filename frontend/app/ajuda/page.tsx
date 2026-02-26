@@ -116,7 +116,7 @@ const FAQ_DATA: FAQCategory[] = [
       {
         question: "Quais formas de pagamento são aceitas?",
         answer:
-          "Aceitamos cartão de crédito (Visa, Mastercard, American Express, Elo) processado de forma segura pelo Stripe. Boleto e PIX estão em fase de implementação.",
+          "Aceitamos cart\u00e3o de cr\u00e9dito (Visa, Mastercard, American Express, Elo) e Boleto Banc\u00e1rio, processados de forma segura pelo Stripe. O Boleto pode levar at\u00e9 3 dias \u00fateis para confirma\u00e7\u00e3o. PIX em breve.",
       },
       {
         question: "O pagamento é seguro?",

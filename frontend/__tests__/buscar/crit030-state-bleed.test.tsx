@@ -43,10 +43,6 @@ jest.mock("../../app/buscar/components/ZeroResultsSuggestions", () => ({
   ),
 }));
 
-jest.mock("../../app/buscar/components/CacheBanner", () => ({
-  CacheBanner: () => <div data-testid="cache-banner">Cache Banner</div>,
-}));
-
 jest.mock("../../app/buscar/components/PartialTimeoutBanner", () => ({
   PartialTimeoutBanner: () => <div data-testid="partial-timeout-banner">Partial Timeout</div>,
 }));
@@ -54,14 +50,6 @@ jest.mock("../../app/buscar/components/PartialTimeoutBanner", () => ({
 jest.mock("../../app/buscar/components/RefreshBanner", () => ({
   __esModule: true,
   default: () => <div data-testid="refresh-banner">Refresh Banner</div>,
-}));
-
-jest.mock("../../app/buscar/components/OperationalStateBanner", () => ({
-  OperationalStateBanner: () => <div data-testid="operational-state">Operational</div>,
-}));
-
-jest.mock("../../app/buscar/components/DegradationBanner", () => ({
-  DegradationBanner: () => <div data-testid="degradation-banner">Degraded</div>,
 }));
 
 jest.mock("../../app/buscar/components/UfProgressGrid", () => ({

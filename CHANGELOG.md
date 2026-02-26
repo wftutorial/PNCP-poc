@@ -5,6 +5,24 @@ All notable changes to SmartLic will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-02-26 - GTM Quick Wins (STORY-284)
+
+### Fixed
+- **Email links** — `/precos` replaced with `/planos` in billing and quota email templates
+- **Help page** — Updated payment FAQ to reflect Boleto support and PIX status
+
+### Changed
+- **CSP documentation** — Documented `unsafe-eval`/`unsafe-inline` as accepted risk in `next.config.js`
+- **`.env.example`** — Added `SUPABASE_JWT_SECRET` with documentation
+
+### Removed
+- **Deprecated banners** — Removed `DegradationBanner`, `CacheBanner`, `OperationalStateBanner` (replaced by `DataQualityBanner`)
+
+### Verified
+- **SENTRY_DSN** — Confirmed active in Railway for both backend and frontend services
+
+---
+
 ## [0.5.0] - 2026-02-20 - GTM RESILIENCE COMPLETE
 
 ### Added — Resilience & Observability

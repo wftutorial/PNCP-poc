@@ -53,6 +53,12 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
+              // CSP script-src: 'unsafe-inline' and 'unsafe-eval' are required because:
+              // 1. Next.js injects inline scripts for hydration and dynamic imports
+              // 2. Stripe.js (https://js.stripe.com) uses eval() for fraud detection
+              // Risk accepted and documented (STORY-284 AC4).
+              // Future plan: migrate to nonce-based CSP when Next.js supports it
+              // natively (tracked in https://github.com/vercel/next.js/discussions/54907)
               "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://static.cloudflareinsights.com",
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: https: blob:",

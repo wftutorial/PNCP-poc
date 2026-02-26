@@ -5,8 +5,14 @@ All modules MUST use get_redis_pool() instead of creating their own connections.
 
 Configuration:
 - REDIS_URL env var: Redis connection URL (redis://host:port/db)
-- Pool: max_connections=20, decode_responses=True, socket_timeout=5
+- Pool: max_connections=50, decode_responses=True, socket_timeout=30
 - Fallback: InMemoryCache with LRU eviction (max 10K entries)
+
+CRIT-026-ROOT: socket_timeout increased from 5→30s to prevent redis-py from killing
+XREAD and other long operations. See https://github.com/redis/redis-py/issues/2807
+and https://github.com/redis/redis-py/issues/3454 — redis-py async applies
+socket_timeout to the ENTIRE response parse, not per-read. 5s was incompatible
+with any operation > 5s (XREAD BLOCK, large SCAN, slow XADD under load).
 
 Usage:
     from redis_pool import get_redis_pool, get_fallback_cache, is_redis_available
@@ -29,9 +35,14 @@ from typing import Any, Optional
 logger = logging.getLogger(__name__)
 
 # Pool configuration (AC2)
-POOL_MAX_CONNECTIONS = 20
-POOL_SOCKET_TIMEOUT = 5
-POOL_SOCKET_CONNECT_TIMEOUT = 5
+# CRIT-026-ROOT: Increased from 20→50 connections (2 Gunicorn workers + ARQ + SSE)
+POOL_MAX_CONNECTIONS = 50
+# CRIT-026-ROOT: Increased from 5→30s — redis-py #2807: socket_timeout MUST exceed
+# any blocking command timeout. SSE XREAD polled at 1s, but other ops can be slow
+# under Railway network latency or Redis load. 30s is safe for all operations.
+POOL_SOCKET_TIMEOUT = 30
+# CRIT-026-ROOT: Increased from 5→10s — connection establishment under load
+POOL_SOCKET_CONNECT_TIMEOUT = 10
 
 # InMemoryCache configuration (AC4)
 INMEMORY_MAX_ENTRIES = 10_000

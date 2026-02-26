@@ -490,11 +490,15 @@ class TestCrossWorkerE2E:
 
     @pytest.mark.asyncio
     async def test_multiple_events_with_heartbeats(self):
-        """AC2/AC5: Mix of events and heartbeats during streaming."""
+        """AC2/AC5: Mix of events and heartbeats during polled streaming.
+
+        CRIT-026-ROOT: XREAD BLOCK replaced by non-blocking polled XREAD.
+        Heartbeat fires after _SSE_POLLS_PER_HEARTBEAT empty polls.
+        """
         stream_key = "smartlic:progress:heartbeat-mix:stream"
         xread_call = 0
 
-        async def mock_xread(streams, block=None, count=None):
+        async def mock_xread(streams, count=None):
             nonlocal xread_call
             xread_call += 1
 
@@ -503,7 +507,7 @@ class TestCrossWorkerE2E:
                     ("1-0", {"stage": "connecting", "progress": "5", "message": "Init", "detail_json": "{}"}),
                 ]]]
             elif xread_call == 2:
-                return None  # Timeout → heartbeat
+                return None  # Empty poll → heartbeat (with threshold=1)
             elif xread_call == 3:
                 return [[stream_key, [
                     ("2-0", {"stage": "complete", "progress": "100", "message": "Done", "detail_json": "{}"}),
@@ -526,7 +530,8 @@ class TestCrossWorkerE2E:
                  patch("routes.search.get_redis_pool", new_callable=AsyncMock, return_value=mock_redis), \
                  patch("routes.search.acquire_sse_connection", new_callable=AsyncMock, return_value=True), \
                  patch("routes.search.release_sse_connection", new_callable=AsyncMock), \
-                 patch("routes.search._SSE_HEARTBEAT_INTERVAL", 0.01):
+                 patch("routes.search._SSE_POLLS_PER_HEARTBEAT", 1), \
+                 patch("routes.search._SSE_POLL_INTERVAL", 0.01):
                 transport = ASGITransport(app=app)
                 async with AsyncClient(transport=transport, base_url="http://test") as client:
                     response = await client.get("/buscar-progress/heartbeat-mix")

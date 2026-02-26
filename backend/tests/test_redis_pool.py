@@ -490,14 +490,18 @@ class TestPoolConfiguration:
         mock_from_url.assert_called_once_with(
             "redis://myhost:6379/2",
             decode_responses=True,
-            max_connections=20,
-            socket_timeout=5,
-            socket_connect_timeout=5,
+            max_connections=50,
+            socket_timeout=30,
+            socket_connect_timeout=10,
         )
 
     def test_pool_constants(self):
-        """Verify module-level pool configuration constants."""
-        assert redis_pool.POOL_MAX_CONNECTIONS == 20
-        assert redis_pool.POOL_SOCKET_TIMEOUT == 5
-        assert redis_pool.POOL_SOCKET_CONNECT_TIMEOUT == 5
+        """Verify module-level pool configuration constants.
+
+        CRIT-026-ROOT: Values increased to prevent socket_timeout killing
+        XREAD and other long Redis operations. See redis-py #2807, #3454.
+        """
+        assert redis_pool.POOL_MAX_CONNECTIONS == 50
+        assert redis_pool.POOL_SOCKET_TIMEOUT == 30
+        assert redis_pool.POOL_SOCKET_CONNECT_TIMEOUT == 10
         assert redis_pool.INMEMORY_MAX_ENTRIES == 10_000

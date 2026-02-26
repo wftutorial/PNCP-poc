@@ -72,6 +72,12 @@ router = APIRouter(tags=["search"])
 _SSE_HEARTBEAT_INTERVAL = 15.0
 _SSE_WAIT_HEARTBEAT_EVERY = 10  # Every 10 iterations of 0.5s = 5s
 
+# CRIT-026-ROOT: Polled XREAD constants (replacing XREAD BLOCK).
+# Non-blocking XREAD polls every _SSE_POLL_INTERVAL seconds.
+# Heartbeat SSE comment sent every _SSE_POLLS_PER_HEARTBEAT empty polls.
+_SSE_POLL_INTERVAL = 1.0   # seconds between non-blocking polls
+_SSE_POLLS_PER_HEARTBEAT = 15  # heartbeat every ~15s (15 polls * 1s)
+
 
 def _build_error_detail(
     message: str,
@@ -299,30 +305,56 @@ async def buscar_progress_stream(
                     )
 
             if _use_streams:
-                # STORY-276 AC2: Redis Streams mode — XREAD BLOCK with replay
+                # CRIT-026-ROOT: Non-blocking polled XREAD replaces XREAD BLOCK.
+                #
+                # WHY: redis-py applies socket_timeout (global) to the ENTIRE
+                # XREAD BLOCK response wait. With socket_timeout=5s and block=15s,
+                # the socket layer kills the connection after 5s — BEFORE the
+                # 15s block timeout completes. This is a KNOWN BUG in redis-py:
+                #   - https://github.com/redis/redis-py/issues/2807
+                #   - https://github.com/redis/redis-py/issues/3454
+                #   - https://github.com/redis/redis-py/issues/2663
+                #
+                # SOLUTION: Use non-blocking XREAD (no BLOCK param) + asyncio.sleep
+                # polling. This completely sidesteps the socket_timeout conflict
+                # AND avoids connection pool corruption from stuck blocking reads
+                # (redis-py #2663). 1s poll interval is negligible latency for
+                # SSE progress updates.
+                #
+                # Preserves STORY-276 at-least-once delivery guarantee: XREAD
+                # with last_id still replays all entries from any point.
                 _stream_key = f"smartlic:progress:{search_id}:stream"
                 _last_id = "0"  # AC2: id=0 reads ALL history since beginning
-                logger.debug(f"SSE using Redis Streams for {search_id}")
+                _polls_since_heartbeat = 0
+                _consecutive_errors = 0
+                _MAX_CONSECUTIVE_ERRORS = 5  # circuit breaker for Redis failures
+                logger.debug(f"SSE using Redis Streams (polled) for {search_id}")
 
                 while True:
                     try:
+                        # Non-blocking XREAD — returns immediately with data or empty
                         result = await _redis.xread(
                             {_stream_key: _last_id},
-                            block=int(_SSE_HEARTBEAT_INTERVAL * 1000),
                             count=100,
                         )
+                        _consecutive_errors = 0  # reset on success
 
                         if not result:
-                            # XREAD timed out — send heartbeat
-                            heartbeat_count += 1
-                            yield ": heartbeat\n\n"
-                            logger.debug(
-                                f"CRIT-012: Heartbeat #{heartbeat_count} "
-                                f"for {search_id} (streams)"
-                            )
+                            # No new data — poll again after sleep
+                            _polls_since_heartbeat += 1
+                            if _polls_since_heartbeat >= _SSE_POLLS_PER_HEARTBEAT:
+                                heartbeat_count += 1
+                                yield ": heartbeat\n\n"
+                                logger.debug(
+                                    f"CRIT-012: Heartbeat #{heartbeat_count} "
+                                    f"for {search_id} (streams-polled)"
+                                )
+                                _polls_since_heartbeat = 0
+                            await _asyncio.sleep(_SSE_POLL_INTERVAL)
                             continue
 
                         # AC2: Process entries, updating last_id for subsequent reads
+                        _polls_since_heartbeat = 0  # reset on data received
                         for _stream_name, entries in result:
                             for entry_id, fields in entries:
                                 _last_id = entry_id
@@ -354,8 +386,31 @@ async def buscar_progress_stream(
                         ).inc()
                         break
 
-            else:
+                    except Exception as redis_err:
+                        # CRIT-026-ROOT: Circuit breaker for transient Redis errors.
+                        # Instead of crashing the SSE generator on first error,
+                        # retry up to _MAX_CONSECUTIVE_ERRORS times with backoff.
+                        _consecutive_errors += 1
+                        logger.warning(
+                            f"CRIT-026: Redis read error #{_consecutive_errors} "
+                            f"for {search_id}: {type(redis_err).__name__}: {redis_err}"
+                        )
+                        if _consecutive_errors >= _MAX_CONSECUTIVE_ERRORS:
+                            logger.error(
+                                f"CRIT-026: Circuit breaker open for {search_id} "
+                                f"after {_consecutive_errors} consecutive Redis errors, "
+                                f"falling back to in-memory queue"
+                            )
+                            # Fall through to in-memory mode
+                            _use_streams = False
+                            break
+                        # Exponential backoff: 1s, 2s, 4s, 8s, 16s
+                        _backoff = min(2 ** (_consecutive_errors - 1), 16)
+                        await _asyncio.sleep(_backoff)
+
+            if not _use_streams:
                 # AC3: In-memory mode — fallback asyncio.Queue (no Redis)
+                # Also entered when CRIT-026-ROOT circuit breaker opens mid-stream.
                 logger.debug(f"SSE using in-memory queue for {search_id}")
                 while True:
                     try:

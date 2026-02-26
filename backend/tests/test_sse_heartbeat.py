@@ -182,22 +182,26 @@ class TestMainLoopHeartbeat:
         assert ": heartbeat" in response.text
 
     async def test_redis_streams_heartbeat_on_timeout(self, mock_auth, mock_sse_limits):
-        """AC10: Redis Streams mode emits heartbeat when XREAD times out."""
+        """AC10: Redis Streams polled mode emits heartbeat on empty polls.
+
+        CRIT-026-ROOT: XREAD BLOCK replaced by non-blocking polled XREAD.
+        Heartbeat fires after _SSE_POLLS_PER_HEARTBEAT empty polls.
+        """
         from main import app
 
         mock_tracker = MagicMock()
         mock_tracker._use_redis = True
         mock_tracker.queue = asyncio.Queue()
 
-        # Mock Redis client with XREAD
+        # Mock Redis client with non-blocking XREAD
         mock_redis = AsyncMock()
         xread_count = 0
 
-        async def mock_xread(streams, block=None, count=None):
+        async def mock_xread(streams, count=None):
             nonlocal xread_count
             xread_count += 1
             if xread_count == 1:
-                # First call: return None (timeout) → heartbeat
+                # First call: return None (no data) → triggers heartbeat (threshold=1)
                 return None
             # Second call: return complete event
             stream_key = list(streams.keys())[0]
@@ -214,7 +218,8 @@ class TestMainLoopHeartbeat:
 
         with patch("routes.search.get_tracker", new_callable=AsyncMock, return_value=mock_tracker), \
              patch("routes.search.get_redis_pool", new_callable=AsyncMock, return_value=mock_redis), \
-             patch("routes.search._SSE_HEARTBEAT_INTERVAL", 0.01):
+             patch("routes.search._SSE_POLLS_PER_HEARTBEAT", 1), \
+             patch("routes.search._SSE_POLL_INTERVAL", 0.01):
             transport = ASGITransport(app=app)
             async with AsyncClient(transport=transport, base_url="http://test") as client:
                 response = await client.get("/buscar-progress/test-hb-streams")

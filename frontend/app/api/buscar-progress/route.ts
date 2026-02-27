@@ -90,6 +90,9 @@ export async function GET(request: NextRequest) {
     return new Response("Serviço temporariamente indisponível", { status: 503 });
   }
 
+  // STORY-297: Forward last_event_id for SSE reconnection replay
+  const lastEventId = request.nextUrl.searchParams.get("last_event_id");
+
   // CRIT-004 AC2: Forward Authorization + X-Correlation-ID
   const correlationId = request.headers.get("X-Correlation-ID");
   const headers: Record<string, string> = {
@@ -100,6 +103,10 @@ export async function GET(request: NextRequest) {
   }
   if (correlationId) {
     headers["X-Correlation-ID"] = correlationId;
+  }
+  // STORY-297 AC3: Forward Last-Event-ID header for replay
+  if (lastEventId) {
+    headers["Last-Event-ID"] = lastEventId;
   }
 
   // CRIT-012 AC5: AbortController for cleanup on client disconnect

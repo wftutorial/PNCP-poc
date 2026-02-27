@@ -36,6 +36,11 @@ _TERMINAL_STAGES = frozenset({
 # STORY-276 AC1: TTL for stream key after terminal event (5 minutes)
 _STREAM_EXPIRE_TTL = 300
 
+# STORY-297: SSE Last-Event-ID resumption constants
+_REPLAY_LIST_TTL = 600       # 10 minutes TTL for replay list
+_REPLAY_MAX_EVENTS = 1000    # Ring buffer max (AC5)
+_REPLAY_KEY_PREFIX = "sse_events:"  # Redis list key prefix
+
 
 @dataclass
 class ProgressEvent:
@@ -86,6 +91,9 @@ class ProgressTracker:
         self._ufs_completed = 0
         self._is_complete = False
         self._use_redis = use_redis
+        # STORY-297: Monotonic event counter + local history for replay
+        self._event_counter = 0
+        self._event_history: list[tuple[int, dict]] = []
 
     async def emit(self, stage: str, progress: int, message: str, **detail: Any) -> None:
         """Push a progress event to the queue and/or Redis pub/sub channel."""
@@ -95,13 +103,7 @@ class ProgressTracker:
             message=message,
             detail=detail,
         )
-
-        # Always put in local queue for backward compatibility
-        await self.queue.put(event)
-
-        # Also publish to Redis if enabled
-        if self._use_redis:
-            await self._publish_to_redis(event)
+        await self._emit_event(event)
 
     async def _publish_to_redis(self, event: ProgressEvent) -> None:
         """Publish event to Redis Stream (STORY-276 AC1).
@@ -137,6 +139,52 @@ class ProgressTracker:
             from metrics import STATE_STORE_ERRORS
             STATE_STORE_ERRORS.labels(store="tracker", operation="write").inc()
             logger.warning(f"Failed to publish progress event to Redis Stream: {e}")
+
+    async def _store_replay_event(self, event_id: int, event_dict: dict) -> None:
+        """STORY-297 AC2: Store event in Redis list for Last-Event-ID replay.
+
+        Uses RPUSH + LTRIM (ring buffer) with 10min TTL.
+        Graceful failure — replay is best-effort, not critical path.
+        """
+        redis = await get_redis_pool()
+        if redis is None:
+            return
+
+        replay_key = f"{_REPLAY_KEY_PREFIX}{self.search_id}"
+        try:
+            entry = json.dumps({"id": event_id, "data": event_dict})
+            await redis.rpush(replay_key, entry)
+            # AC5: Ring buffer — keep max 1000 entries
+            await redis.ltrim(replay_key, -_REPLAY_MAX_EVENTS, -1)
+            # AC2: 10min TTL
+            await redis.expire(replay_key, _REPLAY_LIST_TTL)
+        except Exception as e:
+            logger.warning(f"STORY-297: Failed to store replay event: {e}")
+
+    def get_events_after(self, after_id: int) -> list[tuple[int, dict]]:
+        """STORY-297 AC3: Get local events with id > after_id for replay."""
+        return [(eid, data) for eid, data in self._event_history if eid > after_id]
+
+    async def _emit_event(self, event: ProgressEvent) -> None:
+        """STORY-297: Common event dispatch — counter, queue, replay storage, Redis stream.
+
+        All emit_* methods that create ProgressEvent directly should call this
+        instead of manually doing queue.put + _publish_to_redis.
+        """
+        self._event_counter += 1
+        event_id = self._event_counter
+
+        await self.queue.put(event)
+
+        event_dict = event.to_dict()
+        self._event_history.append((event_id, event_dict))
+        if len(self._event_history) > _REPLAY_MAX_EVENTS:
+            self._event_history = self._event_history[-_REPLAY_MAX_EVENTS:]
+
+        await self._store_replay_event(event_id, event_dict)
+
+        if self._use_redis:
+            await self._publish_to_redis(event)
 
     async def emit_uf_complete(self, uf: str, items_count: int) -> None:
         """Emit progress for a single UF completion."""
@@ -223,11 +271,7 @@ class ProgressTracker:
             message=message,
             detail=merged_detail,
         )
-        await self.queue.put(event)
-
-        # Also publish to Redis if enabled
-        if self._use_redis:
-            await self._publish_to_redis(event)
+        await self._emit_event(event)
 
     async def emit_complete(self) -> None:
         """Signal search completion."""
@@ -237,11 +281,7 @@ class ProgressTracker:
             progress=100,
             message="Busca concluida!",
         )
-        await self.queue.put(event)
-
-        # STORY-276: Publish terminal event to stream for cross-worker visibility
-        if self._use_redis:
-            await self._publish_to_redis(event)
+        await self._emit_event(event)
 
     async def emit_source_complete(
         self,
@@ -277,9 +317,7 @@ class ProgressTracker:
             message=f"Fonte {source}: {status} ({record_count} resultados)",
             detail=detail,
         )
-        await self.queue.put(event)
-        if self._use_redis:
-            await self._publish_to_redis(event)
+        await self._emit_event(event)
 
     async def emit_source_error(
         self,
@@ -301,9 +339,7 @@ class ProgressTracker:
                 "duration_ms": duration_ms,
             },
         )
-        await self.queue.put(event)
-        if self._use_redis:
-            await self._publish_to_redis(event)
+        await self._emit_event(event)
 
     async def emit_progressive_results(
         self,
@@ -333,9 +369,7 @@ class ProgressTracker:
                 "sources_pending": sources_pending,
             },
         )
-        await self.queue.put(event)
-        if self._use_redis:
-            await self._publish_to_redis(event)
+        await self._emit_event(event)
 
     async def emit_revalidated(self, total_results: int, fetched_at: str) -> None:
         """B-01 AC7: Notify connected user that background revalidation completed.
@@ -353,10 +387,7 @@ class ProgressTracker:
                 "fetched_at": fetched_at,
             },
         )
-        await self.queue.put(event)
-
-        if self._use_redis:
-            await self._publish_to_redis(event)
+        await self._emit_event(event)
 
     async def emit_partial_results(
         self,
@@ -382,9 +413,7 @@ class ProgressTracker:
                 "ufs_pending": ufs_pending,
             },
         )
-        await self.queue.put(event)
-        if self._use_redis:
-            await self._publish_to_redis(event)
+        await self._emit_event(event)
 
     async def emit_refresh_available(
         self,
@@ -411,9 +440,7 @@ class ProgressTracker:
                 "removed_count": removed_count,
             },
         )
-        await self.queue.put(event)
-        if self._use_redis:
-            await self._publish_to_redis(event)
+        await self._emit_event(event)
 
     async def emit_search_complete(self, search_id: str, total_results: int) -> None:
         """GTM-ARCH-001 AC3: Signal async search completed — results available via /buscar-results.
@@ -433,9 +460,7 @@ class ProgressTracker:
                 "has_results": True,
             },
         )
-        await self.queue.put(event)
-        if self._use_redis:
-            await self._publish_to_redis(event)
+        await self._emit_event(event)
 
     async def emit_error(self, error_message: str) -> None:
         """Signal search error."""
@@ -446,16 +471,79 @@ class ProgressTracker:
             message=error_message,
             detail={"error": error_message},
         )
-        await self.queue.put(event)
-
-        # STORY-276: Publish terminal event to stream for cross-worker visibility
-        if self._use_redis:
-            await self._publish_to_redis(event)
+        await self._emit_event(event)
 
 
 # Global registry of active progress trackers (in-memory mode only)
 _active_trackers: Dict[str, ProgressTracker] = {}
 _TRACKER_TTL = 420  # 7 minutes (AC14: >= FETCH_TIMEOUT 360s + margin)
+
+
+async def get_replay_events(search_id: str, after_id: int) -> list[tuple[int, dict]]:
+    """STORY-297 AC3: Get replay events after a given event ID.
+
+    Tries local tracker history first, then Redis list.
+    Returns list of (event_id, event_data) tuples.
+    """
+    # Try local tracker first (fastest)
+    tracker = _active_trackers.get(search_id)
+    if tracker and tracker._event_history:
+        return tracker.get_events_after(after_id)
+
+    # Fall back to Redis list
+    redis = await get_redis_pool()
+    if redis is None:
+        return []
+
+    replay_key = f"{_REPLAY_KEY_PREFIX}{search_id}"
+    try:
+        raw_entries = await redis.lrange(replay_key, 0, -1)
+        if not raw_entries:
+            return []
+
+        events = []
+        for entry in raw_entries:
+            parsed = json.loads(entry)
+            eid = parsed["id"]
+            if eid > after_id:
+                events.append((eid, parsed["data"]))
+        return events
+    except Exception as e:
+        logger.warning(f"STORY-297: Failed to load replay events from Redis: {e}")
+        return []
+
+
+async def is_search_terminal(search_id: str) -> Optional[dict]:
+    """STORY-297 AC4: Check if search has reached a terminal state.
+
+    Returns the terminal event data if found, None otherwise.
+    Checks local tracker history first, then Redis list.
+    """
+    # Check local tracker
+    tracker = _active_trackers.get(search_id)
+    if tracker and tracker._event_history:
+        for _eid, data in reversed(tracker._event_history):
+            if data.get("stage") in _TERMINAL_STAGES:
+                return data
+        return None
+
+    # Check Redis list (last entry)
+    redis = await get_redis_pool()
+    if redis is None:
+        return None
+
+    replay_key = f"{_REPLAY_KEY_PREFIX}{search_id}"
+    try:
+        last_entries = await redis.lrange(replay_key, -1, -1)
+        if last_entries:
+            parsed = json.loads(last_entries[0])
+            data = parsed["data"]
+            if data.get("stage") in _TERMINAL_STAGES:
+                return data
+    except Exception as e:
+        logger.warning(f"STORY-297: Failed to check terminal state: {e}")
+
+    return None
 
 
 async def create_tracker(search_id: str, uf_count: int) -> ProgressTracker:

@@ -128,6 +128,8 @@ interface UseSearchSSEReturn {
   sseAvailable: boolean;
   /** GTM-FIX-033 AC2: true when SSE disconnected after retry */
   sseDisconnected: boolean;
+  /** STORY-297 AC9: true during reconnection attempt (between disconnect and reconnect) */
+  isReconnecting: boolean;
   /** A-02 AC8: true when last terminal SSE event was "degraded" */
   isDegraded: boolean;
   /** A-02 AC10: metadata from degraded SSE event detail */
@@ -159,6 +161,7 @@ export function useSearchSSE({
   const [isConnected, setIsConnected] = useState(false);
   const [sseAvailable, setSseAvailable] = useState(true);
   const [sseDisconnected, setSseDisconnected] = useState(false);
+  const [isReconnecting, setIsReconnecting] = useState(false);
   const [isDegraded, setIsDegraded] = useState(false);
   const [degradedDetail, setDegradedDetail] = useState<SearchProgressEvent['detail'] | null>(null);
   const [partialProgress, setPartialProgress] = useState<PartialProgress | null>(null);
@@ -173,6 +176,8 @@ export function useSearchSSE({
 
   const eventSourceRef = useRef<EventSource | null>(null);
   const retryAttemptRef = useRef(0);
+  // STORY-297 AC6: Track last received event ID for reconnection
+  const lastEventIdRef = useRef<string>('');
   const onEventRef = useRef(onEvent);
   const onUfStatusRef = useRef(onUfStatus);
   const onErrorRef = useRef(onError);
@@ -323,9 +328,16 @@ export function useSearchSSE({
     eventSource.onopen = () => {
       setIsConnected(true);
       setSseAvailable(true);
+      setIsReconnecting(false);
     };
 
-    eventSource.onmessage = (e) => handleMessage(e.data);
+    eventSource.onmessage = (e) => {
+      // STORY-297 AC6: Track last event ID for reconnection
+      if (e.lastEventId) {
+        lastEventIdRef.current = e.lastEventId;
+      }
+      handleMessage(e.data);
+    };
 
     // Also listen for named events (uf_status, batch_progress)
     eventSource.addEventListener('uf_status', (e: MessageEvent) => {
@@ -372,8 +384,10 @@ export function useSearchSSE({
     setRefreshAvailable(null);
     setSourceStatuses(new Map());
     setSseDisconnected(false);
+    setIsReconnecting(false);
     setSseAvailable(true);
     retryAttemptRef.current = 0;
+    lastEventIdRef.current = '';
 
     // Build SSE URL through Next.js proxy
     // Auth token passed as query param since EventSource doesn't support custom headers
@@ -411,12 +425,15 @@ export function useSearchSSE({
         console.warn(`SSE all ${SSE_MAX_RETRIES} retries exhausted — falling back to simulated progress`);
         setSseAvailable(false);
         setSseDisconnected(true);
+        setIsReconnecting(false);
         onErrorRef.current?.();
         return;
       }
 
       const delay = SSE_RETRY_DELAYS[retryAttemptRef.current] ?? 12000;
       retryAttemptRef.current += 1;
+      // STORY-297 AC9: Show reconnecting indicator
+      setIsReconnecting(true);
       console.info(`SSE reconnecting in ${delay}ms (attempt ${retryAttemptRef.current}/${SSE_MAX_RETRIES})`);
 
       setTimeout(() => {
@@ -424,6 +441,10 @@ export function useSearchSSE({
           let retryUrl = `/api/buscar-progress?search_id=${encodeURIComponent(searchId)}`;
           if (authToken) {
             retryUrl += `&token=${encodeURIComponent(authToken)}`;
+          }
+          // STORY-297 AC6: Pass last event ID for replay on reconnection
+          if (lastEventIdRef.current) {
+            retryUrl += `&last_event_id=${encodeURIComponent(lastEventIdRef.current)}`;
           }
           const retryEs = connectSSE(retryUrl);
           retryEs.onerror = () => {
@@ -465,6 +486,7 @@ export function useSearchSSE({
 
   return {
     currentEvent, isConnected, sseAvailable, sseDisconnected,
+    isReconnecting,
     isDegraded, degradedDetail, partialProgress, refreshAvailable,
     ufStatuses, ufTotalFound, ufAllComplete, batchProgress,
     sourceStatuses,

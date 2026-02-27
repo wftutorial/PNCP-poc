@@ -49,7 +49,7 @@ from rate_limiter import (
     release_sse_connection,
     SEARCH_RATE_LIMIT_PER_MINUTE,
 )
-from progress import create_tracker, get_tracker, remove_tracker
+from progress import create_tracker, get_tracker, remove_tracker, get_replay_events, is_search_terminal
 from redis_pool import get_redis_pool
 from log_sanitizer import get_sanitized_logger
 from search_pipeline import SearchPipeline
@@ -308,10 +308,57 @@ async def buscar_progress_stream(
             headers={"Retry-After": "5"},
         )
 
+    # STORY-297 AC3: Read Last-Event-ID for reconnection replay
+    last_event_id_raw = request.headers.get("Last-Event-ID") or request.query_params.get("last_event_id")
+    last_event_id: int = 0
+    if last_event_id_raw:
+        try:
+            last_event_id = int(last_event_id_raw)
+        except (ValueError, TypeError):
+            last_event_id = 0
+        logger.debug(f"STORY-297: SSE reconnect for {search_id} with Last-Event-ID={last_event_id}")
+
     async def event_generator():
         # GTM-GO-002 AC6: Release SSE slot when generator finishes
         heartbeat_count = 0
+        # STORY-297: Track event IDs for SSE id: field
+        _sse_event_counter = last_event_id
         try:
+            # STORY-297 AC3+AC4: Replay events after Last-Event-ID on reconnection
+            if last_event_id > 0:
+                # AC4: If search already completed, replay + send terminal immediately
+                terminal_event = await is_search_terminal(search_id)
+                if terminal_event:
+                    replay_events = await get_replay_events(search_id, last_event_id)
+                    for eid, edata in replay_events:
+                        yield f"id: {eid}\ndata: {_json.dumps(edata)}\n\n"
+                    # If terminal wasn't in replay (already seen), send it now
+                    if not replay_events or replay_events[-1][1].get("stage") != terminal_event.get("stage"):
+                        # Generate a synthetic ID beyond replay
+                        final_id = replay_events[-1][0] + 1 if replay_events else last_event_id + 1
+                        yield f"id: {final_id}\ndata: {_json.dumps(terminal_event)}\n\n"
+                    logger.debug(
+                        f"STORY-297 AC4: Replayed {len(replay_events) if replay_events else 0} events "
+                        f"+ terminal for completed search {search_id}"
+                    )
+                    return
+
+                # AC3: Search still in progress — replay missed events then continue streaming
+                replay_events = await get_replay_events(search_id, last_event_id)
+                if replay_events:
+                    for eid, edata in replay_events:
+                        _sse_event_counter = eid
+                        yield f"id: {eid}\ndata: {_json.dumps(edata)}\n\n"
+                    logger.debug(
+                        f"STORY-297 AC3: Replayed {len(replay_events)} events for {search_id} "
+                        f"(after ID {last_event_id})"
+                    )
+                    # Check if replay included terminal event
+                    if replay_events[-1][1].get("stage") in (
+                        "complete", "degraded", "error", "refresh_available", "search_complete",
+                    ):
+                        return
+
             # CRIT-012 AC1: Wait for tracker with SSE keepalive comments every 5s
             # Moved inside generator so heartbeats flow before first real event
             tracker = None
@@ -350,7 +397,8 @@ async def buscar_progress_stream(
                 state_val = db_state.get("to_state", "error")
                 from search_state_manager import _estimate_progress
                 progress = _estimate_progress(state_val)
-                yield f"data: {_json.dumps({'stage': state_val, 'progress': progress, 'message': f'Estado atual: {state_val}'})}\n\n"
+                _sse_event_counter += 1
+                yield f"id: {_sse_event_counter}\ndata: {_json.dumps({'stage': state_val, 'progress': progress, 'message': f'Estado atual: {state_val}'})}\n\n"
                 # If terminal, we're done
                 if state_val in ("completed", "failed", "timed_out", "rate_limited"):
                     return
@@ -436,7 +484,9 @@ async def buscar_progress_stream(
                                     if _extra in fields:
                                         event_data[_extra] = fields[_extra]
 
-                                yield f"data: {_json.dumps(event_data)}\n\n"
+                                # STORY-297 AC1: Include SSE event id
+                                _sse_event_counter += 1
+                                yield f"id: {_sse_event_counter}\ndata: {_json.dumps(event_data)}\n\n"
 
                                 if fields["stage"] in (
                                     "complete", "degraded", "error",
@@ -484,7 +534,9 @@ async def buscar_progress_stream(
                             tracker.queue.get(),
                             timeout=_SSE_HEARTBEAT_INTERVAL,
                         )
-                        yield f"data: {_json.dumps(event.to_dict())}\n\n"
+                        # STORY-297 AC1: Include SSE event id
+                        _sse_event_counter += 1
+                        yield f"id: {_sse_event_counter}\ndata: {_json.dumps(event.to_dict())}\n\n"
 
                         if event.stage in (
                             "complete", "degraded", "error",

@@ -234,8 +234,13 @@ class TestProgressTracker:
             assert fields["message"] == "Fetching..."
             assert "detail_json" in fields
 
-            # Non-terminal event should NOT set EXPIRE
-            mock_redis_client.expire.assert_not_called()
+            # Non-terminal event should NOT set EXPIRE on stream key
+            # STORY-297: Replay list EXPIRE is always called, but stream EXPIRE only on terminal
+            stream_expire_calls = [
+                c for c in mock_redis_client.expire.call_args_list
+                if c[0][0].endswith(":stream")
+            ]
+            assert len(stream_expire_calls) == 0
 
     @pytest.mark.asyncio
     async def test_emit_redis_publish_failure_graceful(self):
@@ -704,5 +709,10 @@ class TestEmitDegraded:
             assert detail["reason"] == "timeout"
             assert detail["cache_age_hours"] == 1.5
 
-            # Terminal event should set EXPIRE
-            mock_redis_client.expire.assert_called_once()
+            # Terminal event should set EXPIRE on stream key
+            # STORY-297: Also sets EXPIRE on replay list, so expect 2 calls
+            stream_expire_calls = [
+                c for c in mock_redis_client.expire.call_args_list
+                if c[0][0].endswith(":stream")
+            ]
+            assert len(stream_expire_calls) == 1

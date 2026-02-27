@@ -39,6 +39,8 @@ export interface SearchResultsProps {
   sseAvailable: boolean;
   /** GTM-FIX-033 AC3: SSE disconnected flag */
   sseDisconnected?: boolean;
+  /** STORY-297 AC9: SSE reconnecting indicator */
+  isReconnecting?: boolean;
   /** A-02 AC8: search completed with degraded data */
   isDegraded?: boolean;
   /** A-02 AC10: metadata from SSE degraded event */
@@ -143,7 +145,7 @@ export interface SearchResultsProps {
 
 export default function SearchResults({
   loading, loadingStep, estimatedTime, stateCount, statesProcessed,
-  onCancel, sseEvent, useRealProgress, sseAvailable, sseDisconnected, isDegraded, degradedDetail, onStageChange,
+  onCancel, sseEvent, useRealProgress, sseAvailable, sseDisconnected, isReconnecting, isDegraded, degradedDetail, onStageChange,
   error, quotaError,
   result, rawCount,
   ufsSelecionadas, sectorName,
@@ -241,6 +243,21 @@ export default function SearchResults({
           style={{ minHeight: gridFading ? 0 : undefined }}
         >
           <UfProgressGrid ufStatuses={ufStatuses} totalFound={ufTotalFound} />
+        </div>
+      )}
+
+      {/* STORY-297 AC9: Reconnecting indicator during SSE gap */}
+      {isReconnecting && loading && (
+        <div className="mb-2 p-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 animate-fade-in-up" role="status" data-testid="sse-reconnecting-banner">
+          <div className="flex items-center gap-2">
+            <svg className="w-4 h-4 text-amber-600 dark:text-amber-400 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            <span className="text-sm text-amber-800 dark:text-amber-200">
+              Reconectando...
+            </span>
+          </div>
         </div>
       )}
 

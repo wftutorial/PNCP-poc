@@ -100,6 +100,8 @@ export interface UseSearchReturn {
   sseAvailable: boolean;
   /** GTM-FIX-033 AC2: true when SSE disconnected after retry */
   sseDisconnected: boolean;
+  /** STORY-297 AC9: true during SSE reconnection attempt */
+  isReconnecting: boolean;
   /** A-02 AC8: true when search completed with degraded data */
   isDegraded: boolean;
   /** A-02 AC10: metadata from degraded SSE event */
@@ -347,6 +349,7 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
   // CRIT-003 AC19-AC20: Single consolidated SSE connection (replaces useSearchProgress + useUfProgress)
   const {
     currentEvent: sseEvent, sseAvailable, sseDisconnected,
+    isReconnecting,
     isDegraded, degradedDetail, partialProgress, refreshAvailable,
     ufStatuses, ufTotalFound, ufAllComplete, batchProgress,
     sourceStatuses,
@@ -1096,7 +1099,7 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
   return {
     loading, loadingStep, statesProcessed, error, quotaError,
     result, setResult, setError, rawCount,
-    searchId, useRealProgress, sseEvent: effectiveEvent, sseAvailable, sseDisconnected, isDegraded, degradedDetail,
+    searchId, useRealProgress, sseEvent: effectiveEvent, sseAvailable, sseDisconnected, isReconnecting, isDegraded, degradedDetail,
     partialProgress, refreshAvailable,
     ufStatuses, ufTotalFound, ufAllComplete, batchProgress,
     sourceStatuses,

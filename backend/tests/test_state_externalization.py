@@ -370,11 +370,14 @@ class TestProgressTrackerCrossWorker:
             tracker = ProgressTracker("expire-001", uf_count=1, use_redis=True)
             await tracker.emit_complete()
 
-            # EXPIRE called after terminal event
-            mock_redis_async.expire.assert_called_once()
-            call_args = mock_redis_async.expire.call_args
-            assert call_args[0][0] == "smartlic:progress:expire-001:stream"
-            assert call_args[0][1] == 300  # 5 min cleanup
+            # EXPIRE called for stream key after terminal event
+            # STORY-297: Also sets EXPIRE on replay list, so filter for stream key
+            stream_expire_calls = [
+                c for c in mock_redis_async.expire.call_args_list
+                if c[0][0] == "smartlic:progress:expire-001:stream"
+            ]
+            assert len(stream_expire_calls) == 1
+            assert stream_expire_calls[0][0][1] == 300  # 5 min cleanup
 
     @pytest.mark.asyncio
     async def test_tracker_redis_error_increments_metric(self, mock_redis_async):

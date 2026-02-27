@@ -138,16 +138,23 @@ class TestStreamExpire:
 
     @pytest.mark.asyncio
     async def test_no_expire_on_non_terminal_event(self):
-        """AC1: No EXPIRE for non-terminal events like 'fetching'."""
+        """AC1: No EXPIRE on stream key for non-terminal events like 'fetching'."""
         mock_redis = AsyncMock()
         mock_redis.xadd = AsyncMock(return_value="1-0")
         mock_redis.expire = AsyncMock()
+        mock_redis.rpush = AsyncMock()
+        mock_redis.ltrim = AsyncMock()
 
         with patch("progress.get_redis_pool", new_callable=AsyncMock, return_value=mock_redis):
             tracker = ProgressTracker("stream-no-expire", uf_count=1, use_redis=True)
             await tracker.emit(stage="fetching", progress=30, message="Working...")
 
-        mock_redis.expire.assert_not_called()
+        # STORY-297: Replay list EXPIRE is called, but stream EXPIRE should NOT be
+        stream_expire_calls = [
+            c for c in mock_redis.expire.call_args_list
+            if c[0][0].endswith(":stream")
+        ]
+        assert len(stream_expire_calls) == 0
 
     @pytest.mark.asyncio
     async def test_emit_complete_publishes_and_expires(self):
@@ -155,6 +162,8 @@ class TestStreamExpire:
         mock_redis = AsyncMock()
         mock_redis.xadd = AsyncMock(return_value="1-0")
         mock_redis.expire = AsyncMock()
+        mock_redis.rpush = AsyncMock()
+        mock_redis.ltrim = AsyncMock()
 
         with patch("progress.get_redis_pool", new_callable=AsyncMock, return_value=mock_redis):
             tracker = ProgressTracker("stream-complete", uf_count=1, use_redis=True)
@@ -165,7 +174,12 @@ class TestStreamExpire:
         fields = mock_redis.xadd.call_args[0][1]
         assert fields["stage"] == "complete"
         assert fields["progress"] == "100"
-        mock_redis.expire.assert_called_once()
+        # STORY-297: EXPIRE called twice — replay list (600s) + stream (300s)
+        stream_expire_calls = [
+            c for c in mock_redis.expire.call_args_list
+            if c[0][0].endswith(":stream")
+        ]
+        assert len(stream_expire_calls) == 1
 
     @pytest.mark.asyncio
     async def test_emit_error_publishes_and_expires(self):
@@ -173,6 +187,8 @@ class TestStreamExpire:
         mock_redis = AsyncMock()
         mock_redis.xadd = AsyncMock(return_value="1-0")
         mock_redis.expire = AsyncMock()
+        mock_redis.rpush = AsyncMock()
+        mock_redis.ltrim = AsyncMock()
 
         with patch("progress.get_redis_pool", new_callable=AsyncMock, return_value=mock_redis):
             tracker = ProgressTracker("stream-error", uf_count=1, use_redis=True)
@@ -182,7 +198,12 @@ class TestStreamExpire:
         fields = mock_redis.xadd.call_args[0][1]
         assert fields["stage"] == "error"
         assert fields["progress"] == "-1"
-        mock_redis.expire.assert_called_once()
+        # STORY-297: EXPIRE called twice — replay list (600s) + stream (300s)
+        stream_expire_calls = [
+            c for c in mock_redis.expire.call_args_list
+            if c[0][0].endswith(":stream")
+        ]
+        assert len(stream_expire_calls) == 1
 
 
 # ============================================================================

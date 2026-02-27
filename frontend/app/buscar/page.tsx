@@ -541,6 +541,7 @@ function HomePageContent() {
                 useRealProgress={search.useRealProgress}
                 sseAvailable={search.sseAvailable}
                 sseDisconnected={search.sseDisconnected}
+                isReconnecting={search.isReconnecting}
                 isDegraded={search.isDegraded}
                 degradedDetail={search.degradedDetail}
                 onStageChange={(stage) => trackEvent('search_progress_stage', { stage, is_sse: search.useRealProgress && search.sseAvailable })}

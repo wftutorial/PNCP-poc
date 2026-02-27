@@ -338,6 +338,18 @@ async def lifespan(app_instance: FastAPI):
     # AC12-AC14: Validate environment variables
     validate_env_vars()
 
+    # STORY-290-patch: Configure thread pool for asyncio.to_thread() calls
+    # Default pool = min(32, cpu+4) ≈ 5-6 on Railway 1-2 vCPU.
+    # Each search uses ~5-8 to_thread calls (auth, quota, cache, excel, upload).
+    # 20 workers supports ~3 concurrent searches without thread starvation.
+    import concurrent.futures
+    _thread_pool = concurrent.futures.ThreadPoolExecutor(
+        max_workers=20,
+        thread_name_prefix="smartlic-io-",
+    )
+    asyncio.get_event_loop().set_default_executor(_thread_pool)
+    logger.info("STORY-290-patch: thread pool executor configured (max_workers=20)")
+
     # STORY-217: Initialize Redis pool
     await startup_redis()
 
@@ -493,6 +505,10 @@ async def lifespan(app_instance: FastAPI):
 
     # GTM-RESILIENCE-F02: Flush and shut down tracing
     shutdown_tracing()
+
+    # STORY-290-patch: Shutdown thread pool executor
+    _thread_pool.shutdown(wait=False)
+    logger.info("STORY-290-patch: thread pool executor shut down")
 
     # STORY-217: Close Redis pool
     await shutdown_redis()

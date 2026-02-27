@@ -736,7 +736,10 @@ class SearchPipeline:
                     )
 
                 # STORY-225 AC10/AC11: Quota email notifications (fire-and-forget)
-                _maybe_send_quota_email(ctx.user["id"], new_quota_used, ctx.quota_info)
+                # STORY-290-patch: offload sync Supabase query to thread pool
+                asyncio.create_task(
+                    asyncio.to_thread(_maybe_send_quota_email, ctx.user["id"], new_quota_used, ctx.quota_info)
+                )
             except HTTPException as http_exc:
                 # CRIT-002 AC5: If quota fails after registration, mark session as failed
                 if ctx.session_id:
@@ -2277,11 +2280,13 @@ class SearchPipeline:
                     "excel.input_count": len(ctx.licitacoes_filtradas),
                 }) as excel_span:
                     logger.debug("Generating Excel report")
-                    excel_buffer = deps.create_excel(ctx.licitacoes_filtradas)
+                    # STORY-290-patch: offload CPU-bound Excel generation to thread pool
+                    excel_buffer = await asyncio.to_thread(deps.create_excel, ctx.licitacoes_filtradas)
                     excel_bytes = excel_buffer.read()
 
                     with optional_span(_tracer, "generate.upload"):
-                        storage_result = upload_excel(excel_bytes, ctx.request.search_id)
+                        # STORY-290-patch: offload sync storage upload to thread pool
+                        storage_result = await asyncio.to_thread(upload_excel, excel_bytes, ctx.request.search_id)
 
                     if storage_result:
                         ctx.download_url = storage_result["signed_url"]

@@ -34,14 +34,14 @@ A busca multi-fonte do SmartLic depende de 3 APIs governamentais externas (PNCP,
 
 ### ComprasGov Circuit Breaker (gap principal)
 
-- [ ] AC1: ComprasGov protegido por circuit breaker — reusar a classe `PNCPCircuitBreaker` existente (ja funciona, testada, Redis-backed)
-- [ ] AC2: Instancia separada: `_comprasgov_circuit_breaker` com config propria via env vars (`COMPRASGOV_CIRCUIT_BREAKER_THRESHOLD`, `COMPRASGOV_CIRCUIT_BREAKER_COOLDOWN`)
-- [ ] AC3: Retry logic do ComprasGov (atualmente inline em `compras_gov_client.py:137-212`) DENTRO do circuit breaker — CB wraps retry, nao o contrario. Se o retry exaure tentativas, conta como 1 failure no CB (nao 3).
-- [ ] AC4: Health canary para ComprasGov (similar ao existente para PNCP) — probe leve a cada 60s para detectar recovery
+- [x] AC1: ComprasGov protegido por circuit breaker — reusar a classe `PNCPCircuitBreaker` existente (ja funciona, testada, Redis-backed)
+- [x] AC2: Instancia separada: `_comprasgov_circuit_breaker` com config propria via env vars (`COMPRASGOV_CIRCUIT_BREAKER_THRESHOLD`, `COMPRASGOV_CIRCUIT_BREAKER_COOLDOWN`)
+- [x] AC3: Retry logic do ComprasGov (atualmente inline em `compras_gov_client.py:137-212`) DENTRO do circuit breaker — CB wraps retry, nao o contrario. Se o retry exaure tentativas, conta como 1 failure no CB (nao 3).
+- [x] AC4: Health canary para ComprasGov (similar ao existente para PNCP) — probe leve a cada 60s para detectar recovery
 
 ### Threshold Alignment
 
-- [ ] AC5: PNCP, PCP e ComprasGov com thresholds ALINHADOS e justificados:
+- [x] AC5: PNCP, PCP e ComprasGov com thresholds ALINHADOS e justificados:
 
 | Fonte | Threshold | Cooldown | Justificativa |
 |-------|-----------|----------|---------------|
@@ -49,31 +49,31 @@ A busca multi-fonte do SmartLic depende de 3 APIs governamentais externas (PNCP,
 | PCP | 15 falhas | 60s | **Alinhado** (era 30/120s sem justificativa) |
 | ComprasGov | 15 falhas | 60s | **Novo** — mesma classe de API governamental |
 
-- [ ] AC6: Se no futuro diferentes thresholds forem necessarios, a razao DEVE ser documentada no config.py como comentario
+- [x] AC6: Se no futuro diferentes thresholds forem necessarios, a razao DEVE ser documentada no config.py como comentario
 
 ### Supabase CB — Manter Separado
 
-- [ ] AC7: `SupabaseCircuitBreaker` NAO e alterado — databases tem semantica de falha diferente de APIs HTTP (sliding window com fail rate e correto para DB). Documentar no config.py: "Supabase CB usa sliding window — databases sao diferentes de APIs HTTP externas"
+- [x] AC7: `SupabaseCircuitBreaker` NAO e alterado — databases tem semantica de falha diferente de APIs HTTP (sliding window com fail rate e correto para DB). Documentar no config.py: "Supabase CB usa sliding window — databases sao diferentes de APIs HTTP externas"
 
 ### Integracao com Pipeline de Busca
 
-- [ ] AC8: `search_pipeline.py` usa CB para PNCP, PCP e ComprasGov
-- [ ] AC9: Se CB OPEN para uma fonte, pipeline SKIP aquela fonte (nao tenta) e continua com as demais
-- [ ] AC10: Se TODAS as fontes OPEN, retorna cache stale com aviso ao usuario
+- [x] AC8: `search_pipeline.py` usa CB para PNCP, PCP e ComprasGov
+- [x] AC9: Se CB OPEN para uma fonte, pipeline SKIP aquela fonte (nao tenta) e continua com as demais
+- [x] AC10: Se TODAS as fontes OPEN, retorna cache stale com aviso ao usuario
 
 ### Metricas e Observabilidade
 
-- [ ] AC11: Prometheus metric `smartlic_circuit_breaker_state` com label `source={pncp,pcp,comprasgov}` — valores `{closed,open,half_open}` (expandir metrica existente que ja cobre pncp/pcp)
-- [ ] AC12: Log WARN ao transitar para OPEN, INFO ao retornar para CLOSED
-- [ ] AC13: Sentry breadcrumb em cada transicao de estado
+- [x] AC11: Prometheus metric `smartlic_circuit_breaker_state` com label `source={pncp,pcp,comprasgov}` — valores `{closed,open,half_open}` (expandir metrica existente que ja cobre pncp/pcp)
+- [x] AC12: Log WARN ao transitar para OPEN, INFO ao retornar para CLOSED
+- [x] AC13: Sentry breadcrumb em cada transicao de estado
 
 ### Testes
 
-- [ ] AC14: Teste: ComprasGov CB tripa apos 15 falhas e impede novas chamadas
-- [ ] AC15: Teste: ComprasGov CB recupera apos cooldown (half-open → closed)
-- [ ] AC16: Teste: Pipeline funciona com 1 fonte em CB OPEN (resultados parciais)
-- [ ] AC17: Teste: Pipeline retorna cache stale quando todas as fontes OPEN
-- [ ] AC18: Testes existentes passando (5131+ backend, 2681+ frontend)
+- [x] AC14: Teste: ComprasGov CB tripa apos 15 falhas e impede novas chamadas
+- [x] AC15: Teste: ComprasGov CB recupera apos cooldown (half-open → closed)
+- [x] AC16: Teste: Pipeline funciona com 1 fonte em CB OPEN (resultados parciais)
+- [x] AC17: Teste: Pipeline retorna cache stale quando todas as fontes OPEN
+- [x] AC18: Testes existentes passando (5131+ backend, 2681+ frontend)
 
 ## Technical Notes
 
@@ -142,11 +142,11 @@ curl -s -X POST https://api.smartlic.tech/buscar \
 
 ## Definition of Done
 
-- [ ] Todas as 3 fontes de dados protegidas por circuit breaker
-- [ ] Thresholds alinhados e justificados
-- [ ] ComprasGov com CB (era zero protecao)
-- [ ] Metricas Prometheus para monitorar estado de cada CB
-- [ ] Pipeline de busca degrada gracefully quando fontes falham
-- [ ] Supabase CB mantido separado (decisao documentada)
-- [ ] Rollback via env vars funcional
-- [ ] Testes cobrindo ComprasGov CB + pipeline integration
+- [x] Todas as 3 fontes de dados protegidas por circuit breaker
+- [x] Thresholds alinhados e justificados
+- [x] ComprasGov com CB (era zero protecao)
+- [x] Metricas Prometheus para monitorar estado de cada CB
+- [x] Pipeline de busca degrada gracefully quando fontes falham
+- [x] Supabase CB mantido separado (decisao documentada)
+- [x] Rollback via env vars funcional
+- [x] Testes cobrindo ComprasGov CB + pipeline integration

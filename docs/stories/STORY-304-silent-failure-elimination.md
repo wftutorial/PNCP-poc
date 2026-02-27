@@ -33,45 +33,45 @@ A auditoria tecnica (Track E) encontrou **19 instancias** de excecoes silenciada
 
 ### Grupo 1: BLOCKERs — Exception silencing em dados de busca
 
-- [ ] AC1: `consolidation.py:410` — `on_source_complete` callback: substituir `except Exception: pass` por `logger.warning(f"on_source_complete callback error for {code}: {e}")` + continuar
-- [ ] AC2: `consolidation.py:431` — mesma correcao para path de erro
-- [ ] AC3: `consolidation.py:475` — mesma correcao para fallback completion
-- [ ] AC4: `search_pipeline.py:151` — link extraction: substituir `except Exception: pass` por `logger.debug(f"PNCP link extraction failed for {numeroControlePNCP}: {e}")` + fallback para URL vazia (ja funciona, so precisa logar)
+- [x] AC1: `consolidation.py:410` — `on_source_complete` callback: substituir `except Exception: pass` por `logger.warning(f"on_source_complete callback error for {code}: {e}")` + continuar
+- [x] AC2: `consolidation.py:431` — mesma correcao para path de erro
+- [x] AC3: `consolidation.py:475` — mesma correcao para fallback completion
+- [x] AC4: `search_pipeline.py:151` — link extraction: substituir `except Exception: pass` por `logger.debug(f"PNCP link extraction failed for {numeroControlePNCP}: {e}")` + fallback para URL vazia (ja funciona, so precisa logar)
 
 ### Grupo 2: HIGHs — Severidade errada (WARNING deveria ser ERROR)
 
-- [ ] AC5: `search_pipeline.py:120` — email quota notification failure: mudar de `logger.warning` para `logger.error` + adicionar `sentry_sdk.capture_exception(e)`
-- [ ] AC6: `search_pipeline.py:307` — bid conversion failure em response path: mudar de `logger.warning` para `logger.error` + adicionar `sentry_sdk.capture_exception(e)` + incrementar counter metrica `ITEMS_CONVERSION_ERRORS`
+- [x] AC5: `search_pipeline.py:120` — email quota notification failure: mudar de `logger.warning` para `logger.error` + adicionar `sentry_sdk.capture_exception(e)`
+- [x] AC6: `search_pipeline.py:307` — bid conversion failure em response path: mudar de `logger.warning` para `logger.error` + adicionar `sentry_sdk.capture_exception(e)` + incrementar counter metrica `ITEMS_CONVERSION_ERRORS`
 
 ### Grupo 3: HIGHs — State machine transitions silenciadas
 
-- [ ] AC7: `routes/search.py:957` — state machine completion: substituir `except Exception: pass` por `logger.warning(f"State machine complete() failed: {e}")`
-- [ ] AC8: `routes/search.py:981` — state machine timeout: idem
-- [ ] AC9: `routes/search.py:1005` — state machine failure: idem
+- [x] AC7: `routes/search.py:957` — state machine completion: substituir `except Exception: pass` por `logger.warning(f"State machine complete() failed: {e}")`
+- [x] AC8: `routes/search.py:981` — state machine timeout: idem
+- [x] AC9: `routes/search.py:1005` — state machine failure: idem
 
 ### Grupo 4: MEDIUMs — Seguranca e observabilidade
 
-- [ ] AC10: `routes/pipeline.py:47` — master access check: substituir `except Exception: pass` por `logger.warning(f"Master access check failed, falling through: {e}")`
-- [ ] AC11: `routes/pipeline.py:86` — mesma correcao (segunda instancia)
-- [ ] AC12: `routes/search.py:302` — SSE metrics: substituir `except Exception: pass` por `logger.debug(f"SSE metrics unavailable: {e}")`
+- [x] AC10: `routes/pipeline.py:47` — master access check: substituir `except Exception: pass` por `logger.warning(f"Master access check failed, falling through: {e}")`
+- [x] AC11: `routes/pipeline.py:86` — mesma correcao (segunda instancia)
+- [x] AC12: `routes/search.py:302` — SSE metrics: substituir `except Exception: pass` por `logger.debug(f"SSE metrics unavailable: {e}")`
 
 ### Grupo 5: INCOMPLETEs — Logging sem Sentry
 
-- [ ] AC13: `llm_arbiter.py:96` — cache read failure: adicionar `sentry_sdk.capture_exception(e)` ao bloco existente (ja loga WARNING)
-- [ ] AC14: `llm_arbiter.py:116` — cache write failure: idem
+- [x] AC13: `llm_arbiter.py:96` — cache read failure: adicionar `sentry_sdk.capture_exception(e)` ao bloco existente (ja loga WARNING)
+- [x] AC14: `llm_arbiter.py:116` — cache write failure: idem
 
 ### Grupo 6: LOWs — Cleanup (aceitavel, mas deve logar)
 
-- [ ] AC15: `consolidation.py:834` — adapter.close(): substituir `except Exception: pass` por `logger.debug(f"Adapter close error (non-critical): {e}")`
-- [ ] AC16: `consolidation.py:840` — fallback_adapter.close(): idem
-- [ ] AC17: `pncp_client.py:411,436,501` — Redis CB fallback: adicionar `logger.debug(f"Redis CB fallback: {e}")` (3 locais)
+- [x] AC15: `consolidation.py:834` — adapter.close(): substituir `except Exception: pass` por `logger.debug(f"Adapter close error (non-critical): {e}")`
+- [x] AC16: `consolidation.py:840` — fallback_adapter.close(): idem
+- [x] AC17: `pncp_client.py:411,436,501` — Redis CB fallback: adicionar `logger.debug(f"Redis CB fallback: {e}")` (3 locais)
 
 ### Quality
 
-- [ ] AC18: Zero instancias de `except Exception: pass` ou `except: pass` em arquivos criticos (consolidation.py, search_pipeline.py, routes/search.py, routes/pipeline.py)
-- [ ] AC19: Grep automatizado: `grep -rn "except.*:.*pass" backend/ --include="*.py"` retorna APENAS instancias em testes ou locais explicitamente documentados
-- [ ] AC20: Testes existentes passando (5131+ backend, 2681+ frontend)
-- [ ] AC21: Sentry recebe eventos para erros que antes eram silenciosos (verificar no dashboard apos deploy)
+- [x] AC18: Zero instancias de `except Exception: pass` ou `except: pass` em arquivos criticos (consolidation.py, search_pipeline.py, routes/search.py, routes/pipeline.py)
+- [x] AC19: Grep automatizado: `grep -rn "except.*:.*pass" backend/ --include="*.py"` retorna APENAS instancias em testes ou locais explicitamente documentados
+- [x] AC20: Testes existentes passando (5131+ backend, 2681+ frontend)
+- [x] AC21: Sentry recebe eventos para erros que antes eram silenciosos (verificar no dashboard apos deploy)
 
 ## Technical Notes
 
@@ -108,8 +108,8 @@ Esta story NAO muda como o sistema se comporta — apenas torna os erros VISIVEI
 
 ## Definition of Done
 
-- [ ] Zero `except Exception: pass` em caminhos criticos
-- [ ] Sentry recebendo eventos de erros que antes eram invisiveis
-- [ ] Log levels corretos (ERROR onde impacta usuario, WARNING onde degrada, DEBUG onde cleanup)
-- [ ] Testes passando
-- [ ] Grep clean: nenhum `except.*: pass` novo introduzido
+- [x] Zero `except Exception: pass` em caminhos criticos
+- [x] Sentry recebendo eventos de erros que antes eram invisiveis
+- [x] Log levels corretos (ERROR onde impacta usuario, WARNING onde degrada, DEBUG onde cleanup)
+- [x] Testes passando
+- [x] Grep clean: nenhum `except.*: pass` novo introduzido

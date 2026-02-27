@@ -1446,10 +1446,10 @@ async def _fetch_multi_source_for_revalidation(request_data: dict) -> tuple[list
             from clients.compras_gov_client import ComprasGovAdapter
             adapters["COMPRAS_GOV"] = ComprasGovAdapter(timeout=source_config.compras_gov.timeout)
 
-        if source_config.portal.enabled and source_config.portal.credentials.has_api_key():
+        # GTM-FIX-024 T2: PCP v2 API is public — no API key required
+        if source_config.portal.enabled:
             from clients.portal_compras_client import PortalComprasAdapter
             adapters["PORTAL_COMPRAS"] = PortalComprasAdapter(
-                api_key=source_config.portal.credentials.api_key,
                 timeout=source_config.portal.timeout,
             )
 
@@ -1488,10 +1488,10 @@ async def _fetch_multi_source_for_revalidation(request_data: dict) -> tuple[list
             from clients.compras_gov_client import ComprasGovAdapter
             fallback_adapters["COMPRAS_GOV"] = ComprasGovAdapter(timeout=source_config.compras_gov.timeout)
 
-        if source_config.portal.enabled and source_config.portal.credentials.has_api_key():
+        # GTM-FIX-024 T2: PCP v2 API is public — no API key required
+        if source_config.portal.enabled:
             from clients.portal_compras_client import PortalComprasAdapter
             fallback_adapters["PORTAL_COMPRAS"] = PortalComprasAdapter(
-                api_key=source_config.portal.credentials.api_key,
                 timeout=source_config.portal.timeout,
             )
 

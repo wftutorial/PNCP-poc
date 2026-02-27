@@ -1087,39 +1087,49 @@ async def buscar_licitacoes(
         logger.info(f"STORY-292: Async mode — dispatching background task for {request.search_id}")
 
         # Consume quota in POST before dispatching (prevents wasted work)
+        # PHASE-0: 15s timeout prevents Supabase latency from blocking POST response
+        _QUOTA_CHECK_TIMEOUT = 15  # seconds
         try:
-            import quota as _quota
-            from authorization import get_admin_ids as _get_admin_ids
+            async def _do_quota_check():
+                import quota as _quota
+                from authorization import get_admin_ids as _get_admin_ids
 
-            _is_admin = user["id"].lower() in _get_admin_ids()
-            _is_master = False
-            if not _is_admin:
-                _is_admin, _is_master = await check_user_roles(user["id"])
+                _is_admin = user["id"].lower() in _get_admin_ids()
+                _is_master = False
+                if not _is_admin:
+                    _is_admin, _is_master = await check_user_roles(user["id"])
 
-            if not (_is_admin or _is_master):
-                _quota_info = await asyncio.to_thread(_quota.check_quota, user["id"])
-                if not _quota_info.allowed:
-                    if tracker:
-                        await tracker.emit_error(_quota_info.error_message)
-                        await remove_tracker(request.search_id)
-                    raise HTTPException(status_code=403, detail=_quota_info.error_message)
+                if not (_is_admin or _is_master):
+                    _quota_info = await asyncio.to_thread(_quota.check_quota, user["id"])
+                    if not _quota_info.allowed:
+                        if tracker:
+                            await tracker.emit_error(_quota_info.error_message)
+                            await remove_tracker(request.search_id)
+                        raise HTTPException(status_code=403, detail=_quota_info.error_message)
 
-                _allowed, _new_used, _remaining = await asyncio.to_thread(
-                    _quota.check_and_increment_quota_atomic,
-                    user["id"],
-                    _quota_info.capabilities["max_requests_per_month"],
-                )
-                if not _allowed:
-                    if tracker:
-                        await tracker.emit_error("Suas buscas acabaram.")
-                        await remove_tracker(request.search_id)
-                    raise HTTPException(
-                        status_code=403,
-                        detail=(
-                            f"Limite de {_quota_info.capabilities['max_requests_per_month']} "
-                            f"buscas mensais atingido."
-                        ),
+                    _allowed, _new_used, _remaining = await asyncio.to_thread(
+                        _quota.check_and_increment_quota_atomic,
+                        user["id"],
+                        _quota_info.capabilities["max_requests_per_month"],
                     )
+                    if not _allowed:
+                        if tracker:
+                            await tracker.emit_error("Suas buscas acabaram.")
+                            await remove_tracker(request.search_id)
+                        raise HTTPException(
+                            status_code=403,
+                            detail=(
+                                f"Limite de {_quota_info.capabilities['max_requests_per_month']} "
+                                f"buscas mensais atingido."
+                            ),
+                        )
+
+            await asyncio.wait_for(_do_quota_check(), timeout=_QUOTA_CHECK_TIMEOUT)
+        except asyncio.TimeoutError:
+            logger.warning(
+                f"PHASE-0: Quota check timed out after {_QUOTA_CHECK_TIMEOUT}s for "
+                f"{request.search_id} — proceeding with async dispatch (allow-through)"
+            )
         except HTTPException:
             raise
         except Exception as quota_err:

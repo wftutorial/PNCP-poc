@@ -245,11 +245,33 @@ async def _save_to_supabase(
     except ImportError:
         pass
 
-    await sb_execute(
-        sb.table("search_results_cache").upsert(
-            row, on_conflict="user_id,params_hash"
-        )
-    )
+    # PHASE-0: Retry once on transient Supabase errors + detailed error logging
+    _max_retries = 1
+    for _attempt in range(_max_retries + 1):
+        try:
+            await sb_execute(
+                sb.table("search_results_cache").upsert(
+                    row, on_conflict="user_id,params_hash"
+                )
+            )
+            return  # Success
+        except Exception as _upsert_err:
+            _err_type = type(_upsert_err).__name__
+            _err_msg = str(_upsert_err)[:300]
+            if _attempt < _max_retries:
+                logger.warning(
+                    f"PHASE-0: _save_to_supabase attempt {_attempt + 1} failed "
+                    f"({_err_type}: {_err_msg}), retrying in 1s..."
+                )
+                await asyncio.sleep(1)
+            else:
+                logger.error(
+                    f"PHASE-0: _save_to_supabase FAILED after {_max_retries + 1} attempts — "
+                    f"{_err_type}: {_err_msg} "
+                    f"(user_id={user_id[:8]}, hash={params_hash[:12]}, "
+                    f"n_results={len(results)}, row_keys={sorted(row.keys())})"
+                )
+                raise
 
 
 async def _get_from_supabase(user_id: str, params_hash: str) -> Optional[dict]:

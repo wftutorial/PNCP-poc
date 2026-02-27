@@ -1,12 +1,14 @@
 """GTM-STAB-009: Async search architecture tests.
 
 Tests the async search flow end-to-end:
-- POST /buscar returns 202 when SEARCH_ASYNC_ENABLED=true and ARQ queue available
+- POST /buscar returns 202 when SEARCH_ASYNC_ENABLED=true (asyncio.create_task)
 - POST /buscar returns 200 when flag disabled (backward compat)
 - X-Sync: true header forces sync even with async enabled
-- Queue unavailable → falls back to sync pipeline
+- Quota failure → falls back to sync pipeline
 - GET /v1/search/{id}/status → current search state
 - GET /search/{id}/results → 200 with results when ready, 202 when processing
+
+STORY-292: Migrated from ARQ enqueue_job to asyncio.create_task.
 """
 
 import uuid
@@ -117,16 +119,17 @@ def mock_quota():
 # Shared patch context for the async POST /buscar path
 # ---------------------------------------------------------------------------
 
-def _common_async_patches(*, queue_available=True, enqueue_return=None):
-    """Return a list of context manager patches used in async POST tests."""
-    mock_job = enqueue_return or Mock(job_id="job-abc-123")
+def _common_async_patches():
+    """Return a list of context manager patches used in async POST tests.
+
+    STORY-292: No ARQ — uses asyncio.create_task in-process.
+    """
     return [
         patch("config.get_feature_flag", return_value=True),
-        patch("job_queue.is_queue_available", new_callable=AsyncMock, return_value=queue_available),
-        patch("job_queue.enqueue_job", new_callable=AsyncMock, return_value=mock_job),
         patch("routes.search.check_user_roles", new_callable=AsyncMock, return_value=(False, False)),
         patch("routes.search.create_tracker", new_callable=AsyncMock, return_value=_make_mock_tracker()),
         patch("routes.search.create_state_machine", new_callable=AsyncMock, return_value=_make_mock_state_machine()),
+        patch("routes.search._run_async_search", new_callable=AsyncMock),
     ]
 
 
@@ -135,18 +138,15 @@ def _common_async_patches(*, queue_available=True, enqueue_return=None):
 # ---------------------------------------------------------------------------
 
 class TestAsyncEnabledReturns202:
-    """T1: SEARCH_ASYNC_ENABLED=true + queue available → 202 Accepted."""
+    """T1: SEARCH_ASYNC_ENABLED=true → 202 Accepted (STORY-292: asyncio.create_task)."""
 
     def test_async_enabled_returns_202(self, client, mock_quota):
         """AC1: POST /buscar returns 202 with full enriched async response body."""
-        mock_job = Mock(job_id="job-abc-123")
-
         with patch("config.get_feature_flag", return_value=True), \
-             patch("job_queue.is_queue_available", new_callable=AsyncMock, return_value=True), \
-             patch("job_queue.enqueue_job", new_callable=AsyncMock, return_value=mock_job), \
              patch("routes.search.check_user_roles", new_callable=AsyncMock, return_value=(False, False)), \
              patch("routes.search.create_tracker", new_callable=AsyncMock, return_value=_make_mock_tracker()), \
-             patch("routes.search.create_state_machine", new_callable=AsyncMock, return_value=_make_mock_state_machine()):
+             patch("routes.search.create_state_machine", new_callable=AsyncMock, return_value=_make_mock_state_machine()), \
+             patch("routes.search._run_async_search", new_callable=AsyncMock):
 
             response = client.post("/buscar", json=VALID_SEARCH_BODY)
 
@@ -171,17 +171,14 @@ class TestAsyncEnabledReturns202:
 
     def test_async_enabled_duration_scales_with_ufs(self, client, mock_quota):
         """AC1: estimated_duration_s scales with number of UFs requested."""
-        mock_job = Mock(job_id="job-xyz")
-
         body_few_ufs = {**VALID_SEARCH_BODY, "ufs": ["SP"]}
         body_many_ufs = {**VALID_SEARCH_BODY, "ufs": ["SP", "RJ", "MG", "RS", "PR", "BA", "SC", "GO"]}
 
         with patch("config.get_feature_flag", return_value=True), \
-             patch("job_queue.is_queue_available", new_callable=AsyncMock, return_value=True), \
-             patch("job_queue.enqueue_job", new_callable=AsyncMock, return_value=mock_job), \
              patch("routes.search.check_user_roles", new_callable=AsyncMock, return_value=(False, False)), \
              patch("routes.search.create_tracker", new_callable=AsyncMock, return_value=_make_mock_tracker()), \
-             patch("routes.search.create_state_machine", new_callable=AsyncMock, return_value=_make_mock_state_machine()):
+             patch("routes.search.create_state_machine", new_callable=AsyncMock, return_value=_make_mock_state_machine()), \
+             patch("routes.search._run_async_search", new_callable=AsyncMock):
 
             resp_few = client.post("/buscar", json=body_few_ufs)
             resp_many = client.post("/buscar", json=body_many_ufs)
@@ -202,7 +199,6 @@ class TestAsyncDisabledReturns200:
     def test_async_disabled_returns_200(self, client, mock_quota):
         """AC6: When flag is off, sync pipeline runs and returns 200."""
         with patch("config.get_feature_flag", return_value=False), \
-             patch("job_queue.enqueue_job", new_callable=AsyncMock) as mock_enqueue, \
              patch("routes.search.create_tracker", new_callable=AsyncMock, return_value=_make_mock_tracker()), \
              patch("routes.search.create_state_machine", new_callable=AsyncMock, return_value=_make_mock_state_machine()), \
              patch("routes.search.remove_tracker", new_callable=AsyncMock), \
@@ -216,8 +212,6 @@ class TestAsyncDisabledReturns200:
             response = client.post("/buscar", json=VALID_SEARCH_BODY)
 
         assert response.status_code == 200
-        # enqueue_job should never be called when flag is off
-        mock_enqueue.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -228,10 +222,8 @@ class TestXSyncHeaderForcesSyncMode:
     """T3: X-Sync: true header bypasses async even when flag=true + queue available."""
 
     def test_x_sync_header_forces_sync(self, client, mock_quota):
-        """AC6: X-Sync: true → sync pipeline, no enqueue, HTTP 200 not 202."""
+        """AC6: X-Sync: true → sync pipeline, HTTP 200 not 202."""
         with patch("config.get_feature_flag", return_value=True), \
-             patch("job_queue.is_queue_available", new_callable=AsyncMock, return_value=True), \
-             patch("job_queue.enqueue_job", new_callable=AsyncMock) as mock_enqueue, \
              patch("routes.search.create_tracker", new_callable=AsyncMock, return_value=_make_mock_tracker()), \
              patch("routes.search.create_state_machine", new_callable=AsyncMock, return_value=_make_mock_state_machine()), \
              patch("routes.search.remove_tracker", new_callable=AsyncMock), \
@@ -251,14 +243,10 @@ class TestXSyncHeaderForcesSyncMode:
         # Must NOT be 202 — sync path was forced
         assert response.status_code != 202
         assert response.status_code == 200
-        # Queue should never have been touched
-        mock_enqueue.assert_not_called()
 
     def test_sync_query_param_forces_sync(self, client, mock_quota):
         """AC6: ?sync=true query param also bypasses async path."""
         with patch("config.get_feature_flag", return_value=True), \
-             patch("job_queue.is_queue_available", new_callable=AsyncMock, return_value=True), \
-             patch("job_queue.enqueue_job", new_callable=AsyncMock) as mock_enqueue, \
              patch("routes.search.create_tracker", new_callable=AsyncMock, return_value=_make_mock_tracker()), \
              patch("routes.search.create_state_machine", new_callable=AsyncMock, return_value=_make_mock_state_machine()), \
              patch("routes.search.remove_tracker", new_callable=AsyncMock), \
@@ -272,18 +260,14 @@ class TestXSyncHeaderForcesSyncMode:
             response = client.post("/buscar?sync=true", json=VALID_SEARCH_BODY)
 
         assert response.status_code == 200
-        mock_enqueue.assert_not_called()
 
     def test_x_sync_false_does_not_force_sync(self, client, mock_quota):
-        """AC6: X-Sync: false does NOT prevent async — queue mode still used."""
-        mock_job = Mock(job_id="job-sync-false")
-
+        """AC6: X-Sync: false does NOT prevent async — async mode still used."""
         with patch("config.get_feature_flag", return_value=True), \
-             patch("job_queue.is_queue_available", new_callable=AsyncMock, return_value=True), \
-             patch("job_queue.enqueue_job", new_callable=AsyncMock, return_value=mock_job), \
              patch("routes.search.check_user_roles", new_callable=AsyncMock, return_value=(False, False)), \
              patch("routes.search.create_tracker", new_callable=AsyncMock, return_value=_make_mock_tracker()), \
-             patch("routes.search.create_state_machine", new_callable=AsyncMock, return_value=_make_mock_state_machine()):
+             patch("routes.search.create_state_machine", new_callable=AsyncMock, return_value=_make_mock_state_machine()), \
+             patch("routes.search._run_async_search", new_callable=AsyncMock):
 
             response = client.post(
                 "/buscar",
@@ -296,52 +280,40 @@ class TestXSyncHeaderForcesSyncMode:
 
 
 # ---------------------------------------------------------------------------
-# T4: Queue unavailable → falls back to sync pipeline
+# T4: Quota failure → falls back to sync pipeline (STORY-292)
 # ---------------------------------------------------------------------------
 
-class TestQueueUnavailableFallsBackToSync:
-    """T4: When ARQ/Redis queue is unavailable, graceful sync fallback."""
+class TestQuotaFailureFallsBackToSync:
+    """T4: STORY-292 — Quota check exception → graceful sync fallback.
 
-    def test_queue_unavailable_falls_back_to_sync(self, client, mock_quota):
-        """AC2: Queue down → sync pipeline executes, returns 200 (no 202)."""
+    When the quota check raises an unexpected exception (e.g., Supabase down),
+    the async path sets force_sync=True and falls through to the sync pipeline.
+    """
+
+    def test_quota_exception_falls_back_to_sync(self, client):
+        """Quota check raises → force_sync=True → sync pipeline returns 200."""
+        mock_info = Mock()
+        mock_info.allowed = True
+        mock_info.error_message = ""
+        mock_info.capabilities = {"max_requests_per_month": 1000}
+
         with patch("config.get_feature_flag", return_value=True), \
-             patch("job_queue.is_queue_available", new_callable=AsyncMock, return_value=False), \
-             patch("job_queue.enqueue_job", new_callable=AsyncMock) as mock_enqueue, \
+             patch("routes.search.check_user_roles", new_callable=AsyncMock, side_effect=Exception("DB down")), \
              patch("routes.search.create_tracker", new_callable=AsyncMock, return_value=_make_mock_tracker()), \
              patch("routes.search.create_state_machine", new_callable=AsyncMock, return_value=_make_mock_state_machine()), \
              patch("routes.search.remove_tracker", new_callable=AsyncMock), \
              patch("routes.search.remove_state_machine"), \
              patch("routes.search.SearchPipeline") as MockPipeline, \
-             patch("search_cache.get_from_cache_cascade", new_callable=AsyncMock, return_value=None):
+             patch("search_cache.get_from_cache_cascade", new_callable=AsyncMock, return_value=None), \
+             patch("quota.check_quota", return_value=mock_info), \
+             patch("quota.check_and_increment_quota_atomic", return_value=(True, 1, 999)):
 
             mock_pipe = MockPipeline.return_value
             mock_pipe.run = AsyncMock(return_value=_make_sync_response())
 
             response = client.post("/buscar", json=VALID_SEARCH_BODY)
 
-        # Queue was down → sync fallback, must be 200 not 202
-        assert response.status_code == 200
-        mock_enqueue.assert_not_called()
-
-    def test_enqueue_failure_falls_back_to_sync(self, client, mock_quota):
-        """AC2: enqueue_job returns None (failure) → sync fallback."""
-        with patch("config.get_feature_flag", return_value=True), \
-             patch("job_queue.is_queue_available", new_callable=AsyncMock, return_value=True), \
-             patch("job_queue.enqueue_job", new_callable=AsyncMock, return_value=None), \
-             patch("routes.search.check_user_roles", new_callable=AsyncMock, return_value=(False, False)), \
-             patch("routes.search.create_tracker", new_callable=AsyncMock, return_value=_make_mock_tracker()), \
-             patch("routes.search.create_state_machine", new_callable=AsyncMock, return_value=_make_mock_state_machine()), \
-             patch("routes.search.remove_tracker", new_callable=AsyncMock), \
-             patch("routes.search.remove_state_machine"), \
-             patch("routes.search.SearchPipeline") as MockPipeline, \
-             patch("search_cache.get_from_cache_cascade", new_callable=AsyncMock, return_value=None):
-
-            mock_pipe = MockPipeline.return_value
-            mock_pipe.run = AsyncMock(return_value=_make_sync_response())
-
-            response = client.post("/buscar", json=VALID_SEARCH_BODY)
-
-        # enqueue returned None → fallback to sync
+        # Quota check exception → sync fallback, must be 200 not 202
         assert response.status_code == 200
 
 
@@ -606,15 +578,14 @@ class TestSearchQueuedResponseSchema:
 
 
 # ---------------------------------------------------------------------------
-# T9: Quota consumed in POST before enqueue (AC8)
+# T9: Quota consumed in POST before dispatch (AC8) — STORY-292
 # ---------------------------------------------------------------------------
 
-class TestQuotaConsumedBeforeEnqueue:
-    """T9: Quota is consumed in POST (before Worker), not in Worker itself."""
+class TestQuotaConsumedBeforeDispatch:
+    """T9: Quota is consumed in POST before asyncio.create_task dispatch."""
 
     def test_quota_checked_on_async_path(self, client):
-        """AC8: Quota check and increment happen before enqueue_job is called."""
-        mock_job = Mock(job_id="job-quota-test")
+        """AC8: Quota check and increment happen before background task dispatched."""
         mock_info = Mock()
         mock_info.allowed = True
         mock_info.error_message = ""
@@ -623,21 +594,20 @@ class TestQuotaConsumedBeforeEnqueue:
         with patch("quota.check_quota", return_value=mock_info) as mock_check, \
              patch("quota.check_and_increment_quota_atomic", return_value=(True, 1, 999)) as mock_atomic, \
              patch("config.get_feature_flag", return_value=True), \
-             patch("job_queue.is_queue_available", new_callable=AsyncMock, return_value=True), \
-             patch("job_queue.enqueue_job", new_callable=AsyncMock, return_value=mock_job), \
              patch("routes.search.check_user_roles", new_callable=AsyncMock, return_value=(False, False)), \
              patch("routes.search.create_tracker", new_callable=AsyncMock, return_value=_make_mock_tracker()), \
-             patch("routes.search.create_state_machine", new_callable=AsyncMock, return_value=_make_mock_state_machine()):
+             patch("routes.search.create_state_machine", new_callable=AsyncMock, return_value=_make_mock_state_machine()), \
+             patch("routes.search._run_async_search", new_callable=AsyncMock):
 
             response = client.post("/buscar", json=VALID_SEARCH_BODY)
 
         assert response.status_code == 202
-        # Both quota check and atomic increment should be called before job is enqueued
+        # Both quota check and atomic increment should be called before task dispatched
         mock_check.assert_called_once()
         mock_atomic.assert_called_once()
 
-    def test_quota_exceeded_blocks_async_enqueue(self, client):
-        """AC8: Quota exceeded → 403, enqueue_job never called."""
+    def test_quota_exceeded_blocks_async_dispatch(self, client):
+        """AC8: Quota exceeded → 403, background task never dispatched."""
         mock_info = Mock()
         mock_info.allowed = False
         mock_info.error_message = "Limite de buscas atingido."
@@ -645,14 +615,13 @@ class TestQuotaConsumedBeforeEnqueue:
 
         with patch("quota.check_quota", return_value=mock_info), \
              patch("config.get_feature_flag", return_value=True), \
-             patch("job_queue.is_queue_available", new_callable=AsyncMock, return_value=True), \
-             patch("job_queue.enqueue_job", new_callable=AsyncMock) as mock_enqueue, \
              patch("routes.search.check_user_roles", new_callable=AsyncMock, return_value=(False, False)), \
              patch("routes.search.create_tracker", new_callable=AsyncMock, return_value=_make_mock_tracker()), \
              patch("routes.search.create_state_machine", new_callable=AsyncMock, return_value=_make_mock_state_machine()), \
-             patch("routes.search.remove_tracker", new_callable=AsyncMock):
+             patch("routes.search.remove_tracker", new_callable=AsyncMock), \
+             patch("routes.search._run_async_search", new_callable=AsyncMock) as mock_run:
 
             response = client.post("/buscar", json=VALID_SEARCH_BODY)
 
         assert response.status_code == 403
-        mock_enqueue.assert_not_called()
+        mock_run.assert_not_called()

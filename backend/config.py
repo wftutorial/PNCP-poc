@@ -441,7 +441,7 @@ _FEATURE_FLAG_REGISTRY: dict[str, tuple[str, str]] = {
     "SECTOR_RED_FLAGS_ENABLED": ("SECTOR_RED_FLAGS_ENABLED", "true"),
     "TRIAL_EMAILS_ENABLED": ("TRIAL_EMAILS_ENABLED", "true"),
     "CACHE_REFRESH_ENABLED": ("CACHE_REFRESH_ENABLED", "false"),
-    "SEARCH_ASYNC_ENABLED": ("SEARCH_ASYNC_ENABLED", "false"),
+    "SEARCH_ASYNC_ENABLED": ("SEARCH_ASYNC_ENABLED", "true"),
     "BID_ANALYSIS_ENABLED": ("BID_ANALYSIS_ENABLED", "true"),
     # STORY-267: Term search quality parity flags (gradual opt-in)
     "TERM_SEARCH_LLM_AWARE": ("TERM_SEARCH_LLM_AWARE", "false"),
@@ -539,20 +539,9 @@ CACHE_REFRESH_BATCH_SIZE: int = int(os.getenv("CACHE_REFRESH_BATCH_SIZE", "25"))
 CACHE_REFRESH_STAGGER_SECONDS: int = int(os.getenv("CACHE_REFRESH_STAGGER_SECONDS", "5"))
 
 # ============================================
-# GTM-ARCH-001: Async Search via ARQ Worker
+# STORY-292: Async Search via asyncio.create_task (no ARQ dependency)
 # ============================================
-SEARCH_ASYNC_ENABLED: bool = str_to_bool(os.getenv("SEARCH_ASYNC_ENABLED", "false"))
-
-# STORY-281 AC1: Increased from 30s to 120s to prevent double execution.
-# PNCP searches for 1 UF can take 180s+ when API is slow. 30s always expired,
-# causing every async search to also run inline (double load on PNCP, Redis, CPU).
-# 120s covers >95% of single-UF searches. Multi-UF may still fallback but that's rare.
-SEARCH_ASYNC_WAIT_TIMEOUT: int = int(os.getenv("SEARCH_ASYNC_WAIT_TIMEOUT", "120"))
-
-# Legacy alias — kept for backward compatibility (reads same env var if set, else uses new default)
-SEARCH_WORKER_FALLBACK_TIMEOUT: int = int(
-    os.getenv("SEARCH_WORKER_FALLBACK_TIMEOUT", str(SEARCH_ASYNC_WAIT_TIMEOUT))
-)
+SEARCH_ASYNC_ENABLED: bool = str_to_bool(os.getenv("SEARCH_ASYNC_ENABLED", "true"))
 
 # ============================================
 # D-05: User Feedback Loop

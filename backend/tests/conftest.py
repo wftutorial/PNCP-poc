@@ -154,6 +154,26 @@ def setup_test_env(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _force_sync_search(monkeypatch):
+    """STORY-292: Default tests to sync search mode.
+
+    SEARCH_ASYNC_ENABLED is true in production (STORY-292), but existing tests
+    expect synchronous 200 responses from POST /buscar. This fixture forces
+    sync mode by default. Tests that explicitly test async behavior should
+    override with: monkeypatch.setenv("SEARCH_ASYNC_ENABLED", "true")
+    """
+    import config
+    monkeypatch.setattr(config, "SEARCH_ASYNC_ENABLED", False)
+    monkeypatch.setenv("SEARCH_ASYNC_ENABLED", "false")
+    # Clear the feature flag cache so get_feature_flag() re-reads
+    if hasattr(config, "_feature_flag_cache"):
+        config._feature_flag_cache.pop("SEARCH_ASYNC_ENABLED", None)
+    # Patch the registry default
+    if hasattr(config, "_FEATURE_FLAG_REGISTRY"):
+        monkeypatch.setitem(config._FEATURE_FLAG_REGISTRY, "SEARCH_ASYNC_ENABLED", ("SEARCH_ASYNC_ENABLED", "false"))
+
+
+@pytest.fixture(autouse=True)
 def _reset_rate_limiter_state():
     """GTM-GO-002: Reset FlexibleRateLimiter + SSE connection state between tests.
 

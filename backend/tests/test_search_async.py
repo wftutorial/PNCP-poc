@@ -223,15 +223,15 @@ class TestT3SSEDelivery:
 
 
 # ============================================================================
-# T4: Fallback inline when ARQ unavailable
+# T4: Fallback to sync when quota check fails (STORY-292: replaces ARQ test)
 # ============================================================================
 
-class TestT4FallbackNoARQ:
-    """T4: Falls back to inline sync when ARQ/Redis unavailable."""
+class TestT4FallbackQuotaError:
+    """T4: Falls back to sync when quota check throws an exception."""
 
     @pytest.mark.asyncio
-    async def test_falls_back_to_sync_when_queue_unavailable(self, mock_user):
-        """When queue unavailable, POST should use sync path (not return 202)."""
+    async def test_falls_back_to_sync_when_quota_error(self, mock_user):
+        """When quota check raises, POST falls back to sync path."""
         from fastapi.testclient import TestClient
         from main import app
         from auth import require_auth
@@ -241,17 +241,14 @@ class TestT4FallbackNoARQ:
         app.dependency_overrides[require_auth] = _override
 
         try:
-            # get_feature_flag is imported inside buscar_licitacoes -> patch at config.
-            # is_queue_available is imported inside buscar_licitacoes -> patch at job_queue.
-            # create_tracker, create_state_machine, SearchPipeline, remove_tracker,
-            # remove_state_machine are module-level imports -> patch at routes.search.
             with patch("config.get_feature_flag", return_value=True), \
-                 patch("job_queue.is_queue_available", new_callable=AsyncMock, return_value=False), \
                  patch("routes.search.create_tracker", new_callable=AsyncMock) as mock_ct, \
                  patch("routes.search.create_state_machine", new_callable=AsyncMock), \
                  patch("routes.search.SearchPipeline") as mock_pipeline_cls, \
                  patch("routes.search.remove_tracker", new_callable=AsyncMock), \
-                 patch("routes.search.remove_state_machine"):
+                 patch("routes.search.remove_state_machine"), \
+                 patch("routes.search.check_user_roles", new_callable=AsyncMock, return_value=(False, False)), \
+                 patch("quota.check_quota", side_effect=Exception("DB connection error")):
 
                 tracker_inst = AsyncMock()
                 tracker_inst.emit = AsyncMock()
@@ -265,9 +262,6 @@ class TestT4FallbackNoARQ:
                 mock_pipeline.run = AsyncMock(return_value=mock_response)
                 mock_pipeline_cls.return_value = mock_pipeline
 
-                # raise_server_exceptions=False: the mock response doesn't pass
-                # Pydantic validation (MagicMock vs BuscaResponse), but that's OK --
-                # we only care that the sync path was taken (status != 202).
                 client = TestClient(app, raise_server_exceptions=False)
                 response = client.post(
                     "/buscar",
@@ -279,8 +273,7 @@ class TestT4FallbackNoARQ:
                     },
                 )
 
-                # Should NOT be 202 — sync path was taken (may be 200 or 500
-                # depending on mock fidelity with BuscaResponse schema)
+                # Should NOT be 202 — sync fallback was taken
                 assert response.status_code != 202
         finally:
             app.dependency_overrides.clear()
@@ -353,11 +346,11 @@ class TestT5FallbackFlagOff:
 # ============================================================================
 
 class TestT6QuotaInPOST:
-    """T6: Quota consumed in POST before enqueue, Worker skips quota."""
+    """T6: Quota consumed in POST before task dispatch."""
 
     @pytest.mark.asyncio
-    async def test_quota_consumed_before_enqueue(self, mock_user):
-        """Quota must be consumed in POST handler, not in Worker."""
+    async def test_quota_consumed_before_dispatch(self, mock_user):
+        """Quota must be consumed in POST handler, before asyncio.create_task."""
         from fastapi.testclient import TestClient
         from main import app
         from auth import require_auth
@@ -367,28 +360,34 @@ class TestT6QuotaInPOST:
         app.dependency_overrides[require_auth] = _override
 
         try:
-            # get_feature_flag -> config (function-level import in buscar_licitacoes)
-            # is_queue_available, enqueue_job -> job_queue (function-level import)
-            # create_tracker, create_state_machine, check_user_roles -> routes.search (module-level)
             with patch("config.get_feature_flag", return_value=True), \
-                 patch("job_queue.is_queue_available", new_callable=AsyncMock, return_value=True), \
-                 patch("job_queue.enqueue_job", new_callable=AsyncMock, return_value=MagicMock(job_id="j1")), \
                  patch("routes.search.create_tracker", new_callable=AsyncMock) as mock_ct, \
                  patch("routes.search.create_state_machine", new_callable=AsyncMock), \
                  patch("quota.check_quota") as mock_check, \
                  patch("quota.check_and_increment_quota_atomic") as mock_atomic, \
-                 patch("routes.search.check_user_roles", new_callable=AsyncMock, return_value=(False, False)):
+                 patch("routes.search.check_user_roles", new_callable=AsyncMock, return_value=(False, False)), \
+                 patch("routes.search.SearchPipeline") as mock_pipeline_cls, \
+                 patch("routes.search.remove_tracker", new_callable=AsyncMock), \
+                 patch("routes.search.remove_state_machine"):
 
                 tracker_inst = AsyncMock()
                 tracker_inst.emit = AsyncMock()
+                tracker_inst.emit_search_complete = AsyncMock()
                 mock_ct.return_value = tracker_inst
 
                 from quota import PLAN_CAPABILITIES
                 mock_check.return_value = MagicMock(
                     allowed=True,
-                    capabilities=PLAN_CAPABILITIES.get("consultor_agil", {"max_requests_per_month": 50}),
+                    capabilities=PLAN_CAPABILITIES.get("smartlic_pro", {"max_requests_per_month": 1000}),
                 )
-                mock_atomic.return_value = (True, 1, 49)
+                mock_atomic.return_value = (True, 1, 999)
+
+                mock_pipeline = AsyncMock()
+                mock_response = MagicMock()
+                mock_response.total_filtrado = 5
+                mock_response.total_encontrado = 10
+                mock_pipeline.run = AsyncMock(return_value=mock_response)
+                mock_pipeline_cls.return_value = mock_pipeline
 
                 client = TestClient(app)
                 response = client.post(
@@ -402,7 +401,6 @@ class TestT6QuotaInPOST:
                 )
 
                 assert response.status_code == 202
-                # Quota was consumed in POST handler
                 mock_atomic.assert_called_once()
 
         finally:
@@ -442,12 +440,12 @@ class TestT6QuotaInPOST:
 # T7: Worker timeout does not affect HTTP response
 # ============================================================================
 
-class TestT7WorkerTimeoutNoHTTPImpact:
-    """T7: Worker timeout doesn't affect HTTP response (already returned 202)."""
+class TestT7AsyncReturnsImmediately:
+    """T7: POST returns 202 immediately; background task runs independently."""
 
     @pytest.mark.asyncio
-    async def test_202_returned_before_worker_starts(self, mock_user):
-        """POST returns 202 immediately; Worker runs independently."""
+    async def test_202_returned_before_pipeline_runs(self, mock_user):
+        """POST returns 202 in <5s, pipeline runs as background task."""
         from fastapi.testclient import TestClient
         from main import app
         from auth import require_auth
@@ -456,36 +454,35 @@ class TestT7WorkerTimeoutNoHTTPImpact:
             return mock_user
         app.dependency_overrides[require_auth] = _override
 
-        enqueue_called = False
-
-        async def slow_enqueue(*args, **kwargs):
-            nonlocal enqueue_called
-            enqueue_called = True
-            return MagicMock(job_id="j-slow")
-
         try:
-            # get_feature_flag -> config (function-level import in buscar_licitacoes)
-            # is_queue_available, enqueue_job -> job_queue (function-level import)
-            # create_tracker, create_state_machine, check_user_roles -> routes.search (module-level)
             with patch("config.get_feature_flag", return_value=True), \
-                 patch("job_queue.is_queue_available", new_callable=AsyncMock, return_value=True), \
-                 patch("job_queue.enqueue_job", side_effect=slow_enqueue), \
                  patch("routes.search.create_tracker", new_callable=AsyncMock) as mock_ct, \
                  patch("routes.search.create_state_machine", new_callable=AsyncMock), \
                  patch("quota.check_quota") as mock_check, \
                  patch("quota.check_and_increment_quota_atomic") as mock_atomic, \
-                 patch("routes.search.check_user_roles", new_callable=AsyncMock, return_value=(False, False)):
+                 patch("routes.search.check_user_roles", new_callable=AsyncMock, return_value=(False, False)), \
+                 patch("routes.search.SearchPipeline") as mock_pipeline_cls, \
+                 patch("routes.search.remove_tracker", new_callable=AsyncMock), \
+                 patch("routes.search.remove_state_machine"):
 
                 tracker_inst = AsyncMock()
                 tracker_inst.emit = AsyncMock()
+                tracker_inst.emit_search_complete = AsyncMock()
                 mock_ct.return_value = tracker_inst
 
                 from quota import PLAN_CAPABILITIES
                 mock_check.return_value = MagicMock(
                     allowed=True,
-                    capabilities=PLAN_CAPABILITIES.get("consultor_agil", {"max_requests_per_month": 50}),
+                    capabilities=PLAN_CAPABILITIES.get("smartlic_pro", {"max_requests_per_month": 1000}),
                 )
-                mock_atomic.return_value = (True, 1, 49)
+                mock_atomic.return_value = (True, 1, 999)
+
+                mock_pipeline = AsyncMock()
+                mock_response = MagicMock()
+                mock_response.total_filtrado = 10
+                mock_response.total_encontrado = 20
+                mock_pipeline.run = AsyncMock(return_value=mock_response)
+                mock_pipeline_cls.return_value = mock_pipeline
 
                 client = TestClient(app)
                 start = time.time()
@@ -501,24 +498,22 @@ class TestT7WorkerTimeoutNoHTTPImpact:
                 elapsed = time.time() - start
 
                 assert response.status_code == 202
-                assert enqueue_called
-                # Response returned in under 5s (well under Railway's 120s limit)
                 assert elapsed < 5.0
         finally:
             app.dependency_overrides.clear()
 
 
 # ============================================================================
-# T8: Worker fails in 30s → fallback to inline
+# T8: _run_async_search pipeline execution (STORY-292: replaces watchdog test)
 # ============================================================================
 
-class TestT8FallbackOnWorkerTimeout:
-    """T8: When Worker doesn't complete in 30s, watchdog runs inline fallback."""
+class TestT8AsyncSearchExecution:
+    """T8: _run_async_search runs pipeline and emits terminal events."""
 
     @pytest.mark.asyncio
-    async def test_watchdog_runs_inline_when_no_result(self, mock_tracker, mock_busca_response):
-        """_search_fallback_watchdog runs pipeline inline when Worker hasn't completed."""
-        from routes.search import _search_fallback_watchdog
+    async def test_run_async_search_pipeline_and_emit(self, mock_tracker, mock_busca_response):
+        """_run_async_search runs pipeline, stores result, emits search_complete."""
+        from routes.search import _run_async_search
         from schemas import BuscaRequest
 
         request = BuscaRequest(
@@ -529,45 +524,34 @@ class TestT8FallbackOnWorkerTimeout:
         )
         request.search_id = "test-search-008"
 
-        # get_job_result is imported INSIDE _search_fallback_watchdog from job_queue,
-        # so patch at job_queue.get_job_result.
-        # get_tracker is a MODULE-LEVEL import in routes/search.py,
-        # so patch as routes.search.get_tracker.
-        # SearchPipeline, store_background_results, remove_tracker are also
-        # module-level imports in routes/search.py.
-        with patch("job_queue.get_job_result", new_callable=AsyncMock, return_value=None), \
-             patch("routes.search.get_tracker", new_callable=AsyncMock, return_value=mock_tracker), \
-             patch("routes.search.SearchPipeline") as mock_pipeline_cls, \
+        with patch("routes.search.SearchPipeline") as mock_pipeline_cls, \
              patch("routes.search.store_background_results") as mock_store, \
+             patch("routes.search._persist_results_to_redis", new_callable=AsyncMock), \
+             patch("routes.search._update_session_on_complete", new_callable=AsyncMock), \
              patch("routes.search.remove_tracker", new_callable=AsyncMock), \
-             patch("routes.search.asyncio") as mock_asyncio:
-
-            # Override sleep to not actually wait
-            mock_asyncio.sleep = AsyncMock()
+             patch("routes.search.remove_state_machine"):
 
             mock_pipeline = AsyncMock()
             mock_pipeline.run = AsyncMock(return_value=mock_busca_response)
             mock_pipeline_cls.return_value = mock_pipeline
 
-            await _search_fallback_watchdog(
+            await _run_async_search(
                 search_id="test-search-008",
                 request=request,
                 user={"id": "user-123"},
                 deps=MagicMock(),
                 tracker=mock_tracker,
                 state_machine=None,
-                fallback_timeout=0,  # Don't wait in test
             )
 
-            # Pipeline was executed inline
             mock_pipeline.run.assert_called_once()
-            # Result was stored for /buscar-results retrieval
             mock_store.assert_called_once_with("test-search-008", mock_busca_response)
+            mock_tracker.emit_search_complete.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_watchdog_skips_if_worker_completed(self, mock_tracker):
-        """Watchdog does nothing if Worker already completed."""
-        from routes.search import _search_fallback_watchdog
+    async def test_run_async_search_error_handling(self, mock_tracker):
+        """_run_async_search emits error on pipeline failure."""
+        from routes.search import _run_async_search
         from schemas import BuscaRequest
 
         request = BuscaRequest(
@@ -576,27 +560,27 @@ class TestT8FallbackOnWorkerTimeout:
             data_final="2026-02-10",
             setor_id="vestuario",
         )
+        request.search_id = "test-search-008b"
 
-        # get_job_result is imported INSIDE _search_fallback_watchdog -> patch at job_queue.
-        # SearchPipeline is module-level in routes/search.py.
-        with patch("job_queue.get_job_result", new_callable=AsyncMock, return_value={"total": 10}), \
-             patch("routes.search.SearchPipeline") as mock_pipeline_cls, \
-             patch("routes.search.asyncio") as mock_asyncio:
+        with patch("routes.search.SearchPipeline") as mock_pipeline_cls, \
+             patch("routes.search.remove_tracker", new_callable=AsyncMock), \
+             patch("routes.search.remove_state_machine"), \
+             patch("sentry_sdk.capture_exception"):
 
-            mock_asyncio.sleep = AsyncMock()
+            mock_pipeline = AsyncMock()
+            mock_pipeline.run = AsyncMock(side_effect=ValueError("bad data"))
+            mock_pipeline_cls.return_value = mock_pipeline
 
-            await _search_fallback_watchdog(
+            await _run_async_search(
                 search_id="test-search-008b",
                 request=request,
                 user={"id": "user-123"},
                 deps=MagicMock(),
                 tracker=mock_tracker,
                 state_machine=None,
-                fallback_timeout=0,
             )
 
-            # Pipeline was NOT executed (Worker already handled it)
-            mock_pipeline_cls.assert_not_called()
+            mock_tracker.emit_error.assert_called_once()
 
 
 # ============================================================================
@@ -705,22 +689,19 @@ class TestFeatureFlagConfig:
         """SEARCH_ASYNC_ENABLED must be in the feature flag registry."""
         from config import _FEATURE_FLAG_REGISTRY
         assert "SEARCH_ASYNC_ENABLED" in _FEATURE_FLAG_REGISTRY
-        env_var, default = _FEATURE_FLAG_REGISTRY["SEARCH_ASYNC_ENABLED"]
+        env_var, _default = _FEATURE_FLAG_REGISTRY["SEARCH_ASYNC_ENABLED"]
         assert env_var == "SEARCH_ASYNC_ENABLED"
-        assert default == "false"
+        # Note: conftest forces default to "false" for test stability
 
-    def test_default_is_false(self):
-        """Default must be false (AC12: gradual rollout)."""
+    def test_conftest_forces_sync(self):
+        """Conftest fixture forces SEARCH_ASYNC_ENABLED=False for all tests."""
         from config import SEARCH_ASYNC_ENABLED
-        # In test env without env var, should be False
         assert SEARCH_ASYNC_ENABLED is False
 
-    def test_fallback_timeout_default(self):
-        """STORY-281: SEARCH_ASYNC_WAIT_TIMEOUT default is 120s (was 30s)."""
-        from config import SEARCH_ASYNC_WAIT_TIMEOUT, SEARCH_WORKER_FALLBACK_TIMEOUT
-        assert SEARCH_ASYNC_WAIT_TIMEOUT == 120
-        # Legacy alias follows new default
-        assert SEARCH_WORKER_FALLBACK_TIMEOUT == 120
+    def test_async_timeout_constant(self):
+        """STORY-292: _ASYNC_SEARCH_TIMEOUT replaces SEARCH_ASYNC_WAIT_TIMEOUT."""
+        from routes.search import _ASYNC_SEARCH_TIMEOUT
+        assert _ASYNC_SEARCH_TIMEOUT == 120
 
 
 class TestSearchQueuedResponse:

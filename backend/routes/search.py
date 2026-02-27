@@ -841,96 +841,150 @@ async def _execute_background_fetch(
 
 
 # ---------------------------------------------------------------------------
-# GTM-ARCH-001 AC13: Watchdog fallback for async search
+# STORY-292 AC3: Async search via asyncio.create_task (replaces ARQ worker)
 # ---------------------------------------------------------------------------
 
-async def _search_fallback_watchdog(
+_ASYNC_SEARCH_TIMEOUT = 120  # AC9: Hard limit in seconds
+
+
+async def _run_async_search(
     search_id: str,
     request: "BuscaRequest",
     user: dict,
     deps: "SimpleNamespace",
     tracker,
     state_machine,
-    fallback_timeout: int = 120,
 ) -> None:
-    """STORY-281: If Worker doesn't produce results within fallback_timeout, run inline.
+    """STORY-292 AC3: Execute search pipeline as background task.
 
-    Spawned as asyncio.create_task() after enqueue. Sleeps for fallback_timeout
-    seconds, then checks if the Worker already completed. If not, sets a cancel
-    flag (AC2) to stop the worker and executes the pipeline inline.
+    Runs the full 7-stage SearchPipeline via asyncio.create_task() in the
+    same worker process (no ARQ dependency).  Results are persisted to
+    in-memory L1, Redis L2, and Supabase session update for retrieval via
+    GET /buscar-results/{search_id}.
 
-    STORY-281 AC1: Default timeout increased from 30s to 120s.
-    STORY-281 AC2: Sets Redis cancel flag so worker aborts.
-    STORY-281 AC4: Emits inline_fallback metric and structured log.
+    AC7: On failure, state transitions to 'failed' and SSE emits error.
+    AC9: 120s hard timeout with cleanup.
     """
-    from metrics import SEARCH_INLINE_FALLBACK, SEARCH_WORKER_COMPLETION
-
-    wait_start = sync_time.time()
-    await asyncio.sleep(fallback_timeout)
-
-    # Check if Worker already completed (via Redis)
-    from job_queue import get_job_result, set_cancel_flag
-    result = await get_job_result(search_id, "search_result")
-    if result:
-        # STORY-281 AC4: Record worker completion time
-        worker_duration = sync_time.time() - wait_start
-        SEARCH_WORKER_COMPLETION.observe(worker_duration)
-        logger.debug(f"ARCH-001: Watchdog — Worker completed for {search_id}, no fallback needed")
-        return
-
-    # Check if tracker already completed (Worker emitted terminal event)
-    existing_tracker = await get_tracker(search_id)
-    if existing_tracker and existing_tracker._is_complete:
-        worker_duration = sync_time.time() - wait_start
-        SEARCH_WORKER_COMPLETION.observe(worker_duration)
-        logger.debug(f"ARCH-001: Watchdog — tracker complete for {search_id}, no fallback needed")
-        return
-
-    # STORY-281 AC4: Record inline fallback event
-    SEARCH_INLINE_FALLBACK.inc()
-
-    # STORY-281 AC4: Structured log for inline fallback
-    import json as _json
-    logger.warning(_json.dumps({
-        "event": "inline_fallback",
-        "search_id": search_id,
-        "wait_timeout": fallback_timeout,
-        "message": f"Worker didn't complete within {fallback_timeout}s — executing inline",
-    }))
-
-    # STORY-281 AC2: Signal worker to stop (avoids double execution)
-    await set_cancel_flag(search_id)
-
+    _start = sync_time.time()
     try:
         pipeline = SearchPipeline(deps)
         ctx = SearchContext(
             request=request,
             user=user,
-            tracker=existing_tracker or tracker,
-            start_time=sync_time.time(),
+            tracker=tracker,
+            start_time=_start,
             quota_pre_consumed=True,  # Quota already consumed in POST
         )
 
-        response = await pipeline.run(ctx)
+        # AC9: 120s hard limit
+        response = await asyncio.wait_for(
+            pipeline.run(ctx),
+            timeout=_ASYNC_SEARCH_TIMEOUT,
+        )
 
-        # Store for /buscar-results retrieval
+        # Persist results: L1 (memory) + L2 (Redis) + L3 (Supabase session update)
         store_background_results(search_id, response)
         await _persist_results_to_redis(search_id, response)
+        asyncio.create_task(_update_session_on_complete(search_id, user.get("id"), response))
 
-        if existing_tracker or tracker:
-            active_tracker = existing_tracker or tracker
-            await active_tracker.emit_search_complete(search_id, response.total_filtrado)
-            await remove_tracker(search_id)
+        # Emit terminal SSE event
+        if tracker:
+            await tracker.emit_search_complete(search_id, response.total_filtrado)
+
+        # CRIT-003: Complete state machine
+        if state_machine:
+            try:
+                await state_machine.complete()
+            except Exception:
+                pass
+
+        elapsed = round(sync_time.time() - _start, 1)
+        logger.info(
+            f"STORY-292: Async search completed for {search_id} in {elapsed}s "
+            f"({response.total_filtrado} results)"
+        )
+
+    except asyncio.TimeoutError:
+        elapsed = round(sync_time.time() - _start, 1)
+        logger.error(f"STORY-292: Search timed out after {elapsed}s: {search_id}")
+        sentry_sdk.capture_message(
+            f"Async search timeout: {search_id}",
+            level="warning",
+        )
+        if tracker:
+            await tracker.emit_error(
+                "Busca excedeu o tempo limite de 120 segundos. "
+                "Tente com menos estados ou um período menor."
+            )
+        if state_machine:
+            try:
+                await state_machine.timeout()
+            except Exception:
+                pass
+
+    except asyncio.CancelledError:
+        logger.info(f"STORY-292: Async search cancelled for {search_id} (shutdown)")
+        raise
 
     except Exception as e:
+        elapsed = round(sync_time.time() - _start, 1)
         logger.error(
-            f"ARCH-001: Inline fallback also failed for {search_id}: "
-            f"{type(e).__name__}: {e}"
+            f"STORY-292: Async search failed for {search_id} after {elapsed}s: "
+            f"{type(e).__name__}: {e}",
+            exc_info=True,
         )
-        active_tracker = existing_tracker or tracker
-        if active_tracker:
-            await active_tracker.emit_error(f"Erro no processamento: {type(e).__name__}")
-            await remove_tracker(search_id)
+        sentry_sdk.capture_exception(e)
+        if tracker:
+            await tracker.emit_error(f"Erro no processamento: {type(e).__name__}")
+        if state_machine:
+            try:
+                await state_machine.fail(
+                    f"{type(e).__name__}: {str(e)[:200]}",
+                    error_code="pipeline_error",
+                )
+            except Exception:
+                pass
+
+    finally:
+        await remove_tracker(search_id)
+        _active_background_tasks.pop(search_id, None)
+        if state_machine:
+            remove_state_machine(search_id)
+
+
+async def _update_session_on_complete(
+    search_id: str,
+    user_id: str | None,
+    response: Any,
+) -> None:
+    """STORY-292 AC6: Update search session with result metadata on completion.
+
+    Fire-and-forget: errors are logged, never raised.
+    """
+    if not user_id:
+        return
+    try:
+        from supabase_client import get_supabase, sb_execute
+        from datetime import datetime, timezone
+
+        db = get_supabase()
+        if not db:
+            return
+
+        total_filtrado = getattr(response, "total_filtrado", 0) if not isinstance(response, dict) else response.get("total_filtrado", 0)
+        total_raw = getattr(response, "total_encontrado", 0) if not isinstance(response, dict) else response.get("total_encontrado", 0)
+
+        await sb_execute(
+            db.table("search_sessions")
+            .update({
+                "status": "completed",
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+            })
+            .eq("search_id", search_id)
+            .eq("user_id", user_id)
+        )
+    except Exception as e:
+        logger.debug(f"STORY-292: Session update on complete failed (non-fatal): {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -1019,108 +1073,89 @@ async def buscar_licitacoes(
     )
 
     # -----------------------------------------------------------------------
-    # GTM-ARCH-001: Async search — enqueue to ARQ Worker, return 202
+    # STORY-292: Async search — create_task in-process, return 202
     # -----------------------------------------------------------------------
-    from config import get_feature_flag, SEARCH_ASYNC_WAIT_TIMEOUT
-    from job_queue import is_queue_available, enqueue_job
+    from config import get_feature_flag
 
-    # GTM-STAB-009 AC6: X-Sync header forces synchronous mode (backward compat)
+    # AC14: X-Sync header forces synchronous mode (backward compat)
     force_sync = (
         raw_request.headers.get("x-sync", "").lower() == "true"
         or raw_request.query_params.get("sync", "").lower() == "true"
     )
 
     if get_feature_flag("SEARCH_ASYNC_ENABLED") and not force_sync:
-        queue_available = await is_queue_available()
-        if queue_available:
-            logger.info(f"ARCH-001: Async mode — enqueueing search job for {request.search_id}")
+        logger.info(f"STORY-292: Async mode — dispatching background task for {request.search_id}")
 
-            # AC8: Consume quota in POST (before enqueue, not in Worker)
-            try:
-                import quota as _quota
-                from authorization import get_admin_ids as _get_admin_ids
+        # Consume quota in POST before dispatching (prevents wasted work)
+        try:
+            import quota as _quota
+            from authorization import get_admin_ids as _get_admin_ids
 
-                _is_admin = user["id"].lower() in _get_admin_ids()
-                _is_master = False
-                if not _is_admin:
-                    _is_admin, _is_master = await check_user_roles(user["id"])
+            _is_admin = user["id"].lower() in _get_admin_ids()
+            _is_master = False
+            if not _is_admin:
+                _is_admin, _is_master = await check_user_roles(user["id"])
 
-                if not (_is_admin or _is_master):
-                    _quota_info = await asyncio.to_thread(_quota.check_quota, user["id"])
-                    if not _quota_info.allowed:
-                        if tracker:
-                            await tracker.emit_error(_quota_info.error_message)
-                            await remove_tracker(request.search_id)
-                        raise HTTPException(status_code=403, detail=_quota_info.error_message)
+            if not (_is_admin or _is_master):
+                _quota_info = await asyncio.to_thread(_quota.check_quota, user["id"])
+                if not _quota_info.allowed:
+                    if tracker:
+                        await tracker.emit_error(_quota_info.error_message)
+                        await remove_tracker(request.search_id)
+                    raise HTTPException(status_code=403, detail=_quota_info.error_message)
 
-                    _allowed, _new_used, _remaining = await asyncio.to_thread(
-                        _quota.check_and_increment_quota_atomic,
-                        user["id"],
-                        _quota_info.capabilities["max_requests_per_month"],
-                    )
-                    if not _allowed:
-                        if tracker:
-                            await tracker.emit_error("Suas buscas acabaram.")
-                            await remove_tracker(request.search_id)
-                        raise HTTPException(
-                            status_code=403,
-                            detail=(
-                                f"Limite de {_quota_info.capabilities['max_requests_per_month']} "
-                                f"buscas mensais atingido."
-                            ),
-                        )
-            except HTTPException:
-                raise
-            except Exception as quota_err:
-                logger.warning(f"ARCH-001: Quota check failed, falling through to sync: {quota_err}")
-                # Fall through to sync path
-                queue_available = False
-
-            if queue_available:
-                # AC7: Reuse search_id generated in POST
-                request_data = request.model_dump(mode="json")
-                queued_at = sync_time.time()
-
-                job = await enqueue_job(
-                    "search_job",
-                    request.search_id,
-                    request_data,
-                    user,
-                    _job_id=f"search:{request.search_id}",
-                    _queued_at=queued_at,
+                _allowed, _new_used, _remaining = await asyncio.to_thread(
+                    _quota.check_and_increment_quota_atomic,
+                    user["id"],
+                    _quota_info.capabilities["max_requests_per_month"],
                 )
+                if not _allowed:
+                    if tracker:
+                        await tracker.emit_error("Suas buscas acabaram.")
+                        await remove_tracker(request.search_id)
+                    raise HTTPException(
+                        status_code=403,
+                        detail=(
+                            f"Limite de {_quota_info.capabilities['max_requests_per_month']} "
+                            f"buscas mensais atingido."
+                        ),
+                    )
+        except HTTPException:
+            raise
+        except Exception as quota_err:
+            logger.warning(f"STORY-292: Quota check failed, falling through to sync: {quota_err}")
+            # Fall through to sync/cache-first path below
+            force_sync = True
 
-                if job:
-                    # STORY-281 AC1: Watchdog with 120s timeout (was 30s)
-                    asyncio.create_task(
-                        _search_fallback_watchdog(
-                            search_id=request.search_id,
-                            request=request,
-                            user=user,
-                            deps=deps,
-                            tracker=tracker,
-                            state_machine=state_machine,
-                            fallback_timeout=SEARCH_ASYNC_WAIT_TIMEOUT,
-                        )
-                    )
+        if not force_sync:
+            # AC3: Dispatch pipeline as asyncio.create_task (no ARQ dependency)
+            task = asyncio.create_task(
+                _run_async_search(
+                    search_id=request.search_id,
+                    request=request,
+                    user=user,
+                    deps=deps,
+                    tracker=tracker,
+                    state_machine=state_machine,
+                )
+            )
+            _active_background_tasks[request.search_id] = task
 
-                    # GTM-STAB-009 AC1: Return 202 Accepted with full async response
-                    logger.info(
-                        f"STAB-009: Search job enqueued for {request.search_id} — returning 202"
-                    )
-                    num_ufs = len(request.ufs) if request.ufs else 1
-                    return StarletteJSONResponse(
-                        status_code=202,
-                        content={
-                            "search_id": request.search_id,
-                            "status": "queued",
-                            "status_url": f"/v1/search/{request.search_id}/status",
-                            "progress_url": f"/buscar-progress/{request.search_id}",
-                            "estimated_duration_s": min(15 + num_ufs * 8, 120),
-                        },
-                    )
-                else:
-                    logger.warning(f"ARCH-001: Enqueue failed for {request.search_id} — falling back to sync")
+            # AC1+AC2: Return 202 Accepted with Location header
+            num_ufs = len(request.ufs) if request.ufs else 1
+            status_url = f"/v1/search/{request.search_id}/status"
+            logger.info(f"STORY-292: Background task dispatched for {request.search_id} — returning 202")
+            return StarletteJSONResponse(
+                status_code=202,
+                content={
+                    "search_id": request.search_id,
+                    "status": "queued",
+                    "status_url": status_url,
+                    "progress_url": f"/buscar-progress/{request.search_id}",
+                    "estimated_duration_s": min(15 + num_ufs * 8, 120),
+                },
+                headers={"Location": status_url},
+            )
 
     # -----------------------------------------------------------------------
     # A-04 AC1: Cache-first — check cascade before running full pipeline

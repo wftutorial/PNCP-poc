@@ -2,15 +2,55 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 /**
- * Next.js Middleware for route protection.
+ * Next.js Middleware for route protection + security headers.
  * Uses @supabase/ssr with getAll/setAll pattern for proper cookie handling.
  *
- * Protected routes: / (main search page), /historico, /conta, /admin/*
- * Public routes: /login, /signup, /planos, /auth/callback
+ * STORY-300: Security Hardening
+ * - AC1: CSP header configured here for programmatic control
+ * - AC2: Report-Only mode (change to Content-Security-Policy to enforce)
+ * - AC3: X-Content-Type-Options: nosniff
+ * - AC4: X-Frame-Options: DENY
  *
- * IMPORTANT: This middleware uses the recommended getAll/setAll cookie pattern
- * which is compatible with createBrowserClient on the client side.
+ * Protected routes: /buscar, /historico, /conta, /admin/*, /dashboard, /mensagens
+ * Public routes: /login, /signup, /planos, /auth/callback
  */
+
+/**
+ * STORY-300 AC1-AC4: Apply security headers to every response.
+ * CSP is in Report-Only mode (AC2) — switch to Content-Security-Policy to enforce.
+ */
+function addSecurityHeaders(response: NextResponse): NextResponse {
+  // AC1: Content Security Policy
+  const csp = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://static.cloudflareinsights.com https://cdn.sentry.io",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: https: blob:",
+    "font-src 'self' data:",
+    "connect-src 'self' https://*.supabase.co https://*.supabase.in https://api.stripe.com https://*.railway.app https://*.ingest.sentry.io https://*.sentry.io https://*.smartlic.tech https://api-js.mixpanel.com https://api.mixpanel.com wss://*.supabase.co",
+    "frame-src 'self' https://js.stripe.com",
+    "object-src 'none'",
+    "base-uri 'self'",
+  ].join("; ");
+
+  // AC2: Report-Only mode first — violations are logged, not blocked.
+  // When ready to enforce, change to "Content-Security-Policy".
+  response.headers.set("Content-Security-Policy-Report-Only", csp);
+
+  // AC3: Prevent MIME type sniffing
+  response.headers.set("X-Content-Type-Options", "nosniff");
+
+  // AC4: Prevent clickjacking
+  response.headers.set("X-Frame-Options", "DENY");
+
+  // Additional hardening headers
+  response.headers.set("X-XSS-Protection", "1; mode=block");
+  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  response.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+
+  return response;
+}
 
 const PROTECTED_ROUTES = [
   "/buscar",     // Main search page requires auth
@@ -35,7 +75,7 @@ export async function middleware(request: NextRequest) {
 
   // Allow API routes first (includes /api/health for Railway healthcheck)
   if (pathname.startsWith("/api/")) {
-    return NextResponse.next();
+    return addSecurityHeaders(NextResponse.next());
   }
 
   // CRITICAL: Force canonical domain redirect (railway.app → smartlic.tech)
@@ -51,7 +91,7 @@ export async function middleware(request: NextRequest) {
 
   // Allow public routes without auth check
   if (PUBLIC_ROUTES.some(route => pathname.startsWith(route))) {
-    return NextResponse.next();
+    return addSecurityHeaders(NextResponse.next());
   }
 
   // Allow static assets and Next.js internals
@@ -60,7 +100,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/favicon") ||
     pathname.includes(".")
   ) {
-    return NextResponse.next();
+    return addSecurityHeaders(NextResponse.next());
   }
 
   // Check if route requires protection
@@ -69,7 +109,7 @@ export async function middleware(request: NextRequest) {
   );
 
   if (!isProtectedRoute) {
-    return NextResponse.next();
+    return addSecurityHeaders(NextResponse.next());
   }
 
   // Get Supabase config
@@ -78,7 +118,7 @@ export async function middleware(request: NextRequest) {
 
   if (!supabaseUrl || !supabaseAnonKey) {
     console.error("Supabase environment variables not configured");
-    return NextResponse.next();
+    return addSecurityHeaders(NextResponse.next());
   }
 
   // Create response - cookies will be set on this
@@ -154,12 +194,12 @@ export async function middleware(request: NextRequest) {
     requestHeaders.set("x-user-id", user.id);
     requestHeaders.set("x-user-email", user.email || "");
 
-    // Return response with any updated session cookies
-    return NextResponse.next({
+    // Return response with any updated session cookies + security headers
+    return addSecurityHeaders(NextResponse.next({
       request: {
         headers: requestHeaders,
       },
-    });
+    }));
 
   } catch (error) {
     console.error("Middleware auth error:", error);

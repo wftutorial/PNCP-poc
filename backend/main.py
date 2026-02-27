@@ -658,27 +658,47 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    """AC10+AC11: Catch-all for Stripe and RLS errors that leak English text."""
-    error_msg = str(exc).lower()
+    """STORY-300 AC5-AC7: Catch-all that NEVER returns stack traces in production.
 
-    # AC11: Supabase RLS policy errors
-    if "rls" in error_msg or "row-level security" in error_msg or "policy" in error_msg and "permission" in error_msg:
+    AC5: Generic error message for all unhandled exceptions
+    AC6: correlation_id included for support tracing
+    AC7: Sentry captures the full exception with stack trace
+    """
+    from middleware import correlation_id_var, request_id_var
+
+    error_msg = str(exc).lower()
+    corr_id = correlation_id_var.get("-")
+    req_id = request_id_var.get("-")
+
+    # AC11 (GTM-PROXY-001): Supabase RLS policy errors
+    if "rls" in error_msg or "row-level security" in error_msg or ("policy" in error_msg and "permission" in error_msg):
         logger.error(f"RLS error on {request.url.path}: {exc}")
+        sentry_sdk.capture_exception(exc)
         return JSONResponse(
             status_code=403,
-            content={"detail": "Erro de permissão. Faça login novamente."},
+            content={"detail": "Erro de permissão. Faça login novamente.", "correlation_id": corr_id},
         )
 
-    # AC10: Stripe errors that weren't caught by specific handlers
+    # AC10 (GTM-PROXY-001): Stripe errors
     if "stripe" in error_msg or "stripeerror" in type(exc).__name__.lower():
         logger.error(f"Unhandled Stripe error on {request.url.path}: {exc}")
+        sentry_sdk.capture_exception(exc)
         return JSONResponse(
             status_code=500,
-            content={"detail": "Erro ao processar pagamento. Tente novamente."},
+            content={"detail": "Erro ao processar pagamento. Tente novamente.", "correlation_id": corr_id},
         )
 
-    # Let other exceptions propagate to default handler / Sentry
-    raise exc
+    # AC5: NEVER return stack traces — log + Sentry get the full exception
+    logger.exception(f"Unhandled error on {request.url.path}")
+    sentry_sdk.capture_exception(exc)  # AC7: Sentry gets full stack trace + context
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Erro interno do servidor. Tente novamente.",
+            "correlation_id": corr_id,
+            "request_id": req_id,
+        },
+    )
 
 
 # ============================================================================

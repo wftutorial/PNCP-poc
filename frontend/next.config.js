@@ -54,21 +54,18 @@ const nextConfig = {
             key: 'Strict-Transport-Security',
             value: 'max-age=31536000; includeSubDomains',
           },
+          // STORY-300 AC2: CSP in Report-Only mode (violations logged, not blocked).
+          // Primary CSP is in middleware.ts (AC1). This covers static assets outside middleware matcher.
+          // When ready to enforce, change to 'Content-Security-Policy'.
           {
-            key: 'Content-Security-Policy',
+            key: 'Content-Security-Policy-Report-Only',
             value: [
               "default-src 'self'",
-              // CSP script-src: 'unsafe-inline' and 'unsafe-eval' are required because:
-              // 1. Next.js injects inline scripts for hydration and dynamic imports
-              // 2. Stripe.js (https://js.stripe.com) uses eval() for fraud detection
-              // Risk accepted and documented (STORY-284 AC4).
-              // Future plan: migrate to nonce-based CSP when Next.js supports it
-              // natively (tracked in https://github.com/vercel/next.js/discussions/54907)
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://static.cloudflareinsights.com",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://static.cloudflareinsights.com https://cdn.sentry.io",
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: https: blob:",
               "font-src 'self' data:",
-              "connect-src 'self' https://*.supabase.co https://*.supabase.in https://api.stripe.com https://*.railway.app https://*.ingest.sentry.io https://*.smartlic.tech https://api-js.mixpanel.com https://api.mixpanel.com",
+              "connect-src 'self' https://*.supabase.co https://*.supabase.in https://api.stripe.com https://*.railway.app https://*.ingest.sentry.io https://*.sentry.io https://*.smartlic.tech https://api-js.mixpanel.com https://api.mixpanel.com wss://*.supabase.co",
               "frame-src 'self' https://js.stripe.com",
               "object-src 'none'",
               "base-uri 'self'",

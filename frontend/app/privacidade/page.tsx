@@ -1,8 +1,8 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Política de Privacidade | SmartLic',
-  description: 'Política de Privacidade do SmartLic - Como coletamos, usamos e protegemos seus dados',
+  title: 'Politica de Privacidade | SmartLic',
+  description: 'Politica de Privacidade do SmartLic - Como coletamos, usamos e protegemos seus dados',
 };
 
 export default function PrivacidadePage() {
@@ -11,194 +11,352 @@ export default function PrivacidadePage() {
       <div className="container mx-auto px-4 py-16 max-w-4xl">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 md:p-12">
           <h1 className="text-4xl font-bold mb-2 text-gray-900 dark:text-white">
-            Política de Privacidade
+            Politica de Privacidade
           </h1>
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-8">
-            Última atualização: 13 de fevereiro de 2026
+            Ultima atualizacao: 27 de fevereiro de 2026
           </p>
 
           <div className="prose prose-gray dark:prose-invert max-w-none">
+            {/* 1. Introducao */}
             <section className="mb-8">
               <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
-                1. Introdução
+                1. Introducao
               </h2>
               <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                A <strong>SmartLic</strong> ("nós", "nosso" ou "empresa") respeita sua privacidade e está
-                comprometida em proteger seus dados pessoais. Esta Política de Privacidade descreve como
-                coletamos, usamos, armazenamos e protegemos suas informações ao utilizar nossa plataforma
-                de descoberta automatizada de oportunidades de licitações públicas.
+                A <strong>CONFENGE Avaliacoes e Inteligencia Artificial LTDA</strong> (&quot;SmartLic&quot;, &quot;nos&quot; ou &quot;empresa&quot;),
+                inscrita no CNPJ sob o n. XX.XXX.XXX/0001-XX, com sede na cidade de Sao Paulo/SP,
+                respeita sua privacidade e esta comprometida em proteger seus dados pessoais em conformidade com
+                a <strong>Lei Geral de Protecao de Dados (LGPD - Lei 13.709/2018)</strong>.
+                Esta Politica de Privacidade descreve como coletamos, usamos, armazenamos e protegemos suas informacoes
+                ao utilizar a plataforma SmartLic de descoberta automatizada de oportunidades de licitacoes publicas.
               </p>
             </section>
 
+            {/* 2. Controlador de Dados */}
             <section className="mb-8">
               <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
-                2. Informações que Coletamos
+                2. Controlador de Dados
               </h2>
-
-              <h3 className="text-xl font-semibold mb-3 mt-6 text-gray-800 dark:text-gray-200">
-                2.1 Informações Fornecidas por Você
-              </h3>
-              <ul className="list-disc pl-6 space-y-2 text-gray-700 dark:text-gray-300">
-                <li><strong>Cadastro:</strong> Nome, e-mail, telefone, CPF/CNPJ, cargo e empresa</li>
-                <li><strong>Perfil de Busca:</strong> Setores de interesse, estados/regiões, filtros de valor</li>
-                <li><strong>Comunicação:</strong> Mensagens enviadas através de formulários de contato</li>
-                <li><strong>Pagamento:</strong> Dados de cobrança (processados por Stripe)</li>
-              </ul>
-
-              <h3 className="text-xl font-semibold mb-3 mt-6 text-gray-800 dark:text-gray-200">
-                2.2 Informações Coletadas Automaticamente
-              </h3>
-              <ul className="list-disc pl-6 space-y-2 text-gray-700 dark:text-gray-300">
-                <li><strong>Dados de Uso (via Mixpanel, apenas com consentimento):</strong> Páginas visitadas, tempo de sessão, buscas realizadas, eventos de interação</li>
-                <li><strong>Dados Técnicos:</strong> Endereço IP, tipo de navegador, sistema operacional</li>
-                <li><strong>Cookies:</strong> Preferências de tema, sessão de autenticação, análise de uso (cookies analíticos requerem consentimento explícito)</li>
-              </ul>
-
-              <h3 className="text-xl font-semibold mb-3 mt-6 text-gray-800 dark:text-gray-200">
-                2.3 Informações de Terceiros
-              </h3>
-              <ul className="list-disc pl-6 space-y-2 text-gray-700 dark:text-gray-300">
-                <li><strong>Google OAuth:</strong> Nome, e-mail e foto de perfil (se autorizado)</li>
-                <li><strong>PNCP API:</strong> Dados públicos de licitações (não inclui dados pessoais)</li>
-              </ul>
+              <div className="text-gray-700 dark:text-gray-300 leading-relaxed space-y-2">
+                <p><strong>Razao Social:</strong> CONFENGE Avaliacoes e Inteligencia Artificial LTDA</p>
+                <p><strong>Encarregado de Dados (DPO):</strong> Tiago Sasaki</p>
+                <p><strong>E-mail do DPO:</strong>{' '}
+                  <a href="mailto:privacidade@smartlic.tech" className="text-blue-600 dark:text-blue-400 hover:underline">privacidade@smartlic.tech</a>
+                </p>
+              </div>
             </section>
 
+            {/* 3. Dados Coletados e Base Legal (Art. 7 LGPD) */}
             <section className="mb-8">
               <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
-                3. Como Usamos Suas Informações
+                3. Dados Coletados, Finalidade e Base Legal (Art. 7&#176; LGPD)
               </h2>
-              <ul className="list-disc pl-6 space-y-2 text-gray-700 dark:text-gray-300">
-                <li>Fornecer e melhorar nossos serviços de busca de licitações</li>
-                <li>Personalizar resultados de acordo com suas preferências</li>
-                <li>Enviar notificações sobre novas oportunidades relevantes (em breve)</li>
-                <li>Processar pagamentos e gerenciar assinaturas</li>
-                <li>Comunicar atualizações de sistema e novidades do produto</li>
-                <li>Analisar uso da plataforma para melhorias de UX</li>
-                <li>Prevenir fraudes e garantir segurança da plataforma</li>
-                <li>Cumprir obrigações legais e regulatórias</li>
-              </ul>
+              <p className="text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
+                Cada tipo de dado pessoal que coletamos possui uma finalidade especifica e uma base legal conforme o Art. 7&#176; da LGPD:
+              </p>
+
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm border border-gray-200 dark:border-gray-700">
+                  <thead>
+                    <tr className="bg-gray-100 dark:bg-gray-700">
+                      <th className="px-4 py-3 text-left font-semibold text-gray-900 dark:text-white border-b">Dado Pessoal</th>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-900 dark:text-white border-b">Finalidade</th>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-900 dark:text-white border-b">Base Legal (Art. 7&#176;)</th>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-900 dark:text-white border-b">Retencao</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-gray-700 dark:text-gray-300">
+                    <tr className="border-b border-gray-200 dark:border-gray-700">
+                      <td className="px-4 py-3"><strong>Nome e e-mail</strong></td>
+                      <td className="px-4 py-3">Criacao e manutencao de conta; comunicacao</td>
+                      <td className="px-4 py-3">Execucao de contrato (Art. 7&#176;, V)</td>
+                      <td className="px-4 py-3">Duracao da conta + 6 meses</td>
+                    </tr>
+                    <tr className="border-b border-gray-200 dark:border-gray-700">
+                      <td className="px-4 py-3"><strong>CNPJ/CPF, cargo, empresa</strong></td>
+                      <td className="px-4 py-3">Perfil empresarial para classificacao de licitacoes</td>
+                      <td className="px-4 py-3">Execucao de contrato (Art. 7&#176;, V)</td>
+                      <td className="px-4 py-3">Duracao da conta + 6 meses</td>
+                    </tr>
+                    <tr className="border-b border-gray-200 dark:border-gray-700">
+                      <td className="px-4 py-3"><strong>Setores de interesse, UFs, filtros</strong></td>
+                      <td className="px-4 py-3">Personalizacao de busca e classificacao IA</td>
+                      <td className="px-4 py-3">Execucao de contrato (Art. 7&#176;, V)</td>
+                      <td className="px-4 py-3">Duracao da conta + 6 meses</td>
+                    </tr>
+                    <tr className="border-b border-gray-200 dark:border-gray-700">
+                      <td className="px-4 py-3"><strong>Historico de buscas</strong></td>
+                      <td className="px-4 py-3">Funcionalidade de historico e analytics</td>
+                      <td className="px-4 py-3">Execucao de contrato (Art. 7&#176;, V)</td>
+                      <td className="px-4 py-3">12 meses (rolling)</td>
+                    </tr>
+                    <tr className="border-b border-gray-200 dark:border-gray-700">
+                      <td className="px-4 py-3"><strong>Dados de pagamento</strong></td>
+                      <td className="px-4 py-3">Processamento de cobrancas via Stripe</td>
+                      <td className="px-4 py-3">Execucao de contrato (Art. 7&#176;, V)</td>
+                      <td className="px-4 py-3">5 anos (obrigacao fiscal)</td>
+                    </tr>
+                    <tr className="border-b border-gray-200 dark:border-gray-700">
+                      <td className="px-4 py-3"><strong>IP, navegador, SO</strong></td>
+                      <td className="px-4 py-3">Seguranca, rate limiting, prevencao de fraude</td>
+                      <td className="px-4 py-3">Interesse legitimo (Art. 7&#176;, IX)</td>
+                      <td className="px-4 py-3">90 dias</td>
+                    </tr>
+                    <tr className="border-b border-gray-200 dark:border-gray-700">
+                      <td className="px-4 py-3"><strong>Dados de uso (Mixpanel)</strong></td>
+                      <td className="px-4 py-3">Melhoria de UX e analytics de produto</td>
+                      <td className="px-4 py-3">Consentimento (Art. 7&#176;, I)</td>
+                      <td className="px-4 py-3">12 meses</td>
+                    </tr>
+                    <tr className="border-b border-gray-200 dark:border-gray-700">
+                      <td className="px-4 py-3"><strong>Cookies de sessao</strong></td>
+                      <td className="px-4 py-3">Autenticacao e seguranca</td>
+                      <td className="px-4 py-3">Execucao de contrato (Art. 7&#176;, V)</td>
+                      <td className="px-4 py-3">Duracao da sessao</td>
+                    </tr>
+                    <tr className="border-b border-gray-200 dark:border-gray-700">
+                      <td className="px-4 py-3"><strong>Google OAuth (nome, e-mail, foto)</strong></td>
+                      <td className="px-4 py-3">Login social simplificado</td>
+                      <td className="px-4 py-3">Consentimento (Art. 7&#176;, I)</td>
+                      <td className="px-4 py-3">Duracao da conta + 6 meses</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-3"><strong>Logs de erro (Sentry)</strong></td>
+                      <td className="px-4 py-3">Monitoramento de estabilidade e debug</td>
+                      <td className="px-4 py-3">Interesse legitimo (Art. 7&#176;, IX)</td>
+                      <td className="px-4 py-3">90 dias</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <p className="text-gray-600 dark:text-gray-400 text-sm mt-4">
+                <strong>Nota:</strong> Dados de pagamento (numero do cartao, CVV) sao processados exclusivamente pela Stripe e
+                nunca armazenados em nossos servidores. A SmartLic recebe apenas informacoes de cobranca (status, valor, data).
+              </p>
             </section>
 
+            {/* 4. Compartilhamento de Dados */}
             <section className="mb-8">
               <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
                 4. Compartilhamento de Dados
               </h2>
               <p className="text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
-                <strong>Nós NÃO vendemos seus dados pessoais.</strong> Compartilhamos informações apenas nas seguintes situações:
+                <strong>Nos NAO vendemos seus dados pessoais.</strong> Compartilhamos informacoes apenas nas seguintes situacoes:
               </p>
               <ul className="list-disc pl-6 space-y-2 text-gray-700 dark:text-gray-300">
-                <li><strong>Prestadores de Serviço:</strong> Supabase (hospedagem), Railway (backend), OpenAI (IA), Stripe (pagamentos), Mixpanel (análise de uso — apenas com consentimento)</li>
-                <li><strong>Requisições Legais:</strong> Quando exigido por lei, ordem judicial ou autoridades competentes</li>
-                <li><strong>Proteção de Direitos:</strong> Para proteger nossos direitos, propriedade ou segurança</li>
-                <li><strong>Consentimento:</strong> Quando você autorizar explicitamente</li>
+                <li><strong>Supabase (EUA):</strong> Hospedagem de banco de dados e autenticacao</li>
+                <li><strong>Railway (EUA):</strong> Hospedagem de backend e frontend</li>
+                <li><strong>OpenAI (EUA):</strong> Classificacao IA de licitacoes (dados anonimizados)</li>
+                <li><strong>Stripe (EUA):</strong> Processamento de pagamentos</li>
+                <li><strong>Mixpanel (EUA):</strong> Analise de uso (apenas com consentimento explicito)</li>
+                <li><strong>Sentry (EUA):</strong> Monitoramento de erros (dados sanitizados, sem PII)</li>
+                <li><strong>Requisicoes Legais:</strong> Quando exigido por lei, ordem judicial ou autoridades competentes</li>
               </ul>
             </section>
 
+            {/* 5. Transferencia Internacional */}
             <section className="mb-8">
               <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
-                5. Segurança dos Dados
-              </h2>
-              <p className="text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
-                Implementamos medidas técnicas e organizacionais para proteger seus dados:
-              </p>
-              <ul className="list-disc pl-6 space-y-2 text-gray-700 dark:text-gray-300">
-                <li>Criptografia SSL/TLS para todas as comunicações</li>
-                <li>Autenticação de dois fatores (quando disponível)</li>
-                <li>Controle de acesso baseado em funções (RBAC)</li>
-                <li>Backups regulares e recuperação de desastres</li>
-                <li>Monitoramento contínuo de segurança</li>
-                <li>Auditoria de logs de acesso</li>
-              </ul>
-            </section>
-
-            <section className="mb-8">
-              <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
-                6. Seus Direitos (LGPD)
-              </h2>
-              <p className="text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
-                Conforme a Lei Geral de Proteção de Dados (LGPD - Lei 13.709/2018), você tem direito a:
-              </p>
-              <ul className="list-disc pl-6 space-y-2 text-gray-700 dark:text-gray-300">
-                <li><strong>Acesso:</strong> Confirmar se processamos seus dados e obter cópia</li>
-                <li><strong>Correção:</strong> Atualizar dados incompletos, inexatos ou desatualizados</li>
-                <li><strong>Anonimização/Bloqueio:</strong> Limitar processamento de dados desnecessários</li>
-                <li><strong>Eliminação:</strong> Excluir dados tratados com consentimento (com exceções legais)</li>
-                <li><strong>Portabilidade:</strong> Receber dados em formato estruturado e interoperável</li>
-                <li><strong>Revogação de Consentimento:</strong> Retirar autorização a qualquer momento</li>
-                <li><strong>Oposição:</strong> Se opor ao tratamento de dados em certas situações</li>
-              </ul>
-              <p className="text-gray-700 dark:text-gray-300 leading-relaxed mt-4">
-                Para exercer seus direitos de <strong>eliminação</strong> e <strong>portabilidade</strong>,
-                acesse <a href="/conta" className="text-blue-600 dark:text-blue-400 hover:underline">Minha Conta</a> na
-                plataforma. Para demais solicitações, entre em contato pelo e-mail{' '}
-                <a href="mailto:privacidade@smartlic.tech" className="text-blue-600 dark:text-blue-400 hover:underline">privacidade@smartlic.tech</a>.
-              </p>
-            </section>
-
-            <section className="mb-8">
-              <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
-                7. Cookies e Tecnologias Similares
-              </h2>
-              <p className="text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
-                Utilizamos cookies essenciais, funcionais e analíticos. Cookies analíticos (Mixpanel) só são ativados após seu consentimento explícito. Você pode gerenciar suas preferências de cookies a qualquer momento através do link &quot;Gerenciar Cookies&quot; no rodapé da plataforma.
-              </p>
-              <ul className="list-disc pl-6 space-y-2 text-gray-700 dark:text-gray-300">
-                <li><strong>Essenciais:</strong> Autenticação, segurança</li>
-                <li><strong>Funcionais:</strong> Preferências de tema, idioma</li>
-                <li><strong>Analíticos:</strong> Mixpanel (apenas com consentimento explícito do usuário)</li>
-              </ul>
-            </section>
-
-            <section className="mb-8">
-              <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
-                8. Retenção de Dados
+                5. Transferencia Internacional de Dados
               </h2>
               <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                Mantemos seus dados apenas pelo tempo necessário para cumprir as finalidades descritas nesta política,
-                ou conforme exigido por lei. Dados de contas inativas por mais de 24 meses serão anonimizados ou excluídos.
+                Nossos prestadores de servico estao localizados nos Estados Unidos. As transferencias internacionais
+                de dados pessoais sao realizadas com base no Art. 33 da LGPD, garantindo nivel adequado de protecao
+                por meio de clausulas contratuais padrao e certificacoes de seguranca dos prestadores (SOC 2, ISO 27001).
               </p>
             </section>
 
+            {/* 6. Seguranca dos Dados */}
             <section className="mb-8">
               <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
-                9. Transferência Internacional de Dados
+                6. Seguranca dos Dados
               </h2>
-              <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                Alguns de nossos prestadores de serviço estão localizados fora do Brasil (EUA, Europa).
-                Garantimos que essas transferências seguem padrões adequados de proteção de dados (GDPR, Privacy Shield, etc.).
+              <p className="text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
+                Implementamos medidas tecnicas e organizacionais para proteger seus dados:
+              </p>
+              <ul className="list-disc pl-6 space-y-2 text-gray-700 dark:text-gray-300">
+                <li>Criptografia TLS 1.3 para todas as comunicacoes</li>
+                <li>Autenticacao JWT com validacao local (ES256)</li>
+                <li>Row Level Security (RLS) no banco de dados</li>
+                <li>Sanitizacao de logs (PII nunca exposta em logs de producao)</li>
+                <li>Content Security Policy (CSP) contra XSS</li>
+                <li>Rate limiting por usuario e IP</li>
+                <li>Monitoramento continuo de seguranca (Sentry, Prometheus)</li>
+                <li>Backups regulares com recuperacao de desastres</li>
+              </ul>
+            </section>
+
+            {/* 7. Direitos do Titular (Art. 18 LGPD) */}
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
+                7. Seus Direitos (Art. 18&#176; LGPD)
+              </h2>
+              <p className="text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
+                Conforme a Lei Geral de Protecao de Dados (LGPD - Lei 13.709/2018), voce tem os seguintes direitos:
+              </p>
+              <ul className="list-disc pl-6 space-y-3 text-gray-700 dark:text-gray-300">
+                <li>
+                  <strong>I - Confirmacao e Acesso:</strong> Confirmar se processamos seus dados e obter copia.
+                  <span className="text-sm text-gray-500 dark:text-gray-400 block mt-1">
+                    Disponivel em: Minha Conta &gt; Exportar Dados
+                  </span>
+                </li>
+                <li>
+                  <strong>II - Correcao:</strong> Atualizar dados incompletos, inexatos ou desatualizados.
+                  <span className="text-sm text-gray-500 dark:text-gray-400 block mt-1">
+                    Disponivel em: Minha Conta &gt; Editar Perfil
+                  </span>
+                </li>
+                <li>
+                  <strong>III - Anonimizacao/Bloqueio:</strong> Limitar processamento de dados desnecessarios ou excessivos.
+                </li>
+                <li>
+                  <strong>IV - Portabilidade:</strong> Receber dados em formato estruturado (JSON).
+                  <span className="text-sm text-gray-500 dark:text-gray-400 block mt-1">
+                    Disponivel em: Minha Conta &gt; Exportar Dados (download JSON completo)
+                  </span>
+                </li>
+                <li>
+                  <strong>V - Eliminacao:</strong> Excluir todos os dados pessoais tratados com consentimento.
+                  <span className="text-sm text-gray-500 dark:text-gray-400 block mt-1">
+                    Disponivel em: Minha Conta &gt; Excluir Conta (exclusao completa e irrecuperavel)
+                  </span>
+                </li>
+                <li>
+                  <strong>VI - Informacao sobre compartilhamento:</strong> Saber com quais entidades seus dados sao compartilhados (veja secao 4).
+                </li>
+                <li>
+                  <strong>VII - Revogacao de Consentimento:</strong> Retirar autorizacao a qualquer momento (cookies analiticos, notificacoes).
+                </li>
+                <li>
+                  <strong>VIII - Oposicao:</strong> Se opor ao tratamento de dados em certas situacoes.
+                </li>
+              </ul>
+              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 mt-4">
+                <p className="text-gray-700 dark:text-gray-300">
+                  <strong>Como exercer seus direitos:</strong>
+                </p>
+                <ul className="list-disc pl-6 space-y-1 mt-2 text-gray-700 dark:text-gray-300">
+                  <li>
+                    <strong>Self-service:</strong> Acesse{' '}
+                    <a href="/conta" className="text-blue-600 dark:text-blue-400 hover:underline">Minha Conta</a> para
+                    exportar dados, editar perfil ou excluir conta.
+                  </li>
+                  <li>
+                    <strong>Via DPO:</strong> Envie e-mail para{' '}
+                    <a href="mailto:privacidade@smartlic.tech" className="text-blue-600 dark:text-blue-400 hover:underline">privacidade@smartlic.tech</a>.
+                    Resposta em ate 15 dias uteis.
+                  </li>
+                </ul>
+              </div>
+            </section>
+
+            {/* 8. Cookies e Consentimento */}
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
+                8. Cookies e Tecnologias Similares
+              </h2>
+              <p className="text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
+                Utilizamos cookies para funcionamento da plataforma. Cookies analiticos so sao ativados apos
+                seu consentimento explicito via banner de cookies.
+              </p>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm border border-gray-200 dark:border-gray-700">
+                  <thead>
+                    <tr className="bg-gray-100 dark:bg-gray-700">
+                      <th className="px-4 py-3 text-left font-semibold text-gray-900 dark:text-white border-b">Tipo</th>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-900 dark:text-white border-b">Finalidade</th>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-900 dark:text-white border-b">Base Legal</th>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-900 dark:text-white border-b">Duracao</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-gray-700 dark:text-gray-300">
+                    <tr className="border-b border-gray-200 dark:border-gray-700">
+                      <td className="px-4 py-3"><strong>Essenciais</strong></td>
+                      <td className="px-4 py-3">Autenticacao (Supabase session)</td>
+                      <td className="px-4 py-3">Execucao de contrato</td>
+                      <td className="px-4 py-3">Sessao</td>
+                    </tr>
+                    <tr className="border-b border-gray-200 dark:border-gray-700">
+                      <td className="px-4 py-3"><strong>Funcionais</strong></td>
+                      <td className="px-4 py-3">Preferencias de tema, idioma</td>
+                      <td className="px-4 py-3">Interesse legitimo</td>
+                      <td className="px-4 py-3">1 ano</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-3"><strong>Analiticos</strong></td>
+                      <td className="px-4 py-3">Mixpanel (uso da plataforma)</td>
+                      <td className="px-4 py-3">Consentimento</td>
+                      <td className="px-4 py-3">12 meses</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-gray-600 dark:text-gray-400 text-sm mt-4">
+                Voce pode gerenciar suas preferencias de cookies a qualquer momento atraves do
+                link &quot;Gerenciar Cookies&quot; no rodape da plataforma.
               </p>
             </section>
 
+            {/* 9. Retencao de Dados */}
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
+                9. Retencao e Eliminacao de Dados
+              </h2>
+              <p className="text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
+                Mantemos seus dados apenas pelo tempo necessario para cumprir as finalidades descritas nesta politica.
+                Os periodos de retencao por categoria estao descritos na tabela da secao 3. Alem disso:
+              </p>
+              <ul className="list-disc pl-6 space-y-2 text-gray-700 dark:text-gray-300">
+                <li>Contas inativas por mais de 24 meses serao anonimizadas ou excluidas</li>
+                <li>Dados fiscais sao retidos por 5 anos conforme legislacao tributaria</li>
+                <li>Logs de seguranca sao retidos por 90 dias e depois deletados automaticamente</li>
+                <li>Ao solicitar exclusao de conta, todos os dados sao deletados em ate 30 dias (exceto obrigacoes legais)</li>
+              </ul>
+            </section>
+
+            {/* 10. Menores de Idade */}
             <section className="mb-8">
               <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
                 10. Menores de Idade
               </h2>
               <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                Nossos serviços são destinados a profissionais e empresas. Não coletamos intencionalmente dados
-                de menores de 18 anos sem consentimento dos pais/responsáveis.
+                Nossos servicos sao destinados a profissionais e empresas. Nao coletamos intencionalmente dados
+                de menores de 18 anos sem consentimento dos pais/responsaveis conforme Art. 14 da LGPD.
               </p>
             </section>
 
+            {/* 11. Alteracoes */}
             <section className="mb-8">
               <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
-                11. Alterações nesta Política
+                11. Alteracoes nesta Politica
               </h2>
               <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                Podemos atualizar esta política periodicamente. Notificaremos sobre mudanças significativas
-                por e-mail ou através de aviso destacado na plataforma.
+                Podemos atualizar esta politica periodicamente. Notificaremos sobre mudancas significativas
+                por e-mail ou atraves de aviso destacado na plataforma. A data de &quot;ultima atualizacao&quot; no topo
+                reflete a versao mais recente.
               </p>
             </section>
 
+            {/* 12. Contato e ANPD */}
             <section className="mb-8">
               <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
-                12. Contato
+                12. Contato do Encarregado (DPO) e ANPD
               </h2>
-              <div className="text-gray-700 dark:text-gray-300 leading-relaxed space-y-2">
-                <p><strong>Encarregado de Dados (DPO):</strong></p>
-                <p>E-mail: <a href="mailto:privacidade@smartlic.tech" className="text-blue-600 dark:text-blue-400 hover:underline">privacidade@smartlic.tech</a></p>
-                <p className="mt-4">
-                  Para questões relacionadas à LGPD, você também pode contatar a Autoridade Nacional de Proteção de Dados (ANPD):
-                  <a href="https://www.gov.br/anpd" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline ml-1">
+              <div className="text-gray-700 dark:text-gray-300 leading-relaxed space-y-4">
+                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 space-y-2">
+                  <p><strong>Encarregado de Dados (DPO):</strong> Tiago Sasaki</p>
+                  <p><strong>E-mail:</strong>{' '}
+                    <a href="mailto:privacidade@smartlic.tech" className="text-blue-600 dark:text-blue-400 hover:underline">privacidade@smartlic.tech</a>
+                  </p>
+                  <p><strong>Prazo de resposta:</strong> Ate 15 dias uteis</p>
+                </div>
+                <p>
+                  Para questoes relacionadas a LGPD, voce tambem pode contatar a
+                  Autoridade Nacional de Protecao de Dados (ANPD):{' '}
+                  <a href="https://www.gov.br/anpd" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">
                     www.gov.br/anpd
                   </a>
                 </p>
@@ -211,7 +369,7 @@ export default function PrivacidadePage() {
               href="/"
               className="inline-flex items-center text-blue-600 dark:text-blue-400 hover:underline"
             >
-              ← Voltar para a página inicial
+              &larr; Voltar para a pagina inicial
             </a>
           </div>
         </div>

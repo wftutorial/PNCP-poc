@@ -593,6 +593,9 @@ function HomePageContent() {
                 onCancelRetry={search.cancelRetry}
                 // STORY-265 AC16: Disable Excel download when trial expired
                 isTrialExpired={isTrialExpired || search.quotaError === "trial_expired"}
+                // STORY-295: Progressive results
+                sourceStatuses={search.sourceStatuses}
+                partialProgress={search.partialProgress}
               />
             </SearchErrorBoundary>
           </div>

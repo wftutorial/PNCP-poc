@@ -1169,6 +1169,51 @@ class SearchPipeline:
                     early_return=True,
                 )
 
+        # STORY-295 AC1-AC8: Progressive results callback
+        # Tracks total across sources for incremental count
+        _progressive_total = [0]
+        _completed_sources: list[str] = []
+        _all_source_codes = list(adapters.keys())
+        source_done_cb = None
+        if ctx.tracker:
+            async def source_done_cb(src_code, status, legacy_records, duration_ms, error):
+                _completed_sources.append(src_code)
+                _pending = [s for s in _all_source_codes if s not in _completed_sources]
+
+                if status in ("success", "partial"):
+                    _progressive_total[0] += len(legacy_records)
+                    # AC1-AC2: Emit partial results with items
+                    await ctx.tracker.emit_progressive_results(
+                        source=src_code,
+                        items_count=len(legacy_records),
+                        total_so_far=_progressive_total[0],
+                        sources_completed=list(_completed_sources),
+                        sources_pending=_pending,
+                    )
+                    # AC7: Emit source_complete
+                    await ctx.tracker.emit_source_complete(
+                        source=src_code,
+                        status=status,
+                        record_count=len(legacy_records),
+                        duration_ms=duration_ms,
+                        error=error,
+                    )
+                elif status in ("error", "timeout"):
+                    # AC8: Emit source_error
+                    await ctx.tracker.emit_source_error(
+                        source=src_code,
+                        error=error or f"Source {src_code} failed with status={status}",
+                        duration_ms=duration_ms,
+                    )
+                    # AC7: Also emit source_complete for timeout/error
+                    await ctx.tracker.emit_source_complete(
+                        source=src_code,
+                        status=status,
+                        record_count=0,
+                        duration_ms=duration_ms,
+                        error=error,
+                    )
+
         try:
             consolidation_result = await asyncio.wait_for(
                 consolidation_svc.fetch_all(
@@ -1177,6 +1222,7 @@ class SearchPipeline:
                     ufs=set(request.ufs),
                     on_source_complete=source_complete_cb,
                     on_early_return=early_return_cb,
+                    on_source_done=source_done_cb,
                 ),
                 timeout=fetch_timeout,
             )

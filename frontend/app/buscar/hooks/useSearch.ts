@@ -10,7 +10,7 @@ import type { SavedSearch } from "../../../lib/savedSearches";
 import { useAnalytics } from "../../../hooks/useAnalytics";
 import { useAuth } from "../../components/AuthProvider";
 import { useQuota } from "../../../hooks/useQuota";
-import { useSearchSSE, type SearchProgressEvent, type PartialProgress, type RefreshAvailableInfo, type UfStatus, type BatchProgress } from "../../../hooks/useSearchSSE";
+import { useSearchSSE, type SearchProgressEvent, type PartialProgress, type RefreshAvailableInfo, type UfStatus, type BatchProgress, type SourceStatus } from "../../../hooks/useSearchSSE";
 import { useSearchPolling } from "../../../hooks/useSearchPolling";
 import { useSavedSearches } from "../../../hooks/useSavedSearches";
 import { getUserFriendlyError, getMessageFromErrorCode, isTransientError, getRetryMessage, getHumanizedError, type HumanizedError } from "../../../lib/error-messages";
@@ -113,6 +113,8 @@ export interface UseSearchReturn {
   ufTotalFound: number;
   ufAllComplete: boolean;
   batchProgress: BatchProgress | null;
+  /** STORY-295 AC10: Per-source status for progressive results */
+  sourceStatuses: Map<string, SourceStatus>;
   /** A-04 AC1: True when cached data shown with live fetch in background */
   liveFetchInProgress: boolean;
   /** A-04 AC9: Fetch live results and replace cached data */
@@ -347,6 +349,7 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
     currentEvent: sseEvent, sseAvailable, sseDisconnected,
     isDegraded, degradedDetail, partialProgress, refreshAvailable,
     ufStatuses, ufTotalFound, ufAllComplete, batchProgress,
+    sourceStatuses,
   } = useSearchSSE({
     searchId: asyncSearchActive ? asyncSearchIdRef.current : (liveFetchInProgress ? liveFetchSearchIdRef.current : searchId),
     enabled: (loading && !!searchId) || liveFetchInProgress || hasProcessingJobs || asyncSearchActive,
@@ -1096,6 +1099,7 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
     searchId, useRealProgress, sseEvent: effectiveEvent, sseAvailable, sseDisconnected, isDegraded, degradedDetail,
     partialProgress, refreshAvailable,
     ufStatuses, ufTotalFound, ufAllComplete, batchProgress,
+    sourceStatuses,
     liveFetchInProgress, handleRefreshResults,
     downloadLoading, downloadError,
     searchButtonRef: searchButtonRef as React.RefObject<HTMLButtonElement>,

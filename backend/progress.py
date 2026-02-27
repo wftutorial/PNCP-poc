@@ -243,6 +243,100 @@ class ProgressTracker:
         if self._use_redis:
             await self._publish_to_redis(event)
 
+    async def emit_source_complete(
+        self,
+        source: str,
+        status: str,
+        record_count: int,
+        duration_ms: int,
+        error: str | None = None,
+    ) -> None:
+        """STORY-295 AC7: Emit source_complete when a data source finishes.
+
+        Non-terminal event — SSE stream stays open.
+
+        Args:
+            source: Source identifier (e.g., "PNCP", "PORTAL_COMPRAS")
+            status: "success", "timeout", "partial", "error"
+            record_count: Number of records returned by this source
+            duration_ms: How long the source took
+            error: Error message if applicable
+        """
+        detail: dict = {
+            "source": source,
+            "source_status": status,
+            "record_count": record_count,
+            "duration_ms": duration_ms,
+        }
+        if error:
+            detail["error"] = error
+
+        event = ProgressEvent(
+            stage="source_complete",
+            progress=-1,  # Source events don't map to overall progress
+            message=f"Fonte {source}: {status} ({record_count} resultados)",
+            detail=detail,
+        )
+        await self.queue.put(event)
+        if self._use_redis:
+            await self._publish_to_redis(event)
+
+    async def emit_source_error(
+        self,
+        source: str,
+        error: str,
+        duration_ms: int,
+    ) -> None:
+        """STORY-295 AC8: Emit source_error when a data source fails.
+
+        Non-terminal event — SSE stream stays open.
+        """
+        event = ProgressEvent(
+            stage="source_error",
+            progress=-1,
+            message=f"Fonte {source}: falhou — {error}",
+            detail={
+                "source": source,
+                "error": error,
+                "duration_ms": duration_ms,
+            },
+        )
+        await self.queue.put(event)
+        if self._use_redis:
+            await self._publish_to_redis(event)
+
+    async def emit_progressive_results(
+        self,
+        source: str,
+        items_count: int,
+        total_so_far: int,
+        sources_completed: list[str],
+        sources_pending: list[str],
+    ) -> None:
+        """STORY-295 AC1-AC2: Emit partial results as each source completes.
+
+        Non-terminal event — SSE stream stays open.
+        Frontend uses this to incrementally populate the results table.
+        """
+        total_sources = len(sources_completed) + len(sources_pending)
+        progress_pct = min(55, 10 + int((len(sources_completed) / max(total_sources, 1)) * 45))
+
+        event = ProgressEvent(
+            stage="partial_results",
+            progress=progress_pct,
+            message=f"{len(sources_completed)} de {total_sources} fontes concluídas — {total_so_far} resultados até agora",
+            detail={
+                "source": source,
+                "new_results_count": items_count,
+                "total_so_far": total_so_far,
+                "sources_completed": sources_completed,
+                "sources_pending": sources_pending,
+            },
+        )
+        await self.queue.put(event)
+        if self._use_redis:
+            await self._publish_to_redis(event)
+
     async def emit_revalidated(self, total_results: int, fetched_at: str) -> None:
         """B-01 AC7: Notify connected user that background revalidation completed.
 

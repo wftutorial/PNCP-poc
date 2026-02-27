@@ -101,6 +101,16 @@ export interface BatchProgress {
   ufsInBatch: string[];
 }
 
+/** STORY-295 AC10: Per-source status for progressive results */
+export type SourceStatusType = 'pending' | 'fetching' | 'success' | 'partial' | 'error' | 'timeout';
+
+export interface SourceStatus {
+  status: SourceStatusType;
+  recordCount: number;
+  durationMs: number;
+  error?: string;
+}
+
 interface UseSearchSSEOptions {
   searchId: string | null;
   enabled: boolean;
@@ -131,6 +141,8 @@ interface UseSearchSSEReturn {
   ufTotalFound: number;
   ufAllComplete: boolean;
   batchProgress: BatchProgress | null;
+  /** STORY-295 AC10: Per-source status for progressive results */
+  sourceStatuses: Map<string, SourceStatus>;
 }
 
 export function useSearchSSE({
@@ -155,6 +167,9 @@ export function useSearchSSE({
   // UF state (from useUfProgress)
   const [ufStatuses, setUfStatuses] = useState<Map<string, UfStatus>>(new Map());
   const [batchProgress, setBatchProgress] = useState<BatchProgress | null>(null);
+
+  // STORY-295: Per-source status for progressive results
+  const [sourceStatuses, setSourceStatuses] = useState<Map<string, SourceStatus>>(new Map());
 
   const eventSourceRef = useRef<EventSource | null>(null);
   const retryAttemptRef = useRef(0);
@@ -231,13 +246,54 @@ export function useSearchSSE({
       setCurrentEvent(event);
       onEventRef.current?.(event);
 
+      // STORY-295: Handle source_complete and source_error events
+      if (event.stage === 'source_complete' || event.stage === 'source_error') {
+        const detail = event.detail as Record<string, unknown>;
+        const source = detail.source as string;
+        if (source) {
+          setSourceStatuses(prev => {
+            const next = new Map(prev);
+            next.set(source, {
+              status: (detail.source_status as SourceStatusType) || (event.stage === 'source_error' ? 'error' : 'success'),
+              recordCount: (detail.record_count as number) || 0,
+              durationMs: (detail.duration_ms as number) || 0,
+              error: detail.error as string | undefined,
+            });
+            return next;
+          });
+        }
+        return; // Don't set as current event — these are metadata events
+      }
+
       // Handle terminal and special events
       if (event.stage === 'partial_results') {
+        const detail = event.detail as Record<string, unknown>;
         setPartialProgress({
           newCount: event.detail.new_results_count ?? 0,
           totalSoFar: event.detail.total_so_far ?? 0,
           ufsCompleted: event.detail.ufs_completed ?? [],
           ufsPending: event.detail.ufs_pending ?? [],
+        });
+        // STORY-295: Update source statuses from partial_results sources_completed/pending
+        const sourcesCompleted = (detail.sources_completed as string[]) || [];
+        const sourcesPending = (detail.sources_pending as string[]) || [];
+        setSourceStatuses(prev => {
+          const next = new Map(prev);
+          for (const s of sourcesPending) {
+            if (!next.has(s)) {
+              next.set(s, { status: 'fetching', recordCount: 0, durationMs: 0 });
+            }
+          }
+          // Source from this event is now complete (at least partially)
+          const eventSource = detail.source as string;
+          if (eventSource && !next.has(eventSource)) {
+            next.set(eventSource, {
+              status: 'success',
+              recordCount: (detail.new_results_count as number) || 0,
+              durationMs: 0,
+            });
+          }
+          return next;
         });
       } else if (event.stage === 'refresh_available') {
         setRefreshAvailable({
@@ -314,6 +370,7 @@ export function useSearchSSE({
     setDegradedDetail(null);
     setPartialProgress(null);
     setRefreshAvailable(null);
+    setSourceStatuses(new Map());
     setSseDisconnected(false);
     setSseAvailable(true);
     retryAttemptRef.current = 0;
@@ -410,5 +467,6 @@ export function useSearchSSE({
     currentEvent, isConnected, sseAvailable, sseDisconnected,
     isDegraded, degradedDetail, partialProgress, refreshAvailable,
     ufStatuses, ufTotalFound, ufAllComplete, batchProgress,
+    sourceStatuses,
   };
 }

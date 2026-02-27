@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import type { BuscaResult } from "../../types";
-import type { SearchProgressEvent, RefreshAvailableInfo } from "../../../hooks/useSearchSSE";
+import type { SearchProgressEvent, RefreshAvailableInfo, SourceStatus, PartialProgress } from "../../../hooks/useSearchSSE";
 import RefreshBanner from "./RefreshBanner";
 import { EnhancedLoadingProgress } from "../../../components/EnhancedLoadingProgress";
 import { LoadingResultsSkeleton } from "../../components/LoadingResultsSkeleton";
@@ -23,6 +23,7 @@ import type { SearchError } from "../hooks/useSearch";
 import { ZeroResultsSuggestions } from "./ZeroResultsSuggestions";
 import { FilterRelaxedBanner } from "./FilterRelaxedBanner";
 import { ExpiredCacheBanner } from "./ExpiredCacheBanner";
+import SourceStatusGrid from "./SourceStatusGrid";
 // GTM-UX-001: PartialTimeoutBanner replaced by DataQualityBanner
 
 export interface SearchResultsProps {
@@ -134,6 +135,10 @@ export interface SearchResultsProps {
 
   // STORY-265 AC16: Trial expired — disable Excel download
   isTrialExpired?: boolean;
+
+  // STORY-295: Progressive results
+  sourceStatuses?: Map<string, SourceStatus>;
+  partialProgress?: PartialProgress | null;
 }
 
 export default function SearchResults({
@@ -162,6 +167,8 @@ export default function SearchResults({
   onAdjustPeriod, onAddNeighborStates, nearbyResultsCount, onViewNearbyResults,
   // STORY-265 AC16
   isTrialExpired,
+  // STORY-295: Progressive results
+  sourceStatuses, partialProgress,
 }: SearchResultsProps) {
   // STORY-257B AC4: Track transition from grid to results
   const [showGrid, setShowGrid] = useState(false);
@@ -257,6 +264,30 @@ export default function SearchResults({
             />
           </div>
           <LoadingResultsSkeleton count={1} />
+
+          {/* STORY-295 AC10: Per-source status indicators */}
+          {sourceStatuses && sourceStatuses.size > 0 && (
+            <SourceStatusGrid sourceStatuses={sourceStatuses} className="mt-3" />
+          )}
+
+          {/* STORY-295 AC11+AC14: Progressive results counter + banner */}
+          {partialProgress && partialProgress.totalSoFar > 0 && (
+            <div className="mt-3 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 animate-fade-in-up">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <svg className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                    {partialProgress.totalSoFar} {partialProgress.totalSoFar === 1 ? "oportunidade encontrada" : "oportunidades encontradas"} até agora
+                  </span>
+                </div>
+                <span className="text-xs text-blue-600 dark:text-blue-400">
+                  Busca em andamento
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* STORY-257B AC5: Partial results prompt after 15s */}
           {searchElapsedSeconds >= 15 && ufTotalFound > 0 && !partialDismissed && onViewPartial && onDismissPartial && (

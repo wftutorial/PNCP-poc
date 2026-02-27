@@ -16,28 +16,28 @@ Meta-search engines (Skyscanner, Google Flights, Kayak) mostram resultados à me
 ## Acceptance Criteria
 
 ### Backend
-- [ ] AC1: Cada UF/fonte que completa publica resultado parcial via SSE event `partial_results`
-- [ ] AC2: Evento SSE contém: `{ type: "partial_results", source, uf, items: [...], total_so_far, progress }`
-- [ ] AC3: Resultados parciais persistidos incrementalmente em Redis (não esperar tudo)
-- [ ] AC4: Resultado final (`status=completed`) é a consolidação de todos os parciais
-- [ ] AC5: Se uma fonte falha, resultados das outras fontes são entregues (não all-or-nothing)
-- [ ] AC6: Timeout por fonte: 90s. Se estourar, consolida o que tem e marca fonte como `timed_out`
-- [ ] AC7: SSE event `source_complete` quando uma fonte termina (success ou timeout)
-- [ ] AC8: SSE event `source_error` quando uma fonte falha com detalhes
+- [x] AC1: Cada UF/fonte que completa publica resultado parcial via SSE event `partial_results`
+- [x] AC2: Evento SSE contém: `{ type: "partial_results", source, uf, items: [...], total_so_far, progress }`
+- [x] AC3: Resultados parciais persistidos incrementalmente em Redis (não esperar tudo)
+- [x] AC4: Resultado final (`status=completed`) é a consolidação de todos os parciais
+- [x] AC5: Se uma fonte falha, resultados das outras fontes são entregues (não all-or-nothing)
+- [x] AC6: Timeout por fonte: 90s. Se estourar, consolida o que tem e marca fonte como `timed_out`
+- [x] AC7: SSE event `source_complete` quando uma fonte termina (success ou timeout)
+- [x] AC8: SSE event `source_error` quando uma fonte falha com detalhes
 
 ### Frontend
-- [ ] AC9: Resultados aparecem na tabela à medida que SSE `partial_results` chega
-- [ ] AC10: Indicador visual por fonte: ✓ completa, ⏳ em progresso, ✗ falhou, ⏱ timeout
-- [ ] AC11: Counter "X de Y oportunidades encontradas até agora" atualiza em real-time
-- [ ] AC12: Botão "Ver resultados parciais" aparece após primeira fonte completar
-- [ ] AC13: Download Excel disponível com resultados parciais (não espera tudo)
-- [ ] AC14: Banner: "Busca em andamento — resultados parciais disponíveis"
+- [x] AC9: Resultados aparecem na tabela à medida que SSE `partial_results` chega
+- [x] AC10: Indicador visual por fonte: ✓ completa, ⏳ em progresso, ✗ falhou, ⏱ timeout
+- [x] AC11: Counter "X de Y oportunidades encontradas até agora" atualiza em real-time
+- [x] AC12: Botão "Ver resultados parciais" aparece após primeira fonte completar
+- [x] AC13: Download Excel disponível com resultados parciais (não espera tudo)
+- [x] AC14: Banner: "Busca em andamento — resultados parciais disponíveis"
 
 ### Quality
-- [ ] AC15: Teste: 1 fonte rápida + 1 lenta → resultados parciais em <10s
-- [ ] AC16: Teste: 1 fonte falha → outras fontes entregam resultado
-- [ ] AC17: Teste: todas as fontes timeout → empty result com error details
-- [ ] AC18: Testes existentes passando
+- [x] AC15: Teste: 1 fonte rápida + 1 lenta → resultados parciais em <10s
+- [x] AC16: Teste: 1 fonte falha → outras fontes entregam resultado
+- [x] AC17: Teste: todas as fontes timeout → empty result com error details
+- [x] AC18: Testes existentes passando
 
 ## Technical Notes
 
@@ -65,7 +65,7 @@ A mudança principal é trocar `asyncio.gather()` por `asyncio.as_completed()` n
 
 ## Definition of Done
 
-- [ ] Primeiro resultado visível em <10s (era >60s)
-- [ ] Falha de 1 fonte não impacta resultados das outras
-- [ ] Todos os testes passando
+- [x] Primeiro resultado visível em <10s (era >60s)
+- [x] Falha de 1 fonte não impacta resultados das outras
+- [x] Todos os testes passando
 - [ ] PR merged

@@ -147,6 +147,7 @@ class ConsolidationService:
         ufs: Optional[Set[str]] = None,
         on_source_complete: Optional[Callable] = None,
         on_early_return: Optional[Callable] = None,
+        on_source_done: Optional[Callable] = None,
     ) -> ConsolidationResult:
         """
         Fetch from all enabled sources in parallel, deduplicate, and return.
@@ -165,6 +166,9 @@ class ConsolidationService:
             on_source_complete: Callback(source_code, count, error) per source
             on_early_return: Optional async callback(ufs_completed, ufs_pending)
                 called when early return triggers (e.g. to emit progress event)
+            on_source_done: STORY-295 AC1-AC8: Async callback(source_code, status,
+                records_legacy, duration_ms, error) called when each source finishes.
+                Enables progressive SSE delivery of partial results.
 
         Returns:
             ConsolidationResult with deduplicated records in legacy format
@@ -276,6 +280,26 @@ class ConsolidationService:
                 if isinstance(result, dict):
                     code = result["code"]
                     source_results_map[code] = result
+
+                    # STORY-295 AC1-AC8: Emit progressive results per source
+                    if on_source_done:
+                        try:
+                            _status = result.get("status", "error")
+                            _records = result.get("records", [])
+                            # Convert records to legacy format for frontend consumption
+                            _legacy = [r.to_legacy_format() for r in _records if hasattr(r, "to_legacy_format")]
+                            _duration = result.get("duration_ms", 0)
+                            _error = result.get("error")
+
+                            cb_result = on_source_done(
+                                code, _status, _legacy, _duration, _error,
+                            )
+                            if asyncio.iscoroutine(cb_result):
+                                await cb_result
+                        except Exception as cb_err:
+                            logger.warning(
+                                f"[CONSOLIDATION] on_source_done callback error for {code}: {cb_err}"
+                            )
                 elif result is not None:
                     logger.warning(
                         f"[CONSOLIDATION] Unexpected non-dict result from task: "

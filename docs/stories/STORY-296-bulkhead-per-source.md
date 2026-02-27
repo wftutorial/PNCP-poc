@@ -68,4 +68,4 @@ class SourceBulkhead:
 - [x] Falha de PNCP não impacta latência de PCP/ComprasGov
 - [x] Metrics visíveis per-source no /metrics endpoint
 - [x] Todos os testes passando
-- [ ] PR merged
+- [x] PR merged

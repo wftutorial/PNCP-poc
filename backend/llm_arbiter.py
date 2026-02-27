@@ -59,9 +59,62 @@ _PRICING_INPUT_PER_M = 0.10   # USD per 1M input tokens
 _PRICING_OUTPUT_PER_M = 0.40  # USD per 1M output tokens
 _USD_TO_BRL = 5.0  # approximate
 
-# In-memory cache for LLM decisions (key = MD5 hash of input)
+# In-memory L1 cache for LLM decisions (key = MD5 hash of input)
 # D-02 AC8: Cache value is now dict (structured) or bool (legacy), keyed with prompt version
+# STORY-294 AC3: L2 cache in Redis hash with 1h TTL for cross-worker sharing
 _arbiter_cache: dict[str, Any] = {}
+_ARBITER_REDIS_PREFIX = "smartlic:arbiter:"
+
+
+# ============================================================================
+# STORY-294 AC3: Redis L2 cache helpers (sync — runs in ThreadPoolExecutor)
+# ============================================================================
+
+
+def _arbiter_cache_get_redis(cache_key: str) -> Optional[Any]:
+    """Read from Redis L2 cache (sync). Returns None on miss or error."""
+    try:
+        from redis_pool import get_sync_redis
+        redis = get_sync_redis()
+        if not redis:
+            return None
+
+        key = f"{_ARBITER_REDIS_PREFIX}{cache_key}"
+        data = redis.get(key)
+        if data:
+            result = json.loads(data)
+            # Promote to L1 for fast subsequent access
+            _arbiter_cache[cache_key] = result
+            logger.debug(f"STORY-294: Arbiter cache L2 HIT: {cache_key[:16]}...")
+            return result
+    except Exception as e:
+        try:
+            from metrics import STATE_STORE_ERRORS
+            STATE_STORE_ERRORS.labels(store="arbiter", operation="read").inc()
+        except Exception:
+            pass
+        logger.warning(f"STORY-294: Arbiter cache Redis read failed: {e}")
+    return None
+
+
+def _arbiter_cache_set_redis(cache_key: str, value: Any) -> None:
+    """Write to Redis L2 cache (sync). Fire-and-forget on error."""
+    try:
+        from redis_pool import get_sync_redis
+        redis = get_sync_redis()
+        if not redis:
+            return
+
+        from config import ARBITER_REDIS_TTL
+        key = f"{_ARBITER_REDIS_PREFIX}{cache_key}"
+        redis.setex(key, ARBITER_REDIS_TTL, json.dumps(value, default=str))
+    except Exception as e:
+        try:
+            from metrics import STATE_STORE_ERRORS
+            STATE_STORE_ERRORS.labels(store="arbiter", operation="write").inc()
+        except Exception:
+            pass
+        logger.warning(f"STORY-294: Arbiter cache Redis write failed: {e}")
 
 
 # ============================================================================
@@ -538,12 +591,17 @@ Os termos buscados descrevem o OBJETO PRINCIPAL deste contrato (não itens secun
         f"{prompt_version}:{mode}:{context}:{valor}:{objeto_truncated}:{prompt_level}:{setor_id or ''}".encode()
     ).hexdigest()
 
+    # STORY-294: L1 (in-memory) → L2 (Redis) cache lookup
     if cache_key in _arbiter_cache:
         logger.debug(
-            f"LLM arbiter cache HIT: mode={mode} "
+            f"LLM arbiter cache L1 HIT: mode={mode} "
             f"context={context[:50]}... valor={valor}"
         )
         return _arbiter_cache[cache_key]
+
+    redis_cached = _arbiter_cache_get_redis(cache_key)
+    if redis_cached is not None:
+        return redis_cached
 
     # Call LLM
     try:
@@ -620,8 +678,9 @@ Os termos buscados descrevem o OBJETO PRINCIPAL deste contrato (não itens secun
         LLM_DURATION.labels(model=LLM_MODEL, decision=_decision).observe(_llm_elapsed)
         LLM_CALLS.labels(model=LLM_MODEL, decision=_decision, zone=prompt_level).inc()
 
-        # Cache the result
+        # Cache the result (L1 + L2)
         _arbiter_cache[cache_key] = result
+        _arbiter_cache_set_redis(cache_key, result)
 
         logger.info(
             f"LLM arbiter decision: {_decision} conf={result['confidence']}% | "
@@ -709,12 +768,18 @@ Responda APENAS: SIM ou NAO"""
         f"{mode}:{context}:{valor}:{objeto_truncated}:{rejection_reason}".encode()
     ).hexdigest()
 
+    # STORY-294: L1 (in-memory) → L2 (Redis) cache lookup
     if cache_key in _arbiter_cache:
         cached = _arbiter_cache[cache_key]
-        # Handle both dict (new) and bool (legacy) cache entries
         if isinstance(cached, dict):
             return cached.get("is_primary", False)
         return cached
+
+    redis_cached = _arbiter_cache_get_redis(cache_key)
+    if redis_cached is not None:
+        if isinstance(redis_cached, dict):
+            return redis_cached.get("is_primary", False)
+        return redis_cached
 
     try:
         system_prompt = (
@@ -742,6 +807,7 @@ Responda APENAS: SIM ou NAO"""
         LLM_CALLS.labels(model=LLM_MODEL, decision=_decision, zone="recovery").inc()
 
         _arbiter_cache[cache_key] = should_recover
+        _arbiter_cache_set_redis(cache_key, should_recover)
 
         logger.debug(
             f"LLM recovery decision: {llm_response} | "

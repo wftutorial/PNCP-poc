@@ -803,6 +803,14 @@ def validate_env_vars() -> None:
 
 
 # ============================================================================
+# STORY-294: State Externalization to Redis
+# ============================================================================
+# TTLs for externalized state stores (seconds)
+RESULTS_REDIS_TTL: int = int(os.getenv("RESULTS_REDIS_TTL", "1800"))  # 30 min
+ARBITER_REDIS_TTL: int = int(os.getenv("ARBITER_REDIS_TTL", "3600"))  # 1 hour
+STATE_STORE_REDIS_PREFIX: str = os.getenv("STATE_STORE_REDIS_PREFIX", "smartlic:")
+
+# ============================================================================
 # STORY-278: Daily Digest Configuration
 # ============================================================================
 

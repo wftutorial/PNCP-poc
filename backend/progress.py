@@ -9,6 +9,10 @@ Pub/Sub was fire-and-forget (at-most-once) — events published before subscribe
 were permanently lost, causing "stuck at 10%" progress bars with multi-worker Gunicorn.
 Redis Streams provides persistent append-only log with replay from any point.
 
+STORY-294 AC1/AC4: Tracker metadata stored in Redis enables cross-worker SSE.
+Worker A creates tracker + publishes to Streams, Worker B reads from Streams.
+STATE_STORE_ERRORS metric tracks Redis operation failures (AC7).
+
 The mode is determined by REDIS_URL environment variable and connection health.
 """
 
@@ -130,6 +134,8 @@ class ProgressTracker:
                 await redis.expire(stream_key, _STREAM_EXPIRE_TTL)
 
         except Exception as e:
+            from metrics import STATE_STORE_ERRORS
+            STATE_STORE_ERRORS.labels(store="tracker", operation="write").inc()
             logger.warning(f"Failed to publish progress event to Redis Stream: {e}")
 
     async def emit_uf_complete(self, uf: str, items_count: int) -> None:
@@ -407,6 +413,8 @@ async def get_tracker(search_id: str) -> Optional[ProgressTracker]:
                 logger.debug(f"Loaded tracker from Redis metadata: {search_id}")
                 return tracker
         except Exception as e:
+            from metrics import STATE_STORE_ERRORS
+            STATE_STORE_ERRORS.labels(store="tracker", operation="read").inc()
             logger.warning(f"Failed to load tracker from Redis: {e}")
 
     return None
@@ -427,6 +435,8 @@ async def remove_tracker(search_id: str) -> None:
             stream_key = f"smartlic:progress:{search_id}:stream"
             await redis.delete(metadata_key, stream_key)
         except Exception as e:
+            from metrics import STATE_STORE_ERRORS
+            STATE_STORE_ERRORS.labels(store="tracker", operation="delete").inc()
             logger.warning(f"Failed to remove tracker from Redis: {e}")
 
 
@@ -475,6 +485,8 @@ async def _store_tracker_metadata(search_id: str, uf_count: int) -> None:
         await redis.hset(key, mapping=metadata)
         await redis.expire(key, _TRACKER_TTL)
     except Exception as e:
+        from metrics import STATE_STORE_ERRORS
+        STATE_STORE_ERRORS.labels(store="tracker", operation="write").inc()
         logger.warning(f"Failed to store tracker metadata in Redis: {e}")
 
 

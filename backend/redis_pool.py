@@ -240,3 +240,58 @@ async def shutdown_redis() -> None:
         logger.info("Redis pool closed")
     _redis_pool = None
     _pool_initialized = False
+
+
+# ============================================================================
+# STORY-294: Sync Redis client for thread-offloaded operations (LLM arbiter)
+# ============================================================================
+
+_sync_redis = None
+_sync_redis_initialized = False
+
+# Small pool — arbiter cache hits are mostly served from L1 in-memory
+_SYNC_POOL_MAX_CONNECTIONS = 5
+
+
+def get_sync_redis():
+    """Get a sync Redis client for use in ThreadPoolExecutor contexts.
+
+    STORY-294 AC3: The LLM arbiter runs in asyncio.to_thread() and needs
+    sync Redis access for cross-worker cache sharing.
+
+    Returns:
+        redis.Redis instance if available, None otherwise.
+    """
+    global _sync_redis, _sync_redis_initialized
+
+    if _sync_redis_initialized:
+        return _sync_redis
+
+    redis_url = os.getenv("REDIS_URL")
+    if not redis_url:
+        _sync_redis_initialized = True
+        return None
+
+    try:
+        import redis as sync_redis
+
+        _sync_redis = sync_redis.from_url(
+            redis_url,
+            decode_responses=True,
+            max_connections=_SYNC_POOL_MAX_CONNECTIONS,
+            socket_timeout=POOL_SOCKET_TIMEOUT,
+            socket_connect_timeout=POOL_SOCKET_CONNECT_TIMEOUT,
+        )
+        _sync_redis.ping()
+        logger.info(
+            "Sync Redis client connected (max_connections=%d)",
+            _SYNC_POOL_MAX_CONNECTIONS,
+        )
+        _sync_redis_initialized = True
+        return _sync_redis
+
+    except Exception as e:
+        logger.warning("Sync Redis connection failed: %s — arbiter cache L2 disabled", e)
+        _sync_redis = None
+        _sync_redis_initialized = True
+        return None

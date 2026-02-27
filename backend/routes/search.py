@@ -137,12 +137,15 @@ from search_pipeline import _build_pncp_link, _calcular_urgencia, _calcular_dias
 
 
 # ---------------------------------------------------------------------------
-# A-04: In-memory store for background fetch results
+# A-04 + STORY-294: Background fetch results (in-memory L1 + Redis L2)
 # ---------------------------------------------------------------------------
 _background_results: Dict[str, Dict[str, Any]] = {}
-_RESULTS_TTL = 600  # 10 minutes
+_RESULTS_TTL = 600  # 10 minutes (in-memory)
 _active_background_tasks: Dict[str, asyncio.Task] = {}
 _MAX_BACKGROUND_TASKS = 5  # Budget: max concurrent background fetches
+
+# STORY-294 AC2: Redis key prefix and TTL for cross-worker result sharing
+_RESULTS_REDIS_PREFIX = "smartlic:results:"
 
 
 def _cleanup_stale_results() -> None:
@@ -159,19 +162,76 @@ def _cleanup_stale_results() -> None:
 
 
 def store_background_results(search_id: str, response: BuscaResponse) -> None:
-    """Store results from a completed background fetch."""
+    """Store results in in-memory L1 cache."""
     _background_results[search_id] = {
         "response": response,
         "stored_at": sync_time.time(),
     }
 
 
-def get_background_results(search_id: str) -> Optional[BuscaResponse]:
-    """Retrieve background fetch results if available and not expired.
+async def _persist_results_to_redis(search_id: str, response: Any) -> None:
+    """STORY-294 AC2: Persist results to Redis for cross-worker access.
 
-    GTM-ARCH-001: Also checks Redis for results persisted by ARQ Worker.
+    Stores as JSON string with TTL from config.RESULTS_REDIS_TTL (30min default).
+    Fire-and-forget: errors are logged and metriced, never raised.
     """
-    # Check in-memory first (A-04 cache-first pattern)
+    import json as _json
+
+    redis = await get_redis_pool()
+    if not redis:
+        return
+
+    try:
+        from config import RESULTS_REDIS_TTL
+        key = f"{_RESULTS_REDIS_PREFIX}{search_id}"
+
+        # Serialize: BuscaResponse → dict → JSON
+        if hasattr(response, "model_dump"):
+            data = response.model_dump(mode="json")
+        elif hasattr(response, "dict"):
+            data = response.dict()
+        elif isinstance(response, dict):
+            data = response
+        else:
+            logger.warning(f"STORY-294: Cannot serialize response type {type(response)}")
+            return
+
+        await redis.setex(key, RESULTS_REDIS_TTL, _json.dumps(data, default=str))
+        logger.debug(f"STORY-294: Results stored in Redis: {key} (TTL={RESULTS_REDIS_TTL}s)")
+
+    except Exception as e:
+        from metrics import STATE_STORE_ERRORS
+        STATE_STORE_ERRORS.labels(store="results", operation="write").inc()
+        logger.warning(f"STORY-294: Failed to persist results to Redis: {e}")
+
+
+async def _get_results_from_redis(search_id: str) -> Optional[Dict[str, Any]]:
+    """STORY-294 AC5: Read results from Redis (cross-worker)."""
+    import json as _json
+
+    redis = await get_redis_pool()
+    if not redis:
+        return None
+
+    try:
+        key = f"{_RESULTS_REDIS_PREFIX}{search_id}"
+        data = await redis.get(key)
+        if data:
+            logger.debug(f"STORY-294: Results retrieved from Redis: {key}")
+            return _json.loads(data)
+    except Exception as e:
+        from metrics import STATE_STORE_ERRORS
+        STATE_STORE_ERRORS.labels(store="results", operation="read").inc()
+        logger.warning(f"STORY-294: Failed to read results from Redis: {e}")
+
+    return None
+
+
+def get_background_results(search_id: str) -> Optional[BuscaResponse]:
+    """Retrieve background fetch results from in-memory L1 cache.
+
+    For cross-worker access, use get_background_results_async() which checks Redis.
+    """
     entry = _background_results.get(search_id)
     if entry and sync_time.time() - entry["stored_at"] < _RESULTS_TTL:
         return entry["response"]
@@ -179,20 +239,26 @@ def get_background_results(search_id: str) -> Optional[BuscaResponse]:
 
 
 async def get_background_results_async(search_id: str) -> Optional[Dict[str, Any]]:
-    """GTM-ARCH-001: Retrieve search results from Redis (set by ARQ Worker).
+    """Retrieve search results: in-memory L1 → Redis L2 → ARQ Worker results.
 
-    Falls back to in-memory results for backward compatibility.
+    STORY-294 AC5: Cross-worker result retrieval via Redis.
+    GTM-ARCH-001: Also checks ARQ Worker results as last resort.
     """
-    # Check in-memory first
+    # L1: Check in-memory first (same worker — fast path)
     sync_result = get_background_results(search_id)
     if sync_result:
         return sync_result
 
-    # Check Redis (results persisted by search_job Worker)
-    from job_queue import get_job_result
-    redis_result = await get_job_result(search_id, "search_result")
+    # L2: Check Redis (cross-worker — STORY-294)
+    redis_result = await _get_results_from_redis(search_id)
     if redis_result:
         return redis_result
+
+    # L3: Check ARQ Worker results (job_queue)
+    from job_queue import get_job_result
+    arq_result = await get_job_result(search_id, "search_result")
+    if arq_result:
+        return arq_result
 
     return None
 
@@ -718,6 +784,7 @@ async def _execute_background_fetch(
 
         # Store results for /buscar-results/{search_id}
         store_background_results(search_id, response)
+        await _persist_results_to_redis(search_id, response)
 
         # Calculate diff summary for refresh_available event
         cached_ids = set()
@@ -848,6 +915,7 @@ async def _search_fallback_watchdog(
 
         # Store for /buscar-results retrieval
         store_background_results(search_id, response)
+        await _persist_results_to_redis(search_id, response)
 
         if existing_tracker or tracker:
             active_tracker = existing_tracker or tracker

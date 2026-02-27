@@ -327,6 +327,13 @@ SUPABASE_EXECUTE_DURATION = _create_histogram(
     buckets=[0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5],
 )
 
+# STORY-294 AC7: State store operation errors (Redis externalization)
+STATE_STORE_ERRORS = _create_counter(
+    "smartlic_state_store_errors_total",
+    "State store operation errors by store and operation",
+    labelnames=["store", "operation"],
+)
+
 # STORY-291 AC6: Supabase circuit breaker state gauge (0=closed, 1=open, 2=half_open)
 SUPABASE_CB_STATE = _create_gauge(
     "smartlic_supabase_cb_state",

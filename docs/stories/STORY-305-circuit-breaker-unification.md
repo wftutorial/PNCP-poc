@@ -1,14 +1,14 @@
-# STORY-305: Circuit Breaker Unification & Full Source Coverage
+# STORY-305: Circuit Breaker Coverage & Threshold Alignment
 
 **Sprint:** CRITICAL — Semana 1 pos-recovery
-**Size:** L (8-12h)
+**Size:** M (4-6h)
 **Root Cause:** Diagnostic Report 2026-02-27 — HIGHs H6, H7
 **Depends on:** STORY-303 (backend precisa estar de pe)
 **Industry Standard:** [Circuit Breaker Pattern — Martin Fowler](https://martinfowler.com/bliki/CircuitBreaker.html), [Resilience4j](https://resilience4j.readme.io/docs/circuitbreaker)
 
 ## Contexto
 
-A busca multi-fonte do SmartLic depende de 3 APIs governamentais externas (PNCP, PCP, ComprasGov). Se uma fonte travar, o circuit breaker deve isola-la rapidamente para que as outras continuem servindo resultados. Hoje existem DOIS sistemas de circuit breaker com configuracoes CONFLITANTES e uma fonte (ComprasGov) SEM NENHUMA protecao.
+A busca multi-fonte do SmartLic depende de 3 APIs governamentais externas (PNCP, PCP, ComprasGov). Se uma fonte travar, o circuit breaker deve isola-la rapidamente para que as outras continuem servindo resultados. Hoje o ComprasGov NAO TEM circuit breaker e os thresholds entre PNCP e PCP sao inconsistentes sem justificativa tecnica.
 
 **Evidencia da auditoria:**
 
@@ -16,13 +16,12 @@ A busca multi-fonte do SmartLic depende de 3 APIs governamentais externas (PNCP,
 |-------|----------------|-----------|----------|----------|
 | PNCP | `PNCPCircuitBreaker` | 15 falhas | 60s | OK — threshold adequado |
 | PCP | `PNCPCircuitBreaker` (reusado) | 30 falhas | 120s | 2x mais tolerante que PNCP sem justificativa tecnica |
-| ComprasGov | **NENHUM** | — | — | Zero protecao |
-| Supabase | `SupabaseCircuitBreaker` | 50% fail rate (janela 10) | 60s | Sistema diferente com modelo diferente |
+| ComprasGov | **NENHUM** | — | — | Zero protecao — se travar, consome recursos indefinidamente |
+| Supabase | `SupabaseCircuitBreaker` | 50% fail rate (janela 10) | 60s | Sistema diferente — CORRETO (DB != API HTTP) |
 
 **Conflitos identificados:**
 - `pncp_client.py:48-60`: PNCP threshold=15, PCP threshold=30 — ratio 2:1 sem justificativa
-- `supabase_client.py:84-100`: Modelo completamente diferente (sliding window vs consecutive failures)
-- `clients/compras_gov_client.py`: 839 linhas, NENHUM circuit breaker — usa apenas retry inline
+- `clients/compras_gov_client.py`: 839 linhas, NENHUM circuit breaker — usa apenas retry inline (3x com backoff)
 
 **Fundamentacao tecnica:**
 - [Circuit Breaker Pattern — Martin Fowler](https://martinfowler.com/bliki/CircuitBreaker.html): Padrao original — 3 estados (Closed/Open/Half-Open), threshold uniforme
@@ -33,93 +32,121 @@ A busca multi-fonte do SmartLic depende de 3 APIs governamentais externas (PNCP,
 
 ## Acceptance Criteria
 
-### Unificacao do Circuit Breaker
+### ComprasGov Circuit Breaker (gap principal)
 
-- [ ] AC1: Uma UNICA classe `SourceCircuitBreaker` com interface consistente para todas as fontes
-- [ ] AC2: Modelo de failure: sliding window (ultimas N requests) com failure rate threshold — nao consecutive failures
-- [ ] AC3: Tres estados: CLOSED (normal) → OPEN (isolado) → HALF_OPEN (testando recovery)
-- [ ] AC4: Parametros unificados e configuráveis por fonte via env vars:
+- [ ] AC1: ComprasGov protegido por circuit breaker — reusar a classe `PNCPCircuitBreaker` existente (ja funciona, testada, Redis-backed)
+- [ ] AC2: Instancia separada: `_comprasgov_circuit_breaker` com config propria via env vars (`COMPRASGOV_CIRCUIT_BREAKER_THRESHOLD`, `COMPRASGOV_CIRCUIT_BREAKER_COOLDOWN`)
+- [ ] AC3: Retry logic do ComprasGov (atualmente inline em `compras_gov_client.py:137-212`) DENTRO do circuit breaker — CB wraps retry, nao o contrario. Se o retry exaure tentativas, conta como 1 failure no CB (nao 3).
+- [ ] AC4: Health canary para ComprasGov (similar ao existente para PNCP) — probe leve a cada 60s para detectar recovery
 
-| Parametro | Default | PNCP | PCP | ComprasGov | Env Var Pattern |
-|-----------|---------|------|-----|------------|-----------------|
-| window_size | 20 | 20 | 20 | 20 | `{SOURCE}_CB_WINDOW_SIZE` |
-| failure_rate_threshold | 0.5 | 0.5 | 0.5 | 0.5 | `{SOURCE}_CB_FAILURE_RATE` |
-| cooldown_seconds | 60 | 60 | 60 | 60 | `{SOURCE}_CB_COOLDOWN` |
-| half_open_max_calls | 3 | 3 | 3 | 3 | `{SOURCE}_CB_HALF_OPEN_CALLS` |
+### Threshold Alignment
 
-- [ ] AC5: Redis-backed state sharing entre workers (manter feature B-06)
-- [ ] AC6: Fallback graceful para in-memory se Redis indisponivel (manter comportamento atual)
+- [ ] AC5: PNCP, PCP e ComprasGov com thresholds ALINHADOS e justificados:
 
-### ComprasGov Circuit Breaker
+| Fonte | Threshold | Cooldown | Justificativa |
+|-------|-----------|----------|---------------|
+| PNCP | 15 falhas | 60s | Mantido — primario, volume alto, deteccao rapida |
+| PCP | 15 falhas | 60s | **Alinhado** (era 30/120s sem justificativa) |
+| ComprasGov | 15 falhas | 60s | **Novo** — mesma classe de API governamental |
 
-- [ ] AC7: ComprasGov protegido pelo mesmo `SourceCircuitBreaker`
-- [ ] AC8: Retry logic do ComprasGov (atualmente inline em `compras_gov_client.py:137-212`) FORA do circuit breaker — CB wraps retry, nao o contrario
-- [ ] AC9: Health canary para ComprasGov (similar ao existente para PNCP)
+- [ ] AC6: Se no futuro diferentes thresholds forem necessarios, a razao DEVE ser documentada no config.py como comentario
 
-### Metricas e Observabilidade
+### Supabase CB — Manter Separado
 
-- [ ] AC10: Prometheus metric `smartlic_circuit_breaker_state` com labels `source={pncp,pcp,comprasgov}` e valores `{closed,open,half_open}`
-- [ ] AC11: Prometheus metric `smartlic_circuit_breaker_transitions_total` com labels `source` e `from_state` → `to_state`
-- [ ] AC12: Log WARN ao transitar para OPEN, INFO ao transitar para HALF_OPEN, INFO ao retornar para CLOSED
-- [ ] AC13: Sentry breadcrumb em cada transicao de estado
+- [ ] AC7: `SupabaseCircuitBreaker` NAO e alterado — databases tem semantica de falha diferente de APIs HTTP (sliding window com fail rate e correto para DB). Documentar no config.py: "Supabase CB usa sliding window — databases sao diferentes de APIs HTTP externas"
 
 ### Integracao com Pipeline de Busca
 
-- [ ] AC14: `search_pipeline.py` usa o novo CB unificado para PNCP, PCP e ComprasGov
-- [ ] AC15: Se CB OPEN para uma fonte, pipeline SKIP aquela fonte (nao tenta) e continua com as demais
-- [ ] AC16: Se TODAS as fontes OPEN, retorna cache stale com aviso ao usuario
+- [ ] AC8: `search_pipeline.py` usa CB para PNCP, PCP e ComprasGov
+- [ ] AC9: Se CB OPEN para uma fonte, pipeline SKIP aquela fonte (nao tenta) e continua com as demais
+- [ ] AC10: Se TODAS as fontes OPEN, retorna cache stale com aviso ao usuario
+
+### Metricas e Observabilidade
+
+- [ ] AC11: Prometheus metric `smartlic_circuit_breaker_state` com label `source={pncp,pcp,comprasgov}` — valores `{closed,open,half_open}` (expandir metrica existente que ja cobre pncp/pcp)
+- [ ] AC12: Log WARN ao transitar para OPEN, INFO ao retornar para CLOSED
+- [ ] AC13: Sentry breadcrumb em cada transicao de estado
 
 ### Testes
 
-- [ ] AC17: Teste: CB transita CLOSED → OPEN apos failure_rate exceder threshold
-- [ ] AC18: Teste: CB transita OPEN → HALF_OPEN apos cooldown
-- [ ] AC19: Teste: CB transita HALF_OPEN → CLOSED apos calls bem-sucedidos
-- [ ] AC20: Teste: CB transita HALF_OPEN → OPEN se call falha durante half-open
-- [ ] AC21: Teste: Redis state sync funciona entre 2 instancias
-- [ ] AC22: Teste: Fallback para in-memory se Redis down
-- [ ] AC23: Teste: ComprasGov CB integrado no pipeline de busca
-- [ ] AC24: Testes existentes passando (5131+ backend, 2681+ frontend)
+- [ ] AC14: Teste: ComprasGov CB tripa apos 15 falhas e impede novas chamadas
+- [ ] AC15: Teste: ComprasGov CB recupera apos cooldown (half-open → closed)
+- [ ] AC16: Teste: Pipeline funciona com 1 fonte em CB OPEN (resultados parciais)
+- [ ] AC17: Teste: Pipeline retorna cache stale quando todas as fontes OPEN
+- [ ] AC18: Testes existentes passando (5131+ backend, 2681+ frontend)
 
 ## Technical Notes
 
-### Por que sliding window e nao consecutive failures
+### Por que reusar PNCPCircuitBreaker (nao reescrever)
 
-O modelo atual (consecutive failures) tem um problema: UMA request bem-sucedida reseta o contador. Se a API esta falhando 80% das vezes mas 1 em cada 5 passa, o CB NUNCA tripa. Sliding window com failure rate (ex: >50% das ultimas 20 requests falharam) detecta degradacao real.
+A classe `PNCPCircuitBreaker` (pncp_client.py:154-261) ja funciona, ja e testada, ja tem Redis-backed state sharing (B-06), e ja tem fallback para in-memory. Criar uma nova "SourceCircuitBreaker" universal seria over-engineering para 50 usuarios.
 
-**Referencia Resilience4j:** "COUNT_BASED sliding window aggregates the outcome of the last N calls. The failure rate threshold is used to decide when the CircuitBreaker should transit from CLOSED to OPEN."
+**Abordagem pragmatica:**
+1. Criar instancia do mesmo `PNCPCircuitBreaker`/`RedisCircuitBreaker` para ComprasGov
+2. Alinhar thresholds
+3. Integrar no pipeline
+4. Pronto.
+
+Reescrita para sliding window (Resilience4j-style) e trabalho de v2 quando houver dados de producao suficientes para justificar a mudanca. "Start with sensible defaults, monitor in production, and tune based on real traffic patterns."
 
 ### ComprasGov: retry DENTRO do CB, nao fora
 
 Atualmente ComprasGov tem retry inline (3 tentativas com backoff). O CB deve envolver o retry:
-```
-CB.execute(() => {
-    return retry(3, () => comprasGovRequest())
-})
+```python
+# CORRETO: CB wraps retry
+async with comprasgov_cb:
+    result = await comprasgov_client.fetch_with_retry(params)  # 3 retries internos
+
+# ERRADO: retry wraps CB (cada retry conta como failure separado)
+for attempt in range(3):
+    async with comprasgov_cb:
+        result = await comprasgov_client.fetch(params)
 ```
 Se o retry exaure todas as tentativas, conta como 1 failure no CB. Nao como 3.
 
-### Migracaco: manter backward compat
+## Rollback Plan
 
-O `PNCPCircuitBreaker` e `RedisCircuitBreaker` atuais devem ser deprecados mas nao removidos imediatamente. A nova `SourceCircuitBreaker` assume, e as classes antigas ficam como alias ate a proxima release.
+| Condicao | Acao | Tempo |
+|----------|------|-------|
+| ComprasGov CB tripa prematuramente (falsos positivos) | Aumentar threshold via env var `COMPRASGOV_CIRCUIT_BREAKER_THRESHOLD=30` | < 2 min (env var) |
+| Pipeline nao funciona com novo CB | Desabilitar ComprasGov CB via env var `COMPRASGOV_CB_ENABLED=false` | < 2 min (env var) |
+| Threshold alignment causa problemas no PCP | Reverter PCP threshold: `PCP_CIRCUIT_BREAKER_THRESHOLD=30` | < 2 min (env var) |
+
+## Smoke Test Pos-Deploy
+
+```bash
+# 1. CB state de todas as fontes
+curl -s https://api.smartlic.tech/health | jq '.dependencies.sources'
+# Esperado: pncp, pcp, comprasgov todos "healthy" ou "degraded" (nao missing)
+
+# 2. Busca retorna fontes
+curl -s -X POST https://api.smartlic.tech/buscar \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"setor_id":"vestuario","ufs":["SP"],"data_inicio":"2026-02-20","data_fim":"2026-02-27"}' \
+  | jq '.sources_consulted'
+# Esperado: array com pncp, pcp, comprasgov (quando disponiveis)
+```
 
 ## Files to Change
 
 | File | Mudanca |
 |------|---------|
-| `backend/circuit_breaker.py` (NOVO) | Classe unificada `SourceCircuitBreaker` |
-| `backend/pncp_client.py:48-60,154-530` | Deprecar `PNCPCircuitBreaker` + `RedisCircuitBreaker`, usar nova classe |
-| `backend/clients/compras_gov_client.py` | Integrar CB, mover retry para dentro do CB |
-| `backend/supabase_client.py:73-228` | Avaliar migracao ou manter separado (DB vs API) |
-| `backend/search_pipeline.py:1562,2560-2561` | Usar novo CB unificado |
-| `backend/config.py` | Adicionar config vars para CB por fonte |
-| `backend/metrics.py` | Adicionar metricas unificadas |
-| `backend/tests/test_circuit_breaker.py` (NOVO) | Testes do CB unificado |
+| `backend/pncp_client.py:56-60` | Alinhar PCP threshold para 15/60s |
+| `backend/pncp_client.py:505-519` | Adicionar instancia `_comprasgov_circuit_breaker` |
+| `backend/clients/compras_gov_client.py` | Integrar CB wrapping retry logic |
+| `backend/search_pipeline.py` | Usar CB para ComprasGov no pipeline |
+| `backend/config.py` | Adicionar env vars para ComprasGov CB |
+| `backend/metrics.py` | Expandir metrica CB para incluir comprasgov |
+| `backend/tests/test_comprasgov_circuit_breaker.py` (NOVO) | Testes do ComprasGov CB |
 
 ## Definition of Done
 
 - [ ] Todas as 3 fontes de dados protegidas por circuit breaker
-- [ ] Configuracao uniforme e consistente entre fontes
+- [ ] Thresholds alinhados e justificados
 - [ ] ComprasGov com CB (era zero protecao)
 - [ ] Metricas Prometheus para monitorar estado de cada CB
 - [ ] Pipeline de busca degrada gracefully quando fontes falham
-- [ ] Testes cobrindo todos os estados e transicoes
+- [ ] Supabase CB mantido separado (decisao documentada)
+- [ ] Rollback via env vars funcional
+- [ ] Testes cobrindo ComprasGov CB + pipeline integration

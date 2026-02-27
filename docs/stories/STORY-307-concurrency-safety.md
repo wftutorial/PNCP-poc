@@ -56,18 +56,20 @@ Se RETURNING retorna NULL, evento ja existe — skip. Se retorna id, prosseguir 
 - [ ] AC3: Se processamento falha, UPDATE status para 'failed' com error message
 - [ ] AC4: Coluna `status` adicionada a `stripe_webhook_events`: `processing | completed | failed`
 - [ ] AC5: Webhook signature verification ANTES do INSERT (manter seguranca existente)
+- [ ] AC6: Cleanup de eventos stuck: webhook handler verifica se evento com status='processing' tem `received_at` > 5 minutos atras — se sim, permite reprocessamento (UPDATE status='pending' e prossegue). Isso previne eventos que crasharam mid-processing de ficarem stuck para sempre.
+- [ ] AC7: Log WARNING quando evento stuck e detectado: `"Stripe webhook {event_id} stuck in processing for >5min — reprocessing"`
 
 ### Fix 2: Pipeline Optimistic Locking (M2)
 
-- [ ] AC6: Adicionar coluna `version` (integer, default 1) na tabela `pipeline_items`
-- [ ] AC7: UPDATE pipeline item inclui `WHERE version = $current_version` e incrementa `version = version + 1`
-- [ ] AC8: Se UPDATE afeta 0 rows (version mismatch), retornar HTTP 409 Conflict com mensagem: `{"error": "Item foi atualizado por outra operacao. Recarregue a pagina."}`
-- [ ] AC9: Frontend trata 409: mostra toast de conflito e recarrega dados do pipeline
-- [ ] AC10: GET pipeline items retorna `version` no response (para enviar no proximo update)
+- [ ] AC8: Adicionar coluna `version` (integer, default 1) na tabela `pipeline_items`
+- [ ] AC9: UPDATE pipeline item inclui `WHERE version = $current_version` e incrementa `version = version + 1`
+- [ ] AC10: Se UPDATE afeta 0 rows (version mismatch), retornar HTTP 409 Conflict com mensagem: `{"error": "Item foi atualizado por outra operacao. Recarregue a pagina."}`
+- [ ] AC11: Frontend trata 409: mostra toast de conflito e recarrega dados do pipeline
+- [ ] AC12: GET pipeline items retorna `version` no response (para enviar no proximo update)
 
 ### Fix 3: Quota Atomicity no Fallback (M3)
 
-- [ ] AC11: Fallback path em `quota.py:460-472` usa SQL atomico:
+- [ ] AC13: Fallback path em `quota.py:460-472` usa SQL atomico:
 ```sql
 UPDATE monthly_quota
 SET searches_count = searches_count + 1
@@ -76,23 +78,26 @@ RETURNING searches_count;
 ```
 Se RETURNING vazio, quota excedida. Se retorna valor, incremento atomico.
 
-- [ ] AC12: Se row nao existe, INSERT com `searches_count = 1` (usando ON CONFLICT)
-- [ ] AC13: Eliminar o padrao read-modify-write no fallback
+- [ ] AC14: Se row nao existe, INSERT com `searches_count = 1` (usando ON CONFLICT)
+- [ ] AC15: Eliminar o padrao read-modify-write no fallback
 
 ### Database Migration
 
-- [ ] AC14: Migration: adicionar `status` a `stripe_webhook_events` (default 'completed' para registros existentes)
-- [ ] AC15: Migration: adicionar `version` a `pipeline_items` (default 1 para registros existentes)
-- [ ] AC16: Migration: index em `stripe_webhook_events(id)` se nao existir (UNIQUE constraint)
+- [ ] AC16: Migration: adicionar `status VARCHAR(20) DEFAULT 'completed'` a `stripe_webhook_events`
+- [ ] AC17: Migration: adicionar `received_at TIMESTAMPTZ` a `stripe_webhook_events` (para deteccao de stuck events)
+- [ ] AC18: Migration: adicionar `version INTEGER DEFAULT 1` a `pipeline_items`
+- [ ] AC19: Migration: `GRANT UPDATE ON stripe_webhook_events TO service_role` (atualmente so tem INSERT e SELECT — necessario para status transitions)
+- [ ] AC20: Migration: index em `stripe_webhook_events(id)` se nao existir (UNIQUE constraint — ja e PK, validar)
 
 ### Testes
 
-- [ ] AC17: Teste: dois webhooks com mesmo event_id — apenas um processa (segundo retorna skip)
-- [ ] AC18: Teste: pipeline update com version correta — sucesso
-- [ ] AC19: Teste: pipeline update com version errada — retorna 409
-- [ ] AC20: Teste: quota increment concorrente — count incrementa corretamente (nao perde incremento)
-- [ ] AC21: Teste: quota fallback com row inexistente — cria com count=1
-- [ ] AC22: Testes existentes passando (5131+ backend, 2681+ frontend)
+- [ ] AC21: Teste: dois webhooks com mesmo event_id — apenas um processa (segundo retorna skip)
+- [ ] AC22: Teste: webhook stuck em 'processing' por >5 min e reprocessado com sucesso
+- [ ] AC23: Teste: pipeline update com version correta — sucesso
+- [ ] AC24: Teste: pipeline update com version errada — retorna 409
+- [ ] AC25: Teste: quota increment concorrente — count incrementa corretamente (nao perde incremento)
+- [ ] AC26: Teste: quota fallback com row inexistente — cria com count=1
+- [ ] AC27: Testes existentes passando (5131+ backend, 2681+ frontend)
 
 ## Technical Notes
 

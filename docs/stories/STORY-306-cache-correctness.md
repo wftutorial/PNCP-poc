@@ -78,13 +78,18 @@ Os TTLs criam janelas onde uma camada serve "fresh" e outra serve "stale" para a
 - [ ] AC10: SWR (Stale-While-Revalidate): entre 4-24h, serve stale E dispara revalidacao em background
 - [ ] AC11: Apos 24h, cache expirado — nova busca obrigatoria (nao serve dados de >24h exceto em emergency)
 
+### Mitigacao de Thundering Herd no Deploy
+
+- [ ] AC12: Dual-read por 24h pos-deploy: ao buscar no cache, tentar key NOVA primeiro → se miss, tentar key ANTIGA (sem datas) → se miss, busca live. Controlado por flag `CACHE_LEGACY_KEY_FALLBACK` (default `true`, desabilitar manualmente apos 24h)
+- [ ] AC13: Cache warming pos-deploy: background task que revalida as 10 queries mais populares (baseado em `search_sessions` recentes) nos primeiros 5 minutos apos startup
+
 ### Testes
 
-- [ ] AC12: Teste: mesma query com datas diferentes gera cache keys diferentes
-- [ ] AC13: Teste: fallback serve cache antigo com flag `cache_fallback: true`
-- [ ] AC14: Teste: TTL L1 e L2 expiram no mesmo momento
-- [ ] AC15: Teste: SWR dispara revalidacao em background quando serve stale
-- [ ] AC16: Testes existentes passando (5131+ backend, 2681+ frontend)
+- [ ] AC14: Teste: mesma query com datas diferentes gera cache keys diferentes
+- [ ] AC15: Teste: fallback serve cache antigo com flag `cache_fallback: true`
+- [ ] AC16: Teste: dual-read retorna cache de key antiga quando key nova miss
+- [ ] AC17: Teste: SWR dispara revalidacao em background quando serve stale
+- [ ] AC18: Testes existentes passando (5131+ backend, 2681+ frontend)
 
 ## Technical Notes
 
@@ -99,6 +104,37 @@ O problema: isso tambem serve resultados de periodo errado quando as fontes ESTA
 ### Impacto no cache hit rate
 
 Incluir datas no cache key vai REDUZIR o hit rate inicialmente. Isso e esperado e correto. Dados errados servidos com 90% hit rate sao piores que dados corretos com 60% hit rate. O SWR background revalidation vai compensar.
+
+### RISCO: Thundering Herd no Deploy
+
+Mudar a cache key invalida TODOS os cache entries existentes instantaneamente. No deploy, 100% das buscas serao cache miss, gerando requests simultaneos para as 3 APIs governamentais. Com 50 usuarios ativos, isso pode tripar os circuit breakers e causar DDoS nos endpoints governamentais.
+
+**Mitigacao obrigatoria (AC17-AC18):** Dual-read por 24h pos-deploy — tentar key nova primeiro, se miss tentar key antiga. Isso faz a transicao ser gradual em vez de cliff.
+
+### Nota sobre TTL L2
+
+A arquitetura atual usa InMemory (L1) + Supabase (L3) + Local File (L4). A tabela TTL em AC8 introduz "L2 Redis" por clareza futura, mas o sistema atual nao usa Redis como camada de cache de busca (Redis e usado para circuit breaker state e feature flags). Se Redis nao for adicionado como L2 nesta story, manter a tabela com as camadas existentes (L1 InMemory, L2 Supabase, L3 Local File).
+
+## Rollback Plan
+
+| Condicao | Acao | Tempo |
+|----------|------|-------|
+| Thundering herd causa circuit breakers OPEN | Feature flag `CACHE_LEGACY_KEY_FALLBACK=true` (ativa dual-read ilimitado) | < 2 min (env var) |
+| Cache hit rate cai abaixo de 20% por 1h | Reverter commit + redeploy | < 15 min |
+| Frontend cache fallback UI confusa | Desabilitar banner via feature flag `SHOW_CACHE_FALLBACK_BANNER=false` | < 2 min |
+
+## Smoke Test Pos-Deploy
+
+```bash
+# 1. Cache key diferente para datas diferentes
+curl -s "https://api.smartlic.tech/debug/cache-key?setor=vestuario&ufs=SP&date_from=2026-02-20&date_to=2026-02-27"
+curl -s "https://api.smartlic.tech/debug/cache-key?setor=vestuario&ufs=SP&date_from=2026-02-01&date_to=2026-02-27"
+# Esperado: hashes DIFERENTES
+
+# 2. Cache hit rate nao zerou (dual-read funcionando)
+curl -s https://api.smartlic.tech/health | jq '.dependencies.cache'
+# Esperado: hit_rate > 0 (nao 0%)
+```
 
 ## Files to Change
 

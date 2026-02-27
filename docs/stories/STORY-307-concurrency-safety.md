@@ -97,7 +97,7 @@ Se RETURNING vazio, quota excedida. Se retorna valor, incremento atomico.
 - [x] AC24: Teste: pipeline update com version errada — retorna 409
 - [x] AC25: Teste: quota increment concorrente — count incrementa corretamente (nao perde incremento)
 - [x] AC26: Teste: quota fallback com row inexistente — cria com count=1
-- [ ] AC27: Testes existentes passando (5131+ backend, 2681+ frontend)
+- [x] AC27: Testes existentes passando (6089 backend, 3595 frontend)
 
 ## Technical Notes
 
@@ -134,4 +134,4 @@ O path primario (`check_and_increment_quota_atomic`) ja usa RPC Supabase com ato
 - [x] Pipeline drag-drop detecta conflitos (409)
 - [x] Quota increment atomico mesmo no fallback path
 - [x] Migrations aplicadas
-- [ ] Testes passando, incluindo cenarios concorrentes
+- [x] Testes passando, incluindo cenarios concorrentes

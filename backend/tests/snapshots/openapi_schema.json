@@ -3537,6 +3537,11 @@
               }
             ],
             "title": "Valor Estimado"
+          },
+          "version": {
+            "default": 1,
+            "title": "Version",
+            "type": "integer"
           }
         },
         "required": [
@@ -3578,6 +3583,18 @@
             ],
             "description": "New pipeline stage",
             "title": "Stage"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Current version for optimistic locking (STORY-307)",
+            "title": "Version"
           }
         },
         "title": "PipelineItemUpdate",

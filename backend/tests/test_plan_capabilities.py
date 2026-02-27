@@ -226,20 +226,23 @@ class TestIncrementMonthlyQuota:
     @patch("supabase_client.get_supabase")
     @patch("quota.get_monthly_quota_used")
     def test_fallback_increments_existing_quota(self, mock_get_used, mock_get_supabase):
-        """Should increment quota via fallback when RPC unavailable."""
-        # RPC fails (function not available)
+        """Should increment quota via fallback when RPC unavailable.
+        STORY-307: Updated — fallback now tries atomic RPC first, then upsert.
+        get_monthly_quota_used is called once (after upsert), not twice.
+        """
+        # Both RPCs fail (functions not available)
         mock_sb = MagicMock()
         mock_get_supabase.return_value = mock_sb
         mock_sb.rpc.return_value.execute.side_effect = Exception("function does not exist")
 
-        # Fallback: first call returns 23 (before), second returns 24 (after increment)
-        mock_get_used.side_effect = [23, 24]
+        # Fallback: get_monthly_quota_used called once after upsert
+        mock_get_used.return_value = 24
 
         result = increment_monthly_quota("user-123")
 
         assert result == 24
 
-        # Verify upsert was called as fallback
+        # Verify upsert was called as last-resort fallback
         mock_sb.table.return_value.upsert.assert_called_once()
 
     @patch("supabase_client.get_supabase")

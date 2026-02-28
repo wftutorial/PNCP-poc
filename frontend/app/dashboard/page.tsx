@@ -26,6 +26,8 @@ import {
   Pie,
   Cell,
 } from "recharts";
+import { TrialUpsellCTA } from "../../components/billing/TrialUpsellCTA";
+import { usePlan } from "../../hooks/usePlan";
 
 const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || "SmartLic.tech";
 
@@ -215,6 +217,7 @@ export default function DashboardPage() {
   const { session, user, loading: authLoading } = useAuth();
   const { trackEvent } = useAnalytics();
   const { status: backendStatus } = useBackendStatusContext();
+  const { planInfo } = usePlan();
 
   const [period, setPeriod] = useState<Period>("week");
   const [profilePct, setProfilePct] = useState<number | null>(null);
@@ -684,6 +687,20 @@ export default function DashboardPage() {
               label="Taxa de sucesso"
               value={`${summary.success_rate}%`}
               subtitle={`${summary.total_downloads} com resultados`}
+            />
+          </div>
+        )}
+
+        {/* STORY-312 AC4: Dashboard CTA for trial users with >= 3 searches */}
+        {summary && summary.total_searches >= 3 && (
+          <div className="mb-8">
+            <TrialUpsellCTA
+              variant="dashboard"
+              planId={planInfo?.plan_id}
+              subscriptionStatus={planInfo?.subscription_status}
+              contextData={{
+                valor: formatCurrency(summary.total_value_discovered).replace("R$ ", ""),
+              }}
             />
           </div>
         )}

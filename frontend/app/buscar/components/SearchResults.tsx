@@ -26,6 +26,7 @@ import { ExpiredCacheBanner } from "./ExpiredCacheBanner";
 import SourceStatusGrid from "./SourceStatusGrid";
 import { SearchStateManager } from "./SearchStateManager";
 import { deriveSearchPhase } from "../types/searchPhase";
+import { TrialUpsellCTA } from "../../../components/billing/TrialUpsellCTA";
 // GTM-UX-001: PartialTimeoutBanner replaced by DataQualityBanner
 
 export interface SearchResultsProps {
@@ -80,6 +81,7 @@ export interface SearchResultsProps {
     quota_used: number;
     quota_reset_date: string;
     trial_expires_at?: string | null;
+    subscription_status?: string;
     capabilities: {
       max_history_days: number;
       max_requests_per_month: number;
@@ -215,6 +217,17 @@ export default function SearchResults({
 
   // GTM-FIX-011 AC22: Toggle source badges for power users
   const [showSourceBadges, setShowSourceBadges] = useState(false);
+
+  // STORY-312 AC2: Track when download completes to show post-download CTA
+  const [downloadCompleted, setDownloadCompleted] = useState(false);
+  const [prevDownloadLoading, setPrevDownloadLoading] = useState(false);
+
+  useEffect(() => {
+    if (prevDownloadLoading && !downloadLoading && !downloadError) {
+      setDownloadCompleted(true);
+    }
+    setPrevDownloadLoading(downloadLoading);
+  }, [downloadLoading, downloadError, prevDownloadLoading]);
 
   // GTM-UX-003 AC11: 30-second cooldown REMOVED — single unified retry mechanism
 
@@ -841,6 +854,20 @@ export default function SearchResults({
             />
           )}
 
+          {/* STORY-312 AC5: Quota approaching CTA when >= 80% usage */}
+          {planInfo && planInfo.capabilities.max_requests_per_month > 0 &&
+           (planInfo.quota_used / planInfo.capabilities.max_requests_per_month) >= 0.8 && (
+            <TrialUpsellCTA
+              variant="quota"
+              planId={planInfo.plan_id}
+              subscriptionStatus={planInfo.subscription_status}
+              contextData={{
+                usageLabel: `${planInfo.quota_used}/${planInfo.capabilities.max_requests_per_month}`,
+                usagePct: Math.round((planInfo.quota_used / planInfo.capabilities.max_requests_per_month) * 100),
+              }}
+            />
+          )}
+
           {/* UX-352 AC6: Clear visual separator between summary and opportunities list */}
           {result.licitacoes && result.licitacoes.length > 0 && (
             <div className="border-t border-strong" />
@@ -1071,6 +1098,26 @@ export default function SearchResults({
               </p>
             )}
           </div>
+
+          {/* STORY-312 AC1: Post-search CTA for trial users with >= 10 results */}
+          {result.resumo.total_oportunidades >= 10 && (
+            <TrialUpsellCTA
+              variant="post-search"
+              planId={planInfo?.plan_id}
+              subscriptionStatus={planInfo?.subscription_status}
+              contextData={{ opportunities: result.resumo.total_oportunidades }}
+            />
+          )}
+
+          {/* STORY-312 AC2: Post-download CTA for trial users after Excel export */}
+          {downloadCompleted && (
+            <TrialUpsellCTA
+              variant="post-download"
+              planId={planInfo?.plan_id}
+              subscriptionStatus={planInfo?.subscription_status}
+              contextData={{ exportLimit: planInfo?.capabilities.max_requests_per_month ?? 1000 }}
+            />
+          )}
 
           {/* UX-352 AC11: Encouraging return message */}
           <p className="text-center text-sm text-ink-muted py-2" data-testid="return-invitation">

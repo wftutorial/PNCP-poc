@@ -28,6 +28,7 @@ import { useAuth } from "../components/AuthProvider";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { getUserFriendlyError } from "../../lib/error-messages";
 import { toast } from "sonner";
+import { TrialUpsellCTA } from "../../components/billing/TrialUpsellCTA";
 
 export default function PipelinePage() {
   const { session, loading: authLoading } = useAuth();
@@ -37,6 +38,17 @@ export default function PipelinePage() {
 
   // STORY-265 AC15: Detect trial expired for read-only mode
   const isTrialExpired = planInfo?.plan_id === "free_trial" && planInfo?.subscription_status === "expired";
+
+  // STORY-312 AC3: Track new items added (show CTA after add)
+  const [showPipelineCTA, setShowPipelineCTA] = useState(false);
+  const [prevItemCount, setPrevItemCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (prevItemCount !== null && items.length > prevItemCount) {
+      setShowPipelineCTA(true);
+    }
+    setPrevItemCount(items.length);
+  }, [items.length, prevItemCount]);
   const [activeItem, setActiveItem] = useState<PipelineItem | null>(null);
   const [optimisticItems, setOptimisticItems] = useState<PipelineItem[]>([]);
   const [initialLoadFailed, setInitialLoadFailed] = useState(false);
@@ -169,6 +181,18 @@ export default function PipelinePage() {
             {optimisticItems.length} {optimisticItems.length === 1 ? "item" : "itens"} no pipeline
           </div>
         </div>
+
+        {/* STORY-312 AC3: Post-add-to-pipeline CTA for trial users */}
+        {showPipelineCTA && (
+          <div className="mb-4">
+            <TrialUpsellCTA
+              variant="post-pipeline"
+              planId={planInfo?.plan_id}
+              subscriptionStatus={planInfo?.subscription_status}
+              contextData={{ pipelineLimit: 1000 }}
+            />
+          </div>
+        )}
 
         {/* AC8+AC14: Error state with retry when initial load fails (no data at all) */}
         {initialLoadFailed && !loading && optimisticItems.length === 0 ? (

@@ -22,6 +22,10 @@ urllib3==2.6.3
 # Excel generation
 openpyxl==3.1.5
 
+# PDF report generation (STORY-325: Diagnostico de Oportunidades)
+# Pure Python — no C extensions, Railway-safe
+reportlab==4.4.0
+
 # LLM integration
 openai==1.109.1
 

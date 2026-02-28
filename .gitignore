@@ -280,6 +280,10 @@ output/
 results/
 reports/
 !docs/reports/
+!backend/routes/reports.py
+!frontend/components/reports/
+!frontend/app/api/reports/
+!frontend/__tests__/reports/
 *.pdf
 !docs/**/*.pdf
 

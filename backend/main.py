@@ -88,6 +88,7 @@ from routes.mfa import router as mfa_router  # STORY-317: MFA TOTP + recovery co
 from routes.organizations import router as org_router  # STORY-322: Organizations
 from routes.partners import router as partners_router  # STORY-323: Revenue Share
 from routes.sectors_public import router as sectors_public_router  # STORY-324: SEO Landing Pages
+from routes.reports import router as reports_router  # STORY-325: PDF Diagnostico
 
 # Configure structured logging
 setup_logging(level=os.getenv("LOG_LEVEL", "INFO"))
@@ -706,6 +707,7 @@ app.include_router(mfa_router, prefix="/v1")  # STORY-317: MFA TOTP + recovery c
 app.include_router(org_router, prefix="/v1")  # STORY-322: Organizations
 app.include_router(partners_router, prefix="/v1")  # STORY-323: Revenue Share
 app.include_router(sectors_public_router, prefix="/v1")  # STORY-324: SEO Landing Pages
+app.include_router(reports_router, prefix="/v1")  # STORY-325: PDF Diagnostico
 
 # ============================================================================
 # SYS-M08: Backward Compatibility - Mount routers without /v1/ prefix
@@ -738,6 +740,7 @@ app.include_router(mfa_router)  # STORY-317: MFA TOTP + recovery codes
 app.include_router(org_router)  # STORY-322: Organizations
 app.include_router(partners_router)  # STORY-323: Revenue Share
 app.include_router(sectors_public_router)  # STORY-324: SEO Landing Pages
+app.include_router(reports_router)  # STORY-325: PDF Diagnostico
 
 # ============================================================================
 # GTM-PROXY-001 AC9-AC11: Global exception handlers for error sanitization

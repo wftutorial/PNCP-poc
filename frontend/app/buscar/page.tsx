@@ -31,6 +31,7 @@ import BackendStatusIndicator, { useBackendStatusContext } from "../../component
 import { SearchErrorBoundary } from "./components/SearchErrorBoundary";
 import { MobileDrawer } from "../../components/MobileDrawer";
 import { PaymentRecoveryModal } from "../../components/billing/PaymentRecoveryModal";
+import PdfOptionsModal from "../../components/reports/PdfOptionsModal";
 
 import { dateDiffInDays } from "../../lib/utils/dateDiffInDays";
 import { toast } from "sonner";
@@ -516,6 +517,49 @@ function HomePageContent() {
     }
   };
 
+  // STORY-325: PDF Diagnostico Report
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfModalOpen, setPdfModalOpen] = useState(false);
+
+  const handleGeneratePdf = useCallback(async (options: { clientName: string; maxItems: number }) => {
+    if (!session?.access_token || !search.searchId) return;
+    setPdfLoading(true);
+    setPdfModalOpen(false);
+    try {
+      const response = await fetch("/api/reports/diagnostico", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          search_id: search.searchId,
+          client_name: options.clientName || null,
+          max_items: options.maxItems,
+        }),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ error: "Erro ao gerar PDF" }));
+        toast.error(err.error || "Erro ao gerar relatório PDF");
+        return;
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `diagnostico-${filters.sectorName.toLowerCase().replace(/\s+/g, "-")}-${new Date().toISOString().split("T")[0]}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      trackEvent("pdf_diagnostico_generated", { max_items: options.maxItems, has_client: !!options.clientName });
+    } catch (err) {
+      toast.error("Erro ao gerar relatório PDF. Tente novamente.");
+    } finally {
+      setPdfLoading(false);
+    }
+  }, [session, search.searchId, filters.sectorName, trackEvent]);
+
   // CRIT-002 AC2: Reset handler for error boundary
   const handleErrorBoundaryReset = useCallback(() => {
     search.setResult(null);
@@ -788,6 +832,9 @@ function HomePageContent() {
                 trialPhase={trialPhase}
                 paywallApplied={search.result?.paywall_applied}
                 totalBeforePaywall={search.result?.total_before_paywall}
+                // STORY-325: PDF Diagnostico
+                onGeneratePdf={() => setPdfModalOpen(true)}
+                pdfLoading={pdfLoading}
               />
             </SearchErrorBoundary>
           </div>
@@ -921,6 +968,16 @@ function HomePageContent() {
         isOpen={showUpgradeModal}
         onClose={() => setShowUpgradeModal(false)}
         source={upgradeSource}
+      />
+
+      {/* STORY-325: PDF Diagnostico Options Modal */}
+      <PdfOptionsModal
+        isOpen={pdfModalOpen}
+        onClose={() => setPdfModalOpen(false)}
+        onGenerate={handleGeneratePdf}
+        isGenerating={pdfLoading}
+        sectorName={filters.sectorName}
+        totalResults={search.result?.resumo?.total_oportunidades ?? 0}
       />
 
       {/* GTM-010 AC4/AC7: Trial conversion screen (full-screen overlay) */}

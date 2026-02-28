@@ -32,22 +32,22 @@ Gerar PDF profissional a partir dos resultados de busca com:
 
 ### Backend — Geracao de PDF
 
-- [ ] **AC1:** Endpoint `POST /v1/reports/diagnostico`:
+- [x] **AC1:** Endpoint `POST /v1/reports/diagnostico`:
   - Input: `search_id` (referencia a uma busca realizada)
   - Input opcional: `client_name` (nome da empresa-alvo)
   - Input opcional: `max_items` (default: 20)
   - Output: PDF file (application/pdf)
   - Auth: require_auth (qualquer plano, inclusive trial)
-- [ ] **AC2:** Usar **WeasyPrint** ou **reportlab** para geracao de PDF:
+- [x] **AC2:** Usar **WeasyPrint** ou **reportlab** para geracao de PDF:
   - WeasyPrint preferido (HTML→PDF, mais flexivel para layout)
   - Fallback: reportlab se WeasyPrint tiver problemas em Railway (C deps)
-- [ ] **AC3:** Template HTML para o PDF em `backend/templates/reports/diagnostico.html`:
+- [x] **AC3:** Template HTML para o PDF em `backend/templates/reports/diagnostico.html`:
   - CSS inline (WeasyPrint suporta subset do CSS3)
   - Responsivo para A4 (210mm x 297mm)
 
 ### Backend — Conteudo do PDF
 
-- [ ] **AC4:** **Capa (pagina 1):**
+- [x] **AC4:** **Capa (pagina 1):**
   - Logo SmartLic.tech (texto estilizado, mesmo visual da landing page — sem imagem)
   - Titulo: "Diagnostico de Oportunidades em Licitacoes"
   - Subtitulo: "Preparado para {client_name}" (se fornecido)
@@ -55,49 +55,49 @@ Gerar PDF profissional a partir dos resultados de busca com:
   - Data de geracao
   - Periodo da busca
   - UFs analisadas
-- [ ] **AC5:** **Resumo Executivo (pagina 2):**
+- [x] **AC5:** **Resumo Executivo (pagina 2):**
   - Resumo IA (reutilizar `llm.py` summary ou buscar do cache)
   - Metricas em destaque: total encontradas, total filtradas, valor total, valor medio
   - Distribuicao por UF (top 5, bar chart ou tabela)
   - Distribuicao por modalidade (pie chart ou tabela)
   - Recomendacao: "Das {N} oportunidades, {M} tem score de viabilidade acima de 70%"
-- [ ] **AC6:** **Top 20 Oportunidades (paginas 3+):**
+- [x] **AC6:** **Top 20 Oportunidades (paginas 3+):**
   - Tabela com: #, Titulo (truncado 100 chars), Orgao, UF, Valor, Modalidade, Prazo, Score Viabilidade
   - Score de viabilidade com indicador visual: verde (>70%), amarelo (40-70%), vermelho (<40%)
   - Ordenado por score de viabilidade (desc)
   - Se menos de 20 resultados, mostrar todos
-- [ ] **AC7:** **Footer em todas as paginas:**
+- [x] **AC7:** **Footer em todas as paginas:**
   - "Gerado por SmartLic (smartlic.tech) em {data}"
   - "Este relatorio e uma analise automatizada e nao constitui consultoria juridica"
   - Numero da pagina: "Pagina X de Y"
-- [ ] **AC8:** **Metadados do PDF:**
+- [x] **AC8:** **Metadados do PDF:**
   - Title: "Diagnostico de Oportunidades — {setor} — {data}"
   - Author: "SmartLic"
   - Creator: "SmartLic v0.5"
 
 ### Backend — Integracao com Pipeline Existente
 
-- [ ] **AC9:** Reutilizar dados do `search_id` (nao refazer busca):
+- [x] **AC9:** Reutilizar dados do `search_id` (nao refazer busca):
   - Buscar resultados do cache (L1/L2)
   - Se cache expirado, retornar 404 com mensagem "Busca expirada, refaca a busca"
-- [ ] **AC10:** Reutilizar LLM summary do cache/ARQ (nao rechamar LLM)
-- [ ] **AC11:** Se viability scores existem, usar. Se nao, calcular on-the-fly.
+- [x] **AC10:** Reutilizar LLM summary do cache/ARQ (nao rechamar LLM)
+- [x] **AC11:** Se viability scores existem, usar. Se nao, calcular on-the-fly.
 
 ### Frontend — Botao de Download
 
-- [ ] **AC12:** Botao "Gerar Relatorio PDF" em `SearchResults.tsx`:
+- [x] **AC12:** Botao "Gerar Relatorio PDF" em `SearchResults.tsx`:
   - Icone de PDF + texto "Relatorio PDF"
   - Posicao: ao lado do botao "Baixar Excel"
   - Loading state durante geracao (pode levar 5-10s)
-- [ ] **AC13:** Modal de opcoes antes de gerar:
+- [x] **AC13:** Modal de opcoes antes de gerar:
   - Campo: "Nome da empresa" (opcional)
   - Campo: "Numero de oportunidades" (slider: 10/20/50, default 20)
   - Botao: "Gerar PDF"
-- [ ] **AC14:** Download automatico apos geracao (blob URL)
+- [x] **AC14:** Download automatico apos geracao (blob URL)
 
 ### Frontend — API Proxy
 
-- [ ] **AC15:** Proxy route `frontend/app/api/reports/diagnostico/route.ts`:
+- [x] **AC15:** Proxy route `frontend/app/api/reports/diagnostico/route.ts`:
   - POST → backend `/v1/reports/diagnostico`
   - Stream response (PDF pode ser grande)
   - Content-Type: application/pdf
@@ -105,12 +105,12 @@ Gerar PDF profissional a partir dos resultados de busca com:
 
 ### Testes
 
-- [ ] **AC16:** Testes backend: gera PDF valido (verifica que output e PDF)
-- [ ] **AC17:** Testes backend: capa com/sem logo, com/sem client_name
-- [ ] **AC18:** Testes backend: top 20 ordenado por viability score
-- [ ] **AC19:** Testes backend: search_id invalido → 404
-- [ ] **AC20:** Testes frontend: modal de opcoes, botao de download
-- [ ] **AC21:** Zero regressions
+- [x] **AC16:** Testes backend: gera PDF valido (verifica que output e PDF)
+- [x] **AC17:** Testes backend: capa com/sem logo, com/sem client_name
+- [x] **AC18:** Testes backend: top 20 ordenado por viability score
+- [x] **AC19:** Testes backend: search_id invalido → 404
+- [x] **AC20:** Testes frontend: modal de opcoes, botao de download
+- [x] **AC21:** Zero regressions
 
 ---
 

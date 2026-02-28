@@ -174,6 +174,7 @@ def _before_send(event, hint):
 
     GTM-RESILIENCE-E02: PII scrubbing + transient fingerprinting.
     CRIT-040 AC5: Drop CircuitBreakerOpenError and PGRST205 schema errors.
+    CRIT-043 AC5: Drop PNCP 400 on page>1 (expected noise, not real errors).
     """
     # CRIT-040 AC5: Drop CB open errors (already tracked via Prometheus)
     exc_info = hint.get("exc_info")
@@ -185,10 +186,21 @@ def _before_send(event, hint):
     message = event.get("message", "")
     exc_values = event.get("exception", {}).get("values", [])
     for ev in exc_values:
-        if "PGRST205" in ev.get("value", ""):
+        ev_value = ev.get("value", "")
+        if "PGRST205" in ev_value:
             return None
+        # CRIT-043 AC5: Drop PNCP 400 on page>1 (expected end-of-pagination noise)
+        if "status 400" in ev_value or "status=400" in ev_value:
+            if any(marker in ev_value for marker in ("pagina': 5", "pagina': 4", "pagina': 3", "pagina': 2", "page ")):
+                return None
     if "PGRST205" in message:
         return None
+    # CRIT-043 AC5: Also check message-level for PNCP 400 noise
+    if ("status 400" in message or "status=400" in message) and "pagina" in message:
+        import re
+        pagina_match = re.search(r"pagina['\"]?\s*[:=]\s*(\d+)", message)
+        if pagina_match and int(pagina_match.group(1)) > 1:
+            return None
 
     event = scrub_pii(event, hint)
     if event is None:

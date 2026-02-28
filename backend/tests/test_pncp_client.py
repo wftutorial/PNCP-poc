@@ -1443,3 +1443,339 @@ class TestExcludedModalidadesNeverFetched:
             params = call[1].get("params", call[0][1] if len(call[0]) > 1 else {})
             if "codigoModalidadeContratacao" in params:
                 assert params["codigoModalidadeContratacao"] not in (9, 14)
+
+
+# ============================================================================
+# CRIT-043: HTTP 400 page>1 noise reduction
+# ============================================================================
+
+
+class TestCrit043Http400PageNoiseReduction:
+    """CRIT-043: HTTP 400 on page>1 is expected (past last page) and should
+    not pollute circuit breaker or logs."""
+
+    # --- AC2 + AC6: Async path — 400 on page 5 returns empty, no CB failure ---
+
+    @pytest.mark.asyncio
+    @patch("pncp_client.httpx.AsyncClient.get")
+    async def test_ac6_async_400_page5_returns_empty_no_cb_failure(self, mock_get):
+        """AC2+AC6: HTTP 400 on page>1 returns empty result, no CB record_failure."""
+        from pncp_client import AsyncPNCPClient, _circuit_breaker
+
+        call_count = 0
+
+        def mock_side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            params = kwargs.get("params", {})
+            page = params.get("pagina", 1)
+
+            if page <= 4:
+                # Pages 1-4 return data
+                mock = Mock()
+                mock.status_code = 200
+                mock.headers = JSON_HEADERS
+                mock.json.return_value = {
+                    "data": [
+                        {"numeroControlePNCP": f"item-p{page}", "unidadeOrgao": {"ufSigla": "SP", "municipioNome": ""}, "orgaoEntidade": {"razaoSocial": ""}},
+                    ],
+                    "totalRegistros": 250,
+                    "totalPaginas": 5,
+                    "paginasRestantes": max(0, 5 - page),
+                }
+                return mock
+            else:
+                # Page 5 returns 400 (past last page)
+                mock = Mock()
+                mock.status_code = 400
+                mock.text = "Bad Request"
+                return mock
+
+        mock_get.side_effect = mock_side_effect
+
+        with patch.object(_circuit_breaker, "record_failure") as mock_cb_fail, \
+             patch.object(_circuit_breaker, "record_success") as mock_cb_success:
+            config = RetryConfig(max_retries=0)
+            async with AsyncPNCPClient(config=config) as client:
+                items, was_truncated = await client._fetch_single_modality(
+                    uf="SP",
+                    data_inicial="2026-01-01",
+                    data_final="2026-01-15",
+                    modalidade=6,
+                    max_pages=10,
+                )
+
+            # Should have items from pages 1-4
+            assert len(items) == 4
+            # AC6: record_failure should NOT be called (400 on page 5 is expected)
+            mock_cb_fail.assert_not_called()
+            # record_success called for pages 1-4 + page 5 (AC2 returns empty, still a success)
+            assert mock_cb_success.call_count == 5
+
+    @pytest.mark.asyncio
+    @patch("pncp_client.httpx.AsyncClient.get")
+    async def test_ac6_async_400_page5_logs_debug(self, mock_get, caplog):
+        """AC6: HTTP 400 on page>1 logs DEBUG, not WARNING."""
+        import logging
+        from pncp_client import AsyncPNCPClient
+
+        # Page 1 returns data with more pages, page 2 returns 400
+        call_count = 0
+
+        def mock_side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            params = kwargs.get("params", {})
+            page = params.get("pagina", 1)
+
+            if page == 1:
+                mock = Mock()
+                mock.status_code = 200
+                mock.headers = JSON_HEADERS
+                mock.json.return_value = {
+                    "data": [
+                        {"numeroControlePNCP": "item-1", "unidadeOrgao": {"ufSigla": "SP", "municipioNome": ""}, "orgaoEntidade": {"razaoSocial": ""}},
+                    ],
+                    "totalRegistros": 100,
+                    "totalPaginas": 3,
+                    "paginasRestantes": 2,
+                }
+                return mock
+            else:
+                mock = Mock()
+                mock.status_code = 400
+                mock.text = "Bad Request"
+                return mock
+
+        mock_get.side_effect = mock_side_effect
+
+        config = RetryConfig(max_retries=0)
+        with caplog.at_level(logging.DEBUG, logger="pncp_client"):
+            async with AsyncPNCPClient(config=config) as client:
+                items, _ = await client._fetch_single_modality(
+                    uf="SP",
+                    data_inicial="2026-01-01",
+                    data_final="2026-01-15",
+                    modalidade=6,
+                    max_pages=10,
+                )
+
+        assert len(items) == 1
+        # Should have DEBUG log with CRIT-043 marker
+        debug_msgs = [r for r in caplog.records if r.levelno == logging.DEBUG and "CRIT-043" in r.message]
+        assert len(debug_msgs) >= 1, f"Expected DEBUG log with CRIT-043, got: {[r.message for r in caplog.records]}"
+        # Should NOT have WARNING for the 400
+        warning_msgs = [r for r in caplog.records if r.levelno == logging.WARNING and "page=2" in r.message]
+        assert len(warning_msgs) == 0, f"Unexpected WARNING for page 2: {[r.message for r in caplog.records]}"
+
+    # --- AC7: 400 on page 1 — real error, CB failure recorded ---
+
+    @pytest.mark.asyncio
+    @patch("pncp_client.httpx.AsyncClient.get")
+    async def test_ac7_async_400_page1_records_cb_failure(self, mock_get):
+        """AC7: HTTP 400 on page 1 is a real error — record_failure() must be called."""
+        from pncp_client import AsyncPNCPClient, _circuit_breaker
+
+        mock_response = Mock()
+        mock_response.status_code = 400
+        mock_response.text = "Bad Request - missing parameters"
+        mock_get.return_value = mock_response
+
+        with patch.object(_circuit_breaker, "record_failure") as mock_cb_fail:
+            config = RetryConfig(max_retries=0)
+            async with AsyncPNCPClient(config=config) as client:
+                items, _ = await client._fetch_single_modality(
+                    uf="SP",
+                    data_inicial="2026-01-01",
+                    data_final="2026-01-15",
+                    modalidade=6,
+                    max_pages=5,
+                )
+
+            # AC7: record_failure SHOULD be called (400 on page 1 = real error)
+            mock_cb_fail.assert_called()
+
+    @pytest.mark.asyncio
+    @patch("pncp_client.httpx.AsyncClient.get")
+    async def test_ac7_async_400_page1_logs_warning(self, mock_get, caplog):
+        """AC7: HTTP 400 on page 1 should log WARNING (real error)."""
+        import logging
+        from pncp_client import AsyncPNCPClient
+
+        mock_response = Mock()
+        mock_response.status_code = 400
+        mock_response.text = "Bad Request"
+        mock_get.return_value = mock_response
+
+        config = RetryConfig(max_retries=0)
+        with caplog.at_level(logging.DEBUG, logger="pncp_client"):
+            async with AsyncPNCPClient(config=config) as client:
+                items, _ = await client._fetch_single_modality(
+                    uf="SP",
+                    data_inicial="2026-01-01",
+                    data_final="2026-01-15",
+                    modalidade=6,
+                    max_pages=5,
+                )
+
+        # Should have WARNING (not just DEBUG) for page 1 error
+        warning_msgs = [r for r in caplog.records if r.levelno == logging.WARNING and "page=1" in r.message]
+        assert len(warning_msgs) >= 1, f"Expected WARNING for page 1, got: {[r.message for r in caplog.records]}"
+
+    # --- AC8: 503 on any page — transient, CB failure always recorded ---
+
+    @pytest.mark.asyncio
+    @patch("pncp_client.httpx.AsyncClient.get")
+    async def test_ac8_async_503_any_page_records_cb_failure(self, mock_get):
+        """AC8: HTTP 503 on any page is transient — record_failure() must be called."""
+        from pncp_client import AsyncPNCPClient, _circuit_breaker
+
+        call_count = 0
+
+        def mock_side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            params = kwargs.get("params", {})
+            page = params.get("pagina", 1)
+
+            if page == 1:
+                mock = Mock()
+                mock.status_code = 200
+                mock.headers = JSON_HEADERS
+                mock.json.return_value = {
+                    "data": [
+                        {"numeroControlePNCP": "item-1", "unidadeOrgao": {"ufSigla": "SP", "municipioNome": ""}, "orgaoEntidade": {"razaoSocial": ""}},
+                    ],
+                    "totalRegistros": 100,
+                    "totalPaginas": 3,
+                    "paginasRestantes": 2,
+                }
+                return mock
+            else:
+                # Page 2: 503 Service Unavailable (retryable, but no retries configured)
+                mock = Mock()
+                mock.status_code = 503
+                mock.text = "Service Unavailable"
+                mock.headers = {}
+                return mock
+
+        mock_get.side_effect = mock_side_effect
+
+        with patch.object(_circuit_breaker, "record_failure") as mock_cb_fail:
+            config = RetryConfig(max_retries=0)
+            async with AsyncPNCPClient(config=config) as client:
+                items, _ = await client._fetch_single_modality(
+                    uf="SP",
+                    data_inicial="2026-01-01",
+                    data_final="2026-01-15",
+                    modalidade=6,
+                    max_pages=10,
+                )
+
+            # AC8: 503 is transient — record_failure() MUST be called
+            mock_cb_fail.assert_called()
+
+    # --- AC3: Sync path — 400 on page>1 returns empty, logs DEBUG ---
+
+    @patch("pncp_client.requests.Session.get")
+    def test_ac3_sync_400_page2_returns_empty_logs_debug(self, mock_get, caplog):
+        """AC3: Sync fetch_page with 400 on page>1 returns empty, logs DEBUG."""
+        import logging
+
+        mock_get.return_value = Mock(status_code=400, text="Bad Request")
+
+        client = PNCPClient()
+        with caplog.at_level(logging.DEBUG, logger="pncp_client"):
+            result = client.fetch_page(
+                "2026-01-01", "2026-01-15",
+                modalidade=6, pagina=5,
+            )
+
+        # Should return empty result (not raise)
+        assert result["data"] == []
+        assert result["paginaAtual"] == 5
+        # Should log DEBUG with CRIT-043
+        debug_msgs = [r for r in caplog.records if r.levelno == logging.DEBUG and "CRIT-043" in r.message]
+        assert len(debug_msgs) >= 1
+
+    @patch("pncp_client.requests.Session.get")
+    def test_ac4_sync_400_page1_raises_error(self, mock_get):
+        """AC4: Sync fetch_page with 400 on page 1 still raises PNCPAPIError."""
+        mock_get.return_value = Mock(status_code=400, text="Bad Request")
+
+        client = PNCPClient()
+        with pytest.raises(PNCPAPIError, match="non-retryable status 400"):
+            client.fetch_page(
+                "2026-01-01", "2026-01-15",
+                modalidade=6, pagina=1,
+            )
+
+    @patch("pncp_client.requests.Session.get")
+    def test_ac4_sync_400_page1_logs_error(self, mock_get, caplog):
+        """AC4: Sync fetch_page 400 on page 1 logs ERROR (real error)."""
+        import logging
+
+        mock_get.return_value = Mock(status_code=400, text="Bad Request")
+
+        client = PNCPClient()
+        with caplog.at_level(logging.DEBUG, logger="pncp_client"), \
+             pytest.raises(PNCPAPIError):
+            client.fetch_page(
+                "2026-01-01", "2026-01-15",
+                modalidade=6, pagina=1,
+            )
+
+        # Should log ERROR for page 1
+        error_msgs = [r for r in caplog.records if r.levelno == logging.ERROR]
+        assert len(error_msgs) >= 1, f"Expected ERROR log for page 1, got: {[r.message for r in caplog.records]}"
+
+
+class TestCrit043SentryBeforeSend:
+    """CRIT-043 AC5: Sentry before_send drops PNCP 400 noise on page>1."""
+
+    def test_ac5_drops_pncp_400_page5_event(self):
+        """AC5: Events with PNCP 400 on page 5 are dropped."""
+        from main import _before_send
+
+        event = {
+            "exception": {
+                "values": [
+                    {"type": "PNCPAPIError", "value": "API returned non-retryable status 400: pagina': 5"}
+                ]
+            },
+            "message": "",
+        }
+        result = _before_send(event, {})
+        assert result is None, "Should drop PNCP 400 page 5 events"
+
+    def test_ac5_keeps_pncp_400_page1_event(self):
+        """AC5: Events with PNCP 400 on page 1 are NOT dropped."""
+        from main import _before_send
+
+        event = {
+            "exception": {
+                "values": [
+                    {"type": "PNCPAPIError", "value": "API returned non-retryable status 400: Bad Request"}
+                ]
+            },
+            "message": "",
+            "request": {},
+        }
+        result = _before_send(event, {})
+        assert result is not None, "Should NOT drop PNCP 400 page 1 events"
+
+    def test_ac5_keeps_non_400_errors(self):
+        """AC5: Non-400 errors are never dropped by this filter."""
+        from main import _before_send
+
+        event = {
+            "exception": {
+                "values": [
+                    {"type": "PNCPAPIError", "value": "API returned non-retryable status 503"}
+                ]
+            },
+            "message": "",
+            "request": {},
+        }
+        result = _before_send(event, {})
+        assert result is not None, "Should NOT drop 503 errors"

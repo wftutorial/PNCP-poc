@@ -1022,6 +1022,20 @@ class PNCPClient:
                         f"Reduza o período de busca."
                     )
 
+                # CRIT-043 AC3+AC4: 400 on page>1 is expected (past last page)
+                if response.status_code == 400 and pagina > 1:
+                    logger.debug(
+                        f"CRIT-043: HTTP 400 at page {pagina} — past last page. "
+                        f"UF={params.get('uf', '?')}, mod={params.get('codigoModalidadeContratacao', '?')}"
+                    )
+                    return {
+                        "data": [],
+                        "totalRegistros": 0,
+                        "totalPaginas": pagina - 1,
+                        "paginaAtual": pagina,
+                        "temProximaPagina": False,
+                    }
+
                 # Non-retryable errors - fail immediately
                 if response.status_code not in self.config.retryable_status_codes:
                     logger.error(
@@ -1769,6 +1783,21 @@ class AsyncPNCPClient:
                         f"Reduza o período de busca."
                     )
 
+                # CRIT-043 AC2: 400 on page>1 = past last page, return empty
+                if response.status_code == 400 and pagina > 1:
+                    logger.debug(
+                        f"CRIT-043: HTTP 400 at page {pagina} — past last page, "
+                        f"returning empty result"
+                    )
+                    return {
+                        "data": [],
+                        "totalRegistros": 0,
+                        "totalPaginas": pagina - 1,
+                        "paginaAtual": pagina,
+                        "paginasRestantes": 0,
+                        "temProximaPagina": False,
+                    }
+
                 # Non-retryable error
                 if response.status_code not in self.config.retryable_status_codes:
                     raise PNCPAPIError(
@@ -1894,11 +1923,22 @@ class AsyncPNCPClient:
                 pagina += 1
 
             except PNCPAPIError as e:
-                await _circuit_breaker.record_failure()
-                logger.warning(
-                    f"Error fetching UF={uf}, modalidade={modalidade}, "
-                    f"page={pagina}: {e}"
-                )
+                # CRIT-043 AC1+AC4: Distinguish expected 400 (page>1) from real errors (page 1)
+                error_str = str(e)
+                is_expected_400 = "status 400" in error_str and pagina > 1
+                if is_expected_400:
+                    # AC1: Expected — past last page. No CB failure, DEBUG log.
+                    logger.debug(
+                        f"CRIT-043: Expected 400 at page {pagina} for UF={uf}, "
+                        f"modalidade={modalidade} (past last page). Stopping pagination."
+                    )
+                else:
+                    # AC4: Real error (page 1 or non-400). Record CB failure, WARNING.
+                    await _circuit_breaker.record_failure()
+                    logger.warning(
+                        f"Error fetching UF={uf}, modalidade={modalidade}, "
+                        f"page={pagina}: {e}"
+                    )
                 break
 
         return items, was_truncated

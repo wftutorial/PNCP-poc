@@ -33,20 +33,20 @@ O PNCP retorna HTTP 400 quando `pagina` ultrapassa o total de páginas disponív
 
 ### Backend — PNCP Client
 
-- [ ] **AC1:** Em `pncp_client.py:_fetch_single_modality()` (~line 1896): quando `PNCPAPIError` com status 400 ocorre em `pagina > 1`, logar como DEBUG (não WARNING) e NÃO chamar `_circuit_breaker.record_failure()`
-- [ ] **AC2:** Em `pncp_client.py:_fetch_page_async()` (~line 1772): quando status 400 e `pagina > 1`, NÃO levantar `PNCPAPIError` — retornar resultado vazio (mesma semântica de "sem mais páginas")
-- [ ] **AC3:** Em `pncp_client.py:_fetch_page()` (sync path, ~line 1027): alinhar log level — 400 em `pagina > 1` deve ser DEBUG (não ERROR)
-- [ ] **AC4:** Manter log ERROR para 400 em `pagina == 1` (indica problema real com parâmetros)
+- [x] **AC1:** Em `pncp_client.py:_fetch_single_modality()` (~line 1896): quando `PNCPAPIError` com status 400 ocorre em `pagina > 1`, logar como DEBUG (não WARNING) e NÃO chamar `_circuit_breaker.record_failure()`
+- [x] **AC2:** Em `pncp_client.py:_fetch_page_async()` (~line 1772): quando status 400 e `pagina > 1`, NÃO levantar `PNCPAPIError` — retornar resultado vazio (mesma semântica de "sem mais páginas")
+- [x] **AC3:** Em `pncp_client.py:_fetch_page()` (sync path, ~line 1027): alinhar log level — 400 em `pagina > 1` deve ser DEBUG (não ERROR)
+- [x] **AC4:** Manter log ERROR para 400 em `pagina == 1` (indica problema real com parâmetros)
 
 ### Sentry — Filtering
 
-- [ ] **AC5:** No `before_send` do Sentry (main.py), dropar eventos que contenham "PNCP API error: status=400" E "pagina': 5" ou `pagina > 1` (são ruído esperado)
+- [x] **AC5:** No `before_send` do Sentry (main.py), dropar eventos que contenham "PNCP API error: status=400" E "pagina': 5" ou `pagina > 1` (são ruído esperado)
 
 ### Testes
 
-- [ ] **AC6:** Teste: HTTP 400 na página 5 → sem `record_failure()` no CB, log DEBUG
-- [ ] **AC7:** Teste: HTTP 400 na página 1 → `record_failure()` chamado, log ERROR
-- [ ] **AC8:** Teste: HTTP 503 em qualquer página → `record_failure()` chamado (transiente)
+- [x] **AC6:** Teste: HTTP 400 na página 5 → sem `record_failure()` no CB, log DEBUG
+- [x] **AC7:** Teste: HTTP 400 na página 1 → `record_failure()` chamado, log ERROR
+- [x] **AC8:** Teste: HTTP 503 em qualquer página → `record_failure()` chamado (transiente)
 
 ---
 

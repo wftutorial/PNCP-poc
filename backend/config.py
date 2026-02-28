@@ -168,6 +168,18 @@ def setup_logging(level: str = "INFO") -> None:
 
     root_logger = logging.getLogger()
     root_logger.setLevel(getattr(logging, effective_level))
+
+    # STORY-330 AC1: Remove pre-existing stdout/stderr handlers to prevent duplicates.
+    # Gunicorn's logconfig_dict adds a "stdout" handler to root before workers
+    # call setup_logging() → without clearing, each log line is emitted 2x.
+    # Only remove handlers targeting stdout/stderr (preserves test framework handlers).
+    for existing in root_logger.handlers[:]:
+        if isinstance(existing, logging.StreamHandler):
+            stream = getattr(existing, "stream", None)
+            if stream in (sys.stdout, sys.stderr):
+                root_logger.removeHandler(existing)
+                existing.close()
+
     root_logger.addHandler(handler)
     root_logger.addFilter(request_id_filter)
 

@@ -16,9 +16,9 @@ Gunicorn configura o root logger via `logconfig_dict` em `gunicorn_conf.py` (han
 
 ## Critérios de Aceite
 
-- [ ] AC1: `setup_logging()` em `config.py` limpa handlers existentes ANTES de adicionar: `root_logger.handlers.clear()` ou verifica duplicata
-- [ ] AC2: Em modo dev (sem Gunicorn), `setup_logging()` continua funcionando (1 handler)
-- [ ] AC3: Teste: chamar `setup_logging()` 2x → root logger tem exatamente 1 StreamHandler
+- [x] AC1: `setup_logging()` em `config.py` limpa handlers existentes ANTES de adicionar: `root_logger.handlers.clear()` ou verifica duplicata
+- [x] AC2: Em modo dev (sem Gunicorn), `setup_logging()` continua funcionando (1 handler)
+- [x] AC3: Teste: chamar `setup_logging()` 2x → root logger tem exatamente 1 StreamHandler
 - [ ] AC4: Após deploy, volume de logs reduz ~50% (monitorar Railway)
 - [ ] AC5: Zero mensagens dropadas em condições normais (< 250 logs/s)
 

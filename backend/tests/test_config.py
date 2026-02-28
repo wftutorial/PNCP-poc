@@ -229,17 +229,51 @@ class TestSetupLogging:
         assert "This should appear" in messages
 
     def test_multiple_calls_idempotent(self):
-        """Test that calling setup_logging multiple times is safe."""
-        setup_logging("INFO")
-        initial_handler_count = len(logging.getLogger().handlers)
+        """STORY-330 AC3: Calling setup_logging() 2x yields exactly 1 StreamHandler.
 
-        # Call again with different level
+        Root cause of STORY-330: Gunicorn logconfig_dict adds a handler, then
+        each worker's setup_logging() added another → 2 handlers → every log 2x.
+        After fix, setup_logging() clears existing handlers before adding its own.
+        """
+        setup_logging("INFO")
         setup_logging("DEBUG")
 
-        # Should have added another handler
-        # NOTE: This is expected behavior - each call adds a handler
-        # In production, setup_logging should only be called once
-        assert len(logging.getLogger().handlers) >= initial_handler_count
+        root_logger = logging.getLogger()
+        stdout_handlers = [
+            h for h in root_logger.handlers
+            if isinstance(h, logging.StreamHandler)
+            and hasattr(h, "stream") and h.stream == sys.stdout
+        ]
+        assert len(stdout_handlers) == 1, (
+            f"Expected exactly 1 stdout StreamHandler, got {len(stdout_handlers)}"
+        )
+        # Level should reflect the LAST call
+        assert root_logger.level == logging.DEBUG
+
+    def test_setup_after_preexisting_handler_replaces_it(self):
+        """STORY-330 AC1: setup_logging clears pre-existing handlers (Gunicorn scenario).
+
+        Simulates Gunicorn's logconfig_dict adding a handler to root logger
+        BEFORE setup_logging() runs in the worker.
+        """
+        root_logger = logging.getLogger()
+        # Simulate Gunicorn's pre-existing handler
+        gunicorn_handler = logging.StreamHandler(sys.stderr)
+        root_logger.addHandler(gunicorn_handler)
+        pre_count = len(root_logger.handlers)
+        assert pre_count >= 1
+
+        setup_logging("INFO")
+
+        # After setup_logging, only our stdout handler should remain
+        stdout_handlers = [
+            h for h in root_logger.handlers
+            if isinstance(h, logging.StreamHandler)
+            and hasattr(h, "stream") and h.stream == sys.stdout
+        ]
+        assert len(stdout_handlers) == 1
+        # The old stderr handler should be gone
+        assert gunicorn_handler not in root_logger.handlers
 
 
 class TestRetryConfig:

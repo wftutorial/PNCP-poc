@@ -343,7 +343,7 @@ describe('STORY-297: SSE Last-Event-ID Resumption', () => {
             stage: 'uf_status',
             progress: 0,
             message: '',
-            detail: { uf: 'SP', uf_status: 'success', items_found: 25 },
+            detail: { uf: 'SP', uf_status: 'success', count: 25 },
           }),
           lastEventId: 'evt-21',
         });

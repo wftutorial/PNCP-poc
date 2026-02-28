@@ -19,6 +19,16 @@ export interface SearchProgressEvent {
     uf_index?: number;
     uf_total?: number;
     items_found?: number;
+    /**
+     * STORY-326: Number of items found per UF in uf_status events.
+     * SSE contract for uf_status event detail:
+     *   - uf: State code (e.g., "SP")
+     *   - uf_status: "pending"|"fetching"|"retrying"|"success"|"failed"|"recovered"
+     *   - count: Items found in this UF (success/recovered only)
+     *   - attempt: Retry attempt number (retrying only)
+     *   - reason: Failure reason (failed only, e.g., "timeout", "retry_failed")
+     */
+    count?: number;
     total_raw?: number;
     total_filtered?: number;
     error?: string;
@@ -223,7 +233,7 @@ export function useSearchSSE({
         const ufEvent: UfStatusEvent = {
           uf: event.detail.uf,
           status: ((event.detail as Record<string, unknown>).uf_status as UfStatusType) || 'pending',
-          count: event.detail.items_found,
+          count: event.detail.count,
           attempt: (event.detail as Record<string, unknown>).attempt as number | undefined,
         };
         setUfStatuses(prev => {

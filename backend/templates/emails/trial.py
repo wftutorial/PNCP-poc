@@ -1,11 +1,15 @@
 """
-STORY-266 AC1-AC4: Trial reminder email templates.
+STORY-266 AC1-AC4 + STORY-310 AC6-AC8: Trial email templates.
 
-4 emails in the trial conversion chain:
-- Day 3: Midpoint — celebrate usage, show value discovered
-- Day 5: Expiring — 2 days remaining, moderate urgency
-- Day 6: Last day — maximum urgency, tomorrow access expires
-- Day 8: Expired — reengagement, data saved for 30 days
+8 emails in the 30-day trial conversion sequence:
+- Day 0:  Welcome — onboarding CTA
+- Day 3:  Engagement Early — celebrate usage, show value discovered
+- Day 7:  Engagement — deeper feature education
+- Day 14: Tips — advanced tips + sector insights
+- Day 21: Urgency Light — 9 days remaining, soft CTA
+- Day 25: Expiring — 5 days remaining, moderate urgency
+- Day 29: Last day — maximum urgency, tomorrow access expires
+- Day 32: Expired — reengagement, data saved for 30 days
 """
 
 from templates.emails.base import email_base, SMARTLIC_GREEN, FRONTEND_URL
@@ -71,12 +75,85 @@ def _stats_block(stats: dict, show_pipeline: bool = False) -> str:
     </table>"""
 
 
-def render_trial_midpoint_email(user_name: str, stats: dict) -> str:
-    """AC1: Day 3 — midpoint email. Celebrate usage, show value.
+def _unsubscribe_block(unsubscribe_url: str) -> str:
+    """Render unsubscribe link block (AC2: RFC 8058 one-click)."""
+    if not unsubscribe_url:
+        return ""
+    return f"""
+    <p style="color: #999; font-size: 12px; text-align: center; margin: 24px 0 0;">
+      <a href="{unsubscribe_url}" style="color: #999; text-decoration: underline;">
+        Não desejo receber emails sobre o trial
+      </a>
+    </p>"""
+
+
+# ============================================================================
+# Email #1 — Day 0: Welcome (STORY-310 AC6)
+# ============================================================================
+
+def render_trial_welcome_email(user_name: str, unsubscribe_url: str = "") -> str:
+    """STORY-310 AC6: Day 0 — Welcome email. Onboarding CTA.
 
     Args:
         user_name: User's display name.
-        stats: Dict with keys from TrialUsageStats (searches_count, opportunities_found, etc.)
+        unsubscribe_url: URL for one-click unsubscribe.
+    """
+    body = f"""
+    <h1 style="color: #333; font-size: 22px; margin: 0 0 16px;">
+      Bem-vindo ao SmartLic, {user_name}!
+    </h1>
+    <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
+      Seu trial de 30 dias começou. Agora você tem acesso completo à
+      plataforma de inteligência em licitações mais avançada do Brasil.
+    </p>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 24px;">
+      <tr>
+        <td style="background-color: #e8f5e9; border-radius: 8px; padding: 16px; border-left: 4px solid {SMARTLIC_GREEN};">
+          <p style="color: #1b5e20; font-size: 14px; margin: 0; font-weight: 600;">
+            O que você pode fazer agora:
+          </p>
+          <ul style="color: #555; font-size: 14px; margin: 8px 0 0; padding-left: 20px;">
+            <li>Buscar licitações por setor e UF com IA</li>
+            <li>Analisar viabilidade de cada oportunidade</li>
+            <li>Exportar relatórios Excel estilizados</li>
+            <li>Montar seu pipeline de oportunidades</li>
+          </ul>
+        </td>
+      </tr>
+    </table>
+
+    <p style="text-align: center; margin: 24px 0 16px;">
+      <a href="{FRONTEND_URL}/buscar" class="btn"
+         style="display: inline-block; padding: 14px 32px; background-color: {SMARTLIC_GREEN}; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
+        Fazer minha primeira busca
+      </a>
+    </p>
+    <p style="color: #888; font-size: 13px; text-align: center; margin: 16px 0 0;">
+      Seu trial gratuito de 30 dias começou hoje.
+    </p>
+    {_unsubscribe_block(unsubscribe_url)}
+    """
+
+    return email_base(
+        title="Bem-vindo ao SmartLic!",
+        body_html=body,
+        is_transactional=False,
+        unsubscribe_url=unsubscribe_url,
+    )
+
+
+# ============================================================================
+# Email #2 — Day 3: Engagement Early (existing midpoint, updated copy)
+# ============================================================================
+
+def render_trial_midpoint_email(user_name: str, stats: dict, unsubscribe_url: str = "") -> str:
+    """Day 3 — engagement early. Celebrate usage, show value.
+
+    Args:
+        user_name: User's display name.
+        stats: Dict with keys from TrialUsageStats.
+        unsubscribe_url: URL for one-click unsubscribe.
     """
     has_usage = stats.get("searches_count", 0) > 0
 
@@ -87,9 +164,9 @@ def render_trial_midpoint_email(user_name: str, stats: dict) -> str:
             f"descobrindo oportunidades reais de licitação."
         )
     else:
-        headline = "Você ainda tem 4 dias para descobrir oportunidades"
+        headline = "Você ainda tem 27 dias para descobrir oportunidades"
         intro = (
-            f"Olá, {user_name}! Seu trial do SmartLic está na metade e "
+            f"Olá, {user_name}! Seu trial do SmartLic está apenas começando e "
             f"há oportunidades esperando por você. Faça sua primeira busca agora!"
         )
 
@@ -108,24 +185,227 @@ def render_trial_midpoint_email(user_name: str, stats: dict) -> str:
       </a>
     </p>
     <p style="color: #888; font-size: 13px; text-align: center; margin: 16px 0 0;">
-      Seu trial gratuito termina em 4 dias.
+      Seu trial gratuito termina em 27 dias.
     </p>
+    {_unsubscribe_block(unsubscribe_url)}
     """
 
     return email_base(
-        title="Meio do trial — SmartLic",
+        title="Suas primeiras descobertas — SmartLic",
         body_html=body,
-        is_transactional=True,
+        is_transactional=False,
+        unsubscribe_url=unsubscribe_url,
     )
 
 
-def render_trial_expiring_email(user_name: str, days_remaining: int, stats: dict) -> str:
-    """AC2: Day 5 — 2 days remaining. Informative with moderate urgency.
+# ============================================================================
+# Email #3 — Day 7: Engagement (STORY-310 AC6)
+# ============================================================================
+
+def render_trial_engagement_email(user_name: str, stats: dict, unsubscribe_url: str = "") -> str:
+    """STORY-310 AC6: Day 7 — engagement email. Feature education.
 
     Args:
         user_name: User's display name.
-        days_remaining: Days left in trial (typically 2).
         stats: Dict with keys from TrialUsageStats.
+        unsubscribe_url: URL for one-click unsubscribe.
+    """
+    has_usage = stats.get("searches_count", 0) > 0
+    opps = stats.get("opportunities_found", 0)
+
+    if has_usage and opps > 0:
+        headline = f"Você encontrou {opps} oportunidades — descubra como ir além"
+    else:
+        headline = "Descubra o poder completo do SmartLic"
+
+    body = f"""
+    <h1 style="color: #333; font-size: 22px; margin: 0 0 16px;">
+      {headline}
+    </h1>
+    <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
+      Olá, {user_name}! Sua primeira semana no SmartLic passou rápido.
+      Você está aproveitando todos os recursos disponíveis?
+    </p>
+    {_stats_block(stats, show_pipeline=True) if has_usage else ''}
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 24px;">
+      <tr>
+        <td style="background-color: #e3f2fd; border-radius: 8px; padding: 16px; border-left: 4px solid #1976D2;">
+          <p style="color: #0d47a1; font-size: 14px; margin: 0; font-weight: 600;">
+            Recursos que você pode não ter explorado:
+          </p>
+          <ul style="color: #555; font-size: 14px; margin: 8px 0 0; padding-left: 20px;">
+            <li><strong>Pipeline:</strong> Organize oportunidades em etapas (Kanban)</li>
+            <li><strong>Filtros avançados:</strong> UF, modalidade, valor estimado</li>
+            <li><strong>Relatório Excel:</strong> Exporte dados estilizados para sua equipe</li>
+            <li><strong>Análise IA:</strong> Classificação setorial automática</li>
+          </ul>
+        </td>
+      </tr>
+    </table>
+
+    <p style="text-align: center; margin: 24px 0 16px;">
+      <a href="{FRONTEND_URL}/buscar" class="btn"
+         style="display: inline-block; padding: 14px 32px; background-color: {SMARTLIC_GREEN}; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
+        Explorar mais funcionalidades
+      </a>
+    </p>
+    <p style="color: #888; font-size: 13px; text-align: center; margin: 16px 0 0;">
+      Seu trial gratuito termina em 23 dias.
+    </p>
+    {_unsubscribe_block(unsubscribe_url)}
+    """
+
+    return email_base(
+        title="Descubra mais do SmartLic — Semana 1",
+        body_html=body,
+        is_transactional=False,
+        unsubscribe_url=unsubscribe_url,
+    )
+
+
+# ============================================================================
+# Email #4 — Day 14: Tips (STORY-310 AC6)
+# ============================================================================
+
+def render_trial_tips_email(user_name: str, stats: dict, unsubscribe_url: str = "") -> str:
+    """STORY-310 AC6: Day 14 — tips email. Advanced tips + sector insights.
+
+    Args:
+        user_name: User's display name.
+        stats: Dict with keys from TrialUsageStats.
+        unsubscribe_url: URL for one-click unsubscribe.
+    """
+    has_usage = stats.get("searches_count", 0) > 0
+    value = stats.get("total_value_estimated", 0.0)
+    sectors = stats.get("sectors_searched", [])
+
+    if has_usage and value > 0:
+        headline = f"Metade do trial: {_format_brl(value)} em oportunidades analisadas"
+    else:
+        headline = "Metade do trial — dicas para maximizar suas descobertas"
+
+    sectors_tip = ""
+    if sectors and len(sectors) > 0:
+        sector_names = ", ".join(sectors[:3])
+        sectors_tip = f"""
+        <li><strong>Amplie setores:</strong> Você buscou em {sector_names}.
+          Experimente setores relacionados para mais oportunidades.</li>"""
+
+    body = f"""
+    <h1 style="color: #333; font-size: 22px; margin: 0 0 16px;">
+      {headline}
+    </h1>
+    <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
+      Olá, {user_name}! Você está na metade do seu trial de 30 dias.
+      Aqui vão algumas dicas para encontrar ainda mais oportunidades relevantes:
+    </p>
+    {_stats_block(stats, show_pipeline=True) if has_usage else ''}
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 24px;">
+      <tr>
+        <td style="background-color: #fff8e1; border-radius: 8px; padding: 16px; border-left: 4px solid #f9a825;">
+          <p style="color: #e65100; font-size: 14px; margin: 0; font-weight: 600;">
+            Dicas de especialista:
+          </p>
+          <ul style="color: #555; font-size: 14px; margin: 8px 0 0; padding-left: 20px;">
+            <li><strong>Busca multi-UF:</strong> Selecione vários estados para ampliar resultados</li>
+            {sectors_tip}
+            <li><strong>Pipeline:</strong> Arraste oportunidades para acompanhar prazos</li>
+            <li><strong>Alertas:</strong> Configure alertas para não perder novas licitações</li>
+          </ul>
+        </td>
+      </tr>
+    </table>
+
+    <p style="text-align: center; margin: 24px 0 16px;">
+      <a href="{FRONTEND_URL}/buscar" class="btn"
+         style="display: inline-block; padding: 14px 32px; background-color: {SMARTLIC_GREEN}; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
+        Aplicar essas dicas agora
+      </a>
+    </p>
+    <p style="color: #888; font-size: 13px; text-align: center; margin: 16px 0 0;">
+      Seu trial gratuito termina em 16 dias.
+    </p>
+    {_unsubscribe_block(unsubscribe_url)}
+    """
+
+    return email_base(
+        title="Dicas para maximizar seu trial — SmartLic",
+        body_html=body,
+        is_transactional=False,
+        unsubscribe_url=unsubscribe_url,
+    )
+
+
+# ============================================================================
+# Email #5 — Day 21: Urgency Light (STORY-310 AC6)
+# ============================================================================
+
+def render_trial_urgency_email(user_name: str, stats: dict, days_remaining: int = 9, unsubscribe_url: str = "") -> str:
+    """STORY-310 AC6: Day 21 — urgency light. Soft CTA to upgrade.
+
+    Args:
+        user_name: User's display name.
+        stats: Dict with keys from TrialUsageStats.
+        days_remaining: Days left in trial (typically 9).
+        unsubscribe_url: URL for one-click unsubscribe.
+    """
+    value = stats.get("total_value_estimated", 0.0)
+    opps = stats.get("opportunities_found", 0)
+
+    if value > 0:
+        headline = f"Restam {days_remaining} dias — você já descobriu {_format_brl(value)} em oportunidades"
+    elif opps > 0:
+        headline = f"Restam {days_remaining} dias — {opps} oportunidades encontradas"
+    else:
+        headline = f"Restam {days_remaining} dias no seu trial SmartLic"
+
+    body = f"""
+    <h1 style="color: #333; font-size: 22px; margin: 0 0 16px;">
+      {headline}
+    </h1>
+    <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
+      Olá, {user_name}! Seu trial do SmartLic termina em {days_remaining} dias.
+      Garanta que você não perca acesso às oportunidades que está acompanhando.
+    </p>
+    {_stats_block(stats, show_pipeline=True)}
+    <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
+      Com o SmartLic Pro, você mantém acesso a buscas ilimitadas, IA de classificação,
+      relatórios e pipeline — sem interrupção.
+    </p>
+    <p style="text-align: center; margin: 24px 0 16px;">
+      <a href="{FRONTEND_URL}/planos" class="btn"
+         style="display: inline-block; padding: 14px 32px; background-color: {SMARTLIC_GREEN}; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
+        Conhecer o SmartLic Pro
+      </a>
+    </p>
+    <p style="color: #888; font-size: 13px; text-align: center; margin: 16px 0 0;">
+      Economize 20% com o plano anual.
+    </p>
+    {_unsubscribe_block(unsubscribe_url)}
+    """
+
+    return email_base(
+        title=f"Restam {days_remaining} dias de trial — SmartLic",
+        body_html=body,
+        is_transactional=False,
+        unsubscribe_url=unsubscribe_url,
+    )
+
+
+# ============================================================================
+# Email #6 — Day 25: Expiring (existing, updated for 30-day trial)
+# ============================================================================
+
+def render_trial_expiring_email(user_name: str, days_remaining: int, stats: dict, unsubscribe_url: str = "") -> str:
+    """Day 25 — 5 days remaining. Informative with moderate urgency.
+
+    Args:
+        user_name: User's display name.
+        days_remaining: Days left in trial (typically 5).
+        stats: Dict with keys from TrialUsageStats.
+        unsubscribe_url: URL for one-click unsubscribe.
     """
     body = f"""
     <h1 style="color: #333; font-size: 22px; margin: 0 0 16px;">
@@ -146,21 +426,28 @@ def render_trial_expiring_email(user_name: str, days_remaining: int, stats: dict
         Garantir acesso contínuo
       </a>
     </p>
+    {_unsubscribe_block(unsubscribe_url)}
     """
 
     return email_base(
         title="Seu trial expira em breve — SmartLic",
         body_html=body,
-        is_transactional=True,
+        is_transactional=False,
+        unsubscribe_url=unsubscribe_url,
     )
 
 
-def render_trial_last_day_email(user_name: str, stats: dict) -> str:
-    """AC3: Day 6 — last day. Maximum urgency.
+# ============================================================================
+# Email #7 — Day 29: Last Day (existing, updated for 30-day trial)
+# ============================================================================
+
+def render_trial_last_day_email(user_name: str, stats: dict, unsubscribe_url: str = "") -> str:
+    """Day 29 — last day. Maximum urgency.
 
     Args:
         user_name: User's display name.
         stats: Dict with keys from TrialUsageStats.
+        unsubscribe_url: URL for one-click unsubscribe.
     """
     body = f"""
     <h1 style="color: #d32f2f; font-size: 22px; margin: 0 0 16px;">
@@ -183,7 +470,7 @@ def render_trial_last_day_email(user_name: str, stats: dict) -> str:
           </p>
           <p style="color: #555; font-size: 14px; margin: 8px 0 0;">
             SmartLic Pro — R$ 397/mês &nbsp;|&nbsp;
-            Economia de 25% no plano anual
+            Economia de 20% no plano anual
           </p>
         </td>
       </tr>
@@ -195,21 +482,28 @@ def render_trial_last_day_email(user_name: str, stats: dict) -> str:
         Ativar SmartLic Pro — R$ 397/mês
       </a>
     </p>
+    {_unsubscribe_block(unsubscribe_url)}
     """
 
     return email_base(
         title="Último dia de trial — SmartLic",
         body_html=body,
-        is_transactional=True,
+        is_transactional=False,
+        unsubscribe_url=unsubscribe_url,
     )
 
 
-def render_trial_expired_email(user_name: str, stats: dict) -> str:
-    """AC4: Day 8 — 1 day after expiry. Reengagement.
+# ============================================================================
+# Email #8 — Day 32: Expired (existing, updated for 30-day trial)
+# ============================================================================
+
+def render_trial_expired_email(user_name: str, stats: dict, unsubscribe_url: str = "") -> str:
+    """Day 32 — 2 days after expiry. Reengagement.
 
     Args:
         user_name: User's display name.
         stats: Dict with keys from TrialUsageStats.
+        unsubscribe_url: URL for one-click unsubscribe.
     """
     opps = stats.get("opportunities_found", 0)
     pipeline = stats.get("pipeline_items_count", 0)
@@ -248,10 +542,12 @@ def render_trial_expired_email(user_name: str, stats: dict) -> str:
         Reativar acesso
       </a>
     </p>
+    {_unsubscribe_block(unsubscribe_url)}
     """
 
     return email_base(
         title="Seu trial expirou — SmartLic",
         body_html=body,
-        is_transactional=True,
+        is_transactional=False,
+        unsubscribe_url=unsubscribe_url,
     )

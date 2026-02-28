@@ -5411,6 +5411,46 @@
         ]
       }
     },
+    "/admin/trial-emails/preview": {
+      "get": {
+        "description": "AC13: Preview all 8 trial email templates.",
+        "operationId": "preview_trial_emails_admin_trial_emails_preview_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Preview Trial Emails",
+        "tags": [
+          "trial-emails"
+        ]
+      }
+    },
+    "/admin/trial-emails/test-send": {
+      "post": {
+        "description": "AC14: Send a test trial email to the admin's own email.",
+        "operationId": "test_send_trial_email_admin_trial_emails_test_send_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Test Send Trial Email",
+        "tags": [
+          "trial-emails"
+        ]
+      }
+    },
     "/admin/users": {
       "get": {
         "description": "List all users with profiles and subscription info.",
@@ -8571,6 +8611,80 @@
         ]
       }
     },
+    "/trial-emails/unsubscribe": {
+      "get": {
+        "description": "AC2/AC5: One-click unsubscribe from trial marketing emails.",
+        "operationId": "unsubscribe_trial_emails_trial_emails_unsubscribe_get",
+        "parameters": [
+          {
+            "description": "User ID",
+            "in": "query",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "description": "User ID",
+              "title": "User Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "HMAC unsubscribe token",
+            "in": "query",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "description": "HMAC unsubscribe token",
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Unsubscribe Trial Emails",
+        "tags": [
+          "trial-emails"
+        ]
+      }
+    },
+    "/trial-emails/webhook": {
+      "post": {
+        "description": "AC11: Handle Resend webhook events for email tracking.",
+        "operationId": "resend_webhook_trial_emails_webhook_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Resend Webhook",
+        "tags": [
+          "trial-emails"
+        ]
+      }
+    },
     "/trial-status": {
       "get": {
         "description": "Get detailed trial status for conversion flow (GTM-010 AC3).\n\nReturns days remaining, usage stats, and expiration info.",
@@ -8998,6 +9112,46 @@
         "summary": "Get Slo Alerts",
         "tags": [
           "admin-slo"
+        ]
+      }
+    },
+    "/v1/admin/trial-emails/preview": {
+      "get": {
+        "description": "AC13: Preview all 8 trial email templates.",
+        "operationId": "preview_trial_emails_v1_admin_trial_emails_preview_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Preview Trial Emails",
+        "tags": [
+          "trial-emails"
+        ]
+      }
+    },
+    "/v1/admin/trial-emails/test-send": {
+      "post": {
+        "description": "AC14: Send a test trial email to the admin's own email.",
+        "operationId": "test_send_trial_email_v1_admin_trial_emails_test_send_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Test Send Trial Email",
+        "tags": [
+          "trial-emails"
         ]
       }
     },
@@ -12285,6 +12439,80 @@
         "summary": "Get Subscription Status",
         "tags": [
           "billing"
+        ]
+      }
+    },
+    "/v1/trial-emails/unsubscribe": {
+      "get": {
+        "description": "AC2/AC5: One-click unsubscribe from trial marketing emails.",
+        "operationId": "unsubscribe_trial_emails_v1_trial_emails_unsubscribe_get",
+        "parameters": [
+          {
+            "description": "User ID",
+            "in": "query",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "description": "User ID",
+              "title": "User Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "HMAC unsubscribe token",
+            "in": "query",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "description": "HMAC unsubscribe token",
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Unsubscribe Trial Emails",
+        "tags": [
+          "trial-emails"
+        ]
+      }
+    },
+    "/v1/trial-emails/webhook": {
+      "post": {
+        "description": "AC11: Handle Resend webhook events for email tracking.",
+        "operationId": "resend_webhook_v1_trial_emails_webhook_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Resend Webhook",
+        "tags": [
+          "trial-emails"
         ]
       }
     },

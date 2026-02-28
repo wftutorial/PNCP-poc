@@ -220,7 +220,7 @@ EVIDENCE_PREFIX_STRIPPED = _create_counter(
 TRIAL_EMAILS_SENT = _create_counter(
     "smartlic_trial_emails_sent_total",
     "Trial reminder emails sent",
-    labelnames=["type"],  # midpoint, expiring, last_day, expired
+    labelnames=["type"],  # welcome, engagement_early, engagement, tips, urgency, expiring, last_day, expired
 )
 
 CACHE_REFRESH_TOTAL = _create_counter(

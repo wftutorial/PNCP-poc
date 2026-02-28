@@ -431,19 +431,30 @@ async def _cache_refresh_loop() -> None:
 
 
 # ============================================================================
-# STORY-266: Trial Reminder Emails
+# STORY-266: Trial Reminder Emails (legacy — replaced by STORY-310 sequence)
 # ============================================================================
 
 # Trial reminder check interval: every 6 hours (runs ~4x/day for robustness)
 TRIAL_REMINDER_INTERVAL_SECONDS = 6 * 60 * 60
 
 # Day milestones for email triggers (days since account creation)
+# DEPRECATED: Kept for backward compat. STORY-310 uses TRIAL_EMAIL_SEQUENCE.
 TRIAL_EMAIL_MILESTONES = {
     3: "midpoint",
     5: "expiring",
     6: "last_day",
     8: "expired",
 }
+
+# ============================================================================
+# STORY-310: Trial Email Sequence (daily, 08:00 BRT)
+# ============================================================================
+
+# Daily check interval (24h). Cron runs daily at 08:00 BRT (11:00 UTC).
+TRIAL_SEQUENCE_INTERVAL_SECONDS = 24 * 60 * 60
+
+# Max emails per execution cycle (AC9)
+TRIAL_SEQUENCE_BATCH_SIZE = 50
 
 
 async def start_trial_reminder_task() -> asyncio.Task:
@@ -792,3 +803,55 @@ async def _pre_dunning_loop() -> None:
         except Exception as e:
             logger.error(f"Pre-dunning loop error: {e}", exc_info=True)
             await asyncio.sleep(60)
+
+
+# ============================================================================
+# STORY-310: Trial Email Sequence (daily at 08:00 BRT)
+# ============================================================================
+
+async def start_trial_sequence_task() -> asyncio.Task:
+    """STORY-310 AC9: Start the daily trial email sequence background task.
+
+    Calculates initial delay to align with 08:00 BRT (11:00 UTC),
+    then runs every 24 hours.
+    Returns the Task so it can be cancelled during shutdown.
+    """
+    task = asyncio.create_task(_trial_sequence_loop(), name="trial_email_sequence")
+    logger.info("STORY-310: Trial email sequence task started (daily at 08:00 BRT)")
+    return task
+
+
+async def _trial_sequence_loop() -> None:
+    """STORY-310 AC9: Run trial email sequence daily at ~08:00 BRT."""
+    # Calculate delay until next 11:00 UTC (08:00 BRT)
+    now = datetime.now(timezone.utc)
+    target_hour = 11  # 08:00 BRT = 11:00 UTC
+    next_run = now.replace(hour=target_hour, minute=0, second=0, microsecond=0)
+    if now.hour >= target_hour:
+        next_run += timedelta(days=1)
+
+    initial_delay = (next_run - now).total_seconds()
+    # Cap at 24h max, minimum 60s
+    initial_delay = max(60, min(initial_delay, 86400))
+
+    logger.info(
+        f"STORY-310: Trial sequence first run in {initial_delay:.0f}s "
+        f"(target: {next_run.isoformat()})"
+    )
+    await asyncio.sleep(initial_delay)
+
+    while True:
+        try:
+            from services.trial_email_sequence import process_trial_emails
+            result = await process_trial_emails(batch_size=TRIAL_SEQUENCE_BATCH_SIZE)
+            logger.info(
+                f"STORY-310 trial sequence cycle: {result} "
+                f"at {datetime.now(timezone.utc).isoformat()}"
+            )
+            await asyncio.sleep(TRIAL_SEQUENCE_INTERVAL_SECONDS)
+        except asyncio.CancelledError:
+            logger.info("Trial email sequence task cancelled")
+            break
+        except Exception as e:
+            logger.error(f"Trial email sequence loop error: {e}", exc_info=True)
+            await asyncio.sleep(300)  # Retry in 5min on error

@@ -77,6 +77,7 @@ from routes.auth_check import router as auth_check_router  # STORY-258: Email/ph
 from routes.bid_analysis import router as bid_analysis_router  # STORY-259: Deep bid analysis
 from routes.slo import router as slo_router  # STORY-299: SLO dashboard
 from routes.alerts import router as alerts_router  # STORY-301: Email Alert System
+from routes.trial_emails import router as trial_emails_router  # STORY-310: Trial email sequence
 
 # Configure structured logging
 setup_logging(level=os.getenv("LOG_LEVEL", "INFO"))
@@ -364,7 +365,7 @@ async def lifespan(app_instance: FastAPI):
     await get_arq_pool()
 
     # UX-303 AC8: Start periodic cache cleanup
-    from cron_jobs import start_cache_cleanup_task, start_session_cleanup_task, start_cache_refresh_task, warmup_top_params, start_trial_reminder_task, start_warmup_task
+    from cron_jobs import start_cache_cleanup_task, start_session_cleanup_task, start_cache_refresh_task, warmup_top_params, start_trial_reminder_task, start_warmup_task, start_trial_sequence_task
     cleanup_task = await start_cache_cleanup_task()
 
     # CRIT-011 AC7: Start periodic session cleanup (stale + old sessions)
@@ -375,6 +376,9 @@ async def lifespan(app_instance: FastAPI):
 
     # STORY-266 AC7: Start periodic trial reminder email check
     trial_reminder_task = await start_trial_reminder_task()
+
+    # STORY-310 AC9: Start daily trial email sequence (08:00 BRT)
+    trial_sequence_task = await start_trial_sequence_task()
 
     # P1.2: Start startup cache warm-up (top sector+UF combinations)
     warmup_task = await start_warmup_task()
@@ -619,6 +623,7 @@ app.include_router(auth_check_router, prefix="/v1")  # STORY-258: Email/phone ch
 app.include_router(bid_analysis_router, prefix="/v1")  # STORY-259: Deep bid analysis
 app.include_router(slo_router)  # STORY-299: SLO dashboard (already has /v1/admin prefix)
 app.include_router(alerts_router, prefix="/v1")  # STORY-301: Email Alert System
+app.include_router(trial_emails_router, prefix="/v1")  # STORY-310: Trial email sequence
 
 # ============================================================================
 # SYS-M08: Backward Compatibility - Mount routers without /v1/ prefix
@@ -646,6 +651,7 @@ app.include_router(feedback_router)  # GTM-RESILIENCE-D05: User feedback loop
 app.include_router(auth_check_router)  # STORY-258: Email/phone check
 app.include_router(bid_analysis_router)  # STORY-259: Deep bid analysis
 app.include_router(alerts_router)  # STORY-301: Email Alert System
+app.include_router(trial_emails_router)  # STORY-310: Trial email sequence
 
 # ============================================================================
 # GTM-PROXY-001 AC9-AC11: Global exception handlers for error sanitization

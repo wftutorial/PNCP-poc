@@ -23,7 +23,7 @@ CREATE POLICY "Admin read reconciliation_log"
         EXISTS (
             SELECT 1 FROM profiles
             WHERE profiles.id = auth.uid()
-            AND (profiles.is_admin = true OR profiles.is_master = true)
+            AND profiles.is_admin = true
         )
     );
 

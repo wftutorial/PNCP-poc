@@ -1,8 +1,9 @@
-"""Gunicorn configuration with worker lifecycle hooks.
+"""Gunicorn configuration with worker lifecycle hooks and logging.
 
 This config file is loaded by gunicorn via the -c flag in start.sh.
-It defines ONLY hooks (not settings like workers/timeout/bind — those
-are set via CLI args in start.sh so they can be env-var-overridden).
+It defines hooks (not settings like workers/timeout/bind — those
+are set via CLI args in start.sh so they can be env-var-overridden)
+and logconfig_dict (to redirect Gunicorn internal logs to stdout).
 
 Hooks:
     when_ready:       STORY-303 AC5 — Logs readiness after workers spawned.
@@ -11,9 +12,85 @@ Hooks:
     worker_abort:     CRIT-034 — Arbiter-side logging when killing a timed-out worker.
     worker_exit:      SLA-002 + STORY-303 AC15 — Logs worker exit with crash diagnosis
                       (SIGSEGV -11, OOM -9, other non-zero).
+
+Logging (CRIT-044):
+    logconfig_dict redirects gunicorn.error, gunicorn.access, and gunicorn.conf
+    loggers from stderr (default) to stdout. Railway classifies stderr as
+    severity=error regardless of actual log level. By writing to stdout with
+    JSON structured logs containing a "level" field, Railway correctly classifies
+    each log entry at its actual severity.
 """
 
 import logging
+import os
+import sys
+
+# ---------------------------------------------------------------------------
+# CRIT-044: logconfig_dict — redirect Gunicorn logs stderr → stdout
+# ---------------------------------------------------------------------------
+# Root cause: Gunicorn writes ALL internal logs (including INFO) to stderr.
+# Railway classifies stderr → severity=error, causing false error alerts.
+#
+# Fix: logconfig_dict is applied by Gunicorn at startup (before workers fork).
+# It redirects gunicorn.error, gunicorn.access, and gunicorn.conf loggers to
+# stdout with a JSON formatter that includes a "level" field. Railway reads
+# this field for correct severity classification.
+#
+# App-level logging in workers is handled separately by config.py:setup_logging().
+# ---------------------------------------------------------------------------
+
+_env = os.getenv("ENVIRONMENT", os.getenv("ENV", "development")).lower()
+_is_production = _env in ("production", "prod")
+_log_format = os.getenv("LOG_FORMAT", "").lower() or ("json" if _is_production else "text")
+
+if _log_format == "json":
+    _formatter_config = {
+        "()": "pythonjsonlogger.jsonlogger.JsonFormatter",
+        "fmt": "%(asctime)s %(levelname)s %(name)s %(message)s",
+        "datefmt": "%Y-%m-%dT%H:%M:%S",
+        "rename_fields": {
+            "asctime": "timestamp",
+            "levelname": "level",
+            "name": "logger_name",
+        },
+    }
+else:
+    _formatter_config = {
+        "format": "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+        "datefmt": "%Y-%m-%d %H:%M:%S",
+    }
+
+logconfig_dict = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "gunicorn_fmt": _formatter_config,
+    },
+    "handlers": {
+        "stdout": {
+            "class": "logging.StreamHandler",
+            "stream": "ext://sys.stdout",
+            "formatter": "gunicorn_fmt",
+        },
+    },
+    "loggers": {
+        "gunicorn.error": {
+            "handlers": ["stdout"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "gunicorn.access": {
+            "handlers": ["stdout"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "gunicorn.conf": {
+            "handlers": ["stdout"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}
 
 logger = logging.getLogger("gunicorn.conf")
 

@@ -36,7 +36,7 @@ export default function SegurancaPage() {
 
       setMfaEnabled(verifiedFactors.length > 0);
       setFactors(
-        verifiedFactors.map((f: { id: string; factor_type: string; friendly_name: string; status: string }) => ({
+        verifiedFactors.map((f: { id: string; factor_type: string; friendly_name?: string; status: string }) => ({
           id: f.id,
           type: f.factor_type || "totp",
           friendly_name: f.friendly_name || "Autenticador",
@@ -132,10 +132,10 @@ export default function SegurancaPage() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
-      <PageHeader
-        title="Segurança"
-        subtitle="Gerencie a autenticação em dois fatores da sua conta"
-      />
+      <PageHeader title="Segurança" />
+      <p className="text-sm text-[var(--text-secondary)] -mt-2">
+        Gerencie a autenticação em dois fatores da sua conta
+      </p>
 
       <div className="mt-2 mb-6">
         <Link href="/conta" className="text-sm text-[var(--brand-blue)] hover:underline">

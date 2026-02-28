@@ -389,6 +389,39 @@ SUPABASE_CB_TRANSITIONS = _create_counter(
     labelnames=["from_state", "to_state"],
 )
 
+# ============================================================================
+# STORY-309: Dunning metrics
+# ============================================================================
+
+DUNNING_EMAILS_SENT = _create_counter(
+    "smartlic_dunning_emails_sent_total",
+    "Dunning emails sent by sequence number and plan",
+    labelnames=["email_number", "plan_type"],
+)
+
+DUNNING_RECOVERY = _create_counter(
+    "smartlic_dunning_recovery_total",
+    "Dunning recovery events by recovery channel",
+    labelnames=["recovered_via"],  # email, in_app, self_service, webhook
+)
+
+DUNNING_CHURNED = _create_counter(
+    "smartlic_dunning_churned_total",
+    "Users churned after dunning sequence by decline type",
+    labelnames=["decline_type"],  # soft, hard
+)
+
+SUBSCRIPTION_PAST_DUE = _create_gauge(
+    "smartlic_subscription_past_due_gauge",
+    "Current count of past_due subscriptions",
+)
+
+PAYMENT_FAILURE = _create_counter(
+    "smartlic_payment_failure_total",
+    "Payment failures by decline type and code",
+    labelnames=["decline_type", "decline_code"],
+)
+
 
 # ============================================================================
 # ASGI app factory for /metrics endpoint

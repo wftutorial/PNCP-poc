@@ -487,8 +487,8 @@ class TestCheckQuotaExpiredSubscriptions:
 
         mock_supabase = Mock()
 
-        # Past expiry date
-        past_date = (datetime.now(timezone.utc) - timedelta(days=5)).isoformat()
+        # Past expiry date (must exceed SUBSCRIPTION_GRACE_DAYS=7)
+        past_date = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
         subscription_result = Mock()
         subscription_result.data = [{
             "id": "sub-expired",

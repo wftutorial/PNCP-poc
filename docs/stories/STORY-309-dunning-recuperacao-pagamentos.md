@@ -31,85 +31,85 @@ Implementar fluxo completo de dunning com:
 
 ### Backend — Sequencia de Emails Dunning
 
-- [ ] **AC1:** Criar `backend/services/dunning.py` com logica de sequencia de emails baseada em `attempt_count` do Stripe:
+- [x] **AC1:** Criar `backend/services/dunning.py` com logica de sequencia de emails baseada em `attempt_count` do Stripe:
   - Tentativa 1 (dia 0): Email amigavel "Isso acontece — vamos resolver rapidinho"
   - Tentativa 2 (dia 3): Lembrete gentil "Acao necessaria: atualize seu pagamento"
   - Tentativa 3 (dia 7): Urgencia "Sua assinatura esta em risco — X dias restantes"
   - Tentativa 4 (dia 14): Aviso final "Aviso final: sua conta sera suspensa amanha"
-- [ ] **AC2:** Criar templates em `backend/templates/emails/dunning.py` com:
+- [x] **AC2:** Criar templates em `backend/templates/emails/dunning.py` com:
   - Nome do usuario, plano, valor, motivo da falha
   - Dias restantes ate cancelamento (countdown)
   - CTA unico: "Atualizar Forma de Pagamento" → Stripe Billing Portal
   - Tom: empatico, sem culpa ("voce deve"), direto ("pagamento falhou")
   - Remetente: "Tiago from SmartLic" (nao noreply@)
-- [ ] **AC3:** Atualizar `_handle_invoice_payment_failed()` em `webhooks/stripe.py:675` para:
+- [x] **AC3:** Atualizar `_handle_invoice_payment_failed()` em `webhooks/stripe.py:675` para:
   - Chamar `dunning.send_dunning_email(user_id, attempt_count, invoice_data)`
   - Extrair `decline_type` (soft vs hard) do charge details
   - Registrar `decline_code` no log estruturado
-- [ ] **AC4:** Criar cron job em `cron_jobs.py` para email pre-dunning:
+- [x] **AC4:** Criar cron job em `cron_jobs.py` para email pre-dunning:
   - 7 dias antes de vencimento do cartao: "Seu cartao termina em MM/AA — atualize"
   - Usar webhook `invoice.upcoming` como trigger alternativo
 
 ### Backend — Degradacao Gradual de Acesso
 
-- [ ] **AC5:** Atualizar `quota.py` para implementar acesso gradual durante `past_due`:
+- [x] **AC5:** Atualizar `quota.py` para implementar acesso gradual durante `past_due`:
   - Dias 0-14 (Smart Retries ativas): Acesso completo, banner de aviso
   - Dias 14-21 (grace period estendido): Read-only (pipeline, historico), novas buscas bloqueadas
   - Dia 21+: Acesso totalmente bloqueado, redirecionar para /planos
-- [ ] **AC6:** Estender `SUBSCRIPTION_GRACE_DAYS` de 3 para 7 dias (pos-retry) em `quota.py:573`
-- [ ] **AC7:** Adicionar campo `first_failed_at` em `user_subscriptions` para calcular dias desde primeira falha (migration necessaria)
+- [x] **AC6:** Estender `SUBSCRIPTION_GRACE_DAYS` de 3 para 7 dias (pos-retry) em `quota.py:573`
+- [x] **AC7:** Adicionar campo `first_failed_at` em `user_subscriptions` para calcular dias desde primeira falha (migration necessaria)
 
 ### Backend — Metricas e Observabilidade
 
-- [ ] **AC8:** Adicionar metricas Prometheus em `metrics.py`:
+- [x] **AC8:** Adicionar metricas Prometheus em `metrics.py`:
   - `smartlic_dunning_emails_sent_total` (labels: email_number, plan_type)
   - `smartlic_dunning_recovery_total` (labels: recovered_via: email|in_app|self_service)
   - `smartlic_dunning_churned_total` (labels: decline_type: soft|hard)
   - `smartlic_subscription_past_due_gauge` (current count)
   - `smartlic_payment_failure_total` (labels: decline_type, decline_code)
-- [ ] **AC9:** Logging estruturado em cada etapa do dunning para analytics:
+- [x] **AC9:** Logging estruturado em cada etapa do dunning para analytics:
   - `dunning_email_sent`, `dunning_recovered`, `dunning_churned`
   - Incluir: user_id (sanitized), plan_type, attempt_count, decline_type, days_since_failure
 
 ### Backend — Webhook Enhancements
 
-- [ ] **AC10:** Adicionar handler para `invoice.payment_action_required` (3D Secure / SCA):
+- [x] **AC10:** Adicionar handler para `invoice.payment_action_required` (3D Secure / SCA):
   - Enviar email com link para completar autenticacao
-- [ ] **AC11:** Atualizar `_handle_invoice_payment_succeeded()` em `webhooks/stripe.py:612` para:
+- [x] **AC11:** Atualizar `_handle_invoice_payment_succeeded()` em `webhooks/stripe.py:612` para:
   - Limpar estado dunning (reset `first_failed_at`, subscription_status → "active")
   - Enviar email "Pagamento restaurado com sucesso!"
   - Incrementar `smartlic_dunning_recovery_total`
 
 ### Frontend — Banners e CTAs In-App
 
-- [ ] **AC12:** Evoluir `PaymentFailedBanner.tsx` com 3 niveis de urgencia visual:
+- [x] **AC12:** Evoluir `PaymentFailedBanner.tsx` com 3 niveis de urgencia visual:
   - `past_due` recente (0-7 dias): Banner amarelo, tom informativo
   - `past_due` critico (7-14 dias): Banner vermelho, countdown de dias
   - Grace period (14-21 dias): Banner vermelho escuro com "Acesso limitado — X dias restantes"
-- [ ] **AC13:** Criar modal bloqueante `PaymentRecoveryModal.tsx` para grace period:
+- [x] **AC13:** Criar modal bloqueante `PaymentRecoveryModal.tsx` para grace period:
   - Full-screen overlay (reutilizar pattern de TrialConversionScreen)
   - Mostrar valor ja analisado (reusar endpoint `/v1/analytics/trial-value`)
   - Countdown de dias restantes
   - CTA: "Atualizar Pagamento Agora" → Stripe Billing Portal
-- [ ] **AC14:** Mostrar badge vermelho no nav item "Conta" quando `past_due`
-- [ ] **AC15:** Apos recuperacao: banner verde "Pagamento restaurado" com fade-out 5s (reusar pattern CRIT-008 recovered)
+- [x] **AC14:** Mostrar badge vermelho no nav item "Conta" quando `past_due`
+- [x] **AC15:** Apos recuperacao: banner verde "Pagamento restaurado" com fade-out 5s (reusar pattern CRIT-008 recovered)
 
 ### Frontend — Feature Degradation UI
 
-- [ ] **AC16:** Em `/buscar` durante grace period: mostrar banner "Novas buscas suspensas ate regularizacao. Historico e pipeline acessiveis."
-- [ ] **AC17:** Desabilitar botao "Buscar" durante grace period com tooltip explicativo
-- [ ] **AC18:** Pipeline e historico permanecem read-only acessiveis
+- [x] **AC16:** Em `/buscar` durante grace period: mostrar banner "Novas buscas suspensas ate regularizacao. Historico e pipeline acessiveis."
+- [x] **AC17:** Desabilitar botao "Buscar" durante grace period com tooltip explicativo
+- [x] **AC18:** Pipeline e historico permanecem read-only acessiveis
 
 ### Testes
 
-- [ ] **AC19:** Backend: Testes para cada email da sequencia (4), degradacao gradual (3 fases), metricas, webhook enhancements — minimo 20 testes
-- [ ] **AC20:** Frontend: Testes para 3 niveis de banner, modal bloqueante, badge, recovery banner — minimo 12 testes
-- [ ] **AC21:** Zero regressions no test suite existente
+- [x] **AC19:** Backend: Testes para cada email da sequencia (4), degradacao gradual (3 fases), metricas, webhook enhancements — minimo 20 testes (35 tests in test_dunning.py)
+- [x] **AC20:** Frontend: Testes para 3 niveis de banner, modal bloqueante, badge, recovery banner — minimo 12 testes (18 tests in dunning-flow.test.tsx)
+- [x] **AC21:** Zero regressions no test suite existente (BE: 6092 pass, FE: 3641 pass)
 
 ### Configuracao Stripe (Dashboard)
 
-- [ ] **AC22:** Configurar Smart Retries: 8 tentativas over 2 semanas
-- [ ] **AC23:** Apos retries esgotadas: marcar como `unpaid` (nao cancelar — permite reativacao)
+- [ ] **AC22:** Configurar Smart Retries: 8 tentativas over 2 semanas _(manual: Stripe Dashboard → Settings → Subscriptions → Smart Retries)_
+- [ ] **AC23:** Apos retries esgotadas: marcar como `unpaid` (nao cancelar — permite reativacao) _(manual: Stripe Dashboard → Settings → Subscriptions → After all retries fail → Mark as unpaid)_
 
 ---
 

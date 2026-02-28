@@ -652,3 +652,143 @@ async def _trial_reminder_loop() -> None:
         except Exception as e:
             logger.error(f"Trial reminder loop error: {e}", exc_info=True)
             await asyncio.sleep(60)
+
+
+# ============================================================================
+# STORY-309 AC4: Pre-Dunning Card Expiry Warning
+# ============================================================================
+
+# Check interval: every 24 hours (check once per day)
+PRE_DUNNING_INTERVAL_SECONDS = 24 * 60 * 60
+
+
+async def start_pre_dunning_task() -> asyncio.Task:
+    """STORY-309 AC4: Start the periodic pre-dunning card expiry check.
+
+    Runs once on startup (after 120s delay), then every 24 hours.
+    Returns the Task so it can be cancelled during shutdown.
+    """
+    task = asyncio.create_task(_pre_dunning_loop(), name="pre_dunning")
+    logger.info("Pre-dunning card expiry check started (interval: 24h)")
+    return task
+
+
+async def check_pre_dunning_cards() -> dict:
+    """STORY-309 AC4: Check for cards expiring within 7 days and send warnings.
+
+    Uses Stripe API to list customers with cards about to expire.
+    For each expiring card, sends a pre-dunning email via the dunning service.
+
+    Returns:
+        dict with counts: {"sent": N, "skipped": M, "errors": E}
+    """
+    import os
+
+    try:
+        import stripe
+        stripe_key = os.getenv("STRIPE_SECRET_KEY", "")
+        if not stripe_key:
+            logger.debug("Pre-dunning: STRIPE_SECRET_KEY not set, skipping")
+            return {"sent": 0, "skipped": 0, "errors": 0, "disabled": True}
+
+        from supabase_client import get_supabase, sb_execute
+        from services.dunning import send_pre_dunning_email
+
+        sb = get_supabase()
+        now = datetime.now(timezone.utc)
+
+        # Target: cards expiring in the current month (7 days from now)
+        target_date = now + timedelta(days=7)
+        target_month = target_date.month
+        target_year = target_date.year
+
+        sent = 0
+        skipped = 0
+        errors = 0
+
+        # Find active subscribers with Stripe customer IDs
+        subs_result = await sb_execute(
+            sb.table("user_subscriptions")
+            .select("user_id, stripe_customer_id")
+            .eq("is_active", True)
+            .eq("subscription_status", "active")
+            .not_.is_("stripe_customer_id", "null")
+        )
+
+        if not subs_result.data:
+            return {"sent": 0, "skipped": 0, "errors": 0}
+
+        for sub in subs_result.data:
+            try:
+                customer_id = sub.get("stripe_customer_id")
+                user_id = sub.get("user_id")
+
+                if not customer_id or not user_id:
+                    continue
+
+                # Check customer's default payment method via Stripe API
+                customer = stripe.Customer.retrieve(
+                    customer_id,
+                    api_key=stripe_key,
+                    expand=["default_source", "invoice_settings.default_payment_method"],
+                )
+
+                # Get card details from default payment method
+                pm = customer.get("invoice_settings", {}).get("default_payment_method")
+                card_info = None
+
+                if pm and hasattr(pm, "card"):
+                    card_info = pm.card
+                elif customer.get("default_source") and hasattr(customer.default_source, "exp_month"):
+                    card_info = customer.default_source
+
+                if not card_info:
+                    skipped += 1
+                    continue
+
+                exp_month = getattr(card_info, "exp_month", None) or card_info.get("exp_month")
+                exp_year = getattr(card_info, "exp_year", None) or card_info.get("exp_year")
+                last4 = getattr(card_info, "last4", None) or card_info.get("last4", "****")
+
+                if not exp_month or not exp_year:
+                    skipped += 1
+                    continue
+
+                # Check if card expires this target month
+                if exp_year == target_year and exp_month == target_month:
+                    await send_pre_dunning_email(user_id, last4, exp_month, exp_year)
+                    sent += 1
+                else:
+                    skipped += 1
+
+            except Exception as e:
+                errors += 1
+                logger.debug(f"Pre-dunning check failed for customer: {e}")
+
+        logger.info(f"Pre-dunning check: sent={sent}, skipped={skipped}, errors={errors}")
+        return {"sent": sent, "skipped": skipped, "errors": errors}
+
+    except Exception as e:
+        logger.error(f"Pre-dunning check failed: {e}", exc_info=True)
+        return {"sent": 0, "skipped": 0, "errors": 1, "error": str(e)}
+
+
+async def _pre_dunning_loop() -> None:
+    """STORY-309 AC4: Run pre-dunning card check periodically."""
+    # Delay 120s after startup
+    await asyncio.sleep(120)
+
+    while True:
+        try:
+            result = await check_pre_dunning_cards()
+            logger.info(
+                f"Pre-dunning cycle: {result} "
+                f"at {datetime.now(timezone.utc).isoformat()}"
+            )
+            await asyncio.sleep(PRE_DUNNING_INTERVAL_SECONDS)
+        except asyncio.CancelledError:
+            logger.info("Pre-dunning task cancelled")
+            break
+        except Exception as e:
+            logger.error(f"Pre-dunning loop error: {e}", exc_info=True)
+            await asyncio.sleep(60)

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "../app/components/AuthProvider";
+import { usePlan } from "../hooks/usePlan";
 
 const STORAGE_KEY = "smartlic-sidebar-collapsed";
 
@@ -90,6 +91,7 @@ const SECONDARY_NAV: NavItem[] = [
 export function Sidebar() {
   const pathname = usePathname();
   const { signOut } = useAuth();
+  const { planInfo } = usePlan();
   const [collapsed, setCollapsed] = useState(false);
 
   // Load persisted state
@@ -109,8 +111,12 @@ export function Sidebar() {
     return pathname.startsWith(href);
   };
 
+  // STORY-309 AC14: Show red dot on "Minha Conta" when subscription is past_due
+  const isPastDue = planInfo?.subscription_status === "past_due";
+
   const renderNavItem = (item: NavItem) => {
     const active = isActive(item.href);
+    const showPastDueBadge = item.href === "/conta" && isPastDue;
     return (
       <Link
         key={item.href}
@@ -126,7 +132,12 @@ export function Sidebar() {
         `}
         aria-current={active ? "page" : undefined}
       >
-        <span className="flex-shrink-0">{item.icon}</span>
+        <span className="flex-shrink-0 relative">
+          {item.icon}
+          {showPastDueBadge && (
+            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full" data-testid="conta-past-due-badge" />
+          )}
+        </span>
         {!collapsed && <span>{item.label}</span>}
         {item.badge && item.badge > 0 && (
           <span className={`

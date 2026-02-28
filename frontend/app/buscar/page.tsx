@@ -27,6 +27,7 @@ import SearchResults from "./components/SearchResults";
 import BackendStatusIndicator, { useBackendStatusContext } from "../../components/BackendStatusIndicator";
 import { SearchErrorBoundary } from "./components/SearchErrorBoundary";
 import { MobileDrawer } from "../../components/MobileDrawer";
+import { PaymentRecoveryModal } from "../../components/billing/PaymentRecoveryModal";
 
 import { dateDiffInDays } from "../../lib/utils/dateDiffInDays";
 import { toast } from "sonner";
@@ -145,6 +146,27 @@ function HomePageContent() {
   const isTrialExpired = useMemo(() => {
     return planInfo?.plan_id === "free_trial" && planInfo?.subscription_status === "expired";
   }, [planInfo?.plan_id, planInfo?.subscription_status]);
+
+  // STORY-309 AC13/AC16/AC17: Grace period — searches suspended, show recovery modal
+  const isGracePeriod = useMemo(() => {
+    return planInfo?.dunning_phase === "grace_period";
+  }, [planInfo?.dunning_phase]);
+
+  const graceDaysRemaining = useMemo(() => {
+    if (!isGracePeriod || planInfo?.days_since_failure == null) return 0;
+    return Math.max(0, 21 - planInfo.days_since_failure);
+  }, [isGracePeriod, planInfo?.days_since_failure]);
+
+  // STORY-309 AC13: Show recovery modal during grace period
+  const [showPaymentRecovery, setShowPaymentRecovery] = useState(false);
+
+  useEffect(() => {
+    if (isGracePeriod) {
+      setShowPaymentRecovery(true);
+    } else {
+      setShowPaymentRecovery(false);
+    }
+  }, [isGracePeriod]);
 
   // GTM-010: Fetch trial value when trial is expired (for conversion screen)
   const fetchTrialValue = useCallback(async () => {
@@ -499,6 +521,7 @@ function HomePageContent() {
               showFirstUseTip={showFirstUseTip}
               onDismissFirstUseTip={dismissFirstUseTip}
               isTrialExpired={isTrialExpired || search.quotaError === "trial_expired"}
+              isGracePeriod={isGracePeriod}
             />
 
             {/* GTM-004: Auto-search banners */}
@@ -742,6 +765,15 @@ function HomePageContent() {
             router.push("/planos");
           }}
           loading={trialValueLoading}
+        />
+      )}
+
+      {/* STORY-309 AC13: Payment recovery modal during grace period */}
+      {showPaymentRecovery && (
+        <PaymentRecoveryModal
+          daysRemaining={graceDaysRemaining}
+          trialValue={trialValue}
+          onClose={() => setShowPaymentRecovery(false)}
         />
       )}
     </div>

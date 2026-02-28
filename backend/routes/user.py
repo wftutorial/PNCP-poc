@@ -134,7 +134,13 @@ async def get_profile(user: dict = Depends(require_auth), db=Depends(get_db)):
         logger.warning(f"Failed to fetch user email: {e}")
         email = user.get("email", "unknown@example.com")
 
-    if quota_info.trial_expires_at:
+    # STORY-309: Determine subscription_status with dunning awareness
+    dunning_phase = getattr(quota_info, "dunning_phase", "healthy")
+    days_since_failure = getattr(quota_info, "days_since_failure", None)
+
+    if dunning_phase in ("active_retries", "grace_period", "blocked"):
+        subscription_status = "past_due"
+    elif quota_info.trial_expires_at:
         if datetime.now(timezone.utc) > quota_info.trial_expires_at:
             subscription_status = "expired"
         else:
@@ -154,6 +160,8 @@ async def get_profile(user: dict = Depends(require_auth), db=Depends(get_db)):
         trial_expires_at=quota_info.trial_expires_at.isoformat() if quota_info.trial_expires_at else None,
         subscription_status=subscription_status,
         is_admin=is_admin_flag,
+        dunning_phase=dunning_phase,
+        days_since_failure=days_since_failure,
     )
 
 

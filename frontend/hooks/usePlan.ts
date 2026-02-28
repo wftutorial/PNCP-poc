@@ -30,6 +30,8 @@ export interface PlanInfo {
   quota_reset_date: string;
   trial_expires_at: string | null;
   subscription_status: string;
+  dunning_phase: string;
+  days_since_failure: number | null;
 }
 
 interface UsePlanReturn {

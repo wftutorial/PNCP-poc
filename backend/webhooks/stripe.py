@@ -17,7 +17,9 @@ Supported Events:
 - checkout.session.async_payment_failed (Boleto/PIX async payment failed — STORY-280)
 - customer.subscription.updated (billing period changes, plan changes)
 - customer.subscription.deleted (cancellation)
-- invoice.payment_succeeded (renewal)
+- invoice.payment_succeeded (renewal + dunning recovery — STORY-309 AC11)
+- invoice.payment_failed (dunning email via dunning service — STORY-309 AC3)
+- invoice.payment_action_required (3D Secure / SCA — STORY-309 AC10)
 
 Security:
 - STRIPE_WEBHOOK_SECRET required (set in .env)
@@ -169,6 +171,8 @@ async def stripe_webhook(request: Request):
             await _handle_invoice_payment_succeeded(sb, event)
         elif event.type == "invoice.payment_failed":
             await _handle_invoice_payment_failed(sb, event)
+        elif event.type == "invoice.payment_action_required":
+            await _handle_payment_action_required(sb, event)
         else:
             logger.info(f"Unhandled event type: {event.type}")
 
@@ -650,14 +654,28 @@ async def _handle_invoice_payment_succeeded(sb, event: stripe.Event):
 
     new_expires = (datetime.now(timezone.utc) + timedelta(days=duration_days)).isoformat()
 
-    # Reactivate and extend
+    # STORY-309 AC11: Check if this was a recovery from dunning (subscription was past_due)
+    was_past_due = False
+    try:
+        profile_check = sb.table("profiles").select("subscription_status").eq("id", user_id).single().execute()
+        if profile_check.data and profile_check.data.get("subscription_status") == "past_due":
+            was_past_due = True
+    except Exception as e:
+        logger.warning(f"Failed to check past_due status for user_id={user_id}: {e}")
+
+    # Reactivate, extend, and clear dunning state (first_failed_at → None)
     sb.table("user_subscriptions").update({
         "is_active": True,
         "expires_at": new_expires,
+        "subscription_status": "active",
+        "first_failed_at": None,
     }).eq("id", local_sub["id"]).execute()
 
-    # Sync profiles.plan_type (keeps fallback current)
-    sb.table("profiles").update({"plan_type": plan_id}).eq("id", user_id).execute()
+    # Sync profiles.plan_type AND subscription_status (keeps fallback current)
+    sb.table("profiles").update({
+        "plan_type": plan_id,
+        "subscription_status": "active",
+    }).eq("id", user_id).execute()
 
     # Invalidate cache
     cache_key = f"features:{user_id}"
@@ -670,6 +688,14 @@ async def _handle_invoice_payment_succeeded(sb, event: stripe.Event):
 
     # STORY-225 AC12: Send payment confirmation email
     _send_payment_confirmation_email(sb, user_id, plan_id, invoice_data, new_expires)
+
+    # STORY-309 AC11: Send recovery email if was in dunning
+    if was_past_due:
+        try:
+            from services.dunning import send_recovery_email
+            await send_recovery_email(user_id, plan_id)
+        except Exception as e:
+            logger.warning(f"Failed to send dunning recovery email for user_id={user_id}: {e}")
 
 
 async def _handle_invoice_payment_failed(sb, event: stripe.Event):
@@ -712,19 +738,34 @@ async def _handle_invoice_payment_failed(sb, event: stripe.Event):
     user_id = local_sub["user_id"]
     plan_id = local_sub["plan_id"]
 
-    # Update subscription status to past_due (AC3)
-    sb.table("user_subscriptions").update({
-        "subscription_status": "past_due",
-    }).eq("id", local_sub["id"]).execute()
+    # Extract attempt count and decline details (STORY-309 AC3)
+    attempt_count = invoice_data.get("attempt_count", 1)
+    amount = invoice_data.get("amount_due", 0)
 
-    # Also update profiles.subscription_status (AC3)
+    charge = invoice_data.get("charge") or {}
+    decline_type = "soft"
+    decline_code = ""
+    if isinstance(charge, dict):
+        outcome = charge.get("outcome") or {}
+        if isinstance(outcome, dict) and outcome.get("type") == "blocked":
+            decline_type = "hard"
+        decline_code = charge.get("decline_code", "") or charge.get("failure_code", "") or ""
+
+    # Set first_failed_at on first failure, update status to past_due (STORY-309 AC7)
+    if attempt_count <= 1:
+        sb.table("user_subscriptions").update({
+            "subscription_status": "past_due",
+            "first_failed_at": datetime.now(timezone.utc).isoformat(),
+        }).eq("id", local_sub["id"]).is_("first_failed_at", "null").execute()
+    else:
+        sb.table("user_subscriptions").update({
+            "subscription_status": "past_due",
+        }).eq("id", local_sub["id"]).execute()
+
+    # Also update profiles.subscription_status
     sb.table("profiles").update({
         "subscription_status": "past_due",
     }).eq("id", user_id).execute()
-
-    # Extract attempt count for logging
-    attempt_count = invoice_data.get("attempt_count", 1)
-    amount = invoice_data.get("amount_due", 0)
 
     # Log to Sentry with customer context (AC4)
     try:
@@ -739,6 +780,8 @@ async def _handle_invoice_payment_failed(sb, event: stripe.Event):
                 "stripe_subscription_id": stripe_subscription_id,
                 "attempt_count": attempt_count,
                 "amount_due": amount,
+                "decline_type": decline_type,
+                "decline_code": decline_code,
             }
         )
     except Exception as e:
@@ -753,13 +796,60 @@ async def _handle_invoice_payment_failed(sb, event: stripe.Event):
             "plan": plan_id,
             "amount": amount / 100,  # Convert cents to BRL
             "attempt_count": attempt_count,
+            "decline_type": decline_type,
+            "decline_code": decline_code,
         }
     )
 
-    # Send payment failed email (AC5)
-    _send_payment_failed_email(sb, user_id, plan_id, invoice_data)
+    # STORY-309 AC3: Send dunning email via dunning service (replaces generic _send_payment_failed_email)
+    try:
+        from services.dunning import send_dunning_email
+        await send_dunning_email(user_id, attempt_count, invoice_data, decline_type)
+    except Exception as e:
+        logger.warning(f"Failed to send dunning email for user_id={user_id}: {e}")
 
-    logger.info(f"Payment failed handling complete: user_id={user_id}, status=past_due")
+    logger.info(f"Payment failed handling complete: user_id={user_id}, status=past_due, decline_type={decline_type}")
+
+
+async def _handle_payment_action_required(sb, event: stripe.Event):
+    """Handle invoice.payment_action_required event (STORY-309 AC10).
+
+    Sent when payment requires 3D Secure / SCA authentication.
+    Sends email with link to complete payment.
+    """
+    invoice_data = event.data.object
+    stripe_subscription_id = invoice_data.get("subscription")
+
+    if not stripe_subscription_id:
+        return
+
+    # Find user
+    sub_result = (
+        sb.table("user_subscriptions")
+        .select("id, user_id, plan_id")
+        .eq("stripe_subscription_id", stripe_subscription_id)
+        .limit(1)
+        .execute()
+    )
+    if not sub_result.data:
+        logger.warning(
+            f"No local subscription for payment_action_required: "
+            f"stripe_sub={stripe_subscription_id[:8]}***"
+        )
+        return
+
+    user_id = sub_result.data[0]["user_id"]
+
+    # Extract hosted_invoice_url for 3DS completion
+    hosted_url = invoice_data.get("hosted_invoice_url", "")
+
+    logger.info(
+        f"Payment action required (3DS/SCA): user_id={user_id}, "
+        f"stripe_sub={stripe_subscription_id[:8]}***, has_hosted_url={bool(hosted_url)}"
+    )
+
+    # Send notification email
+    _send_payment_action_required_email(sb, user_id, hosted_url)
 
 
 # ============================================================================
@@ -865,8 +955,44 @@ def _send_cancellation_email(sb, user_id: str, subscription_data: dict) -> None:
         logger.warning(f"Failed to send cancellation email: {e}")
 
 
+def _send_payment_action_required_email(sb, user_id: str, hosted_url: str) -> None:
+    """Send 3D Secure authentication required email (STORY-309 AC10). Never raises."""
+    try:
+        from email_service import send_email_async
+        from templates.emails.base import email_base, FRONTEND_URL
+
+        profile = sb.table("profiles").select("email, full_name").eq("id", user_id).single().execute()
+        if not profile.data or not profile.data.get("email"):
+            return
+
+        email = profile.data["email"]
+        name = profile.data.get("full_name") or email.split("@")[0]
+
+        action_url = hosted_url or f"{FRONTEND_URL}/conta"
+        body = f'''
+        <h1 style="color: #333; font-size: 22px; margin: 0 0 16px;">Autenticação necessária para pagamento</h1>
+        <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
+          Olá, {name}! Seu banco requer uma autenticação adicional (3D Secure) para processar o pagamento da sua assinatura SmartLic.
+        </p>
+        <p style="text-align: center; margin: 24px 0 16px;">
+          <a href="{action_url}" class="btn" style="display: inline-block; padding: 14px 32px; background-color: #2E7D32; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">Completar Autenticação</a>
+        </p>
+        <p style="color: #888; font-size: 14px; line-height: 1.6; margin: 24px 0 0;">Basta clicar no botão acima e seguir as instruções do seu banco.</p>
+        '''
+        html = email_base(title="Autenticação necessária — SmartLic", body_html=body, is_transactional=True)
+        send_email_async(
+            to=email,
+            subject="Autenticação necessária para pagamento — SmartLic",
+            html=html,
+            tags=[{"name": "category", "value": "payment_action_required"}],
+        )
+        logger.info(f"Payment action required email queued for user_id={user_id}")
+    except Exception as e:
+        logger.warning(f"Failed to send payment action required email: {e}")
+
+
 def _send_payment_failed_email(sb, user_id: str, plan_id: str, invoice_data: dict) -> None:
-    """Send payment failed email (GTM-FIX-007 AC5-AC6). Never raises."""
+    """Send payment failed email (GTM-FIX-007 AC5-AC6). Never raises. Kept for backward compatibility."""
     try:
         from email_service import send_email_async
         from templates.emails.billing import render_payment_failed_email

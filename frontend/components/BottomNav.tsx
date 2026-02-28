@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "../app/components/AuthProvider";
+import { usePlan } from "../hooks/usePlan";
 
 interface BottomNavItem {
   href: string;
@@ -84,6 +85,7 @@ const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), [tabindex]:not([tab
 export function BottomNav() {
   const pathname = usePathname();
   const { signOut } = useAuth();
+  const { planInfo } = usePlan();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -95,6 +97,9 @@ export function BottomNav() {
 
   // Check if "Mais" should be highlighted (any drawer route is active)
   const moreActive = DRAWER_ITEMS.some((item) => isActive(item.href));
+
+  // STORY-309 AC14: Red dot on "Minha Conta" when subscription is past_due
+  const isPastDue = planInfo?.subscription_status === "past_due";
 
   const closeDrawer = useCallback(() => {
     setDrawerOpen(false);
@@ -237,6 +242,7 @@ export function BottomNav() {
             <div className="px-4 pb-6 space-y-1">
               {DRAWER_ITEMS.map((item) => {
                 const active = isActive(item.href);
+                const showPastDueBadge = item.href === "/conta" && isPastDue;
                 return (
                   <Link
                     key={item.href}
@@ -250,7 +256,12 @@ export function BottomNav() {
                       }
                     `}
                   >
-                    {item.icon}
+                    <span className="relative">
+                      {item.icon}
+                      {showPastDueBadge && (
+                        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full" data-testid="conta-past-due-badge-mobile" />
+                      )}
+                    </span>
                     <span>{item.label}</span>
                   </Link>
                 );

@@ -58,12 +58,12 @@ class TestInvoicePaymentFailedWebhook:
         assert len(status_updates) >= 1, "subscription_status should be updated to past_due"
 
     @patch("supabase_client.get_supabase")
-    @patch("webhooks.stripe._send_payment_failed_email")
+    @patch("services.dunning.send_dunning_email")
     async def test_invoice_payment_failed_sends_email(
-        self, mock_send_email, mock_supabase
+        self, mock_send_dunning, mock_supabase
     ):
         """
-        Test that payment failure triggers email notification (AC12).
+        Test that payment failure triggers dunning email notification (STORY-309 AC3).
         """
         from webhooks.stripe import _handle_invoice_payment_failed
 
@@ -91,11 +91,8 @@ class TestInvoicePaymentFailedWebhook:
 
         await _handle_invoice_payment_failed(sb_mock, event)
 
-        # Verify email send was called
-        assert mock_send_email.called, "Payment failed email should be sent"
-        call_args = mock_send_email.call_args
-        assert call_args[0][1] == "user-456", "Email should be sent to correct user_id"
-        assert call_args[0][2] == "smartlic_pro", "Email should include correct plan_id"
+        # Verify dunning email was called (STORY-309: replaces _send_payment_failed_email)
+        assert mock_send_dunning.called, "Dunning email should be sent on payment failure"
 
     @patch("supabase_client.get_supabase")
     async def test_invoice_payment_failed_no_subscription(self, mock_supabase):

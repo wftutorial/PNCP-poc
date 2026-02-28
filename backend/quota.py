@@ -344,6 +344,9 @@ class QuotaInfo(BaseModel):
     quota_reset_date: datetime
     trial_expires_at: Optional[datetime] = None
     error_message: Optional[str] = None
+    # STORY-309 AC5: Dunning degradation fields
+    dunning_phase: str = "healthy"  # "healthy" | "active_retries" | "grace_period" | "blocked"
+    days_since_failure: Optional[int] = None
 
 
 # ============================================================================
@@ -569,8 +572,8 @@ def check_and_increment_quota_atomic(
 # Profile-Based Plan Fallback (prevents "fail to free" anti-pattern)
 # ============================================================================
 
-# Grace period for subscription expiry (covers Stripe billing gaps)
-SUBSCRIPTION_GRACE_DAYS = 3
+# STORY-309 AC6: Extended grace period (was 3, now 7 for post-retry dunning)
+SUBSCRIPTION_GRACE_DAYS = 7
 
 
 def get_plan_from_profile(user_id: str, sb=None) -> Optional[str]:
@@ -835,6 +838,59 @@ def check_quota(user_id: str) -> QuotaInfo:
             error_message=f"Limite de {quota_limit} buscas mensais atingido. Renovação em {reset_date.strftime('%d/%m/%Y')} ou faça upgrade.",
         )
 
+    # STORY-309 AC5: Dunning degradation — restrict access based on days since first failure
+    subscription_status_for_dunning = None
+    try:
+        if not cb_open:
+            status_result = supabase_cb.call_sync(
+                sb.table("profiles")
+                .select("subscription_status")
+                .eq("id", user_id)
+                .single()
+                .execute
+            )
+            if status_result.data:
+                subscription_status_for_dunning = status_result.data.get("subscription_status")
+    except Exception:
+        pass  # Non-fatal — degrade gracefully
+
+    if subscription_status_for_dunning == "past_due":
+        from services.dunning import get_days_since_failure, get_dunning_phase
+        days = get_days_since_failure(user_id)
+        phase = get_dunning_phase(days)
+
+        if phase == "blocked":
+            # Day 21+: Fully blocked — redirect to /planos
+            return QuotaInfo(
+                allowed=False,
+                plan_id=plan_id,
+                plan_name=plan_name,
+                capabilities=caps,
+                quota_used=0,
+                quota_remaining=0,
+                quota_reset_date=get_quota_reset_date(),
+                trial_expires_at=None,
+                error_message="Seu pagamento falhou há mais de 21 dias. Atualize seu método de pagamento para continuar.",
+                dunning_phase=phase,
+                days_since_failure=days,
+            )
+        elif phase == "grace_period":
+            # Days 14-21: Read-only — can view pipeline/historico but no new searches
+            # Set quota_remaining to 0 to block new searches
+            return QuotaInfo(
+                allowed=False,
+                plan_id=plan_id,
+                plan_name=plan_name,
+                capabilities=caps,
+                quota_used=0,
+                quota_remaining=0,
+                quota_reset_date=get_quota_reset_date(),
+                trial_expires_at=None,
+                error_message="Seu pagamento está pendente. Acesso somente leitura até a regularização.",
+                dunning_phase=phase,
+                days_since_failure=days,
+            )
+
     # All checks passed
     return QuotaInfo(
         allowed=True,
@@ -870,6 +926,7 @@ async def require_active_plan(user: dict) -> dict:
     STORY-265 AC9: Read-only endpoints (GET /pipeline, GET /sessions, GET /me)
                    should NOT use this dependency.
     STORY-291 AC4: When Supabase CB is open, allows user through (fail-open).
+    STORY-309 AC5: Returns HTTP 402 when user is in dunning grace_period or blocked phase.
 
     Usage:
         @router.post("/endpoint")
@@ -887,6 +944,7 @@ async def require_active_plan(user: dict) -> dict:
         dict: The authenticated user dict (pass-through on success).
 
     Raises:
+        HTTPException(402): If user is in dunning grace_period or blocked phase.
         HTTPException(403): If trial expired or plan inactive.
     """
     from fastapi import HTTPException
@@ -916,6 +974,50 @@ async def require_active_plan(user: dict) -> dict:
             f"STORY-291 CB OPEN: Bypassing plan check for user {mask_user_id(user_id)} (fail-open)"
         )
         return user
+
+    # STORY-309 AC5: Dunning phase enforcement
+    _dunning_phase = getattr(quota_info, "dunning_phase", "healthy")
+    _days_since_failure = getattr(quota_info, "days_since_failure", None)
+    if _dunning_phase == "blocked":
+        logger.info(
+            "dunning_blocked",
+            extra={
+                "user_id": mask_user_id(user_id),
+                "dunning_phase": "blocked",
+                "days_since_failure": _days_since_failure,
+                "plan_id": quota_info.plan_id,
+            },
+        )
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "error": "dunning_blocked",
+                "message": getattr(quota_info, "error_message", "") or "Atualize seu método de pagamento para continuar.",
+                "upgrade_url": "/planos",
+                "dunning_phase": "blocked",
+                "days_since_failure": _days_since_failure,
+            },
+        )
+    elif _dunning_phase == "grace_period":
+        logger.info(
+            "dunning_grace_period_blocked",
+            extra={
+                "user_id": mask_user_id(user_id),
+                "dunning_phase": "grace_period",
+                "days_since_failure": _days_since_failure,
+                "plan_id": quota_info.plan_id,
+            },
+        )
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "error": "dunning_grace_period",
+                "message": getattr(quota_info, "error_message", "") or "Seu pagamento está pendente. Acesso somente leitura.",
+                "upgrade_url": "/planos",
+                "dunning_phase": "grace_period",
+                "days_since_failure": _days_since_failure,
+            },
+        )
 
     if not quota_info.allowed:
         # STORY-265 AC12: Structured logging for trial blocks

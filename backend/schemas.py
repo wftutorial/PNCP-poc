@@ -1519,10 +1519,18 @@ class UserProfileResponse(BaseModel):
         default=None, description="ISO 8601 timestamp when trial expires (if applicable)"
     )
     subscription_status: str = Field(
-        ..., description="Status: 'trial', 'active', or 'expired'"
+        ..., description="Status: 'trial', 'active', 'expired', or 'past_due'"
     )
     is_admin: bool = Field(
         default=False, description="Whether user has admin privileges"
+    )
+    dunning_phase: str = Field(
+        default="healthy",
+        description="STORY-309: Dunning phase — healthy, active_retries, grace_period, blocked"
+    )
+    days_since_failure: Optional[int] = Field(
+        default=None,
+        description="STORY-309: Days since first payment failure (null if no failure)"
     )
 
 

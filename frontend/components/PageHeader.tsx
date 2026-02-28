@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ThemeToggle } from "../app/components/ThemeToggle";
 import { UserMenu } from "../app/components/UserMenu";
 import { QuotaBadge } from "../app/components/QuotaBadge";
+import { AlertNotificationBell } from "./AlertNotificationBell";
 import { MobileDrawer } from "./MobileDrawer";
 import { ReactNode } from "react";
 
@@ -63,6 +64,7 @@ export function PageHeader({ title, extraControls, statusSlot }: PageHeaderProps
           {/* AC10: Desktop — full controls (unchanged) */}
           <div className="hidden lg:flex items-center gap-2 sm:gap-3">
             {extraControls}
+            <AlertNotificationBell />
             <ThemeToggle />
             <UserMenu statusSlot={statusSlot ?? defaultStatusSlot} />
           </div>

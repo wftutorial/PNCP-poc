@@ -269,6 +269,136 @@ def render_alert_digest_email(
     )
 
 
+def render_consolidated_digest_email(
+    user_name: str,
+    alert_summaries: list[dict],
+    unsubscribe_url: str,
+) -> str:
+    """Render a consolidated digest email with all alerts for a user.
+
+    STORY-315 AC6: Single email containing summaries from all user's alerts.
+
+    Args:
+        user_name: User's display name.
+        alert_summaries: List of dicts, each with keys:
+            alert_name (str), opportunities (list[dict]), total_count (int).
+        unsubscribe_url: URL to manage alert preferences.
+
+    Returns:
+        Complete HTML email string.
+    """
+    total_opps = sum(s.get("total_count", 0) for s in alert_summaries)
+    alerts_with_items = [s for s in alert_summaries if s.get("total_count", 0) > 0]
+
+    if not alerts_with_items:
+        body = f"""
+        <h1 style="color: #333; font-size: 22px; margin: 0 0 16px;">
+          Ola, {user_name}!
+        </h1>
+        <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
+          Nenhum dos seus alertas encontrou novas oportunidades hoje.
+          Continuaremos monitorando.
+        </p>
+        <p style="text-align: center; margin: 24px 0 16px;">
+          <a href="{FRONTEND_URL}/buscar" class="btn"
+             style="display: inline-block; padding: 14px 32px; background-color: {SMARTLIC_GREEN}; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
+            Fazer busca manual
+          </a>
+        </p>
+        """
+        return email_base(
+            title="Resumo diario — SmartLic",
+            body_html=body,
+            is_transactional=False,
+            unsubscribe_url=unsubscribe_url,
+        )
+
+    # Build sections per alert
+    sections_html = ""
+    for summary in alerts_with_items:
+        alert_name = summary.get("alert_name", "Alerta")
+        opps = summary.get("opportunities", [])[:5]  # Top 5 per alert
+        count = summary.get("total_count", 0)
+
+        rows = ""
+        for i, opp in enumerate(opps):
+            rows += _render_opportunity_row(opp, i + 1)
+
+        sections_html += f"""
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+               style="border: 1px solid #eee; border-radius: 8px; overflow: hidden; margin: 0 0 16px;">
+          <tr>
+            <td style="padding: 10px 16px; background-color: #f5f5f5; border-bottom: 2px solid #eee;">
+              <span style="font-size: 13px; font-weight: 600; color: #555;">
+                {alert_name} &mdash; {count} nova{"s" if count != 1 else ""}
+              </span>
+            </td>
+          </tr>
+          {rows}
+        </table>
+        """
+
+    body = f"""
+    <h1 style="color: #333; font-size: 22px; margin: 0 0 8px;">
+      Ola, {user_name}!
+    </h1>
+    <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
+      Seus alertas encontraram <strong>{total_opps}</strong>
+      nova{"s" if total_opps != 1 else ""} oportunidade{"s" if total_opps != 1 else ""}
+      em <strong>{len(alerts_with_items)}</strong> alerta{"s" if len(alerts_with_items) != 1 else ""}.
+    </p>
+
+    <!-- Stats highlight bar -->
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+           style="background-color: #e8f5e9; border-radius: 8px; margin: 0 0 24px;">
+      <tr>
+        <td style="padding: 12px 16px; text-align: center;">
+          <span style="color: {SMARTLIC_GREEN}; font-size: 24px; font-weight: 700;">
+            {total_opps}
+          </span>
+          <span style="color: #555; font-size: 14px; margin-left: 8px;">
+            {"oportunidade" if total_opps == 1 else "oportunidades"} em {len(alerts_with_items)} {"alerta" if len(alerts_with_items) == 1 else "alertas"}
+          </span>
+        </td>
+      </tr>
+    </table>
+
+    {sections_html}
+
+    <!-- CTA -->
+    <p style="text-align: center; margin: 24px 0 16px;">
+      <a href="{FRONTEND_URL}/buscar" class="btn"
+         style="display: inline-block; padding: 14px 32px; background-color: {SMARTLIC_GREEN}; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
+        Ver todas as oportunidades no SmartLic
+      </a>
+    </p>
+
+    <p style="color: #888; font-size: 12px; text-align: center; margin: 16px 0 0;">
+      Para gerenciar seus alertas,
+      <a href="{FRONTEND_URL}/alertas" style="color: #888; text-decoration: underline;">acesse suas configuracoes</a>.
+    </p>
+    """
+
+    return email_base(
+        title=f"{total_opps} novas oportunidades — SmartLic",
+        body_html=body,
+        is_transactional=False,
+        unsubscribe_url=unsubscribe_url,
+    )
+
+
+def get_consolidated_digest_subject(total_count: int, alert_count: int) -> str:
+    """Generate subject line for consolidated digest email.
+
+    AC6: Subject for multi-alert consolidated digest.
+    """
+    if total_count == 0:
+        return "SmartLic — Nenhuma novidade nos seus alertas"
+    if total_count == 1:
+        return f"SmartLic — 1 nova oportunidade em {alert_count} alertas"
+    return f"SmartLic — {total_count} novas oportunidades em {alert_count} alertas"
+
+
 def get_alert_digest_subject(total_count: int, alert_name: str) -> str:
     """Generate the email subject line for an alert digest.
 

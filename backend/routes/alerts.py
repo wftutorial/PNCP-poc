@@ -460,6 +460,109 @@ async def unsubscribe_alert(
 
 
 # ---------------------------------------------------------------------------
+# STORY-315 AC12: GET /alerts/{alert_id}/preview — Dry-run matching
+# ---------------------------------------------------------------------------
+
+
+class AlertPreviewItem(BaseModel):
+    id: str
+    titulo: str
+    orgao: str
+    valor_estimado: float = 0.0
+    uf: str = ""
+    modalidade: str = ""
+    link_pncp: str = ""
+    viability_score: Optional[float] = None
+
+
+class AlertPreviewResponse(BaseModel):
+    alert_id: str
+    alert_name: str
+    items: List[AlertPreviewItem]
+    total: int
+    message: str
+
+
+@router.get("/alerts/{alert_id}/preview", response_model=AlertPreviewResponse)
+async def preview_alert(
+    alert_id: str,
+    user: dict = Depends(require_auth),
+):
+    """Preview what opportunities an alert would match (dry-run).
+
+    STORY-315 AC12: Executes matching without sending email.
+    Returns opportunities that would be sent, useful for validating filters.
+    """
+    from supabase_client import get_supabase, sb_execute
+
+    user_id = user["id"]
+    sb = get_supabase()
+
+    # Verify alert ownership
+    try:
+        alert_result = await sb_execute(
+            sb.table("alerts")
+            .select("id, user_id, name, filters")
+            .eq("id", alert_id)
+            .eq("user_id", user_id)
+        )
+
+        if not alert_result.data or len(alert_result.data) == 0:
+            raise HTTPException(status_code=404, detail="Alerta não encontrado.")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error verifying alert for preview {alert_id[:8]}...: {e}")
+        raise HTTPException(status_code=500, detail="Erro ao verificar alerta.")
+
+    alert_data = alert_result.data[0]
+    filters = alert_data.get("filters") or {}
+
+    # Execute matching logic (dry run — no email, no tracking)
+    try:
+        from services.alert_matcher import _search_cached_results, _apply_alert_filters
+
+        raw_results = await _search_cached_results(filters, sb)
+        matched = _apply_alert_filters(raw_results, filters)
+
+        # Cap at 20 items for preview
+        preview_items = [
+            AlertPreviewItem(
+                id=item.get("id", ""),
+                titulo=item.get("titulo", "Sem titulo"),
+                orgao=item.get("orgao", ""),
+                valor_estimado=item.get("valor_estimado", 0.0),
+                uf=item.get("uf", ""),
+                modalidade=item.get("modalidade", ""),
+                link_pncp=item.get("link_pncp", ""),
+                viability_score=item.get("viability_score"),
+            )
+            for item in matched[:20]
+        ]
+
+        total = len(matched)
+        if total == 0:
+            message = "Nenhuma oportunidade encontrada nas últimas 24h com esses filtros."
+        elif total == 1:
+            message = "1 oportunidade encontrada nas últimas 24h."
+        else:
+            message = f"{total} oportunidades encontradas nas últimas 24h."
+
+        return AlertPreviewResponse(
+            alert_id=alert_id,
+            alert_name=alert_data.get("name", ""),
+            items=preview_items,
+            total=total,
+            message=message,
+        )
+
+    except Exception as e:
+        logger.error(f"Error previewing alert {alert_id[:8]}...: {e}")
+        raise HTTPException(status_code=500, detail="Erro ao gerar preview.")
+
+
+# ---------------------------------------------------------------------------
 # AC13: GET /alerts/{alert_id}/history — Sent-item history
 # ---------------------------------------------------------------------------
 

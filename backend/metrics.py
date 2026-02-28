@@ -480,6 +480,33 @@ TOUR_SKIPPED = _create_counter(
     labelnames=["tour_id"],
 )
 
+# ============================================================================
+# STORY-315 AC20: Search Alert metrics
+# ============================================================================
+
+ALERTS_PROCESSED = _create_counter(
+    "smartlic_alerts_processed_total",
+    "Total alerts processed by outcome",
+    labelnames=["outcome"],  # matched, skipped, error
+)
+
+ALERTS_ITEMS_MATCHED = _create_counter(
+    "smartlic_alerts_items_matched_total",
+    "Total items matched across all alerts",
+)
+
+ALERTS_EMAILS_SENT = _create_counter(
+    "smartlic_alerts_emails_sent_total",
+    "Alert digest emails sent",
+    labelnames=["mode"],  # individual, consolidated
+)
+
+ALERTS_PROCESSING_DURATION = _create_histogram(
+    "smartlic_alerts_processing_duration_seconds",
+    "Total alert processing cycle duration",
+    buckets=[5, 10, 30, 60, 120, 300, 600],
+)
+
 
 # ============================================================================
 # ASGI app factory for /metrics endpoint

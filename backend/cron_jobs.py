@@ -810,6 +810,208 @@ async def _pre_dunning_loop() -> None:
 # ============================================================================
 
 # ============================================================================
+# STORY-315 AC8: Search Alerts (daily at 08:00 BRT = 11:00 UTC)
+# ============================================================================
+
+ALERTS_LOCK_KEY = "smartlic:alerts:lock"
+ALERTS_LOCK_TTL = 30 * 60  # 30 minutes
+
+
+async def start_alerts_task() -> asyncio.Task:
+    """STORY-315 AC8: Start the daily search alerts background task.
+
+    Calculates initial delay to align with ALERTS_HOUR_UTC (08:00 BRT),
+    then runs every 24 hours with Redis lock protection.
+    Returns the Task so it can be cancelled during shutdown.
+    """
+    task = asyncio.create_task(_alerts_loop(), name="search_alerts")
+    logger.info("STORY-315: Search alerts task started (daily at 08:00 BRT)")
+    return task
+
+
+async def run_search_alerts() -> dict:
+    """Execute a single search alerts run with lock protection.
+
+    AC8: Uses Redis lock with 30min TTL to prevent duplicate execution.
+    Processes max 100 alerts per run, 10 concurrent.
+    Respects ALERTS_ENABLED flag.
+    """
+    import time as _time
+
+    from config import ALERTS_ENABLED
+
+    if not ALERTS_ENABLED:
+        logger.info("STORY-315: Alerts disabled (ALERTS_ENABLED=false)")
+        return {"status": "disabled"}
+
+    # Acquire Redis lock
+    lock_acquired = False
+    try:
+        from redis_pool import get_redis_pool
+        redis = await get_redis_pool()
+        if redis:
+            lock_acquired = await redis.set(
+                ALERTS_LOCK_KEY,
+                datetime.now(timezone.utc).isoformat(),
+                nx=True,
+                ex=ALERTS_LOCK_TTL,
+            )
+            if not lock_acquired:
+                logger.info("STORY-315: Alerts skipped — lock already held")
+                return {"status": "skipped", "reason": "lock_held"}
+    except Exception as e:
+        logger.warning(f"STORY-315: Redis lock check failed (proceeding): {e}")
+        lock_acquired = True  # Proceed without lock on Redis failure
+
+    try:
+        from services.alert_matcher import match_alerts, finalize_matched_alert
+        from services.alert_service import get_sent_item_ids
+        from templates.emails.alert_digest import (
+            render_alert_digest_email,
+            get_alert_digest_subject,
+        )
+        from routes.alerts import get_alert_unsubscribe_url
+        from email_service import send_email_async
+        from metrics import (
+            ALERTS_PROCESSED,
+            ALERTS_ITEMS_MATCHED,
+            ALERTS_EMAILS_SENT,
+            ALERTS_PROCESSING_DURATION,
+        )
+
+        start = _time.time()
+
+        # AC8: Run matching engine (max 100 alerts)
+        result = await match_alerts(max_alerts=100, batch_size=10)
+
+        # Send emails for matched alerts
+        emails_sent = 0
+        for payload in result.get("payloads", []):
+            try:
+                items = payload.get("new_items", [])
+                if not items:
+                    continue
+
+                alert_id = payload["alert_id"]
+                unsubscribe_url = get_alert_unsubscribe_url(alert_id)
+                alert_name = payload.get("alert_name", "suas licitacoes")
+
+                # AC5: Render email (max 20 items)
+                html = render_alert_digest_email(
+                    user_name=payload["full_name"],
+                    alert_name=alert_name,
+                    opportunities=items[:20],
+                    total_count=len(items),
+                    unsubscribe_url=unsubscribe_url,
+                )
+                subject = get_alert_digest_subject(len(items), alert_name)
+
+                # AC7: Send with List-Unsubscribe header
+                send_email_async(
+                    to=payload["email"],
+                    subject=subject,
+                    html=html,
+                    headers={
+                        "List-Unsubscribe": f"<{unsubscribe_url}>",
+                        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+                    },
+                    tags=[
+                        {"name": "category", "value": "alert_digest"},
+                        {"name": "alert_id", "value": alert_id[:8]},
+                    ],
+                )
+
+                # Track sent items for dedup
+                item_ids = [item["id"] for item in items if item.get("id")]
+                await finalize_matched_alert(alert_id, item_ids)
+
+                emails_sent += 1
+                ALERTS_EMAILS_SENT.labels(mode="individual").inc()
+                ALERTS_ITEMS_MATCHED.inc(len(items))
+
+            except Exception as e:
+                logger.error(
+                    "STORY-315: Failed to send alert email for %s: %s",
+                    payload.get("alert_id", "?")[:8], e,
+                )
+
+        # Record metrics
+        ALERTS_PROCESSED.labels(outcome="matched").inc(result.get("matched", 0))
+        ALERTS_PROCESSED.labels(outcome="skipped").inc(result.get("skipped", 0))
+        ALERTS_PROCESSED.labels(outcome="error").inc(result.get("errors", 0))
+
+        duration = _time.time() - start
+        ALERTS_PROCESSING_DURATION.observe(duration)
+
+        result["emails_sent"] = emails_sent
+        result["duration_s"] = round(duration, 2)
+
+        logger.info(
+            "STORY-315: Alert cycle complete — "
+            "matched=%d, emails=%d, skipped=%d, errors=%d, duration=%.1fs",
+            result.get("matched", 0),
+            emails_sent,
+            result.get("skipped", 0),
+            result.get("errors", 0),
+            duration,
+        )
+
+        return result
+
+    finally:
+        # Release lock
+        if lock_acquired:
+            try:
+                from redis_pool import get_redis_pool
+                redis = await get_redis_pool()
+                if redis:
+                    await redis.delete(ALERTS_LOCK_KEY)
+            except Exception:
+                pass
+
+
+async def _alerts_loop() -> None:
+    """STORY-315 AC8: Run search alerts daily at configured hour."""
+    from config import ALERTS_ENABLED, ALERTS_HOUR_UTC
+
+    if not ALERTS_ENABLED:
+        logger.info("STORY-315: Alerts disabled (ALERTS_ENABLED=false)")
+        return
+
+    # Calculate delay until next target hour
+    now = datetime.now(timezone.utc)
+    next_run = now.replace(
+        hour=ALERTS_HOUR_UTC, minute=0, second=0, microsecond=0,
+    )
+    if now.hour >= ALERTS_HOUR_UTC:
+        next_run += timedelta(days=1)
+
+    initial_delay = (next_run - now).total_seconds()
+    initial_delay = max(60, min(initial_delay, 86400))
+
+    logger.info(
+        "STORY-315: Alerts first run in %.0fs (target: %s)",
+        initial_delay, next_run.isoformat(),
+    )
+    await asyncio.sleep(initial_delay)
+
+    while True:
+        try:
+            result = await run_search_alerts()
+            logger.info(
+                "STORY-315 alert cycle: %s at %s",
+                result, datetime.now(timezone.utc).isoformat(),
+            )
+            await asyncio.sleep(24 * 60 * 60)
+        except asyncio.CancelledError:
+            logger.info("STORY-315: Alerts task cancelled")
+            break
+        except Exception as e:
+            logger.error(f"STORY-315: Alerts loop error: {e}", exc_info=True)
+            await asyncio.sleep(300)
+
+
+# ============================================================================
 # STORY-314: Stripe ⇄ DB Reconciliation (daily at 03:00 BRT = 06:00 UTC)
 # ============================================================================
 

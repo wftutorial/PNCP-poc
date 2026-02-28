@@ -58,6 +58,7 @@ def send_email(
     html: str,
     tags: Optional[list[dict[str, str]]] = None,
     reply_to: Optional[str] = None,
+    headers: Optional[dict[str, str]] = None,
 ) -> Optional[str]:
     """
     Send a transactional email via Resend.
@@ -93,6 +94,8 @@ def send_email(
         params["tags"] = tags
     if reply_to:
         params["reply_to"] = reply_to
+    if headers:
+        params["headers"] = headers
 
     last_error = None
     for attempt in range(MAX_RETRIES):
@@ -194,6 +197,7 @@ def send_email_async(
     html: str,
     tags: Optional[list[dict[str, str]]] = None,
     reply_to: Optional[str] = None,
+    headers: Optional[dict[str, str]] = None,
 ) -> None:
     """
     Fire-and-forget email send in a background thread.
@@ -207,7 +211,7 @@ def send_email_async(
     """
     def _send():
         try:
-            send_email(to=to, subject=subject, html=html, tags=tags, reply_to=reply_to)
+            send_email(to=to, subject=subject, html=html, tags=tags, reply_to=reply_to, headers=headers)
         except Exception as e:
             # Belt-and-suspenders: send_email already catches, but just in case
             logger.error(f"Async email send unexpected error: {e}")

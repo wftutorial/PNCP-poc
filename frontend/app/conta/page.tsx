@@ -104,6 +104,11 @@ export default function ContaPage() {
   const [alertFrequency, setAlertFrequency] = useState("daily");
   const [alertLoading, setAlertLoading] = useState(false);
   const [alertSaving, setAlertSaving] = useState(false);
+  // STORY-315 AC17: Digest mode (consolidated vs individual)
+  const [digestMode, setDigestMode] = useState<"individual" | "consolidated">("individual");
+  // STORY-315 AC14: User's alerts list
+  const [userAlerts, setUserAlerts] = useState<Array<{ id: string; name: string; active: boolean; filters: Record<string, unknown> }>>([]);
+  const [userAlertsLoading, setUserAlertsLoading] = useState(false);
 
   // STORY-260: Profile de Licitante state
   const [profileCtx, setProfileCtx] = useState<ProfileContext | null>(null);
@@ -158,6 +163,26 @@ export default function ContaPage() {
     }
   }, [session?.access_token]);
 
+  // STORY-315 AC14: Fetch user alerts list
+  const fetchUserAlerts = useCallback(async () => {
+    if (!session?.access_token) return;
+    setUserAlertsLoading(true);
+    try {
+      const res = await fetch("/api/alerts", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : data.alerts || [];
+        setUserAlerts(list);
+      }
+    } catch {
+      // silent — non-critical
+    } finally {
+      setUserAlertsLoading(false);
+    }
+  }, [session?.access_token]);
+
   const handleSaveAlertPrefs = useCallback(async (enabled: boolean, frequency: string) => {
     if (!session?.access_token) return;
     setAlertSaving(true);
@@ -188,7 +213,8 @@ export default function ContaPage() {
   useEffect(() => {
     fetchProfileCtx();
     fetchAlertPrefs();
-  }, [fetchProfileCtx, fetchAlertPrefs]);
+    fetchUserAlerts();
+  }, [fetchProfileCtx, fetchAlertPrefs, fetchUserAlerts]);
 
   const startEdit = () => {
     if (!profileCtx) return;
@@ -1040,34 +1066,137 @@ export default function ContaPage() {
 
               {/* Frequency selector — only shown when enabled */}
               {alertEnabled && (
-                <div>
-                  <label className="block text-sm font-medium text-[var(--ink-secondary)] mb-2">Frequencia</label>
-                  <div className="flex flex-wrap gap-2">
-                    {[
-                      { value: "daily", label: "Diario" },
-                      { value: "twice_weekly", label: "2x por semana" },
-                      { value: "weekly", label: "Semanal" },
-                    ].map((opt) => (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        disabled={alertSaving}
-                        data-testid={`alert-freq-${opt.value}`}
-                        onClick={() => {
-                          setAlertFrequency(opt.value);
-                          handleSaveAlertPrefs(alertEnabled, opt.value);
-                        }}
-                        className={`px-4 py-2 rounded-button text-sm font-medium transition-colors ${
-                          alertFrequency === opt.value
-                            ? "bg-[var(--brand-navy)] text-white"
-                            : "border border-[var(--border)] bg-[var(--surface-0)] text-[var(--ink)] hover:bg-[var(--surface-1)]"
-                        } ${alertSaving ? "opacity-50 cursor-not-allowed" : ""}`}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-[var(--ink-secondary)] mb-2">Frequencia</label>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { value: "daily", label: "Diario" },
+                        { value: "twice_weekly", label: "2x por semana" },
+                        { value: "weekly", label: "Semanal" },
+                      ].map((opt) => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          disabled={alertSaving}
+                          data-testid={`alert-freq-${opt.value}`}
+                          onClick={() => {
+                            setAlertFrequency(opt.value);
+                            handleSaveAlertPrefs(alertEnabled, opt.value);
+                          }}
+                          className={`px-4 py-2 rounded-button text-sm font-medium transition-colors ${
+                            alertFrequency === opt.value
+                              ? "bg-[var(--brand-navy)] text-white"
+                              : "border border-[var(--border)] bg-[var(--surface-0)] text-[var(--ink)] hover:bg-[var(--surface-1)]"
+                          } ${alertSaving ? "opacity-50 cursor-not-allowed" : ""}`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
+
+                  {/* STORY-315 AC17: Digest mode — consolidated vs individual */}
+                  <div>
+                    <label className="block text-sm font-medium text-[var(--ink-secondary)] mb-2">
+                      Formato do email
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { value: "individual" as const, label: "1 email por alerta" },
+                        { value: "consolidated" as const, label: "1 email consolidado" },
+                      ].map((opt) => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          data-testid={`digest-mode-${opt.value}`}
+                          onClick={() => setDigestMode(opt.value)}
+                          className={`px-4 py-2 rounded-button text-sm font-medium transition-colors ${
+                            digestMode === opt.value
+                              ? "bg-[var(--brand-navy)] text-white"
+                              : "border border-[var(--border)] bg-[var(--surface-0)] text-[var(--ink)] hover:bg-[var(--surface-1)]"
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-[var(--ink-muted)] mt-1">
+                      {digestMode === "consolidated"
+                        ? "Voce recebera 1 email com todos os alertas reunidos."
+                        : "Voce recebera 1 email separado para cada alerta."}
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* STORY-315 AC14: Meus Alertas section */}
+        <div className="p-6 bg-[var(--surface-0)] border border-[var(--border)] rounded-card mb-6" data-testid="meus-alertas-section">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-[var(--ink)]">Meus Alertas</h2>
+            <Link
+              href="/alertas"
+              className="text-sm font-medium text-[var(--brand-blue)] hover:underline"
+            >
+              Gerenciar alertas
+            </Link>
+          </div>
+
+          {userAlertsLoading ? (
+            <div className="space-y-2">
+              {[1, 2].map((i) => (
+                <div key={i} className="h-12 bg-[var(--surface-1)] rounded animate-pulse" />
+              ))}
+            </div>
+          ) : userAlerts.length === 0 ? (
+            <div className="text-center py-6">
+              <p className="text-sm text-[var(--ink-muted)] mb-3">
+                Voce ainda nao tem alertas configurados.
+              </p>
+              <Link
+                href="/alertas"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-button text-sm font-medium bg-[var(--brand-navy)] text-white hover:bg-[var(--brand-blue)] transition-colors"
+                data-testid="create-first-alert-btn"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+                Criar primeiro alerta
+              </Link>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {userAlerts.slice(0, 5).map((alert) => (
+                <div
+                  key={alert.id}
+                  className={`flex items-center justify-between px-3 py-2.5 rounded-lg border transition-colors ${
+                    alert.active
+                      ? "border-[var(--brand-blue)]/20 bg-[var(--surface-0)]"
+                      : "border-[var(--border)] bg-[var(--surface-1)] opacity-60"
+                  }`}
+                  data-testid={`conta-alert-${alert.id}`}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${alert.active ? "bg-green-500" : "bg-[var(--ink-faint)]"}`} />
+                    <span className="text-sm font-medium text-[var(--ink)] truncate">
+                      {alert.name}
+                    </span>
+                  </div>
+                  <span className="text-xs text-[var(--ink-muted)] flex-shrink-0 ml-2">
+                    {alert.active ? "Ativo" : "Inativo"}
+                  </span>
                 </div>
+              ))}
+              {userAlerts.length > 5 && (
+                <Link
+                  href="/alertas"
+                  className="block text-center text-sm text-[var(--brand-blue)] hover:underline py-1"
+                >
+                  Ver todos os {userAlerts.length} alertas
+                </Link>
               )}
             </div>
           )}

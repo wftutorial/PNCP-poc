@@ -111,6 +111,15 @@ export interface BatchProgress {
   ufsInBatch: string[];
 }
 
+/** STORY-327 AC5: Filter summary from backend filter_summary SSE event */
+export interface FilterSummary {
+  totalRaw: number;
+  totalFiltered: number;
+  rejectedKeyword: number;
+  rejectedValue: number;
+  rejectedLlm: number;
+}
+
 /** STORY-295 AC10: Per-source status for progressive results */
 export type SourceStatusType = 'pending' | 'fetching' | 'success' | 'partial' | 'error' | 'timeout';
 
@@ -155,6 +164,8 @@ interface UseSearchSSEReturn {
   batchProgress: BatchProgress | null;
   /** STORY-295 AC10: Per-source status for progressive results */
   sourceStatuses: Map<string, SourceStatus>;
+  /** STORY-327 AC5: Filter summary with raw vs filtered counts */
+  filterSummary: FilterSummary | null;
 }
 
 export function useSearchSSE({
@@ -183,6 +194,8 @@ export function useSearchSSE({
 
   // STORY-295: Per-source status for progressive results
   const [sourceStatuses, setSourceStatuses] = useState<Map<string, SourceStatus>>(new Map());
+  // STORY-327 AC5: Filter summary from backend
+  const [filterSummary, setFilterSummary] = useState<FilterSummary | null>(null);
 
   const eventSourceRef = useRef<EventSource | null>(null);
   const retryAttemptRef = useRef(0);
@@ -278,6 +291,19 @@ export function useSearchSSE({
           });
         }
         return; // Don't set as current event — these are metadata events
+      }
+
+      // STORY-327 AC5: Handle filter_summary event
+      if (event.stage === 'filter_summary') {
+        const detail = event.detail as Record<string, unknown>;
+        setFilterSummary({
+          totalRaw: (detail.total_raw as number) || 0,
+          totalFiltered: (detail.total_filtered as number) || 0,
+          rejectedKeyword: (detail.rejected_keyword as number) || 0,
+          rejectedValue: (detail.rejected_value as number) || 0,
+          rejectedLlm: (detail.rejected_llm as number) || 0,
+        });
+        return; // Don't set as current event — this is metadata
       }
 
       // Handle terminal and special events
@@ -393,6 +419,7 @@ export function useSearchSSE({
     setPartialProgress(null);
     setRefreshAvailable(null);
     setSourceStatuses(new Map());
+    setFilterSummary(null);
     setSseDisconnected(false);
     setIsReconnecting(false);
     setSseAvailable(true);
@@ -499,6 +526,6 @@ export function useSearchSSE({
     isReconnecting,
     isDegraded, degradedDetail, partialProgress, refreshAvailable,
     ufStatuses, ufTotalFound, ufAllComplete, batchProgress,
-    sourceStatuses,
+    sourceStatuses, filterSummary,
   };
 }

@@ -2038,6 +2038,15 @@ class SearchPipeline:
                 f"Filtragem concluida: {len(ctx.licitacoes_filtradas)} resultados",
                 total_filtered=len(ctx.licitacoes_filtradas),
             )
+            # STORY-327 AC5: Emit unified filter_summary with raw vs filtered breakdown
+            await ctx.tracker.emit_filter_summary(
+                total_raw=len(ctx.licitacoes_raw),
+                total_filtered=len(ctx.licitacoes_filtradas),
+                rejected_keyword=stats.get("rejeitadas_keyword", 0) if stats else 0,
+                rejected_value=stats.get("rejeitadas_valor", 0) if stats else 0,
+                rejected_llm=stats.get("rejeitadas_llm", 0) if stats else 0,
+                filter_stats=stats,
+            )
 
     # ------------------------------------------------------------------
     # Stage 5: EnrichResults

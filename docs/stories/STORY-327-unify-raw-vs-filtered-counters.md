@@ -21,13 +21,13 @@ Dois pipelines SSE independentes alimentam dois componentes sem coordenação:
 
 ## Critérios de Aceite
 
-- [ ] AC1: O banner inferior durante a busca deve exibir formato **"X relevantes de Y analisadas"** (padrão Algolia), onde Y = totalSoFar (raw) e X = total filtrado
-- [ ] AC2: Durante a fase de filtragem (X ainda desconhecido), exibir "Analisando Y licitações encontradas — aplicando filtros do setor..." em vez de apenas "Y encontradas"
-- [ ] AC3: Se a busca completar com 0 resultados filtrados e Y > 0, exibir sugestão: "Nenhuma oportunidade relevante entre Y licitações. Tente ampliar o período ou selecionar mais estados."
-- [ ] AC4: O `UfProgressGrid` header deve ser "Relevantes: N oportunidades até agora" para diferenciar de "encontradas" (raw) no banner inferior
-- [ ] AC5: O backend deve emitir novo evento SSE `filter_summary` ao final da filtragem com breakdown: `{ total_raw, total_filtered, rejected_keyword, rejected_value, rejected_llm }`
-- [ ] AC6: Teste de integração SSE: simular pipeline 100 raw → 15 filtrados → verificar ambos contadores
-- [ ] AC7: O `SearchResults.tsx` não deve mostrar `totalSoFar` isoladamente sem contexto
+- [x] AC1: O banner inferior durante a busca deve exibir formato **"X relevantes de Y analisadas"** (padrão Algolia), onde Y = totalSoFar (raw) e X = total filtrado
+- [x] AC2: Durante a fase de filtragem (X ainda desconhecido), exibir "Analisando Y licitações encontradas — aplicando filtros do setor..." em vez de apenas "Y encontradas"
+- [x] AC3: Se a busca completar com 0 resultados filtrados e Y > 0, exibir sugestão: "Nenhuma oportunidade relevante entre Y licitações. Tente ampliar o período ou selecionar mais estados."
+- [x] AC4: O `UfProgressGrid` header deve ser "Relevantes: N oportunidades até agora" para diferenciar de "encontradas" (raw) no banner inferior
+- [x] AC5: O backend deve emitir novo evento SSE `filter_summary` ao final da filtragem com breakdown: `{ total_raw, total_filtered, rejected_keyword, rejected_value, rejected_llm }`
+- [x] AC6: Teste de integração SSE: simular pipeline 100 raw → 15 filtrados → verificar ambos contadores
+- [x] AC7: O `SearchResults.tsx` não deve mostrar `totalSoFar` isoladamente sem contexto
 
 ## Arquivos Afetados
 

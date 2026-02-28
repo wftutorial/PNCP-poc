@@ -122,10 +122,10 @@ export function UfProgressGrid({ ufStatuses, totalFound }: UfProgressGridProps) 
 
   return (
     <div className="mt-6 sm:mt-8 animate-fade-in-up">
-      {/* Progressive results counter (AC3) */}
+      {/* STORY-327 AC4: "Relevantes" to differentiate from raw count in banner */}
       <div className="mb-4 text-center">
         <p className="text-base sm:text-lg text-ink">
-          Encontradas:{" "}
+          Relevantes:{" "}
           <span className="font-display font-bold text-2xl sm:text-3xl text-ink tabular-nums transition-all duration-300">
             {totalFound.toLocaleString("pt-BR")}
           </span>

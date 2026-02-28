@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import type { BuscaResult } from "../../types";
-import type { SearchProgressEvent, RefreshAvailableInfo, SourceStatus, PartialProgress } from "../../../hooks/useSearchSSE";
+import type { SearchProgressEvent, RefreshAvailableInfo, SourceStatus, PartialProgress, FilterSummary } from "../../../hooks/useSearchSSE";
 import RefreshBanner from "./RefreshBanner";
 import { EnhancedLoadingProgress } from "../../../components/EnhancedLoadingProgress";
 import { LoadingResultsSkeleton } from "../../components/LoadingResultsSkeleton";
@@ -147,6 +147,9 @@ export interface SearchResultsProps {
   sourceStatuses?: Map<string, SourceStatus>;
   partialProgress?: PartialProgress | null;
 
+  // STORY-327: Filter summary (raw vs filtered)
+  filterSummary?: FilterSummary | null;
+
   // STORY-320: Trial paywall
   trialPhase?: "full_access" | "limited_access" | "not_trial";
   paywallApplied?: boolean;
@@ -185,6 +188,8 @@ export default function SearchResults({
   isTrialExpired,
   // STORY-295: Progressive results
   sourceStatuses, partialProgress,
+  // STORY-327: Filter summary
+  filterSummary,
   // STORY-320: Trial paywall
   trialPhase, paywallApplied, totalBeforePaywall,
   // STORY-325: PDF Diagnostico
@@ -330,22 +335,33 @@ export default function SearchResults({
             <SourceStatusGrid sourceStatuses={sourceStatuses} className="mt-3" />
           )}
 
-          {/* STORY-295 AC11+AC14: Progressive results counter + banner */}
-          {partialProgress && partialProgress.totalSoFar > 0 && (
+          {/* STORY-327 AC1+AC2+AC7: Unified counter banner — "X relevantes de Y analisadas" */}
+          {(filterSummary || (partialProgress && partialProgress.totalSoFar > 0)) && (
             <div className="mt-3 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 animate-fade-in-up">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <svg className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
-                  <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
-                    {partialProgress.totalSoFar} {partialProgress.totalSoFar === 1 ? "oportunidade encontrada" : "oportunidades encontradas"} até agora
+                  <span className="text-sm font-medium text-blue-800 dark:text-blue-200" data-testid="unified-counter-banner">
+                    {filterSummary
+                      ? `${filterSummary.totalFiltered} ${filterSummary.totalFiltered === 1 ? "relevante" : "relevantes"} de ${filterSummary.totalRaw.toLocaleString("pt-BR")} analisadas`
+                      : `Analisando ${partialProgress!.totalSoFar.toLocaleString("pt-BR")} licitações encontradas — aplicando filtros do setor...`}
                   </span>
                 </div>
                 <span className="text-xs text-blue-600 dark:text-blue-400">
-                  Busca em andamento
+                  {filterSummary ? "Filtragem concluída" : "Busca em andamento"}
                 </span>
               </div>
+            </div>
+          )}
+
+          {/* STORY-327 AC3: Zero filtered results with raw > 0 — actionable suggestion */}
+          {filterSummary && filterSummary.totalFiltered === 0 && filterSummary.totalRaw > 0 && (
+            <div className="mt-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 animate-fade-in-up" data-testid="zero-filtered-suggestion">
+              <p className="text-sm text-amber-800 dark:text-amber-200">
+                Nenhuma oportunidade relevante entre {filterSummary.totalRaw.toLocaleString("pt-BR")} licitações. Tente ampliar o período ou selecionar mais estados.
+              </p>
             </div>
           )}
 

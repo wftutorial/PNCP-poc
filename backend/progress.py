@@ -462,6 +462,40 @@ class ProgressTracker:
         )
         await self._emit_event(event)
 
+    async def emit_filter_summary(
+        self,
+        total_raw: int,
+        total_filtered: int,
+        rejected_keyword: int = 0,
+        rejected_value: int = 0,
+        rejected_llm: int = 0,
+        filter_stats: dict | None = None,
+    ) -> None:
+        """STORY-327 AC5: Emit unified filter summary with raw vs filtered breakdown.
+
+        Non-terminal event — SSE stream stays open after this.
+        Frontend uses this to display "X relevantes de Y analisadas".
+        """
+        detail: dict = {
+            "total_raw": total_raw,
+            "total_filtered": total_filtered,
+            "rejected_keyword": rejected_keyword,
+            "rejected_value": rejected_value,
+            "rejected_llm": rejected_llm,
+        }
+        if filter_stats:
+            detail["rejected_uf"] = filter_stats.get("rejeitadas_uf", 0)
+            detail["rejected_status"] = filter_stats.get("rejeitadas_status", 0)
+            detail["rejected_outros"] = filter_stats.get("rejeitadas_outros", 0)
+
+        event = ProgressEvent(
+            stage="filter_summary",
+            progress=70,
+            message=f"{total_filtered} relevantes de {total_raw} analisadas",
+            detail=detail,
+        )
+        await self._emit_event(event)
+
     async def emit_error(self, error_message: str) -> None:
         """Signal search error."""
         self._is_complete = True

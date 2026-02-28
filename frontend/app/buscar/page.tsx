@@ -828,6 +828,7 @@ function HomePageContent() {
                 // STORY-295: Progressive results
                 sourceStatuses={search.sourceStatuses}
                 partialProgress={search.partialProgress}
+                filterSummary={search.filterSummary}
                 // STORY-320: Trial paywall
                 trialPhase={trialPhase}
                 paywallApplied={search.result?.paywall_applied}

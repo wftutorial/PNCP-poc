@@ -10,8 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 // In-memory rate limiter (persists across requests in Railway standalone mode)
-// Exported for test cleanup
-export const reportCounts = new Map<
+const reportCounts = new Map<
   string,
   { count: number; resetAt: number }
 >();

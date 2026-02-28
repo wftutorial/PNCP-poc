@@ -7,7 +7,7 @@
  * @jest-environment node
  */
 
-import { POST, reportCounts } from "../app/api/csp-report/route";
+import { POST } from "../app/api/csp-report/route";
 import { NextRequest } from "next/server";
 
 function createRequest(body: object, ip?: string): NextRequest {
@@ -22,30 +22,31 @@ function createRequest(body: object, ip?: string): NextRequest {
 }
 
 describe("STORY-311 AC19: CSP Report Endpoint", () => {
-  beforeEach(() => {
-    // Reset rate limiter state between tests
-    reportCounts.clear();
-  });
-
   it("should accept valid legacy report-uri format", async () => {
-    const req = createRequest({
-      "csp-report": {
-        "document-uri": "https://smartlic.tech/buscar",
-        "violated-directive": "script-src 'self'",
-        "blocked-uri": "https://evil.com/script.js",
+    const req = createRequest(
+      {
+        "csp-report": {
+          "document-uri": "https://smartlic.tech/buscar",
+          "violated-directive": "script-src 'self'",
+          "blocked-uri": "https://evil.com/script.js",
+        },
       },
-    });
+      "legacy-format-ip"
+    );
     const resp = await POST(req);
     expect(resp.status).toBe(204);
   });
 
   it("should accept Reporting API v1 format", async () => {
-    const req = createRequest({
-      documentURL: "https://smartlic.tech/buscar",
-      violatedDirective: "script-src",
-      blockedURL: "https://evil.com/script.js",
-      disposition: "enforce",
-    });
+    const req = createRequest(
+      {
+        documentURL: "https://smartlic.tech/buscar",
+        violatedDirective: "script-src",
+        blockedURL: "https://evil.com/script.js",
+        disposition: "enforce",
+      },
+      "reporting-api-ip"
+    );
     const resp = await POST(req);
     expect(resp.status).toBe(204);
   });

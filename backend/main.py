@@ -1,3 +1,9 @@
+# CRIT-SIGSEGV: Enable faulthandler BEFORE any imports.
+# Prints Python-level traceback to stderr on SIGSEGV/SIGFPE/SIGABRT,
+# giving visibility into which C extension is crashing.
+import faulthandler
+faulthandler.enable()
+
 """
 SmartLic - Backend API
 

@@ -2,7 +2,12 @@
 # Production dependencies - PINNED for Railway compatibility
 # =============================================================================
 fastapi==0.129.0
-uvicorn[standard]==0.41.0
+# CRIT-SIGSEGV: uvicorn WITHOUT [standard] extra.
+# [standard] installs uvloop + httptools (C extensions) which cause SIGSEGV
+# crash loops on Railway Linux containers. uvloop is NOT available on Windows
+# (dev), so the bug is invisible locally. Pure-Python h11 + asyncio loop is
+# stable and sufficient for current scale (2 workers, <100 concurrent users).
+uvicorn==0.41.0
 gunicorn==23.0.0
 pydantic[email]==2.12.5
 pydantic-settings==2.10.1
@@ -60,6 +65,8 @@ prometheus_client>=0.20.0
 arq>=0.26,<1.0
 
 # Distributed tracing (GTM-RESILIENCE-F02)
+# NOTE: These pull grpcio as transitive dep — removed in Dockerfile post-install.
+# We use HTTP/protobuf exporter (not gRPC), so grpcio is unnecessary and fork-unsafe.
 opentelemetry-api>=1.25,<2.0
 opentelemetry-sdk>=1.25,<2.0
 opentelemetry-exporter-otlp-proto-http>=1.25,<2.0

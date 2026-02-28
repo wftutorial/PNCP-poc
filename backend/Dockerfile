@@ -24,8 +24,11 @@ RUN echo "Build: ${CACHEBUST}" && apt-get update && apt-get install -y \
 COPY requirements.txt .
 
 # Install Python dependencies
+# CRIT-SIGSEGV: Remove grpcio (transitive dep from opentelemetry) — C extension
+# that is fork-unsafe and not needed (we use HTTP/protobuf OTLP exporter, not gRPC).
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt && \
+    pip uninstall -y grpcio grpcio-status 2>/dev/null || true
 
 # Copy application code
 COPY . .

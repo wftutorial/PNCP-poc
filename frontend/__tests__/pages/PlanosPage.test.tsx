@@ -493,7 +493,8 @@ describe('PlanosPage Component', () => {
       });
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /Processando.../i })).toBeInTheDocument();
+        // AC21/AC22: two CTA buttons may show "Processando..." (Pro + Consultoria share checkoutLoading)
+        expect(screen.getAllByRole('button', { name: /Processando.../i }).length).toBeGreaterThanOrEqual(1);
       });
     });
 

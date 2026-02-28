@@ -221,6 +221,10 @@ export default function DashboardPage() {
 
   const [period, setPeriod] = useState<Period>("week");
   const [profilePct, setProfilePct] = useState<number | null>(null);
+  const [viewMode, setViewMode] = useState<"personal" | "team">("personal");
+  const [userOrg, setUserOrg] = useState<{ id: string; name: string; user_role: string } | null>(null);
+  const [teamData, setTeamData] = useState<DashboardData | null>(null);
+  const [teamLoading, setTeamLoading] = useState(false);
 
   // STORY-260: Fetch profile completeness on mount (for header ring + conditional components)
   useEffect(() => {
@@ -242,6 +246,45 @@ export default function DashboardPage() {
       cancelled = true;
     };
   }, [session?.access_token]);
+
+  // AC19: Fetch org membership — show team toggle only for owners/admins
+  useEffect(() => {
+    if (!session?.access_token) return;
+    fetch("/api/organizations/me", {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (
+          data?.organization &&
+          ["owner", "admin"].includes(data.organization.user_role)
+        ) {
+          setUserOrg(data.organization);
+        }
+      })
+      .catch(() => {});
+  }, [session?.access_token]);
+
+  // AC19: Fetch team dashboard data when switching to team view
+  useEffect(() => {
+    if (viewMode !== "team" || !userOrg || !session?.access_token) return;
+    setTeamLoading(true);
+    fetch(`/api/organizations/${userOrg.id}/dashboard`, {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) {
+          setTeamData({
+            summary: data.summary ?? null,
+            timeSeries: data.time_series ?? [],
+            dimensions: data.dimensions ?? null,
+          });
+        }
+      })
+      .catch(() => {})
+      .finally(() => setTeamLoading(false));
+  }, [viewMode, userOrg, session?.access_token]);
 
   // Stable fetch helper — always uses proxy to avoid CORS issues
   const fetchAnalytics = useCallback(
@@ -300,14 +343,17 @@ export default function DashboardPage() {
     timeoutMs: LOADING_TIMEOUT_MS,
   });
 
-  const summary = data?.summary ?? null;
-  const timeSeries = data?.timeSeries ?? [];
-  const dimensions = data?.dimensions ?? null;
-
-  // AC4/AC5: Per-section error flags
+  // AC4/AC5: Per-section error flags (always from personal data)
   const summaryError = data?.summaryError ?? false;
   const timeSeriesError = data?.timeSeriesError ?? false;
   const dimensionsError = data?.dimensionsError ?? false;
+
+  // AC19: Active dataset — personal or team view
+  const activeData = viewMode === "team" && teamData ? teamData : data;
+
+  const summary = activeData?.summary ?? null;
+  const timeSeries = activeData?.timeSeries ?? [];
+  const dimensions = activeData?.dimensions ?? null;
 
   // CSV export
   const handleExportCSV = useCallback(() => {
@@ -618,10 +664,54 @@ export default function DashboardPage() {
         }
       />
       <div className="max-w-6xl mx-auto py-8 px-4">
+        {/* AC19: Team/personal data toggle — shown only to org owners/admins */}
+        {userOrg && (
+          <div className="flex items-center gap-2 mb-4" data-testid="team-toggle">
+            <button
+              onClick={() => setViewMode("personal")}
+              className={`px-3 py-1.5 text-sm rounded-button transition-colors ${
+                viewMode === "personal"
+                  ? "bg-[var(--brand-blue)] text-white"
+                  : "bg-[var(--surface-1)] text-[var(--ink-secondary)]"
+              }`}
+              data-testid="toggle-personal"
+            >
+              Meus dados
+            </button>
+            <button
+              onClick={() => setViewMode("team")}
+              className={`px-3 py-1.5 text-sm rounded-button transition-colors ${
+                viewMode === "team"
+                  ? "bg-[var(--brand-blue)] text-white"
+                  : "bg-[var(--surface-1)] text-[var(--ink-secondary)]"
+              }`}
+              data-testid="toggle-team"
+            >
+              Dados da equipe
+            </button>
+            {viewMode === "team" && (
+              <span className="text-xs text-[var(--ink-muted)] ml-1">{userOrg.name}</span>
+            )}
+          </div>
+        )}
+
+        {/* AC19: Team loading spinner */}
+        {viewMode === "team" && teamLoading && (
+          <div className="flex items-center gap-2 mb-4 text-sm text-[var(--ink-secondary)]" data-testid="team-loading">
+            <div className="w-4 h-4 border-2 border-[var(--brand-blue)] border-t-transparent rounded-full animate-spin" />
+            Carregando dados da equipe...
+          </div>
+        )}
+
         {/* Subtitle */}
-        {summary && (
+        {summary && viewMode === "personal" && (
           <p className="text-sm text-[var(--ink-muted)] mb-6">
             Membro desde {formatDate(summary.member_since)}
+          </p>
+        )}
+        {viewMode === "team" && userOrg && (
+          <p className="text-sm text-[var(--ink-muted)] mb-6">
+            Dados agregados da equipe — {userOrg.name}
           </p>
         )}
 

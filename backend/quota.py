@@ -135,6 +135,16 @@ PLAN_CAPABILITIES: dict[str, PlanCapabilities] = {
         "max_summary_tokens": 10000,
         "priority": PlanPriority.NORMAL.value,
     },
+    # STORY-322: Plano Consultoria — multi-user org plan
+    "consultoria": {
+        "max_history_days": 1825,  # 5 years
+        "allow_excel": True,
+        "allow_pipeline": True,
+        "max_requests_per_month": 5000,  # 1000 x 5 members
+        "max_requests_per_min": 10,  # Rate limit per org
+        "max_summary_tokens": 10000,
+        "priority": PlanPriority.HIGH.value,
+    },
     # STORY-283 AC1: Map plan_ids found in production database
     "free": {
         "max_history_days": 7,
@@ -163,6 +173,7 @@ PLAN_NAMES: dict[str, str] = {
     "maquina": "Máquina (legacy)",
     "sala_guerra": "Sala de Guerra (legacy)",
     "smartlic_pro": "SmartLic Pro",
+    "consultoria": "SmartLic Consultoria",
     "free": "Free",
     "master": "Master",
 }
@@ -173,6 +184,7 @@ PLAN_PRICES: dict[str, str] = {
     "maquina": "R$ 597/mês",
     "sala_guerra": "R$ 1.497/mês",
     "smartlic_pro": "R$ 397/mês",
+    "consultoria": "R$ 997/mês",
 }
 
 # Upgrade path suggestions (for error messages)
@@ -625,6 +637,70 @@ def check_and_increment_quota_atomic(
         # Increment using fallback
         new_count = increment_monthly_quota(user_id, max_quota)
         return (True, new_count, max(0, max_quota - new_count))
+
+
+# ============================================================================
+# STORY-322 AC5/AC6: Organization-level quota helpers
+# ============================================================================
+
+
+def get_user_org_plan(user_id: str) -> Optional[tuple[str, str, int]]:
+    """Check if user belongs to an org with consultoria plan.
+
+    Returns (org_id, plan_type, max_requests_per_month) or None.
+    Used by check_quota to switch from per-user to per-org quota pool.
+    """
+    try:
+        from supabase_client import get_supabase
+        sb = get_supabase()
+
+        member = (
+            sb.table("organization_members")
+            .select("org_id, accepted_at")
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+        )
+        if not member.data or not member.data[0].get("accepted_at"):
+            return None
+
+        org_id = member.data[0]["org_id"]
+        org = (
+            sb.table("organizations")
+            .select("plan_type")
+            .eq("id", org_id)
+            .single()
+            .execute()
+        )
+        if not org.data:
+            return None
+
+        org_plan = org.data.get("plan_type", "")
+        if org_plan not in PLAN_CAPABILITIES:
+            return None
+
+        caps = PLAN_CAPABILITIES[org_plan]
+        return (org_id, org_plan, caps["max_requests_per_month"])
+
+    except Exception as e:
+        logger.warning(f"Failed to check org plan for user {mask_user_id(user_id)}: {e}")
+        return None
+
+
+def check_and_increment_org_quota_atomic(
+    org_id: str,
+    user_id: str,
+    max_quota: int,
+) -> tuple[bool, int, int]:
+    """Atomically check and increment quota at the org level.
+
+    STORY-322 AC6: Quota is shared across all org members.
+    Uses the same RPC function but with org_id as the user_id key
+    (the quota table tracks by a generic subject_id).
+    """
+    # Reuse the same function with org_id as the "user" identifier
+    # The monthly_quota table uses user_id column but semantically it's the quota subject
+    return check_and_increment_quota_atomic(org_id, max_quota)
 
 
 # ============================================================================

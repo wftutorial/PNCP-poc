@@ -59,7 +59,7 @@ async def create_checkout(
     if not stripe_price_id:
         raise HTTPException(status_code=400, detail="Plano sem configuração de preço")
 
-    is_subscription = plan_id in ("smartlic_pro", "consultor_agil", "maquina", "sala_guerra")
+    is_subscription = plan_id in ("smartlic_pro", "consultoria", "consultor_agil", "maquina", "sala_guerra")
     frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
     # STORY-280 AC1: Boleto enabled for subscriptions (PIX NOT supported for subscriptions)

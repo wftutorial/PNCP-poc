@@ -62,7 +62,7 @@ def sanitize_for_excel(value: str | None) -> str:
     return ILLEGAL_CHARACTERS_RE.sub(' ', value)
 
 
-def create_excel(licitacoes: list[dict], paywall_preview: bool = False, total_before_paywall: int | None = None) -> BytesIO:
+def create_excel(licitacoes: list[dict], paywall_preview: bool = False, total_before_paywall: int | None = None, org_name: str | None = None) -> BytesIO:
     """
     Gera planilha Excel formatada com licitações filtradas.
 
@@ -223,13 +223,22 @@ def create_excel(licitacoes: list[dict], paywall_preview: bool = False, total_be
 
     # === METADATA (aba separada) ===
     ws_meta = wb.create_sheet("Metadata")
-    ws_meta["A1"] = "Gerado em:"
-    ws_meta["B1"] = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M:%S")
-    ws_meta["A2"] = "Total de licitações:"
-    ws_meta["B2"] = len(licitacoes)
-    ws_meta["A3"] = "Valor total estimado:"
-    ws_meta["B3"] = sum(lic.get("valorTotalEstimado", 0) or 0 for lic in licitacoes)
-    ws_meta["B3"].number_format = currency_format
+    meta_row = 1
+    # STORY-322 AC23: Include org name in metadata header
+    if org_name:
+        ws_meta[f"A{meta_row}"] = "Organização:"
+        ws_meta[f"B{meta_row}"] = org_name
+        ws_meta[f"B{meta_row}"].font = Font(bold=True, size=12)
+        meta_row += 1
+    ws_meta[f"A{meta_row}"] = "Gerado em:"
+    ws_meta[f"B{meta_row}"] = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M:%S")
+    meta_row += 1
+    ws_meta[f"A{meta_row}"] = "Total de licitações:"
+    ws_meta[f"B{meta_row}"] = len(licitacoes)
+    meta_row += 1
+    ws_meta[f"A{meta_row}"] = "Valor total estimado:"
+    ws_meta[f"B{meta_row}"] = sum(lic.get("valorTotalEstimado", 0) or 0 for lic in licitacoes)
+    ws_meta[f"B{meta_row}"].number_format = currency_format
 
     # STORY-320 AC4: Upsell sheet when paywall preview is active
     if paywall_preview and total_before_paywall and total_before_paywall > len(licitacoes):

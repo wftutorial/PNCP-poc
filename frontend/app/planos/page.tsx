@@ -36,6 +36,21 @@ const FEATURES = [
   { text: "Filtragem com 1.000+ regras", detail: "Precisão setorial para seu mercado" },
 ];
 
+const CONSULTORIA_PRICING: Record<BillingPeriod, { monthly: number; total: number; period: string; discount?: number }> = {
+  monthly: { monthly: 997, total: 997, period: "mês" },
+  semiannual: { monthly: 897, total: 5382, period: "semestre", discount: 10 },
+  annual: { monthly: 797, total: 9564, period: "ano", discount: 20 },
+};
+
+const CONSULTORIA_FEATURES = [
+  { text: "Até 5 usuários", detail: "Sua equipe inteira em uma só conta" },
+  { text: "5.000 análises por mês", detail: "Capacidade compartilhada entre membros" },
+  { text: "Dashboard consolidado", detail: "Veja buscas e resultados de toda a equipe" },
+  { text: "Logo da consultoria nos relatórios", detail: "Branding profissional em Excel/PDF" },
+  { text: "Todas as funcionalidades Pro", detail: "Excel, pipeline, IA, 15 setores, 27 estados" },
+  { text: "Suporte prioritário", detail: "Atendimento dedicado para sua consultoria" },
+];
+
 // FAQ items — STORY-280 AC4: Updated to mention Boleto
 const FAQ_ITEMS = [
   {
@@ -198,6 +213,37 @@ export default function PlanosPage() {
       setStripeRedirecting(false);
     }
   };
+
+  const handleConsultoriaCheckout = async () => {
+    if (!session) { window.location.href = "/login"; return; }
+    setCheckoutLoading(true);
+    trackEvent("checkout_initiated", { plan_id: "consultoria", billing_period: billingPeriod, source: "planos_page" });
+    try {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "/api";
+      const res = await fetch(
+        `${backendUrl}/v1/checkout?plan_id=consultoria&billing_period=${billingPeriod}`,
+        { method: "POST", headers: { Authorization: `Bearer ${session.access_token}` } }
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Erro ao iniciar processo");
+      }
+      const data = await res.json();
+      setStripeRedirecting(true);
+      window.location.href = data.checkout_url;
+    } catch (err) {
+      toast.error(getUserFriendlyError(err));
+      setCheckoutLoading(false);
+      setStripeRedirecting(false);
+    }
+  };
+
+  // AC22: Detect consultoria UTM params for lead badge
+  const isConsultoriaLead = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    const params = new URLSearchParams(window.location.search);
+    return params.get("utm_source") === "consultoria" || params.get("utm_campaign") === "consultoria";
+  }, []);
 
   return (
     <div className="min-h-screen bg-[var(--canvas)]">
@@ -432,6 +478,71 @@ export default function PlanosPage() {
             </div>
             <p className="mt-3 text-sm font-semibold text-[var(--brand-blue)]">
               Exemplo ilustrativo com base em oportunidades típicas do setor
+            </p>
+          </div>
+        </div>
+
+        {/* Consultoria Plan Card — AC21/AC22 */}
+        <div className="mt-16 max-w-lg mx-auto">
+          <div className="text-center mb-6">
+            {isConsultoriaLead && (
+              <span className="inline-block mb-4 px-3 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-sm font-semibold rounded-full">
+                Recomendado para consultorias
+              </span>
+            )}
+            <h2 className="text-2xl font-bold text-[var(--ink)]">Para Consultorias e Assessorias</h2>
+            <p className="text-sm text-[var(--ink-secondary)] mt-1">
+              Gerencie sua equipe e consolide resultados em uma conta
+            </p>
+          </div>
+          <div className="backdrop-blur-xl bg-white/50 dark:bg-gray-900/40 border-2 border-amber-500 rounded-card p-8 shadow-gem-amethyst">
+            {/* Plan Name */}
+            <div className="text-center mb-6">
+              <div className="flex items-center justify-center gap-2 mb-1">
+                <h3 className="text-2xl font-bold text-[var(--ink)]">SmartLic Consultoria</h3>
+              </div>
+            </div>
+            {/* Dynamic Price */}
+            <div className="text-center mb-6">
+              <div className="flex items-baseline justify-center gap-1">
+                <span className="text-5xl font-bold text-amber-700 dark:text-amber-400">
+                  {formatCurrency(CONSULTORIA_PRICING[billingPeriod].monthly)}
+                </span>
+                <span className="text-lg text-[var(--ink-muted)]">/mês</span>
+              </div>
+              {CONSULTORIA_PRICING[billingPeriod].discount && (
+                <div className="mt-2">
+                  <span className="inline-block px-3 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-sm font-semibold rounded-full">
+                    Economize {CONSULTORIA_PRICING[billingPeriod].discount}%
+                  </span>
+                </div>
+              )}
+            </div>
+            {/* Feature List */}
+            <ul className="space-y-3 mb-8">
+              {CONSULTORIA_FEATURES.map((feature) => (
+                <li key={feature.text} className="flex items-start gap-3">
+                  <span className="flex-shrink-0 mt-0.5 w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center text-xs font-bold">&#10003;</span>
+                  <div>
+                    <span className="text-sm font-medium text-[var(--ink)]">{feature.text}</span>
+                    <span className="block text-xs text-[var(--ink-muted)]">{feature.detail}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            {/* CTA */}
+            <button
+              onClick={() => {
+                if (!session) { window.location.href = "/login"; return; }
+                handleConsultoriaCheckout();
+              }}
+              disabled={checkoutLoading}
+              className="w-full py-4 rounded-button text-lg font-bold transition-all bg-amber-600 text-white hover:bg-amber-700 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {checkoutLoading ? "Processando..." : "Falar com vendas"}
+            </button>
+            <p className="mt-3 text-center text-xs text-[var(--ink-muted)]">
+              Ideal para consultorias com 3-5 colaboradores
             </p>
           </div>
         </div>

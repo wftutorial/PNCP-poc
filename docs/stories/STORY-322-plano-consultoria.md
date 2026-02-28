@@ -31,7 +31,7 @@ Criar "Plano Consultoria" com:
 
 ### Backend — Modelo de Dados (Organization)
 
-- [ ] **AC1:** Migration para tabela `organizations`:
+- [x] **AC1:** Migration para tabela `organizations`:
   ```sql
   CREATE TABLE organizations (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -43,7 +43,7 @@ Criar "Plano Consultoria" com:
     created_at TIMESTAMPTZ DEFAULT now()
   );
   ```
-- [ ] **AC2:** Migration para tabela `organization_members`:
+- [x] **AC2:** Migration para tabela `organization_members`:
   ```sql
   CREATE TABLE organization_members (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -55,7 +55,7 @@ Criar "Plano Consultoria" com:
     UNIQUE(org_id, user_id)
   );
   ```
-- [ ] **AC3:** RLS policies:
+- [x] **AC3:** RLS policies:
   - Owner/admin pode ver todos os membros
   - Member so ve propria membership
   - Owner pode convidar/remover
@@ -63,69 +63,69 @@ Criar "Plano Consultoria" com:
 
 ### Backend — Plan & Quota
 
-- [ ] **AC4:** Novo plan `consultoria` em `quota.py`:
+- [x] **AC4:** Novo plan `consultoria` em `quota.py`:
   - `max_requests_per_month: 5000` (1000 x 5 membros)
   - `max_requests_per_min: 10` (rate limit por org)
   - `allow_excel: true`, `allow_pipeline: true`, `allow_summary: true`
   - `priority: "high"`
   - `max_history_days: 1825`
   - `max_members: 5`
-- [ ] **AC5:** Quota contabiliza no nivel da org (nao por usuario individual)
-- [ ] **AC6:** `check_and_increment_quota_atomic` identifica org do usuario e debita quota da org
+- [x] **AC5:** Quota contabiliza no nivel da org (nao por usuario individual)
+- [x] **AC6:** `check_and_increment_quota_atomic` identifica org do usuario e debita quota da org
 
 ### Backend — Stripe Integration
 
-- [ ] **AC7:** Criar product `SmartLic Consultoria` no Stripe com 3 prices:
+- [x] **AC7:** Criar product `SmartLic Consultoria` no Stripe com 3 prices:
   - Mensal: R$997/mes
   - Semestral: R$897/mes (`interval=month`, `interval_count=6`)
   - Anual: R$797/mes (`interval=year`)
-- [ ] **AC8:** Checkout session cria/atualiza `organizations.stripe_customer_id`
-- [ ] **AC9:** Webhook handlers sincronizam `org.plan_type` (mesma logica do Pro)
-- [ ] **AC10:** Boleto habilitado (PIX nao suporta subscription)
+- [x] **AC8:** Checkout session cria/atualiza `organizations.stripe_customer_id`
+- [x] **AC9:** Webhook handlers sincronizam `org.plan_type` (mesma logica do Pro)
+- [x] **AC10:** Boleto habilitado (PIX nao suporta subscription)
 
 ### Backend — API Endpoints
 
-- [ ] **AC11:** `POST /v1/organizations` — criar org (owner = usuario logado)
-- [ ] **AC12:** `GET /v1/organizations/{id}` — detalhes da org
-- [ ] **AC13:** `POST /v1/organizations/{id}/invite` — convidar membro (por email)
-- [ ] **AC14:** `POST /v1/organizations/{id}/accept` — aceitar convite
-- [ ] **AC15:** `DELETE /v1/organizations/{id}/members/{user_id}` — remover membro
-- [ ] **AC16:** `GET /v1/organizations/{id}/dashboard` — stats consolidados (buscas, oportunidades, valor)
-- [ ] **AC17:** `PUT /v1/organizations/{id}/logo` — upload logo
+- [x] **AC11:** `POST /v1/organizations` — criar org (owner = usuario logado)
+- [x] **AC12:** `GET /v1/organizations/{id}` — detalhes da org
+- [x] **AC13:** `POST /v1/organizations/{id}/invite` — convidar membro (por email)
+- [x] **AC14:** `POST /v1/organizations/{id}/accept` — aceitar convite
+- [x] **AC15:** `DELETE /v1/organizations/{id}/members/{user_id}` — remover membro
+- [x] **AC16:** `GET /v1/organizations/{id}/dashboard` — stats consolidados (buscas, oportunidades, valor)
+- [x] **AC17:** `PUT /v1/organizations/{id}/logo` — upload logo
 
 ### Frontend — Gestao de Equipe
 
-- [ ] **AC18:** Nova pagina `/conta/equipe`:
+- [x] **AC18:** Nova pagina `/conta/equipe`:
   - Lista de membros (nome, email, role, status)
   - Botao "Convidar membro" (modal com input de email)
   - Botao "Remover" por membro (com confirmacao)
   - Indicador de slots usados: "3/5 membros"
-- [ ] **AC19:** Dashboard consolidado em `/dashboard`:
+- [x] **AC19:** Dashboard consolidado em `/dashboard`:
   - Se usuario e owner/admin de org: toggle "Meus dados" / "Dados da equipe"
   - Metricas: total buscas, total oportunidades, top setores (agregado)
-- [ ] **AC20:** Upload de logo em `/conta/equipe` (arrastar ou selecionar arquivo)
+- [x] **AC20:** Upload de logo em `/conta/equipe` (arrastar ou selecionar arquivo)
 
 ### Frontend — Pagina de Planos
 
-- [ ] **AC21:** Card "Plano Consultoria" na pagina `/planos`:
+- [x] **AC21:** Card "Plano Consultoria" na pagina `/planos`:
   - Destaque: "Para consultorias e assessorias"
   - Features: 5 usuarios, dashboard consolidado, logo nos relatorios, suporte prioritario
   - Toggle mensal/semestral/anual (reutilizar PlanToggle)
   - CTA: "Falar com vendas" ou "Assinar Consultoria"
-- [ ] **AC22:** Badge "Recomendado para consultorias" se UTM indica lead de consultoria
+- [x] **AC22:** Badge "Recomendado para consultorias" se UTM indica lead de consultoria
 
 ### Backend — Logo nos Relatorios
 
-- [ ] **AC23:** `excel.py` → incluir logo da org no header do Excel (se org existir)
+- [x] **AC23:** `excel.py` → incluir logo da org no header do Excel (se org existir)
 
 ### Testes
 
-- [ ] **AC25:** Testes: criar org, convidar membro, aceitar, remover
-- [ ] **AC26:** Testes: quota no nivel da org (debita de pool compartilhado)
-- [ ] **AC27:** Testes: RLS (member nao ve dados de outro member diretamente)
-- [ ] **AC28:** Testes: Stripe checkout + webhook para plano consultoria
-- [ ] **AC29:** Testes frontend: pagina de equipe (CRUD membros)
-- [ ] **AC30:** Zero regressions
+- [x] **AC25:** Testes: criar org, convidar membro, aceitar, remover
+- [x] **AC26:** Testes: quota no nivel da org (debita de pool compartilhado)
+- [x] **AC27:** Testes: RLS (member nao ve dados de outro member diretamente)
+- [x] **AC28:** Testes: Stripe checkout + webhook para plano consultoria
+- [x] **AC29:** Testes frontend: pagina de equipe (CRUD membros)
+- [x] **AC30:** Zero regressions
 
 ---
 

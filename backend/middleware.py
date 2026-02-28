@@ -3,11 +3,12 @@ import logging
 import re
 import time
 import uuid
+from collections import defaultdict
 from contextvars import ContextVar
 from starlette.datastructures import State
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import Response
+from starlette.responses import JSONResponse, Response
 
 logger = logging.getLogger(__name__)
 
@@ -215,15 +216,16 @@ class DeprecationMiddleware(BaseHTTPMiddleware):
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """
-    STORY-210 AC10 + GTM-GO-006 AC5: Add standard security headers to all responses.
+    STORY-210 AC10 + STORY-311 AC9/AC11/AC16: Security headers for all responses.
 
     Headers applied:
     - X-Content-Type-Options: nosniff — prevent MIME type sniffing
     - X-Frame-Options: DENY — prevent clickjacking
     - X-XSS-Protection: 1; mode=block — legacy XSS protection
     - Referrer-Policy: strict-origin-when-cross-origin — control referrer leakage
-    - Permissions-Policy: camera=(), microphone=(), geolocation=() — disable unused APIs
-    - Strict-Transport-Security: max-age=31536000; includeSubDomains — enforce HTTPS via HSTS
+    - Permissions-Policy: camera=(), microphone=(), geolocation=() — disable unused APIs (AC11)
+    - Strict-Transport-Security: max-age=31536000; includeSubDomains; preload (AC16)
+    - Cache-Control: no-store on authenticated endpoints (AC9)
     """
 
     async def dispatch(self, request: Request, call_next) -> Response:
@@ -233,5 +235,83 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        # AC16: HSTS with preload directive for hstspreload.org eligibility
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=31536000; includeSubDomains; preload"
+        )
+        # AC9: Prevent caching of authenticated responses
+        if request.headers.get("authorization"):
+            response.headers["Cache-Control"] = "no-store"
         return response
+
+
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    """STORY-311 AC10: Per-IP rate limiting for public endpoints.
+
+    Limits:
+    - /health, /v1/health: 60 req/min
+    - /plans, /v1/plans: 30 req/min
+    - /webhook/stripe: exempt (Stripe IPs)
+    - /buscar: uses existing Redis token bucket (not handled here)
+    """
+
+    LIMITS: dict[str, int] = {
+        "/health": 60,
+        "/v1/health": 60,
+        "/v1/health/cache": 60,
+        "/plans": 30,
+        "/v1/plans": 30,
+    }
+
+    EXEMPT: set[str] = {
+        "/webhook/stripe",
+        "/v1/webhook/stripe",
+    }
+
+    def __init__(self, app):
+        super().__init__(app)
+        self._requests: dict[str, list[float]] = defaultdict(list)
+        self._cleanup_counter: int = 0
+
+    def _get_client_ip(self, request: Request) -> str:
+        forwarded = request.headers.get("x-forwarded-for", "")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+        return request.client.host if request.client else "unknown"
+
+    def _is_allowed(self, key: str, limit: int) -> bool:
+        now = time.time()
+        cutoff = now - 60
+        entries = self._requests[key]
+        self._requests[key] = [t for t in entries if t > cutoff]
+        if len(self._requests[key]) >= limit:
+            return False
+        self._requests[key].append(now)
+        self._cleanup_counter += 1
+        if self._cleanup_counter >= 200:
+            self._cleanup_counter = 0
+            self._cleanup()
+        return True
+
+    def _cleanup(self):
+        cutoff = time.time() - 60
+        stale = [k for k, v in self._requests.items() if not v or v[-1] < cutoff]
+        for k in stale:
+            del self._requests[k]
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        path = request.url.path
+        if path in self.EXEMPT:
+            return await call_next(request)
+        limit = self.LIMITS.get(path)
+        if limit is None:
+            return await call_next(request)
+        ip = self._get_client_ip(request)
+        key = f"{ip}:{path}"
+        if not self._is_allowed(key, limit):
+            return JSONResponse(
+                {"detail": "Rate limit exceeded. Try again later."},
+                status_code=429,
+                headers={"Retry-After": "60"},
+            )
+        return await call_next(request)

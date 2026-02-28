@@ -1,14 +1,12 @@
 /**
- * STORY-300: Security Headers Tests
+ * STORY-300 + STORY-311: Security Headers Tests
  *
  * Tests CSP and security headers configuration.
  * Since Next.js middleware requires edge runtime APIs unavailable in jsdom,
  * we test the CSP policy content and next.config.js headers directly.
  *
- * AC1: CSP header configured in middleware.ts
- * AC2: CSP report-only mode
- * AC3: X-Content-Type-Options: nosniff
- * AC4: X-Frame-Options: DENY
+ * STORY-300: Initial CSP + security headers
+ * STORY-311: CSP enforcement, deduplication, new headers (COOP, HSTS preload)
  */
 
 import fs from "fs";
@@ -17,7 +15,7 @@ import path from "path";
 const middlewarePath = path.join(__dirname, "..", "middleware.ts");
 const nextConfigPath = path.join(__dirname, "..", "next.config.js");
 
-describe("STORY-300: Security Headers Configuration", () => {
+describe("STORY-311: Security Headers Configuration", () => {
   let middlewareSource: string;
   let nextConfigSource: string;
 
@@ -26,9 +24,22 @@ describe("STORY-300: Security Headers Configuration", () => {
     nextConfigSource = fs.readFileSync(nextConfigPath, "utf-8");
   });
 
-  describe("AC1: CSP header in middleware.ts", () => {
+  describe("AC1: CSP enforcing mode in middleware.ts", () => {
     it("should define addSecurityHeaders function", () => {
       expect(middlewareSource).toContain("function addSecurityHeaders");
+    });
+
+    it("should use enforcing Content-Security-Policy (not Report-Only)", () => {
+      // Must set Content-Security-Policy (enforcing)
+      expect(middlewareSource).toContain(
+        '"Content-Security-Policy"'
+      );
+    });
+
+    it("should NOT use Report-Only CSP anymore", () => {
+      expect(middlewareSource).not.toContain(
+        "Content-Security-Policy-Report-Only"
+      );
     });
 
     it("should include default-src 'self' directive", () => {
@@ -84,7 +95,6 @@ describe("STORY-300: Security Headers Configuration", () => {
     });
 
     it("should apply headers to public routes", () => {
-      // Verify addSecurityHeaders wraps public route responses
       const publicRouteReturn = middlewareSource.includes(
         "return addSecurityHeaders(NextResponse.next())"
       );
@@ -98,78 +108,90 @@ describe("STORY-300: Security Headers Configuration", () => {
     });
   });
 
-  describe("AC2: CSP Report-Only mode", () => {
-    it("should use Content-Security-Policy-Report-Only in middleware", () => {
-      expect(middlewareSource).toContain(
+  describe("AC2: CSP report-uri and report-to directives", () => {
+    it("should include report-uri directive pointing to /api/csp-report", () => {
+      expect(middlewareSource).toContain("report-uri /api/csp-report");
+    });
+
+    it("should include report-to directive", () => {
+      expect(middlewareSource).toContain("report-to csp-endpoint");
+    });
+
+    it("should set Report-To header with group definition", () => {
+      expect(middlewareSource).toContain("Report-To");
+      expect(middlewareSource).toContain("csp-endpoint");
+    });
+  });
+
+  describe("AC4: CSP whitelist completeness", () => {
+    const requiredDirectives = [
+      "default-src",
+      "script-src",
+      "style-src",
+      "img-src",
+      "font-src",
+      "connect-src",
+      "frame-src",
+      "object-src",
+      "base-uri",
+    ];
+
+    for (const directive of requiredDirectives) {
+      it(`should have ${directive} directive`, () => {
+        expect(middlewareSource).toContain(directive);
+      });
+    }
+  });
+
+  describe("AC5: Headers unified in middleware (no duplication)", () => {
+    it("should NOT have Content-Security-Policy-Report-Only in next.config.js", () => {
+      expect(nextConfigSource).not.toContain(
         "Content-Security-Policy-Report-Only"
       );
     });
 
-    it("should NOT use enforcing Content-Security-Policy in middleware", () => {
-      // Count occurrences of CSP header name - all should be Report-Only
-      const enforceMatches = middlewareSource.match(
-        /["']Content-Security-Policy["']/g
-      );
-      const reportOnlyMatches = middlewareSource.match(
-        /Content-Security-Policy-Report-Only/g
-      );
-
-      // All CSP references should be report-only
-      if (enforceMatches) {
-        // Every "Content-Security-Policy" should be part of "Content-Security-Policy-Report-Only"
-        expect(reportOnlyMatches!.length).toBeGreaterThanOrEqual(
-          enforceMatches.length
-        );
-      }
+    it("should NOT have X-Content-Type-Options in next.config.js headers()", () => {
+      // next.config.js should not have the headers() function with security headers
+      expect(nextConfigSource).not.toContain("'X-Content-Type-Options'");
     });
 
-    it("should use Content-Security-Policy-Report-Only in next.config.js", () => {
-      expect(nextConfigSource).toContain(
-        "Content-Security-Policy-Report-Only"
-      );
+    it("should NOT have X-Frame-Options in next.config.js headers()", () => {
+      expect(nextConfigSource).not.toContain("'X-Frame-Options'");
     });
 
-    it("should NOT use enforcing CSP in next.config.js", () => {
-      // The old enforcing header should be gone
-      const lines = nextConfigSource.split("\n");
-      const cspLines = lines.filter(
-        (l) =>
-          l.includes("Content-Security-Policy") &&
-          !l.includes("Report-Only") &&
-          !l.includes("//")
-      );
-      expect(cspLines.length).toBe(0);
+    it("should reference AC5 deduplication comment", () => {
+      expect(nextConfigSource).toContain("AC5");
     });
   });
 
-  describe("AC3: X-Content-Type-Options", () => {
-    it("should set X-Content-Type-Options: nosniff in middleware", () => {
-      expect(middlewareSource).toContain("X-Content-Type-Options");
-      expect(middlewareSource).toContain("nosniff");
-    });
-
-    it("should set X-Content-Type-Options in next.config.js", () => {
-      expect(nextConfigSource).toContain("X-Content-Type-Options");
-      expect(nextConfigSource).toContain("nosniff");
+  describe("AC6: Cross-Origin-Opener-Policy", () => {
+    it("should set Cross-Origin-Opener-Policy: same-origin", () => {
+      expect(middlewareSource).toContain("Cross-Origin-Opener-Policy");
+      expect(middlewareSource).toContain("same-origin");
     });
   });
 
-  describe("AC4: X-Frame-Options", () => {
-    it("should set X-Frame-Options: DENY in middleware", () => {
-      expect(middlewareSource).toContain("X-Frame-Options");
-      expect(middlewareSource).toContain("DENY");
-    });
-
-    it("should set X-Frame-Options in next.config.js", () => {
-      expect(nextConfigSource).toContain("X-Frame-Options");
-      expect(nextConfigSource).toContain("DENY");
+  describe("AC7: Cross-Origin-Embedder-Policy (skipped)", () => {
+    it("should document why COEP is not enabled", () => {
+      // COEP require-corp breaks Stripe iframe — documented in comment
+      expect(middlewareSource).toContain("COEP");
+      expect(middlewareSource).toContain("Stripe");
     });
   });
 
-  describe("Additional security headers in middleware", () => {
-    it("should set HSTS header", () => {
+  describe("AC8: X-DNS-Prefetch-Control", () => {
+    it("should set X-DNS-Prefetch-Control: off", () => {
+      expect(middlewareSource).toContain("X-DNS-Prefetch-Control");
+      expect(middlewareSource).toContain("off");
+    });
+  });
+
+  describe("Standard security headers in middleware", () => {
+    it("should set HSTS header with preload", () => {
       expect(middlewareSource).toContain("Strict-Transport-Security");
       expect(middlewareSource).toContain("max-age=31536000");
+      expect(middlewareSource).toContain("includeSubDomains");
+      expect(middlewareSource).toContain("preload");
     });
 
     it("should set Referrer-Policy", () => {
@@ -190,25 +212,30 @@ describe("STORY-300: Security Headers Configuration", () => {
     });
   });
 
-  describe("CSP completeness check", () => {
-    it("should have matching CSP directives between middleware and next.config.js", () => {
-      // Both should have the same directives
-      const requiredDirectives = [
-        "default-src",
-        "script-src",
-        "style-src",
-        "img-src",
-        "font-src",
-        "connect-src",
-        "frame-src",
-        "object-src",
-        "base-uri",
-      ];
+  describe("AC3: CSP report endpoint exists", () => {
+    it("should have csp-report route file", () => {
+      const cspReportPath = path.join(
+        __dirname,
+        "..",
+        "app",
+        "api",
+        "csp-report",
+        "route.ts"
+      );
+      expect(fs.existsSync(cspReportPath)).toBe(true);
+    });
 
-      for (const directive of requiredDirectives) {
-        expect(middlewareSource).toContain(directive);
-        expect(nextConfigSource).toContain(directive);
-      }
+    it("should export a POST handler", () => {
+      const cspReportPath = path.join(
+        __dirname,
+        "..",
+        "app",
+        "api",
+        "csp-report",
+        "route.ts"
+      );
+      const source = fs.readFileSync(cspReportPath, "utf-8");
+      expect(source).toContain("export async function POST");
     });
   });
 });

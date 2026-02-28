@@ -5,22 +5,26 @@ import { createServerClient } from "@supabase/ssr";
  * Next.js Middleware for route protection + security headers.
  * Uses @supabase/ssr with getAll/setAll pattern for proper cookie handling.
  *
- * STORY-300: Security Hardening
- * - AC1: CSP header configured here for programmatic control
- * - AC2: Report-Only mode (change to Content-Security-Policy to enforce)
- * - AC3: X-Content-Type-Options: nosniff
- * - AC4: X-Frame-Options: DENY
+ * STORY-300: Initial security headers setup.
+ * STORY-311: Security hardening — CSP enforcement, report-uri, COOP, HSTS preload.
  *
  * Protected routes: /buscar, /historico, /conta, /admin/*, /dashboard, /mensagens
  * Public routes: /login, /signup, /planos, /auth/callback
  */
 
 /**
- * STORY-300 AC1-AC4: Apply security headers to every response.
- * CSP is in Report-Only mode (AC2) — switch to Content-Security-Policy to enforce.
+ * STORY-311: Security headers hardening.
+ *
+ * AC1: CSP promoted from Report-Only to enforcing Content-Security-Policy.
+ * AC2: report-uri + report-to directives for violation collection.
+ * AC4: Whitelisted domains: Stripe, Sentry, Supabase, Mixpanel, Cloudflare.
+ * AC5: Headers unified here (removed from next.config.js).
+ * AC6: Cross-Origin-Opener-Policy: same-origin.
+ * AC7: COEP skipped — require-corp breaks Stripe checkout iframe (no CORP headers).
+ * AC8: X-DNS-Prefetch-Control: off.
  */
 function addSecurityHeaders(response: NextResponse): NextResponse {
-  // AC1: Content Security Policy
+  // AC1+AC4: Content Security Policy — enforcing mode
   const csp = [
     "default-src 'self'",
     "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://static.cloudflareinsights.com https://cdn.sentry.io",
@@ -31,23 +35,45 @@ function addSecurityHeaders(response: NextResponse): NextResponse {
     "frame-src 'self' https://js.stripe.com",
     "object-src 'none'",
     "base-uri 'self'",
+    "report-uri /api/csp-report",
+    "report-to csp-endpoint",
   ].join("; ");
 
-  // AC2: Report-Only mode first — violations are logged, not blocked.
-  // When ready to enforce, change to "Content-Security-Policy".
-  response.headers.set("Content-Security-Policy-Report-Only", csp);
+  // AC1: Enforcing CSP (promoted from Report-Only in STORY-300)
+  response.headers.set("Content-Security-Policy", csp);
 
-  // AC3: Prevent MIME type sniffing
+  // AC2: Reporting API v1 — report-to group definition
+  response.headers.set(
+    "Report-To",
+    JSON.stringify({
+      group: "csp-endpoint",
+      max_age: 86400,
+      endpoints: [{ url: "/api/csp-report" }],
+    })
+  );
+
+  // Prevent MIME type sniffing
   response.headers.set("X-Content-Type-Options", "nosniff");
 
-  // AC4: Prevent clickjacking
+  // Prevent clickjacking
   response.headers.set("X-Frame-Options", "DENY");
 
-  // Additional hardening headers
+  // Legacy XSS protection
   response.headers.set("X-XSS-Protection", "1; mode=block");
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
-  response.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+
+  // AC16: HSTS with preload directive for hstspreload.org eligibility
+  response.headers.set(
+    "Strict-Transport-Security",
+    "max-age=31536000; includeSubDomains; preload"
+  );
+
+  // AC6: Prevent window.opener attacks (Spectre-like)
+  response.headers.set("Cross-Origin-Opener-Policy", "same-origin");
+
+  // AC8: Prevent DNS prefetch leaking visited links
+  response.headers.set("X-DNS-Prefetch-Control", "off");
 
   return response;
 }

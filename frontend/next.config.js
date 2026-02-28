@@ -24,57 +24,9 @@ const nextConfig = {
       },
     ],
   },
-  // STORY-210 AC10: Security headers for all responses
-  async headers() {
-    return [
-      {
-        source: '/(.*)',
-        headers: [
-          {
-            key: 'X-Content-Type-Options',
-            value: 'nosniff',
-          },
-          {
-            key: 'X-Frame-Options',
-            value: 'DENY',
-          },
-          {
-            key: 'X-XSS-Protection',
-            value: '1; mode=block',
-          },
-          {
-            key: 'Referrer-Policy',
-            value: 'strict-origin-when-cross-origin',
-          },
-          {
-            key: 'Permissions-Policy',
-            value: 'camera=(), microphone=(), geolocation=()',
-          },
-          {
-            key: 'Strict-Transport-Security',
-            value: 'max-age=31536000; includeSubDomains',
-          },
-          // STORY-300 AC2: CSP in Report-Only mode (violations logged, not blocked).
-          // Primary CSP is in middleware.ts (AC1). This covers static assets outside middleware matcher.
-          // When ready to enforce, change to 'Content-Security-Policy'.
-          {
-            key: 'Content-Security-Policy-Report-Only',
-            value: [
-              "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://static.cloudflareinsights.com https://cdn.sentry.io",
-              "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' data: https: blob:",
-              "font-src 'self' data:",
-              "connect-src 'self' https://*.supabase.co https://*.supabase.in https://api.stripe.com https://*.railway.app https://*.ingest.sentry.io https://*.sentry.io https://*.smartlic.tech https://api-js.mixpanel.com https://api.mixpanel.com wss://*.supabase.co",
-              "frame-src 'self' https://js.stripe.com",
-              "object-src 'none'",
-              "base-uri 'self'",
-            ].join('; '),
-          },
-        ],
-      },
-    ];
-  },
+  // STORY-311 AC5: Security headers unified in middleware.ts (removed duplication).
+  // Middleware covers all non-static routes. Static assets (_next/static, images)
+  // don't need CSP/X-Frame-Options. HSTS is enforced at Railway edge proxy level.
 }
 
 // STORY-211: Wrap with Sentry for error tracking and source map upload (AC8)

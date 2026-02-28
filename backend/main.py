@@ -47,7 +47,7 @@ from sectors import list_sectors
 from schemas import (
     RootResponse, HealthResponse, SourcesHealthResponse, SetoresResponse, DebugPNCPResponse,
 )
-from middleware import CorrelationIDMiddleware, SecurityHeadersMiddleware, DeprecationMiddleware  # STORY-202 SYS-M01, STORY-210 AC10, STORY-226 AC14
+from middleware import CorrelationIDMiddleware, SecurityHeadersMiddleware, DeprecationMiddleware, RateLimitMiddleware  # STORY-202 SYS-M01, STORY-210 AC10, STORY-226 AC14, STORY-311 AC10
 from redis_pool import startup_redis, shutdown_redis  # STORY-217: Redis pool lifecycle
 
 # Existing routers
@@ -566,6 +566,9 @@ app.add_middleware(SecurityHeadersMiddleware)
 
 # STORY-226 AC14: Add deprecation headers to legacy (non-versioned) routes
 app.add_middleware(DeprecationMiddleware)
+
+# STORY-311 AC10: Rate limiting on public endpoints (/health, /plans)
+app.add_middleware(RateLimitMiddleware)
 
 # STORY-299 AC2: Track HTTP responses for API availability SLI
 @app.middleware("http")

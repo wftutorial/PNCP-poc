@@ -5,6 +5,7 @@ Supports two parsing modes:
 - Space mode: when input has no commas, splits by whitespace (legacy/backward compatible)
 
 STORY-178 AC1: Parsing Inteligente de Termos de Busca
+STORY-311 AC13: Max input length 256 chars (ReDoS protection)
 """
 
 import logging
@@ -15,6 +16,9 @@ from typing import List
 from filter import STOPWORDS_PT
 
 logger = logging.getLogger(__name__)
+
+# STORY-311 AC13: Maximum input length to prevent ReDoS and resource abuse
+MAX_INPUT_LENGTH = 256
 
 
 def parse_search_terms(raw_input: str) -> List[str]:
@@ -32,6 +36,13 @@ def parse_search_terms(raw_input: str) -> List[str]:
     """
     if not raw_input or not raw_input.strip():
         return []
+
+    # AC13: Truncate oversized input to prevent ReDoS
+    if len(raw_input) > MAX_INPUT_LENGTH:
+        logger.warning(
+            f"Search input truncated: {len(raw_input)} chars > {MAX_INPUT_LENGTH} limit"
+        )
+        raw_input = raw_input[:MAX_INPUT_LENGTH]
 
     # Sanitize: convert smart quotes to normal, normalize whitespace
     sanitized = _sanitize_input(raw_input)

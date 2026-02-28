@@ -1016,6 +1016,119 @@ async def _reconciliation_loop() -> None:
             await asyncio.sleep(300)  # Retry in 5min on error
 
 
+# ============================================================================
+# STORY-323: Monthly Partner Revenue Share Report (day 1, 09:00 BRT = 12:00 UTC)
+# ============================================================================
+
+REVENUE_SHARE_LOCK_KEY = "smartlic:revenue_share:lock"
+REVENUE_SHARE_LOCK_TTL = 30 * 60  # 30 minutes
+
+
+async def start_revenue_share_task() -> asyncio.Task:
+    """STORY-323 AC9: Start the monthly revenue share report task.
+
+    Runs on the 1st of each month at 09:00 BRT (12:00 UTC).
+    Returns the Task so it can be cancelled during shutdown.
+    """
+    task = asyncio.create_task(_revenue_share_loop(), name="revenue_share_report")
+    logger.info("STORY-323: Revenue share report task started (monthly, day 1, 09:00 BRT)")
+    return task
+
+
+async def run_revenue_share_report() -> dict:
+    """Execute monthly revenue share report with lock protection."""
+    # Acquire Redis lock
+    lock_acquired = False
+    try:
+        from redis_pool import get_redis_pool
+        redis = await get_redis_pool()
+        if redis:
+            lock_acquired = await redis.set(
+                REVENUE_SHARE_LOCK_KEY,
+                datetime.now(timezone.utc).isoformat(),
+                nx=True,
+                ex=REVENUE_SHARE_LOCK_TTL,
+            )
+            if not lock_acquired:
+                logger.info("STORY-323: Revenue share report skipped — lock held")
+                return {"status": "skipped", "reason": "lock_held"}
+    except Exception as e:
+        logger.warning(f"STORY-323: Redis lock check failed (proceeding): {e}")
+        lock_acquired = True
+
+    try:
+        from services.partner_service import generate_monthly_revenue_report
+
+        # Report for previous month
+        now = datetime.now(timezone.utc)
+        if now.month == 1:
+            report_year = now.year - 1
+            report_month = 12
+        else:
+            report_year = now.year
+            report_month = now.month - 1
+
+        result = await generate_monthly_revenue_report(report_year, report_month)
+
+        logger.info(
+            "STORY-323: Revenue share report generated — %d/%d, "
+            "%d partners, total_share=R$%.2f",
+            report_month, report_year,
+            len(result.get("partner_reports", [])),
+            result.get("total_share", 0),
+        )
+        return result
+
+    finally:
+        if lock_acquired:
+            try:
+                from redis_pool import get_redis_pool
+                redis = await get_redis_pool()
+                if redis:
+                    await redis.delete(REVENUE_SHARE_LOCK_KEY)
+            except Exception:
+                pass
+
+
+async def _revenue_share_loop() -> None:
+    """STORY-323 AC9: Run revenue share report monthly on day 1."""
+    # Calculate delay until next 1st of month at 12:00 UTC (09:00 BRT)
+    now = datetime.now(timezone.utc)
+    target_hour = 12  # 09:00 BRT = 12:00 UTC
+
+    # Next 1st of month
+    if now.month == 12:
+        next_run = datetime(now.year + 1, 1, 1, target_hour, 0, 0, tzinfo=timezone.utc)
+    else:
+        next_run = datetime(now.year, now.month + 1, 1, target_hour, 0, 0, tzinfo=timezone.utc)
+
+    initial_delay = (next_run - now).total_seconds()
+    initial_delay = max(60, min(initial_delay, 31 * 86400))
+
+    logger.info(
+        "STORY-323: Revenue share report first run in %.0fs (target: %s)",
+        initial_delay, next_run.isoformat(),
+    )
+    await asyncio.sleep(initial_delay)
+
+    while True:
+        try:
+            result = await run_revenue_share_report()
+            logger.info(
+                "STORY-323 revenue share cycle: %s at %s",
+                result.get("total_share", "N/A"),
+                datetime.now(timezone.utc).isoformat(),
+            )
+            # Wait ~30 days for next run
+            await asyncio.sleep(30 * 24 * 60 * 60)
+        except asyncio.CancelledError:
+            logger.info("STORY-323: Revenue share report task cancelled")
+            break
+        except Exception as e:
+            logger.error(f"STORY-323: Revenue share loop error: {e}", exc_info=True)
+            await asyncio.sleep(3600)  # Retry in 1h on error
+
+
 async def start_trial_sequence_task() -> asyncio.Task:
     """STORY-310 AC9: Start the daily trial email sequence background task.
 

@@ -312,6 +312,9 @@ async def _handle_checkout_session_completed(sb, event: stripe.Event):
         logger.warning(f"Cache invalidation failed on checkout activation (non-fatal): {e}")
         logger.info(f"Checkout activation complete: user_id={user_id}, plan={plan_id}")
 
+    # STORY-323 AC6: Create partner referral on conversion
+    _create_partner_referral_async(user_id, plan_result, session_data)
+
 
 async def _handle_async_payment_succeeded(sb, event: stripe.Event):
     """
@@ -608,6 +611,9 @@ async def _handle_subscription_deleted(sb, event: stripe.Event):
     except Exception as e:
         logger.warning(f"Cache invalidation failed on deletion (non-fatal): {e}")
         logger.info(f"Subscription deactivated: user_id={user_id}")
+
+    # STORY-323 AC7: Mark partner referral as churned
+    _mark_partner_referral_churned(user_id)
 
     # STORY-225 AC14: Send cancellation confirmation email
     _send_cancellation_email(sb, user_id, local_sub)
@@ -1043,3 +1049,54 @@ def _send_payment_failed_email(sb, user_id: str, plan_id: str, invoice_data: dic
         logger.info(f"Payment failed email queued for user_id={user_id}")
     except Exception as e:
         logger.warning(f"Failed to send payment failed email: {e}")
+
+
+# ============================================================================
+# STORY-323: Partner referral helpers (fire-and-forget)
+# ============================================================================
+
+def _create_partner_referral_async(
+    user_id: str, plan_result, session_data: dict
+) -> None:
+    """STORY-323 AC6: Create partner referral on checkout completion. Never raises."""
+    try:
+        import asyncio
+        from services.partner_service import create_partner_referral
+
+        # Estimate monthly revenue from plan price
+        price_brl = 0.0
+        if plan_result and plan_result.data:
+            # Use plan's monthly price or derive from duration
+            price_brl = float(plan_result.data.get("price_brl", 0) or 0)
+
+        # Extract coupon from session (AC5)
+        discount = session_data.get("total_details", {}).get("breakdown", {}).get("discounts", [])
+        stripe_coupon_id = None
+        if discount and isinstance(discount, list) and len(discount) > 0:
+            stripe_coupon_id = discount[0].get("discount", {}).get("coupon", {}).get("id")
+
+        # Also check session-level discount
+        if not stripe_coupon_id:
+            session_discount = session_data.get("discount")
+            if session_discount and isinstance(session_discount, dict):
+                stripe_coupon_id = session_discount.get("coupon", {}).get("id")
+
+        # Schedule as background task
+        loop = asyncio.get_event_loop()
+        loop.create_task(
+            create_partner_referral(user_id, price_brl, stripe_coupon_id)
+        )
+    except Exception as e:
+        logger.warning(f"STORY-323: Failed to create partner referral for {user_id[:8]}: {e}")
+
+
+def _mark_partner_referral_churned(user_id: str) -> None:
+    """STORY-323 AC7: Mark partner referral as churned on subscription deletion. Never raises."""
+    try:
+        import asyncio
+        from services.partner_service import mark_referral_churned
+
+        loop = asyncio.get_event_loop()
+        loop.create_task(mark_referral_churned(user_id))
+    except Exception as e:
+        logger.warning(f"STORY-323: Failed to mark partner referral churned for {user_id[:8]}: {e}")

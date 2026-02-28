@@ -92,6 +92,9 @@ export default function PlanosPage() {
   // Check URL params
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
 
+  // STORY-323 AC17: Partner tracking state
+  const [partnerName, setPartnerName] = useState<string | null>(null);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("success")) setStatusMsg("Acesso ativado com sucesso! Bem-vindo ao SmartLic Pro.");
@@ -99,6 +102,14 @@ export default function PlanosPage() {
     // Pre-select billing period from URL
     const billing = params.get("billing");
     if (billing === "semiannual" || billing === "annual") setBillingPeriod(billing);
+
+    // STORY-323 AC17: Detect partner from URL or cookie/localStorage
+    const partnerSlug = params.get("partner") || localStorage.getItem("smartlic_partner");
+    if (partnerSlug) {
+      localStorage.setItem("smartlic_partner", partnerSlug);
+      document.cookie = `smartlic_partner=${partnerSlug};path=/;max-age=${7 * 24 * 60 * 60}`;
+      setPartnerName(partnerSlug.replace(/-/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()));
+    }
   }, []);
 
   useEffect(() => {
@@ -326,6 +337,18 @@ export default function PlanosPage() {
             </p>
             <p className="text-sm text-amber-600 dark:text-amber-400">
               Escolha um compromisso para voltar a ter acesso
+            </p>
+          </div>
+        )}
+
+        {/* STORY-323 AC17: Partner referral banner */}
+        {partnerName && (
+          <div data-testid="partner-discount-banner" className="mb-8 p-4 bg-emerald-50 dark:bg-emerald-950/30 backdrop-blur-sm border border-emerald-200 dark:border-emerald-800 rounded-card text-center">
+            <p className="font-semibold text-emerald-800 dark:text-emerald-200">
+              Indicado por <strong>{partnerName}</strong> — 25% de desconto aplicado no checkout
+            </p>
+            <p className="text-sm text-emerald-600 dark:text-emerald-400">
+              O cupom exclusivo será aplicado automaticamente ao finalizar
             </p>
           </div>
         )}

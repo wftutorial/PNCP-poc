@@ -22,6 +22,9 @@ type PhoneCheckResult = {
   already_registered: boolean;
 } | null;
 
+// STORY-323: Partner name type
+type PartnerInfo = { name: string; slug: string } | null;
+
 export default function SignupPage() {
   const { signUpWithEmail, signInWithGoogle } = useAuth();
   const { trackEvent } = useAnalytics();
@@ -36,6 +39,9 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  // STORY-323 AC16: Partner tracking
+  const [partnerInfo, setPartnerInfo] = useState<PartnerInfo>(null);
 
   // STORY-258: Email validation state
   const [emailCheckLoading, setEmailCheckLoading] = useState(false);
@@ -220,6 +226,25 @@ export default function SignupPage() {
     }
   };
 
+  // STORY-323 AC16: Detect ?partner=slug and persist to cookie/localStorage
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const partnerSlug = params.get("partner");
+    if (partnerSlug) {
+      // Persist partner slug for checkout flow
+      localStorage.setItem("smartlic_partner", partnerSlug);
+      document.cookie = `smartlic_partner=${partnerSlug};path=/;max-age=${7 * 24 * 60 * 60}`;
+      // Fetch partner name for badge display
+      setPartnerInfo({ name: partnerSlug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()), slug: partnerSlug });
+    } else {
+      // Check if already stored from previous visit
+      const stored = localStorage.getItem("smartlic_partner");
+      if (stored) {
+        setPartnerInfo({ name: stored.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()), slug: stored });
+      }
+    }
+  }, []);
+
   // UX-359 AC3: Auto-scroll to form via URL param
   const formRef = useRef<HTMLDivElement>(null);
 
@@ -331,6 +356,18 @@ export default function SignupPage() {
           <p className="text-center text-[var(--ink-secondary)] mb-4">
             Veja quais licitações valem a pena para sua empresa — em 2 minutos
           </p>
+
+          {/* STORY-323 AC16: Partner referral badge */}
+          {partnerInfo && (
+            <div data-testid="partner-badge" className="mb-4 p-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-input text-center">
+              <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
+                Indicado por <strong>{partnerInfo.name}</strong>
+              </p>
+              <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5">
+                Desconto exclusivo aplicado automaticamente
+              </p>
+            </div>
+          )}
           <div className="mb-6 p-3 bg-[var(--surface-1)] rounded-input text-xs text-[var(--ink-secondary)] space-y-1">
             <p className="font-medium text-[var(--ink)]">Acesso imediato:</p>
             <ul className="space-y-0.5">

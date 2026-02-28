@@ -31,7 +31,7 @@ Sistema de partner tracking com:
 
 ### Backend — Modelo de Dados
 
-- [ ] **AC1:** Migration para tabela `partners`:
+- [x] **AC1:** Migration para tabela `partners`:
   ```sql
   CREATE TABLE partners (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -45,7 +45,7 @@ Sistema de partner tracking com:
     created_at TIMESTAMPTZ DEFAULT now()
   );
   ```
-- [ ] **AC2:** Migration para tabela `partner_referrals`:
+- [x] **AC2:** Migration para tabela `partner_referrals`:
   ```sql
   CREATE TABLE partner_referrals (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -58,62 +58,62 @@ Sistema de partner tracking com:
     revenue_share_amount NUMERIC(10,2) -- 25% do monthly_revenue
   );
   ```
-- [ ] **AC3:** RLS: parceiro so ve seus proprios referrals; admin ve todos
+- [x] **AC3:** RLS: parceiro so ve seus proprios referrals; admin ve todos
 
 ### Backend — Signup com Partner Tracking
 
-- [ ] **AC4:** Endpoint de signup captura `partner` query param:
+- [x] **AC4:** Endpoint de signup captura `partner` query param:
   - `/signup?partner=triunfo-legis` → salva `partner_id` no perfil do usuario
   - Persiste em `profiles.referred_by_partner_id`
-- [ ] **AC5:** Se cupom aplicado no checkout corresponde a um parceiro → vincular automaticamente
-- [ ] **AC6:** Webhook `checkout.session.completed` → cria registro em `partner_referrals` com `converted_at`
-- [ ] **AC7:** Webhook `customer.subscription.deleted` → atualiza `churned_at`
+- [x] **AC5:** Se cupom aplicado no checkout corresponde a um parceiro → vincular automaticamente
+- [x] **AC6:** Webhook `checkout.session.completed` → cria registro em `partner_referrals` com `converted_at`
+- [x] **AC7:** Webhook `customer.subscription.deleted` → atualiza `churned_at`
 
 ### Backend — Calculo de Revenue Share
 
-- [ ] **AC8:** Funcao `calculate_partner_revenue(partner_id, month)`:
+- [x] **AC8:** Funcao `calculate_partner_revenue(partner_id, month)`:
   - Soma `monthly_revenue` de todos os referrals ativos no mes
   - Aplica `revenue_share_pct` (default 25%)
   - Retorna: total revenue, share amount, count de clientes ativos
-- [ ] **AC9:** Cron job mensal (dia 1, 09:00 BRT): gera relatorio de revenue share para todos os parceiros
+- [x] **AC9:** Cron job mensal (dia 1, 09:00 BRT): gera relatorio de revenue share para todos os parceiros
 
 ### Backend — API Endpoints
 
-- [ ] **AC10:** `GET /v1/admin/partners` — listar parceiros (admin only)
-- [ ] **AC11:** `POST /v1/admin/partners` — criar parceiro (admin only)
-- [ ] **AC12:** `GET /v1/admin/partners/{id}/referrals` — referrals do parceiro (admin only)
-- [ ] **AC13:** `GET /v1/admin/partners/{id}/revenue` — revenue share do parceiro (admin only)
-- [ ] **AC14:** `GET /v1/partner/dashboard` — dashboard para o parceiro logado (self-service futuro)
+- [x] **AC10:** `GET /v1/admin/partners` — listar parceiros (admin only)
+- [x] **AC11:** `POST /v1/admin/partners` — criar parceiro (admin only)
+- [x] **AC12:** `GET /v1/admin/partners/{id}/referrals` — referrals do parceiro (admin only)
+- [x] **AC13:** `GET /v1/admin/partners/{id}/revenue` — revenue share do parceiro (admin only)
+- [x] **AC14:** `GET /v1/partner/dashboard` — dashboard para o parceiro logado (self-service futuro)
 
 ### Backend — Stripe Coupons
 
-- [ ] **AC15:** Script para criar cupons Stripe por parceiro:
+- [x] **AC15:** Script para criar cupons Stripe por parceiro:
   - Cupom: `{PARTNER_SLUG}_25` (ex: `TRIUNFO_25`)
   - Tipo: porcentagem, 25% off, duracao: forever (enquanto parceria ativa)
   - Vinculado ao `partners.stripe_coupon_id`
 
 ### Frontend — Partner Landing
 
-- [ ] **AC16:** Pagina `/signup` detecta `?partner=slug` e:
+- [x] **AC16:** Pagina `/signup` detecta `?partner=slug` e:
   - Exibe badge "Indicado por {partner.name}"
   - Salva `partner` em cookie/localStorage para persistir ate checkout
   - Aplica cupom automaticamente no checkout
-- [ ] **AC17:** Pagina `/planos` detecta partner cookie e mostra preco com desconto
+- [x] **AC17:** Pagina `/planos` detecta partner cookie e mostra preco com desconto
 
 ### Frontend — Admin Dashboard
 
-- [ ] **AC18:** Pagina admin `/admin/partners`:
+- [x] **AC18:** Pagina admin `/admin/partners`:
   - Lista de parceiros (nome, email, referrals ativos, revenue share mensal)
   - Detalhe por parceiro: lista de clientes indicados, status, valor
   - Relatorio mensal exportavel (CSV)
 
 ### Testes
 
-- [ ] **AC19:** Testes: signup com partner param → vincula parceiro
-- [ ] **AC20:** Testes: checkout com cupom → cria partner_referral
-- [ ] **AC21:** Testes: calculo de revenue share (mensal)
-- [ ] **AC22:** Testes: churn atualiza referral
-- [ ] **AC23:** Zero regressions
+- [x] **AC19:** Testes: signup com partner param → vincula parceiro
+- [x] **AC20:** Testes: checkout com cupom → cria partner_referral
+- [x] **AC21:** Testes: calculo de revenue share (mensal)
+- [x] **AC22:** Testes: churn atualiza referral
+- [x] **AC23:** Zero regressions
 
 ---
 

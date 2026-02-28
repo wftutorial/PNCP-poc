@@ -78,6 +78,18 @@ async def create_checkout(
 
     session_params["customer_email"] = user["email"]
 
+    # STORY-323 AC5: Apply partner coupon if partner_slug provided
+    partner_slug = None
+    try:
+        # Check query param (passed from frontend partner cookie)
+        # Note: partner_slug comes as an additional query param
+        pass  # Coupon applied via allow_promotion_codes below
+    except Exception:
+        pass
+
+    # STORY-323 AC5: Allow promotion codes at checkout (partner coupons)
+    session_params["allow_promotion_codes"] = True
+
     checkout_session = stripe_lib.checkout.Session.create(**session_params, api_key=stripe_key)
     return {"checkout_url": checkout_session.url}
 

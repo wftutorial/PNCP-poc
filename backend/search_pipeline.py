@@ -514,6 +514,13 @@ class SearchPipeline:
                 f"skipping LLM and viability, marking is_simplified=True"
             )
             ctx.is_simplified = True
+            # STORY-329 AC5: Emit llm_skipped event when LLM skipped due to timeout
+            if ctx.tracker:
+                await ctx.tracker.emit(
+                    "filtering", 70,
+                    "Classificação IA ignorada (timeout)",
+                    llm_skipped=True, reason="timeout",
+                )
 
         if sm:
             await sm.transition_to(SearchState.ENRICHING, stage="enrich")
@@ -1854,7 +1861,42 @@ class SearchPipeline:
             f"municipios={len(request.municipios) if request.municipios else 0}"
         )
 
-        ctx.licitacoes_filtradas, ctx.filter_stats = deps.aplicar_todos_filtros(
+        # STORY-329 AC2/AC4: Create progress callback for real-time SSE during filtering
+        _filter_start = sync_time_module.monotonic()
+        _long_running_emitted = [False]  # list for thread-safe mutation
+
+        if ctx.tracker:
+            _loop = asyncio.get_running_loop()
+
+            def _on_filter_progress(processed: int, total: int, phase: str = "filter") -> None:
+                """Thread-safe callback: schedules SSE emit on event loop."""
+                elapsed = sync_time_module.monotonic() - _filter_start
+
+                if phase == "filter":
+                    # AC2: interpolate 60→65 for keyword matching
+                    pct = 60 + int((processed / max(total, 1)) * 5)
+                    msg = f"Filtrando: {processed}/{total}"
+                elif phase == "llm_classify":
+                    # AC3: interpolate 65→70 for LLM zero-match
+                    pct = 65 + int((processed / max(total, 1)) * 5)
+                    msg = f"Classificação IA: {processed}/{total} sem keywords"
+                else:
+                    return
+
+                detail: dict = {}
+                # AC4: flag long-running filter after 30s
+                if elapsed > 30 and not _long_running_emitted[0]:
+                    _long_running_emitted[0] = True
+                    detail["is_long_running"] = True
+
+                coro = ctx.tracker.emit("filtering", pct, msg, **detail)
+                _loop.call_soon_threadsafe(_loop.create_task, coro)
+        else:
+            _on_filter_progress = None
+
+        # STORY-329 AC2: Run filter in thread so event loop can send SSE events in real-time
+        ctx.licitacoes_filtradas, ctx.filter_stats = await asyncio.to_thread(
+            deps.aplicar_todos_filtros,
             ctx.licitacoes_raw,
             ufs_selecionadas=set(request.ufs),
             status=status_filter,
@@ -1870,7 +1912,10 @@ class SearchPipeline:
             setor=ctx.request.setor_id,  # CRIT-019 AC1: pass sector to enable 6 classification paths
             modo_busca=request.modo_busca or "publicacao",
             custom_terms=ctx.custom_terms or None,  # STORY-267: pass custom terms for quality parity
+            on_progress=_on_filter_progress,
         )
+        # Let pending progress events flush before continuing
+        await asyncio.sleep(0)
 
         # Min-match relaxation
         ctx.hidden_by_min_match = ctx.filter_stats.get("rejeitadas_min_match", 0)

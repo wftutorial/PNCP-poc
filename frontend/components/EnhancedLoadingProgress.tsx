@@ -179,7 +179,7 @@ export function EnhancedLoadingProgress({
   }, [estimatedTime]);
 
   // GTM-FIX-035 AC3: Compute UF-aware progress that syncs states processed with percentage.
-  // Fetch stage (10%-70%) is proportional to UF completion. Post-fetch stages use SSE or simulation.
+  // STORY-329 AC6: Fetch stage caps at 60% (not 70%) so filtering micro-steps 60→70 are visible.
   const ufBasedProgress = (() => {
     if (stateCount <= 0) return simulatedProgress;
     // P2.1: Always use real uf_index from SSE when available — do not gate behind useRealProgress.
@@ -190,8 +190,8 @@ export function EnhancedLoadingProgress({
       : statesProcessed;
     if (effectiveStatesProcessed <= 0 && !ufAllComplete) return Math.min(simulatedProgress, 10); // Cap at connecting stage
     const ufRatio = ufAllComplete ? 1 : Math.min(effectiveStatesProcessed / stateCount, 1);
-    // Map UF ratio to 10%-70% range (fetch stage)
-    return 10 + (ufRatio * 60);
+    // Map UF ratio to 10%-60% range (fetch stage ends at 60%, filtering covers 60→70)
+    return 10 + (ufRatio * 50);
   })();
 
   // Determine effective progress, stage, and message from SSE or simulation.
@@ -200,11 +200,12 @@ export function EnhancedLoadingProgress({
   if (sseEvent && sseEvent.progress >= 0) {
     // SSE has real progress — reconcile with UF-based progress to avoid contradictions.
     // In the fetch stage, UF completion gives more accurate granular data than the coarse SSE %.
-    if (sseEvent.stage === 'fetching' || (!sseEvent.stage && sseEvent.progress < 70)) {
+    if (sseEvent.stage === 'fetching' || (!sseEvent.stage && sseEvent.progress < 60)) {
       effectiveProgress = Math.max(sseEvent.progress, ufBasedProgress);
     } else {
-      // Post-fetch stages: trust SSE progress directly, but don't go below UF-based floor.
-      effectiveProgress = Math.max(sseEvent.progress, ufBasedProgress);
+      // STORY-329 AC6: Post-fetch stages (filtering 60→70, etc.): trust SSE progress directly.
+      // Don't floor with ufBasedProgress — it would mask filtering micro-steps.
+      effectiveProgress = Math.max(sseEvent.progress, lastSseProgressRef.current);
     }
   } else {
     // No SSE — use UF-aware progress (better than pure time simulation).
@@ -424,6 +425,13 @@ export function EnhancedLoadingProgress({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
           </svg>
           {degradedMessage || 'Resultados disponíveis com ressalvas'}
+        </div>
+      )}
+
+      {/* STORY-329 AC4: Long-running filter message (>30s filtering) */}
+      {sseEvent?.detail?.is_long_running && !isOvertime && !isDegraded && (
+        <div className="mb-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/40 rounded-lg text-sm text-blue-800 dark:text-blue-200" data-testid="long-running-message">
+          Volume grande, pode levar até 2 min
         </div>
       )}
 

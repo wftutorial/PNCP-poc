@@ -396,14 +396,14 @@ describe('EnhancedLoadingProgress Component', () => {
         />
       );
 
-      // With 3 of 5 states processed, UF-based progress = 10 + (3/5 * 60) = 46%
-      // The percentage shown should be >= 46%
+      // STORY-329: UF-based progress now caps at 60% (was 70%)
+      // With 3 of 5 states processed, UF-based progress = 10 + (3/5 * 50) = 40%
       const progressText = screen.getByText(/\d+%/);
       const percentage = parseInt(progressText.textContent || '0');
-      expect(percentage).toBeGreaterThanOrEqual(46);
+      expect(percentage).toBeGreaterThanOrEqual(40);
     });
 
-    it('AC3: should show 70% when all UFs complete (ufAllComplete=true)', () => {
+    it('AC3: should show 60% when all UFs complete (ufAllComplete=true)', () => {
       render(
         <EnhancedLoadingProgress
           currentStep={1}
@@ -414,10 +414,11 @@ describe('EnhancedLoadingProgress Component', () => {
         />
       );
 
-      // ufAllComplete=true → ufRatio=1 → 10 + (1 * 60) = 70%
+      // STORY-329: ufAllComplete=true → ufRatio=1 → 10 + (1 * 50) = 60% (was 70%)
+      // Capped at 60% to allow filtering micro-steps 60→70
       const progressText = screen.getByText(/\d+%/);
       const percentage = parseInt(progressText.textContent || '0');
-      expect(percentage).toBeGreaterThanOrEqual(70);
+      expect(percentage).toBeGreaterThanOrEqual(60);
     });
 
     it('AC3: should cap at connecting stage (10%) when no states processed yet', () => {

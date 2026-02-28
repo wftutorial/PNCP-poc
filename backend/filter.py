@@ -8,7 +8,7 @@ import threading
 import unicodedata
 import uuid
 from datetime import datetime, timezone
-from typing import Set, Tuple, List, Dict, Optional
+from typing import Callable, Set, Tuple, List, Dict, Optional
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -2254,6 +2254,7 @@ def aplicar_todos_filtros(
     setor: Optional[str] = None,  # STORY-179 AC1: sector ID for max_contract_value check
     modo_busca: str = "publicacao",  # STORY-240 AC4: "publicacao" or "abertas"
     custom_terms: Optional[List[str]] = None,  # STORY-267: user's free search terms
+    on_progress: Optional[Callable[[int, int, str], None]] = None,  # STORY-329 AC1: (processed, total, phase)
 ) -> Tuple[List[dict], Dict[str, int]]:
     """
     Aplica todos os filtros em sequência otimizada (fail-fast).
@@ -2673,8 +2674,16 @@ def aplicar_todos_filtros(
         _sector_overrides = GLOBAL_EXCLUSION_OVERRIDES.get(setor, set())
         _effective_global_exc = GLOBAL_EXCLUSIONS_NORMALIZED - _sector_overrides
 
+    # STORY-329 AC1: Progress tracking for keyword matching loop
+    _kw_total = len(resultado_valor)
+    _kw_progress_step = min(50, max(1, int(_kw_total * 0.05))) if on_progress and _kw_total > 0 else 0
+
     resultado_keyword: List[dict] = []
-    for lic in resultado_valor:
+    for _kw_idx, lic in enumerate(resultado_valor):
+        # STORY-329 AC1: Emit progress every N items
+        if _kw_progress_step > 0 and (_kw_idx + 1) % _kw_progress_step == 0:
+            on_progress(_kw_idx + 1, _kw_total, "filter")
+
         objeto = lic.get("objetoCompra", "")
 
         # STORY-328 AC1/AC5: Strip org context BEFORE keyword matching
@@ -2980,13 +2989,19 @@ def aplicar_todos_filtros(
                     )
                 return lic_item, result
 
+            _llm_total = len(zero_match_pool)
+            _llm_completed = 0
             with ThreadPoolExecutor(max_workers=10) as executor:
                 futures = {
                     executor.submit(_classify_one, lic): lic
                     for lic in zero_match_pool
                 }
                 for future in as_completed(futures):
+                    _llm_completed += 1
                     stats["llm_zero_match_calls"] += 1
+                    # STORY-329 AC3: LLM zero-match progress
+                    if on_progress:
+                        on_progress(_llm_completed, _llm_total, "llm_classify")
                     try:
                         lic_item, llm_result = future.result()
                         is_relevant = llm_result.get("is_primary", False) if isinstance(llm_result, dict) else llm_result

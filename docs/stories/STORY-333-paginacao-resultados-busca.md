@@ -72,21 +72,37 @@ O botão de paginação em `/historico` usa `border-[var(--border)]` com `disabl
 - [ ] AC19: Teste: mock export com sucesso → verifica toast de sucesso + abertura de nova aba com URL do spreadsheet
 - [ ] AC20: Teste: mock export com 401 → verifica toast "Reconecte sua conta Google"
 
-### Bloco 5: Fix botão histórico
+### Bloco 5: Máscara de valor BRL nos alertas
 
-- [ ] AC21: No `historico/page.tsx`, atualizar estilo dos botões Anterior/Próximo para usar o mesmo componente `Pagination` do AC1 (consistência visual)
-- [ ] AC22: Se não usar componente compartilhado, pelo menos corrigir: `disabled:opacity-30` → `disabled:opacity-50` e adicionar `disabled:cursor-not-allowed`
-- [ ] AC23: Aumentar tamanho do texto: `text-sm` → `text-base` e padding: `px-3 py-1` → `px-4 py-2`
-- [ ] AC24: Adicionar `font-medium` para melhorar legibilidade
-- [ ] AC25: Testar em tema Light e Dark — botões devem ser legíveis em ambos
+- [ ] AC21: No formulário "Criar Novo Alerta" (`alertas/page.tsx:603-634`), trocar `type="number"` por `type="text"` com máscara de moeda brasileira (pontos de milhar + vírgula de centavos). Ex: digitar `1500000` → exibir `1.500.000,00`
+- [ ] AC22: Criar componente `CurrencyInput` reutilizável em `frontend/components/ui/CurrencyInput.tsx` que:
+  - Aceita digitação livre de números
+  - Formata automaticamente com pontos de milhar (padrão pt-BR) enquanto o usuário digita
+  - Exibe prefixo "R$" à esquerda do input (adornment, não dentro do value)
+  - Converte internamente para number (sem pontos/vírgulas) ao setar no form state
+  - Placeholder: "0,00" (valor mín) e "Sem limite" (valor máx)
+- [ ] AC23: O `CurrencyInput` deve funcionar com backspace, seleção de texto, e paste de valores
+- [ ] AC24: Ao submeter o alerta, `form.valor_min` e `form.valor_max` continuam sendo enviados como número puro (sem formatação) ao backend
+- [ ] AC25: Aplicar o `CurrencyInput` também no campo de valor da busca (`SearchForm.tsx`) se existir input de valor lá
+- [ ] AC26: Teste: digitar "1500000" → exibir "1.500.000" no input, form state = 1500000
+- [ ] AC27: Teste: colar "R$ 2.500.000,00" → exibir "2.500.000,00", form state = 2500000
 
-### Bloco 6: Testes
+### Bloco 6: Fix botão histórico
 
-- [ ] AC26: Teste de `Pagination` component: renderiza, navega, reseta, persiste pageSize
-- [ ] AC27: Teste de `SearchResults` com paginação: 100 items → mostra 20, navega para página 2 → mostra items 21-40
-- [ ] AC28: Teste que botões Excel/PDF/Sheets estão visíveis no viewport sem scroll (dentro da sticky bar)
-- [ ] AC29: Teste de acessibilidade: `Pagination` tem `aria-label`, `aria-current="page"`, botões disabled com `aria-disabled`
-- [ ] AC30: Teste de histórico: botão "Próximo" é visível e legível (contrast ratio check)
+- [ ] AC28: No `historico/page.tsx`, atualizar estilo dos botões Anterior/Próximo para usar o mesmo componente `Pagination` do AC1 (consistência visual)
+- [ ] AC29: Se não usar componente compartilhado, pelo menos corrigir: `disabled:opacity-30` → `disabled:opacity-50` e adicionar `disabled:cursor-not-allowed`
+- [ ] AC30: Aumentar tamanho do texto: `text-sm` → `text-base` e padding: `px-3 py-1` → `px-4 py-2`
+- [ ] AC31: Adicionar `font-medium` para melhorar legibilidade
+- [ ] AC32: Testar em tema Light e Dark — botões devem ser legíveis em ambos
+
+### Bloco 7: Testes
+
+- [ ] AC33: Teste de `Pagination` component: renderiza, navega, reseta, persiste pageSize
+- [ ] AC34: Teste de `SearchResults` com paginação: 100 items → mostra 20, navega para página 2 → mostra items 21-40
+- [ ] AC35: Teste que botões Excel/PDF/Sheets estão visíveis no viewport sem scroll (dentro da sticky bar)
+- [ ] AC36: Teste de acessibilidade: `Pagination` tem `aria-label`, `aria-current="page"`, botões disabled com `aria-disabled`
+- [ ] AC37: Teste de `CurrencyInput`: digitação, formatação, paste, backspace, form state numérico
+- [ ] AC38: Teste de histórico: botão "Próximo" é visível e legível (contrast ratio check)
 
 ## Arquivos Afetados
 
@@ -98,8 +114,11 @@ O botão de paginação em `/historico` usa `border-[var(--border)]` com `disabl
 - `frontend/app/api/export/google-sheets/route.ts` (verificar proxy)
 - `backend/routes/export_sheets.py` (verificar OAuth flow)
 - `backend/oauth.py` (verificar `get_user_google_token`)
+- `frontend/components/ui/CurrencyInput.tsx` (novo — máscara BRL reutilizável)
+- `frontend/app/alertas/page.tsx` (trocar input number por CurrencyInput)
 - `frontend/app/historico/page.tsx` (fix botões, usar Pagination)
 - `frontend/__tests__/components/Pagination.test.tsx` (novo)
+- `frontend/__tests__/components/CurrencyInput.test.tsx` (novo)
 - `frontend/__tests__/components/SearchResults-pagination.test.tsx` (novo)
 - `frontend/__tests__/components/GoogleSheetsExport-errors.test.tsx` (novo)
 

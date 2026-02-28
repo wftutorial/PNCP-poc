@@ -1362,6 +1362,24 @@
         "title": "BuscaResponse",
         "type": "object"
       },
+      "CTAEventRequest": {
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "variant": {
+            "title": "Variant",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action",
+          "variant"
+        ],
+        "title": "CTAEventRequest",
+        "type": "object"
+      },
       "CancelFeedbackRequest": {
         "description": "Post-cancellation feedback (UX-308 AC6).",
         "properties": {
@@ -4590,6 +4608,35 @@
         "title": "TopOpportunity",
         "type": "object"
       },
+      "TourEventRequest": {
+        "description": "Request for onboarding tour event tracking (STORY-313 AC18).",
+        "properties": {
+          "event": {
+            "description": "Event type: completed or skipped",
+            "title": "Event",
+            "type": "string"
+          },
+          "steps_seen": {
+            "description": "Number of steps the user saw before event",
+            "minimum": 0.0,
+            "title": "Steps Seen",
+            "type": "integer"
+          },
+          "tour_id": {
+            "description": "Tour identifier (search, results, pipeline)",
+            "maxLength": 50,
+            "title": "Tour Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tour_id",
+          "event",
+          "steps_seen"
+        ],
+        "title": "TourEventRequest",
+        "type": "object"
+      },
       "TrialStatusResponse": {
         "properties": {
           "days_remaining": {
@@ -5408,6 +5455,80 @@
         "summary": "Feedback Patterns",
         "tags": [
           "feedback"
+        ]
+      }
+    },
+    "/admin/reconciliation/history": {
+      "get": {
+        "description": "AC10: Get last N reconciliation runs.\n\nReturns list of reconciliation_log entries, most recent first.",
+        "operationId": "get_reconciliation_history_admin_reconciliation_history_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Reconciliation History",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/reconciliation/trigger": {
+      "post": {
+        "description": "AC13: Manually trigger a reconciliation run.\n\nExecutes immediately (bypasses cron schedule) but respects Redis lock.",
+        "operationId": "trigger_reconciliation_admin_reconciliation_trigger_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Trigger Reconciliation",
+        "tags": [
+          "admin"
         ]
       }
     },
@@ -6288,6 +6409,46 @@
           }
         ],
         "summary": "Get Top Dimensions",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/analytics/track-cta": {
+      "post": {
+        "description": "Track CTA conversion events for admin dashboard (STORY-312 AC11).\n\nIncrements Prometheus counters for shown/clicked/dismissed by variant.\nFire-and-forget \u2014 always returns 204.",
+        "operationId": "track_cta_event_analytics_track_cta_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CTAEventRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Track Cta Event",
         "tags": [
           "analytics"
         ]
@@ -7993,6 +8154,46 @@
         ]
       }
     },
+    "/onboarding/tour-event": {
+      "post": {
+        "description": "Persist onboarding tour completion/skip events (STORY-313 AC18).\n\nFire-and-forget tracking \u2014 always returns 204 regardless of metric state.",
+        "operationId": "track_tour_event_onboarding_tour_event_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TourEventRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Track Tour Event",
+        "tags": [
+          "onboarding"
+        ]
+      }
+    },
     "/pipeline": {
       "get": {
         "description": "List pipeline items for the authenticated user (AC3).\n\nSTORY-265 AC3: Trial expired can VIEW pipeline (read-only).\nSupports filtering by stage and pagination via limit/offset.",
@@ -9007,6 +9208,80 @@
         ]
       }
     },
+    "/v1/admin/reconciliation/history": {
+      "get": {
+        "description": "AC10: Get last N reconciliation runs.\n\nReturns list of reconciliation_log entries, most recent first.",
+        "operationId": "get_reconciliation_history_v1_admin_reconciliation_history_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Reconciliation History",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/reconciliation/trigger": {
+      "post": {
+        "description": "AC13: Manually trigger a reconciliation run.\n\nExecutes immediately (bypasses cron schedule) but respects Redis lock.",
+        "operationId": "trigger_reconciliation_v1_admin_reconciliation_trigger_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Trigger Reconciliation",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/v1/admin/search-trace/{search_id}": {
       "get": {
         "description": "Reconstruct complete search journey from search_id.\n\nAggregates:\n- Progress tracker state (if still active)\n- Cache entries matching this search\n- Job queue results (if ARQ available)",
@@ -9992,6 +10267,46 @@
           }
         ],
         "summary": "Get Top Dimensions",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/v1/analytics/track-cta": {
+      "post": {
+        "description": "Track CTA conversion events for admin dashboard (STORY-312 AC11).\n\nIncrements Prometheus counters for shown/clicked/dismissed by variant.\nFire-and-forget \u2014 always returns 204.",
+        "operationId": "track_cta_event_v1_analytics_track_cta_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CTAEventRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Track Cta Event",
         "tags": [
           "analytics"
         ]
@@ -11654,6 +11969,46 @@
         "summary": "Export User Data",
         "tags": [
           "user"
+        ]
+      }
+    },
+    "/v1/onboarding/tour-event": {
+      "post": {
+        "description": "Persist onboarding tour completion/skip events (STORY-313 AC18).\n\nFire-and-forget tracking \u2014 always returns 204 regardless of metric state.",
+        "operationId": "track_tour_event_v1_onboarding_tour_event_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TourEventRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Track Tour Event",
+        "tags": [
+          "onboarding"
         ]
       }
     },

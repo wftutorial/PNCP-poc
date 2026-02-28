@@ -23,43 +23,43 @@ Criar worker de reconciliacao batch que periodicamente compara estado Stripe (so
 
 ### Backend — Reconciliation Worker
 
-- [ ] **AC1:** Criar `backend/services/stripe_reconciliation.py` com funcao `reconcile_subscriptions()`:
+- [x] **AC1:** Criar `backend/services/stripe_reconciliation.py` com funcao `reconcile_subscriptions()`:
   - Lista todas assinaturas ativas no Stripe via `stripe.Subscription.list(status='all', limit=100)`
   - Compara com `user_subscriptions` no Supabase
   - Detecta divergencias em: `is_active`, `plan_id`, `billing_period`, `subscription_status`, `expires_at`
-- [ ] **AC2:** Para cada divergencia detectada:
+- [x] **AC2:** Para cada divergencia detectada:
   - Log estruturado: `{ user_id, field, stripe_value, db_value, action_taken }`
   - Auto-fix: atualizar DB para match Stripe (Stripe e source of truth)
   - Sincronizar `profiles.plan_type` (manter pattern existente)
   - Invalidar cache Redis (manter pattern existente)
-- [ ] **AC3:** Detectar "orphan subscriptions" — assinaturas no Stripe sem match no DB:
+- [x] **AC3:** Detectar "orphan subscriptions" — assinaturas no Stripe sem match no DB:
   - Log como WARNING
   - Criar registro em `user_subscriptions` se customer_email match com profiles
   - Caso contrario: log para investigacao manual
-- [ ] **AC4:** Detectar "zombie subscriptions" — assinaturas ativas no DB mas canceladas/expired no Stripe:
+- [x] **AC4:** Detectar "zombie subscriptions" — assinaturas ativas no DB mas canceladas/expired no Stripe:
   - Auto-fix: desativar no DB (`is_active = false`)
   - Sincronizar `profiles.plan_type`
 
 ### Backend — Scheduling
 
-- [ ] **AC5:** Criar ARQ task `reconcile_stripe` em `cron_jobs.py`:
+- [x] **AC5:** Criar ARQ task `reconcile_stripe` em `cron_jobs.py`:
   - Executar diariamente as 03:00 BRT (06:00 UTC) — horario de baixo trafego
   - Configuravel via `RECONCILIATION_ENABLED` e `RECONCILIATION_HOUR_UTC` em config.py
-- [ ] **AC6:** Protecao contra execucao duplicada:
+- [x] **AC6:** Protecao contra execucao duplicada:
   - Lock Redis com TTL de 30 minutos (`smartlic:reconciliation:lock`)
   - Se lock existe, skip execution
 
 ### Backend — Reconciliation Report
 
-- [ ] **AC7:** Criar tabela `reconciliation_log`:
+- [x] **AC7:** Criar tabela `reconciliation_log`:
   - `id`, `run_at`, `total_checked`, `divergences_found`, `auto_fixed`, `manual_review`, `duration_ms`
-- [ ] **AC8:** Ao final de cada execucao, salvar report na tabela
-- [ ] **AC9:** Se divergencias > 0: enviar email de alerta para admin
-- [ ] **AC10:** Endpoint admin `GET /admin/reconciliation/history` com ultimos 30 runs
+- [x] **AC8:** Ao final de cada execucao, salvar report na tabela
+- [x] **AC9:** Se divergencias > 0: enviar email de alerta para admin
+- [x] **AC10:** Endpoint admin `GET /admin/reconciliation/history` com ultimos 30 runs
 
 ### Backend — Metricas
 
-- [ ] **AC11:** Metricas Prometheus:
+- [x] **AC11:** Metricas Prometheus:
   - `smartlic_reconciliation_runs_total`
   - `smartlic_reconciliation_divergences_total` (labels: field, direction: stripe_ahead|db_ahead)
   - `smartlic_reconciliation_fixes_total`
@@ -67,17 +67,17 @@ Criar worker de reconciliacao batch que periodicamente compara estado Stripe (so
 
 ### Frontend — Admin Dashboard
 
-- [ ] **AC12:** Widget no admin dashboard mostrando:
+- [x] **AC12:** Widget no admin dashboard mostrando:
   - Ultimo run: data/hora, divergencias, fixes
   - Status: verde (0 divergencias) / amarelo (< 5) / vermelho (>= 5)
-- [ ] **AC13:** Botao "Executar reconciliacao agora" (trigger manual via API)
+- [x] **AC13:** Botao "Executar reconciliacao agora" (trigger manual via API)
 
 ### Testes
 
-- [ ] **AC14:** Testes para cada tipo de divergencia (status, plan, billing_period, expires_at)
-- [ ] **AC15:** Testes para orphan e zombie detection
-- [ ] **AC16:** Teste de lock/dedup
-- [ ] **AC17:** Zero regressions
+- [x] **AC14:** Testes para cada tipo de divergencia (status, plan, billing_period, expires_at)
+- [x] **AC15:** Testes para orphan e zombie detection
+- [x] **AC16:** Teste de lock/dedup
+- [x] **AC17:** Zero regressions
 
 ---
 

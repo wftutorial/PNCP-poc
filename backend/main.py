@@ -371,7 +371,7 @@ async def lifespan(app_instance: FastAPI):
     await get_arq_pool()
 
     # UX-303 AC8: Start periodic cache cleanup
-    from cron_jobs import start_cache_cleanup_task, start_session_cleanup_task, start_cache_refresh_task, warmup_top_params, start_trial_reminder_task, start_warmup_task, start_trial_sequence_task
+    from cron_jobs import start_cache_cleanup_task, start_session_cleanup_task, start_cache_refresh_task, warmup_top_params, start_trial_reminder_task, start_warmup_task, start_trial_sequence_task, start_reconciliation_task
     cleanup_task = await start_cache_cleanup_task()
 
     # CRIT-011 AC7: Start periodic session cleanup (stale + old sessions)
@@ -385,6 +385,9 @@ async def lifespan(app_instance: FastAPI):
 
     # STORY-310 AC9: Start daily trial email sequence (08:00 BRT)
     trial_sequence_task = await start_trial_sequence_task()
+
+    # STORY-314: Start daily Stripe reconciliation (03:00 BRT)
+    reconciliation_task = await start_reconciliation_task()
 
     # P1.2: Start startup cache warm-up (top sector+UF combinations)
     warmup_task = await start_warmup_task()
@@ -507,6 +510,13 @@ async def lifespan(app_instance: FastAPI):
     trial_reminder_task.cancel()
     try:
         await trial_reminder_task
+    except (Exception, asyncio.CancelledError):
+        pass
+
+    # STORY-314: Cancel Stripe reconciliation task
+    reconciliation_task.cancel()
+    try:
+        await reconciliation_task
     except (Exception, asyncio.CancelledError):
         pass
 

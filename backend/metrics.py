@@ -441,6 +441,32 @@ CTA_DISMISSED = _create_counter(
     labelnames=["variant"],
 )
 
+# ============================================================================
+# STORY-314: Stripe reconciliation metrics
+# ============================================================================
+
+RECONCILIATION_RUNS = _create_counter(
+    "smartlic_reconciliation_runs_total",
+    "Reconciliation job executions",
+)
+
+RECONCILIATION_DIVERGENCES = _create_counter(
+    "smartlic_reconciliation_divergences_total",
+    "Reconciliation divergences detected",
+    labelnames=["field", "direction"],  # direction: stripe_ahead, db_ahead
+)
+
+RECONCILIATION_FIXES = _create_counter(
+    "smartlic_reconciliation_fixes_total",
+    "Reconciliation auto-fixes applied",
+)
+
+RECONCILIATION_DURATION = _create_histogram(
+    "smartlic_reconciliation_duration_seconds",
+    "Reconciliation job duration",
+    buckets=[1, 5, 10, 30, 60, 120, 300, 600],
+)
+
 # STORY-313 AC18: Onboarding tour tracking
 TOUR_COMPLETED = _create_counter(
     "smartlic_tour_completed_total",

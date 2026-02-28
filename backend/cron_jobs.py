@@ -809,6 +809,117 @@ async def _pre_dunning_loop() -> None:
 # STORY-310: Trial Email Sequence (daily at 08:00 BRT)
 # ============================================================================
 
+# ============================================================================
+# STORY-314: Stripe ⇄ DB Reconciliation (daily at 03:00 BRT = 06:00 UTC)
+# ============================================================================
+
+RECONCILIATION_LOCK_KEY = "smartlic:reconciliation:lock"
+RECONCILIATION_LOCK_TTL = 30 * 60  # 30 minutes
+
+
+async def start_reconciliation_task() -> asyncio.Task:
+    """STORY-314 AC5: Start the daily Stripe reconciliation background task.
+
+    Calculates initial delay to align with RECONCILIATION_HOUR_UTC,
+    then runs every 24 hours with Redis lock protection.
+    Returns the Task so it can be cancelled during shutdown.
+    """
+    task = asyncio.create_task(_reconciliation_loop(), name="stripe_reconciliation")
+    logger.info("STORY-314: Stripe reconciliation task started (daily at 03:00 BRT)")
+    return task
+
+
+async def run_reconciliation() -> dict:
+    """Execute a single reconciliation run with lock protection.
+
+    AC6: Uses Redis lock with 30min TTL to prevent duplicate execution.
+    Returns the reconciliation result dict, or a skip-status dict if locked.
+    """
+    from services.stripe_reconciliation import (
+        reconcile_subscriptions,
+        save_reconciliation_report,
+        send_reconciliation_alert,
+    )
+
+    # AC6: Acquire Redis lock
+    lock_acquired = False
+    try:
+        from redis_pool import get_redis_pool
+        redis = await get_redis_pool()
+        if redis:
+            lock_acquired = await redis.set(
+                RECONCILIATION_LOCK_KEY,
+                datetime.now(timezone.utc).isoformat(),
+                nx=True,
+                ex=RECONCILIATION_LOCK_TTL,
+            )
+            if not lock_acquired:
+                logger.info("Reconciliation skipped — lock already held")
+                return {"status": "skipped", "reason": "lock_held"}
+    except Exception as e:
+        logger.warning(f"Redis lock check failed (proceeding without lock): {e}")
+        lock_acquired = True  # Proceed without lock on Redis failure
+
+    try:
+        result = await reconcile_subscriptions()
+        await save_reconciliation_report(result)
+        await send_reconciliation_alert(result)
+        return result
+    finally:
+        # Release lock
+        if lock_acquired:
+            try:
+                from redis_pool import get_redis_pool
+                redis = await get_redis_pool()
+                if redis:
+                    await redis.delete(RECONCILIATION_LOCK_KEY)
+            except Exception:
+                pass  # Lock will expire via TTL
+
+
+async def _reconciliation_loop() -> None:
+    """STORY-314 AC5: Run Stripe reconciliation daily at configured hour."""
+    from config import RECONCILIATION_ENABLED, RECONCILIATION_HOUR_UTC
+
+    if not RECONCILIATION_ENABLED:
+        logger.info("Reconciliation disabled (RECONCILIATION_ENABLED=false)")
+        return
+
+    # Calculate delay until next target hour
+    now = datetime.now(timezone.utc)
+    next_run = now.replace(
+        hour=RECONCILIATION_HOUR_UTC, minute=0, second=0, microsecond=0
+    )
+    if now.hour >= RECONCILIATION_HOUR_UTC:
+        next_run += timedelta(days=1)
+
+    initial_delay = (next_run - now).total_seconds()
+    initial_delay = max(60, min(initial_delay, 86400))
+
+    logger.info(
+        f"STORY-314: Reconciliation first run in {initial_delay:.0f}s "
+        f"(target: {next_run.isoformat()})"
+    )
+    await asyncio.sleep(initial_delay)
+
+    while True:
+        try:
+            result = await run_reconciliation()
+            logger.info(
+                f"STORY-314 reconciliation cycle: "
+                f"checked={result.get('total_checked', 0)}, "
+                f"divergences={result.get('divergences_found', 0)} "
+                f"at {datetime.now(timezone.utc).isoformat()}"
+            )
+            await asyncio.sleep(24 * 60 * 60)  # 24 hours
+        except asyncio.CancelledError:
+            logger.info("Reconciliation task cancelled")
+            break
+        except Exception as e:
+            logger.error(f"Reconciliation loop error: {e}", exc_info=True)
+            await asyncio.sleep(300)  # Retry in 5min on error
+
+
 async def start_trial_sequence_task() -> asyncio.Task:
     """STORY-310 AC9: Start the daily trial email sequence background task.
 

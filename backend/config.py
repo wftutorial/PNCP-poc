@@ -850,3 +850,9 @@ DIGEST_BATCH_SIZE: int = 100  # Resend API limit per batch call
 ALERTS_ENABLED: bool = str_to_bool(os.getenv("ALERTS_ENABLED", "true"))
 ALERTS_HOUR_UTC: int = int(os.getenv("ALERTS_HOUR_UTC", "11"))  # 11:00 UTC = 8:00 BRT
 ALERTS_MAX_PER_EMAIL: int = int(os.getenv("ALERTS_MAX_PER_EMAIL", "10"))
+
+# ============================================================================
+# STORY-314: Stripe ⇄ DB Reconciliation
+# ============================================================================
+RECONCILIATION_ENABLED: bool = str_to_bool(os.getenv("RECONCILIATION_ENABLED", "true"))
+RECONCILIATION_HOUR_UTC: int = int(os.getenv("RECONCILIATION_HOUR_UTC", "6"))  # 06:00 UTC = 03:00 BRT

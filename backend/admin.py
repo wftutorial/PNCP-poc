@@ -810,6 +810,65 @@ async def delete_all_cache_endpoint(
     return result
 
 
+# ============================================================================
+# STORY-314: Stripe Reconciliation Admin Endpoints
+# ============================================================================
+
+@router.get("/reconciliation/history")
+async def get_reconciliation_history(
+    admin: dict = Depends(require_admin),
+    limit: int = Query(default=30, ge=1, le=100),
+):
+    """AC10: Get last N reconciliation runs.
+
+    Returns list of reconciliation_log entries, most recent first.
+    """
+    from supabase_client import get_supabase
+
+    sb = get_supabase()
+    try:
+        result = (
+            sb.table("reconciliation_log")
+            .select("*")
+            .order("run_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        return {"runs": result.data or [], "total": len(result.data or [])}
+    except Exception as e:
+        logger.error(f"Failed to fetch reconciliation history: {e}")
+        raise HTTPException(status_code=500, detail="Erro ao buscar historico de reconciliacao")
+
+
+@router.post("/reconciliation/trigger")
+async def trigger_reconciliation(
+    admin: dict = Depends(require_admin),
+):
+    """AC13: Manually trigger a reconciliation run.
+
+    Executes immediately (bypasses cron schedule) but respects Redis lock.
+    """
+    from cron_jobs import run_reconciliation
+
+    log_admin_action(
+        logger,
+        admin_id=admin["id"],
+        action="trigger-reconciliation",
+        target_user_id=admin["id"],
+        details={},
+    )
+
+    result = await run_reconciliation()
+
+    if result.get("status") == "skipped":
+        raise HTTPException(
+            status_code=409,
+            detail="Reconciliacao ja em execucao. Tente novamente em alguns minutos."
+        )
+
+    return result
+
+
 def _assign_plan(sb, user_id: str, plan_id: str):
     """Internal: assign plan creating subscription record."""
     from datetime import datetime, timezone, timedelta

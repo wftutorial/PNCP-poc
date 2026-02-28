@@ -34,7 +34,6 @@ Gerar PDF profissional a partir dos resultados de busca com:
 
 - [ ] **AC1:** Endpoint `POST /v1/reports/diagnostico`:
   - Input: `search_id` (referencia a uma busca realizada)
-  - Input opcional: `logo_url` (logo da consultoria/cliente)
   - Input opcional: `client_name` (nome da empresa-alvo)
   - Input opcional: `max_items` (default: 20)
   - Output: PDF file (application/pdf)
@@ -49,7 +48,7 @@ Gerar PDF profissional a partir dos resultados de busca com:
 ### Backend — Conteudo do PDF
 
 - [ ] **AC4:** **Capa (pagina 1):**
-  - Logo SmartLic (ou logo customizado se fornecido)
+  - Logo SmartLic.tech (texto estilizado, mesmo visual da landing page — sem imagem)
   - Titulo: "Diagnostico de Oportunidades em Licitacoes"
   - Subtitulo: "Preparado para {client_name}" (se fornecido)
   - Setor(es) buscado(s)
@@ -92,7 +91,6 @@ Gerar PDF profissional a partir dos resultados de busca com:
   - Loading state durante geracao (pode levar 5-10s)
 - [ ] **AC13:** Modal de opcoes antes de gerar:
   - Campo: "Nome da empresa" (opcional)
-  - Campo: "Logo" (upload opcional, max 2MB, PNG/JPG)
   - Campo: "Numero de oportunidades" (slider: 10/20/50, default 20)
   - Botao: "Gerar PDF"
 - [ ] **AC14:** Download automatico apos geracao (blob URL)
@@ -146,7 +144,6 @@ Gerar PDF profissional a partir dos resultados de busca com:
 ## Dependencias
 
 - Nenhuma bloqueadora (pode ser feita em paralelo com STORY-319)
-- STORY-322 (Plano Consultoria) — logo da org no PDF (fase 2)
 - WeasyPrint requer dependencias C no Railway (cairo, pango, gdk-pixbuf)
   - Alternativa: reportlab (pure Python, sem deps C)
   - Alternativa: usar wkhtmltopdf via subprocess

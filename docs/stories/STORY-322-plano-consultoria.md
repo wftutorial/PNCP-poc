@@ -117,7 +117,6 @@ Criar "Plano Consultoria" com:
 ### Backend — Logo nos Relatorios
 
 - [ ] **AC23:** `excel.py` → incluir logo da org no header do Excel (se org existir)
-- [ ] **AC24:** PDF export (STORY-325) → incluir logo da org
 
 ### Testes
 
@@ -152,7 +151,7 @@ Criar "Plano Consultoria" com:
 
 ## Dependencias
 
-- STORY-325 (PDF Diagnostico) — para logo no PDF
+- Nenhuma bloqueadora
 - Stripe product/price criados manualmente ou via script
 
 ## Riscos

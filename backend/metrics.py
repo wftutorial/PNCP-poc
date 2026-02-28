@@ -514,6 +514,18 @@ ORG_CONTEXT_STRIPPED = _create_counter(
     labelnames=["sector"],
 )
 
+# STORY-332 AC1: Redis availability gauge (1=connected, 0=fallback)
+REDIS_AVAILABLE = _create_gauge(
+    "smartlic_redis_available",
+    "Redis availability (1=connected, 0=fallback/InMemoryCache)",
+)
+
+# STORY-332 AC2: How long Redis has been in fallback mode
+REDIS_FALLBACK_DURATION = _create_gauge(
+    "smartlic_redis_fallback_duration_seconds",
+    "Seconds since Redis entered fallback mode (0 when connected)",
+)
+
 
 # ============================================================================
 # STORY-316: Health Canary + Status Page metrics

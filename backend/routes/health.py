@@ -118,22 +118,44 @@ async def _check_supabase_cache() -> dict:
 
 
 def _check_redis_cache() -> dict:
-    """Probe Redis/InMemory cache."""
+    """Probe Redis/InMemory cache.
+
+    STORY-332 AC3: Includes redis_status ("connected" | "fallback")
+    and fallback_duration_seconds.
+    """
     start = time.monotonic()
     try:
-        from redis_pool import get_fallback_cache
+        from redis_pool import (
+            get_fallback_cache,
+            get_redis_status,
+            get_fallback_duration_seconds,
+            _emit_fallback_warning_if_needed,
+            _update_redis_metrics,
+        )
         cache = get_fallback_cache()
 
         alive = cache.ping()
         latency_ms = round((time.monotonic() - start) * 1000)
         entries = len(cache)
+        redis_status = get_redis_status()
 
-        return {
+        # STORY-332 AC1+AC2: Update metrics on each health check
+        _update_redis_metrics(available=(redis_status == "connected"))
+        # STORY-332 AC5: Emit periodic warning if in fallback
+        _emit_fallback_warning_if_needed()
+
+        result = {
             "status": "healthy" if alive else "down",
             "latency_ms": latency_ms,
             "entries": entries,
             "last_error": None,
+            "redis_status": redis_status,
         }
+        if redis_status == "fallback":
+            result["fallback_duration_seconds"] = round(
+                get_fallback_duration_seconds(), 1
+            )
+        return result
     except Exception as e:
         latency_ms = round((time.monotonic() - start) * 1000)
         return {
@@ -141,6 +163,7 @@ def _check_redis_cache() -> dict:
             "latency_ms": latency_ms,
             "entries": 0,
             "last_error": str(e)[:200],
+            "redis_status": "fallback",
         }
 
 

@@ -28,11 +28,18 @@ Usage:
 
 import logging
 import os
+import time
 from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
+
+# STORY-332: Fallback tracking state
+_fallback_since: Optional[float] = None  # monotonic timestamp when fallback started
+_last_fallback_warning: float = 0.0  # monotonic timestamp of last periodic warning
+_FALLBACK_WARNING_THRESHOLD_S = 300  # 5 minutes before first warning
+_FALLBACK_WARNING_INTERVAL_S = 60  # warn every 60s after threshold
 
 # Pool configuration (AC2)
 # CRIT-026-ROOT: Increased from 20→50 connections (2 Gunicorn workers + ARQ + SSE)
@@ -179,6 +186,7 @@ async def get_redis_pool():
             "REDIS_URL not set — Redis disabled, using InMemoryCache fallback"
         )
         _pool_initialized = True
+        _mark_fallback_started()
         return None
 
     try:
@@ -200,6 +208,7 @@ async def get_redis_pool():
             POOL_MAX_CONNECTIONS,
         )
         _pool_initialized = True
+        _mark_redis_connected()
         return _redis_pool
 
     except Exception as e:
@@ -208,18 +217,87 @@ async def get_redis_pool():
         )
         _redis_pool = None
         _pool_initialized = True
+        _mark_fallback_started()
         return None
 
 
+def _mark_fallback_started() -> None:
+    """STORY-332: Record when Redis fallback mode began and update metrics."""
+    global _fallback_since
+    if _fallback_since is None:
+        _fallback_since = time.monotonic()
+    _update_redis_metrics(available=False)
+
+
+def _mark_redis_connected() -> None:
+    """STORY-332: Clear fallback state when Redis reconnects."""
+    global _fallback_since, _last_fallback_warning
+    _fallback_since = None
+    _last_fallback_warning = 0.0
+    _update_redis_metrics(available=True)
+
+
+def _update_redis_metrics(available: bool) -> None:
+    """STORY-332 AC1+AC2: Update Prometheus gauges for Redis status."""
+    try:
+        from metrics import REDIS_AVAILABLE, REDIS_FALLBACK_DURATION
+        REDIS_AVAILABLE.set(1 if available else 0)
+        if available or _fallback_since is None:
+            REDIS_FALLBACK_DURATION.set(0)
+        else:
+            REDIS_FALLBACK_DURATION.set(time.monotonic() - _fallback_since)
+    except Exception:
+        pass  # metrics may not be available (graceful degradation)
+
+
+def _emit_fallback_warning_if_needed() -> None:
+    """STORY-332 AC5: Emit WARNING every 60s when fallback > 5min."""
+    global _last_fallback_warning
+    if _fallback_since is None:
+        return
+    now = time.monotonic()
+    elapsed = now - _fallback_since
+    if elapsed < _FALLBACK_WARNING_THRESHOLD_S:
+        return
+    if (now - _last_fallback_warning) < _FALLBACK_WARNING_INTERVAL_S:
+        return
+    _last_fallback_warning = now
+    logger.warning(
+        "Redis in fallback mode for %.0fs (InMemoryCache active) — "
+        "check Redis connectivity",
+        elapsed,
+    )
+
+
+def get_redis_status() -> str:
+    """STORY-332 AC3: Return 'connected' or 'fallback' based on current Redis state."""
+    return "fallback" if _redis_pool is None else "connected"
+
+
+def get_fallback_duration_seconds() -> float:
+    """STORY-332 AC2: Return seconds since fallback started (0 if connected)."""
+    if _fallback_since is None:
+        return 0.0
+    return time.monotonic() - _fallback_since
+
+
 async def is_redis_available() -> bool:
-    """Check if Redis pool is available and healthy (AC10, AC11)."""
+    """Check if Redis pool is available and healthy (AC10, AC11).
+
+    STORY-332: Also updates Prometheus metrics and emits periodic warnings.
+    """
     pool = await get_redis_pool()
     if pool is None:
+        _update_redis_metrics(available=False)
+        _emit_fallback_warning_if_needed()
         return False
     try:
         await pool.ping()
+        _update_redis_metrics(available=True)
         return True
     except Exception:
+        _update_redis_metrics(available=False)
+        _emit_fallback_warning_if_needed()
         return False
 
 

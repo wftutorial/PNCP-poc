@@ -16,12 +16,12 @@ O fallback InMemoryCache funciona corretamente para single-worker, mas não há 
 
 ## Critérios de Aceite
 
-- [ ] AC1: Métrica Prometheus `smartlic_redis_available` (gauge, 0/1) atualizada a cada health check
-- [ ] AC2: Métrica `smartlic_redis_fallback_duration_seconds` (gauge)
-- [ ] AC3: `GET /health/cache` inclui `redis_status: "connected" | "fallback"`
-- [ ] AC4: Admin dashboard (`/admin/cache`) mostra indicador visual de Redis status
-- [ ] AC5: Se Redis em fallback > 5min, log WARNING a cada 60s (não a cada request)
-- [ ] AC6: Teste: simular Redis timeout → verificar métricas
+- [x] AC1: Métrica Prometheus `smartlic_redis_available` (gauge, 0/1) atualizada a cada health check
+- [x] AC2: Métrica `smartlic_redis_fallback_duration_seconds` (gauge)
+- [x] AC3: `GET /health/cache` inclui `redis_status: "connected" | "fallback"`
+- [x] AC4: Admin dashboard (`/admin/cache`) mostra indicador visual de Redis status
+- [x] AC5: Se Redis em fallback > 5min, log WARNING a cada 60s (não a cada request)
+- [x] AC6: Teste: simular Redis timeout → verificar métricas
 
 ## Arquivos Afetados
 

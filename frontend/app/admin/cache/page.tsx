@@ -5,6 +5,18 @@ import { useAuth } from "../../components/AuthProvider";
 import Link from "next/link";
 import { toast } from "sonner";
 
+// STORY-332 AC4: Redis status from /health/cache
+interface CacheHealth {
+  redis: {
+    status: string;
+    redis_status: "connected" | "fallback";
+    entries: number;
+    latency_ms: number;
+    fallback_duration_seconds?: number;
+  };
+  overall: string;
+}
+
 interface CacheMetrics {
   hit_rate_24h: number;
   miss_rate_24h: number;
@@ -63,6 +75,22 @@ export default function AdminCachePage() {
   const [inspectedEntry, setInspectedEntry] = useState<CacheEntry | null>(null);
   const [showDeleteAll, setShowDeleteAll] = useState(false);
   const [invalidating, setInvalidating] = useState<string | null>(null);
+  const [cacheHealth, setCacheHealth] = useState<CacheHealth | null>(null);
+
+  const fetchCacheHealth = useCallback(async () => {
+    if (!session?.access_token) return;
+    try {
+      const res = await fetch("/api/health/cache", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCacheHealth(data);
+      }
+    } catch {
+      // Silently ignore — health is supplementary info
+    }
+  }, [session?.access_token]);
 
   const fetchMetrics = useCallback(async () => {
     if (!session?.access_token) return;
@@ -85,10 +113,11 @@ export default function AdminCachePage() {
   useEffect(() => {
     if (session?.access_token && isAdmin) {
       fetchMetrics();
+      fetchCacheHealth();
     } else if (!authLoading) {
       setLoading(false);
     }
-  }, [session?.access_token, isAdmin, authLoading, fetchMetrics]);
+  }, [session?.access_token, isAdmin, authLoading, fetchMetrics, fetchCacheHealth]);
 
   const handleInspect = async (hash: string) => {
     if (!session?.access_token) return;
@@ -229,6 +258,41 @@ export default function AdminCachePage() {
         {error && (
           <div className="mb-6 p-4 bg-[var(--error-subtle)] border border-[var(--error)] rounded-card text-[var(--error)]">
             {error}
+          </div>
+        )}
+
+        {/* STORY-332 AC4: Redis Status Indicator */}
+        {cacheHealth?.redis && (
+          <div className={`mb-6 p-4 rounded-card border flex items-center gap-3 ${
+            cacheHealth.redis.redis_status === "connected"
+              ? "bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800"
+              : "bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-800"
+          }`}>
+            <span className={`inline-block w-3 h-3 rounded-full ${
+              cacheHealth.redis.redis_status === "connected"
+                ? "bg-green-500"
+                : "bg-amber-500 animate-pulse"
+            }`} />
+            <div>
+              <span className={`font-medium ${
+                cacheHealth.redis.redis_status === "connected"
+                  ? "text-green-800 dark:text-green-300"
+                  : "text-amber-800 dark:text-amber-300"
+              }`}>
+                Redis: {cacheHealth.redis.redis_status === "connected" ? "Conectado" : "Fallback (InMemoryCache)"}
+              </span>
+              {cacheHealth.redis.redis_status === "fallback" && cacheHealth.redis.fallback_duration_seconds != null && (
+                <span className="ml-2 text-sm text-amber-600 dark:text-amber-400">
+                  — {cacheHealth.redis.fallback_duration_seconds < 60
+                    ? `${Math.round(cacheHealth.redis.fallback_duration_seconds)}s`
+                    : `${Math.round(cacheHealth.redis.fallback_duration_seconds / 60)}min`
+                  } em fallback
+                </span>
+              )}
+            </div>
+            <span className="ml-auto text-sm text-[var(--ink-secondary)]">
+              {cacheHealth.redis.entries} entries | {cacheHealth.redis.latency_ms}ms
+            </span>
           </div>
         )}
 

@@ -50,10 +50,15 @@ def reset_redis_pool_state():
     redis_pool._redis_pool = None
     redis_pool._pool_initialized = False
     redis_pool._fallback_cache = None
+    # STORY-332: Reset fallback tracking state
+    redis_pool._fallback_since = None
+    redis_pool._last_fallback_warning = 0.0
     yield
     redis_pool._redis_pool = None
     redis_pool._pool_initialized = False
     redis_pool._fallback_cache = None
+    redis_pool._fallback_since = None
+    redis_pool._last_fallback_warning = 0.0
 
 
 @pytest.fixture

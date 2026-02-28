@@ -1,15 +1,15 @@
 """
-STORY-266 AC1-AC4 + STORY-310 AC6-AC8: Trial email templates.
+STORY-266 AC1-AC4 + STORY-310 AC6-AC8 + STORY-319: Trial email templates.
 
-8 emails in the 30-day trial conversion sequence:
+8 emails in the 14-day trial conversion sequence (STORY-319):
 - Day 0:  Welcome — onboarding CTA
 - Day 3:  Engagement Early — celebrate usage, show value discovered
-- Day 7:  Engagement — deeper feature education
-- Day 14: Tips — advanced tips + sector insights
-- Day 21: Urgency Light — 9 days remaining, soft CTA
-- Day 25: Expiring — 5 days remaining, moderate urgency
-- Day 29: Last day — maximum urgency, tomorrow access expires
-- Day 32: Expired — reengagement, data saved for 30 days
+- Day 5:  Engagement — deeper feature education
+- Day 7:  Tips — midpoint, advanced tips + sector insights
+- Day 10: Urgency Light — 4 days remaining, soft CTA
+- Day 11: Expiring — 3 days remaining, moderate urgency
+- Day 13: Last day — maximum urgency, tomorrow access expires
+- Day 16: Expired — reengagement, data saved for 30 days
 """
 
 from templates.emails.base import email_base, SMARTLIC_GREEN, FRONTEND_URL
@@ -103,7 +103,7 @@ def render_trial_welcome_email(user_name: str, unsubscribe_url: str = "") -> str
       Bem-vindo ao SmartLic, {user_name}!
     </h1>
     <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
-      Seu trial de 30 dias começou. Agora você tem acesso completo à
+      Seu trial de 14 dias começou. Agora você tem acesso completo à
       plataforma de inteligência em licitações mais avançada do Brasil.
     </p>
 
@@ -130,7 +130,7 @@ def render_trial_welcome_email(user_name: str, unsubscribe_url: str = "") -> str
       </a>
     </p>
     <p style="color: #888; font-size: 13px; text-align: center; margin: 16px 0 0;">
-      Seu trial gratuito de 30 dias começou hoje.
+      Seu trial gratuito de 14 dias começou hoje.
     </p>
     {_unsubscribe_block(unsubscribe_url)}
     """
@@ -164,7 +164,7 @@ def render_trial_midpoint_email(user_name: str, stats: dict, unsubscribe_url: st
             f"descobrindo oportunidades reais de licitação."
         )
     else:
-        headline = "Você ainda tem 27 dias para descobrir oportunidades"
+        headline = "Você ainda tem 11 dias para descobrir oportunidades"
         intro = (
             f"Olá, {user_name}! Seu trial do SmartLic está apenas começando e "
             f"há oportunidades esperando por você. Faça sua primeira busca agora!"
@@ -185,7 +185,7 @@ def render_trial_midpoint_email(user_name: str, stats: dict, unsubscribe_url: st
       </a>
     </p>
     <p style="color: #888; font-size: 13px; text-align: center; margin: 16px 0 0;">
-      Seu trial gratuito termina em 27 dias.
+      Seu trial gratuito termina em 11 dias.
     </p>
     {_unsubscribe_block(unsubscribe_url)}
     """
@@ -251,7 +251,7 @@ def render_trial_engagement_email(user_name: str, stats: dict, unsubscribe_url: 
       </a>
     </p>
     <p style="color: #888; font-size: 13px; text-align: center; margin: 16px 0 0;">
-      Seu trial gratuito termina em 23 dias.
+      Seu trial gratuito termina em 9 dias.
     </p>
     {_unsubscribe_block(unsubscribe_url)}
     """
@@ -297,7 +297,7 @@ def render_trial_tips_email(user_name: str, stats: dict, unsubscribe_url: str = 
       {headline}
     </h1>
     <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
-      Olá, {user_name}! Você está na metade do seu trial de 30 dias.
+      Olá, {user_name}! Você está na metade do seu trial de 14 dias.
       Aqui vão algumas dicas para encontrar ainda mais oportunidades relevantes:
     </p>
     {_stats_block(stats, show_pipeline=True) if has_usage else ''}
@@ -325,7 +325,7 @@ def render_trial_tips_email(user_name: str, stats: dict, unsubscribe_url: str = 
       </a>
     </p>
     <p style="color: #888; font-size: 13px; text-align: center; margin: 16px 0 0;">
-      Seu trial gratuito termina em 16 dias.
+      Seu trial gratuito termina em 7 dias.
     </p>
     {_unsubscribe_block(unsubscribe_url)}
     """
@@ -342,13 +342,13 @@ def render_trial_tips_email(user_name: str, stats: dict, unsubscribe_url: str = 
 # Email #5 — Day 21: Urgency Light (STORY-310 AC6)
 # ============================================================================
 
-def render_trial_urgency_email(user_name: str, stats: dict, days_remaining: int = 9, unsubscribe_url: str = "") -> str:
-    """STORY-310 AC6: Day 21 — urgency light. Soft CTA to upgrade.
+def render_trial_urgency_email(user_name: str, stats: dict, days_remaining: int = 4, unsubscribe_url: str = "") -> str:
+    """STORY-319: Day 10 — urgency light. Soft CTA to upgrade.
 
     Args:
         user_name: User's display name.
         stats: Dict with keys from TrialUsageStats.
-        days_remaining: Days left in trial (typically 9).
+        days_remaining: Days left in trial (typically 4 for 14-day trial).
         unsubscribe_url: URL for one-click unsubscribe.
     """
     value = stats.get("total_value_estimated", 0.0)
@@ -395,15 +395,15 @@ def render_trial_urgency_email(user_name: str, stats: dict, days_remaining: int 
 
 
 # ============================================================================
-# Email #6 — Day 25: Expiring (existing, updated for 30-day trial)
+# Email #6 — Day 11: Expiring (STORY-319: updated for 14-day trial)
 # ============================================================================
 
 def render_trial_expiring_email(user_name: str, days_remaining: int, stats: dict, unsubscribe_url: str = "") -> str:
-    """Day 25 — 5 days remaining. Informative with moderate urgency.
+    """Day 11 — 3 days remaining. Informative with moderate urgency.
 
     Args:
         user_name: User's display name.
-        days_remaining: Days left in trial (typically 5).
+        days_remaining: Days left in trial (typically 3 for 14-day trial).
         stats: Dict with keys from TrialUsageStats.
         unsubscribe_url: URL for one-click unsubscribe.
     """
@@ -438,11 +438,11 @@ def render_trial_expiring_email(user_name: str, days_remaining: int, stats: dict
 
 
 # ============================================================================
-# Email #7 — Day 29: Last Day (existing, updated for 30-day trial)
+# Email #7 — Day 13: Last Day (STORY-319: updated for 14-day trial)
 # ============================================================================
 
 def render_trial_last_day_email(user_name: str, stats: dict, unsubscribe_url: str = "") -> str:
-    """Day 29 — last day. Maximum urgency.
+    """Day 13 — last day. Maximum urgency.
 
     Args:
         user_name: User's display name.
@@ -494,11 +494,11 @@ def render_trial_last_day_email(user_name: str, stats: dict, unsubscribe_url: st
 
 
 # ============================================================================
-# Email #8 — Day 32: Expired (existing, updated for 30-day trial)
+# Email #8 — Day 16: Expired (STORY-319: updated for 14-day trial)
 # ============================================================================
 
 def render_trial_expired_email(user_name: str, stats: dict, unsubscribe_url: str = "") -> str:
-    """Day 32 — 2 days after expiry. Reengagement.
+    """Day 16 — 2 days after expiry. Reengagement.
 
     Args:
         user_name: User's display name.

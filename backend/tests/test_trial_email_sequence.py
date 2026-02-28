@@ -78,9 +78,10 @@ class TestWelcomeEmail:
         html = render_trial_welcome_email("Test")
         assert "Bem-vindo" in html
 
-    def test_contains_30_day_trial_mention(self):
+    def test_contains_14_day_trial_mention(self):
+        """STORY-319: Welcome email mentions 14-day trial."""
         html = render_trial_welcome_email("Test")
-        assert "30 dias" in html
+        assert "14 dias" in html
 
     def test_contains_buscar_cta(self):
         html = render_trial_welcome_email("Test")
@@ -114,8 +115,9 @@ class TestMidpointEmail:
         assert "2.4M" in html or "2.3M" in html  # _format_brl rounding
 
     def test_adapts_for_zero_usage(self):
+        """STORY-319: Now says 11 dias (14-day trial, sent at day 3)."""
         html = render_trial_midpoint_email("Test", ZERO_STATS)
-        assert "27 dias" in html
+        assert "11 dias" in html
 
     def test_contains_buscar_cta(self):
         html = render_trial_midpoint_email("Test", SAMPLE_STATS)
@@ -150,9 +152,10 @@ class TestEngagementEmail:
         html = render_trial_engagement_email("Test", ZERO_STATS)
         assert "poder completo" in html.lower() or "descubra" in html.lower()
 
-    def test_23_days_remaining(self):
+    def test_9_days_remaining(self):
+        """STORY-319: Now says 9 dias (14-day trial, sent at day 5)."""
         html = render_trial_engagement_email("Test", SAMPLE_STATS)
-        assert "23 dias" in html
+        assert "9 dias" in html
 
     def test_empty_stats_safe(self):
         html = render_trial_engagement_email("Test", {})
@@ -182,9 +185,10 @@ class TestTipsEmail:
         html = render_trial_tips_email("Test", ZERO_STATS)
         assert "Metade" in html or "dica" in html.lower()
 
-    def test_16_days_remaining(self):
+    def test_7_days_remaining(self):
+        """STORY-319: Now says 7 dias (14-day trial midpoint, sent at day 7)."""
         html = render_trial_tips_email("Test", SAMPLE_STATS)
-        assert "16 dias" in html
+        assert "7 dias" in html
 
     def test_empty_stats_safe(self):
         html = render_trial_tips_email("Test", {})
@@ -344,7 +348,7 @@ class TestGetTrialUserStats:
         assert "pipeline_items" in result
         assert "days_remaining" in result
         assert result["searches_executed"] == 5
-        assert result["days_remaining"] in (19, 20)  # 30 - 10, +/- 1 due to time-of-day
+        assert result["days_remaining"] in (3, 4)  # STORY-319: 14 - 10, +/- 1 due to time-of-day
 
     def test_days_remaining_zero_when_expired(self):
         """Days remaining is 0 when trial has expired."""

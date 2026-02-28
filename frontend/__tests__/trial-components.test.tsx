@@ -145,10 +145,10 @@ describe('TrialExpiringBanner', () => {
     expect(screen.getByText(/acesso completo.*termina amanhã/i)).toBeInTheDocument();
   });
 
-  it('does not render when daysRemaining > 1', () => {
-    const { container } = render(<TrialExpiringBanner daysRemaining={3} />);
+  it('does not render when daysRemaining > 6 (STORY-319: threshold from day 8)', () => {
+    const { container } = render(<TrialExpiringBanner daysRemaining={7} />);
 
-    // Should return null (no content)
+    // Should return null (no content) — STORY-319: shows from day 8 (6 days remaining)
     expect(container.firstChild).toBeNull();
   });
 

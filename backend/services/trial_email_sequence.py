@@ -1,5 +1,5 @@
 """
-STORY-310 AC1-AC5, AC12: Trial email sequence — 8 emails over 30 days.
+STORY-310 AC1-AC5, AC12 + STORY-319: Trial email sequence — 8 emails over 14 days.
 
 Dispatches personalized trial emails based on user's created_at date.
 Respects feature flags, conversion status, and unsubscribe preferences.
@@ -17,18 +17,19 @@ logger = logging.getLogger(__name__)
 _UNSUBSCRIBE_SECRET = os.getenv("WEBHOOK_SECRET", os.getenv("SECRET_KEY", "smartlic-trial-unsub"))
 
 # ============================================================================
-# AC1: Email sequence definition — 8 emails at days 0, 3, 7, 14, 21, 25, 29, 32
+# AC1: Email sequence definition — STORY-319: 8 emails over 14-day trial
+# (was: days 0, 3, 7, 14, 21, 25, 29, 32 for 30-day trial)
 # ============================================================================
 
 TRIAL_EMAIL_SEQUENCE = [
     {"number": 1, "day": 0,  "type": "welcome"},
     {"number": 2, "day": 3,  "type": "engagement_early"},
-    {"number": 3, "day": 7,  "type": "engagement"},
-    {"number": 4, "day": 14, "type": "tips"},
-    {"number": 5, "day": 21, "type": "urgency"},
-    {"number": 6, "day": 25, "type": "expiring"},
-    {"number": 7, "day": 29, "type": "last_day"},
-    {"number": 8, "day": 32, "type": "expired"},
+    {"number": 3, "day": 5,  "type": "engagement"},
+    {"number": 4, "day": 7,  "type": "tips"},
+    {"number": 5, "day": 10, "type": "urgency"},
+    {"number": 6, "day": 11, "type": "expiring"},
+    {"number": 7, "day": 13, "type": "last_day"},
+    {"number": 8, "day": 16, "type": "expired"},
 ]
 
 
@@ -338,7 +339,7 @@ def _render_email(
     pipeline = stats.get("pipeline_items_count", 0)
 
     if email_type == "welcome":
-        subject = "Bem-vindo ao SmartLic — seu trial de 30 dias começou!"
+        subject = "Bem-vindo ao SmartLic — seu trial de 14 dias começou!"
         html = render_trial_welcome_email(user_name, unsubscribe_url=unsubscribe_url)
 
     elif email_type == "engagement_early":
@@ -363,7 +364,7 @@ def _render_email(
         html = render_trial_tips_email(user_name, stats, unsubscribe_url=unsubscribe_url)
 
     elif email_type == "urgency":
-        days_remaining = stats.get("days_remaining", 9)
+        days_remaining = stats.get("days_remaining", 4)
         if value > 0:
             subject = f"Restam {days_remaining} dias — {_format_brl(value)} em oportunidades"
         else:
@@ -373,7 +374,7 @@ def _render_email(
         )
 
     elif email_type == "expiring":
-        days_remaining = stats.get("days_remaining", 5)
+        days_remaining = stats.get("days_remaining", 3)
         subject = f"Seu acesso completo acaba em {days_remaining} dias"
         html = render_trial_expiring_email(
             user_name, days_remaining, stats, unsubscribe_url=unsubscribe_url

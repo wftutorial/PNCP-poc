@@ -232,7 +232,7 @@ export const pricing = {
     },
     guarantee: {
       traditional: "Raro",
-      smartlic: "30 dias do produto completo (Beta)",
+      smartlic: "14 dias do produto completo (Beta)",
     },
   },
 
@@ -240,7 +240,7 @@ export const pricing = {
   guarantee: {
     headline: "Avalie Sem Compromisso",
     description:
-      "Produto completo por 30 dias para você conhecer o poder da inteligência de decisão. Sem cartão, sem compromisso.",
+      "Produto completo por 14 dias para você conhecer o poder da inteligência de decisão. Sem cartão, sem compromisso.",
   },
 
   // Transparency statement

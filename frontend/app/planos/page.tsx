@@ -18,7 +18,7 @@ interface UserProfile {
   is_admin?: boolean;
 }
 
-// STORY-277: Repricing — R$397/mês (market-aligned) with 30-day beta
+// STORY-277: Repricing — R$397/mês (market-aligned). STORY-319: 14-day trial
 const PRICING: Record<BillingPeriod, { monthly: number; total: number; period: string; discount?: number }> = {
   monthly: { monthly: 397, total: 397, period: "mês" },
   semiannual: { monthly: 357, total: 2142, period: "semestre", discount: 10 },
@@ -52,7 +52,7 @@ const FAQ_ITEMS = [
   },
   {
     question: "O que acontece se eu cancelar?",
-    answer: "Você mantém acesso completo até o fim do período já pago. Após essa data, o acesso ao sistema é encerrado. O período de avaliação gratuita é exclusivo para os primeiros 30 dias após o cadastro inicial e não é reativado.",
+    answer: "Você mantém acesso completo até o fim do período já pago. Após essa data, o acesso ao sistema é encerrado. O período de avaliação gratuita é exclusivo para os primeiros 14 dias após o cadastro inicial e não é reativado.",
   },
   {
     question: "Como funciona a cobrança semestral e anual?",

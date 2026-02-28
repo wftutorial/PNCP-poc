@@ -10,15 +10,15 @@ interface TrialExpiringBannerProps {
 }
 
 /**
- * Proactive notification banner shown on day 6 of trial (1 day remaining).
- * GTM-010 AC9: In-app banner for trial expiring notification.
+ * Proactive notification banner shown from day 8 of 14-day trial (6 days remaining).
+ * GTM-010 AC9 + STORY-319 AC8: In-app banner for trial expiring notification.
  */
 export function TrialExpiringBanner({ daysRemaining, onConvert }: TrialExpiringBannerProps) {
   const [dismissed, setDismissed] = useState(false);
   const { trackEvent } = useAnalytics();
 
-  // Only show when 1 day remaining (day 6 of 7-day trial)
-  if (dismissed || daysRemaining > 1) return null;
+  // STORY-319 AC8: Show from day 8 (6 days remaining) of 14-day trial
+  if (dismissed || daysRemaining > 6) return null;
 
   const handleDismiss = () => {
     setDismissed(true);

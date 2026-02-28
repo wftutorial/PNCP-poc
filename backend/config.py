@@ -378,7 +378,10 @@ ITEM_INSPECTION_CONCURRENCY: int = int(os.getenv("ITEM_INSPECTION_CONCURRENCY", 
 # ============================================
 # STORY-264: Trial Duration
 # ============================================
-TRIAL_DURATION_DAYS: int = int(os.getenv("TRIAL_DURATION_DAYS", "30"))  # STORY-277: 30-day beta
+TRIAL_DURATION_DAYS: int = int(os.getenv("TRIAL_DURATION_DAYS", "14"))  # STORY-319: 14-day trial (was 30)
+
+# STORY-319 AC6: Feature flag for gradual rollout of 14-day trial
+TRIAL_14_DAYS_ENABLED: bool = str_to_bool(os.getenv("TRIAL_14_DAYS_ENABLED", "true"))
 
 # STORY-266: Trial Reminder Emails
 TRIAL_EMAILS_ENABLED: bool = str_to_bool(os.getenv("TRIAL_EMAILS_ENABLED", "true"))

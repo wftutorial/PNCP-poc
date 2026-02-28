@@ -13,6 +13,7 @@ import { NavigationShell } from "../components/NavigationShell";
 import { BackendStatusProvider } from "../components/BackendStatusIndicator";
 import { StructuredData } from "./components/StructuredData";
 import { GoogleAnalytics } from "./components/GoogleAnalytics";
+import { ClarityAnalytics } from "./components/ClarityAnalytics";
 
 const dmSans = DM_Sans({
   subsets: ["latin"],
@@ -122,6 +123,8 @@ export default function RootLayout({
       <head>
         {/* Google Analytics 4 with LGPD/GDPR compliance */}
         <GoogleAnalytics />
+        {/* Microsoft Clarity — heatmaps & session recordings */}
+        <ClarityAnalytics />
         {/* Schema.org Structured Data for Google AI Search */}
         <StructuredData />
         {/* STORY-261 AC11: RSS feed discovery */}

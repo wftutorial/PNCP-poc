@@ -214,6 +214,75 @@ def get_search_cost_stats(search_id: str) -> dict:
 # Prompt builders (updated for structured output)
 # ============================================================================
 
+# STORY-328 AC13: Dynamic negative examples per sector (org name traps)
+_SECTOR_NEGATIVE_EXAMPLES: dict[str, list[str]] = {
+    "saude": [
+        "Locação de veículos para Secretaria de Saúde",
+        "Material de escritório para Hospital Municipal",
+        "Construção de muro na Unidade de Saúde",
+    ],
+    "informatica": [
+        "Uniformes para Secretaria de Tecnologia",
+        "Material de limpeza para Instituto de Tecnologia",
+        "Reforma predial na Secretaria de Tecnologia da Informação",
+    ],
+    "vigilancia": [
+        "Material de escritório para Secretaria de Segurança Pública",
+        "Gêneros alimentícios para Departamento de Segurança",
+        "Locação de veículos para Secretaria de Segurança",
+    ],
+    "vestuario": [
+        "Equipamentos de informática para fábrica de confecções",
+        "Manutenção predial em loja de roupas",
+    ],
+    "alimentos": [
+        "Material de escritório para Secretaria de Alimentação",
+        "Reforma na cozinha da Secretaria de Agricultura",
+    ],
+    "facilities": [
+        "Material de escritório para empresa de limpeza",
+        "Uniformes para equipe de conservação",
+    ],
+    "engenharia_rodoviaria": [
+        "Material de escritório para Departamento de Estradas",
+        "Uniformes para equipe de rodovias",
+    ],
+    "transporte": [
+        "Material de escritório para Secretaria de Transportes",
+        "Uniformes para Departamento de Trânsito",
+    ],
+    "materiais_eletricos": [
+        "Material de limpeza para Companhia de Energia",
+        "Uniformes para equipe da Eletrobras",
+    ],
+    "materiais_hidraulicos": [
+        "Material de escritório para SABESP",
+        "Uniformes para equipe de saneamento",
+    ],
+    "mobiliario": [
+        "Material de limpeza para fábrica de móveis",
+        "Combustível para Secretaria de Administração",
+    ],
+    "papelaria": [
+        "Combustível para gráfica municipal",
+        "Uniformes para equipe de impressão",
+    ],
+    "software": [
+        "Material de escritório para empresa de software",
+        "Uniformes para equipe de TI",
+    ],
+    "manutencao_predial": [
+        "Material de escritório para equipe de manutenção",
+        "Gêneros alimentícios para prédio público",
+    ],
+}
+
+
+def _get_sector_negative_examples(setor_id: str) -> list[str]:
+    """Return dynamic negative examples for a sector (AC13)."""
+    return _SECTOR_NEGATIVE_EXAMPLES.get(setor_id, [])
+
+
 _STRUCTURED_JSON_INSTRUCTION = """
 Responda em JSON com a estrutura exata:
 {"classe": "SIM" ou "NAO", "confianca": 0-100, "evidencias": ["citação 1", "citação 2"], "motivo_exclusao": "razão se NAO", "precisa_mais_dados": false}
@@ -255,10 +324,19 @@ def _build_conservative_prompt(
 
     suffix = _STRUCTURED_JSON_INSTRUCTION if structured else "\nResponda APENAS: SIM ou NAO"
 
+    # STORY-328 AC13: Dynamic negative examples per sector (org name traps)
+    _neg_examples = _get_sector_negative_examples(setor_id)
+    neg_section = ""
+    if _neg_examples:
+        neg_lines = "\n".join(f'- "{ex}" → NAO' for ex in _neg_examples)
+        neg_section = f"\nARMADILHAS (contêm nome de órgão, NÃO são do setor):\n{neg_lines}"
+
     return f"""Você é um classificador de licitações públicas. Analise se o contrato é PRIMARIAMENTE sobre o setor especificado (> 80% do valor e escopo).
 
 SETOR: {setor_name}
 DESCRIÇÃO DO SETOR: {description}
+
+ATENÇÃO CRÍTICA: O campo 'Objeto' pode conter o nome do órgão comprador (ex: 'Secretaria de Saúde', 'Secretaria de Tecnologia', 'Prefeitura Municipal'). IGNORE completamente nomes de órgãos, secretarias, hospitais, universidades e institutos. Foque EXCLUSIVAMENTE no que está sendo CONTRATADO ou ADQUIRIDO.
 
 CONTRATO:
 Valor: R$ {valor:,.2f}
@@ -269,6 +347,7 @@ EXEMPLOS DE CLASSIFICAÇÃO:
 SIM:
 {sim_lines}
 {nao_section}
+{neg_section}
 
 Este contrato é PRIMARIAMENTE sobre {setor_name}?{suffix}"""
 
@@ -358,14 +437,24 @@ Este contrato é sobre {setor_name}?{suffix}"""
         nao_lines = "\n".join(f'- "{exc}"' for exc in exclusions)
         nao_section = f"\nExemplos de NÃO (não é sobre o setor):\n{nao_lines}"
 
+    # STORY-328 AC13: Dynamic negative examples per sector (org name traps)
+    _neg_examples = _get_sector_negative_examples(setor_id)
+    neg_section = ""
+    if _neg_examples:
+        neg_lines = "\n".join(f'- "{ex}" → NAO' for ex in _neg_examples)
+        neg_section = f"\nExemplos de ARMADILHA (contêm nome de órgão, NÃO são do setor):\n{neg_lines}"
+
     return f"""Você classifica licitações públicas. Este contrato NÃO contém palavras-chave do setor — analise o OBJETO para determinar se é relevante.
 
 SETOR: {setor_name}
 DESCRIÇÃO: {description}
 
+ATENÇÃO CRÍTICA: O campo 'Objeto' pode conter o nome do órgão comprador (ex: 'Secretaria de Saúde', 'Secretaria de Tecnologia', 'Prefeitura Municipal'). IGNORE completamente nomes de órgãos, secretarias, hospitais, universidades e institutos. Foque EXCLUSIVAMENTE no que está sendo CONTRATADO ou ADQUIRIDO.
+
 Exemplos de SIM (é sobre o setor):
 {sim_lines}
 {nao_section}
+{neg_section}
 
 CONTRATO:
 Valor: {valor_display}

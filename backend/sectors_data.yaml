@@ -1091,6 +1091,18 @@ sectors:
         - "lumens"
         - "informática"
         - "informatica"
+      # STORY-328 AC16: "tecnologia" requires IT context to avoid org name FP
+      tecnologia:
+        - "informação"
+        - "informacao"
+        - "ti"
+        - "computador"
+        - "servidor"
+        - "rede"
+        - "sistema"
+        - "software"
+        - "hardware"
+        - "digital"
 
     # GTM-RESILIENCE-D03: Co-occurrence rules for informatica
     co_occurrence_rules:
@@ -3579,6 +3591,69 @@ sectors:
         - "medico"
         - "odontológico"
         - "odontologico"
+      # STORY-328 AC16: "saúde/saude" requires medical context to avoid org name FP
+      saude:
+        - "médico"
+        - "medico"
+        - "hospitalar"
+        - "medicamento"
+        - "paciente"
+        - "clínico"
+        - "clinico"
+        - "ambulatorial"
+        - "sus"
+        - "ubs"
+        - "upa"
+        - "terapia"
+        - "cirúrgico"
+        - "cirurgico"
+      "saúde":
+        - "médico"
+        - "medico"
+        - "hospitalar"
+        - "medicamento"
+        - "paciente"
+        - "clínico"
+        - "clinico"
+        - "ambulatorial"
+        - "sus"
+        - "ubs"
+        - "upa"
+        - "terapia"
+        - "cirúrgico"
+        - "cirurgico"
+      hospital:
+        - "médico"
+        - "medico"
+        - "internação"
+        - "internacao"
+        - "paciente"
+        - "leito"
+        - "enfermagem"
+        - "cirúrgico"
+        - "cirurgico"
+        - "ambulatório"
+        - "ambulatorio"
+      "clínica":
+        - "médica"
+        - "medica"
+        - "odontológica"
+        - "odontologica"
+        - "saúde"
+        - "saude"
+        - "paciente"
+        - "consultório"
+        - "consultorio"
+      clinica:
+        - "médica"
+        - "medica"
+        - "odontológica"
+        - "odontologica"
+        - "saúde"
+        - "saude"
+        - "paciente"
+        - "consultório"
+        - "consultorio"
 
     # GTM-RESILIENCE-D03: Co-occurrence rules for saude
     co_occurrence_rules:
@@ -3837,6 +3912,25 @@ sectors:
         - "veicular"
         - "segurança"
         - "seguranca"
+      # STORY-328 AC16: "segurança/seguranca" requires security context to avoid org name FP
+      seguranca:
+        - "patrimonial"
+        - "vigilante"
+        - "monitoramento"
+        - "cftv"
+        - "armada"
+        - "desarmada"
+        - "controle de acesso"
+        - "ronda"
+      "segurança":
+        - "patrimonial"
+        - "vigilante"
+        - "monitoramento"
+        - "cftv"
+        - "armada"
+        - "desarmada"
+        - "controle de acesso"
+        - "ronda"
     # CRIT-FLT-007: Co-occurrence rules for vigilancia
     co_occurrence_rules:
       # Rule 1: "segurança" in non-guard context (cybersecurity, food safety)

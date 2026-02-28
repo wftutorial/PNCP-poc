@@ -631,6 +631,219 @@ def normalize_text(text: str) -> str:
 
 
 # =============================================================================
+# STORY-328: Strip org context clauses from objetoCompra
+# =============================================================================
+# ~30% of PNCP objetoCompra fields include the buying agency name in the
+# description text.  Keywords that match on the agency name (e.g. "saúde"
+# matching "Secretaria de Saúde") produce false positives across ALL sectors.
+# This function strips those trailing context clauses BEFORE keyword matching
+# so that density calculation and keyword gates operate only on the actual
+# object being procured.
+
+# Pre-compiled regex patterns for org context clauses (applied on normalized text)
+_ORG_CONTEXT_PATTERNS: List[re.Pattern] = [
+    # "para atender/atendimento (às) necessidades/demandas da/do ..." to end
+    re.compile(
+        r'\bpara\s+atend(?:er|imento)\s+(?:a|as?)\s*(?:necessidades?|demandas?)\s+'
+        r'(?:da|das|do|dos)\b.*',
+        re.IGNORECASE,
+    ),
+    # "em atendimento (às) demandas/necessidades da/do ..." to end
+    re.compile(
+        r'\bem\s+atendimento\s+(?:a|as?)\s*(?:demandas?|necessidades?)\s+'
+        r'(?:da|das|do|dos)\b.*',
+        re.IGNORECASE,
+    ),
+    # "visando atender ..." to end
+    re.compile(
+        r'\bvisando\s+atender\b.*',
+        re.IGNORECASE,
+    ),
+    # "de interesse da/do ..." to end
+    re.compile(
+        r'\bde\s+interesse\s+(?:da|das|do|dos)\b.*',
+        re.IGNORECASE,
+    ),
+    # "pertencente(s) a/à/ao(s) ... secretaria/prefeitura/município ..." to end
+    re.compile(
+        r'\bpertencentes?\s+(?:a|as?|ao|aos)\b.*',
+        re.IGNORECASE,
+    ),
+    # "a pedido da/do ..." to end
+    re.compile(
+        r'\ba\s+pedido\s+(?:da|do)\b.*',
+        re.IGNORECASE,
+    ),
+    # "através da/do ... Secretaria/Prefeitura/Instituto ..." to end
+    re.compile(
+        r'\batraves\s+(?:da|do)\s+(?:secretaria|prefeitura|municipio|instituto|'
+        r'ministerio|fundacao|departamento|diretoria|superintendencia|'
+        r'coordenadoria|gerencia|consorcio|autarquia)\b.*',
+        re.IGNORECASE,
+    ),
+    # "conforme demanda da/do ..." to end
+    re.compile(
+        r'\bconforme\s+demanda\s+(?:da|das|do|dos)\b.*',
+        re.IGNORECASE,
+    ),
+    # "destinado(s/a/as) a/à/ao(s) Secretaria/Prefeitura ..." to end
+    re.compile(
+        r'\bdestinados?\s*(?:a|as?|ao|aos)\s+(?:secretaria|prefeitura|municipio|'
+        r'hospital|instituto|fundacao|departamento|diretoria|consorcio)\b.*',
+        re.IGNORECASE,
+    ),
+    # "no âmbito da/do ..." to end
+    re.compile(
+        r'\bno\s+ambito\s+(?:da|das|do|dos)\b.*',
+        re.IGNORECASE,
+    ),
+]
+
+# AC2: PCP source prefixes to strip (handles both accented and unaccented)
+_PCP_PREFIX_PATTERNS: List[re.Pattern] = [
+    re.compile(r'^\s*\[?\s*portal\s+de\s+compras\s+p[uú]blicas\s*\]?\s*[-–—:]\s*', re.IGNORECASE),
+    re.compile(r'^\s*\[?\s*pcp\s*\]?\s*[-–—:]\s*', re.IGNORECASE),
+]
+
+
+def _strip_org_context(texto: str) -> str:
+    """Strip buying-agency context clauses from objetoCompra text.
+
+    Removes trailing clauses like "para atender às necessidades da Secretaria
+    de Saúde" that cause cross-sector false positives when the agency name
+    contains a sector keyword.
+
+    STORY-328 AC1-AC3: Operates on normalized text (no accents) for matching
+    but returns cleaned text so downstream keyword matching is accurate.
+
+    Args:
+        texto: Raw objetoCompra text from PNCP/PCP/ComprasGov.
+
+    Returns:
+        Text with org context clauses removed. If no clauses found, returns
+        the original text unchanged.
+    """
+    if not texto:
+        return ""
+
+    result = texto
+
+    # AC2: Strip PCP source prefixes first
+    for pat in _PCP_PREFIX_PATTERNS:
+        result = pat.sub("", result)
+
+    # AC3: Normalize for matching (work on accent-free copy)
+    result_norm = normalize_text(result)
+
+    # Apply each org context pattern to find the earliest match
+    earliest_start = len(result_norm)
+    for pat in _ORG_CONTEXT_PATTERNS:
+        m = pat.search(result_norm)
+        if m and m.start() < earliest_start:
+            earliest_start = m.start()
+
+    if earliest_start < len(result_norm):
+        # Trim the original (non-normalized) text at the same position
+        result = result[:earliest_start].rstrip(" ,;-–—")
+
+    return result.strip()
+
+
+def _strip_org_context_with_detail(texto: str) -> tuple:
+    """Strip org context and return both cleaned text and the removed clause.
+
+    Used for logging and metrics (AC23-AC24).
+
+    Returns:
+        (stripped_text, removed_clause_or_None)
+    """
+    if not texto:
+        return ("", None)
+
+    stripped = _strip_org_context(texto)
+    if stripped != texto.strip():
+        removed = texto[len(stripped):].strip() if len(stripped) < len(texto) else None
+        return (stripped, removed)
+    return (stripped, None)
+
+
+# =============================================================================
+# STORY-328 AC7-AC8: Global exclusions (cross-sector generic purchases)
+# =============================================================================
+# These categories of procurement generate false positives in ALL sectors
+# because they are generic purchases that happen to mention the agency name.
+
+GLOBAL_EXCLUSIONS: Set[str] = {
+    # Vehicle rental/leasing
+    "locacao de veiculo", "locacao de veiculos", "locação de veículo",
+    "locação de veículos", "aluguel de veiculo", "aluguel de veiculos",
+    # Office supplies
+    "material de escritorio", "material de papelaria", "materiais de escritorio",
+    "material de escritório", "material de papelaria",
+    # Food/cleaning (generic government purchases)
+    "generos alimenticios", "genero alimenticio", "gêneros alimentícios",
+    "gênero alimentício",
+    # Generic IT equipment (cross-sector)
+    "equipamentos de informatica", "equipamento de informatica",
+    "insumos de informatica",
+    # Fuel
+    "combustivel", "combustível", "abastecimento de combustivel",
+    "abastecimento de combustível",
+    # Cleaning services
+    "servico de limpeza", "servicos de limpeza", "serviço de limpeza",
+    "serviços de limpeza", "servico de conservacao", "serviço de conservação",
+    # Construction (generic)
+    "construcao de muro", "construção de muro", "construcao de cerca",
+    "construção de cerca",
+    # Kitchen/break room
+    "material de copa e cozinha", "material de copa", "materiais de copa",
+    # Travel
+    "passagem aerea", "passagens aereas", "passagem aérea", "passagens aéreas",
+    # Telecom
+    "servico de telefonia", "serviço de telefonia", "servicos de telefonia",
+    "serviços de telefonia",
+}
+
+# Normalized version for matching (computed once at module load)
+GLOBAL_EXCLUSIONS_NORMALIZED: Set[str] = {normalize_text(exc) for exc in GLOBAL_EXCLUSIONS}
+
+# AC10: Per-sector overrides — sectors that should NOT apply certain global exclusions
+# e.g., "alimentos" sector should NOT exclude "gêneros alimentícios"
+GLOBAL_EXCLUSION_OVERRIDES: Dict[str, Set[str]] = {
+    "alimentos": {
+        "generos alimenticios", "genero alimenticio",
+    },
+    "informatica": {
+        "equipamentos de informatica", "equipamento de informatica",
+        "insumos de informatica",
+    },
+    "facilities": {
+        "servico de limpeza", "servicos de limpeza",
+        "servico de conservacao",
+    },
+    "transporte": {
+        "combustivel", "abastecimento de combustivel",
+        "locacao de veiculo", "locacao de veiculos",
+        "aluguel de veiculo", "aluguel de veiculos",
+    },
+    "engenharia_rodoviaria": {
+        "construcao de muro", "construcao de cerca",
+    },
+    "materiais_eletricos": {
+        "servico de telefonia", "servicos de telefonia",
+    },
+    "papelaria": {
+        "material de escritorio", "materiais de escritorio",
+        "material de papelaria",
+    },
+    "mobiliario": {
+        "material de copa e cozinha", "material de copa",
+        "materiais de copa",
+    },
+}
+
+
+# =============================================================================
 # STORY-181 AC6: Red Flags Secondary Validation
 # =============================================================================
 # After keyword matching passes, check for "red flag" terms that indicate
@@ -2454,13 +2667,86 @@ def aplicar_todos_filtros(
         except re.error:
             logger.warning(f"Failed to compile regex for keyword: {keyword}")
 
+    # STORY-328 AC7-AC8: Compute effective global exclusions for this sector
+    _effective_global_exc: Set[str] = set()
+    if setor:
+        _sector_overrides = GLOBAL_EXCLUSION_OVERRIDES.get(setor, set())
+        _effective_global_exc = GLOBAL_EXCLUSIONS_NORMALIZED - _sector_overrides
+
     resultado_keyword: List[dict] = []
     for lic in resultado_valor:
         objeto = lic.get("objetoCompra", "")
+
+        # STORY-328 AC1/AC5: Strip org context BEFORE keyword matching
+        objeto_for_matching = _strip_org_context(objeto)
+
+        # STORY-328 AC23-AC24: Track stripping for metrics/logging
+        if objeto_for_matching != objeto.strip():
+            lic["_org_context_stripped"] = True
+            removed_clause = objeto[len(objeto_for_matching):].strip() if len(objeto_for_matching) < len(objeto) else ""
+            logger.debug(
+                f"STORY-328: Stripped org context from bid "
+                f"{lic.get('pncpId', lic.get('id', '?'))}: "
+                f"'{removed_clause[:120]}'"
+            )
+            try:
+                from metrics import ORG_CONTEXT_STRIPPED
+                ORG_CONTEXT_STRIPPED.labels(sector=setor or "unknown").inc()
+            except Exception:
+                pass
+        else:
+            lic["_org_context_stripped"] = False
+
+        # STORY-328 AC7-AC8: Check global exclusions before keyword matching
+        if _effective_global_exc:
+            objeto_norm_ge = normalize_text(objeto_for_matching)
+            _hit_global_exc = False
+            for ge in _effective_global_exc:
+                if ge in objeto_norm_ge:
+                    _hit_global_exc = True
+                    logger.debug(
+                        f"STORY-328: Global exclusion hit '{ge}' in "
+                        f"objeto={objeto[:80]}"
+                    )
+                    break
+            if _hit_global_exc:
+                stats["rejeitadas_keyword"] = stats.get("rejeitadas_keyword", 0) + 1
+                try:
+                    _get_tracker().record_rejection(
+                        "global_exclusion",
+                        sector=setor,
+                        description_preview=objeto[:100],
+                    )
+                except Exception:
+                    pass
+                continue
+
+        # STORY-328 AC6: Cross-validate with nomeOrgao
+        nome_orgao = lic.get("nomeOrgao", "") or lic.get("orgaoEntidade", {}).get("razaoSocial", "") or ""
+        nome_orgao_norm = normalize_text(nome_orgao) if nome_orgao else ""
+
         match, matched_terms = match_keywords(
-            objeto, kw, exc, context_required,
+            objeto_for_matching, kw, exc, context_required,
             compiled_patterns=compiled_patterns,
         )
+
+        # AC6: Discount keywords that appear ONLY in the org name (not in stripped object)
+        if match and nome_orgao_norm and matched_terms:
+            objeto_stripped_norm = normalize_text(objeto_for_matching)
+            real_terms = []
+            for term in matched_terms:
+                term_norm = normalize_text(term)
+                if term_norm in objeto_stripped_norm:
+                    real_terms.append(term)
+                elif term_norm in nome_orgao_norm:
+                    logger.debug(
+                        f"STORY-328 AC6: Discounting keyword '{term}' — "
+                        f"found in orgName but not in stripped objeto"
+                    )
+            if real_terms:
+                matched_terms = real_terms
+            else:
+                match = False
 
         if match:
             # Store matched terms on the bid for later scoring
@@ -2468,7 +2754,8 @@ def aplicar_todos_filtros(
 
             # STORY-179 AC2.1: Calculate term density ratio
             # Count how many times matched terms appear in the text
-            objeto_norm = normalize_text(objeto)
+            # STORY-328: Use stripped text for density calculation
+            objeto_norm = normalize_text(objeto_for_matching)
             total_words = len(objeto_norm.split())
             term_count = 0
             for term in matched_terms:
@@ -2663,6 +2950,8 @@ def aplicar_todos_filtros(
             # AC6: Concurrent LLM calls with max 10 threads (equivalent to Semaphore(10))
             def _classify_one(lic_item: dict) -> tuple[dict, dict]:
                 obj = lic_item.get("objetoCompra", "")
+                # STORY-328 AC14: Use stripped text for LLM classification
+                obj = _strip_org_context(obj)
                 val = lic_item.get("valorTotalEstimado") or lic_item.get("valorEstimado") or 0
                 if isinstance(val, str):
                     try:
@@ -2991,6 +3280,8 @@ def aplicar_todos_filtros(
         def _classify_one_arbiter(lic_item):
             """Classify a single gray-zone bid via LLM arbiter (thread-safe)."""
             objeto = lic_item.get("objetoCompra", "")
+            # STORY-328 AC14: Use stripped text for LLM classification
+            objeto = _strip_org_context(objeto)
             valor = lic_item.get("valorTotalEstimado") or lic_item.get("valorEstimado") or 0
             prompt_level = lic_item.get("_llm_prompt_level", "standard")
 
@@ -3436,6 +3727,8 @@ def aplicar_todos_filtros(
 
                 for lic in llm_candidates_fn:
                     objeto = lic.get("objetoCompra", "")
+                    # STORY-328 AC14: Use stripped text for LLM classification
+                    objeto = _strip_org_context(objeto)
                     valor = lic.get("valorTotalEstimado") or lic.get("valorEstimado") or 0
                     if isinstance(valor, str):
                         try:

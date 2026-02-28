@@ -507,6 +507,13 @@ ALERTS_PROCESSING_DURATION = _create_histogram(
     buckets=[5, 10, 30, 60, 120, 300, 600],
 )
 
+# STORY-328 AC25: Org context stripping metrics
+ORG_CONTEXT_STRIPPED = _create_counter(
+    "smartlic_org_context_stripped_total",
+    "Bid descriptions where org context was stripped before keyword matching",
+    labelnames=["sector"],
+)
+
 
 # ============================================================================
 # STORY-316: Health Canary + Status Page metrics

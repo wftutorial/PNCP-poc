@@ -149,7 +149,7 @@ function QuotaRing({ used, total }: { used: number; total: number }) {
     <div className="flex flex-col items-center">
       <svg
               role="img"
-              aria-label={"\u00CDcone"} width="100" height="100" viewBox="0 0 100 100">
+              aria-label={"Ícone"} width="100" height="100" viewBox="0 0 100 100">
         <circle cx="50" cy="50" r="40" fill="none" stroke="var(--border)" strokeWidth="8" />
         <circle
           cx="50" cy="50" r="40" fill="none"
@@ -420,7 +420,7 @@ export default function DashboardPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[var(--canvas)]">
         <div className="text-center">
-          <p className="text-[var(--ink-secondary)] mb-4">{`Fa\u00E7a login para acessar o dashboard`}</p>
+          <p className="text-[var(--ink-secondary)] mb-4">{`Faça login para acessar o dashboard`}</p>
           <Link href="/login" className="text-[var(--brand-blue)] hover:underline">
             Ir para login
           </Link>
@@ -458,7 +458,7 @@ export default function DashboardPage() {
             </svg>
           </div>
           <p className="text-lg font-display font-semibold text-[var(--ink)] mb-2">
-            {`Dados temporariamente indispon\u00EDveis`}
+            {`Dados temporariamente indisponíveis`}
           </p>
           <p className="text-sm text-[var(--ink-secondary)] mb-6 max-w-md mx-auto">
             Tente novamente em alguns minutos.
@@ -498,7 +498,7 @@ export default function DashboardPage() {
             </svg>
           </div>
           <p className="text-lg font-display font-semibold text-[var(--ink)] mb-2">
-            {`Dados temporariamente indispon\u00EDveis`}
+            {`Dados temporariamente indisponíveis`}
           </p>
           <p className="text-sm text-[var(--ink-secondary)] mb-6 max-w-md mx-auto">
             Tente novamente em alguns minutos.
@@ -570,10 +570,10 @@ export default function DashboardPage() {
               </svg>
             </div>
             <h2 className="text-xl font-display font-semibold text-[var(--ink)] mb-3">
-              {`Seu Painel de Intelig\u00EAncia`}
+              {`Seu Painel de Inteligência`}
             </h2>
             <p className="text-[var(--ink-secondary)] mb-6 max-w-md mx-auto">
-              {`Ap\u00F3s suas primeiras buscas, voc\u00EA ver\u00E1 aqui:`}
+              {`Após suas primeiras buscas, você verá aqui:`}
             </p>
             <ul className="text-left max-w-sm mx-auto mb-8 space-y-2">
               <li className="flex items-center gap-2 text-sm text-[var(--ink-secondary)]">
@@ -582,7 +582,7 @@ export default function DashboardPage() {
               </li>
               <li className="flex items-center gap-2 text-sm text-[var(--ink-secondary)]">
                 <span className="w-1.5 h-1.5 rounded-full bg-[var(--brand-blue)] flex-shrink-0" />
-                {`Tend\u00EAncias do seu setor`}
+                {`Tendências do seu setor`}
               </li>
               <li className="flex items-center gap-2 text-sm text-[var(--ink-secondary)]">
                 <span className="w-1.5 h-1.5 rounded-full bg-[var(--brand-blue)] flex-shrink-0" />
@@ -741,7 +741,7 @@ export default function DashboardPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 mb-8">
             <div className="col-span-full bg-[var(--surface-0)] border border-[var(--border)] rounded-card" data-testid="summary-error">
               <ErrorStateWithRetry
-                message={`Dados indispon\u00EDveis.`}
+                message={`Dados indisponíveis.`}
                 onRetry={manualRetry}
                 compact
               />
@@ -802,7 +802,7 @@ export default function DashboardPage() {
               Buscas ao longo do tempo
             </h2>
             <ErrorStateWithRetry
-              message={`Dados indispon\u00EDveis.`}
+              message={`Dados indisponíveis.`}
               onRetry={manualRetry}
               compact
             />
@@ -824,7 +824,7 @@ export default function DashboardPage() {
                         : "text-[var(--ink-secondary)] hover:text-[var(--ink)]"
                     }`}
                   >
-                    {p === "day" ? "Dia" : p === "week" ? "Semana" : `M\u00EAs`}
+                    {p === "day" ? "Dia" : p === "week" ? "Semana" : `Mês`}
                   </button>
                 ))}
               </div>
@@ -864,7 +864,7 @@ export default function DashboardPage() {
               </ResponsiveContainer>
             ) : (
               <div className="h-64 flex items-center justify-center text-[var(--ink-muted)]">
-                {`Sem dados para o per\u00EDodo selecionado`}
+                {`Sem dados para o período selecionado`}
               </div>
             )}
           </div>
@@ -878,7 +878,7 @@ export default function DashboardPage() {
                 Estados mais buscados
               </h2>
               <ErrorStateWithRetry
-                message={`Dados indispon\u00EDveis.`}
+                message={`Dados indisponíveis.`}
                 onRetry={manualRetry}
                 compact
               />
@@ -888,7 +888,7 @@ export default function DashboardPage() {
                 Setores mais buscados
               </h2>
               <ErrorStateWithRetry
-                message={`Dados indispon\u00EDveis.`}
+                message={`Dados indisponíveis.`}
                 onRetry={manualRetry}
                 compact
               />
@@ -987,7 +987,7 @@ export default function DashboardPage() {
         {/* Quick Links */}
         <div className="bg-[var(--surface-0)] border border-[var(--border)] rounded-card p-6">
           <h2 className="text-lg font-display font-semibold text-[var(--ink)] mb-4">
-            {`Acesso r\u00E1pido`}
+            {`Acesso rápido`}
           </h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Link
@@ -1004,7 +1004,7 @@ export default function DashboardPage() {
                          hover:border-[var(--border-strong)] hover:bg-[var(--surface-1)] transition-colors"
             >
               <span className="text-xl">{"\uD83D\uDCDC"}</span>
-              <span className="text-sm text-[var(--ink)]">{`Hist\u00F3rico`}</span>
+              <span className="text-sm text-[var(--ink)]">{`Histórico`}</span>
             </Link>
             <Link
               href="/conta"

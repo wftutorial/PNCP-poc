@@ -137,4 +137,57 @@ describe("GTM-FIX-034: Portuguese accents smoke test", () => {
       });
     });
   });
+
+  // SAB-002 AC9: Detect \u00 unicode escapes in hardcoded frontend strings
+  describe("SAB-002: No \\u00 unicode escapes in frontend source files", () => {
+    // Files that previously had \u00 escapes rendered as literal text
+    const filesToCheck = [
+      { path: "../app/historico/page.tsx", name: "historico/page.tsx" },
+      { path: "../app/pipeline/page.tsx", name: "pipeline/page.tsx" },
+      { path: "../app/alertas/page.tsx", name: "alertas/page.tsx" },
+      { path: "../app/dashboard/page.tsx", name: "dashboard/page.tsx" },
+      { path: "../app/ajuda/page.tsx", name: "ajuda/page.tsx" },
+      { path: "../components/BottomNav.tsx", name: "BottomNav.tsx" },
+      { path: "../components/Sidebar.tsx", name: "Sidebar.tsx" },
+      { path: "../app/buscar/components/SearchResults.tsx", name: "SearchResults.tsx" },
+    ];
+
+    // Match \u00XX patterns that are NOT inside comments (// or /* */)
+    // This regex finds literal backslash-u-00-hex-hex sequences in source
+    const unicodeEscapePattern = /\\u00[0-9a-fA-F]{2}/;
+
+    filesToCheck.forEach(({ path, name }) => {
+      it(`${name} should not contain \\u00 unicode escape sequences`, () => {
+        const src = fs.readFileSync(require.resolve(path), "utf-8");
+        // Strip single-line comments to avoid false positives from comment references
+        const withoutComments = src.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
+        const matches = withoutComments.match(/\\u00[0-9a-fA-F]{2}/g);
+        expect(matches).toBeNull();
+      });
+    });
+
+    it("historico header should display 'Histórico' with accent", () => {
+      const src = fs.readFileSync(
+        require.resolve("../app/historico/page.tsx"),
+        "utf-8"
+      );
+      expect(src).toContain('title="Histórico"');
+    });
+
+    it("pipeline subtitle should use 'licitações' with cedilla", () => {
+      const src = fs.readFileSync(
+        require.resolve("../app/pipeline/page.tsx"),
+        "utf-8"
+      );
+      expect(src).toContain("licitações entre os estágios");
+    });
+
+    it("alertas subtitle should use 'notificações automáticas'", () => {
+      const src = fs.readFileSync(
+        require.resolve("../app/alertas/page.tsx"),
+        "utf-8"
+      );
+      expect(src).toContain("notificações automáticas sobre novas licitações");
+    });
+  });
 });

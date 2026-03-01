@@ -245,7 +245,7 @@ export default function PipelinePage() {
         <PageHeader title="Pipeline" />
         <div className="max-w-7xl mx-auto px-4 py-16 text-center">
           <h1 className="text-2xl font-bold mb-4">Pipeline de Oportunidades</h1>
-          <p className="text-[var(--text-secondary)]">Fa\u00e7a login para acessar seu pipeline.</p>
+          <p className="text-[var(--text-secondary)]">Faça login para acessar seu pipeline.</p>
         </div>
       </>
     );
@@ -259,7 +259,7 @@ export default function PipelinePage() {
           <div>
             <h1 className="text-2xl font-bold text-[var(--text-primary)]">Pipeline de Oportunidades</h1>
             <p className="text-sm text-[var(--text-secondary)] mt-1">
-              Arraste as licita\u00e7\u00f5es entre os est\u00e1gios para acompanhar seu progresso.
+              Arraste as licitações entre os estágios para acompanhar seu progresso.
             </p>
           </div>
           <div className="text-sm text-[var(--text-secondary)]">
@@ -294,7 +294,7 @@ export default function PipelinePage() {
         {/* AC8+AC14: Error state with retry when initial load fails (no data at all) */}
         {initialLoadFailed && !loading && optimisticItems.length === 0 ? (
           <ErrorStateWithRetry
-            message="N\u00e3o foi poss\u00edvel carregar seu pipeline."
+            message="Não foi possível carregar seu pipeline."
             onRetry={wrappedFetchItems}
           />
         ) : loading && optimisticItems.length === 0 ? (
@@ -325,11 +325,11 @@ export default function PipelinePage() {
               </svg>
             }
             title="Seu Pipeline de Oportunidades"
-            description="Arraste licita\u00e7\u00f5es para c\u00e1 e acompanhe do in\u00edcio ao fim."
+            description="Arraste licitações para cá e acompanhe do início ao fim."
             steps={[
-              'Busque licita\u00e7\u00f5es em "Buscar"',
+              'Busque licitações em "Buscar"',
               'Clique em "Acompanhar" numa oportunidade',
-              "Arraste entre as colunas conforme avan\u00e7a",
+              "Arraste entre as colunas conforme avança",
             ]}
             ctaLabel="Buscar oportunidades"
             ctaHref="/buscar"
@@ -343,7 +343,7 @@ export default function PipelinePage() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
                 </svg>
                 <p className="text-sm text-amber-800 dark:text-amber-200">
-                  Seu trial expirou. O pipeline est\u00e1 em modo leitura. Ative um plano para continuar gerenciando suas oportunidades.
+                  Seu trial expirou. O pipeline está em modo leitura. Ative um plano para continuar gerenciando suas oportunidades.
                 </p>
               </div>
               <a

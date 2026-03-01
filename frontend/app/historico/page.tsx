@@ -56,7 +56,7 @@ const STATUS_CONFIG: Record<SearchSessionStatus, {
   icon: string;
 }> = {
   completed: {
-    label: "Conclu\u00edda",
+    label: "Concluída",
     bgClass: "bg-emerald-100 dark:bg-emerald-900/30",
     textClass: "text-emerald-700 dark:text-emerald-400",
     icon: "check",
@@ -200,14 +200,14 @@ export default function HistoricoPage() {
         `/api/sessions?limit=${limit}&offset=${page * limit}`,
         { headers: { Authorization: `Bearer ${session.access_token}` } }
       );
-      if (!res.ok) throw new Error("Erro ao carregar hist\u00f3rico");
+      if (!res.ok) throw new Error("Erro ao carregar histórico");
       const data = await res.json();
       setSessions(data.sessions);
       setTotal(data.total);
       setFetchError(null);
     } catch {
       if (!silent) {
-        setFetchError("Nao foi possivel carregar seu historico.");
+        setFetchError("Não foi possível carregar seu histórico.");
         setErrorTimestamp(new Date().toISOString());
         setSessions([]);
       }
@@ -251,7 +251,7 @@ export default function HistoricoPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[var(--canvas)]">
         <div className="text-center">
-          <p className="text-[var(--ink-secondary)] mb-4">Fa\u00e7a login para ver seu hist\u00f3rico</p>
+          <p className="text-[var(--ink-secondary)] mb-4">Faça login para ver seu histórico</p>
           <Link href="/login" className="text-[var(--brand-blue)] hover:underline">
             Ir para login
           </Link>
@@ -277,7 +277,7 @@ export default function HistoricoPage() {
   return (
     <div className="min-h-screen bg-[var(--canvas)]">
       <PageHeader
-        title="Hist\u00f3rico"
+        title="Histórico"
         extraControls={
           <Link
             href="/buscar"
@@ -310,8 +310,8 @@ export default function HistoricoPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
               </svg>
             }
-            title="Hist\u00f3rico de Buscas"
-            description="Cada busca que voc\u00ea faz fica salva aqui. Voc\u00ea pode revisitar resultados anteriores sem gastar uma nova an\u00e1lise."
+            title="Histórico de Buscas"
+            description="Cada busca que você faz fica salva aqui. Você pode revisitar resultados anteriores sem gastar uma nova análise."
             ctaLabel="Fazer primeira busca"
             ctaHref="/buscar"
           />
@@ -385,7 +385,7 @@ export default function HistoricoPage() {
                                      border border-red-300 dark:border-red-700 rounded-button
                                      hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors
                                      flex items-center gap-1.5"
-                          title="Tentar novamente com os mesmos par\u00e2metros"
+                          title="Tentar novamente com os mesmos parâmetros"
                         >
                           <svg aria-hidden="true" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -399,7 +399,7 @@ export default function HistoricoPage() {
                                      border border-[var(--brand-blue)] rounded-button
                                      hover:bg-[var(--brand-blue-subtle)] transition-colors
                                      flex items-center gap-1.5"
-                          title="Repetir esta busca com os mesmos par\u00e2metros"
+                          title="Repetir esta busca com os mesmos parâmetros"
                         >
                           <svg aria-hidden="true" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />

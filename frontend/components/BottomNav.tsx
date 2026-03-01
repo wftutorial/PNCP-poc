@@ -69,7 +69,7 @@ const icons = {
 const MAIN_ITEMS: BottomNavItem[] = [
   { href: "/buscar", label: "Buscar", icon: icons.search },
   { href: "/pipeline", label: "Pipeline", icon: icons.pipeline },
-  { href: "/historico", label: "Hist\u00f3rico", icon: icons.history },
+  { href: "/historico", label: "Histórico", icon: icons.history },
   { href: "/mensagens", label: "Msg", icon: icons.messages },
 ];
 

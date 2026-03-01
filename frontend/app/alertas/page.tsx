@@ -246,7 +246,7 @@ function AlertCard({
           ) : (
             <button
               onClick={() => setShowConfirm(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--error)]/70 hover:text-[var(--error)] hover:bg-[var(--error-subtle)] transition-colors ml-auto"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--error)] hover:bg-[var(--error-subtle)] transition-colors ml-auto"
               data-testid={`alert-delete-${alert.id}`}
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
@@ -330,7 +330,7 @@ function KeywordsInput({
         />
       </div>
       <p className="text-[11px] text-[var(--ink-muted)] mt-1">
-        Pressione Enter ou virgula para adicionar. Backspace remove a ultima.
+        Pressione Enter ou vírgula para adicionar. Backspace remove a última.
       </p>
     </div>
   );
@@ -729,7 +729,7 @@ function AlertFormModal({
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
               )}
-              {editingAlert ? "Salvar alteracoes" : "Criar alerta"}
+              {editingAlert ? "Salvar alterações" : "Criar alerta"}
             </button>
           </div>
         </form>
@@ -760,14 +760,14 @@ function AlertsEmptyState({ onCreate }: { onCreate: () => void }) {
         Nenhum alerta configurado
       </h2>
       <p className="text-[var(--ink-secondary)] mb-6 max-w-md mx-auto">
-        Crie alertas para receber notificacoes por e-mail quando novas
-        licitacoes forem publicadas nos setores e estados que voce acompanha.
+        Crie alertas para receber notificações por e-mail quando novas
+        licitações forem publicadas nos setores e estados que você acompanha.
       </p>
       <ol className="text-left max-w-sm mx-auto mb-8 space-y-3">
         {[
           "Defina um nome para o alerta",
           "Escolha setor, estados e palavras-chave",
-          "Receba e-mails automaticos com novas oportunidades",
+          "Receba e-mails automáticos com novas oportunidades",
         ].map((step, i) => (
           <li key={i} className="flex items-start gap-3">
             <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[var(--brand-blue)] text-white text-xs font-bold flex items-center justify-center mt-0.5">
@@ -932,7 +932,7 @@ export default function AlertasPage() {
         throw new Error("Falha ao excluir");
       }
       setAlerts((prev) => prev.filter((a) => a.id !== id));
-      toast.success("Alerta excluido com sucesso");
+      toast.success("Alerta excluído com sucesso");
     } catch {
       toast.error("Erro ao excluir alerta");
     }
@@ -962,7 +962,7 @@ export default function AlertasPage() {
         <div className="max-w-7xl mx-auto px-4 py-16 text-center">
           <h1 className="text-2xl font-bold mb-4">Alertas por E-mail</h1>
           <p className="text-[var(--text-secondary)]">
-            Faca login para gerenciar seus alertas.
+            Faça login para gerenciar seus alertas.
           </p>
         </div>
       </>
@@ -982,7 +982,7 @@ export default function AlertasPage() {
               Alertas por E-mail
             </h1>
             <p className="text-sm text-[var(--text-secondary)] mt-1">
-              Receba notificacoes automaticas sobre novas licitacoes.
+              Receba notificações automáticas sobre novas licitações.
             </p>
           </div>
           {alerts.length > 0 && (

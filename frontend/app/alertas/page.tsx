@@ -8,6 +8,7 @@ import { ErrorStateWithRetry } from "../../components/ErrorStateWithRetry";
 import { toast } from "sonner";
 import { SECTOR_DISPLAY_NAMES } from "../../lib/constants/sector-names";
 import { UFS, UF_NAMES } from "../../lib/constants/uf-names";
+import { CurrencyInput } from "../../components/ui/CurrencyInput";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -591,26 +592,22 @@ function AlertFormModal({
             onChange={(ufs) => setForm((f) => ({ ...f, ufs }))}
           />
 
-          {/* Value range */}
+          {/* STORY-333 AC21-AC24: Value range with BRL currency mask */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label
                 htmlFor="alert-valor-min"
                 className="block text-sm font-medium text-[var(--ink)] mb-1.5"
               >
-                Valor minimo (R$)
+                Valor mínimo
               </label>
-              <input
+              <CurrencyInput
                 id="alert-valor-min"
-                type="number"
-                min={0}
-                step={1000}
                 value={form.valor_min}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, valor_min: e.target.value }))
+                onChange={(raw) =>
+                  setForm((f) => ({ ...f, valor_min: raw }))
                 }
-                placeholder="0"
-                className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--surface-0)] text-sm text-[var(--ink)] placeholder:text-[var(--ink-muted)] focus:border-[var(--brand-blue)] focus:ring-1 focus:ring-[var(--brand-blue)]/20 outline-none transition-colors"
+                placeholder="0,00"
               />
             </div>
             <div>
@@ -618,19 +615,15 @@ function AlertFormModal({
                 htmlFor="alert-valor-max"
                 className="block text-sm font-medium text-[var(--ink)] mb-1.5"
               >
-                Valor maximo (R$)
+                Valor máximo
               </label>
-              <input
+              <CurrencyInput
                 id="alert-valor-max"
-                type="number"
-                min={0}
-                step={1000}
                 value={form.valor_max}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, valor_max: e.target.value }))
+                onChange={(raw) =>
+                  setForm((f) => ({ ...f, valor_max: raw }))
                 }
                 placeholder="Sem limite"
-                className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--surface-0)] text-sm text-[var(--ink)] placeholder:text-[var(--ink-muted)] focus:border-[var(--brand-blue)] focus:ring-1 focus:ring-[var(--brand-blue)]/20 outline-none transition-colors"
               />
             </div>
           </div>

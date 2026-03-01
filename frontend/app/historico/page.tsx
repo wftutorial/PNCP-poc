@@ -413,27 +413,35 @@ export default function HistoricoPage() {
               ))}
             </div>
 
-            {/* Pagination */}
+            {/* STORY-333 AC28-AC32: Pagination with improved contrast and sizing */}
             {totalPages > 1 && (
-              <div className="flex items-center justify-center gap-2 mt-8">
+              <div className="flex items-center justify-center gap-3 mt-8">
                 <button
                   onClick={() => setPage(Math.max(0, page - 1))}
                   disabled={page === 0}
-                  className="px-3 py-1 text-sm border border-[var(--border)] rounded-button
-                             disabled:opacity-30 hover:bg-[var(--surface-1)]"
+                  className="px-4 py-2 text-base font-medium border border-[var(--border)] rounded-button
+                             disabled:opacity-50 disabled:cursor-not-allowed
+                             hover:bg-[var(--surface-1)] transition-colors"
+                  aria-label="Página anterior"
+                  aria-disabled={page === 0}
+                  data-testid="historico-prev"
                 >
                   Anterior
                 </button>
-                <span className="text-sm text-[var(--ink-secondary)]">
+                <span className="text-sm text-[var(--ink-secondary)] tabular-nums" aria-current="page">
                   {page + 1} de {totalPages}
                 </span>
                 <button
                   onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
                   disabled={page >= totalPages - 1}
-                  className="px-3 py-1 text-sm border border-[var(--border)] rounded-button
-                             disabled:opacity-30 hover:bg-[var(--surface-1)]"
+                  className="px-4 py-2 text-base font-medium border border-[var(--border)] rounded-button
+                             disabled:opacity-50 disabled:cursor-not-allowed
+                             hover:bg-[var(--surface-1)] transition-colors"
+                  aria-label="Próxima página"
+                  aria-disabled={page >= totalPages - 1}
+                  data-testid="historico-next"
                 >
-                  Pr\u00f3ximo
+                  Próximo
                 </button>
               </div>
             )}

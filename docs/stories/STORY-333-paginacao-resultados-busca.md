@@ -45,64 +45,64 @@ O botão de paginação em `/historico` usa `border-[var(--border)]` com `disabl
 
 ### Bloco 1: Paginação client-side dos resultados de busca
 
-- [ ] AC1: Adicionar componente `Pagination` em `frontend/components/ui/Pagination.tsx` reutilizável: botões Anterior/Próximo + indicador "Página X de Y" + seletor de itens por página (10/20/50)
-- [ ] AC2: `SearchResults.tsx` pagina os resultados client-side: `licitacoes.slice(offset, offset + pageSize)` onde `pageSize` default = 20
-- [ ] AC3: O componente `Pagination` aparece ACIMA e ABAIXO da lista de resultados (topo para acesso rápido, rodapé para quem scrollou)
-- [ ] AC4: Scroll automático para o topo da lista ao mudar de página (`scrollIntoView({ behavior: 'smooth' })`)
-- [ ] AC5: O seletor de itens por página oferece 10, 20, 50 com persistência em `localStorage` (chave `smartlic_page_size`)
-- [ ] AC6: A paginação reseta para página 1 quando o usuário faz uma nova busca ou muda a ordenação
-- [ ] AC7: O header da lista mostra "Exibindo X-Y de Z oportunidades" (ex: "Exibindo 21-40 de 109 oportunidades")
-- [ ] AC8: Paginated state é preservado na URL como query param (`?page=2`) para permitir compartilhamento/bookmark
+- [x] AC1: Adicionar componente `Pagination` em `frontend/components/ui/Pagination.tsx` reutilizável: botões Anterior/Próximo + indicador "Página X de Y" + seletor de itens por página (10/20/50)
+- [x] AC2: `SearchResults.tsx` pagina os resultados client-side: `licitacoes.slice(offset, offset + pageSize)` onde `pageSize` default = 20
+- [x] AC3: O componente `Pagination` aparece ACIMA e ABAIXO da lista de resultados (topo para acesso rápido, rodapé para quem scrollou)
+- [x] AC4: Scroll automático para o topo da lista ao mudar de página (`scrollIntoView({ behavior: 'smooth' })`)
+- [x] AC5: O seletor de itens por página oferece 10, 20, 50 com persistência em `localStorage` (chave `smartlic_page_size`)
+- [x] AC6: A paginação reseta para página 1 quando o usuário faz uma nova busca ou muda a ordenação
+- [x] AC7: O header da lista mostra "Exibindo X-Y de Z oportunidades" (ex: "Exibindo 21-40 de 109 oportunidades")
+- [x] AC8: Paginated state é preservado na URL como query param (`?page=2`) para permitir compartilhamento/bookmark
 
 ### Bloco 2: Reposicionar botões Excel/PDF
 
-- [ ] AC9: Mover os botões Excel e PDF para uma **barra de ações fixa** (sticky) no topo dos resultados, junto com o seletor de ordenação e contagem total
-- [ ] AC10: A barra de ações contém: `[Ordenar por ▼] [Baixar Excel] [Google Sheets] [Relatório PDF] [X de Y oportunidades]`
-- [ ] AC11: A barra fica `sticky top-0` com `z-index` adequado — sempre visível ao scrollar
-- [ ] AC12: Em mobile (< 640px), os botões Excel/PDF ficam em row abaixo da ordenação (2 linhas)
-- [ ] AC13: Se a busca está em loading (`isLoading=true`), a barra mostra skeleton/disabled state mas permanece visível
+- [x] AC9: Mover os botões Excel e PDF para uma **barra de ações fixa** (sticky) no topo dos resultados, junto com o seletor de ordenação e contagem total
+- [x] AC10: A barra de ações contém: `[Ordenar por ▼] [Baixar Excel] [Google Sheets] [Relatório PDF] [X de Y oportunidades]`
+- [x] AC11: A barra fica `sticky top-0` com `z-index` adequado — sempre visível ao scrollar
+- [x] AC12: Em mobile (< 640px), os botões Excel/PDF ficam em row abaixo da ordenação (2 linhas)
+- [x] AC13: Se a busca está em loading (`isLoading=true`), a barra mostra skeleton/disabled state mas permanece visível
 
 ### Bloco 3: Fix Google Sheets export
 
-- [ ] AC14: Diagnosticar o erro atual do Google Sheets export em produção: testar `POST /api/export/google-sheets` com token válido e capturar o erro exato (401? 403? 500? timeout?)
-- [ ] AC15: Se o problema é OAuth token expirado/revogado: verificar que o fluxo `GET /auth/google` → callback → `get_user_google_token()` funciona end-to-end. Se token revogado, exibir mensagem "Reconecte sua conta Google" com botão de re-autorização
-- [ ] AC16: Se o problema é proxy 404/502: verificar que `frontend/app/api/export/google-sheets/route.ts` roteia corretamente para `BACKEND_URL/api/export/google-sheets`
-- [ ] AC17: Adicionar tratamento de erro user-friendly no `GoogleSheetsExportButton.tsx`: em vez de falha silenciosa, exibir toast com mensagem específica por código de erro (401→"Reconecte Google", 403→"Permissão revogada", 429→"Limite Google atingido", 500→"Erro interno")
-- [ ] AC18: O botão Google Sheets deve aparecer na sticky bar de ações (AC10) junto com Excel e PDF
-- [ ] AC19: Teste: mock export com sucesso → verifica toast de sucesso + abertura de nova aba com URL do spreadsheet
-- [ ] AC20: Teste: mock export com 401 → verifica toast "Reconecte sua conta Google"
+- [x] AC14: Diagnosticar o erro atual do Google Sheets export em produção: testar `POST /api/export/google-sheets` com token válido e capturar o erro exato (401? 403? 500? timeout?)
+- [x] AC15: Se o problema é OAuth token expirado/revogado: verificar que o fluxo `GET /auth/google` → callback → `get_user_google_token()` funciona end-to-end. Se token revogado, exibir mensagem "Reconecte sua conta Google" com botão de re-autorização
+- [x] AC16: Se o problema é proxy 404/502: verificar que `frontend/app/api/export/google-sheets/route.ts` roteia corretamente para `BACKEND_URL/api/export/google-sheets`
+- [x] AC17: Adicionar tratamento de erro user-friendly no `GoogleSheetsExportButton.tsx`: em vez de falha silenciosa, exibir toast com mensagem específica por código de erro (401→"Reconecte Google", 403→"Permissão revogada", 429→"Limite Google atingido", 500→"Erro interno")
+- [x] AC18: O botão Google Sheets deve aparecer na sticky bar de ações (AC10) junto com Excel e PDF
+- [x] AC19: Teste: mock export com sucesso → verifica toast de sucesso + abertura de nova aba com URL do spreadsheet
+- [x] AC20: Teste: mock export com 401 → verifica toast "Reconecte sua conta Google"
 
 ### Bloco 5: Máscara de valor BRL nos alertas
 
-- [ ] AC21: No formulário "Criar Novo Alerta" (`alertas/page.tsx:603-634`), trocar `type="number"` por `type="text"` com máscara de moeda brasileira (pontos de milhar + vírgula de centavos). Ex: digitar `1500000` → exibir `1.500.000,00`
-- [ ] AC22: Criar componente `CurrencyInput` reutilizável em `frontend/components/ui/CurrencyInput.tsx` que:
+- [x] AC21: No formulário "Criar Novo Alerta" (`alertas/page.tsx:603-634`), trocar `type="number"` por `type="text"` com máscara de moeda brasileira (pontos de milhar + vírgula de centavos). Ex: digitar `1500000` → exibir `1.500.000,00`
+- [x] AC22: Criar componente `CurrencyInput` reutilizável em `frontend/components/ui/CurrencyInput.tsx` que:
   - Aceita digitação livre de números
   - Formata automaticamente com pontos de milhar (padrão pt-BR) enquanto o usuário digita
   - Exibe prefixo "R$" à esquerda do input (adornment, não dentro do value)
   - Converte internamente para number (sem pontos/vírgulas) ao setar no form state
   - Placeholder: "0,00" (valor mín) e "Sem limite" (valor máx)
-- [ ] AC23: O `CurrencyInput` deve funcionar com backspace, seleção de texto, e paste de valores
-- [ ] AC24: Ao submeter o alerta, `form.valor_min` e `form.valor_max` continuam sendo enviados como número puro (sem formatação) ao backend
-- [ ] AC25: Aplicar o `CurrencyInput` também no campo de valor da busca (`SearchForm.tsx`) se existir input de valor lá
-- [ ] AC26: Teste: digitar "1500000" → exibir "1.500.000" no input, form state = 1500000
-- [ ] AC27: Teste: colar "R$ 2.500.000,00" → exibir "2.500.000,00", form state = 2500000
+- [x] AC23: O `CurrencyInput` deve funcionar com backspace, seleção de texto, e paste de valores
+- [x] AC24: Ao submeter o alerta, `form.valor_min` e `form.valor_max` continuam sendo enviados como número puro (sem formatação) ao backend
+- [x] AC25: Aplicar o `CurrencyInput` também no campo de valor da busca (`SearchForm.tsx`) se existir input de valor lá
+- [x] AC26: Teste: digitar "1500000" → exibir "1.500.000" no input, form state = 1500000
+- [x] AC27: Teste: colar "R$ 2.500.000,00" → exibir "2.500.000,00", form state = 2500000
 
 ### Bloco 6: Fix botão histórico
 
-- [ ] AC28: No `historico/page.tsx`, atualizar estilo dos botões Anterior/Próximo para usar o mesmo componente `Pagination` do AC1 (consistência visual)
-- [ ] AC29: Se não usar componente compartilhado, pelo menos corrigir: `disabled:opacity-30` → `disabled:opacity-50` e adicionar `disabled:cursor-not-allowed`
-- [ ] AC30: Aumentar tamanho do texto: `text-sm` → `text-base` e padding: `px-3 py-1` → `px-4 py-2`
-- [ ] AC31: Adicionar `font-medium` para melhorar legibilidade
-- [ ] AC32: Testar em tema Light e Dark — botões devem ser legíveis em ambos
+- [x] AC28: No `historico/page.tsx`, atualizar estilo dos botões Anterior/Próximo para usar o mesmo componente `Pagination` do AC1 (consistência visual)
+- [x] AC29: Se não usar componente compartilhado, pelo menos corrigir: `disabled:opacity-30` → `disabled:opacity-50` e adicionar `disabled:cursor-not-allowed`
+- [x] AC30: Aumentar tamanho do texto: `text-sm` → `text-base` e padding: `px-3 py-1` → `px-4 py-2`
+- [x] AC31: Adicionar `font-medium` para melhorar legibilidade
+- [x] AC32: Testar em tema Light e Dark — botões devem ser legíveis em ambos
 
 ### Bloco 7: Testes
 
-- [ ] AC33: Teste de `Pagination` component: renderiza, navega, reseta, persiste pageSize
-- [ ] AC34: Teste de `SearchResults` com paginação: 100 items → mostra 20, navega para página 2 → mostra items 21-40
-- [ ] AC35: Teste que botões Excel/PDF/Sheets estão visíveis no viewport sem scroll (dentro da sticky bar)
-- [ ] AC36: Teste de acessibilidade: `Pagination` tem `aria-label`, `aria-current="page"`, botões disabled com `aria-disabled`
-- [ ] AC37: Teste de `CurrencyInput`: digitação, formatação, paste, backspace, form state numérico
-- [ ] AC38: Teste de histórico: botão "Próximo" é visível e legível (contrast ratio check)
+- [x] AC33: Teste de `Pagination` component: renderiza, navega, reseta, persiste pageSize
+- [x] AC34: Teste de `SearchResults` com paginação: 100 items → mostra 20, navega para página 2 → mostra items 21-40
+- [x] AC35: Teste que botões Excel/PDF/Sheets estão visíveis no viewport sem scroll (dentro da sticky bar)
+- [x] AC36: Teste de acessibilidade: `Pagination` tem `aria-label`, `aria-current="page"`, botões disabled com `aria-disabled`
+- [x] AC37: Teste de `CurrencyInput`: digitação, formatação, paste, backspace, form state numérico
+- [x] AC38: Teste de histórico: botão "Próximo" é visível e legível (contrast ratio check)
 
 ## Arquivos Afetados
 

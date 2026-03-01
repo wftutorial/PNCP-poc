@@ -28,6 +28,7 @@ import { SearchStateManager } from "./SearchStateManager";
 import { deriveSearchPhase } from "../types/searchPhase";
 import { TrialUpsellCTA } from "../../../components/billing/TrialUpsellCTA";
 import { TrialPaywall } from "../../../components/billing/TrialPaywall";
+import { Pagination, useInitPagination } from "../../../components/ui/Pagination";
 // GTM-UX-001: PartialTimeoutBanner replaced by DataQualityBanner
 
 export interface SearchResultsProps {
@@ -195,6 +196,41 @@ export default function SearchResults({
   // STORY-325: PDF Diagnostico
   onGeneratePdf, pdfLoading,
 }: SearchResultsProps) {
+  // STORY-333: Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState<10 | 20 | 50>(() => {
+    if (typeof window === "undefined") return 20;
+    const stored = localStorage.getItem("smartlic_page_size");
+    if (stored && [10, 20, 50].includes(Number(stored))) return Number(stored) as 10 | 20 | 50;
+    return 20;
+  });
+
+  // STORY-333 AC6: Reset page on new search result or sort change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [result, ordenacao]);
+
+  // STORY-333 AC8: Sync page with URL query param
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    const pageParam = url.searchParams.get("page");
+    if (pageParam && Number(pageParam) > 0) {
+      setCurrentPage(Number(pageParam));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !result) return;
+    const url = new URL(window.location.href);
+    if (currentPage > 1) {
+      url.searchParams.set("page", String(currentPage));
+    } else {
+      url.searchParams.delete("page");
+    }
+    window.history.replaceState({}, "", url.toString());
+  }, [currentPage, result]);
+
   // STORY-257B AC4: Track transition from grid to results
   const [showGrid, setShowGrid] = useState(false);
   const [gridFading, setGridFading] = useState(false);
@@ -265,6 +301,15 @@ export default function SearchResults({
     ufTotalFound,
     searchElapsedSeconds,
   }), [loading, error, quotaError, result, retryCountdown, retryExhausted, sourceStatuses, partialProgress, ufTotalFound, searchElapsedSeconds]);
+
+  // STORY-333: Paginated licitacoes slice for display
+  const paginatedLicitacoes = useMemo(() => {
+    if (!result?.licitacoes) return [];
+    const start = (currentPage - 1) * pageSize;
+    return result.licitacoes.slice(start, start + pageSize);
+  }, [result?.licitacoes, currentPage, pageSize]);
+
+  const totalLicitacoes = result?.licitacoes?.length ?? 0;
 
   // STORY-260 AC16: Dismissible profile incomplete banner (localStorage, 3-day TTL)
   const [bannerDismissed, setBannerDismissed] = useState(false);
@@ -611,11 +656,154 @@ export default function SearchResults({
                 </p>
               )}
             </div>
-            <OrdenacaoSelect
-              value={ordenacao}
-              onChange={onOrdenacaoChange}
-              disabled={loading}
-            />
+          </div>
+
+          {/* STORY-333 AC9-AC13: Sticky Action Bar */}
+          <div
+            className="sticky top-0 z-30 bg-[var(--canvas)] border-b border-[var(--border)] -mx-1 px-1 py-3"
+            data-testid="sticky-action-bar"
+            id="results-top"
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+              {/* Row 1: Sort + action buttons */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <OrdenacaoSelect
+                  value={ordenacao}
+                  onChange={onOrdenacaoChange}
+                  disabled={loading}
+                />
+
+                {/* Excel button (compact) */}
+                {planInfo?.capabilities.allow_excel && !isTrialExpired && !(paywallApplied && totalBeforePaywall) && (
+                  (() => {
+                    const hasDownload = !!(result.download_url || result.download_id);
+                    const isFailed = (result.excel_status === 'failed' || excelTimedOut) && !hasDownload;
+                    const isProcessing = result.excel_status === 'processing' && !hasDownload && !isFailed;
+
+                    if (isProcessing) {
+                      return (
+                        <button
+                          disabled
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium
+                                     bg-[var(--brand-navy)]/70 text-white rounded-button cursor-wait"
+                          data-testid="excel-processing-button"
+                        >
+                          <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" aria-label="Gerando Excel" role="img">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                          </svg>
+                          Gerando Excel...
+                        </button>
+                      );
+                    }
+
+                    if (isFailed) {
+                      return (
+                        <button
+                          onClick={onSearch}
+                          disabled={loading}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium
+                                     bg-amber-600 hover:bg-amber-700 text-white rounded-button
+                                     disabled:opacity-50 disabled:cursor-not-allowed"
+                          data-testid="excel-retry-button"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                          Gerar novamente
+                        </button>
+                      );
+                    }
+
+                    return (
+                      <button
+                        onClick={onDownload}
+                        disabled={downloadLoading}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium
+                                   bg-[var(--brand-navy)] text-white rounded-button
+                                   hover:bg-[var(--brand-blue-hover)]
+                                   disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        data-testid="excel-download-button"
+                        aria-label={`Baixar Excel com ${result.resumo.total_oportunidades} licitações`}
+                      >
+                        {downloadLoading ? (
+                          <>
+                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" aria-label="Preparando" role="img">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                            </svg>
+                            Preparando download...
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                            Baixar Excel ({result.resumo.total_oportunidades} {result.resumo.total_oportunidades === 1 ? 'licitação' : 'licitações'})
+                          </>
+                        )}
+                      </button>
+                    );
+                  })()
+                )}
+
+                {/* Google Sheets button (compact) — AC18 */}
+                {planInfo?.capabilities.allow_excel && !isTrialExpired && (
+                  <GoogleSheetsExportButton
+                    licitacoes={result.licitacoes}
+                    searchLabel={`${sectorName} - ${Array.from(ufsSelecionadas).join(', ')}`}
+                    disabled={downloadLoading}
+                    session={session}
+                  />
+                )}
+
+                {/* PDF button (compact) */}
+                {session?.access_token && result && !isTrialExpired && onGeneratePdf && (
+                  <button
+                    onClick={() => onGeneratePdf({ clientName: "", maxItems: 20 })}
+                    disabled={pdfLoading}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium
+                               border border-[var(--brand-navy)] text-[var(--brand-navy)]
+                               dark:border-[var(--brand-blue)] dark:text-[var(--brand-blue)]
+                               rounded-button hover:bg-[var(--brand-blue-subtle)] transition-colors
+                               disabled:opacity-50 disabled:cursor-not-allowed"
+                    data-testid="pdf-report-button"
+                  >
+                    {pdfLoading ? (
+                      <>
+                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" aria-label="Gerando PDF" role="img">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                        Gerando PDF...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        </svg>
+                        Relatório PDF ({result.resumo.total_oportunidades} {result.resumo.total_oportunidades === 1 ? 'oportunidade' : 'oportunidades'})
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+
+              {/* Opportunity count — right side */}
+              <span className="text-sm text-[var(--ink-secondary)] sm:ml-auto whitespace-nowrap" data-testid="sticky-count">
+                {result.resumo.total_oportunidades} {result.resumo.total_oportunidades === 1 ? 'oportunidade' : 'oportunidades'}
+              </span>
+            </div>
+
+            {/* AC13: Skeleton state during loading */}
+            {loading && (
+              <div className="flex items-center gap-3 mt-2 animate-pulse">
+                <div className="h-8 w-28 bg-[var(--surface-1)] rounded" />
+                <div className="h-8 w-24 bg-[var(--surface-1)] rounded" />
+                <div className="h-8 w-20 bg-[var(--surface-1)] rounded" />
+                <div className="h-4 w-32 bg-[var(--surface-1)] rounded ml-auto" />
+              </div>
+            )}
           </div>
 
           {/* GTM-FIX-028 AC16: LLM zero-match analysis note */}
@@ -947,11 +1135,23 @@ export default function SearchResults({
             <div className="border-t border-strong" />
           )}
 
-          {/* Licitacoes Preview */}
-          {result.licitacoes && result.licitacoes.length > 0 && (
+          {/* STORY-333 AC3: Top Pagination */}
+          {totalLicitacoes > 0 && (
+            <Pagination
+              totalItems={totalLicitacoes}
+              currentPage={currentPage}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setPageSize}
+              scrollTargetId="results-top"
+            />
+          )}
+
+          {/* STORY-333 AC2: Licitacoes Preview — paginated client-side */}
+          {paginatedLicitacoes.length > 0 && (
             <LicitacoesPreview
-              licitacoes={result.licitacoes}
-              previewCount={5}
+              licitacoes={paginatedLicitacoes}
+              previewCount={pageSize}
               excelAvailable={planInfo?.capabilities.allow_excel ?? false}
               searchTerms={searchMode === "termos" ? termosArray : (result.termos_utilizados || [])}
               onUpgradeClick={() => {
@@ -962,6 +1162,18 @@ export default function SearchResults({
               accessToken={session?.access_token}
               bidAnalysis={result.bid_analysis}
               bidAnalysisStatus={result.bid_analysis_status}
+            />
+          )}
+
+          {/* STORY-333 AC3: Bottom Pagination */}
+          {totalLicitacoes > 0 && (
+            <Pagination
+              totalItems={totalLicitacoes}
+              currentPage={currentPage}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setPageSize}
+              scrollTargetId="results-top"
             />
           )}
 
@@ -988,9 +1200,9 @@ export default function SearchResults({
             </div>
           )}
 
-          {/* Download Button — UX-349 AC1-AC5: Excel always visible when results exist */}
-          {/* STORY-320 AC8: Paywall preview download button */}
-          {/* STORY-265 AC16: Trial expired → disabled download with upgrade message */}
+          {/* STORY-333: Buttons moved to sticky action bar. Keep upgrade CTAs below. */}
+
+          {/* STORY-320 AC8 / STORY-265: Paywall/trial expired upgrade CTAs */}
           {paywallApplied && totalBeforePaywall ? (
             <div className="relative">
               <button
@@ -1034,83 +1246,7 @@ export default function SearchResults({
               </svg>
               Ative seu plano para exportar
             </Link>
-          ) : planInfo?.capabilities.allow_excel ? (
-            (() => {
-              const hasDownload = !!(result.download_url || result.download_id);
-              const isFailed = (result.excel_status === 'failed' || excelTimedOut) && !hasDownload;
-              const isProcessing = result.excel_status === 'processing' && !hasDownload && !isFailed;
-
-              if (isProcessing) {
-                // AC2: Processing → spinner with progress message
-                return (
-                  <button
-                    disabled
-                    className="w-full bg-brand-navy/70 text-white py-3 sm:py-4 rounded-button text-base sm:text-lg font-semibold
-                               cursor-wait flex items-center justify-center gap-3"
-                    data-testid="excel-processing-button"
-                  >
-                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" aria-label="Gerando Excel" role="img">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    Gerando Excel...
-                  </button>
-                );
-              }
-
-              if (isFailed) {
-                // AC4: Failed or timed out → "Gerar novamente" retry button
-                return (
-                  <button
-                    onClick={onSearch}
-                    disabled={loading}
-                    className="w-full bg-amber-600 hover:bg-amber-700 text-white py-3 sm:py-4 rounded-button text-base sm:text-lg font-semibold
-                               transition-all duration-200 flex items-center justify-center gap-3
-                               disabled:opacity-50 disabled:cursor-not-allowed"
-                    data-testid="excel-retry-button"
-                  >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                    Gerar novamente
-                  </button>
-                );
-              }
-
-              // AC1/AC3/AC5: Active download button
-              return (
-                <button
-                  onClick={onDownload}
-                  disabled={downloadLoading}
-                  aria-label={`Baixar Excel com ${result.resumo.total_oportunidades} ${result.resumo.total_oportunidades === 1 ? 'licitação' : 'licitações'}`}
-                  className="w-full bg-brand-navy text-white py-3 sm:py-4 rounded-button text-base sm:text-lg font-semibold
-                             hover:bg-brand-blue-hover active:bg-brand-blue
-                             disabled:bg-ink-faint disabled:text-ink-muted disabled:cursor-not-allowed
-                             transition-all duration-200
-                             flex items-center justify-center gap-3"
-                  data-testid="excel-download-button"
-                  data-tour="excel-button"
-                >
-                  {downloadLoading ? (
-                    <>
-                      <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" aria-label="Carregando" role="img">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                      </svg>
-                      Preparando download...
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                      </svg>
-                      Baixar Excel ({result.resumo.total_oportunidades} {result.resumo.total_oportunidades === 1 ? 'licitação' : 'licitações'})
-                    </>
-                  )}
-                </button>
-              );
-            })()
-          ) : (
+          ) : !planInfo?.capabilities.allow_excel ? (
             <Link
               href="/planos"
               className="w-full bg-surface-0 border-2 border-brand-navy text-brand-navy py-3 sm:py-4 rounded-button text-base sm:text-lg font-semibold
@@ -1123,7 +1259,7 @@ export default function SearchResults({
               </svg>
               Assine para exportar resultados e acessar funcionalidades premium
             </Link>
-          )}
+          ) : null}
 
           {/* STORY-301 AC11: Create alert from this search */}
           {session?.access_token && result && (
@@ -1138,46 +1274,6 @@ export default function SearchResults({
               </svg>
               Criar alerta a partir desta busca
             </a>
-          )}
-
-          {/* Google Sheets Export — STORY-265: also disabled when trial expired */}
-          {planInfo?.capabilities.allow_excel && !isTrialExpired && (
-            <GoogleSheetsExportButton
-              licitacoes={result.licitacoes}
-              searchLabel={`${sectorName} - ${Array.from(ufsSelecionadas).join(', ')}`}
-              disabled={downloadLoading}
-              session={session}
-            />
-          )}
-
-          {/* STORY-325: PDF Diagnostico Report */}
-          {session?.access_token && result && !isTrialExpired && onGeneratePdf && (
-            <button
-              onClick={() => onGeneratePdf({ clientName: "", maxItems: 20 })}
-              disabled={pdfLoading}
-              className="w-full bg-surface-0 border-2 border-brand-navy text-brand-navy py-3 sm:py-4 rounded-button text-base sm:text-lg font-semibold
-                         hover:bg-brand-blue-subtle transition-all duration-200
-                         flex items-center justify-center gap-3
-                         disabled:opacity-50 disabled:cursor-not-allowed"
-              data-testid="pdf-report-button"
-            >
-              {pdfLoading ? (
-                <>
-                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" aria-label="Gerando PDF" role="img">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                  Gerando PDF...
-                </>
-              ) : (
-                <>
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                  </svg>
-                  Relatório PDF ({result.resumo.total_oportunidades} {result.resumo.total_oportunidades === 1 ? 'oportunidade' : 'oportunidades'})
-                </>
-              )}
-            </button>
           )}
 
           {/* Download Error */}

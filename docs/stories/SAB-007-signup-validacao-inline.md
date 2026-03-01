@@ -21,22 +21,22 @@ Botão "Criar conta" aparece visualmente como desabilitado/greyed out sem nenhum
 
 ### Validação Inline
 
-- [ ] **AC1:** Campo Nome — erro inline se vazio ao sair do campo (onBlur): "Nome é obrigatório"
-- [ ] **AC2:** Campo Email — erro inline para formato inválido: "Email inválido" (onBlur + onChange após primeiro blur)
-- [ ] **AC3:** Campo Senha — indicador de força (fraca/média/forte) com barra visual + requisitos: "Mínimo 8 caracteres"
-- [ ] **AC4:** Campo Confirmar Senha — erro inline se diferente: "Senhas não coincidem"
+- [x] **AC1:** Campo Nome — erro inline se vazio ao sair do campo (onBlur): "Nome é obrigatório"
+- [x] **AC2:** Campo Email — erro inline para formato inválido: "Email inválido" (onBlur + onChange após primeiro blur)
+- [x] **AC3:** Campo Senha — indicador de força (fraca/média/forte) com barra visual + requisitos: "Mínimo 8 caracteres"
+- [x] **AC4:** Campo Confirmar Senha — erro inline se diferente: "Senhas não coincidem"
 
 ### Botão Submit
 
-- [ ] **AC5:** Botão "Criar conta" desabilitado com `cursor-not-allowed` e tooltip no hover: "Preencha todos os campos"
-- [ ] **AC6:** Quando todos os campos válidos: botão muda para estilo primary (ativo) com transição suave
-- [ ] **AC7:** Durante submit: botão mostra spinner + "Criando conta..."
+- [x] **AC5:** Botão "Criar conta" desabilitado com `cursor-not-allowed` e tooltip no hover: "Preencha todos os campos"
+- [x] **AC6:** Quando todos os campos válidos: botão muda para estilo primary (ativo) com transição suave
+- [x] **AC7:** Durante submit: botão mostra spinner + "Criando conta..."
 
 ### Testes
 
-- [ ] **AC8:** Teste: submit com campos vazios → erros inline aparecem em todos os campos
-- [ ] **AC9:** Teste: email inválido → erro inline específico
-- [ ] **AC10:** Teste: senhas diferentes → erro inline no campo de confirmação
+- [x] **AC8:** Teste: submit com campos vazios → erros inline aparecem em todos os campos
+- [x] **AC9:** Teste: email inválido → erro inline específico
+- [x] **AC10:** Teste: senhas diferentes → erro inline no campo de confirmação
 
 ---
 

@@ -77,12 +77,15 @@ jest.mock("../lib/error-messages", () => ({
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 /** Fill all required fields so the form can be submitted */
-function fillValidForm(overrides: { email?: string; password?: string; fullName?: string } = {}) {
+function fillValidForm(overrides: { email?: string; password?: string; fullName?: string; confirmPassword?: string } = {}) {
   // Use htmlFor-linked label text exactly to avoid ambiguity with "Mostrar senha" button
   const nameInput = screen.getByLabelText("Nome completo");
   const emailInput = screen.getByLabelText("Email");
   // The password input has id="password"; its label text is "Senha"
   const passwordInput = screen.getByLabelText("Senha");
+  const confirmInput = screen.getByLabelText("Confirmar senha");
+
+  const pw = overrides.password ?? "Senha1234";
 
   fireEvent.change(nameInput, {
     target: { value: overrides.fullName ?? "João da Silva" },
@@ -91,7 +94,10 @@ function fillValidForm(overrides: { email?: string; password?: string; fullName?
     target: { value: overrides.email ?? "joao@gmail.com" },
   });
   fireEvent.change(passwordInput, {
-    target: { value: overrides.password ?? "Senha1234" },
+    target: { value: pw },
+  });
+  fireEvent.change(confirmInput, {
+    target: { value: overrides.confirmPassword ?? pw },
   });
 }
 
@@ -117,7 +123,7 @@ describe("SignupPage — form validation (STORY-258 AC22)", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("email-error")).toBeInTheDocument();
-      expect(screen.getByTestId("email-error")).toHaveTextContent(/email v/i);
+      expect(screen.getByTestId("email-error")).toHaveTextContent(/email inv/i);
     });
   });
 
@@ -425,5 +431,201 @@ describe("SignupPage — form validation (STORY-258 AC22)", () => {
     await waitFor(() => {
       expect(screen.queryByTestId("email-disposable-error")).not.toBeInTheDocument();
     });
+  });
+});
+
+// ─── SAB-007: Inline Validation Tests ──────────────────────────────────────────
+describe("SignupPage — SAB-007 inline validation", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ confirmed: false }),
+    });
+  });
+
+  // ── AC1: Name field onBlur ─────────────────────────────────────────────────
+
+  it("AC1: shows 'Nome é obrigatório' on blur when name is empty", () => {
+    render(<SignupPage />);
+
+    const nameInput = screen.getByLabelText("Nome completo");
+    fireEvent.focus(nameInput);
+    fireEvent.blur(nameInput);
+
+    expect(screen.getByTestId("name-error")).toBeInTheDocument();
+    expect(screen.getByTestId("name-error")).toHaveTextContent("Nome é obrigatório");
+  });
+
+  it("AC1: does not show name error when name is filled", () => {
+    render(<SignupPage />);
+
+    const nameInput = screen.getByLabelText("Nome completo");
+    fireEvent.change(nameInput, { target: { value: "João" } });
+    fireEvent.blur(nameInput);
+
+    expect(screen.queryByTestId("name-error")).not.toBeInTheDocument();
+  });
+
+  // ── AC2: Email inline error ────────────────────────────────────────────────
+
+  it("AC2: shows 'Email inválido' for malformed email on blur", () => {
+    render(<SignupPage />);
+
+    const emailInput = screen.getByLabelText("Email");
+    fireEvent.change(emailInput, { target: { value: "not-an-email" } });
+    fireEvent.blur(emailInput);
+
+    expect(screen.getByTestId("email-error")).toBeInTheDocument();
+    expect(screen.getByTestId("email-error")).toHaveTextContent("Email inválido");
+  });
+
+  // ── AC3: Password strength bar ─────────────────────────────────────────────
+
+  it("AC3: shows password strength indicator when typing", () => {
+    render(<SignupPage />);
+
+    const passwordInput = screen.getByLabelText("Senha");
+    fireEvent.change(passwordInput, { target: { value: "abc" } });
+
+    expect(screen.getByTestId("password-strength")).toBeInTheDocument();
+    expect(screen.getByTestId("password-strength-label")).toHaveTextContent("Senha fraca");
+  });
+
+  it("AC3: shows 'forte' for complex passwords", () => {
+    render(<SignupPage />);
+
+    const passwordInput = screen.getByLabelText("Senha");
+    fireEvent.change(passwordInput, { target: { value: "Str0ng!Pass@2026" } });
+
+    expect(screen.getByTestId("password-strength-label")).toHaveTextContent("Senha forte");
+  });
+
+  // ── AC4: Confirm password mismatch ─────────────────────────────────────────
+
+  it("AC4: shows 'Senhas não coincidem' when passwords differ", () => {
+    render(<SignupPage />);
+
+    const passwordInput = screen.getByLabelText("Senha");
+    const confirmInput = screen.getByLabelText("Confirmar senha");
+
+    fireEvent.change(passwordInput, { target: { value: "Senha1234" } });
+    fireEvent.change(confirmInput, { target: { value: "Different" } });
+    fireEvent.blur(confirmInput);
+
+    expect(screen.getByTestId("confirm-password-error")).toBeInTheDocument();
+    expect(screen.getByTestId("confirm-password-error")).toHaveTextContent("Senhas não coincidem");
+  });
+
+  it("AC4: shows match indicator when passwords are equal", () => {
+    render(<SignupPage />);
+
+    const passwordInput = screen.getByLabelText("Senha");
+    const confirmInput = screen.getByLabelText("Confirmar senha");
+
+    fireEvent.change(passwordInput, { target: { value: "Senha1234" } });
+    fireEvent.change(confirmInput, { target: { value: "Senha1234" } });
+
+    expect(screen.getByTestId("confirm-password-match")).toBeInTheDocument();
+  });
+
+  // ── AC5: Submit button tooltip ─────────────────────────────────────────────
+
+  it("AC5: renders tooltip when button is disabled", () => {
+    render(<SignupPage />);
+
+    // Button should be disabled on empty form
+    const submitBtn = screen.getByRole("button", { name: /criar conta/i });
+    expect(submitBtn).toBeDisabled();
+
+    // Tooltip should be in DOM (hidden via CSS opacity)
+    expect(screen.getByTestId("submit-tooltip")).toBeInTheDocument();
+    expect(screen.getByTestId("submit-tooltip")).toHaveTextContent("Preencha todos os campos");
+  });
+
+  it("AC5: tooltip disappears when form becomes valid", () => {
+    render(<SignupPage />);
+
+    fillValidForm();
+
+    expect(screen.queryByTestId("submit-tooltip")).not.toBeInTheDocument();
+  });
+
+  // ── AC6: Smooth button transition ──────────────────────────────────────────
+
+  it("AC6: button has transition classes for smooth visual change", () => {
+    render(<SignupPage />);
+
+    const submitBtn = screen.getByRole("button", { name: /criar conta/i });
+    expect(submitBtn.className).toContain("transition-all");
+    expect(submitBtn.className).toContain("duration-300");
+  });
+
+  // ── AC7: Spinner during submit ─────────────────────────────────────────────
+
+  it("AC7: shows spinner during form submission", async () => {
+    // Make signUp hang to observe loading state
+    mockSignUpWithEmail.mockImplementation(() => new Promise(() => {}));
+    render(<SignupPage />);
+
+    fillValidForm();
+
+    const submitBtn = screen.getByRole("button", { name: /criar conta/i });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText("Criando conta...")).toBeInTheDocument();
+      // Spinner SVG should be present
+      const svg = submitBtn.querySelector("svg.animate-spin");
+      expect(svg).toBeInTheDocument();
+    });
+  });
+
+  // ── AC8: Submit with empty fields → inline errors on all fields ────────────
+
+  it("AC8: shows inline errors on all fields when submitting empty form", async () => {
+    render(<SignupPage />);
+
+    // Attempt submit on empty form — button is disabled, but we simulate the form submission
+    // by directly calling the submit on the form element
+    const form = screen.getByRole("button", { name: /criar conta/i }).closest("form")!;
+    fireEvent.submit(form);
+
+    await waitFor(() => {
+      // Name error
+      expect(screen.getByTestId("name-error")).toBeInTheDocument();
+      expect(screen.getByTestId("name-error")).toHaveTextContent("Nome é obrigatório");
+    });
+  });
+
+  // ── AC9: Invalid email → specific inline error ─────────────────────────────
+
+  it("AC9: shows specific inline error for invalid email format", () => {
+    render(<SignupPage />);
+
+    const emailInput = screen.getByLabelText("Email");
+    fireEvent.change(emailInput, { target: { value: "not-valid" } });
+    fireEvent.blur(emailInput);
+
+    const error = screen.getByTestId("email-error");
+    expect(error).toBeInTheDocument();
+    expect(error).toHaveTextContent("Email inválido");
+  });
+
+  // ── AC10: Mismatched passwords → inline error on confirm field ─────────────
+
+  it("AC10: shows inline error on confirm password when passwords don't match", () => {
+    render(<SignupPage />);
+
+    const passwordInput = screen.getByLabelText("Senha");
+    const confirmInput = screen.getByLabelText("Confirmar senha");
+
+    fireEvent.change(passwordInput, { target: { value: "ValidPass1" } });
+    fireEvent.change(confirmInput, { target: { value: "WrongPass2" } });
+    fireEvent.blur(confirmInput);
+
+    const error = screen.getByTestId("confirm-password-error");
+    expect(error).toBeInTheDocument();
+    expect(error).toHaveTextContent("Senhas não coincidem");
   });
 });

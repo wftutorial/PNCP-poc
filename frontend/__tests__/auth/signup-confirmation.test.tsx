@@ -62,23 +62,25 @@ jest.mock("../../lib/error-messages", () => ({
     err instanceof Error ? err.message : String(err),
 }));
 
-// Helper to fill simplified form (Nome, Email, Senha) and submit
+// Helper to fill form (Nome, Email, Senha, Confirmar) and submit
 async function signupAndGetToConfirmation(
   email = "test@example.com"
 ) {
   render(<SignupPage />);
 
-  // Fill required fields (GTM-FIX-037: simplified to 3 fields)
+  // Fill required fields (SAB-007: includes confirmPassword)
   const nameInput = screen.getByLabelText(/Nome completo/i);
   const emailInput = screen.getByPlaceholderText(/seu@email.com/i);
   const passwordInput = screen.getByPlaceholderText(
     /Min\. 8 caracteres, 1 maiúscula, 1 número/i
   );
+  const confirmInput = screen.getByLabelText(/Confirmar senha/i);
 
   await act(async () => {
     fireEvent.change(nameInput, { target: { value: "Test User" } });
     fireEvent.change(emailInput, { target: { value: email } });
     fireEvent.change(passwordInput, { target: { value: "Password123" } });
+    fireEvent.change(confirmInput, { target: { value: "Password123" } });
   });
 
   // Submit

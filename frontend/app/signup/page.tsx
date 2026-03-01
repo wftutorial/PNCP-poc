@@ -36,6 +36,10 @@ export default function SignupPage() {
   const [fullName, setFullName] = useState("");
   const [emailTouched, setEmailTouched] = useState(false);
   const [formTouched, setFormTouched] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [nameTouched, setNameTouched] = useState(false);
+  const [confirmPasswordTouched, setConfirmPasswordTouched] = useState(false);
+  const [passwordTouched, setPasswordTouched] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -186,17 +190,58 @@ export default function SignupPage() {
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const showEmailError = emailTouched && email.trim() !== "" && !isEmailValid;
 
+  // SAB-007 AC1: Name validation
+  const showNameError = nameTouched && fullName.trim() === "";
+
+  // SAB-007 AC4: Confirm password validation
+  const showConfirmPasswordError =
+    confirmPasswordTouched && (
+      (confirmPassword === "" && formTouched) ||
+      (confirmPassword !== "" && confirmPassword !== password)
+    );
+  const confirmPasswordMatch = confirmPassword !== "" && confirmPassword === password;
+
+  // SAB-007 AC3: Password strength indicator
+  const getPasswordStrength = (pw: string): { level: "fraca" | "média" | "forte"; score: number } => {
+    if (!pw) return { level: "fraca", score: 0 };
+    let score = 0;
+    if (pw.length >= 8) score++;
+    if (pw.length >= 12) score++;
+    if (/[A-Z]/.test(pw)) score++;
+    if (/[a-z]/.test(pw)) score++;
+    if (/\d/.test(pw)) score++;
+    if (/[^A-Za-z0-9]/.test(pw)) score++;
+    if (score <= 2) return { level: "fraca", score: 1 };
+    if (score <= 4) return { level: "média", score: 2 };
+    return { level: "forte", score: 3 };
+  };
+  const passwordStrength = getPasswordStrength(password);
+
   const isFormValid =
     fullName.trim() !== "" &&
     email.trim() !== "" &&
     isEmailValid &&
     passwordMeetsPolicy &&
+    confirmPassword === password &&
+    confirmPassword !== "" &&
     !emailCheckError &&
     !phoneCheckError;
+
+  // SAB-007 AC8: Touch all fields to show inline errors on submit attempt
+  const touchAllFields = () => {
+    setNameTouched(true);
+    setEmailTouched(true);
+    setPasswordTouched(true);
+    setConfirmPasswordTouched(true);
+    setFormTouched(true);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    touchAllFields();
+
+    if (!isFormValid) return;
 
     if (!passwordMeetsPolicy) {
       setError("A senha deve ter pelo menos 8 caracteres, 1 letra maiúscula e 1 número");
@@ -408,7 +453,7 @@ export default function SignupPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Full Name */}
+          {/* Full Name — SAB-007 AC1 */}
           <div>
             <label htmlFor="fullName" className="block text-sm font-medium text-[var(--ink-secondary)] mb-1">
               Nome completo
@@ -419,12 +464,19 @@ export default function SignupPage() {
               required
               value={fullName}
               onChange={(e) => { setFullName(e.target.value); setFormTouched(true); }}
-              className="w-full px-4 py-3 rounded-input border border-[var(--border)]
+              onBlur={() => setNameTouched(true)}
+              className={`w-full px-4 py-3 rounded-input border
                          bg-[var(--surface-0)] text-[var(--ink)]
                          focus:border-[var(--brand-blue)] focus:outline-none focus:ring-2
-                         focus:ring-[var(--brand-blue-subtle)]"
+                         focus:ring-[var(--brand-blue-subtle)]
+                         ${showNameError ? 'border-[var(--error)]' : 'border-[var(--border)]'}`}
               placeholder="Seu nome"
             />
+            {showNameError && (
+              <p className="mt-1 text-xs text-[var(--error)]" data-testid="name-error">
+                Nome é obrigatório
+              </p>
+            )}
           </div>
 
           {/* Email */}
@@ -441,6 +493,8 @@ export default function SignupPage() {
                 onChange={(e) => {
                   setEmail(e.target.value);
                   setFormTouched(true);
+                  // SAB-007 AC2: Validate on change after first blur
+                  if (!emailTouched) setEmailTouched(false);
                   // Reset check result on change
                   setEmailCheckResult(null);
                   setEmailCheckError(null);
@@ -463,10 +517,10 @@ export default function SignupPage() {
                 </div>
               )}
             </div>
-            {/* STORY-258: Format error */}
+            {/* SAB-007 AC2: Format error */}
             {showEmailError && !emailCheckError && (
               <p className="mt-1 text-xs text-[var(--error)]" data-testid="email-error">
-                Digite um email válido
+                Email inválido
               </p>
             )}
             {/* STORY-258: Disposable email error */}
@@ -534,7 +588,7 @@ export default function SignupPage() {
             )}
           </div>
 
-          {/* Password */}
+          {/* Password — SAB-007 AC3 */}
           <div>
             <label htmlFor="password" className="block text-sm font-medium text-[var(--ink-secondary)] mb-1">
               Senha
@@ -546,10 +600,12 @@ export default function SignupPage() {
                 required
                 value={password}
                 onChange={(e) => { setPassword(e.target.value); setFormTouched(true); }}
-                className="w-full px-4 py-3 pr-12 rounded-input border border-[var(--border)]
+                onBlur={() => setPasswordTouched(true)}
+                className={`w-full px-4 py-3 pr-12 rounded-input border
                            bg-[var(--surface-0)] text-[var(--ink)]
                            focus:border-[var(--brand-blue)] focus:outline-none focus:ring-2
-                           focus:ring-[var(--brand-blue-subtle)]"
+                           focus:ring-[var(--brand-blue-subtle)]
+                           ${passwordTouched && !passwordMeetsPolicy && password ? 'border-[var(--error)]' : 'border-[var(--border)]'}`}
                 placeholder="Min. 8 caracteres, 1 maiúscula, 1 número"
                 minLength={8}
               />
@@ -579,7 +635,35 @@ export default function SignupPage() {
                 )}
               </button>
             </div>
-            {/* STORY-226 AC17: Password policy feedback */}
+            {/* SAB-007 AC3: Password strength bar */}
+            {password && (
+              <div className="mt-2" data-testid="password-strength">
+                <div className="flex gap-1 mb-1">
+                  <div className={`h-1.5 flex-1 rounded-full transition-colors ${
+                    passwordStrength.score >= 1 ? (
+                      passwordStrength.level === "fraca" ? "bg-red-500" :
+                      passwordStrength.level === "média" ? "bg-yellow-500" : "bg-green-500"
+                    ) : "bg-gray-200 dark:bg-gray-700"
+                  }`} />
+                  <div className={`h-1.5 flex-1 rounded-full transition-colors ${
+                    passwordStrength.score >= 2 ? (
+                      passwordStrength.level === "média" ? "bg-yellow-500" : "bg-green-500"
+                    ) : "bg-gray-200 dark:bg-gray-700"
+                  }`} />
+                  <div className={`h-1.5 flex-1 rounded-full transition-colors ${
+                    passwordStrength.score >= 3 ? "bg-green-500" : "bg-gray-200 dark:bg-gray-700"
+                  }`} />
+                </div>
+                <p className={`text-xs ${
+                  passwordStrength.level === "fraca" ? "text-red-500" :
+                  passwordStrength.level === "média" ? "text-yellow-600 dark:text-yellow-400" :
+                  "text-green-600"
+                }`} data-testid="password-strength-label">
+                  Senha {passwordStrength.level}
+                </p>
+              </div>
+            )}
+            {/* Password policy requirements */}
             {password && !passwordMeetsPolicy && (
               <ul className="mt-1 text-xs space-y-0.5">
                 <li className={password.length >= 8 ? "text-green-600" : "text-[var(--error)]"}>
@@ -595,15 +679,77 @@ export default function SignupPage() {
             )}
           </div>
 
-          <button
-            type="submit"
-            disabled={loading || !isFormValid}
-            className="w-full py-3 bg-[var(--brand-navy)] text-white rounded-button
-                       font-semibold hover:bg-[var(--brand-blue)] transition-colors
-                       disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? "Criando conta..." : "Criar conta"}
-          </button>
+          {/* Confirm Password — SAB-007 AC4 */}
+          <div>
+            <label htmlFor="confirmPassword" className="block text-sm font-medium text-[var(--ink-secondary)] mb-1">
+              Confirmar senha
+            </label>
+            <input
+              id="confirmPassword"
+              type="password"
+              required
+              value={confirmPassword}
+              onChange={(e) => { setConfirmPassword(e.target.value); setFormTouched(true); }}
+              onBlur={() => setConfirmPasswordTouched(true)}
+              className={`w-full px-4 py-3 rounded-input border
+                         bg-[var(--surface-0)] text-[var(--ink)]
+                         focus:border-[var(--brand-blue)] focus:outline-none focus:ring-2
+                         focus:ring-[var(--brand-blue-subtle)]
+                         ${showConfirmPasswordError ? 'border-[var(--error)]' : confirmPasswordMatch ? 'border-green-500' : 'border-[var(--border)]'}`}
+              placeholder="Repita sua senha"
+            />
+            {showConfirmPasswordError && (
+              <p className="mt-1 text-xs text-[var(--error)]" data-testid="confirm-password-error">
+                {confirmPassword === "" ? "Confirme sua senha" : "Senhas não coincidem"}
+              </p>
+            )}
+            {confirmPasswordMatch && (
+              <p className="mt-1 text-xs text-green-600" data-testid="confirm-password-match">
+                &#10003; Senhas coincidem
+              </p>
+            )}
+          </div>
+
+          {/* SAB-007 AC5/AC6/AC7: Submit button with tooltip, transition, spinner */}
+          <div className="relative group">
+            <button
+              type="submit"
+              disabled={loading || !isFormValid}
+              className={`w-full py-3 rounded-button font-semibold
+                         flex items-center justify-center gap-2
+                         transition-all duration-300 ease-in-out
+                         ${isFormValid
+                           ? "bg-[var(--brand-navy)] text-white hover:bg-[var(--brand-blue)] shadow-md hover:shadow-lg"
+                           : "bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed"
+                         }
+                         ${loading ? "opacity-80 cursor-wait" : ""}`}
+            >
+              {loading ? (
+                <>
+                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  Criando conta...
+                </>
+              ) : "Criar conta"}
+            </button>
+            {/* AC5: Tooltip when disabled */}
+            {!isFormValid && !loading && (
+              <div
+                className="absolute -top-10 left-1/2 -translate-x-1/2 px-3 py-1.5
+                           bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900
+                           text-xs rounded-md whitespace-nowrap
+                           opacity-0 group-hover:opacity-100 transition-opacity
+                           pointer-events-none z-10"
+                role="tooltip"
+                data-testid="submit-tooltip"
+              >
+                Preencha todos os campos
+                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900 dark:border-t-gray-100" />
+              </div>
+            )}
+          </div>
           {!isFormValid && formTouched && !loading && (
             <p className="mt-2 text-xs text-center text-[var(--ink-muted)]" data-testid="form-hint">
               Preencha todos os campos corretamente para continuar.

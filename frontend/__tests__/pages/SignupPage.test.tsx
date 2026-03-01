@@ -2,8 +2,7 @@
  * SignupPage Component Tests
  *
  * Tests form submission, validation, success/error states
- * for the simplified 3-field signup form (GTM-FIX-019)
- * Updated: GTM-FIX-037 — removed confirmPassword, added email validation + form hint
+ * Updated: SAB-007 — re-added confirmPassword with inline validation
  */
 
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
@@ -58,12 +57,13 @@ jest.mock('../../app/components/InstitutionalSidebar', () => {
   };
 });
 
-// Helper to fill the simplified 3-field form (no confirmPassword — GTM-FIX-037 AC3)
+// Helper to fill the signup form (SAB-007: includes confirmPassword)
 async function fillForm(
   options: {
     name?: string;
     email?: string;
     password?: string;
+    confirmPassword?: string;
   } = {}
 ) {
   const {
@@ -71,15 +71,18 @@ async function fillForm(
     email = 'john@example.com',
     password = 'Password123',
   } = options;
+  const confirmPw = options.confirmPassword ?? password;
 
   const nameInput = screen.getByLabelText(/Nome completo/i);
   const emailInput = screen.getByPlaceholderText(/seu@email.com/i);
   const passwordInput = screen.getByPlaceholderText(/Min\. 8 caracteres, 1 maiúscula, 1 número/i);
+  const confirmInput = screen.getByLabelText(/Confirmar senha/i);
 
   await act(async () => {
     fireEvent.change(nameInput, { target: { value: name } });
     fireEvent.change(emailInput, { target: { value: email } });
     fireEvent.change(passwordInput, { target: { value: password } });
+    fireEvent.change(confirmInput, { target: { value: confirmPw } });
   });
 }
 
@@ -112,15 +115,14 @@ describe('SignupPage Component', () => {
       expect(screen.getByText(/Veja quais licitações valem a pena para sua empresa/i)).toBeInTheDocument();
     });
 
-    it('should render simplified form fields (name, email, password — no confirm)', () => {
+    it('should render form fields (name, email, password, confirm password)', () => {
       render(<SignupPage />);
 
       expect(screen.getByLabelText(/Nome completo/i)).toBeInTheDocument();
       expect(screen.getByPlaceholderText(/seu@email.com/i)).toBeInTheDocument();
       expect(screen.getByPlaceholderText(/Min\. 8 caracteres, 1 maiúscula, 1 número/i)).toBeInTheDocument();
-      // GTM-FIX-037 AC3: Confirm password removed
-      expect(screen.queryByPlaceholderText(/Digite a senha novamente/i)).not.toBeInTheDocument();
-      expect(screen.queryByLabelText(/Confirmar senha/i)).not.toBeInTheDocument();
+      // SAB-007 AC4: Confirm password field
+      expect(screen.getByLabelText(/Confirmar senha/i)).toBeInTheDocument();
     });
 
     it('should NOT render removed fields (company, sector, phone, consent)', () => {
@@ -236,7 +238,7 @@ describe('SignupPage Component', () => {
       });
 
       expect(screen.getByTestId('email-error')).toBeInTheDocument();
-      expect(screen.getByText(/Digite um email válido/i)).toBeInTheDocument();
+      expect(screen.getByText(/Email inválido/i)).toBeInTheDocument();
     });
 
     it('should NOT show email error with valid email after blur', async () => {

@@ -193,7 +193,7 @@ export function useSearchFilters(clearResult: () => void): SearchFiltersState {
   const [valorValid, setValorValid] = useState(true);
 
   // P1 Filters
-  const [esferas, setEsferas] = useState<Esfera[]>([]);
+  const [esferas, setEsferas] = useState<Esfera[]>(["F", "E", "M"]);
   const [municipios, setMunicipios] = useState<Municipio[]>([]);
   const [ordenacao, setOrdenacao] = useState<OrdenacaoOption>("data_desc");
 

@@ -222,6 +222,8 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
   // GTM-ARCH-001: Async search mode (202 Accepted — results via SSE)
   const [asyncSearchActive, setAsyncSearchActive] = useState(false);
   const asyncSearchIdRef = useRef<string | null>(null);
+  // SAB-001 AC4: Ref mirror of asyncSearchActive — prevents stale closure in buscar() finally block
+  const asyncSearchActiveRef = useRef(false);
 
   // UX-350 AC1-AC4: LLM summary timeout — show fallback after 30s if AI summary not ready
   const llmTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -236,6 +238,33 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
 
   // STAB-009 AC7: SSE reconnection tracking
   const sseReconnectAttemptsRef = useRef(0);
+
+  // SAB-001 AC6: Safety timeout — forces loading=false when result is set but loading stuck
+  const resultSafetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // SAB-001 AC4: Keep ref in sync with state for closure-safe reads
+  useEffect(() => {
+    asyncSearchActiveRef.current = asyncSearchActive;
+  }, [asyncSearchActive]);
+
+  // SAB-001 AC6: Safety timeout — if result is set but loading is still true after 5s,
+  // force transition to results. Prevents permanent loading state from any state machine bug.
+  useEffect(() => {
+    if (loading && result && result.licitacoes && result.licitacoes.length > 0) {
+      // Result is set but loading is still true — start safety timer
+      console.warn('[SAB-001] Result set but loading=true — safety timer started (5s)');
+      resultSafetyTimerRef.current = setTimeout(() => {
+        console.error('[SAB-001] Safety timeout triggered — forcing loading=false with result already set');
+        setLoading(false);
+      }, 5000);
+      return () => {
+        if (resultSafetyTimerRef.current) {
+          clearTimeout(resultSafetyTimerRef.current);
+          resultSafetyTimerRef.current = null;
+        }
+      };
+    }
+  }, [loading, result]);
 
   // STAB-006 AC4: Clean up expired partials on mount
   useEffect(() => {
@@ -285,6 +314,7 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
           console.warn('[ARCH-001] Error fetching async search results:', e);
         } finally {
           setAsyncSearchActive(false);
+          asyncSearchActiveRef.current = false;
           asyncSearchIdRef.current = null;
           setLoading(false);
           setSearchId(null);
@@ -326,9 +356,10 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
         const totalUfs = event.detail.uf_total ?? filters.ufsSelecionadas.size;
         savePartialSearch(sid, result, ufsCompleted, totalUfs);
       }
-    } else if (event.stage === 'error' && asyncSearchActive) {
+    } else if (event.stage === 'error' && asyncSearchActiveRef.current) {
       // GTM-ARCH-001: Worker error during async search
       setAsyncSearchActive(false);
+      asyncSearchActiveRef.current = false;
       asyncSearchIdRef.current = null;
       setLoading(false);
       setError({
@@ -427,6 +458,7 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
     setUseRealProgress(false);
     // GTM-ARCH-001: Clean up async state on cancel
     setAsyncSearchActive(false);
+    asyncSearchActiveRef.current = false;
     asyncSearchIdRef.current = null;
   };
 
@@ -489,7 +521,9 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
     setLiveFetchInProgress(false);
     liveFetchSearchIdRef.current = null;
     // GTM-ARCH-001: Clear async state from previous search
+    // SAB-001 AC4: Also update ref to prevent stale closure in finally block
     setAsyncSearchActive(false);
+    asyncSearchActiveRef.current = false;
     asyncSearchIdRef.current = null;
     // CRIT-027 AC1 + CRIT-030 AC1: Set loading AFTER clearing result
     setLoading(true);
@@ -604,6 +638,7 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
           const queued = await response.json();
           // Search is queued — results will arrive via SSE search_complete event
           setAsyncSearchActive(true);
+          asyncSearchActiveRef.current = true;
           asyncSearchIdRef.current = queued.search_id || newSearchId;
           // Keep loading=true, SSE will drive completion
           data = null;
@@ -679,11 +714,15 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
       }
 
       // GTM-ARCH-001: null data is expected for 202 async mode — results come via SSE
-      if (!data && asyncSearchActive) {
+      // SAB-001 AC4: Use ref (not stale closure state) for async check
+      if (!data && asyncSearchActiveRef.current) {
         // Async mode — skip result processing, SSE will handle it
         return;
       }
       if (!data) throw new Error("Nao foi possivel obter os resultados. Tente novamente.");
+
+      // SAB-001 AC2: Diagnostic log — POST returned with data
+      console.info(`[SAB-001] POST /buscar returned: ${data.licitacoes?.length ?? 0} results, total_raw=${data.total_raw}, total_filtrado=${data.total_filtrado}`);
 
       setResult(data);
       setRawCount(data.total_raw || 0);
@@ -852,9 +891,17 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
         finalizingTimerRef.current = null;
       }
       setIsFinalizing(false);
+      // SAB-001 AC4: Use REF (not stale closure state) to check async mode.
+      // The state variable `asyncSearchActive` captures the value from the render
+      // that created buscar(), which may be stale. The ref always has current value.
+      const isAsync = asyncSearchActiveRef.current;
+      // SAB-001 AC2: Diagnostic log — finally block transition
+      console.info(`[SAB-001] finally: isAsync=${isAsync}, asyncIdRef=${asyncSearchIdRef.current}, data=${!!data}`);
       // GTM-ARCH-001: Keep loading active for async mode (SSE will complete it)
-      if (!asyncSearchActive && !asyncSearchIdRef.current) {
+      if (!isAsync && !asyncSearchIdRef.current) {
         setLoading(false);
+      } else {
+        console.info(`[SAB-001] Keeping loading=true for async mode (isAsync=${isAsync})`);
       }
       setLoadingStep(1);
       setStatesProcessed(0);
@@ -862,7 +909,7 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
       // F-01: Don't kill searchId when background jobs are still processing
       // GTM-ARCH-001: Don't kill searchId when async search is active
       const hasJobsRunning = data?.llm_status === 'processing' || data?.excel_status === 'processing';
-      if (!liveFetchInProgress && !liveFetchSearchIdRef.current && !hasJobsRunning && !asyncSearchActive) {
+      if (!liveFetchInProgress && !liveFetchSearchIdRef.current && !hasJobsRunning && !isAsync) {
         setSearchId(null);
       }
       setUseRealProgress(false);

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import BlogInlineCTA from '../components/BlogInlineCTA';
 
 /**
  * STORY-263 CONS-14: Aumentar Taxa de Sucesso dos Clientes em 20%
@@ -194,6 +195,8 @@ export default function AumentarTaxaSucessoClientes20Porcento() {
         da Etapa 1, o impacto acumulado é de +8% a +13% -- já próximo da
         meta de 20%.
       </p>
+
+      <BlogInlineCTA slug="aumentar-taxa-sucesso-clientes-20-porcento" campaign="consultorias" />
 
       <h2>Etapa 3: otimização da proposta comercial</h2>
 
@@ -419,14 +422,14 @@ export default function AumentarTaxaSucessoClientes20Porcento() {
           Automatize as etapas que geram maior impacto na taxa de adjudicação.
         </p>
         <Link
-          href="/signup?source=blog&article=aumentar-taxa-sucesso-clientes-20-porcento&utm_source=blog&utm_medium=article&utm_campaign=consultorias"
+          href="/signup?source=blog&article=aumentar-taxa-sucesso-clientes-20-porcento&utm_source=blog&utm_medium=cta&utm_content=aumentar-taxa-sucesso-clientes-20-porcento&utm_campaign=consultorias"
           className="inline-block bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-button text-sm sm:text-base transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
-          Comece Grátis
+          Teste Grátis por 14 Dias
         </Link>
         <p className="text-xs text-ink-secondary mt-3">
-          Veja todas as funcionalidades na{' '}
-          <Link href="/features" className="underline hover:text-ink">página de recursos</Link>.
+          Sem cartão de crédito.{' '}
+          <Link href="/features" className="underline hover:text-ink">Veja todas as funcionalidades</Link>.
         </p>
       </div>
 
@@ -482,6 +485,8 @@ export default function AumentarTaxaSucessoClientes20Porcento() {
         impacto é proporcionalmente maior. A chave é apresentar a
         projeção com os dados reais do cliente, não com médias genéricas.
       </p>
+      {/* TODO: Link para página programática de setor — MKT-003 */}
+      {/* TODO: Link para página programática de cidade — MKT-005 */}
     </>
   );
 }

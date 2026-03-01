@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import BlogInlineCTA from '../components/BlogInlineCTA';
 
 /**
  * STORY-262 B2G-01: Como Aumentar sua Taxa de Vitoria em Licitacoes
@@ -209,6 +210,10 @@ export default function ComoAumentarTaxaVitoriaLicitacoes() {
         <Link href="/blog/vale-a-pena-disputar-pregao" className="text-brand-navy dark:text-brand-blue hover:underline">
           como saber se vale a pena disputar um pregão antes de investir horas na análise
         </Link>.
+        {' '}Empresas que contam com apoio especializado também podem aprender{' '}
+        <Link href="/blog/aumentar-taxa-sucesso-clientes-20-porcento" className="text-brand-navy dark:text-brand-blue hover:underline">
+          como consultorias ajudam clientes a aumentar a taxa de sucesso em até 20%
+        </Link>.
       </p>
 
       {/* Section 4 */}
@@ -412,6 +417,8 @@ export default function ComoAumentarTaxaVitoriaLicitacoes() {
         descartados na triagem.
       </p>
 
+      <BlogInlineCTA slug="como-aumentar-taxa-vitoria-licitacoes" campaign="b2g" />
+
       <h3>Etapa 3: Implemente a triagem antes da análise</h3>
 
       <p>
@@ -499,13 +506,13 @@ export default function ComoAumentarTaxaVitoriaLicitacoes() {
           recebe apenas os editais que merecem atenção.
         </p>
         <Link
-          href="/signup?source=blog&article=como-aumentar-taxa-vitoria-licitacoes&utm_source=blog&utm_medium=article&utm_campaign=b2g"
+          href="/signup?source=blog&article=como-aumentar-taxa-vitoria-licitacoes&utm_source=blog&utm_medium=cta&utm_content=como-aumentar-taxa-vitoria-licitacoes&utm_campaign=b2g"
           className="inline-block bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-button text-sm sm:text-base transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
-          Comece Grátis
+          Teste Grátis por 14 Dias
         </Link>
         <p className="text-xs text-ink-secondary mt-3">
-          Veja todas as funcionalidades na{' '}
+          Sem cartão de crédito. Veja todas as funcionalidades na{' '}
           <Link href="/features" className="underline hover:text-ink">
             página de recursos
           </Link>.
@@ -564,6 +571,8 @@ export default function ComoAumentarTaxaVitoriaLicitacoes() {
         a equipe concentre esforço nas oportunidades com melhor encaixe para o
         perfil da empresa, elevando a taxa de adjudicação de forma consistente.
       </p>
+      {/* TODO: Link para página programática de setor — MKT-003 */}
+      {/* TODO: Link para página programática de cidade — MKT-005 */}
     </>
   );
 }

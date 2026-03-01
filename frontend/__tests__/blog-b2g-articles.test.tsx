@@ -314,7 +314,7 @@ describe('STORY-262 AC18: CTA section', () => {
           a.getAttribute('href')?.includes('utm_source=blog'),
       );
       expect(ctaLink).toBeDefined();
-      expect(ctaLink?.getAttribute('href')).toContain('utm_medium=article');
+      expect(ctaLink?.getAttribute('href')).toContain('utm_medium=cta');
       expect(ctaLink?.getAttribute('href')).toContain('utm_campaign=b2g');
     },
   );

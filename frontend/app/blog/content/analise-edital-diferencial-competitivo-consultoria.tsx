@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import BlogInlineCTA from '../components/BlogInlineCTA';
 
 /**
  * STORY-263 CONS-02: Análise de Edital como Diferencial Competitivo da Consultoria
@@ -180,7 +181,12 @@ export default function AnaliseEditalDiferencialCompetitivoConsultoria() {
         do cliente (setores, capacidade, histórico, geografia), critérios
         objetivos de viabilidade (modalidade, prazo, valor, concorrência) e
         julgamento estratégico (quais licitações priorizar dado os recursos
-        limitados do cliente).
+        limitados do cliente). Parte fundamental dessa curadoria é saber
+        identificar as{' '}
+        <Link href="/blog/clausulas-escondidas-editais-licitacao" className="text-brand-navy dark:text-brand-blue hover:underline">
+          cláusulas escondidas em editais que eliminam fornecedores experientes
+        </Link>{' '}
+        antes de recomendar a participação.
       </p>
 
       <p>
@@ -236,6 +242,8 @@ export default function AnaliseEditalDiferencialCompetitivoConsultoria() {
         reformulação completa da operação -- exige a adição de camadas
         de valor sobre a base existente.
       </p>
+
+      <BlogInlineCTA slug="analise-edital-diferencial-competitivo-consultoria" campaign="consultorias" />
 
       <h3>O que muda em cada transição</h3>
 
@@ -474,12 +482,13 @@ export default function AnaliseEditalDiferencialCompetitivoConsultoria() {
           cliente não encontra em nenhum outro lugar.
         </p>
         <Link
-          href="/signup?source=blog&article=analise-edital-diferencial-competitivo-consultoria&utm_source=blog&utm_medium=article&utm_campaign=consultorias"
+          href="/signup?source=blog&article=analise-edital-diferencial-competitivo-consultoria&utm_source=blog&utm_medium=cta&utm_content=analise-edital-diferencial-competitivo-consultoria&utm_campaign=consultorias"
           className="inline-block bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-button text-sm sm:text-base transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
-          Comece Grátis
+          Teste Grátis por 14 Dias
         </Link>
         <p className="text-xs text-ink-secondary mt-3">
+          Sem cartão de crédito.{' '}
           Veja todas as funcionalidades na{' '}
           <Link href="/features" className="underline hover:text-ink">página de recursos</Link>.
         </p>
@@ -550,6 +559,9 @@ export default function AnaliseEditalDiferencialCompetitivoConsultoria() {
         adicional das fases 2 e 3 tipicamente cobre o investimento em
         ferramentas da fase 1 em 45 a 60 dias.
       </p>
+
+      {/* TODO: Link para página programática de setor — MKT-003 */}
+      {/* TODO: Link para página programática de cidade — MKT-005 */}
     </>
   );
 }

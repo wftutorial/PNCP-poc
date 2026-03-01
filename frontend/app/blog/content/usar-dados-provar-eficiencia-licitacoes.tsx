@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import BlogInlineCTA from '../components/BlogInlineCTA';
 
 /**
  * STORY-263 CONS-05: Como Usar Dados Para Provar Sua Eficiência ao Cliente
@@ -132,6 +133,8 @@ export default function UsarDadosProvarEficienciaLicitacoes() {
         dados é proteger o seu próprio contrato.
       </p>
 
+      <BlogInlineCTA slug="usar-dados-provar-eficiencia-licitacoes" campaign="consultorias" />
+
       <h2>Os 8 KPIs essenciais para consultoria de licitação</h2>
 
       <p>
@@ -159,6 +162,10 @@ export default function UsarDadosProvarEficienciaLicitacoes() {
         o artigo sobre{' '}
         <Link href="/blog/aumentar-taxa-sucesso-clientes-20-porcento" className="text-brand-navy dark:text-brand-blue hover:underline">
           como aumentar a taxa de sucesso dos clientes em 20%
+        </Link>{' '}
+        e entenda por que{' '}
+        <Link href="/blog/empresas-vencem-30-porcento-pregoes" className="text-brand-navy dark:text-brand-blue hover:underline">
+          empresas que vencem 30% dos pregões fazem isso diferente
         </Link>.
       </p>
 
@@ -333,12 +340,13 @@ export default function UsarDadosProvarEficienciaLicitacoes() {
           Analytics integrados, histórico de buscas e relatórios Excel estilizados que você pode personalizar e enviar ao cliente. Dados concretos, não justificativas.
         </p>
         <Link
-          href="/signup?source=blog&article=usar-dados-provar-eficiencia-licitacoes&utm_source=blog&utm_medium=article&utm_campaign=consultorias"
+          href="/signup?source=blog&article=usar-dados-provar-eficiencia-licitacoes&utm_source=blog&utm_medium=cta&utm_content=usar-dados-provar-eficiencia-licitacoes&utm_campaign=consultorias"
           className="inline-block bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-button text-sm sm:text-base transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
-          Comece Grátis
+          Teste Grátis por 14 Dias
         </Link>
         <p className="text-xs text-ink-secondary mt-3">
+          Sem cartão de crédito.{' '}
           Veja todas as funcionalidades na{' '}
           <Link href="/features" className="underline hover:text-ink">página de recursos</Link>.
         </p>
@@ -389,6 +397,9 @@ export default function UsarDadosProvarEficienciaLicitacoes() {
         economiza entre R$ 800 e R$ 2.500 em custos de proposta. É valor gerado pela
         curadoria, não pelo volume.
       </p>
+
+      {/* TODO: Link para página programática de setor — MKT-003 */}
+      {/* TODO: Link para página programática de cidade — MKT-005 */}
     </>
   );
 }

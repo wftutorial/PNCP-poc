@@ -288,11 +288,11 @@ describe('BlogArticleLayout', () => {
 
     const scripts = container.querySelectorAll('script[type="application/ld+json"]');
     const schemas = Array.from(scripts).map((s) => JSON.parse(s.textContent || '{}'));
-    const blogPosting = schemas.find((s) => s['@type'] === 'BlogPosting');
+    const blogPosting = schemas.find((s) => s['@type'] === 'Article');
 
     expect(blogPosting).toBeDefined();
     expect(blogPosting.headline).toBe('Test Article Title');
-    expect(blogPosting.author.name).toBe('SmartLic');
+    expect(blogPosting.author.name).toBe('Equipe SmartLic');
     expect(blogPosting.wordCount).toBe(1000);
     expect(blogPosting.articleSection).toBe('Empresas B2G');
     expect(blogPosting.inLanguage).toBe('pt-BR');
@@ -373,7 +373,7 @@ describe('BlogArticleLayout', () => {
       </BlogArticleLayout>,
     );
 
-    expect(screen.getByText('Equipe SmartLic')).toBeInTheDocument();
+    expect(screen.getByText(/Equipe SmartLic/)).toBeInTheDocument();
   });
 
   it('renders article tags', () => {

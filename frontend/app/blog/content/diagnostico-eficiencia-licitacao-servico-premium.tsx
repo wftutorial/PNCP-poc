@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import BlogInlineCTA from '../components/BlogInlineCTA';
 
 /**
  * STORY-263 CONS-13: Diagnóstico de Eficiência em Licitação como Serviço Premium
@@ -254,6 +255,8 @@ export default function DiagnosticoEficienciaLicitacaoServicoPremium() {
           transformar a triagem de editais em vantagem estratégica
         </Link>.
       </p>
+
+      <BlogInlineCTA slug="diagnostico-eficiencia-licitacao-servico-premium" campaign="consultorias" />
 
       <h2>Dimensão 3: taxa de participação e adjudicação</h2>
 
@@ -587,7 +590,12 @@ export default function DiagnosticoEficienciaLicitacaoServicoPremium() {
         para 75% em um diagnóstico de R$ 5.000. Ou, alternativamente, a
         consultoria pode oferecer o diagnóstico por R$ 3.500 mantendo a
         mesma margem absoluta -- tornando o produto de entrada mais
-        acessível e ampliando o topo do funil.
+        acessível e ampliando o topo do funil. Para entender como as
+        empresas B2G que utilizam triagem estruturada se saem melhor no
+        mercado, leia sobre{' '}
+        <Link href="/blog/como-aumentar-taxa-vitoria-licitacoes" className="text-brand-navy dark:text-brand-blue hover:underline">
+          como aumentar a taxa de vitória em licitações
+        </Link>.
       </p>
 
       {/* CTA Section — BEFORE FAQ */}
@@ -601,14 +609,14 @@ export default function DiagnosticoEficienciaLicitacaoServicoPremium() {
           coleta do diagnóstico em até 70%.
         </p>
         <Link
-          href="/signup?source=blog&article=diagnostico-eficiencia-licitacao-servico-premium&utm_source=blog&utm_medium=article&utm_campaign=consultorias"
+          href="/signup?source=blog&article=diagnostico-eficiencia-licitacao-servico-premium&utm_source=blog&utm_medium=cta&utm_content=diagnostico-eficiencia-licitacao-servico-premium&utm_campaign=consultorias"
           className="inline-block bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-button text-sm sm:text-base transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
-          Comece Grátis
+          Teste Grátis por 14 Dias
         </Link>
         <p className="text-xs text-ink-secondary mt-3">
-          Veja todas as funcionalidades na{' '}
-          <Link href="/features" className="underline hover:text-ink">página de recursos</Link>.
+          Sem cartão de crédito.{' '}
+          <Link href="/features" className="underline hover:text-ink">Veja todas as funcionalidades</Link>.
         </p>
       </div>
 
@@ -681,6 +689,8 @@ export default function DiagnosticoEficienciaLicitacaoServicoPremium() {
         incluir análise por unidade de negócio e benchmarking setorial
         (R$ 6.000 a R$ 8.000).
       </p>
+      {/* TODO: Link para página programática de setor — MKT-003 */}
+      {/* TODO: Link para página programática de cidade — MKT-005 */}
     </>
   );
 }

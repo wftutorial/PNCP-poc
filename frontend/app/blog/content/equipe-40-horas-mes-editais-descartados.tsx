@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import BlogInlineCTA from '../components/BlogInlineCTA';
 
 /**
  * STORY-262 B2G-15: Equipe 40 Horas/Mes em Editais Descartados
@@ -180,6 +181,8 @@ export default function Equipe40HorasMesEditaisDescartados() {
         quantifica o impacto financeiro desse comportamento.
       </p>
 
+      <BlogInlineCTA slug="equipe-40-horas-mes-editais-descartados" campaign="b2g" />
+
       <h2>Causa 4: Fontes desorganizadas</h2>
 
       <p>
@@ -326,7 +329,12 @@ export default function Equipe40HorasMesEditaisDescartados() {
         <Link href="/blog/como-aumentar-taxa-vitoria-licitacoes">
           como aumentar a taxa de vitoria em licitacoes
         </Link>{' '}
-        detalha as praticas que maximizam esse retorno.
+        detalha as praticas que maximizam esse retorno. Para quem quer ir
+        alem da triagem e entender a dimensao estrategica do problema, vale
+        ver{' '}
+        <Link href="/blog/reduzir-ruido-aumentar-performance-pregoes">
+          como reduzir ruído e aumentar performance nos pregões
+        </Link>.
       </p>
 
       {/* CTA — BEFORE FAQ */}
@@ -340,11 +348,17 @@ export default function Equipe40HorasMesEditaisDescartados() {
           analisa apenas editais pre-qualificados.
         </p>
         <Link
-          href="/signup?source=blog&article=equipe-40-horas-mes-editais-descartados&utm_source=blog&utm_medium=article&utm_campaign=b2g"
+          href="/signup?source=blog&article=equipe-40-horas-mes-editais-descartados&utm_source=blog&utm_medium=cta&utm_content=equipe-40-horas-mes-editais-descartados&utm_campaign=b2g"
           className="inline-block bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-button text-sm sm:text-base transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
-          Comece Gratis
+          Teste Grátis por 14 Dias
         </Link>
+        <p className="text-xs text-ink-secondary mt-3">
+          Sem cartão de crédito.{' '}
+          <Link href="/planos" className="underline hover:text-ink">
+            Ver planos
+          </Link>
+        </p>
       </div>
 
       <h2>Perguntas Frequentes</h2>
@@ -402,6 +416,8 @@ export default function Equipe40HorasMesEditaisDescartados() {
         desperdicado + mais propostas qualificadas + melhor taxa de conversao)
         se reflete claramente no faturamento.
       </p>
+      {/* TODO: Link para página programática de setor — MKT-003 */}
+      {/* TODO: Link para página programática de cidade — MKT-005 */}
     </>
   );
 }

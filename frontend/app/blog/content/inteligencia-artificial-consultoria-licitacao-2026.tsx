@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import BlogInlineCTA from '../components/BlogInlineCTA';
 
 /**
  * STORY-263 CONS-10: Inteligência Artificial na Consultoria de Licitação em 2026
@@ -251,6 +252,8 @@ export default function InteligenciaArtificialConsultoriaLicitacao2026() {
         </Link>{' '}
         detalha como esse framework se aplica na operação diária.
       </p>
+
+      <BlogInlineCTA slug="inteligencia-artificial-consultoria-licitacao-2026" campaign="consultorias" />
 
       {/* Section 4 */}
       <h2>Aplicação 3: Priorização de oportunidades</h2>
@@ -558,12 +561,13 @@ export default function InteligenciaArtificialConsultoriaLicitacao2026() {
           já qualificadas, prontas para análise estratégica.
         </p>
         <Link
-          href="/signup?source=blog&article=inteligencia-artificial-consultoria-licitacao-2026&utm_source=blog&utm_medium=article&utm_campaign=consultorias"
+          href="/signup?source=blog&article=inteligencia-artificial-consultoria-licitacao-2026&utm_source=blog&utm_medium=cta&utm_content=inteligencia-artificial-consultoria-licitacao-2026&utm_campaign=consultorias"
           className="inline-block bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-button text-sm sm:text-base transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
-          Comece Grátis
+          Teste Grátis por 14 Dias
         </Link>
         <p className="text-xs text-ink-secondary mt-3">
+          Sem cartão de crédito.{' '}
           Veja todas as funcionalidades na{' '}
           <Link href="/features" className="underline hover:text-ink">
             página de recursos
@@ -626,6 +630,9 @@ export default function InteligenciaArtificialConsultoriaLicitacao2026() {
         de classificação (análise semântica além de palavras-chave) para atingir a
         mesma precisão.
       </p>
+
+      {/* TODO: Link para página programática de setor — MKT-003 */}
+      {/* TODO: Link para página programática de cidade — MKT-005 */}
     </>
   );
 }

@@ -309,7 +309,7 @@ describe('STORY-263 AC19: CTA section', () => {
           a.getAttribute('href')?.includes('utm_source=blog'),
       );
       expect(ctaLink).toBeDefined();
-      expect(ctaLink?.getAttribute('href')).toContain('utm_medium=article');
+      expect(ctaLink?.getAttribute('href')).toContain('utm_medium=cta');
       expect(ctaLink?.getAttribute('href')).toContain('utm_campaign=consultorias');
     },
   );

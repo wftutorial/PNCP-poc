@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import BlogInlineCTA from '../components/BlogInlineCTA';
 
 /**
  * STORY-262 B2G-05: Como Reduzir em 50% o Tempo Gasto Analisando Editais Irrelevantes
@@ -190,6 +191,8 @@ export default function ReduzirTempoAnalisandoEditaisIrrelevantes() {
         milissegundos, eliminando a necessidade de leitura humana.
       </p>
 
+      <BlogInlineCTA slug="reduzir-tempo-analisando-editais-irrelevantes" campaign="b2g" />
+
       <h3>Camada 2: filtro de viabilidade (elimina aproximadamente 25%)</h3>
 
       <p>
@@ -226,6 +229,9 @@ export default function ReduzirTempoAnalisandoEditaisIrrelevantes() {
         Para aprofundar essa análise, consulte{' '}
         <Link href="/blog/como-aumentar-taxa-vitoria-licitacoes">
           Como Aumentar sua Taxa de Vitória em Licitações
+        </Link>. No contexto de consultorias, esse ganho de eficiência demonstra{' '}
+        <Link href="/blog/entregar-mais-resultado-clientes-sem-aumentar-equipe" className="text-brand-navy dark:text-brand-blue hover:underline">
+          como consultorias entregam mais resultado sem aumentar equipe
         </Link>.
       </p>
 
@@ -376,11 +382,17 @@ export default function ReduzirTempoAnalisandoEditaisIrrelevantes() {
           merecem análise profunda.
         </p>
         <Link
-          href="/signup?source=blog&article=reduzir-tempo-analisando-editais-irrelevantes&utm_source=blog&utm_medium=article&utm_campaign=b2g"
+          href="/signup?source=blog&article=reduzir-tempo-analisando-editais-irrelevantes&utm_source=blog&utm_medium=cta&utm_content=reduzir-tempo-analisando-editais-irrelevantes&utm_campaign=b2g"
           className="inline-block bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-button text-sm sm:text-base transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
-          Comece Grátis
+          Teste Grátis por 14 Dias
         </Link>
+        <p className="text-xs text-ink-secondary mt-3">
+          Sem cartão de crédito. Veja todas as funcionalidades na{' '}
+          <Link href="/features" className="underline hover:text-ink">
+            página de recursos
+          </Link>.
+        </p>
       </div>
 
       <h2>Perguntas Frequentes</h2>
@@ -430,6 +442,8 @@ export default function ReduzirTempoAnalisandoEditaisIrrelevantes() {
         e 2 com taxa de falso negativo inferior a 3%, eliminando o risco de
         perder oportunidades relevantes.
       </p>
+      {/* TODO: Link para página programática de setor — MKT-003 */}
+      {/* TODO: Link para página programática de cidade — MKT-005 */}
     </>
   );
 }

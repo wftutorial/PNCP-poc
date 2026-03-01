@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import BlogInlineCTA from '../components/BlogInlineCTA';
 
 /**
  * STORY-263 CONS-11: Escalar Consultoria sem Depender de Horas Técnicas
@@ -177,6 +178,8 @@ export default function EscalarConsultoriaSemDependerHorasTecnicas() {
           Entenda como entregar mais resultado aos clientes sem aumentar a equipe
         </Link>.
       </p>
+
+      <BlogInlineCTA slug="escalar-consultoria-sem-depender-horas-tecnicas" campaign="consultorias" />
 
       {/* Section 3 */}
       <h2>Modelo 2: Tecnologia como multiplicador de capacidade</h2>
@@ -408,7 +411,11 @@ export default function EscalarConsultoriaSemDependerHorasTecnicas() {
         depende exclusivamente de contratar mais analistas -- um recurso escasso,
         caro e com curva de aprendizado longa. A tecnologia já existe para
         quebrar essa dependência. O que falta, na maioria das consultorias, é
-        a decisão estratégica de mudar.
+        a decisão estratégica de mudar. Para quem quer entender a estrutura
+        operacional que suporta esse crescimento, vale ler{' '}
+        <Link href="/blog/estruturar-setor-licitacao-5-milhoes" className="text-brand-navy dark:text-brand-blue hover:underline">
+          como estruturar um setor de licitação enxuto para faturar R$ 5 milhões por ano
+        </Link>.
       </p>
 
       {/* CTA Section — BEFORE FAQ */}
@@ -422,15 +429,15 @@ export default function EscalarConsultoriaSemDependerHorasTecnicas() {
           proporcionalmente ampliar a equipe.
         </p>
         <Link
-          href="/signup?source=blog&article=escalar-consultoria-sem-depender-horas-tecnicas&utm_source=blog&utm_medium=article&utm_campaign=consultorias"
+          href="/signup?source=blog&article=escalar-consultoria-sem-depender-horas-tecnicas&utm_source=blog&utm_medium=cta&utm_content=escalar-consultoria-sem-depender-horas-tecnicas&utm_campaign=consultorias"
           className="inline-block bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-button text-sm sm:text-base transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
-          Comece Grátis
+          Teste Grátis por 14 Dias
         </Link>
         <p className="text-xs text-ink-secondary mt-3">
-          Veja todas as funcionalidades na{' '}
+          Sem cartão de crédito.{' '}
           <Link href="/features" className="underline hover:text-ink">
-            página de recursos
+            Veja todas as funcionalidades
           </Link>.
         </p>
       </div>
@@ -491,6 +498,8 @@ export default function EscalarConsultoriaSemDependerHorasTecnicas() {
         proposta, recursos). Essa combinação garante receita recorrente
         previsível enquanto preserva a margem elevada dos projetos consultivos.
       </p>
+      {/* TODO: Link para página programática de setor — MKT-003 */}
+      {/* TODO: Link para página programática de cidade — MKT-005 */}
     </>
   );
 }

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import BlogInlineCTA from '../components/BlogInlineCTA';
 
 /**
  * STORY-262 B2G-11: Como Identificar Orgaos com Maior Risco de Atraso no Pagamento
@@ -205,6 +206,8 @@ export default function OrgaosRiscoAtrasoPagamentoLicitacao() {
         De 30 a 60 dias: atenção. Acima de 60 dias: risco.
       </p>
 
+      <BlogInlineCTA slug="orgaos-risco-atraso-pagamento-licitacao" campaign="b2g" />
+
       <h3>Indicador 3: Histórico de contingenciamento orçamentário</h3>
 
       <p>
@@ -369,6 +372,15 @@ export default function OrgaosRiscoAtrasoPagamentoLicitacao() {
         <Link href="/blog/custo-invisivel-disputar-pregoes-errados">
           empresas lucrativas de empresas que faturam muito e lucram pouco
         </Link>.
+        {' '}Vale também entender como avaliar as{' '}
+        <Link href="/blog/clausulas-escondidas-editais-licitacao">
+          cláusulas escondidas que eliminam fornecedores
+        </Link>{' '}
+        antes mesmo de chegar à fase de preços, e{' '}
+        <Link href="/blog/identificar-clientes-gargalo-operacional-licitacoes">
+          como consultorias identificam clientes com gargalo operacional em licitações
+        </Link>{' '}
+        para priorizar onde atuar.
       </p>
 
       <h2>Fontes de dados complementares</h2>
@@ -405,11 +417,17 @@ export default function OrgaosRiscoAtrasoPagamentoLicitacao() {
           melhor histórico de execução orçamentária.
         </p>
         <Link
-          href="/signup?source=blog&article=orgaos-risco-atraso-pagamento-licitacao&utm_source=blog&utm_medium=article&utm_campaign=b2g"
+          href="/signup?source=blog&article=orgaos-risco-atraso-pagamento-licitacao&utm_source=blog&utm_medium=cta&utm_content=orgaos-risco-atraso-pagamento-licitacao&utm_campaign=b2g"
           className="inline-block bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-button text-sm sm:text-base transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
-          Comece Grátis
+          Teste Grátis por 14 Dias
         </Link>
+        <p className="text-xs text-ink-secondary mt-3">
+          Sem cartão de crédito.{' '}
+          <Link href="/planos" className="underline hover:text-ink">
+            Ver planos
+          </Link>
+        </p>
       </div>
 
       <h2>Perguntas Frequentes</h2>
@@ -457,6 +475,8 @@ export default function OrgaosRiscoAtrasoPagamentoLicitacao() {
         porém, acionar essas cláusulas gera desgaste na relação com o
         órgão e pode prejudicar a empresa em futuras licitações.
       </p>
+      {/* TODO: Link para página programática de setor — MKT-003 */}
+      {/* TODO: Link para página programática de cidade — MKT-005 */}
     </>
   );
 }

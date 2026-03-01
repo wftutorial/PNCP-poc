@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import BlogInlineCTA from '../components/BlogInlineCTA';
 
 /**
  * STORY-263 CONS-01: Aumentar Retenção de Clientes com Inteligência em Editais
@@ -172,6 +173,8 @@ export default function AumentarRetencaoClientesInteligenciaEditais() {
         é entregar algo que a concorrência não entrega -- e esse algo é
         inteligência.
       </p>
+
+      <BlogInlineCTA slug="aumentar-retencao-clientes-inteligencia-editais" campaign="consultorias" />
 
       <h2>O upgrade: de &ldquo;buscar editais&rdquo; para &ldquo;inteligência de oportunidades&rdquo;</h2>
 
@@ -507,12 +510,13 @@ export default function AumentarRetencaoClientesInteligenciaEditais() {
           apenas listas de editais.
         </p>
         <Link
-          href="/signup?source=blog&article=aumentar-retencao-clientes-inteligencia-editais&utm_source=blog&utm_medium=article&utm_campaign=consultorias"
+          href="/signup?source=blog&article=aumentar-retencao-clientes-inteligencia-editais&utm_source=blog&utm_medium=cta&utm_content=aumentar-retencao-clientes-inteligencia-editais&utm_campaign=consultorias"
           className="inline-block bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-button text-sm sm:text-base transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
-          Comece Grátis
+          Teste Grátis por 14 Dias
         </Link>
         <p className="text-xs text-ink-secondary mt-3">
+          Sem cartão de crédito.{' '}
           Veja todas as funcionalidades na{' '}
           <Link href="/features" className="underline hover:text-ink">página de recursos</Link>.
         </p>
@@ -581,6 +585,9 @@ export default function AumentarRetencaoClientesInteligenciaEditais() {
         reportam redução de churn de 35-40% para 12-18% em um ciclo de
         6 meses.
       </p>
+
+      {/* TODO: Link para página programática de setor — MKT-003 */}
+      {/* TODO: Link para página programática de cidade — MKT-005 */}
     </>
   );
 }

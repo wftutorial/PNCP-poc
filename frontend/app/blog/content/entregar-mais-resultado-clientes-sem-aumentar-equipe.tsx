@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import BlogInlineCTA from '../components/BlogInlineCTA';
 
 /**
  * STORY-263 CONS-03: Entregar Mais Resultado aos Clientes Sem Aumentar a Equipe
@@ -156,7 +157,11 @@ export default function EntregarMaisResultadoClientesSemAumentarEquipe() {
           redução de ruído para aumentar performance em pregões
         </Link>,
         a eliminação de editais irrelevantes antes da etapa humana é o
-        maior ganho de produtividade disponível.
+        maior ganho de produtividade disponível. Veja também{' '}
+        <Link href="/blog/reduzir-tempo-analisando-editais-irrelevantes" className="text-brand-navy dark:text-brand-blue hover:underline">
+          como reduzir em 50% o tempo gasto analisando editais irrelevantes
+        </Link>{' '}
+        para uma análise complementar sobre otimização do fluxo de triagem.
       </p>
 
       <h2>O modelo: automação na triagem, humano na análise</h2>
@@ -204,6 +209,8 @@ export default function EntregarMaisResultadoClientesSemAumentarEquipe() {
           </li>
         </ul>
       </div>
+
+      <BlogInlineCTA slug="entregar-mais-resultado-clientes-sem-aumentar-equipe" campaign="consultorias" />
 
       <h2>Quanto tempo se economiza por cliente</h2>
 
@@ -394,12 +401,13 @@ export default function EntregarMaisResultadoClientesSemAumentarEquipe() {
           Sua equipe recebe oportunidades prontas para análise.
         </p>
         <Link
-          href="/signup?source=blog&article=entregar-mais-resultado-clientes-sem-aumentar-equipe&utm_source=blog&utm_medium=article&utm_campaign=consultorias"
+          href="/signup?source=blog&article=entregar-mais-resultado-clientes-sem-aumentar-equipe&utm_source=blog&utm_medium=cta&utm_content=entregar-mais-resultado-clientes-sem-aumentar-equipe&utm_campaign=consultorias"
           className="inline-block bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-button text-sm sm:text-base transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
-          Comece Grátis
+          Teste Grátis por 14 Dias
         </Link>
         <p className="text-xs text-ink-secondary mt-3">
+          Sem cartão de crédito.{' '}
           Veja todas as funcionalidades na{' '}
           <Link href="/features" className="underline hover:text-ink">página de recursos</Link>.
         </p>
@@ -454,6 +462,9 @@ export default function EntregarMaisResultadoClientesSemAumentarEquipe() {
         Mesmo em cenários conservadores (2 a 3 clientes adicionais), o
         retorno sobre o investimento é positivo antes de 60 dias.
       </p>
+
+      {/* TODO: Link para página programática de setor — MKT-003 */}
+      {/* TODO: Link para página programática de cidade — MKT-005 */}
     </>
   );
 }

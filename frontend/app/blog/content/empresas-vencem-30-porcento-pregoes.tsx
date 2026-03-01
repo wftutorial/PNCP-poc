@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import BlogInlineCTA from '../components/BlogInlineCTA';
 
 /**
  * STORY-262 B2G-12: Empresas que Vencem 30% dos Pregoes Fazem Isso Diferente
@@ -170,6 +171,8 @@ export default function EmpresasVencem30PorcentoPregoes() {
           </p>
         </div>
       </div>
+
+      <BlogInlineCTA slug="empresas-vencem-30-porcento-pregoes" campaign="b2g" />
 
       <h2>Prática 2: Especialização setorial — nichos superam generalismo</h2>
 
@@ -421,7 +424,11 @@ export default function EmpresasVencem30PorcentoPregoes() {
         <Link href="/blog/licitacao-volume-ou-inteligencia">
           volume versus inteligência em licitações
         </Link>, que apresenta cenários comparativos para empresas de
-        diferentes portes.
+        diferentes portes. Para consultorias que assessoram clientes B2G,
+        também é relevante entender{' '}
+        <Link href="/blog/aumentar-retencao-clientes-inteligencia-editais">
+          como consultorias retêm clientes usando inteligência em editais
+        </Link>.
       </p>
 
       {/* CTA — BEFORE FAQ */}
@@ -435,11 +442,17 @@ export default function EmpresasVencem30PorcentoPregoes() {
           pregões com maior probabilidade de retorno.
         </p>
         <Link
-          href="/signup?source=blog&article=empresas-vencem-30-porcento-pregoes&utm_source=blog&utm_medium=article&utm_campaign=b2g"
+          href="/signup?source=blog&article=empresas-vencem-30-porcento-pregoes&utm_source=blog&utm_medium=cta&utm_content=empresas-vencem-30-porcento-pregoes&utm_campaign=b2g"
           className="inline-block bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-button text-sm sm:text-base transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
-          Comece Grátis
+          Teste Grátis por 14 Dias
         </Link>
+        <p className="text-xs text-ink-secondary mt-3">
+          Sem cartão de crédito.{' '}
+          <Link href="/planos" className="underline hover:text-ink">
+            Ver planos
+          </Link>
+        </p>
       </div>
 
       <h2>Perguntas Frequentes</h2>
@@ -497,6 +510,8 @@ export default function EmpresasVencem30PorcentoPregoes() {
         triagem estruturada com critérios objetivos de viabilidade antes
         de decidir participar de cada licitação.
       </p>
+      {/* TODO: Link para página programática de setor — MKT-003 */}
+      {/* TODO: Link para página programática de cidade — MKT-005 */}
     </>
   );
 }

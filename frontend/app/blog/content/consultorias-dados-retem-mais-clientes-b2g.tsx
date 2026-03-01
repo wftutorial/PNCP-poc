@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import BlogInlineCTA from '../components/BlogInlineCTA';
 
 /**
  * STORY-263 CONS-15: Consultorias Data-Driven Retêm Mais Clientes B2G
@@ -107,7 +108,11 @@ export default function ConsultoriasDadosRetemMaisClientesB2g() {
         recomendação, mas se o cliente não vê os dados que comprovam
         esse trabalho, a percepção de valor se deteriora. O dado é o
         veículo da percepção -- e a percepção é o que determina a
-        renovação.
+        renovação. Consultorias que dominam essa equação trabalham com
+        as empresas B2G que mais crescem no setor -- saiba o que{' '}
+        <Link href="/blog/empresas-vencem-30-porcento-pregoes" className="text-brand-navy dark:text-brand-blue hover:underline">
+          empresas que vencem 30% dos pregões fazem isso diferente
+        </Link>.
       </p>
 
       <div className="not-prose my-6 sm:my-8 bg-surface-1 border border-[var(--border)] rounded-lg p-4 sm:p-6">
@@ -266,6 +271,8 @@ export default function ConsultoriasDadosRetemMaisClientesB2g() {
         aproximadamente 70 horas/mês. Para uma equipe que custa
         R$ 50/hora, isso representa R$ 3.500/mês em economia direta.
       </p>
+
+      <BlogInlineCTA slug="consultorias-dados-retem-mais-clientes-b2g" campaign="consultorias" />
 
       <h3>Relatório 4: ROI do serviço</h3>
 
@@ -495,14 +502,14 @@ export default function ConsultoriasDadosRetemMaisClientesB2g() {
           em relatórios de valor para seus clientes.
         </p>
         <Link
-          href="/signup?source=blog&article=consultorias-dados-retem-mais-clientes-b2g&utm_source=blog&utm_medium=article&utm_campaign=consultorias"
+          href="/signup?source=blog&article=consultorias-dados-retem-mais-clientes-b2g&utm_source=blog&utm_medium=cta&utm_content=consultorias-dados-retem-mais-clientes-b2g&utm_campaign=consultorias"
           className="inline-block bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-button text-sm sm:text-base transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
-          Comece Grátis
+          Teste Grátis por 14 Dias
         </Link>
         <p className="text-xs text-ink-secondary mt-3">
-          Veja todas as funcionalidades na{' '}
-          <Link href="/features" className="underline hover:text-ink">página de recursos</Link>.
+          Sem cartão de crédito.{' '}
+          <Link href="/features" className="underline hover:text-ink">Veja todas as funcionalidades</Link>.
         </p>
       </div>
 
@@ -570,6 +577,8 @@ export default function ConsultoriasDadosRetemMaisClientesB2g() {
         começar com o que é viável e evoluir a sofisticação conforme
         o porte da operação.
       </p>
+      {/* TODO: Link para página programática de setor — MKT-003 */}
+      {/* TODO: Link para página programática de cidade — MKT-005 */}
     </>
   );
 }

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import BlogInlineCTA from '../components/BlogInlineCTA';
 
 /**
  * STORY-262 B2G-10: Licitacao por Volume ou por Inteligencia
@@ -199,6 +200,8 @@ export default function LicitacaoVolumeOuInteligencia() {
         tornando cada participação um investimento significativo que precisa
         ser direcionado com critério.
       </p>
+
+      <BlogInlineCTA slug="licitacao-volume-ou-inteligencia" campaign="b2g" />
 
       <h3>As limitações reais</h3>
 
@@ -422,7 +425,12 @@ export default function LicitacaoVolumeOuInteligencia() {
         as decisões que realmente importam:{' '}
         <Link href="/blog/reduzir-tempo-analisando-editais-irrelevantes">
           quais dos editais pré-qualificados merecem proposta
-        </Link>.
+        </Link>. Esse mesmo princípio fundamenta{' '}
+        <Link href="/blog/inteligencia-artificial-consultoria-licitacao-2026">
+          o papel da inteligência artificial nas consultorias de licitação em 2026
+        </Link>{' '}
+        — a transição de volume para inteligência é acelerada quando a IA
+        assume as camadas de triagem que antes exigiam horas de trabalho humano.
       </p>
 
       <h2>Indicadores para monitorar a transição</h2>
@@ -476,11 +484,17 @@ export default function LicitacaoVolumeOuInteligencia() {
           recursos sem retorno.
         </p>
         <Link
-          href="/signup?source=blog&article=licitacao-volume-ou-inteligencia&utm_source=blog&utm_medium=article&utm_campaign=b2g"
+          href="/signup?source=blog&article=licitacao-volume-ou-inteligencia&utm_source=blog&utm_medium=cta&utm_content=licitacao-volume-ou-inteligencia&utm_campaign=b2g"
           className="inline-block bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-button text-sm sm:text-base transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
-          Comece Grátis
+          Teste Grátis por 14 Dias
         </Link>
+        <p className="text-xs text-ink-secondary mt-3">
+          Sem cartão de crédito.{' '}
+          <Link href="/planos" className="underline hover:text-ink">
+            Ver planos
+          </Link>
+        </p>
       </div>
 
       <h2>Perguntas Frequentes</h2>
@@ -535,6 +549,9 @@ export default function LicitacaoVolumeOuInteligencia() {
         reinvestir o tempo liberado em análise aprofundada das oportunidades
         remanescentes. O ciclo completo leva de 3 a 6 meses.
       </p>
+
+      {/* TODO: Link para página programática de setor — MKT-003 */}
+      {/* TODO: Link para página programática de cidade — MKT-005 */}
     </>
   );
 }

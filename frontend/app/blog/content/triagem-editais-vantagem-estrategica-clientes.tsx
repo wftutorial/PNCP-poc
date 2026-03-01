@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import BlogInlineCTA from '../components/BlogInlineCTA';
 
 /**
  * STORY-263 CONS-07: Triagem de Editais como Vantagem Estratégica para Clientes
@@ -207,6 +208,8 @@ export default function TriagemEditaisVantagemEstrategicaClientes() {
         em conselho.
       </p>
 
+      <BlogInlineCTA slug="triagem-editais-vantagem-estrategica-clientes" campaign="consultorias" />
+
       {/* Section 4 */}
       <h2>Como apresentar a triagem como entregável premium</h2>
 
@@ -388,12 +391,13 @@ export default function TriagemEditaisVantagemEstrategicaClientes() {
           curadoria e escale sua consultoria sem escalar equipe.
         </p>
         <Link
-          href="/signup?source=blog&article=triagem-editais-vantagem-estrategica-clientes&utm_source=blog&utm_medium=article&utm_campaign=consultorias"
+          href="/signup?source=blog&article=triagem-editais-vantagem-estrategica-clientes&utm_source=blog&utm_medium=cta&utm_content=triagem-editais-vantagem-estrategica-clientes&utm_campaign=consultorias"
           className="inline-block bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-button text-sm sm:text-base transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
-          Comece Grátis
+          Teste Grátis por 14 Dias
         </Link>
         <p className="text-xs text-ink-secondary mt-3">
+          Sem cartão de crédito.{' '}
           Veja todas as funcionalidades na{' '}
           <Link href="/features" className="underline hover:text-ink">
             página de recursos
@@ -460,6 +464,9 @@ export default function TriagemEditaisVantagemEstrategicaClientes() {
         enviadas que resultam em contrato -- constroem evidência quantitativa
         irrefutável de valor.
       </p>
+
+      {/* TODO: Link para página programática de setor — MKT-003 */}
+      {/* TODO: Link para página programática de cidade — MKT-005 */}
     </>
   );
 }

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import BlogInlineCTA from '../components/BlogInlineCTA';
 
 /**
  * STORY-263 CONS-04: Por Que Seus Clientes Perdem Pregões Mesmo com Documentação Impecável
@@ -182,6 +183,8 @@ export default function ClientesPerdemPregoesBoadocumentacao() {
         vitória -- mas a vitória gerou prejuízo.
       </p>
 
+      <BlogInlineCTA slug="clientes-perdem-pregoes-boa-documentacao" campaign="consultorias" />
+
       <h2>O que acontece antes da documentação: a decisão de participar</h2>
 
       <p>
@@ -304,12 +307,13 @@ export default function ClientesPerdemPregoesBoadocumentacao() {
           O SmartLic avalia cada edital em 4 fatores de viabilidade antes que você invista tempo na proposta. Triagem inteligente para consultorias que precisam de resultados, não de volume.
         </p>
         <Link
-          href="/signup?source=blog&article=clientes-perdem-pregoes-boa-documentacao&utm_source=blog&utm_medium=article&utm_campaign=consultorias"
+          href="/signup?source=blog&article=clientes-perdem-pregoes-boa-documentacao&utm_source=blog&utm_medium=cta&utm_content=clientes-perdem-pregoes-boa-documentacao&utm_campaign=consultorias"
           className="inline-block bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-button text-sm sm:text-base transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
-          Comece Grátis
+          Teste Grátis por 14 Dias
         </Link>
         <p className="text-xs text-ink-secondary mt-3">
+          Sem cartão de crédito.{' '}
           Veja todas as funcionalidades na{' '}
           <Link href="/features" className="underline hover:text-ink">página de recursos</Link>.
         </p>
@@ -352,6 +356,9 @@ export default function ClientesPerdemPregoesBoadocumentacao() {
         logística (peso 20%). A combinação ponderada gera um score de 0 a 100 que permite
         classificar editais objetivamente antes de investir recursos na proposta.
       </p>
+
+      {/* TODO: Link para página programática de setor — MKT-003 */}
+      {/* TODO: Link para página programática de cidade — MKT-005 */}
     </>
   );
 }

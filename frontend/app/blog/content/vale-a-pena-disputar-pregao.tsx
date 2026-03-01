@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import BlogInlineCTA from '../components/BlogInlineCTA';
 
 /**
  * STORY-262 B2G-03: Como Saber se Vale a Pena Disputar um Pregao
@@ -247,6 +248,8 @@ export default function ValeAPenaDisputarPregao() {
         comprometer contratos em andamento.
       </p>
 
+      <BlogInlineCTA slug="vale-a-pena-disputar-pregao" campaign="b2g" />
+
       {/* Factor 3 */}
       <h2>Fator 3: Valor estimado -- peso 25%</h2>
 
@@ -414,6 +417,9 @@ export default function ValeAPenaDisputarPregao() {
         do segmento versus focar nas mais viáveis, consulte{' '}
         <Link href="/blog/disputar-todas-licitacoes-matematica-real" className="text-brand-navy dark:text-brand-blue hover:underline">
           a matemática real de disputar todas as licitações do seu segmento
+        </Link>. Consultorias que aplicam esse modelo para seus clientes descobrem{' '}
+        <Link href="/blog/triagem-editais-vantagem-estrategica-clientes" className="text-brand-navy dark:text-brand-blue hover:underline">
+          como transformar triagem de editais em vantagem estratégica
         </Link>.
       </p>
 
@@ -459,13 +465,13 @@ export default function ValeAPenaDisputarPregao() {
           oportunidades com real potencial de retorno.
         </p>
         <Link
-          href="/signup?source=blog&article=vale-a-pena-disputar-pregao&utm_source=blog&utm_medium=article&utm_campaign=b2g"
+          href="/signup?source=blog&article=vale-a-pena-disputar-pregao&utm_source=blog&utm_medium=cta&utm_content=vale-a-pena-disputar-pregao&utm_campaign=b2g"
           className="inline-block bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-button text-sm sm:text-base transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
-          Comece Grátis por 7 Dias
+          Teste Grátis por 14 Dias
         </Link>
         <p className="text-xs text-ink-secondary mt-3">
-          Veja como funciona na{' '}
+          Sem cartão de crédito. Veja como funciona na{' '}
           <Link href="/buscar" className="underline hover:text-ink">
             página de busca
           </Link>{' '}
@@ -533,6 +539,8 @@ export default function ValeAPenaDisputarPregao() {
         do tipo de produto. Empresas com atuação regional concentrada tendem a
         ter margens melhores em editais da sua região de abrangência.
       </p>
+      {/* TODO: Link para página programática de setor — MKT-003 */}
+      {/* TODO: Link para página programática de cidade — MKT-005 */}
     </>
   );
 }

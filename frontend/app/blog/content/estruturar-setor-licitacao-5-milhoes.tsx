@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import BlogInlineCTA from '../components/BlogInlineCTA';
 
 /**
  * STORY-262 B2G-07: Como Estruturar um Setor de Licitação Enxuto para Faturar R$ 5 Milhões por Ano
@@ -240,6 +241,8 @@ export default function EstruturarSetorLicitacao5Milhoes() {
         analista de editais com apoio do especialista em propostas.
       </p>
 
+      <BlogInlineCTA slug="estruturar-setor-licitacao-5-milhoes" campaign="b2g" />
+
       <h3>Etapa 4: Elaboracao da proposta</h3>
 
       <p>
@@ -429,7 +432,12 @@ export default function EstruturarSetorLicitacao5Milhoes() {
         alta taxa de vitoria,{' '}
         <Link href="/blog/empresas-vencem-30-porcento-pregoes">
           leia nossa analise sobre empresas que vencem 30% dos pregoes
-        </Link>.
+        </Link>. Vale tambem conhecer{' '}
+        <Link href="/blog/escalar-consultoria-sem-depender-horas-tecnicas">
+          como consultorias escalam sem depender de horas tecnicas
+        </Link>{' '}
+        — o modelo enxuto descrito aqui tem paralelos diretos com a estrutura
+        que assessorias de licitacao adotam para crescer com eficiencia.
       </p>
 
       <h2>O papel da tecnologia na viabilidade do modelo enxuto</h2>
@@ -461,11 +469,17 @@ export default function EstruturarSetorLicitacao5Milhoes() {
           enxuta foque em elaborar propostas vencedoras.
         </p>
         <Link
-          href="/signup?source=blog&article=estruturar-setor-licitacao-5-milhoes&utm_source=blog&utm_medium=article&utm_campaign=b2g"
+          href="/signup?source=blog&article=estruturar-setor-licitacao-5-milhoes&utm_source=blog&utm_medium=cta&utm_content=estruturar-setor-licitacao-5-milhoes&utm_campaign=b2g"
           className="inline-block bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-button text-sm sm:text-base transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
-          Comece Gratis
+          Teste Grátis por 14 Dias
         </Link>
+        <p className="text-xs text-ink-secondary mt-3">
+          Sem cartão de crédito.{' '}
+          <Link href="/planos" className="underline hover:text-ink">
+            Ver planos
+          </Link>
+        </p>
       </div>
 
       <h2>Perguntas Frequentes</h2>
@@ -509,6 +523,9 @@ export default function EstruturarSetorLicitacao5Milhoes() {
         monitoramento. Esse investimento se paga com um a dois contratos adjudicados por trimestre,
         dependendo do ticket medio do setor de atuacao.
       </p>
+
+      {/* TODO: Link para página programática de setor — MKT-003 */}
+      {/* TODO: Link para página programática de cidade — MKT-005 */}
     </>
   );
 }

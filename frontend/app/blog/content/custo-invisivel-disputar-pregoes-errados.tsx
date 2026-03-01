@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import BlogInlineCTA from '../components/BlogInlineCTA';
 
 /**
  * STORY-262 B2G-08: O Custo Invisivel de Disputar Pregoes Errados
@@ -143,8 +144,15 @@ export default function CustoInvisivelDisputarPregoesErrados() {
         Para entender como evitar esse ciclo,{' '}
         <Link href="/blog/erro-operacional-perder-contratos-publicos">
           leia nossa análise sobre erros operacionais que custam contratos
-        </Link>.
+        </Link>. Uma perspectiva complementar vem de{' '}
+        <Link href="/blog/usar-dados-provar-eficiencia-licitacoes">
+          como usar dados para comprovar eficiência em licitações
+        </Link>{' '}
+        — mensurar o custo do esforço desperdiçado é o primeiro passo para
+        demonstrar o valor de uma triagem mais inteligente.
       </p>
+
+      <BlogInlineCTA slug="custo-invisivel-disputar-pregoes-errados" campaign="b2g" />
 
       <h2>Custo 4: Desgaste da equipe e turnover</h2>
 
@@ -279,11 +287,17 @@ export default function CustoInvisivelDisputarPregoesErrados() {
           com chance real de retorno.
         </p>
         <Link
-          href="/signup?source=blog&article=custo-invisivel-disputar-pregoes-errados&utm_source=blog&utm_medium=article&utm_campaign=b2g"
+          href="/signup?source=blog&article=custo-invisivel-disputar-pregoes-errados&utm_source=blog&utm_medium=cta&utm_content=custo-invisivel-disputar-pregoes-errados&utm_campaign=b2g"
           className="inline-block bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-button text-sm sm:text-base transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
-          Comece Grátis
+          Teste Grátis por 14 Dias
         </Link>
+        <p className="text-xs text-ink-secondary mt-3">
+          Sem cartão de crédito.{' '}
+          <Link href="/planos" className="underline hover:text-ink">
+            Ver planos
+          </Link>
+        </p>
       </div>
 
       <h2>Perguntas Frequentes</h2>
@@ -326,6 +340,9 @@ export default function CustoInvisivelDisputarPregoesErrados() {
         para elaborar propostas mais competitivas para editais com maior alinhamento,
         potencialmente gerando 2 a 4 contratos adicionais.
       </p>
+
+      {/* TODO: Link para página programática de setor — MKT-003 */}
+      {/* TODO: Link para página programática de cidade — MKT-005 */}
     </>
   );
 }

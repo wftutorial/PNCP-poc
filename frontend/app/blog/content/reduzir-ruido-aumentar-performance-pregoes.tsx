@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import BlogInlineCTA from '../components/BlogInlineCTA';
 
 /**
  * STORY-263 CONS-09: Reduzir Ruído e Aumentar Performance em Pregões
@@ -204,6 +205,8 @@ export default function ReduzirRuidoAumentarPerformancePregoes() {
         uma empresa de manutenção predial tem raio operacional limitado.
       </p>
 
+      <BlogInlineCTA slug="reduzir-ruido-aumentar-performance-pregoes" campaign="consultorias" />
+
       <h3>Ruído de valor: o edital é grande ou pequeno demais</h3>
       <p>
         O ruído de valor se manifesta em duas direções. Editais com valor
@@ -408,12 +411,13 @@ export default function ReduzirRuidoAumentarPerformancePregoes() {
           analisa apenas os editais que merecem atenção.
         </p>
         <Link
-          href="/signup?source=blog&article=reduzir-ruido-aumentar-performance-pregoes&utm_source=blog&utm_medium=article&utm_campaign=consultorias"
+          href="/signup?source=blog&article=reduzir-ruido-aumentar-performance-pregoes&utm_source=blog&utm_medium=cta&utm_content=reduzir-ruido-aumentar-performance-pregoes&utm_campaign=consultorias"
           className="inline-block bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-button text-sm sm:text-base transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
-          Comece Grátis
+          Teste Grátis por 14 Dias
         </Link>
         <p className="text-xs text-ink-secondary mt-3">
+          Sem cartão de crédito.{' '}
           Veja todas as funcionalidades na{' '}
           <Link href="/features" className="underline hover:text-ink">
             página de recursos
@@ -478,6 +482,9 @@ export default function ReduzirRuidoAumentarPerformancePregoes() {
         analista com custo total de R$ 10.000/mês, a economia representa
         R$ 3.400 a R$ 5.700 por mês.
       </p>
+
+      {/* TODO: Link para página programática de setor — MKT-003 */}
+      {/* TODO: Link para página programática de cidade — MKT-005 */}
     </>
   );
 }

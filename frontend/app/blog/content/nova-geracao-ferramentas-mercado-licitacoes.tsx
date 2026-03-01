@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import BlogInlineCTA from '../components/BlogInlineCTA';
 
 /**
  * STORY-263 CONS-08: A Nova Geração de Ferramentas para o Mercado de Licitações
@@ -222,6 +223,8 @@ export default function NovaGeracaoFerramentasMercadoLicitacoes() {
         têm maior probabilidade de retorno. A seletividade deixa de ser
         limitação operacional e passa a ser vantagem estratégica.
       </p>
+
+      <BlogInlineCTA slug="nova-geracao-ferramentas-mercado-licitacoes" campaign="consultorias" />
 
       {/* Section 5 */}
       <h2>O que diferencia cada geração</h2>
@@ -454,12 +457,13 @@ export default function NovaGeracaoFerramentasMercadoLicitacoes() {
           automática.
         </p>
         <Link
-          href="/signup?source=blog&article=nova-geracao-ferramentas-mercado-licitacoes&utm_source=blog&utm_medium=article&utm_campaign=consultorias"
+          href="/signup?source=blog&article=nova-geracao-ferramentas-mercado-licitacoes&utm_source=blog&utm_medium=cta&utm_content=nova-geracao-ferramentas-mercado-licitacoes&utm_campaign=consultorias"
           className="inline-block bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-button text-sm sm:text-base transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
-          Comece Grátis
+          Teste Grátis por 14 Dias
         </Link>
         <p className="text-xs text-ink-secondary mt-3">
+          Sem cartão de crédito.{' '}
           Veja todas as funcionalidades na{' '}
           <Link href="/features" className="underline hover:text-ink">
             página de recursos
@@ -533,6 +537,9 @@ export default function NovaGeracaoFerramentasMercadoLicitacoes() {
         dos seus clientes e se permite configuração de palavras-chave e
         exclusões por setor.
       </p>
+
+      {/* TODO: Link para página programática de setor — MKT-003 */}
+      {/* TODO: Link para página programática de cidade — MKT-005 */}
     </>
   );
 }

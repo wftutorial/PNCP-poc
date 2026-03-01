@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import BlogInlineCTA from '../components/BlogInlineCTA';
 
 /**
  * STORY-262 B2G-02: O Erro Operacional que Faz Empresas Perderem Contratos Publicos
@@ -129,6 +130,10 @@ export default function ErroOperacionalPerderContratosPublicos() {
         comportamento, veja{' '}
         <Link href="/blog/custo-invisivel-disputar-pregoes-errados" className="text-brand-navy dark:text-brand-blue hover:underline">
           o custo invisível de disputar pregões errados
+        </Link>. Consultorias especializadas enfrentam desafio semelhante ao
+        explicar a clientes{' '}
+        <Link href="/blog/clientes-perdem-pregoes-boa-documentacao" className="text-brand-navy dark:text-brand-blue hover:underline">
+          por que clientes perdem pregões mesmo com boa documentação
         </Link>.
       </p>
 
@@ -213,6 +218,8 @@ export default function ErroOperacionalPerderContratosPublicos() {
           como reduzir em 50% o tempo gasto analisando editais irrelevantes
         </Link>.
       </p>
+
+      <BlogInlineCTA slug="erro-operacional-perder-contratos-publicos" campaign="b2g" />
 
       {/* Section 4 */}
       <h2>Os 5 sinais de que você está cometendo esse erro</h2>
@@ -318,13 +325,13 @@ export default function ErroOperacionalPerderContratosPublicos() {
           Pare de desperdiçar recursos em editais de baixa probabilidade.
         </p>
         <Link
-          href="/signup?source=blog&article=erro-operacional-perder-contratos-publicos&utm_source=blog&utm_medium=article&utm_campaign=b2g"
+          href="/signup?source=blog&article=erro-operacional-perder-contratos-publicos&utm_source=blog&utm_medium=cta&utm_content=erro-operacional-perder-contratos-publicos&utm_campaign=b2g"
           className="inline-block bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-button text-sm sm:text-base transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
-          Teste o SmartLic Grátis por 7 Dias
+          Teste Grátis por 14 Dias
         </Link>
         <p className="text-xs text-ink-secondary mt-3">
-          Conheça todos os recursos na{' '}
+          Sem cartão de crédito. Conheça todos os recursos na{' '}
           <Link href="/features" className="underline hover:text-ink">
             página de funcionalidades
           </Link>.
@@ -374,6 +381,8 @@ export default function ErroOperacionalPerderContratosPublicos() {
         oportunidades com maior probabilidade de adjudicação, aumentando a taxa
         de vitória sem necessidade de mais contratações.
       </p>
+      {/* TODO: Link para página programática de setor — MKT-003 */}
+      {/* TODO: Link para página programática de cidade — MKT-005 */}
     </>
   );
 }

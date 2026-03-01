@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import BlogInlineCTA from '../components/BlogInlineCTA';
 
 /**
  * STORY-262 B2G-09: Como Escolher Editais com Maior Probabilidade de Vitoria
@@ -143,6 +144,8 @@ export default function EscolherEditaisMaiorProbabilidadeVitoria() {
         da empresa pode não permitir margens viáveis em contratos de menor valor.
       </p>
 
+      <BlogInlineCTA slug="escolher-editais-maior-probabilidade-vitoria" campaign="b2g" />
+
       <h3>Como avaliar</h3>
 
       <p>
@@ -198,7 +201,12 @@ export default function EscolherEditaisMaiorProbabilidadeVitoria() {
         objetos mais complexos — naturalmente reduzem o número de competidores.{' '}
         <Link href="/blog/disputar-todas-licitacoes-matematica-real">
           Entenda por que a matemática de disputar tudo gera prejuízo
-        </Link>.
+        </Link>. Para assessorias que aplicam esse raciocínio em benefício de seus clientes,{' '}
+        <Link href="/blog/triagem-editais-vantagem-estrategica-clientes">
+          como transformar triagem de editais em vantagem estratégica
+        </Link>{' '}
+        mostra como o mesmo framework de viabilidade pode ser convertido em
+        diferencial competitivo no mercado de consultoria.
       </p>
 
       <h2>Indicador 4: Histórico do órgão contratante</h2>
@@ -354,11 +362,17 @@ export default function EscolherEditaisMaiorProbabilidadeVitoria() {
           priorizado — para que sua equipe invista tempo apenas nos editais com maior chance de vitória.
         </p>
         <Link
-          href="/signup?source=blog&article=escolher-editais-maior-probabilidade-vitoria&utm_source=blog&utm_medium=article&utm_campaign=b2g"
+          href="/signup?source=blog&article=escolher-editais-maior-probabilidade-vitoria&utm_source=blog&utm_medium=cta&utm_content=escolher-editais-maior-probabilidade-vitoria&utm_campaign=b2g"
           className="inline-block bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-button text-sm sm:text-base transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
-          Comece Grátis
+          Teste Grátis por 14 Dias
         </Link>
+        <p className="text-xs text-ink-secondary mt-3">
+          Sem cartão de crédito.{' '}
+          <Link href="/planos" className="underline hover:text-ink">
+            Ver planos
+          </Link>
+        </p>
       </div>
 
       <h2>Perguntas Frequentes</h2>
@@ -413,6 +427,9 @@ export default function EscolherEditaisMaiorProbabilidadeVitoria() {
         por meio de redes profissionais ou associações de classe — também fornece
         informações práticas sobre a pontualidade real dos pagamentos.
       </p>
+
+      {/* TODO: Link para página programática de setor — MKT-003 */}
+      {/* TODO: Link para página programática de cidade — MKT-005 */}
     </>
   );
 }

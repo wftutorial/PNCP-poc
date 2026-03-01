@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import BlogInlineCTA from '../components/BlogInlineCTA';
 
 /**
  * STORY-263 CONS-06: Consultorias Modernas Usam Inteligência Para Priorizar Oportunidades
@@ -191,6 +192,8 @@ export default function ConsultoriasModernasInteligenciaPriorizarOportunidades()
         </Link>.
       </p>
 
+      <BlogInlineCTA slug="consultorias-modernas-inteligencia-priorizar-oportunidades" campaign="consultorias" />
+
       <h3>Ferramenta 3: Scoring de viabilidade</h3>
 
       <p>
@@ -349,12 +352,13 @@ export default function ConsultoriasModernasInteligenciaPriorizarOportunidades()
           Busca multi-fonte, classificação setorial por IA, análise de viabilidade em 4 fatores e relatórios prontos para seus clientes. A infraestrutura que consultorias modernas usam para crescer.
         </p>
         <Link
-          href="/signup?source=blog&article=consultorias-modernas-inteligencia-priorizar-oportunidades&utm_source=blog&utm_medium=article&utm_campaign=consultorias"
+          href="/signup?source=blog&article=consultorias-modernas-inteligencia-priorizar-oportunidades&utm_source=blog&utm_medium=cta&utm_content=consultorias-modernas-inteligencia-priorizar-oportunidades&utm_campaign=consultorias"
           className="inline-block bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-button text-sm sm:text-base transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
-          Comece Grátis
+          Teste Grátis por 14 Dias
         </Link>
         <p className="text-xs text-ink-secondary mt-3">
+          Sem cartão de crédito.{' '}
           Veja todas as funcionalidades na{' '}
           <Link href="/features" className="underline hover:text-ink">página de recursos</Link>.
         </p>
@@ -410,6 +414,9 @@ export default function ConsultoriasModernasInteligenciaPriorizarOportunidades()
         integração entre essas camadas é o que gera transformação -- ferramentas isoladas
         resolvem problemas pontuais, mas não mudam o modelo.
       </p>
+
+      {/* TODO: Link para página programática de setor — MKT-003 */}
+      {/* TODO: Link para página programática de cidade — MKT-005 */}
     </>
   );
 }

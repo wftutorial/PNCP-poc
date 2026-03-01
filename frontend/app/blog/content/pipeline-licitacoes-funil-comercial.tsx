@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import BlogInlineCTA from '../components/BlogInlineCTA';
 
 /**
  * STORY-262 B2G-13: Pipeline de Licitacoes como Funil Comercial
@@ -176,6 +177,8 @@ export default function PipelineLicitacoesFunilComercial() {
         que chega a analise sem merecimento consome recursos que poderiam ser
         aplicados em oportunidades melhores.
       </p>
+
+      <BlogInlineCTA slug="pipeline-licitacoes-funil-comercial" campaign="b2g" />
 
       <h3>Etapa 4: Proposta</h3>
 
@@ -405,6 +408,11 @@ export default function PipelineLicitacoesFunilComercial() {
         <Link href="/blog/empresas-vencem-30-porcento-pregoes">
           empresas que vencem 30% dos pregoes
         </Link>.
+        {' '}Consultorias que oferecem gestao de pipeline como servico para
+        clientes B2G podem se inspirar em como funciona o{' '}
+        <Link href="/blog/diagnostico-eficiencia-licitacao-servico-premium">
+          diagnóstico de eficiência em licitação como serviço premium
+        </Link>.
       </p>
 
       <h2>Erros comuns na gestao de pipeline</h2>
@@ -472,11 +480,17 @@ export default function PipelineLicitacoesFunilComercial() {
           multi-fonte e classificacao por IA.
         </p>
         <Link
-          href="/signup?source=blog&article=pipeline-licitacoes-funil-comercial&utm_source=blog&utm_medium=article&utm_campaign=b2g"
+          href="/signup?source=blog&article=pipeline-licitacoes-funil-comercial&utm_source=blog&utm_medium=cta&utm_content=pipeline-licitacoes-funil-comercial&utm_campaign=b2g"
           className="inline-block bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-button text-sm sm:text-base transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
-          Comece Gratis
+          Teste Grátis por 14 Dias
         </Link>
+        <p className="text-xs text-ink-secondary mt-3">
+          Sem cartão de crédito.{' '}
+          <Link href="/planos" className="underline hover:text-ink">
+            Ver planos
+          </Link>
+        </p>
       </div>
 
       <h2>Perguntas Frequentes</h2>
@@ -529,6 +543,8 @@ export default function PipelineLicitacoesFunilComercial() {
         calibrar os filtros de triagem. Apos 3 meses de operacao, os dados
         historicos permitem otimizacoes mais profundas.
       </p>
+      {/* TODO: Link para página programática de setor — MKT-003 */}
+      {/* TODO: Link para página programática de cidade — MKT-005 */}
     </>
   );
 }

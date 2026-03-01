@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import BlogInlineCTA from '../components/BlogInlineCTA';
 
 /**
  * STORY-262 B2G-14: Ata de Registro de Precos — Como Escolher
@@ -166,6 +167,8 @@ export default function AtaRegistroPrecoComoEscolher() {
         ha garantia de aprovacao, nem de celeridade no processo.
       </p>
 
+      <BlogInlineCTA slug="ata-registro-precos-como-escolher" campaign="b2g" />
+
       <h2>Os 6 criterios para avaliar uma ARP</h2>
 
       <p>
@@ -287,7 +290,12 @@ export default function AtaRegistroPrecoComoEscolher() {
         <Link href="/blog/clausulas-escondidas-editais-licitacao">
           clausulas do edital que impactam essa avaliacao
         </Link>{' '}
-        precisam ser analisadas com atencao.
+        precisam ser analisadas com atencao. Quem acompanha o mercado sabe
+        que{' '}
+        <Link href="/blog/nova-geracao-ferramentas-mercado-licitacoes">
+          novas ferramentas que estão mudando o mercado de licitações
+        </Link>{' '}
+        ja automatizam parte dessa analise de clausulas e vigencia.
       </p>
 
       <h3>Criterio 6: Clausula de reequilibrio</h3>
@@ -408,11 +416,17 @@ export default function AtaRegistroPrecoComoEscolher() {
           participacao e quais devem ser descartadas.
         </p>
         <Link
-          href="/signup?source=blog&article=ata-registro-precos-como-escolher&utm_source=blog&utm_medium=article&utm_campaign=b2g"
+          href="/signup?source=blog&article=ata-registro-precos-como-escolher&utm_source=blog&utm_medium=cta&utm_content=ata-registro-precos-como-escolher&utm_campaign=b2g"
           className="inline-block bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-button text-sm sm:text-base transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
-          Comece Gratis
+          Teste Grátis por 14 Dias
         </Link>
+        <p className="text-xs text-ink-secondary mt-3">
+          Sem cartão de crédito.{' '}
+          <Link href="/planos" className="underline hover:text-ink">
+            Ver planos
+          </Link>
+        </p>
       </div>
 
       <h2>Perguntas Frequentes</h2>
@@ -473,6 +487,8 @@ export default function AtaRegistroPrecoComoEscolher() {
         pagamento. A seletividade na participacao e um indicador de maturidade
         operacional.
       </p>
+      {/* TODO: Link para página programática de setor — MKT-003 */}
+      {/* TODO: Link para página programática de cidade — MKT-005 */}
     </>
   );
 }

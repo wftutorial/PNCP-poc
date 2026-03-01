@@ -158,15 +158,16 @@ export default function BlogArticleLayout({
 }: BlogArticleLayoutProps) {
   const canonicalUrl = `https://smartlic.tech/blog/${article.slug}`;
 
-  // AC2: BlogPosting JSON-LD
+  // AC2 + MKT-001 AC4: Article JSON-LD with author credentialing
   const blogPostingSchema = {
     '@context': 'https://schema.org',
-    '@type': 'BlogPosting',
+    '@type': 'Article',
     headline: article.title,
     description: article.description,
     author: {
       '@type': 'Organization',
-      name: 'SmartLic',
+      name: 'Equipe SmartLic',
+      description: 'Especialistas em Inteligência de Licitações Públicas',
       url: 'https://smartlic.tech',
     },
     publisher: {
@@ -186,6 +187,18 @@ export default function BlogArticleLayout({
     wordCount: article.wordCount,
     articleSection: article.category,
     inLanguage: 'pt-BR',
+  };
+
+  // MKT-001 AC4: Organization schema
+  const organizationSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: 'SmartLic',
+    url: 'https://smartlic.tech',
+    logo: 'https://smartlic.tech/logo.png',
+    description:
+      'Plataforma de inteligência em licitações públicas. Automação de busca, classificação por IA e análise de viabilidade para empresas B2G e consultorias.',
+    sameAs: ['https://www.linkedin.com/company/smartlic'],
   };
 
   // AC3: BreadcrumbList JSON-LD
@@ -226,7 +239,7 @@ export default function BlogArticleLayout({
       <LandingNavbar />
 
       <main className="flex-1">
-        {/* Structured Data */}
+        {/* Structured Data — MKT-001 AC4: Article + FAQPage + BreadcrumbList + Organization */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -237,6 +250,12 @@ export default function BlogArticleLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{
             __html: JSON.stringify(breadcrumbSchema),
+          }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(organizationSchema),
           }}
         />
 
@@ -296,7 +315,7 @@ export default function BlogArticleLayout({
                   <span>{article.readingTime}</span>
                   <span aria-hidden="true">&middot;</span>
                   <span>
-                    Equipe SmartLic
+                    Equipe SmartLic — Especialistas em Inteligência de Licitações Públicas
                   </span>
                 </div>
               </header>

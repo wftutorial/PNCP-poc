@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import BlogInlineCTA from '../components/BlogInlineCTA';
 
 /**
  * STORY-262 B2G-04: 7 Cláusulas Escondidas em Editais que Eliminam Fornecedores Experientes
@@ -99,6 +100,10 @@ export default function ClausulasEscondidasEditaisLicitacao() {
         <Link href="/blog/erro-operacional-perder-contratos-publicos">
           O Erro Operacional que Faz Empresas Perderem Contratos Públicos
         </Link>, a triagem superficial é a principal causa de perdas evitáveis.
+        Para consultorias que orientam clientes nesse processo, a{' '}
+        <Link href="/blog/analise-edital-diferencial-competitivo-consultoria" className="text-brand-navy dark:text-brand-blue hover:underline">
+          análise de edital como diferencial competitivo para consultorias
+        </Link>{' '}é uma abordagem que agrega valor direto ao cliente.
       </p>
 
       <div className="not-prose my-6 sm:my-8 bg-surface-1 border border-[var(--border)] rounded-lg p-4 sm:p-6">
@@ -248,6 +253,8 @@ export default function ClausulasEscondidasEditaisLicitacao() {
         declaração substitutiva, a cláusula contraria o disposto na Lei
         14.133/2021 e pode ser impugnada.
       </p>
+
+      <BlogInlineCTA slug="clausulas-escondidas-editais-licitacao" campaign="b2g" />
 
       <div className="not-prose my-6 sm:my-8 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 sm:p-6">
         <p className="text-sm font-semibold text-ink mb-3">
@@ -474,11 +481,17 @@ export default function ClausulasEscondidasEditaisLicitacao() {
           oportunidades com potencial real de retorno.
         </p>
         <Link
-          href="/signup?source=blog&article=clausulas-escondidas-editais-licitacao&utm_source=blog&utm_medium=article&utm_campaign=b2g"
+          href="/signup?source=blog&article=clausulas-escondidas-editais-licitacao&utm_source=blog&utm_medium=cta&utm_content=clausulas-escondidas-editais-licitacao&utm_campaign=b2g"
           className="inline-block bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-button text-sm sm:text-base transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
-          Comece Grátis
+          Teste Grátis por 14 Dias
         </Link>
+        <p className="text-xs text-ink-secondary mt-3">
+          Sem cartão de crédito. Veja todas as funcionalidades na{' '}
+          <Link href="/features" className="underline hover:text-ink">
+            página de recursos
+          </Link>.
+        </p>
       </div>
 
       <h2>Perguntas Frequentes</h2>
@@ -547,6 +560,8 @@ export default function ClausulasEscondidasEditaisLicitacao() {
         sobre restrições indevidas são procedentes — um incentivo para que
         empresas não aceitem passivamente cláusulas que limitam a competição.
       </p>
+      {/* TODO: Link para página programática de setor — MKT-003 */}
+      {/* TODO: Link para página programática de cidade — MKT-005 */}
     </>
   );
 }

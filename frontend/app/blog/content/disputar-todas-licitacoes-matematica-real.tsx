@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import BlogInlineCTA from '../components/BlogInlineCTA';
 
 /**
  * STORY-262 B2G-06: Vale a Pena Disputar Todas as Licitações do Seu Segmento? A Matemática Real
@@ -204,6 +205,8 @@ export default function DisputarTodasLicitacoesMatematicaReal() {
           contabiliza o custo de participação em todos os 92 pregões perdidos.
         </p>
       </div>
+
+      <BlogInlineCTA slug="disputar-todas-licitacoes-matematica-real" campaign="b2g" />
 
       <h2>Cenário 2: empresa seletiva (30 pregões/ano)</h2>
 
@@ -432,7 +435,11 @@ export default function DisputarTodasLicitacoesMatematicaReal() {
         invisível das disputas equivocadas, leia{' '}
         <Link href="/blog/custo-invisivel-disputar-pregoes-errados">
           O Custo Invisível de Disputar Pregões Errados
-        </Link>.
+        </Link>. Para ver{' '}
+        <Link href="/blog/consultorias-modernas-inteligencia-priorizar-oportunidades">
+          como consultorias modernas priorizam oportunidades com inteligência
+        </Link>, a lógica de seleção apresentada aqui aplica-se igualmente a
+        quem opera no modelo de assessoria.
       </p>
 
       {/* CTA — BEFORE FAQ — STORY-262 AC13 */}
@@ -447,11 +454,17 @@ export default function DisputarTodasLicitacoesMatematicaReal() {
           esperado positivo.
         </p>
         <Link
-          href="/signup?source=blog&article=disputar-todas-licitacoes-matematica-real&utm_source=blog&utm_medium=article&utm_campaign=b2g"
+          href="/signup?source=blog&article=disputar-todas-licitacoes-matematica-real&utm_source=blog&utm_medium=cta&utm_content=disputar-todas-licitacoes-matematica-real&utm_campaign=b2g"
           className="inline-block bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-button text-sm sm:text-base transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
-          Comece Grátis
+          Teste Grátis por 14 Dias
         </Link>
+        <p className="text-xs text-ink-secondary mt-3">
+          Sem cartão de crédito.{' '}
+          <Link href="/planos" className="underline hover:text-ink">
+            Ver planos
+          </Link>
+        </p>
       </div>
 
       <h2>Perguntas Frequentes</h2>
@@ -513,6 +526,9 @@ export default function DisputarTodasLicitacoesMatematicaReal() {
         retorno ao filtrar automaticamente os editais com maior valor
         esperado.
       </p>
+
+      {/* TODO: Link para página programática de setor — MKT-003 */}
+      {/* TODO: Link para página programática de cidade — MKT-005 */}
     </>
   );
 }

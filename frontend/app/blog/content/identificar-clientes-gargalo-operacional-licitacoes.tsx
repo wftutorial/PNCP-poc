@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import BlogInlineCTA from '../components/BlogInlineCTA';
 
 /**
  * STORY-263 CONS-12: Identificar Clientes pelo Gargalo Operacional em Licitações
@@ -223,6 +224,8 @@ export default function IdentificarClientesGargaloOperacionalLicitacoes() {
         serviço como investimento com retorno mensurável.
       </p>
 
+      <BlogInlineCTA slug="identificar-clientes-gargalo-operacional-licitacoes" campaign="consultorias" />
+
       {/* Section 5 */}
       <h2>Sinal 4: Desistência após início de análise</h2>
 
@@ -425,7 +428,11 @@ export default function IdentificarClientesGargaloOperacionalLicitacoes() {
         Em todos os casos, a abordagem segue a mesma estrutura: dado específico
         sobre o prospect, referência de mercado que contextualiza o dado, e
         oferta de diagnóstico gratuito como próximo passo. Sem pressão
-        comercial, sem discurso de vendas. O dado faz o trabalho.{' '}
+        comercial, sem discurso de vendas. O dado faz o trabalho. Para entender
+        como esses gargalos operacionais resultam em perda de contratos, veja{' '}
+        <Link href="/blog/erro-operacional-perder-contratos-publicos" className="text-brand-navy dark:text-brand-blue hover:underline">
+          o erro operacional que faz empresas perderem contratos públicos
+        </Link>.{' '}
         <Link href="/blog/aumentar-retencao-clientes-inteligencia-editais" className="text-brand-navy dark:text-brand-blue hover:underline">
           Saiba como essa mesma abordagem baseada em dados aumenta a retenção
           de clientes já existentes
@@ -443,15 +450,15 @@ export default function IdentificarClientesGargaloOperacionalLicitacoes() {
           Diagnóstico pronto em menos de 1 hora.
         </p>
         <Link
-          href="/signup?source=blog&article=identificar-clientes-gargalo-operacional-licitacoes&utm_source=blog&utm_medium=article&utm_campaign=consultorias"
+          href="/signup?source=blog&article=identificar-clientes-gargalo-operacional-licitacoes&utm_source=blog&utm_medium=cta&utm_content=identificar-clientes-gargalo-operacional-licitacoes&utm_campaign=consultorias"
           className="inline-block bg-brand-navy hover:bg-brand-blue-hover text-white font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-button text-sm sm:text-base transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
-          Comece Grátis
+          Teste Grátis por 14 Dias
         </Link>
         <p className="text-xs text-ink-secondary mt-3">
-          Veja todas as funcionalidades na{' '}
+          Sem cartão de crédito.{' '}
           <Link href="/planos" className="underline hover:text-ink">
-            página de planos
+            Veja os planos
           </Link>.
         </p>
       </div>
@@ -514,6 +521,8 @@ export default function IdentificarClientesGargaloOperacionalLicitacoes() {
         valor antes de pedir compromisso, e filtra naturalmente os prospects com
         dor real daqueles que não têm necessidade imediata.
       </p>
+      {/* TODO: Link para página programática de setor — MKT-003 */}
+      {/* TODO: Link para página programática de cidade — MKT-005 */}
     </>
   );
 }

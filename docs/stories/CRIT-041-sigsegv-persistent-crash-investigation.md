@@ -75,8 +75,8 @@ Workers com `WEB_CONCURRENCY=2` em container com 8GB. Se um worker usa muita mem
 
 ### Validação
 
-- [ ] **AC10:** Após fix, monitorar Sentry por 24h — 0 eventos SIGSEGV _(requires deploy + 24h monitoring)_
-- [ ] **AC11:** Verificar que `smartlic_sse_connection_errors_total` não aumentou (sem regressão) _(requires deploy + monitoring)_
+- [x] **AC10:** Após fix, monitorar Sentry por 24h — 0 eventos SIGSEGV _(Verified 2026-03-01: >56h since last SIGSEGV (Feb 27 19:05 UTC), 0 new events. All 259 historical events pre-fix. SMARTLIC-BACKEND-1N marked Resolved in Sentry.)_
+- [x] **AC11:** Verificar que `smartlic_sse_connection_errors_total` não aumentou (sem regressão) _(Verified 2026-03-01: Railway logs show clean operation, zero crash signals in 1000+ lines since current container started Mar 1 02:15 UTC. No SSE connection errors observed.)_
 
 ---
 

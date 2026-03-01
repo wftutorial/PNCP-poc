@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "../components/AuthProvider";
 import { usePlan } from "../../hooks/usePlan";
 import { PageHeader } from "../../components/PageHeader";
@@ -110,6 +110,16 @@ export default function ContaPage() {
   const [userAlerts, setUserAlerts] = useState<Array<{ id: string; name: string; active: boolean; filters: Record<string, unknown> }>>([]);
   const [userAlertsLoading, setUserAlertsLoading] = useState(false);
 
+  // SAB-010 AC10-AC11: Section refs for anchor navigation
+  const perfilRef = useRef<HTMLDivElement>(null);
+  const segurancaRef = useRef<HTMLDivElement>(null);
+  const senhaRef = useRef<HTMLDivElement>(null);
+  const acessoRef = useRef<HTMLDivElement>(null);
+  const licitanteRef = useRef<HTMLDivElement>(null);
+  const alertasRef = useRef<HTMLDivElement>(null);
+  const lgpdRef = useRef<HTMLDivElement>(null);
+  const [activeSection, setActiveSection] = useState("perfil");
+
   // STORY-260: Profile de Licitante state
   const [profileCtx, setProfileCtx] = useState<ProfileContext | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
@@ -199,12 +209,12 @@ export default function ContaPage() {
         const data = await res.json();
         setAlertEnabled(data.enabled);
         setAlertFrequency(data.frequency);
-        toast.success("Preferencias de alerta atualizadas");
+        toast.success("Preferências de alerta atualizadas");
       } else {
-        toast.error("Erro ao salvar preferencias");
+        toast.error("Erro ao salvar preferências");
       }
     } catch {
-      toast.error("Erro de conexao");
+      toast.error("Erro de conexão");
     } finally {
       setAlertSaving(false);
     }
@@ -215,6 +225,46 @@ export default function ContaPage() {
     fetchAlertPrefs();
     fetchUserAlerts();
   }, [fetchProfileCtx, fetchAlertPrefs, fetchUserAlerts]);
+
+  // SAB-010 AC11: Smooth scroll to section
+  const scrollToSection = useCallback((key: string) => {
+    const refs: Record<string, React.RefObject<HTMLDivElement | null>> = {
+      perfil: perfilRef, seguranca: segurancaRef, senha: senhaRef,
+      acesso: acessoRef, licitante: licitanteRef, alertas: alertasRef, lgpd: lgpdRef,
+    };
+    refs[key]?.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setActiveSection(key);
+  }, []);
+
+  // SAB-010 AC10: Track active section via IntersectionObserver
+  useEffect(() => {
+    const entries: Array<{ key: string; ref: React.RefObject<HTMLDivElement | null> }> = [
+      { key: "perfil", ref: perfilRef }, { key: "seguranca", ref: segurancaRef },
+      { key: "senha", ref: senhaRef }, { key: "acesso", ref: acessoRef },
+      { key: "licitante", ref: licitanteRef }, { key: "alertas", ref: alertasRef },
+      { key: "lgpd", ref: lgpdRef },
+    ];
+    const observers: IntersectionObserver[] = [];
+    entries.forEach(({ key, ref }) => {
+      const el = ref.current;
+      if (!el) return;
+      const observer = new IntersectionObserver(
+        ([entry]) => { if (entry.isIntersecting) setActiveSection(key); },
+        { rootMargin: "-80px 0px -60% 0px", threshold: 0 }
+      );
+      observer.observe(el);
+      observers.push(observer);
+    });
+    return () => observers.forEach((o) => o.disconnect());
+  }, [profileCtx]);
+
+  // SAB-010 AC2: "Preencher agora" — enters edit mode and scrolls to licitante section
+  const handleFillNow = () => {
+    startEdit();
+    setTimeout(() => {
+      licitanteRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
+  };
 
   const startEdit = () => {
     if (!profileCtx) return;
@@ -427,10 +477,40 @@ export default function ContaPage() {
   return (
     <div className="min-h-screen bg-[var(--canvas)]">
       <PageHeader title="Minha Conta" />
+
+      {/* SAB-010 AC10: Sticky anchor navigation */}
+      <nav className="sticky top-0 z-20 bg-[var(--canvas)] border-b border-[var(--border)]" data-testid="section-nav">
+        <div className="max-w-lg mx-auto px-4 flex gap-1 overflow-x-auto py-2 scrollbar-hide" role="tablist">
+          {[
+            { key: "perfil", label: "Perfil" },
+            { key: "seguranca", label: "Segurança" },
+            { key: "senha", label: "Senha" },
+            { key: "acesso", label: "Acesso" },
+            { key: "licitante", label: "Licitante" },
+            { key: "alertas", label: "Alertas" },
+            { key: "lgpd", label: "LGPD" },
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              role="tab"
+              aria-selected={activeSection === tab.key}
+              onClick={() => scrollToSection(tab.key)}
+              className={`px-3 py-1.5 text-sm font-medium rounded-full whitespace-nowrap transition-colors ${
+                activeSection === tab.key
+                  ? "bg-[var(--brand-navy)] text-white"
+                  : "text-[var(--ink-secondary)] hover:bg-[var(--surface-1)]"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </nav>
+
       <div className="max-w-lg mx-auto py-8 px-4">
 
         {/* Profile info */}
-        <div className="p-6 bg-[var(--surface-0)] border border-[var(--border)] rounded-card mb-6">
+        <div ref={perfilRef} className="p-6 bg-[var(--surface-0)] border border-[var(--border)] rounded-card mb-6 scroll-mt-14">
           <h2 className="text-lg font-semibold text-[var(--ink)] mb-4">Dados do perfil</h2>
           <div className="space-y-3">
             <div>
@@ -447,7 +527,7 @@ export default function ContaPage() {
         </div>
 
         {/* STORY-317 AC9: Security section with MFA link */}
-        <div className="p-6 bg-[var(--surface-0)] border border-[var(--border)] rounded-card mb-6">
+        <div ref={segurancaRef} className="p-6 bg-[var(--surface-0)] border border-[var(--border)] rounded-card mb-6 scroll-mt-14">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold text-[var(--ink)]">Segurança</h2>
@@ -465,7 +545,7 @@ export default function ContaPage() {
         </div>
 
         {/* Change password */}
-        <div className="p-6 bg-[var(--surface-0)] border border-[var(--border)] rounded-card mb-6">
+        <div ref={senhaRef} className="p-6 bg-[var(--surface-0)] border border-[var(--border)] rounded-card mb-6 scroll-mt-14">
           <h2 className="text-lg font-semibold text-[var(--ink)] mb-4">Alterar senha</h2>
 
           {error && (
@@ -596,7 +676,7 @@ export default function ContaPage() {
         </div>
 
         {/* Plan Status Section (AC9-AC13) */}
-        <div className="p-6 bg-[var(--surface-0)] border border-[var(--border)] rounded-card mb-6" data-testid="plan-section">
+        <div ref={acessoRef} className="p-6 bg-[var(--surface-0)] border border-[var(--border)] rounded-card mb-6 scroll-mt-14" data-testid="plan-section">
           <h2 className="text-lg font-semibold text-[var(--ink)] mb-4">Seu Acesso ao SmartLic</h2>
 
           {/* GTM-UX-004 AC2: Show "Verificado ha X min" when using cached data */}
@@ -780,7 +860,7 @@ export default function ContaPage() {
         </div>
 
         {/* STORY-260: Perfil de Licitante section */}
-        <div className="p-6 bg-[var(--surface-0)] border border-[var(--border)] rounded-card mb-6" data-testid="profile-licitante-section">
+        <div ref={licitanteRef} className="p-6 bg-[var(--surface-0)] border border-[var(--border)] rounded-card mb-6 scroll-mt-14" data-testid="profile-licitante-section">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-lg font-semibold text-[var(--ink)]">Perfil de Licitante</h2>
@@ -790,13 +870,6 @@ export default function ContaPage() {
                   {completenessCount(profileCtx) === TOTAL_PROFILE_FIELDS && (
                     <span className="ml-2 text-emerald-600 dark:text-emerald-400 font-medium">Completo!</span>
                   )}
-                </p>
-              )}
-              {/* AC15: Impact message — completeness percentage + benefit */}
-              {profileCtx !== null && completenessCount(profileCtx) < TOTAL_PROFILE_FIELDS && (
-                <p className="text-sm text-[var(--ink-muted)] mt-1">
-                  Seu perfil está {Math.floor((completenessCount(profileCtx) / TOTAL_PROFILE_FIELDS) * 100)}% completo.
-                  Campos preenchidos melhoram a precisão da análise de compatibilidade.
                 </p>
               )}
             </div>
@@ -811,6 +884,45 @@ export default function ContaPage() {
             )}
           </div>
 
+          {/* SAB-010 AC3: Color-coded progress bar */}
+          {profileCtx !== null && (() => {
+            const filled = completenessCount(profileCtx);
+            const pct = Math.floor((filled / TOTAL_PROFILE_FIELDS) * 100);
+            const barColor = pct <= 33 ? "bg-red-500" : pct <= 66 ? "bg-yellow-500" : "bg-green-500";
+            return (
+              <div className="mb-4" data-testid="profile-progress-bar">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-[var(--ink-muted)]">{filled}/{TOTAL_PROFILE_FIELDS} campos</span>
+                  <span className={`text-xs font-medium ${pct <= 33 ? "text-red-600 dark:text-red-400" : pct <= 66 ? "text-yellow-600 dark:text-yellow-400" : "text-green-600 dark:text-green-400"}`}>{pct}%</span>
+                </div>
+                <div className="w-full h-2 bg-[var(--surface-1)] rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full transition-all duration-500 ${barColor}`} style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* SAB-010 AC1: Motivational banner + AC2: Fill now button */}
+          {profileCtx !== null && completenessCount(profileCtx) < TOTAL_PROFILE_FIELDS && !profileEdit && (
+            <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg flex items-start gap-3" data-testid="profile-guidance-banner">
+              <svg className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div>
+                <p className="text-sm font-medium text-blue-800 dark:text-blue-300">
+                  Perfil completo melhora a precisão da análise de viabilidade em até 40%
+                </p>
+                <button
+                  onClick={handleFillNow}
+                  className="mt-2 text-sm font-semibold text-blue-700 dark:text-blue-400 hover:underline"
+                  data-testid="fill-now-btn"
+                >
+                  Preencher agora →
+                </button>
+              </div>
+            </div>
+          )}
+
           {profileLoading && (
             <div className="space-y-3 animate-pulse">
               {[1, 2, 3].map((i) => (
@@ -823,11 +935,11 @@ export default function ContaPage() {
             <div className="space-y-3">
               {/* UFs */}
               <div className="flex items-start justify-between">
-                <span className="text-sm text-[var(--ink-muted)] w-36 flex-shrink-0">Estados de atuacao</span>
+                <span className="text-sm text-[var(--ink-muted)] w-36 flex-shrink-0">Estados de atuação</span>
                 <span className="text-sm text-[var(--ink)] text-right">
                   {profileCtx.ufs_atuacao?.length
                     ? profileCtx.ufs_atuacao.join(", ")
-                    : <span className="text-[var(--ink-muted)] italic">Nao informado</span>}
+                    : <span className="text-[var(--ink-muted)] italic">Não informado</span>}
                 </span>
               </div>
               {/* Porte */}
@@ -835,15 +947,15 @@ export default function ContaPage() {
                 <span className="text-sm text-[var(--ink-muted)] w-36 flex-shrink-0">Porte da empresa</span>
                 <span className="text-sm text-[var(--ink)] text-right">
                   {PORTE_OPTIONS.find((o) => o.value === profileCtx.porte_empresa)?.label
-                    ?? (profileCtx.porte_empresa || <span className="text-[var(--ink-muted)] italic">Nao informado</span>)}
+                    ?? (profileCtx.porte_empresa || <span className="text-[var(--ink-muted)] italic">Não informado</span>)}
                 </span>
               </div>
-              {/* Experiencia */}
+              {/* Experiência */}
               <div className="flex items-start justify-between">
-                <span className="text-sm text-[var(--ink-muted)] w-36 flex-shrink-0">Experiencia</span>
+                <span className="text-sm text-[var(--ink-muted)] w-36 flex-shrink-0">Experiência</span>
                 <span className="text-sm text-[var(--ink)] text-right">
                   {EXPERIENCIA_OPTIONS.find((o) => o.value === profileCtx.experiencia_licitacoes)?.label
-                    ?? (profileCtx.experiencia_licitacoes || <span className="text-[var(--ink-muted)] italic">Nao informado</span>)}
+                    ?? (profileCtx.experiencia_licitacoes || <span className="text-[var(--ink-muted)] italic">Não informado</span>)}
                 </span>
               </div>
               {/* Faixa de valor */}
@@ -852,16 +964,16 @@ export default function ContaPage() {
                 <span className="text-sm text-[var(--ink)] text-right">
                   {profileCtx.faixa_valor_min != null && profileCtx.faixa_valor_max != null
                     ? `R$ ${Number(profileCtx.faixa_valor_min).toLocaleString("pt-BR")} – R$ ${Number(profileCtx.faixa_valor_max).toLocaleString("pt-BR")}`
-                    : <span className="text-[var(--ink-muted)] italic">Nao informado</span>}
+                    : <span className="text-[var(--ink-muted)] italic">Não informado</span>}
                 </span>
               </div>
               {/* Capacidade */}
               <div className="flex items-start justify-between">
-                <span className="text-sm text-[var(--ink-muted)] w-36 flex-shrink-0">Funcionarios</span>
+                <span className="text-sm text-[var(--ink-muted)] w-36 flex-shrink-0">Funcionários</span>
                 <span className="text-sm text-[var(--ink)] text-right">
                   {profileCtx.capacidade_funcionarios != null
                     ? profileCtx.capacidade_funcionarios
-                    : <span className="text-[var(--ink-muted)] italic">Nao informado</span>}
+                    : <span className="text-[var(--ink-muted)] italic">Não informado</span>}
                 </span>
               </div>
               {/* Faturamento */}
@@ -870,7 +982,7 @@ export default function ContaPage() {
                 <span className="text-sm text-[var(--ink)] text-right">
                   {profileCtx.faturamento_anual != null
                     ? `R$ ${Number(profileCtx.faturamento_anual).toLocaleString("pt-BR")}`
-                    : <span className="text-[var(--ink-muted)] italic">Nao informado</span>}
+                    : <span className="text-[var(--ink-muted)] italic">Não informado</span>}
                 </span>
               </div>
               {/* Atestados */}
@@ -881,7 +993,7 @@ export default function ContaPage() {
                     ? profileCtx.atestados
                         .map((id) => ATESTADOS_CATALOG.find((a) => a.id === id)?.label ?? id)
                         .join(", ")
-                    : <span className="text-[var(--ink-muted)] italic">Nao informado</span>}
+                    : <span className="text-[var(--ink-muted)] italic">Não informado</span>}
                 </span>
               </div>
             </div>
@@ -891,7 +1003,7 @@ export default function ContaPage() {
             <div className="space-y-5">
               {/* UFs multi-select */}
               <div>
-                <label className="block text-sm font-medium text-[var(--ink-secondary)] mb-2">Estados de atuacao</label>
+                <label className="block text-sm font-medium text-[var(--ink-secondary)] mb-2">Estados de atuação</label>
                 <div className="flex flex-wrap gap-1.5">
                   {ALL_UFS.map((uf) => (
                     <button
@@ -929,9 +1041,9 @@ export default function ContaPage() {
                 </select>
               </div>
 
-              {/* Experiencia select */}
+              {/* Experiência select */}
               <div>
-                <label className="block text-sm font-medium text-[var(--ink-secondary)] mb-1">Experiencia com licitacoes</label>
+                <label className="block text-sm font-medium text-[var(--ink-secondary)] mb-1">Experiência com licitações</label>
                 <select
                   value={editExperiencia}
                   onChange={(e) => setEditExperiencia(e.target.value)}
@@ -947,7 +1059,7 @@ export default function ContaPage() {
               {/* Faixa de valor */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-[var(--ink-secondary)] mb-1">Valor minimo (R$)</label>
+                  <label className="block text-sm font-medium text-[var(--ink-secondary)] mb-1">Valor mínimo (R$)</label>
                   <input
                     type="number"
                     min={0}
@@ -958,7 +1070,7 @@ export default function ContaPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[var(--ink-secondary)] mb-1">Valor maximo (R$)</label>
+                  <label className="block text-sm font-medium text-[var(--ink-secondary)] mb-1">Valor máximo (R$)</label>
                   <input
                     type="number"
                     min={0}
@@ -970,10 +1082,10 @@ export default function ContaPage() {
                 </div>
               </div>
 
-              {/* Funcionarios + Faturamento */}
+              {/* Funcionários + Faturamento */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-[var(--ink-secondary)] mb-1">Funcionarios</label>
+                  <label className="block text-sm font-medium text-[var(--ink-secondary)] mb-1">Funcionários</label>
                   <input
                     type="number"
                     min={0}
@@ -998,7 +1110,7 @@ export default function ContaPage() {
 
               {/* Atestados multi-select */}
               <div>
-                <label className="block text-sm font-medium text-[var(--ink-secondary)] mb-2">Atestados e certificacoes</label>
+                <label className="block text-sm font-medium text-[var(--ink-secondary)] mb-2">Atestados e certificações</label>
                 <div className="space-y-1.5">
                   {ATESTADOS_CATALOG.map((cert) => (
                     <button
@@ -1046,10 +1158,10 @@ export default function ContaPage() {
         </div>
 
         {/* STORY-278: Alert Preferences section */}
-        <div className="p-6 bg-[var(--surface-0)] border border-[var(--border)] rounded-card mb-6" data-testid="alert-preferences-section">
+        <div ref={alertasRef} className="p-6 bg-[var(--surface-0)] border border-[var(--border)] rounded-card mb-6 scroll-mt-14" data-testid="alert-preferences-section">
           <h2 className="text-lg font-semibold text-[var(--ink)] mb-4">Alertas por Email</h2>
           <p className="text-sm text-[var(--ink-secondary)] mb-4">
-            Receba oportunidades de licitacao filtradas para seu perfil diretamente no seu email.
+            Receba oportunidades de licitação filtradas para seu perfil diretamente no seu email.
           </p>
 
           {alertLoading ? (
@@ -1086,10 +1198,10 @@ export default function ContaPage() {
               {alertEnabled && (
                 <>
                   <div>
-                    <label className="block text-sm font-medium text-[var(--ink-secondary)] mb-2">Frequencia</label>
+                    <label className="block text-sm font-medium text-[var(--ink-secondary)] mb-2">Frequência</label>
                     <div className="flex flex-wrap gap-2">
                       {[
-                        { value: "daily", label: "Diario" },
+                        { value: "daily", label: "Diário" },
                         { value: "twice_weekly", label: "2x por semana" },
                         { value: "weekly", label: "Semanal" },
                       ].map((opt) => (
@@ -1141,8 +1253,8 @@ export default function ContaPage() {
                     </div>
                     <p className="text-[11px] text-[var(--ink-muted)] mt-1">
                       {digestMode === "consolidated"
-                        ? "Voce recebera 1 email com todos os alertas reunidos."
-                        : "Voce recebera 1 email separado para cada alerta."}
+                        ? "Você receberá 1 email com todos os alertas reunidos."
+                        : "Você receberá 1 email separado para cada alerta."}
                     </p>
                   </div>
                 </>
@@ -1172,7 +1284,7 @@ export default function ContaPage() {
           ) : userAlerts.length === 0 ? (
             <div className="text-center py-6">
               <p className="text-sm text-[var(--ink-muted)] mb-3">
-                Voce ainda nao tem alertas configurados.
+                Você ainda não tem alertas configurados.
               </p>
               <Link
                 href="/alertas"
@@ -1221,7 +1333,7 @@ export default function ContaPage() {
         </div>
 
         {/* Data & Privacy section (LGPD) */}
-        <div className="p-6 bg-[var(--surface-0)] border border-[var(--border)] rounded-card mb-6">
+        <div ref={lgpdRef} className="p-6 bg-[var(--surface-0)] border border-[var(--border)] rounded-card mb-6 scroll-mt-14">
           <h2 className="text-lg font-semibold text-[var(--ink)] mb-4">Dados e Privacidade</h2>
           <p className="text-sm text-[var(--ink-secondary)] mb-4">
             Conforme a LGPD, você pode exportar seus dados ou excluir sua conta a qualquer momento.

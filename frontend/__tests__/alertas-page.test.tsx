@@ -180,7 +180,7 @@ describe("AlertasPage", () => {
       loading: false,
     };
     render(<AlertasPage />);
-    expect(screen.getByText("Faca login para gerenciar seus alertas.")).toBeInTheDocument();
+    expect(screen.getByText("Faça login para gerenciar seus alertas.")).toBeInTheDocument();
   });
 
   // ---- 3. Empty state ----
@@ -386,7 +386,7 @@ describe("AlertasPage", () => {
       );
     });
 
-    expect(mockToast.success).toHaveBeenCalledWith("Alerta excluido com sucesso");
+    expect(mockToast.success).toHaveBeenCalledWith("Alerta excluído com sucesso");
   });
 
   // ---- 12. Delete cancel — clicking "Nao" hides confirmation ----

@@ -294,7 +294,7 @@ export default function PlanosPage() {
 
         {/* UX-339: Contextual status banner for logged-in users */}
         {userStatus === "subscriber" && (
-          <div data-testid="status-banner-subscriber" className="mb-8 p-4 bg-emerald-50 dark:bg-emerald-950/30 backdrop-blur-sm border border-emerald-200 dark:border-emerald-800 rounded-card text-center">
+          <div data-testid="status-banner-subscriber" className="mb-8 p-4 bg-emerald-50 dark:bg-emerald-950/50 backdrop-blur-sm border border-emerald-200 dark:border-emerald-800 rounded-card text-center">
             <p className="font-semibold text-emerald-800 dark:text-emerald-200">
               Você possui acesso completo ao SmartLic
             </p>
@@ -309,7 +309,7 @@ export default function PlanosPage() {
         )}
 
         {userStatus === "privileged" && (
-          <div data-testid="status-banner-privileged" className="mb-8 p-4 bg-emerald-50 dark:bg-emerald-950/30 backdrop-blur-sm border border-emerald-200 dark:border-emerald-800 rounded-card text-center">
+          <div data-testid="status-banner-privileged" className="mb-8 p-4 bg-emerald-50 dark:bg-emerald-950/50 backdrop-blur-sm border border-emerald-200 dark:border-emerald-800 rounded-card text-center">
             <p className="font-semibold text-emerald-800 dark:text-emerald-200">
               Você possui acesso completo ao SmartLic
             </p>
@@ -320,7 +320,7 @@ export default function PlanosPage() {
         )}
 
         {userStatus === "trial" && (
-          <div data-testid="status-banner-trial" className="mb-8 p-4 bg-blue-50 dark:bg-blue-950/30 backdrop-blur-sm border border-blue-200 dark:border-blue-800 rounded-card text-center">
+          <div data-testid="status-banner-trial" className="mb-8 p-4 bg-blue-50 dark:bg-blue-950/50 backdrop-blur-sm border border-blue-200 dark:border-blue-800 rounded-card text-center">
             <p className="font-semibold text-blue-800 dark:text-blue-200">
               Você está no período de avaliação{trialDaysRemaining !== null ? ` (${trialDaysRemaining} ${trialDaysRemaining === 1 ? "dia restante" : "dias restantes"})` : ""}
             </p>
@@ -331,7 +331,7 @@ export default function PlanosPage() {
         )}
 
         {userStatus === "trial_expired" && (
-          <div data-testid="status-banner-expired" className="mb-8 p-4 bg-amber-50 dark:bg-amber-950/30 backdrop-blur-sm border border-amber-200 dark:border-amber-800 rounded-card text-center">
+          <div data-testid="status-banner-expired" className="mb-8 p-4 bg-amber-50 dark:bg-amber-950/50 backdrop-blur-sm border border-amber-200 dark:border-amber-800 rounded-card text-center">
             <p className="font-semibold text-amber-800 dark:text-amber-200">
               Seu período de avaliação encerrou
             </p>
@@ -343,7 +343,7 @@ export default function PlanosPage() {
 
         {/* STORY-323 AC17: Partner referral banner */}
         {partnerName && (
-          <div data-testid="partner-discount-banner" className="mb-8 p-4 bg-emerald-50 dark:bg-emerald-950/30 backdrop-blur-sm border border-emerald-200 dark:border-emerald-800 rounded-card text-center">
+          <div data-testid="partner-discount-banner" className="mb-8 p-4 bg-emerald-50 dark:bg-emerald-950/50 backdrop-blur-sm border border-emerald-200 dark:border-emerald-800 rounded-card text-center">
             <p className="font-semibold text-emerald-800 dark:text-emerald-200">
               Indicado por <strong>{partnerName}</strong> — 25% de desconto aplicado no checkout
             </p>
@@ -509,7 +509,7 @@ export default function PlanosPage() {
         <div className="mt-16 max-w-lg mx-auto">
           <div className="text-center mb-6">
             {isConsultoriaLead && (
-              <span className="inline-block mb-4 px-3 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-sm font-semibold rounded-full">
+              <span className="inline-block mb-4 px-3 py-1 bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-400 text-sm font-semibold rounded-full">
                 Recomendado para consultorias
               </span>
             )}
@@ -535,7 +535,7 @@ export default function PlanosPage() {
               </div>
               {CONSULTORIA_PRICING[billingPeriod].discount && (
                 <div className="mt-2">
-                  <span className="inline-block px-3 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-sm font-semibold rounded-full">
+                  <span className="inline-block px-3 py-1 bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-400 text-sm font-semibold rounded-full">
                     Economize {CONSULTORIA_PRICING[billingPeriod].discount}%
                   </span>
                 </div>

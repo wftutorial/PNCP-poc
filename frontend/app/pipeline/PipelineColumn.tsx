@@ -19,14 +19,14 @@ export function PipelineColumn({ stage, items, onRemove, onUpdateNotes }: Pipeli
   return (
     <div
       ref={setNodeRef}
-      className={`flex-shrink-0 w-72 flex flex-col rounded-xl transition-colors backdrop-blur-md ${
+      className={`flex-shrink-0 w-72 flex flex-col rounded-xl transition-colors ${
         isOver
           ? "bg-brand-blue/10 ring-2 ring-brand-blue/30"
-          : "bg-white/50 dark:bg-gray-900/40 border border-white/15 dark:border-white/10"
+          : "bg-[var(--surface-1)] border border-[var(--border-strong)]"
       }`}
     >
       {/* Column Header */}
-      <div className="p-3 border-b border-white/15 dark:border-white/10">
+      <div className="p-3 border-b border-[var(--border-strong)]">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-lg">{config.icon}</span>

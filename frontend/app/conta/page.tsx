@@ -630,11 +630,11 @@ export default function ContaPage() {
               <div className="flex items-center gap-2">
                 <span className="text-sm text-[var(--ink-muted)]">Status:</span>
                 {planInfo.plan_id === "free_trial" ? (
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-400">
                     Período de avaliação
                   </span>
                 ) : planInfo.subscription_status === "active" ? (
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400">
                     Ativo
                   </span>
                 ) : (

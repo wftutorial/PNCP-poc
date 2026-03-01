@@ -79,7 +79,7 @@ const PRIMARY_NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: icons.dashboard },
   { href: "/pipeline", label: "Pipeline", icon: icons.pipeline },
   { href: "/alertas", label: "Alertas", icon: icons.alerts },
-  { href: "/historico", label: "Hist\u00f3rico", icon: icons.history },
+  { href: "/historico", label: "Histórico", icon: icons.history },
   { href: "/mensagens", label: "Suporte", icon: icons.messages },
 ];
 
@@ -167,7 +167,7 @@ export function Sidebar() {
       <div className={`flex items-center h-16 border-b border-[var(--border)] ${collapsed ? "justify-center px-2" : "px-4"}`}>
         <Link
           href="/buscar"
-          className="text-lg font-bold text-[var(--brand-navy)] hover:text-[var(--brand-blue)] transition-colors whitespace-nowrap overflow-hidden"
+          className="text-lg font-bold text-[var(--brand-navy)] dark:text-white hover:text-[var(--brand-blue)] transition-colors whitespace-nowrap overflow-hidden"
         >
           {collapsed ? (
             <span className="text-[var(--brand-blue)] text-xl font-bold">S</span>
@@ -177,8 +177,8 @@ export function Sidebar() {
         </Link>
       </div>
 
-      {/* Primary Navigation */}
-      <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-1" aria-label="Navegação principal">
+      {/* Primary Navigation — SAB-003 AC3: divide-y for dark mode separation */}
+      <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-1 divide-y divide-[var(--border)]" aria-label="Navegação principal">
         {PRIMARY_NAV.map(renderNavItem)}
       </nav>
 

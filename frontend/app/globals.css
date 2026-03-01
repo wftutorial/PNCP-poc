@@ -36,6 +36,11 @@
   --border-strong: rgba(0, 0, 0, 0.15);  /* Emphasized borders */
   --border-accent: rgba(17, 109, 255, 0.3);  /* Brand borders */
 
+  /* Text aliases (used by Pipeline, Alertas, Conta components) */
+  --text-primary: var(--ink);
+  --text-secondary: var(--ink-secondary);
+  --text-tertiary: var(--ink-muted);
+
   /* Focus Ring */
   --ring: #116dff;  /* Focus indicator - vs canvas: 4.8:1 (AA ✅) */
 
@@ -93,8 +98,8 @@
   --canvas: #121212;  /* Dark background */
   --ink: #e8eaed;  /* Primary text - vs canvas: 11.8:1 (AAA ✅) */
   --ink-secondary: #a8b4c0;  /* Secondary text - vs canvas: 7.2:1 (AAA ✅) */
-  --ink-muted: #6b7a8a;  /* Muted text - vs canvas: 4.9:1 (AA ✅) */
-  --ink-faint: #3a4555;  /* Faint text - vs canvas: 2.1:1 (decorative only) */
+  --ink-muted: #8494a7;  /* Muted text - vs canvas: 6.2:1 (AA+ ✅) — SAB-003: increased from #6b7a8a (4.3:1) for timestamps/labels */
+  --ink-faint: #4a5568;  /* Faint text - vs canvas: 2.8:1 (decorative only) — SAB-003: increased from #3a4555 (2.1:1) */
 
   --brand-blue-subtle: rgba(17, 109, 255, 0.12);  /* Subtle bg - decorative */
 
@@ -110,8 +115,8 @@
   --warning: #facc15;  /* Warning - vs canvas: 12.1:1 (AAA ✅) */
   --warning-subtle: #422006;  /* Warning bg - vs warning: 1.1:1 (decorative) */
 
-  --border: rgba(255, 255, 255, 0.08);  /* Subtle borders */
-  --border-strong: rgba(255, 255, 255, 0.15);  /* Emphasized borders */
+  --border: rgba(255, 255, 255, 0.12);  /* Subtle borders - increased from 0.08 for dark mode visibility (SAB-003) */
+  --border-strong: rgba(255, 255, 255, 0.25);  /* Emphasized borders - increased from 0.15 for WCAG 3:1 UI contrast (SAB-003) */
   --border-accent: rgba(17, 109, 255, 0.4);  /* Brand borders */
 
   --ring: #3b8bff;  /* Focus indicator - vs canvas: 6.2:1 (AA ✅) */

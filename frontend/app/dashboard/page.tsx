@@ -108,12 +108,14 @@ function StatCard({
   value,
   subtitle,
   accent = false,
+  tooltip,
 }: {
   icon: string;
   label: string;
   value: string;
   subtitle?: string;
   accent?: boolean;
+  tooltip?: string;
 }) {
   return (
     <div
@@ -122,6 +124,7 @@ function StatCard({
           ? "bg-[var(--brand-blue-subtle)] border-[var(--border-accent)]"
           : "bg-[var(--surface-0)] border-[var(--border)]"
       }`}
+      title={tooltip}
     >
       <div className="flex items-start justify-between mb-3">
         <span className="text-2xl">{icon}</span>
@@ -771,6 +774,7 @@ export default function DashboardPage() {
               label="Horas economizadas"
               value={`${formatNumber(summary.estimated_hours_saved)}h`}
               subtitle="vs busca manual em portais"
+              tooltip={`Estimativa: ${formatNumber(summary.total_searches)} buscas × 2h por busca manual em portais governamentais`}
             />
             <StatCard
               icon={"\u2705"}

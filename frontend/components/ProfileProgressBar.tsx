@@ -90,11 +90,17 @@ export default function ProfileProgressBar({
     </div>
   );
 
+  const tooltipText =
+    pct < 100
+      ? `Perfil de Licitante: ${pct}% — Preencha para melhorar análises`
+      : `Perfil de Licitante: ${pct}% completo`;
+
   if (onClickNext) {
     return (
       <button
         onClick={onClickNext}
         aria-label={`${ariaLabel}. Clique para completar seu perfil.`}
+        title={tooltipText}
         className="rounded-full focus:outline-none focus:ring-2 focus:ring-[var(--brand-blue)] focus:ring-offset-2 hover:opacity-80 transition-opacity"
         data-testid="profile-progress-bar"
       >
@@ -106,6 +112,7 @@ export default function ProfileProgressBar({
   return (
     <div
       aria-label={ariaLabel}
+      title={tooltipText}
       role="progressbar"
       aria-valuenow={pct}
       aria-valuemin={0}

@@ -463,7 +463,7 @@ _FEATURE_FLAG_REGISTRY: dict[str, tuple[str, str]] = {
     "TRIAL_EMAILS_ENABLED": ("TRIAL_EMAILS_ENABLED", "true"),
     "TRIAL_PAYWALL_ENABLED": ("TRIAL_PAYWALL_ENABLED", "true"),
     "CACHE_REFRESH_ENABLED": ("CACHE_REFRESH_ENABLED", "false"),
-    "SEARCH_ASYNC_ENABLED": ("SEARCH_ASYNC_ENABLED", "true"),
+    "SEARCH_ASYNC_ENABLED": ("SEARCH_ASYNC_ENABLED", "false"),
     "BID_ANALYSIS_ENABLED": ("BID_ANALYSIS_ENABLED", "true"),
     # STORY-267: Term search quality parity flags (gradual opt-in)
     "TERM_SEARCH_LLM_AWARE": ("TERM_SEARCH_LLM_AWARE", "false"),
@@ -582,7 +582,7 @@ CACHE_WARMING_POST_DEPLOY_DELAY_S: int = int(os.getenv("CACHE_WARMING_POST_DEPLO
 # ============================================
 # STORY-292: Async Search via asyncio.create_task (no ARQ dependency)
 # ============================================
-SEARCH_ASYNC_ENABLED: bool = str_to_bool(os.getenv("SEARCH_ASYNC_ENABLED", "true"))
+SEARCH_ASYNC_ENABLED: bool = str_to_bool(os.getenv("SEARCH_ASYNC_ENABLED", "false"))
 
 # ============================================
 # D-05: User Feedback Loop

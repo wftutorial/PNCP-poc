@@ -1,460 +1,264 @@
-# Ataque Turbo — Run 001
+# Ataque Turbo #001 — 2026-03-02 (v2 — apenas prazo hábil)
 
-**Data:** 2026-03-02
-**Modo:** Lean (zero OpenAI API)
-**Operador:** @squad-ataque-turbo (analyst + data-engineer + dev + po)
+## Metadata
+- **Data de execução:** 2026-03-02 12:50 UTC (atualizado 13:30 UTC)
+- **Setores analisados:** Engenharia e Construção
+- **UFs:** SP, RJ, MG, ES, PR, SC, RS (Sul + Sudeste)
+- **Período de editais abertos:** 2026-02-01 a 2026-03-02
+- **Filtro de prazo:** Apenas editais com prazo de proposta **posterior a 02/03/2026**
+- **Período de contratos históricos:** 2025-03-01 a 2026-03-01 (12 meses)
+- **APIs consultadas:** PNCP (contratos + publicações), OpenCNPJ
+- **ComprasGov v3:** Indisponível (HTTP 404)
+- **Portal da Transparência:** Token configurado, não utilizado nesta execução
 
----
+## Resumo Executivo
+- **Editais com prazo hábil encontrados:** 32 (de 405 totais — 373 já vencidos)
+- **Valor total estimado (prazo hábil):** ~R$47,3 milhões
+- **Leads qualificados com oportunidades futuras:** 3 (Pentágono, Solovia, Barra Nova)
+- **Lead removido:** ESB Automação (0 editais de iluminação LED com prazo futuro)
+- **Emails gerados:** 3
+- **Relatórios individuais:** `docs/ataque-turbo-001-pentagono.md`, `docs/ataque-turbo-001-solovia.md`, `docs/ataque-turbo-001-barranova.md`
 
-## Metadata da Execucao
+## Distribuição por UF (prazo hábil)
 
-| Campo | Valor |
-|-------|-------|
-| Periodo PNCP | 20/02/2026 — 02/03/2026 (10 dias) |
-| UFs consultadas | SP, RJ, MG, DF, PR |
-| Modalidade | Pregao Eletronico (codigo 6) |
-| Total de licitacoes encontradas | **5.038** |
-| Leads processados | 8 (Tier 1) |
-| Emails gerados | 8 |
-| Chamadas OpenAI | 0 |
+| UF | Editais | Valor Total |
+|----|---------|-------------|
+| SP | 10 | R$11,7M |
+| PR | 4 | R$11,5M |
+| MG | 9 | R$9,2M |
+| ES | 3 | R$9,5M |
+| RS | 4 | R$4,6M |
+| SC | 2 | R$875K |
+| **Total** | **32** | **~R$47,3M** |
 
-### Volume por UF
+## Decisões do @analyst (v2)
 
-| UF | Licitacoes | Paginas |
-|----|-----------|---------|
-| SP | 1.998 | 40 |
-| MG | 1.363 | 28 |
-| PR | 1.124 | 23 |
-| RJ | 384 | 8 |
-| DF | 169 | 4 |
+### Matching por Lead
+| Lead | UF Base | UFs Matching | Total Editais | Valor Total | Preço |
+|------|---------|-------------|--------------|-------------|-------|
+| Pentágono | SP | SP | 10 | ~R$11,7M | R$1.500 |
+| Solovia | SP | SP, MG, PR, ES | 26 | ~R$42M | R$2.500 |
+| Barra Nova | RJ | MG, ES | 12 | ~R$18,7M | R$1.500 |
 
----
+### Notas de Matching
+- **Pentágono:** Foco em SP (consultoria/engenharia — atuação tipicamente regional).
+- **Solovia:** Com 8 CNAEs cobrindo de edifícios a rodovias/saneamento e capital de R$12M, pode competir em múltiplos estados. Incluímos MG, PR e ES.
+- **Barra Nova:** 0 editais com prazo futuro em RJ. Expandimos para MG e ES (estados adjacentes onde construtoras do RJ frequentemente atuam). Capital de R$5M viabiliza deslocamento.
+- **ESB Automação:** REMOVIDA — nenhum edital de iluminação pública/LED com prazo futuro. Reavaliar na próxima execução.
 
-## Leads Processados
-
-### Resumo de Qualificacao
-
-| # | Lead | Cidade/UF | CNPJ | UF Match | Licitacoes na UF | Amostra Gratis | Preco PDF |
-|---|------|-----------|------|----------|------------------|----------------|-----------|
-| 1 | Triunfo Legis | Guarulhos/SP | 19.240.053/0001-08 | SP | 1.998 | 3 | R$ 1.500 |
-| 2 | Concreta Licitacoes | Rio do Sul/SC | 35.127.092/0001-50 | Nacional (5 UFs) | 5.038 | 4 | R$ 2.500 |
-| 3 | Brasil Licitar | Sao Paulo/SP | — | SP | 1.998 | 3 | R$ 1.500 |
-| 4 | LicitaMundo | Betim/MG | 34.049.529/0001-11 | MG | 1.363 | 3 | R$ 1.500 |
-| 5 | Licijur | Porto Alegre/RS | 05.097.345/0001-29 | PR + Nacional | 5.038 | 3 | R$ 2.000 |
-| 6 | Jus Licitacoes | Curitiba/PR | 35.726.602/0001-05 | PR | 1.124 | 3 | R$ 1.500 |
-| 7 | More Licitacoes | Sao Paulo/SP | — | SP | 1.998 | 2 | R$ 1.500 |
-| 8 | Inovacao Assessoria | Londrina/PR | 14.723.231/0001-38 | Nacional (25 unidades) | 5.038 | 4 | R$ 3.000 |
-
-### Racional de Qualificacao (@analyst)
-
-**Fracao gratis:** Seguindo guidelines do squad — para 31+ licitacoes, 3-4 amostras (<10%).
-
-**Pricing ajustado por lead:**
-- **R$ 1.500** (base) — micro/pequena consultoria regional (Triunfo, Brasil Licitar, LicitaMundo, Jus, More)
-- **R$ 2.000** — consultoria bi-regional com 24 anos (Licijur — Porto Alegre + Recife)
-- **R$ 2.500** — consultoria mid-size com R$ 2B+ em contratos (Concreta — franquia nacional)
-- **R$ 3.000** — maior franquia do Brasil, 25 unidades (Inovacao — enterprise target)
+### Fração Grátis
+| Lead | Total (N) | Amostra grátis (K) | Ratio |
+|------|-----------|---------------------|-------|
+| Pentágono | 10 | 2 | 20% |
+| Solovia | 26 | 3 | ~12% |
+| Barra Nova | 12 | 2 | ~17% |
 
 ---
 
-## Emails Prontos para Envio
+## Lead 1 — PENTÁGONO SERVIÇOS DE ENGENHARIA CIVIL E CONSULTORIA LTDA
 
----
+### Perfil
+- **CNPJ:** 47.026.679/0001-51
+- **CNAE:** 7112-0/00 — Serviços de engenharia
+- **Porte:** Demais | **Capital:** R$1.232.000 | **Sede:** Ribeirão Preto/SP | **Desde:** 1975
+- **Email:** pentagono@pentagonoeng.com.br | **Tel:** (16) 2133-3888
+- **Sócios:** José Eduardo Borges Rezende (admin), Isabel Cristina Rezende Vieira (admin) + 3
+- **Histórico PNCP:** R$14M em monitoramento de obras de infraestrutura urbana (Subprefeituras SP)
+- **Relatório individual:** [`docs/ataque-turbo-001-pentagono.md`](ataque-turbo-001-pentagono.md)
 
-### EMAIL 1 — Triunfo Legis
+### Oportunidades (prazo hábil): 10 editais em SP | ~R$11,7M
+### Preço do relatório: R$1.500
+### Email
 
-**Para:** contato@triunfolegis.com.br
-**Assunto:** Triunfo Legis — encontramos 1.998 licitacoes abertas em SP nos ultimos 10 dias
+```
+Assunto: Pentágono Engenharia — identificamos 10 licitações abertas no perfil de vocês
 
----
+Olá José Eduardo,
 
-Ola Alexandre,
+Sou Tiago Sasaki, engenheiro de software da CONFENGE e criador do SmartLic.tech — uma plataforma de inteligência de decisão para licitações públicas que estamos finalizando para lançamento.
 
-Sou Tiago Sasaki, fundador do SmartLic — plataforma de inteligencia em licitacoes que usa IA para filtrar e classificar oportunidades por setor.
+Vi que a Pentágono opera desde 1975 em serviços de engenharia civil e consultoria, com sede em Ribeirão Preto. Nos últimos meses, vocês fecharam contratos de monitoramento técnico de obras de infraestrutura urbana para a Prefeitura de São Paulo — um perfil bastante específico de fiscalização e acompanhamento de obras públicas.
 
-Vi que a Triunfo Legis atua como departamento comercial terceirizado para empresas que querem licitar com o governo. Socios com experiencia como pregoeiros e membros de comissao de licitacao — isso e raro e valioso.
+Nosso algoritmo de classificação — já validado e operacional — consolida fontes oficiais e avalia cada edital contra critérios objetivos de viabilidade: compatibilidade setorial, faixa de valor, prazo e geografia.
 
-Rodei uma busca no SmartLic para o estado de Sao Paulo (ultimos 10 dias, pregao eletronico) e encontramos **1.998 licitacoes abertas**. Aqui estao 3 que podem interessar aos clientes de voces:
+Rodei uma análise para o perfil da Pentágono e o filtro identificou **10 licitações abertas com prazo hábil** no estado de São Paulo. Aqui estão 2 delas:
 
-**1. Manutencao preventiva e corretiva de 16 elevadores**
-- Orgao: Ministerio da Gestao e Inovacao em Servicos Publicos
-- Valor estimado: R$ 1.095.000
-- Modalidade: Pregao Eletronico
-- Por que relevante: Contrato continuado de alto valor em facilities — perfil tipico de PME que precisa de assessoria para licitar
+**1. Construção de 20 Unidades Habitacionais — MCMV/FNHIS (Santa Clara D'Oeste/SP)**
+• Órgão: Município de Santa Clara D'Oeste
+• Valor estimado: R$2.928.865,35
+• Modalidade: Concorrência Presencial
+• Prazo para proposta: 08/04/2026
+• Link: https://santaclaradoeste.sp.gov.br/?pag=T0RZPU9EYz1PR009T1RrPU9EWT1PVEE9T1dFPQ==&view=LIST-LICIT&modalidade=&ano=2026&situacao=&notIn=&covid=&id=1452
+• **Relevância para a Pentágono:** Obra com recursos federais (MCMV/FNHIS) — financiamento garantido. O perfil de engenharia civil e monitoramento da Pentágono é compatível tanto para execução quanto para fiscalização. Prazo amplo (abril/2026).
 
-**2. Servicos de limpeza hospitalar — UNESP**
-- Orgao: Universidade Estadual Paulista
-- Valor estimado: R$ 2.497.612
-- Modalidade: Pregao Eletronico
-- Por que relevante: Limpeza hospitalar exige certificacoes especificas — clientes precisam de orientacao tecnica para montar proposta
+**2. Construção de 20 Unidades Habitacionais — MCMV (Populina/SP)**
+• Órgão: Município de Populina
+• Valor estimado: R$2.901.722,49
+• Modalidade: Concorrência Presencial
+• Prazo para proposta: 07/04/2026
+• Link: https://www.populina.sp.gov.br/editais/concorrencia_01_-_programa_moradia_digna_24110056.pdf
+• **Relevância para a Pentágono:** Mesmo programa MCMV — padrão de editais similares em SP. A Pentágono com CNAE de serviços de engenharia pode tanto participar diretamente quanto prestar consultoria para a execução.
 
-**3. Materiais de vidracaria com instalacao — Botucatu**
-- Orgao: Municipio de Botucatu
-- Valor estimado: R$ 3.117.700
-- Modalidade: Pregao Eletronico
-- Por que relevante: Obra de valor expressivo em municipio medio — oportunidade para clientes de construcao civil
+As outras 8 oportunidades incluem construção de centro de convenções (R$1,5M em Arco-Íris), cozinha piloto (R$728K em Oriente), recapeamento asfáltico, reformas de UBS e unidades habitacionais — todas em SP com prazo de proposta entre março e abril de 2026.
 
-As outras **1.995 oportunidades** incluem editais de saude (medicamentos, proteses), TI (licencas SaaS), seguranca publica, e engenharia — todos os setores que consultorias generalistas atendem.
+**Quer receber a lista completa com análise de viabilidade para cada uma?**
+Enviamos o relatório em PDF com as 10 oportunidades detalhadas por R$1.500 via PIX. Cada oportunidade vem com avaliação objetiva de viabilidade e link direto para o edital oficial.
 
-**Quer receber a lista completa com analise de viabilidade para cada licitacao?**
-Enviamos o PDF com as 1.998 licitacoes detalhadas por setor, com score de relevancia e viabilidade, por R$ 1.500 via PIX. Inclui 30 dias gratis do SmartLic Pro para monitorar novas oportunidades automaticamente.
+Fico à disposição para qualquer dúvida.
 
-Abraco,
+Abraço,
 Tiago Sasaki
-Fundador, SmartLic
+Engenheiro de Software — CONFENGE
+Criador do SmartLic.tech
 smartlic.tech
+```
 
 ---
 
-### EMAIL 2 — Concreta Licitacoes
+## Lead 2 — SOLOVIA ENGENHARIA E CONSTRUÇÕES LTDA
 
-**Para:** contato@concretalicitacoes.com.br
-**Assunto:** Concreta — 5.038 licitacoes abertas em 5 estados que seus 110+ clientes podem estar perdendo
+### Perfil
+- **CNPJ:** 08.806.914/0001-56
+- **CNAE:** 4120-4/00 — Construção de edifícios (+7 CNAEs: rodovias, urbanização, saneamento, etc.)
+- **Porte:** Demais | **Capital:** R$12.000.000 | **Sede:** Santos/SP | **Desde:** 2007
+- **Email:** SOLOVIA@SOLOVIA.COM.BR | **Tel:** (13) 3221-2711
+- **Sócios:** Antonio Carlos Matioli (admin), Leandro Menquini (admin)
+- **Histórico PNCP:** R$518K em manutenção/reforma (Prefeitura de São Sebastião/SP)
+- **Relatório individual:** [`docs/ataque-turbo-001-solovia.md`](ataque-turbo-001-solovia.md)
 
----
+### Oportunidades (prazo hábil): 26 editais em SP, MG, PR, ES | ~R$42M
+### Preço do relatório: R$2.500
+### Email
 
-Ola Lucas,
+```
+Assunto: Solovia Engenharia — identificamos 26 licitações abertas no perfil de vocês
 
-Sou Tiago Sasaki, fundador do SmartLic — plataforma de inteligencia em licitacoes com IA.
+Olá Antonio Carlos,
 
-A Concreta me impressionou: R$ 2 bilhoes em contratos adjudicados, 110+ empresas ativas, 1.000+ processos por ano. E passaram pela InovAtiva Brasil — sinal de que voces levam tecnologia a serio.
+Sou Tiago Sasaki, engenheiro de software da CONFENGE e criador do SmartLic.tech — uma plataforma de inteligência de decisão para licitações públicas que estamos finalizando para lançamento.
 
-Rodei buscas no SmartLic em 5 estados (SP, RJ, MG, DF, PR) nos ultimos 10 dias e encontramos **5.038 licitacoes abertas** em pregao eletronico. Aqui estao 4 destaques:
+A Solovia opera desde 2007 em Santos com um dos perfis mais completos que encontrei na região — construção de edifícios, rodovias, urbanização, redes de água e esgoto, tudo sob o mesmo CNPJ. Com capital social de R$12 milhões e 8 CNAEs que vão de edificação a saneamento, vocês cobrem praticamente toda a cadeia de engenharia civil. Vi que a Solovia já executou serviços de manutenção e reforma para a Prefeitura de São Sebastião.
 
-**1. Servicos de Engenharia e Arquitetura — INPAC (PR)**
-- Valor estimado: R$ 104.757.720
-- Por que relevante: Maior licitacao aberta do Parana — anteprojetos, projetos basicos e executivos. Escala para seus clientes de construcao e energia
+Nosso algoritmo consolida fontes oficiais e avalia cada edital contra critérios objetivos de viabilidade: compatibilidade setorial, faixa de valor, prazo e geografia.
 
-**2. Software de gestao integrado — Municipio de Marica (RJ)**
-- Valor estimado: R$ 27.069.600
-- Por que relevante: TI em prefeitura de alto orcamento — perfil de cliente que busca assessoria para proposta tecnica complexa
+Rodei uma análise para o perfil da Solovia e o filtro identificou **26 licitações abertas com prazo hábil** em SP, MG, PR e ES. Aqui estão 3 delas:
 
-**3. Manutencao de 205 Obras de Arte Especiais — DNIT (DF)**
-- Valor estimado: R$ 40.088.078
-- Por que relevante: Infraestrutura rodoviaria federal — licitacao de altissimo valor com exigencias tecnicas rigorosas
+**1. Pavimentação CBUQ — Estradas Rurais (Cruzeiro do Iguaçu/PR)**
+• Órgão: Município de Cruzeiro do Iguaçu
+• Valor estimado: R$8.224.903,52
+• Modalidade: Concorrência Presencial
+• Prazo para proposta: 16/03/2026
+• Link: https://pncp.gov.br/app/editais/95589230000144/2026/30
+• **Relevância para a Solovia:** Obra de pavimentação com serviços completos (terraplanagem, drenagem, base, revestimento, sinalização). A Solovia com CNAEs 4211 (rodovias) e 4213 (urbanização) tem habilitação técnica completa. Valor de R$8,2M é compatível com o capital de R$12M.
 
-**4. Locacao de sanitarios quimicos — BH Turismo (MG)**
-- Valor estimado: R$ 7.179.936
-- Por que relevante: Facilities para eventos em BH — cadeia de suprimentos ampla, varios CNPJs podem participar
+**2. Pavimentação CBUQ e Regularização (Martins Soares/MG)**
+• Órgão: Município de Martins Soares
+• Valor estimado: R$6.520.964,80
+• Modalidade: Concorrência Presencial
+• Prazo para proposta: 16/03/2026
+• Link: https://pncp.gov.br/app/editais/01615420000145/2026/7
+• **Relevância para a Solovia:** Registro de preços para serviços de regularização, drenagem, pavimentação e sinalização — contrato continuado que gera receita recorrente. CNAEs de rodovias (4211) e urbanização (4213) da Solovia são match direto.
 
-As outras **5.034 oportunidades** cobrem saude (R$ 25M em dialise no DF), seguranca, mobiliario, transporte, alimentos — praticamente todos os setores que seus clientes operam.
+**3. Construção de UBS Porte IV (Fundão/ES)**
+• Órgão: Fundo Municipal de Saúde de Fundão
+• Valor estimado: R$4.739.092,12
+• Modalidade: Concorrência Presencial
+• Prazo para proposta: 05/03/2026
+• Link: https://pncp.gov.br/app/editais/14884701000145/2026/1
+• **Relevância para a Solovia:** Construção de edifício de saúde — CNAE principal 4120 (construção de edifícios). Obra com fornecimento completo de material e mão de obra. Prazo próximo (05/03) — janela curta mas ainda hábil.
 
-**Com 110+ clientes ativos, quantas dessas oportunidades estao passando despercebidas?**
-Enviamos o PDF completo com as 5.038 licitacoes categorizadas por setor e UF, com score de viabilidade, por R$ 2.500 via PIX. Inclui 30 dias gratis do SmartLic Pro para toda a equipe da Concreta.
+As outras 23 oportunidades incluem construção de unidades habitacionais MCMV (R$2,9M em SP), pavimentação urbana e rural (MG, PR), reforma de escola (R$4,5M em ES), calçamento e infraestrutura — todas com prazo entre março e junho de 2026.
 
-Abraco,
+**Quer receber a lista completa com análise de viabilidade para cada uma?**
+Enviamos o relatório em PDF com as 26 oportunidades detalhadas por R$2.500 via PIX. Cada oportunidade vem com avaliação objetiva de viabilidade e link direto para o edital oficial.
+
+Fico à disposição para qualquer dúvida.
+
+Abraço,
 Tiago Sasaki
-Fundador, SmartLic
+Engenheiro de Software — CONFENGE
+Criador do SmartLic.tech
 smartlic.tech
+```
 
 ---
 
-### EMAIL 3 — Brasil Licitar
+## Lead 3 — BARRA NOVA ENGENHARIA LTDA
 
-**Para:** comercial@brasillicitar.com.br
-**Assunto:** Brasil Licitar — 1.998 pregoes eletronicos abertos em SP esta semana
+### Perfil
+- **CNPJ:** 05.338.129/0001-28
+- **CNAE:** 4299-5/99 — Outras obras de engenharia civil (+6 CNAEs: edifícios, fundações, terraplanagem, elétrica)
+- **Porte:** EPP | **Capital:** R$5.000.000 | **Sede:** Rio de Janeiro/RJ | **Desde:** 2002
+- **Email:** BARRANOVA@BARRANOVAENGENHARIA.COM.BR | **Tel:** (21) 3351-6355
+- **Sócios:** Wagner Coriolano Silveira (admin), Igor Coriolano Silveira (admin), Sonia Maria C. Silveira (admin)
+- **Histórico PNCP:** R$1,27M em obras de infraestrutura (Prefeitura de Duque de Caxias/RJ)
+- **Relatório individual:** [`docs/ataque-turbo-001-barranova.md`](ataque-turbo-001-barranova.md)
 
----
+### Oportunidades (prazo hábil): 12 editais em MG e ES | ~R$18,7M
+### Nota: 0 editais com prazo futuro em RJ. Expandido para estados adjacentes (MG + ES).
+### Preço do relatório: R$1.500
+### Email
 
-Ola Gustavo,
+```
+Assunto: Barra Nova Engenharia — identificamos 12 licitações abertas compatíveis com o perfil de vocês
 
-Sou Tiago Sasaki, fundador do SmartLic — plataforma de inteligencia em licitacoes com IA.
+Olá Wagner,
 
-500+ licitacoes ganhas e 200+ impugnacoes/recursos — a Brasil Licitar claramente domina a parte juridica e estrategica. A pergunta e: seus clientes de telecom, TI e infra estao vendo TODAS as oportunidades?
+Sou Tiago Sasaki, engenheiro de software da CONFENGE e criador do SmartLic.tech — uma plataforma de inteligência de decisão para licitações públicas que estamos finalizando para lançamento.
 
-Nos ultimos 10 dias, encontramos **1.998 pregoes eletronicos abertos** so em Sao Paulo. Aqui estao 3 para o perfil dos clientes de voces:
+A Barra Nova opera há 24 anos no Rio de Janeiro em obras de engenharia civil — terraplanagem, fundações, instalações elétricas, construção de edifícios. Com capital social de R$5 milhões e CNAEs que cobrem toda a cadeia de construção civil, vocês têm um perfil completo para competir em obras públicas. Vi que nos últimos meses trabalharam com a Prefeitura de Duque de Caxias em serviços de infraestrutura.
 
-**1. 5 licencas Genially Enterprise SaaS (SCORM) — Camara Municipal de Guarulhos**
-- Valor estimado: R$ 16.161
-- Por que relevante: Software SaaS para orgao publico — entrada rapida para clientes de TI
+Nosso algoritmo consolida fontes oficiais e avalia cada edital contra critérios objetivos de viabilidade: compatibilidade setorial, faixa de valor, prazo e geografia.
 
-**2. Plano Coletivo Empresarial de Assistencia a Saude — Comite Paraolimpico Brasileiro**
-- Valor estimado: R$ 10.332.573
-- Por que relevante: Contrato de alto valor com orgao federal sediado em SP — exige proposta tecnica bem estruturada
+Rodei uma análise para o perfil da Barra Nova e o filtro identificou **12 licitações abertas com prazo hábil** em Minas Gerais e Espírito Santo — estados vizinhos ao RJ onde construtoras cariocas frequentemente atuam. Aqui estão 2 delas:
 
-**3. Manutencao em equipamentos de ar condicionado — Sec. Seguranca Publica SP**
-- Valor estimado: R$ 396.569
-- Por que relevante: Contrato continuado com estado — recorrencia e previsibilidade para clientes de facilities
+**1. Pavimentação e Serviços de Engenharia (Martins Soares/MG)**
+• Órgão: Município de Martins Soares
+• Valor estimado: R$6.520.964,80
+• Modalidade: Concorrência Presencial
+• Prazo para proposta: 16/03/2026
+• Link: https://pncp.gov.br/app/editais/01615420000145/2026/7
+• **Relevância para a Barra Nova:** Registro de preços para serviços de regularização, drenagem, pavimentação CBUQ e sinalização. A Barra Nova com CNAEs de terraplanagem (4313), fundações (4391) e engenharia civil (4299) tem habilitação técnica completa. Martins Soares/MG está na Zona da Mata — acessível a partir do RJ.
 
-As outras **1.995 oportunidades** incluem engenharia (cimento, vidracaria, marcenaria), saude (medicamentos, proteses), e seguranca publica — todos com prazos correndo.
+**2. Construção de UBS Porte IV (Fundão/ES)**
+• Órgão: Fundo Municipal de Saúde de Fundão
+• Valor estimado: R$4.739.092,12
+• Modalidade: Concorrência Presencial
+• Prazo para proposta: 05/03/2026
+• Link: https://pncp.gov.br/app/editais/14884701000145/2026/1
+• **Relevância para a Barra Nova:** Construção de Unidade Básica de Saúde com fornecimento completo. CNAE 4120 (construção de edifícios) da Barra Nova é match direto. Fundão/ES é próximo à divisa com RJ. Prazo curto (05/03) — janela apertada mas hábil.
 
-**Quer o panorama completo para filtrar as melhores para seus 20+ clientes ativos?**
-PDF com 1.998 licitacoes classificadas por setor e viabilidade: R$ 1.500 via PIX. Inclui 30 dias gratis do SmartLic Pro.
+As outras 10 oportunidades incluem reforma de escola (R$4,5M em Mantenópolis/ES), pavimentação e recapeamento em municípios de MG (calçamento, infraestrutura viária), e obras de engenharia com recursos federais — todas com prazo entre março e junho de 2026.
 
-Abraco,
+**Quer receber a lista completa com análise de viabilidade para cada uma?**
+Enviamos o relatório em PDF com as 12 oportunidades detalhadas por R$1.500 via PIX. Cada oportunidade vem com avaliação objetiva de viabilidade e link direto para o edital oficial.
+
+Fico à disposição para qualquer dúvida.
+
+Abraço,
 Tiago Sasaki
-Fundador, SmartLic
+Engenheiro de Software — CONFENGE
+Criador do SmartLic.tech
 smartlic.tech
+```
 
 ---
 
-### EMAIL 4 — LicitaMundo
+## Lead Removida — ESB AUTOMAÇÃO
 
-**Para:** (via LinkedIn — Eduardo Araujo)
-**Assunto:** LicitaMundo — 1.363 licitacoes abertas em MG que podem turbinar seus clientes
-
----
-
-Ola Eduardo,
-
-Sou Tiago Sasaki, fundador do SmartLic — plataforma de inteligencia em licitacoes com IA.
-
-Vi que a LicitaMundo faz o ciclo completo: da selecao do edital ate a entrega do servico. Com formacao em Direito pela PUC Minas e parceria com BLL Compras e ConLicitacao, voces tem uma rede solida.
-
-Rodei uma busca em Minas Gerais (ultimos 10 dias) e encontramos **1.363 pregoes eletronicos abertos**. Tres destaques:
-
-**1. Locacao, licenca de software e servicos de TI — Santa Luzia**
-- Valor estimado: R$ 4.531.166
-- Por que relevante: Contrato grande de TI em municipio da Grande BH — exige proposta tecnica + comercial bem amarrada
-
-**2. Servicos de mao de obra em construcao civil — Ervalia**
-- Valor estimado: R$ 1.295.000
-- Por que relevante: Obra em municipio menor — concorrencia menor, margem maior para PMEs
-
-**3. Monitores de Triagem (equipamentos medicos) — Uberlandia**
-- Valor estimado: R$ 1.039.981
-- Por que relevante: Saude em cidade polo do Triangulo Mineiro — mercado em expansao
-
-As outras **1.360 oportunidades** cobrem infraestrutura (tubos, telhas, estruturas metalicas), saude (OPME, antimicrobianos), e veiculos (CODEVASF com R$ 78M).
-
-**Quer receber o relatorio completo para acelerar a captacao de clientes?**
-PDF com 1.363 licitacoes de MG por setor e viabilidade: R$ 1.500 via PIX. Inclui 30 dias gratis do SmartLic Pro.
-
-Abraco,
-Tiago Sasaki
-Fundador, SmartLic
-smartlic.tech
+**Motivo:** 0 editais de iluminação pública/LED com prazo futuro na busca atual. Reavaliar na próxima execução do ataque-turbo com período mais amplo ou busca específica por "iluminação" + "LED".
 
 ---
 
-### EMAIL 5 — Licijur
-
-**Para:** contato@licijur.com.br (ou mauricio@licijur.com.br)
-**Assunto:** Licijur — 5.038 licitacoes abertas em 5 estados para seus clientes de infraestrutura
-
----
-
-Ola Mauricio,
-
-Sou Tiago Sasaki, fundador do SmartLic — plataforma de inteligencia em licitacoes com IA.
-
-24 anos no mercado, escritorios em Porto Alegre e Recife, especialidade em infraestrutura e compliance — a Licijur e referencia no setor. Com essa cobertura geografica, imagino que monitorar licitacoes em multiplos estados e um desafio constante.
-
-Rodei buscas em 5 estados (SP, RJ, MG, DF, PR) e encontramos **5.038 licitacoes abertas** nos ultimos 10 dias. Tres com cara de Licijur:
-
-**1. Manutencao de 205 Obras de Arte Especiais — DNIT (DF)**
-- Valor estimado: R$ 40.088.078
-- Por que relevante: Infraestrutura rodoviaria federal — core business dos clientes de voces. Exige equipe tecnica qualificada + compliance rigoroso
-
-**2. Servicos de Engenharia e Arquitetura — INPAC (PR)**
-- Valor estimado: R$ 104.757.720
-- Por que relevante: Maior licitacao aberta do PR — anteprojetos e projetos executivos. Escala para grandes escritorios de engenharia
-
-**3. Manutencao predial continua — Fundacao UnB (DF)**
-- Valor estimado: R$ 8.444.232
-- Por que relevante: Contrato continuado em Brasilia — recorrencia e proximidade de orgaos federais
-
-As outras **5.035 oportunidades** incluem TI (Dynatrace R$ 29M para STJ, backup R$ 18M para CLDF), saude, facilities e transporte — cobrindo Sul, Sudeste e Centro-Oeste.
-
-**Com escritorios em duas regioes, voces estao capturando todas as oportunidades relevantes?**
-PDF completo com 5.038 licitacoes por UF, setor e viabilidade: R$ 2.000 via PIX. Inclui 30 dias gratis do SmartLic Pro para a equipe de Porto Alegre e Recife.
-
-Abraco,
-Tiago Sasaki
-Fundador, SmartLic
-smartlic.tech
-
----
-
-### EMAIL 6 — Jus Licitacoes
-
-**Para:** contato@juslicitacoes.com.br
-**Assunto:** Jus Licitacoes — 1.124 pregoes abertos no Parana para seus quase 2.000 clientes
-
----
-
-Ola equipe Jus Licitacoes,
-
-Sou Tiago Sasaki, fundador do SmartLic — plataforma de inteligencia em licitacoes com IA.
-
-1.990 clientes atendidos e 2.500+ processos conduzidos — voces tem escala que poucas consultorias no Parana alcancaram. E atendem tanto fornecedores quanto compradores publicos, o que da uma visao unica do mercado.
-
-Nos ultimos 10 dias, encontramos **1.124 pregoes eletronicos abertos** so no Parana. Tres destaques:
-
-**1. Servicos de Engenharia e Arquitetura — INPAC**
-- Valor estimado: R$ 104.757.720
-- Por que relevante: Maior licitacao aberta do PR — seus clientes de engenharia precisam saber disso
-
-**2. Equipamentos digitais para rede municipal de ensino — SJP**
-- Valor estimado: R$ 2.274.409
-- Por que relevante: TI em educacao publica — demanda crescente pos-pandemia, margens boas
-
-**3. Infraestrutura de rede de dados e comunicacao — Comando do Exercito**
-- Valor estimado: R$ 4.827.430
-- Por que relevante: Contrato federal de TI no PR — exige certificacoes que consultorias como a Jus sabem orientar
-
-As outras **1.121 oportunidades** incluem saude (nutricao parenteral, medicamentos), construcao (concreto, CBUQ), facilities (limpeza, som/iluminacao) e equipamentos pesados (motoniveladoras, retroescavadeiras).
-
-**Com quase 2.000 clientes, cada oportunidade perdida se multiplica. Quer o mapa completo?**
-PDF com 1.124 licitacoes do PR classificadas por setor e viabilidade: R$ 1.500 via PIX. Inclui 30 dias gratis do SmartLic Pro.
-
-Abraco,
-Tiago Sasaki
-Fundador, SmartLic
-smartlic.tech
-
----
-
-### EMAIL 7 — More Licitacoes
-
-**Para:** contato@morelicitacoes.com.br (ou WhatsApp: 11 93496-9696)
-**Assunto:** More Licitacoes — 1.998 licitacoes abertas em SP para seus clientes
-
----
-
-Ola equipe More Licitacoes,
-
-Sou Tiago Sasaki, fundador do SmartLic — plataforma de inteligencia em licitacoes com IA.
-
-Vi que a More oferece terceirizacao completa do departamento de licitacoes — isso e exatamente o tipo de operacao que se beneficia de inteligencia automatizada para triagem de editais.
-
-Nos ultimos 10 dias em Sao Paulo, encontramos **1.998 pregoes eletronicos abertos**. Dois que me chamaram atencao:
-
-**1. Servico de Marcenaria — Mobiliario sob medida — USP**
-- Valor estimado: R$ 284.791
-- Por que relevante: Universidade publica de alto volume de compras — recorrencia garantida para fornecedores qualificados
-
-**2. Servicos de limpeza, asseio e conservacao predial — DER**
-- Valor estimado: R$ 24.490
-- Por que relevante: Contrato continuado em orgao estadual — porta de entrada para contratos maiores
-
-As outras **1.996 oportunidades** incluem saude (R$ 7.4M em medicamentos em Bauru), engenharia (cimento, vidracaria), seguranca publica, e TI.
-
-**Como departamento terceirizado, voces precisam de escala na triagem. Quer ver o panorama completo?**
-PDF com 1.998 licitacoes de SP por setor e viabilidade: R$ 1.500 via PIX. Inclui 30 dias gratis do SmartLic Pro.
-
-Abraco,
-Tiago Sasaki
-Fundador, SmartLic
-smartlic.tech
-
----
-
-### EMAIL 8 — Inovacao Assessoria
-
-**Para:** (43) 98858-3264 (WhatsApp) ou LinkedIn Marco Antonio Cito
-**Assunto:** Inovacao Assessoria — 5.038 licitacoes abertas em 5 estados para suas 25 unidades
-
----
-
-Ola Marco Antonio,
-
-Sou Tiago Sasaki, fundador do SmartLic — plataforma de inteligencia em licitacoes com IA.
-
-A Inovacao e a maior franquia de licitacoes do Brasil: 25 unidades, 5.000 editais monitorados por dia, R$ 1 bilhao por mes em leiloes. Voce criou um modelo que ninguem mais replicou em 21 anos. Parabens.
-
-Minha pergunta e direta: com 25 unidades em estados diferentes, como voces garantem que nenhuma oportunidade relevante escapa?
-
-Rodei buscas em 5 estados (SP, RJ, MG, DF, PR) e encontramos **5.038 pregoes eletronicos abertos** em apenas 10 dias. Quatro destaques por escala:
-
-**1. Servicos de Engenharia e Arquitetura — INPAC (PR)**
-- Valor estimado: R$ 104.757.720
-- Relevante para: Unidades de Curitiba, Londrina, Maringa
-
-**2. Caminhoes e veiculos — CODEVASF (MG)**
-- Valor estimado: R$ 78.391.460
-- Relevante para: Unidade de Belo Horizonte
-
-**3. Transporte escolar — Municipio de Marica (RJ)**
-- Valor estimado: R$ 65.463.409
-- Relevante para: Clientes de logistica e transporte
-
-**4. Observabilidade Dynatrace SaaS — STJ (DF)**
-- Valor estimado: R$ 29.067.814
-- Relevante para: Unidade de Brasilia, clientes de TI
-
-As outras **5.034 oportunidades** somam bilhoes em valor estimado, cobrindo todos os setores que suas unidades atendem: saude, facilities, seguranca, materiais, software.
-
-**Com o SmartLic, cada unidade da franquia teria um radar automatico de oportunidades por setor e UF — em vez de monitorar manualmente 5.000 editais por dia.**
-
-Tenho uma proposta para conversarmos:
-1. PDF completo com as 5.038 licitacoes categorizadas por UF e setor: R$ 3.000 via PIX
-2. 30 dias gratis do SmartLic Pro para sua equipe avaliar
-3. Se fizer sentido, um modelo de parceria para as 25 unidades
-
-15 minutos do seu tempo para te mostrar com dados reais?
-
-Abraco,
-Tiago Sasaki
-Fundador, SmartLic
-smartlic.tech
-
----
-
-## Metricas da Execucao
-
-| Metrica | Valor |
-|---------|-------|
-| Total licitacoes encontradas (5 UFs) | 5.038 |
-| Leads processados | 8 |
-| Emails gerados | 8 |
-| Chamadas OpenAI API | 0 |
-| Tempo de execucao | ~8 min |
-| Leads ineditos (vs runs anteriores) | 8/8 (100% — primeiro run) |
-
-### Receita Potencial
-
-| Cenario | Calculo | Valor |
-|---------|---------|-------|
-| Todos compram PDF | R$1.500x5 + R$2.000x1 + R$2.500x1 + R$3.000x1 = | R$ 15.000 |
-| 15-23% reply rate (2-3 leads) | 2x R$1.500 + 1x R$2.500 = | R$ 5.500 |
-| 1 converte para SmartLic Pro | R$ 397/mes x 12 = | R$ 4.764/ano |
-| **Cenario conservador** | 2 PDFs + 1 assinatura = | **R$ 7.764** |
-
-### Proximo Passo
-
-- [ ] Enviar emails 1-4 (Tier 1 regional: Triunfo, Brasil Licitar, LicitaMundo, Jus)
-- [ ] Enviar emails 5-6 (Tier 1 bi-regional: Licijur, More)
-- [ ] Enviar emails 7-8 (Tier 1 enterprise: Concreta, Inovacao)
-- [ ] Follow-up D+3 para quem nao respondeu
-- [ ] Agendar run 002 com Tier 2 (Eagle, Start, UNYBOSS, LicitoCon, Consultar, ABOP)
-
-### Contatos para Envio
-
-| # | Lead | Canal Primario | Canal Secundario |
-|---|------|----------------|------------------|
-| 1 | Triunfo Legis | contato@triunfolegis.com.br | (11) 2087-2251 |
-| 2 | Concreta Licitacoes | contato@concretalicitacoes.com.br | (47) 3300-1524 |
-| 3 | Brasil Licitar | comercial@brasillicitar.com.br | WhatsApp (11) 95894-4465 |
-| 4 | LicitaMundo | LinkedIn (Eduardo Araujo) | — |
-| 5 | Licijur | contato@licijur.com.br | mauricio@licijur.com.br |
-| 6 | Jus Licitacoes | contato@juslicitacoes.com.br | (41) 99758-5425 |
-| 7 | More Licitacoes | contato@morelicitacoes.com.br | WhatsApp (11) 93496-9696 |
-| 8 | Inovacao Assessoria | WhatsApp (43) 98858-3264 | LinkedIn (Marco Antonio Cito) |
-
----
-
-## Dados PNCP Brutos — Top Licitacoes por Valor
-
-| Rank | Valor Estimado | Objeto | Orgao | UF |
-|------|---------------|--------|-------|----|
-| 1 | R$ 104.757.720 | Servicos de Engenharia e Arquitetura | INPAC | PR |
-| 2 | R$ 78.391.460 | Caminhoes e veiculos (CODEVASF) | CODEVASF | MG |
-| 3 | R$ 65.463.409 | Transporte escolar com motorista | Municipio de Marica | RJ |
-| 4 | R$ 57.062.677 | Tratores e microtratores agricultura familiar | Min. Cidadania | DF |
-| 5 | R$ 40.088.078 | Manutencao de 205 Obras de Arte Especiais | DNIT | DF |
-| 6 | R$ 33.923.188 | Servicos apoio administrativo | INCRA | DF |
-| 7 | R$ 29.067.814 | Observabilidade Dynatrace SaaS | STJ | DF |
-| 8 | R$ 27.069.600 | Software de gestao integrado | Municipio de Marica | RJ |
-| 9 | R$ 25.579.730 | Insumos para Dialise Peritoneal | DF Sec. Saude | DF |
-| 10 | R$ 18.648.454 | Ecossistema de backup institucional | CLDF | DF |
-| 11 | R$ 14.457.322 | Kits material escolar | Municipio Sta Luzia | MG |
-| 12 | R$ 13.644.138 | Analises quimicas (7.000+ amostras) | CPRM | RJ |
-| 13 | R$ 11.749.274 | Monitores Triagem/Sinais Vitais | DF Sec. Saude | DF |
-| 14 | R$ 11.102.680 | Medicamentos (fornecimento) | FMS | RJ |
-| 15 | R$ 10.332.573 | Plano Saude Coletivo Empresarial | Comite Paraolimpico | SP |
-
----
-
-*Gerado por Squad Ataque Turbo — SmartLic v0.5*
-*Zero chamadas OpenAI. Dados reais do PNCP. Emails prontos para copy/paste.*
+## Métricas da Execução (v2)
+- **Editais escaneados:** ~1.500 publicações PNCP (modalidades 4, 5, 6, 8)
+- **Editais com prazo hábil (>02/03/2026):** 32 de 405 (~8%)
+- **Requests PNCP publicações:** ~40 páginas
+- **Requests OpenCNPJ:** 6
+- **Fontes:** PNCP, OpenCNPJ
+
+## Notas para Próxima Execução
+1. Taxa de editais com prazo hábil baixa (8%) — indica que a maioria dos editais publicados no período já venceu. Considerar buscar apenas últimos 5 dias para maior taxa de prazo futuro.
+2. RJ teve 0 editais com prazo futuro — pouca atividade no período ou timeouts na PNCP impediram cobertura completa.
+3. Portal da Transparência com token configurado — incluir como fonte na próxima execução.
+4. PNCP `/contratacoes/publicacao` requer `codigoModalidadeContratacao` obrigatório.

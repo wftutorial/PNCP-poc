@@ -143,6 +143,117 @@ class FilterStatsTracker:
 
 
 # ---------------------------------------------------------------------------
-# Global singleton — imported by filter.py and admin.py
+# STORY-351: Discard Rate Tracker (30-day moving average for /v1/metrics/discard-rate)
+# ---------------------------------------------------------------------------
+
+
+class DiscardRateTracker:
+    """Tracks per-search filter input/output counts for discard rate computation.
+
+    Used by the public ``GET /v1/metrics/discard-rate`` endpoint to serve
+    a 30-day moving average of the filter discard rate (overall + per-sector).
+    """
+
+    def __init__(self, retention_days: int = 30) -> None:
+        self._records: List[Dict] = []
+        self._lock = Lock()
+        self._retention_days = retention_days
+
+    def record(
+        self, input_count: int, output_count: int, sector: str, search_id: str = ""
+    ) -> None:
+        """Record a single search's filter input/output counts."""
+        if input_count <= 0:
+            return
+
+        entry: Dict = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "input": input_count,
+            "output": output_count,
+            "sector": sector or "unknown",
+        }
+        if search_id:
+            entry["search_id"] = search_id
+
+        with self._lock:
+            self._records.append(entry)
+
+        # AC9: Structured log
+        discard_rate = round(1 - output_count / input_count, 4) if input_count > 0 else 0
+        logger.info(
+            "filter_stats",
+            extra={
+                "event": "filter_stats",
+                "input": input_count,
+                "output": output_count,
+                "discard_rate": discard_rate,
+                "sector": sector or "unknown",
+                "search_id": search_id,
+            },
+        )
+
+    def get_discard_rate(self, days: int = 30) -> Dict:
+        """Compute the moving-average discard rate over the last *days* days.
+
+        Returns:
+            {
+                "discard_rate_pct": float,  # overall percentage (e.g. 87.3)
+                "sample_size": int,         # number of searches in window
+                "total_input": int,
+                "total_output": int,
+                "period_days": int,
+                "per_sector": { "sector_id": float, ... },
+            }
+        """
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+
+        with self._lock:
+            recent = [r for r in self._records if r["timestamp"] >= cutoff]
+
+        total_input = sum(r["input"] for r in recent)
+        total_output = sum(r["output"] for r in recent)
+        overall_rate = round((1 - total_output / total_input) * 100, 1) if total_input > 0 else 0.0
+
+        # Per-sector aggregation
+        sectors: Dict[str, Dict] = {}
+        for r in recent:
+            s = r["sector"]
+            if s not in sectors:
+                sectors[s] = {"input": 0, "output": 0}
+            sectors[s]["input"] += r["input"]
+            sectors[s]["output"] += r["output"]
+
+        per_sector: Dict[str, float] = {}
+        for s, data in sectors.items():
+            per_sector[s] = (
+                round((1 - data["output"] / data["input"]) * 100, 1)
+                if data["input"] > 0
+                else 0.0
+            )
+
+        return {
+            "discard_rate_pct": overall_rate,
+            "sample_size": len(recent),
+            "total_input": total_input,
+            "total_output": total_output,
+            "period_days": days,
+            "per_sector": per_sector,
+        }
+
+    def cleanup_old(self) -> int:
+        """Remove entries older than the retention period."""
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=self._retention_days)).isoformat()
+        with self._lock:
+            before = len(self._records)
+            self._records = [r for r in self._records if r["timestamp"] >= cutoff]
+            removed = before - len(self._records)
+        if removed > 0:
+            logger.info(f"discard_rate_tracker cleanup: removed {removed} old entries")
+        return removed
+
+
+# ---------------------------------------------------------------------------
+# Global singletons — imported by filter.py, admin.py, search_pipeline.py
 # ---------------------------------------------------------------------------
 filter_stats_tracker = FilterStatsTracker()
+discard_rate_tracker = DiscardRateTracker()

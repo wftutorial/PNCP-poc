@@ -39,7 +39,7 @@ export const comparisonTable: ComparisonRow[] = [
     feature: "Seleção de editais",
     traditional: "Você adivinha palavras-chave e torce para acertar",
     smartlic: "O sistema cruza seu perfil com cada edital e entrega só o que é compatível",
-    advantage: "Elimina 87% de ruído",
+    advantage: "Elimina a maioria do ruído",
     icon: Search,
   },
   {
@@ -373,7 +373,7 @@ export const beforeAfter: BeforeAfterItem[] = [
   {
     aspect: "Editais",
     before: "Você analisa dezenas de editais irrelevantes por semana",
-    after: "87% descartados automaticamente — sobra só o que é compatível com seu perfil",
+    after: "A maioria descartados automaticamente — sobra só o que é compatível com seu perfil",
     icon: Target,
   },
   {

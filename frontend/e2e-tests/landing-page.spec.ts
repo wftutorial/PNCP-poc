@@ -174,7 +174,9 @@ test.describe('Landing Page', () => {
 
     // Check that final values are displayed
     await expect(page.getByText('15')).toBeVisible();
-    await expect(page.getByText('87%')).toBeVisible();
+    // STORY-351: Discard rate is now dynamic — check for either a number% or "A maioria"
+    const discardStat = page.locator('text=/\\d+%|A maioria/');
+    await expect(discardStat.first()).toBeVisible();
     await expect(page.getByText('27')).toBeVisible();
   });
 

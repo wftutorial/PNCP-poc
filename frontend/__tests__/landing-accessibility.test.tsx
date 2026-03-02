@@ -5,9 +5,10 @@
  *
  * SAB-006: HeroSection stats badges removed (consolidated into StatsSection).
  * Only StatsSection counters remain.
+ * STORY-351: Discard rate is now dynamic — test with mocked fetch.
  */
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 
 // ---- Mocks ----
 
@@ -57,6 +58,14 @@ jest.mock('../app/hooks/useInView', () => ({
   useInView: () => ({ ref: { current: null }, isInView: true }),
 }));
 
+// STORY-351: Mock fetch for discard rate API
+beforeEach(() => {
+  global.fetch = jest.fn().mockResolvedValue({
+    ok: true,
+    json: () => Promise.resolve({ discard_rate_pct: 0, sample_size: 0 }),
+  });
+});
+
 // ---- Imports (after mocks) ----
 import StatsSection from '../app/components/landing/StatsSection';
 
@@ -71,11 +80,14 @@ describe('UX-344 + SAB-006 — Landing Page Accessible Counters', () => {
       ).toBeInTheDocument();
     });
 
-    it('renders aria-label="87% de editais descartados"', () => {
+    it('renders aria-label for discard rate (STORY-351: dynamic fallback)', async () => {
       render(<StatsSection />);
-      expect(
-        screen.getByRole('text', { name: '87% de editais descartados' })
-      ).toBeInTheDocument();
+      // With sample_size=0, fallback to "A maioria dos editais descartados"
+      await waitFor(() => {
+        expect(
+          screen.getByRole('text', { name: 'A maioria dos editais descartados' })
+        ).toBeInTheDocument();
+      }, { timeout: 3000 });
     });
 
     it('renders aria-label="1000+ regras de filtragem"', () => {

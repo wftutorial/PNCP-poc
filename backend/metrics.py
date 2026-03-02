@@ -520,6 +520,29 @@ ALERTS_PROCESSING_DURATION = _create_histogram(
     buckets=[5, 10, 30, 60, 120, 300, 600],
 )
 
+# ============================================================================
+# STORY-351: Filter discard rate observability
+# ============================================================================
+
+FILTER_INPUT_TOTAL = _create_counter(
+    "smartlic_filter_input_total",
+    "Total bids entering the filter pipeline",
+    labelnames=["sector", "source"],
+)
+
+FILTER_OUTPUT_TOTAL = _create_counter(
+    "smartlic_filter_output_total",
+    "Total bids passing the filter pipeline",
+    labelnames=["sector", "source"],
+)
+
+FILTER_DISCARD_RATE = _create_histogram(
+    "smartlic_filter_discard_rate",
+    "Filter discard rate ratio (1 - output/input)",
+    labelnames=["sector"],
+    buckets=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.95, 0.99, 1.0],
+)
+
 # STORY-350 AC3: Per-source bids fetched (enables future coverage measurement)
 SOURCES_BIDS_FETCHED = _create_counter(
     "smartlic_sources_bids_fetched_total",
@@ -532,6 +555,13 @@ ORG_CONTEXT_STRIPPED = _create_counter(
     "smartlic_org_context_stripped_total",
     "Bid descriptions where org context was stripped before keyword matching",
     labelnames=["sector"],
+)
+
+# STORY-354 AC5: LLM fallback to PENDING_REVIEW counter
+LLM_FALLBACK_PENDING = _create_counter(
+    "smartlic_llm_fallback_pending_total",
+    "Bids classified as PENDING_REVIEW due to LLM unavailability",
+    labelnames=["sector", "reason"],
 )
 
 # STORY-352 AC4: 30-day uptime percentage gauge (updated by health canary)

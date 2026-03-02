@@ -43,7 +43,7 @@ from log_sanitizer import mask_user_id
 from redis_pool import get_fallback_cache
 from search_cache import save_to_cache as _supabase_save_cache, get_from_cache as _supabase_get_cache, get_from_cache_cascade
 from fastapi import HTTPException
-from metrics import SEARCH_DURATION, FETCH_DURATION, CACHE_HITS, CACHE_MISSES, ACTIVE_SEARCHES, SEARCHES, FILTER_DECISIONS, SEARCH_RESPONSE_STATE
+from metrics import SEARCH_DURATION, FETCH_DURATION, CACHE_HITS, CACHE_MISSES, ACTIVE_SEARCHES, SEARCHES, FILTER_DECISIONS, SEARCH_RESPONSE_STATE, FILTER_INPUT_TOTAL, FILTER_OUTPUT_TOTAL, FILTER_DISCARD_RATE
 from viability import assess_batch as viability_assess_batch
 from telemetry import get_tracer, optional_span
 
@@ -1993,6 +1993,25 @@ class SearchPipeline:
             if passed > 0:
                 FILTER_DECISIONS.labels(stage="final", decision="pass").inc(passed)
 
+        # STORY-351 AC1+AC2: Filter input/output counters + discard rate histogram
+        _input_count = stats.get("total", len(ctx.licitacoes_raw)) if stats else len(ctx.licitacoes_raw)
+        _output_count = stats.get("aprovadas", len(ctx.licitacoes_filtradas)) if stats else len(ctx.licitacoes_filtradas)
+        _sector = ctx.request.setor_id or "unknown"
+        FILTER_INPUT_TOTAL.labels(sector=_sector, source="all").inc(_input_count)
+        FILTER_OUTPUT_TOTAL.labels(sector=_sector, source="all").inc(_output_count)
+        if _input_count > 0:
+            _discard_ratio = 1 - (_output_count / _input_count)
+            FILTER_DISCARD_RATE.labels(sector=_sector).observe(_discard_ratio)
+
+        # STORY-351 AC9+AC3: Record for discard rate endpoint (30-day moving average)
+        from filter_stats import discard_rate_tracker
+        discard_rate_tracker.record(
+            input_count=_input_count,
+            output_count=_output_count,
+            sector=_sector,
+            search_id=ctx.search_id or "",
+        )
+
         # Diagnostic sample
         if stats.get('rejeitadas_keyword', 0) > 0:
             keyword_rejected_sample = []
@@ -2546,6 +2565,8 @@ class SearchPipeline:
             filter_summary=ctx.filter_summary,
             is_simplified=ctx.is_simplified,
             relaxation_level=ctx.relaxation_level,
+            # STORY-354 AC2: Pending review count
+            pending_review_count=ctx.filter_stats.get("pending_review_count", 0),
         )
 
         logger.info(
@@ -2557,8 +2578,52 @@ class SearchPipeline:
                 "queue_mode": ctx.queue_mode,
                 "llm_status": ctx.llm_status,
                 "excel_status": ctx.excel_status,
+                "pending_review_count": ctx.response.pending_review_count,
             },
         )
+
+        # STORY-354 AC4+AC7: Store pending bids in Redis and enqueue reclassify job
+        _pr_count = ctx.filter_stats.get("pending_review_count", 0)
+        if _pr_count > 0:
+            try:
+                # Collect pending review bids from filtered results
+                _pending_bids = [
+                    lic for lic in ctx.licitacoes_filtradas
+                    if lic.get("_pending_review")
+                ]
+                if _pending_bids:
+                    from job_queue import store_pending_review_bids, is_queue_available, enqueue_job
+                    _sector_name = ""
+                    _sector_id = ""
+                    if ctx.request.setor:
+                        try:
+                            _sec = get_sector(ctx.request.setor)
+                            _sector_name = _sec.name
+                            _sector_id = ctx.request.setor
+                        except Exception:
+                            pass
+
+                    await store_pending_review_bids(
+                        search_id=ctx.search_id,
+                        bids=_pending_bids,
+                        sector_name=_sector_name,
+                    )
+
+                    if await is_queue_available():
+                        await enqueue_job(
+                            "reclassify_pending_bids_job",
+                            search_id=ctx.search_id,
+                            sector_name=_sector_name,
+                            sector_id=_sector_id,
+                            attempt=1,
+                            _defer_by=300,  # 5 min delay — give LLM time to recover
+                        )
+                        logger.info(
+                            f"STORY-354: Enqueued reclassify job for {len(_pending_bids)} bids "
+                            f"(search_id={ctx.search_id})"
+                        )
+            except Exception as _pr_err:
+                logger.warning(f"STORY-354: Failed to enqueue reclassify job: {_pr_err}")
 
     # ------------------------------------------------------------------
     # STORY-256 AC13: Sanctions enrichment helper

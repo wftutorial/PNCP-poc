@@ -36,7 +36,7 @@ export const hero = {
   trustBadges: [
     {
       icon: Target,
-      text: "87% descartados",
+      text: "A maioria descartados",
       detail: "Editais eliminados por irrelevância ao seu perfil",
     },
     {
@@ -73,7 +73,7 @@ export const valueProps = {
       "Você para de gastar horas avaliando editais incompatíveis. O SmartLic aplica mais de 1.000 regras por setor para separar o que tem potencial real de retorno do que é ruído. Sobra só o que vale sua proposta.",
     icon: Target,
     metric: "Foco",
-    proof: "87% dos editais descartados antes de chegar até você",
+    proof: "A maioria dos editais descartados antes de chegar até você",
   },
 
   analysis: {

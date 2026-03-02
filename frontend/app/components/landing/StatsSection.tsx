@@ -9,19 +9,44 @@ interface StatsSectionProps {
 
 /**
  * SAB-006 AC2/AC6: Consolidated stats section with counter animation.
- * All key metrics (87%, 15, 27, 1000+) live here — removed from other sections.
+ * All key metrics (discard rate, 15, 27, 1000+) live here — removed from other sections.
+ * STORY-351 AC4/AC6: Discard rate fetched dynamically from /api/metrics/discard-rate.
+ * Fallback: shows "a maioria" if API returns 0 or fails.
  * Starts with opacity: 0 → fade-in + counting animation (fixes FOUC from P3-01).
  */
 export default function StatsSection({ className = '' }: StatsSectionProps) {
   const { ref, isInView } = useInView({ threshold: 0.2 });
   const [counts, setCounts] = useState({ sectors: 0, rules: 0, states: 0, filtered: 0 });
+  const [discardRate, setDiscardRate] = useState<number | null>(null);
+  const [discardLoading, setDiscardLoading] = useState(true);
   const hasAnimated = useRef(false);
 
+  // STORY-351 AC4: Fetch discard rate from backend
   useEffect(() => {
-    if (!isInView || hasAnimated.current) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/metrics/discard-rate');
+        if (!res.ok) throw new Error('fetch failed');
+        const data = await res.json();
+        if (!cancelled && data.sample_size > 0 && data.discard_rate_pct > 0) {
+          setDiscardRate(Math.round(data.discard_rate_pct));
+        }
+      } catch {
+        // Fallback handled in render
+      } finally {
+        if (!cancelled) setDiscardLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!isInView || hasAnimated.current || discardLoading) return;
     hasAnimated.current = true;
 
-    const targets = { sectors: 15, rules: 1000, states: 27, filtered: 87 };
+    const filteredTarget = discardRate ?? 0; // 0 means fallback text, not animated
+    const targets = { sectors: 15, rules: 1000, states: 27, filtered: filteredTarget };
     const duration = 1200;
     const steps = 40;
     let step = 0;
@@ -39,7 +64,15 @@ export default function StatsSection({ className = '' }: StatsSectionProps) {
     }, duration / steps);
 
     return () => clearInterval(timer);
-  }, [isInView]);
+  }, [isInView, discardRate, discardLoading]);
+
+  // STORY-351 AC4: Determine label — use "a maioria" if no data available
+  const showFallbackLabel = !discardLoading && discardRate === null;
+  const filteredDisplay = showFallbackLabel ? 'A maioria' : `${counts.filtered}%`;
+  // During animation with rate=0, show text not "0%"
+  const filteredAriaLabel = showFallbackLabel
+    ? 'A maioria dos editais descartados'
+    : `${discardRate ?? 87}% de editais descartados`;
 
   return (
     <section
@@ -75,12 +108,18 @@ export default function StatsSection({ className = '' }: StatsSectionProps) {
         <div className="flex-1 grid sm:grid-cols-3 gap-6 w-full">
           <div
             role="text"
-            aria-label="87% de editais descartados"
+            aria-label={filteredAriaLabel}
             className={`text-center p-6 bg-surface-0 rounded-card border border-[var(--border)] transition-all duration-500 delay-200 hover:-translate-y-0.5 hover:shadow-md ${
               isInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
             }`}
           >
-            <div aria-hidden="true" className="text-3xl sm:text-4xl font-bold text-brand-blue tabular-nums">{counts.filtered}%</div>
+            <div aria-hidden="true" className="text-3xl sm:text-4xl font-bold text-brand-blue tabular-nums">
+              {discardLoading ? (
+                <span className="inline-block w-16 h-8 bg-brand-blue-subtle/30 rounded animate-pulse" />
+              ) : (
+                filteredDisplay
+              )}
+            </div>
             <div aria-hidden="true" className="text-sm text-ink-secondary mt-1">de editais descartados</div>
           </div>
 

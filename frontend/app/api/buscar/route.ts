@@ -96,8 +96,29 @@ export async function POST(request: NextRequest) {
     // GTM-INFRA-002 AC6: Expanded retry statuses (502/524 from Railway timeouts/deploys)
     const RETRYABLE_STATUSES = [502, 503, 504, 524];
 
+    // STORY-357 AC1-AC2: Track auth refresh attempts (max 1 retry on 401)
+    let authRefreshAttempted = false;
+
     let response: Response | null = null;
     let lastError: { detail?: any; status: number } | null = null;
+
+    // STORY-357: Build request body once (reused on auth retry)
+    const requestBody = JSON.stringify({
+      ufs,
+      data_inicial,
+      data_final,
+      setor_id: setor_id || "vestuario",
+      termos_busca: termos_busca || undefined,
+      search_id: search_id || undefined,
+      // New filter parameters
+      status: status || undefined,
+      modalidades: modalidades || undefined,
+      valor_minimo: valor_minimo ?? undefined,
+      valor_maximo: valor_maximo ?? undefined,
+      esferas: esferas || undefined,
+      municipios: municipios || undefined,
+      ordenacao: ordenacao || undefined,
+    });
 
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       if (attempt > 0) {
@@ -114,22 +135,7 @@ export async function POST(request: NextRequest) {
         response = await fetch(`${backendUrl}/v1/buscar`, {
           method: "POST",
           headers,
-          body: JSON.stringify({
-            ufs,
-            data_inicial,
-            data_final,
-            setor_id: setor_id || "vestuario",
-            termos_busca: termos_busca || undefined,
-            search_id: search_id || undefined,
-            // New filter parameters
-            status: status || undefined,
-            modalidades: modalidades || undefined,
-            valor_minimo: valor_minimo ?? undefined,
-            valor_maximo: valor_maximo ?? undefined,
-            esferas: esferas || undefined,
-            municipios: municipios || undefined,
-            ordenacao: ordenacao || undefined,
-          }),
+          body: requestBody,
           signal: controller.signal,
         });
 
@@ -139,6 +145,28 @@ export async function POST(request: NextRequest) {
         if (response.status === 202) {
           const queuedData = await response.json();
           return NextResponse.json(queuedData, { status: 202 });
+        }
+
+        // STORY-357 AC1-AC2: On 401, attempt token refresh and retry (max 1 retry)
+        if (response.status === 401 && !authRefreshAttempted) {
+          authRefreshAttempted = true;
+          console.warn("[buscar] Backend returned 401 — attempting token refresh and retry");
+          const newToken = await getRefreshedToken();
+          if (newToken) {
+            headers["Authorization"] = `Bearer ${newToken}`;
+            // Retry same attempt index (don't increment)
+            attempt--;
+            continue;
+          }
+          // STORY-357 AC3: Refresh failed — return 401 with returnTo hint
+          console.warn("[buscar] Token refresh failed — session expired");
+          return NextResponse.json(
+            {
+              message: "Sua sessão expirou. Faça login novamente.",
+              returnTo: "/buscar",
+            },
+            { status: 401 }
+          );
         }
 
         // If successful or non-retryable error, break out

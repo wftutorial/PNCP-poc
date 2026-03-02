@@ -27,19 +27,29 @@ Token refresh no proxy `/api/buscar/route.ts` usa `getRefreshedToken()` que pode
 
 ## Critérios de Aceite
 
-- [ ] AC1: No proxy `/api/buscar/route.ts`, implementar refresh-and-retry: se backend retorna 401, chamar `supabase.auth.refreshSession()` e reenviar request (max 1 retry)
-- [ ] AC2: Limite de 1 retry por request (evitar loop infinito)
-- [ ] AC3: Se refresh falhar, redirecionar para `/login` com query param `?returnTo=/buscar`
-- [ ] AC4: No `useSearch.ts`, detectar 401 e mostrar mensagem amigável: "Sua sessão expirou. Reconectando..." (em vez de erro genérico)
-- [ ] AC5: Implementar pre-emptive refresh: se token expira em < 5min, refreshar antes de iniciar busca
-- [ ] AC6: Testes: mock de token expirado durante busca → refresh automático bem-sucedido
-- [ ] AC7: Testes: mock de refresh falhando → redirect para /login com returnTo
+- [x] AC1: No proxy `/api/buscar/route.ts`, implementar refresh-and-retry: se backend retorna 401, chamar `supabase.auth.refreshSession()` e reenviar request (max 1 retry)
+- [x] AC2: Limite de 1 retry por request (evitar loop infinito)
+- [x] AC3: Se refresh falhar, redirecionar para `/login` com query param `?returnTo=/buscar`
+- [x] AC4: No `useSearch.ts`, detectar 401 e mostrar mensagem amigável: "Sua sessão expirou. Reconectando..." (em vez de erro genérico)
+- [x] AC5: Implementar pre-emptive refresh: se token expira em < 5min, refreshar antes de iniciar busca
+- [x] AC6: Testes: mock de token expirado durante busca → refresh automático bem-sucedido
+- [x] AC7: Testes: mock de refresh falhando → redirect para /login com returnTo
 
 ## Arquivos Afetados
 
-- `frontend/app/api/buscar/route.ts`
-- `frontend/app/buscar/hooks/useSearch.ts`
-- `frontend/lib/supabase-browser.ts`
+- `frontend/app/api/buscar/route.ts` — AC1/AC2/AC3: refresh-and-retry on 401, max 1 auth retry
+- `frontend/app/buscar/hooks/useSearch.ts` — AC4: friendly session expired message, AC5: pre-emptive refresh
+- `frontend/__tests__/api/buscar-auth-refresh.test.ts` — NEW: 4 proxy tests (AC6/AC7)
+- `frontend/__tests__/hooks/useSearch-auth-refresh.test.ts` — NEW: 4 client tests (AC4/AC5/AC7)
+- `frontend/__tests__/hooks/useSearch.test.ts` — Added supabase mock
+- `frontend/__tests__/hooks/useSearch-failures.test.ts` — Added supabase mock
+- `frontend/__tests__/hooks/useSearch-async.test.ts` — Added supabase mock
+- `frontend/__tests__/hooks/useSearch-sab001.test.ts` — Added supabase mock
+- `frontend/__tests__/hooks/useSearch-sab005.test.ts` — Added supabase mock
+- `frontend/__tests__/hooks/useSearch-sse-fix.test.ts` — Already had supabase mock (no change)
+- `frontend/__tests__/retry-unified.test.tsx` — Added supabase mock
+- `frontend/__tests__/gtm-fix-033-sse-resilience.test.tsx` — Added supabase mock
+- `frontend/__tests__/story-257b/ux-transparente.test.tsx` — Added supabase mock
 
 ## Validação
 

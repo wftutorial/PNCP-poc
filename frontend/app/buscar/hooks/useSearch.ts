@@ -20,6 +20,7 @@ import { savePartialSearch, recoverPartialSearch, clearPartialSearch, cleanupExp
 import { toast } from "sonner";
 import { dateDiffInDays } from "../../../lib/utils/dateDiffInDays";
 import { getCorrelationId, logCorrelatedRequest } from "../../../lib/utils/correlationId";
+import { supabase } from "../../../lib/supabase";
 
 export interface SearchFiltersSnapshot {
   ufs: Set<string>;
@@ -137,6 +138,8 @@ export interface UseSearchReturn {
   buscar: (options?: { forceFresh?: boolean }) => Promise<void>;
   buscarForceFresh: () => Promise<void>;
   cancelSearch: () => void;
+  /** CRIT-SSE-FIX AC1: View partial results without destroying search state */
+  viewPartialResults: () => void;
   handleDownload: () => Promise<void>;
   handleSaveSearch: () => void;
   confirmSaveSearch: () => void;
@@ -235,6 +238,10 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
   // STAB-006 AC3: Partial results recovery from localStorage
   const [showingPartialResults, setShowingPartialResults] = useState(false);
 
+  // CRIT-SSE-FIX AC2: Track whether SSE terminal event was received.
+  // Prevents finally block from killing searchId before SSE delivers terminal event.
+  const sseTerminalReceivedRef = useRef(false);
+
   // STAB-003 AC5: Finalizing indicator (>100s elapsed)
   const [isFinalizing, setIsFinalizing] = useState(false);
   const searchStartTimeRef = useRef<number>(0);
@@ -282,6 +289,11 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
   // F-01 AC21: Handle background job completion via SSE
   // GTM-ARCH-001 AC3/AC4: Also handles search_complete from async Worker
   const handleSseEvent = async (event: SearchProgressEvent) => {
+    // CRIT-SSE-FIX AC2: Track terminal SSE events so finally block knows when SSE is done
+    if (['complete', 'error', 'degraded', 'search_complete'].includes(event.stage)) {
+      sseTerminalReceivedRef.current = true;
+    }
+
     if (event.stage === 'search_complete' && event.detail.has_results) {
       // GTM-ARCH-001 AC3: Async search completed — fetch results from /buscar-results
       const sid = event.detail.search_id || asyncSearchIdRef.current;
@@ -386,7 +398,8 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
   // SSE hook — GTM-FIX-033 AC2: sseDisconnected for resilience
   // A-04: Keep SSE open during background fetch (enabled when loading OR liveFetchInProgress)
   // F-01: Keep SSE open when llm_status/excel_status is "processing" (background jobs running)
-  const hasProcessingJobs = !!(result?.llm_status === 'processing' || result?.excel_status === 'processing');
+  // CRIT-SSE-FIX AC2: Include bid_analysis_status in processing check
+  const hasProcessingJobs = !!(result?.llm_status === 'processing' || result?.excel_status === 'processing' || result?.bid_analysis_status === 'processing');
   // CRIT-003 AC19-AC20: Single consolidated SSE connection (replaces useSearchProgress + useUfProgress)
   const {
     currentEvent: sseEvent, sseAvailable, sseDisconnected,
@@ -486,6 +499,46 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
     asyncSearchIdRef.current = null;
   };
 
+  // CRIT-SSE-FIX AC1: View partial results without destroying search state.
+  // Unlike cancelSearch(), this preserves accumulated results and shows them immediately.
+  const viewPartialResults = () => {
+    // Abort the POST fetch in flight — we don't need to wait for full results
+    abortControllerRef.current?.abort();
+
+    // Clear timers
+    if (llmTimeoutRef.current) { clearTimeout(llmTimeoutRef.current); llmTimeoutRef.current = null; }
+    if (finalizingTimerRef.current) { clearTimeout(finalizingTimerRef.current); finalizingTimerRef.current = null; }
+    setIsFinalizing(false);
+    if (skeletonTimeoutTimerRef.current) { clearTimeout(skeletonTimeoutTimerRef.current); skeletonTimeoutTimerRef.current = null; }
+    setSkeletonTimeoutReached(false);
+
+    // If we already have a result (from POST returning before user clicked), just show it
+    if (result && result.licitacoes && result.licitacoes.length > 0) {
+      setLoading(false);
+      setSearchId(null);
+      setUseRealProgress(false);
+      return;
+    }
+
+    // Otherwise, recover partial results from localStorage (STAB-006)
+    const sid = asyncSearchIdRef.current || searchId;
+    if (sid) {
+      const partial = recoverPartialSearch(sid);
+      if (partial && partial.partialResult) {
+        setResult(partial.partialResult as BuscaResult);
+        setShowingPartialResults(true);
+      }
+    }
+
+    // Stop loading and clean up SSE
+    setLoading(false);
+    setSearchId(null);
+    setUseRealProgress(false);
+    setAsyncSearchActive(false);
+    asyncSearchActiveRef.current = false;
+    asyncSearchIdRef.current = null;
+  };
+
   // CRIT-006 AC18: Retry cooldown scaling by error type
   const getRetryCooldown = (errorMessage: string | null, httpStatus?: number): number => {
     if (httpStatus === 429) return 30; // Rate limit
@@ -560,6 +613,8 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
     setShowingPartialResults(false);
     setIsFinalizing(false);
     sseReconnectAttemptsRef.current = 0;
+    // CRIT-SSE-FIX AC2: Reset terminal tracking for new search
+    sseTerminalReceivedRef.current = false;
 
     // SAB-005 AC1: Start 30s skeleton timeout
     setSkeletonTimeoutReached(false);
@@ -623,13 +678,32 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
     let data: BuscaResult | null = null;
 
     try {
+      // STORY-357 AC5: Pre-emptive token refresh if token expires within 5 minutes.
+      // Prevents 401 during long searches (60-110s) by ensuring a fresh token upfront.
+      let activeToken = session?.access_token || null;
+      if (session?.expires_at) {
+        const expiresInSeconds = session.expires_at - Math.floor(Date.now() / 1000);
+        if (expiresInSeconds < 300) {
+          console.info(`[buscar] Token expires in ${expiresInSeconds}s — pre-emptive refresh`);
+          try {
+            const { data: { session: refreshed } } = await supabase.auth.refreshSession();
+            if (refreshed?.access_token) {
+              activeToken = refreshed.access_token;
+              console.info("[buscar] Pre-emptive token refresh succeeded");
+            }
+          } catch (refreshErr) {
+            console.warn("[buscar] Pre-emptive refresh failed, proceeding with current token", refreshErr);
+          }
+        }
+      }
+
       // STORY-226 AC24: Attach session correlation ID for distributed tracing
       const correlationId = getCorrelationId();
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
         "X-Correlation-ID": correlationId,
       };
-      if (session?.access_token) headers["Authorization"] = `Bearer ${session.access_token}`;
+      if (activeToken) headers["Authorization"] = `Bearer ${activeToken}`;
 
       const MAX_CLIENT_RETRIES = 2;
       const CLIENT_RETRY_DELAYS = [3000, 8000];
@@ -704,8 +778,23 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
                 includeKeywords: filters.searchMode === 'termos' ? filters.termosArray : undefined,
               });
             }
-            window.location.href = "/login";
-            throw attachMeta(new Error("Faca login para continuar"));
+            // STORY-357 AC4: Show friendly message before redirect
+            setError({
+              message: "Sua sessão expirou. Reconectando...",
+              rawMessage: err.message || "Session expired",
+              errorCode: "SESSION_EXPIRED",
+              searchId: newSearchId,
+              correlationId: correlationId,
+              requestId: err.request_id || null,
+              httpStatus: 401,
+              timestamp: new Date().toISOString(),
+            });
+            // STORY-357 AC3: Redirect with returnTo for post-login navigation
+            const returnTo = err.returnTo || "/buscar";
+            setTimeout(() => { window.location.href = `/login?returnTo=${encodeURIComponent(returnTo)}`; }, 1500);
+            const authError = attachMeta(new Error("Sua sessão expirou. Reconectando..."));
+            (authError as any)._searchErrorMeta.errorCode = "SESSION_EXPIRED";
+            throw authError;
           }
 
           if (response.status === 403) {
@@ -945,9 +1034,29 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
       // A-04: Don't kill searchId when live fetch is running in background
       // F-01: Don't kill searchId when background jobs are still processing
       // GTM-ARCH-001: Don't kill searchId when async search is active
-      const hasJobsRunning = data?.llm_status === 'processing' || data?.excel_status === 'processing';
-      if (!liveFetchInProgress && !liveFetchSearchIdRef.current && !hasJobsRunning && !isAsync) {
+      // CRIT-SSE-FIX AC2: Include bid_analysis_status + wait for SSE terminal event
+      const hasJobsRunning = data?.llm_status === 'processing'
+        || data?.excel_status === 'processing'
+        || data?.bid_analysis_status === 'processing';
+      // CRIT-SSE-FIX AC2: Don't kill searchId if SSE hasn't delivered terminal event yet.
+      // When POST returns before SSE emits 'complete', killing searchId closes the
+      // EventSource mid-stream, causing the AbortError at ~43.5s (CRIT-048).
+      // Note: We check sseTerminalReceivedRef (not `searchId` which is a stale closure value).
+      // Safety: if SSE terminal never arrives, a 5s timeout below cleans up.
+      const sseStillActive = !sseTerminalReceivedRef.current;
+      if (!liveFetchInProgress && !liveFetchSearchIdRef.current && !hasJobsRunning && !isAsync && !sseStillActive) {
         setSearchId(null);
+      } else if (sseStillActive && !hasJobsRunning && !isAsync && !liveFetchInProgress) {
+        // CRIT-SSE-FIX AC2: Deferred cleanup — keep SSE alive for 5s after POST returns
+        // so background job events (llm_ready, excel_ready, bid_analysis_ready) can arrive.
+        // After 5s, clean up regardless of SSE terminal status.
+        setTimeout(() => {
+          if (!sseTerminalReceivedRef.current) {
+            console.info('[CRIT-SSE-FIX] SSE terminal timeout (5s) — cleaning up searchId');
+          }
+          sseTerminalReceivedRef.current = true;
+          setSearchId(null);
+        }, 5000);
       }
       setUseRealProgress(false);
       abortControllerRef.current = null;
@@ -1195,7 +1304,7 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
     showSaveDialog, setShowSaveDialog,
     saveSearchName, setSaveSearchName,
     saveError, isMaxCapacity,
-    buscar, buscarForceFresh, cancelSearch, handleDownload,
+    buscar, buscarForceFresh, cancelSearch, viewPartialResults, handleDownload,
     handleSaveSearch, confirmSaveSearch, handleLoadSearch, handleRefresh,
     estimateSearchTime, restoreSearchStateOnMount,
     getRetryCooldown,

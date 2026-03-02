@@ -9,6 +9,9 @@
 jest.mock("../../app/components/AuthProvider", () => ({
   useAuth: () => ({ session: { access_token: "test-token" }, loading: false }),
 }));
+jest.mock("../../lib/supabase", () => ({
+  supabase: { auth: { refreshSession: jest.fn().mockResolvedValue({ data: { session: null } }) } },
+}));
 jest.mock("../../hooks/useQuota", () => ({
   useQuota: () => ({ refresh: jest.fn() }),
 }));

@@ -190,7 +190,8 @@ api_reference:
         - objetoCompra: descrição do objeto
         - valorTotalEstimado: valor estimado
         - anoCompra, sequencialCompra: para construir link
-        - dataAberturaProposta: prazo para propostas
+        - dataAberturaProposta: PRAZO PARA PROPOSTAS (CRÍTICO — incluir no email!)
+        - dataPublicacaoPncp: data de publicação do edital
         - modalidadeNome: modalidade da licitação
         - unidadeOrgao.ufSigla: UF
         - linkSistemaOrigem: link externo do edital
@@ -527,7 +528,13 @@ coordination:
            - UF compatível (mesma UF ou UFs onde já venceu)
            - Faixa de valor compatível (dentro do range histórico do lead)
            - Modalidade compatível
+           - Prazo de proposta ainda aberto (dataAberturaProposta > hoje)
+           DESCARTAR editais com prazo expirado — não têm valor para o lead.
         7. Ranquear editais por relevância (maior match com perfil = mais relevante)
+           Incluir dias restantes para proposta como fator de ranqueamento:
+           - Prazo curto (≤5 dias): urgente — impressiona, mas avaliar se lead consegue reagir
+           - Prazo médio (6-15 dias): ideal — tempo hábil para preparar proposta
+           - Prazo longo (>15 dias): confortável — menor urgência
         8. Construir link oficial para cada edital:
            - PNCP: https://pncp.gov.br/app/editais/{CNPJ}/{ANO}/{SEQ}
            - ComprasGov: link direto se disponível nos dados da API
@@ -575,8 +582,10 @@ coordination:
            Para cada oportunidade mostrada no email, redigir justificativa:
            - Por que esta licitação é relevante PARA ESTE LEAD ESPECÍFICO
            - Cruzar com vitórias passadas (mesmo tipo de objeto/órgão/valor)
-           - Indicar modalidade, prazo, valor estimado
+           - Indicar modalidade, valor estimado, UF
+           - OBRIGATÓRIO: prazo de apresentação de proposta (data DD/MM/AAAA + dias restantes)
            - Indicar nível de concorrência esperado (se dados disponíveis)
+           - Se prazo ≤5 dias: alertar urgência explicitamente no email
 
     - phase: 5_email_and_save
       name: "Redação do Email + Salvamento Automático"
@@ -666,8 +675,8 @@ email_template: |
   • Órgão: {razaoSocial do órgão}
   • Valor estimado: R$ {valor}
   • Modalidade: {modalidade}
-  • Prazo: {dataAberturaProposta}
-  • Link: {https://pncp.gov.br/app/editais/CNPJ/ANO/SEQ}
+  • Prazo para proposta: {dataAberturaProposta — DD/MM/AAAA} ({X dias restantes})
+  • Link do edital: {https://pncp.gov.br/app/editais/CNPJ/ANO/SEQ}
   • **Por que é relevante para a {Empresa}:** {Análise personalizada —
     cruzamento com histórico de vitórias, setor, valor, órgão familiar}
 
@@ -693,10 +702,12 @@ email_template: |
 
   REGRAS DO TEMPLATE:
   - Acentuação correta OBRIGATÓRIA (á, é, í, ó, ú, ã, õ, ç, â, ê, ô)
-  - Cada licitação DEVE ter link oficial do PNCP
+  - Cada licitação DEVE ter link oficial do edital
+  - Cada licitação DEVE ter prazo de apresentação de proposta (data + dias restantes)
   - Análise de relevância DEVE ser personalizada (cruzar com perfil)
+  - NUNCA incluir editais com prazo já expirado
   - NUNCA mencionar "assinatura", "plano", "trial"
-  - NUNCA fabricar dados — usar apenas dados reais do PNCP
+  - NUNCA fabricar dados — usar apenas dados reais das APIs
   - Tom: profissional, direto, focado em valor financeiro
 
 # ═══════════════════════════════════════════════════════════════════
@@ -746,9 +757,14 @@ output_rules:
     ### Oportunidades Encontradas
     - Total: {N}
     - Valor total estimado: R$ {valor}
+    - Prazos: {edital mais urgente DD/MM} a {edital mais distante DD/MM}
     - Amostra grátis: {K} de {N} ({ratio}%)
     - Preço do relatório: R$ {preço}
     - Justificativa do preço: {explicação}
+    - Tabela resumo:
+      | # | Objeto | Órgão | Valor | Prazo proposta | Dias restantes | Link |
+      |---|--------|-------|-------|----------------|----------------|------|
+      | 1 | ...    | ...   | ...   | DD/MM/AAAA     | X dias         | ...  |
 
     ### Email
     ```

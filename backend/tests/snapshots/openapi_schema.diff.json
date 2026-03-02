@@ -6529,6 +6529,31 @@
           ]
         }
       },
+      "/admin/support-sla": {
+        "get": {
+          "description": "STORY-353 AC6: Return support SLA metrics.\n\nReturns:\n    avg_response_hours: Average first-response time in business hours\n    pending_count: Number of unanswered conversations\n    breached_count: Number of conversations exceeding 20 business hours",
+          "operationId": "get_support_sla_admin_support_sla_get",
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              },
+              "description": "Successful Response"
+            }
+          },
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "summary": "Get Support Sla",
+          "tags": [
+            "admin"
+          ]
+        }
+      },
       "/admin/trial-emails/preview": {
         "get": {
           "description": "AC15: Preview all 6 trial email templates.",
@@ -9243,6 +9268,21 @@
           ]
         }
       },
+      "/metrics/sse-fallback": {
+        "post": {
+          "description": "STORY-359 AC4: Frontend reports SSE fallback to simulated progress.\n\nLightweight fire-and-forget endpoint \u2014 no auth, no body, just increments counter.",
+          "operationId": "report_sse_fallback_metrics_sse_fallback_post",
+          "responses": {
+            "204": {
+              "description": "Successful Response"
+            }
+          },
+          "summary": "Report Sse Fallback",
+          "tags": [
+            "metrics"
+          ]
+        }
+      },
       "/mfa/recovery-codes": {
         "post": {
           "description": "AC5: Generate 10 recovery codes after MFA enrollment.\n\nThis should be called immediately after successful MFA enrollment.\nStores bcrypt-hashed codes in the database, returns plaintext once.",
@@ -9895,7 +9935,7 @@
           ]
         },
         "post": {
-          "description": "Add a procurement opportunity to the user's pipeline (AC2).\n\nSTORY-265 AC2: Trial expired cannot add items.\nReturns 409 if the item already exists (UNIQUE constraint on user_id + pncp_id).",
+          "description": "Add a procurement opportunity to the user's pipeline (AC2).\n\nSTORY-265 AC2: Trial expired cannot add items.\nSTORY-356: Enforce pipeline item limit (trial: 5 items max).\nReturns 409 if the item already exists (UNIQUE constraint on user_id + pncp_id).",
           "operationId": "create_pipeline_item_pipeline_post",
           "requestBody": {
             "content": {
@@ -10067,7 +10107,7 @@
       },
       "/plans": {
         "get": {
-          "description": "Get available subscription plans.",
+          "description": "Get available subscription plans with billing period pricing.\n\nSTORY-360 AC1: Single source of truth \u2014 DB (synced from Stripe) is master.\nReturns per-period pricing from plan_billing_periods table.\nStripe price IDs stripped from response (STORY-210 AC11).",
           "operationId": "get_plans_plans_get",
           "responses": {
             "200": {
@@ -11390,6 +11430,31 @@
           "summary": "Get Slo Alerts",
           "tags": [
             "admin-slo"
+          ]
+        }
+      },
+      "/v1/admin/support-sla": {
+        "get": {
+          "description": "STORY-353 AC6: Return support SLA metrics.\n\nReturns:\n    avg_response_hours: Average first-response time in business hours\n    pending_count: Number of unanswered conversations\n    breached_count: Number of conversations exceeding 20 business hours",
+          "operationId": "get_support_sla_v1_admin_support_sla_get",
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              },
+              "description": "Successful Response"
+            }
+          },
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "summary": "Get Support Sla",
+          "tags": [
+            "admin"
           ]
         }
       },
@@ -14248,6 +14313,21 @@
           ]
         }
       },
+      "/v1/metrics/sse-fallback": {
+        "post": {
+          "description": "STORY-359 AC4: Frontend reports SSE fallback to simulated progress.\n\nLightweight fire-and-forget endpoint \u2014 no auth, no body, just increments counter.",
+          "operationId": "report_sse_fallback_v1_metrics_sse_fallback_post",
+          "responses": {
+            "204": {
+              "description": "Successful Response"
+            }
+          },
+          "summary": "Report Sse Fallback",
+          "tags": [
+            "metrics"
+          ]
+        }
+      },
       "/v1/mfa/recovery-codes": {
         "post": {
           "description": "AC5: Generate 10 recovery codes after MFA enrollment.\n\nThis should be called immediately after successful MFA enrollment.\nStores bcrypt-hashed codes in the database, returns plaintext once.",
@@ -14900,7 +14980,7 @@
           ]
         },
         "post": {
-          "description": "Add a procurement opportunity to the user's pipeline (AC2).\n\nSTORY-265 AC2: Trial expired cannot add items.\nReturns 409 if the item already exists (UNIQUE constraint on user_id + pncp_id).",
+          "description": "Add a procurement opportunity to the user's pipeline (AC2).\n\nSTORY-265 AC2: Trial expired cannot add items.\nSTORY-356: Enforce pipeline item limit (trial: 5 items max).\nReturns 409 if the item already exists (UNIQUE constraint on user_id + pncp_id).",
           "operationId": "create_pipeline_item_v1_pipeline_post",
           "requestBody": {
             "content": {
@@ -15072,7 +15152,7 @@
       },
       "/v1/plans": {
         "get": {
-          "description": "Get available subscription plans.",
+          "description": "Get available subscription plans with billing period pricing.\n\nSTORY-360 AC1: Single source of truth \u2014 DB (synced from Stripe) is master.\nReturns per-period pricing from plan_billing_periods table.\nStripe price IDs stripped from response (STORY-210 AC11).",
           "operationId": "get_plans_v1_plans_get",
           "responses": {
             "200": {

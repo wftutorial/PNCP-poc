@@ -1230,3 +1230,147 @@ async def _sector_stats_loop() -> None:
         except Exception as e:
             logger.error(f"Sector stats refresh error: {e}", exc_info=True)
             await asyncio.sleep(600)  # Retry in 10min on error
+
+
+# ============================================================================
+# STORY-353: Support SLA — check unanswered messages (every 4h)
+# ============================================================================
+
+
+async def start_support_sla_task() -> asyncio.Task:
+    """STORY-353 AC3: Start the periodic support SLA check task.
+
+    Runs every 4 hours. Checks for unanswered conversations exceeding
+    20 business hours and sends admin email alerts.
+    Returns the Task so it can be cancelled during shutdown.
+    """
+    task = asyncio.create_task(_support_sla_loop(), name="support_sla")
+    logger.info("STORY-353: Support SLA check started (interval: 4h)")
+    return task
+
+
+async def check_unanswered_messages() -> dict:
+    """STORY-353 AC3+AC4: Check for unanswered support messages.
+
+    Finds conversations with status != 'resolvido' and first_response_at IS NULL,
+    calculates elapsed business hours since created_at, and sends email alerts
+    for those exceeding 20 business hours.
+
+    Returns:
+        dict with counts: {"checked": N, "breached": M, "alerted": A}
+    """
+    import os
+
+    try:
+        from supabase_client import get_supabase, sb_execute
+        from business_hours import calculate_business_hours
+        from config import SUPPORT_SLA_ALERT_THRESHOLD_HOURS
+        from metrics import SUPPORT_PENDING_MESSAGES
+
+        sb = get_supabase()
+        now = datetime.now(timezone.utc)
+
+        # Find unanswered conversations (no first_response_at, not resolved)
+        result = await sb_execute(
+            sb.table("conversations")
+            .select("id, user_id, subject, category, created_at")
+            .is_("first_response_at", "null")
+            .neq("status", "resolvido")
+            .order("created_at", desc=False)
+        )
+
+        conversations = result.data or []
+        SUPPORT_PENDING_MESSAGES.set(len(conversations))
+
+        if not conversations:
+            return {"checked": 0, "breached": 0, "alerted": 0}
+
+        breached = []
+        for conv in conversations:
+            from dateutil.parser import isoparse
+            created_at = isoparse(conv["created_at"])
+            elapsed_hours = calculate_business_hours(created_at, now)
+
+            if elapsed_hours >= SUPPORT_SLA_ALERT_THRESHOLD_HOURS:
+                breached.append({
+                    "id": conv["id"],
+                    "subject": conv["subject"],
+                    "category": conv["category"],
+                    "elapsed_hours": elapsed_hours,
+                    "created_at": conv["created_at"],
+                })
+
+        # Send alert email if breaches found
+        alerted = 0
+        if breached:
+            admin_email = os.getenv("ADMIN_EMAIL", "tiago.sasaki@gmail.com")
+            try:
+                from email_service import send_email_async
+
+                items_html = "".join(
+                    f"<tr><td>{b['subject']}</td>"
+                    f"<td>{b['category']}</td>"
+                    f"<td>{b['elapsed_hours']:.1f}h</td>"
+                    f"<td>{b['created_at'][:16]}</td></tr>"
+                    for b in breached
+                )
+
+                html = f"""
+                <h2>Alerta de SLA de Suporte</h2>
+                <p>{len(breached)} mensagem(ns) sem resposta excederam {SUPPORT_SLA_ALERT_THRESHOLD_HOURS}h uteis.</p>
+                <table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse;">
+                    <tr style="background:#f0f0f0;">
+                        <th>Assunto</th><th>Categoria</th>
+                        <th>Horas uteis</th><th>Criada em</th>
+                    </tr>
+                    {items_html}
+                </table>
+                <p>Acesse <a href="https://smartlic.tech/mensagens">SmartLic Mensagens</a> para responder.</p>
+                """
+
+                send_email_async(
+                    to=admin_email,
+                    subject=f"[SLA] {len(breached)} mensagem(ns) sem resposta > {SUPPORT_SLA_ALERT_THRESHOLD_HOURS}h",
+                    html=html,
+                    tags=[{"name": "category", "value": "sla_alert"}],
+                )
+                alerted = len(breached)
+                logger.warning(
+                    "STORY-353 SLA alert: %d breached conversations, email sent to %s",
+                    len(breached), admin_email,
+                )
+            except Exception as e:
+                logger.error("STORY-353: Failed to send SLA alert email: %s", e)
+
+        logger.info(
+            "STORY-353 SLA check: checked=%d, breached=%d, alerted=%d",
+            len(conversations), len(breached), alerted,
+        )
+        return {"checked": len(conversations), "breached": len(breached), "alerted": alerted}
+
+    except Exception as e:
+        logger.error("STORY-353: Support SLA check error: %s", e, exc_info=True)
+        return {"checked": 0, "breached": 0, "alerted": 0, "error": str(e)}
+
+
+async def _support_sla_loop() -> None:
+    """STORY-353 AC3: Run support SLA check every 4 hours."""
+    from config import SUPPORT_SLA_CHECK_INTERVAL_SECONDS
+
+    # Delay 60s after startup
+    await asyncio.sleep(60)
+
+    while True:
+        try:
+            result = await check_unanswered_messages()
+            logger.info(
+                "STORY-353 SLA cycle: %s at %s",
+                result, datetime.now(timezone.utc).isoformat(),
+            )
+            await asyncio.sleep(SUPPORT_SLA_CHECK_INTERVAL_SECONDS)
+        except asyncio.CancelledError:
+            logger.info("STORY-353: Support SLA task cancelled")
+            break
+        except Exception as e:
+            logger.error("STORY-353 SLA loop error: %s", e, exc_info=True)
+            await asyncio.sleep(300)

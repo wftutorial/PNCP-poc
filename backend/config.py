@@ -918,3 +918,11 @@ RECONCILIATION_HOUR_UTC: int = int(os.getenv("RECONCILIATION_HOUR_UTC", "6"))  #
 HEALTH_CANARY_ENABLED: bool = str_to_bool(os.getenv("HEALTH_CANARY_ENABLED", "true"))
 HEALTH_CANARY_INTERVAL_SECONDS: int = int(os.getenv("HEALTH_CANARY_INTERVAL_SECONDS", "300"))  # 5 minutes
 HEALTH_CHECKS_RETENTION_DAYS: int = int(os.getenv("HEALTH_CHECKS_RETENTION_DAYS", "30"))
+
+# ============================================================================
+# STORY-353: Support SLA Business Hours
+# ============================================================================
+BUSINESS_HOURS_START: int = int(os.getenv("BUSINESS_HOURS_START", "8"))   # 08:00 BRT
+BUSINESS_HOURS_END: int = int(os.getenv("BUSINESS_HOURS_END", "18"))     # 18:00 BRT
+SUPPORT_SLA_CHECK_INTERVAL_SECONDS: int = 4 * 60 * 60  # every 4 hours
+SUPPORT_SLA_ALERT_THRESHOLD_HOURS: int = 20  # alert after 20 business hours

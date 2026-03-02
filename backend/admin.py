@@ -869,6 +869,87 @@ async def trigger_reconciliation(
     return result
 
 
+# ============================================================================
+# STORY-353 AC6: Support SLA Metrics
+# ============================================================================
+
+@router.get("/support-sla")
+async def get_support_sla(
+    admin: dict = Depends(require_admin),
+):
+    """STORY-353 AC6: Return support SLA metrics.
+
+    Returns:
+        avg_response_hours: Average first-response time in business hours
+        pending_count: Number of unanswered conversations
+        breached_count: Number of conversations exceeding 20 business hours
+    """
+    from supabase_client import get_supabase
+    from business_hours import calculate_business_hours
+    from config import SUPPORT_SLA_ALERT_THRESHOLD_HOURS
+    from datetime import datetime, timezone
+
+    sb = get_supabase()
+    now = datetime.now(timezone.utc)
+
+    try:
+        # Get conversations with first_response_at (for average)
+        responded = (
+            sb.table("conversations")
+            .select("created_at, first_response_at")
+            .not_.is_("first_response_at", "null")
+            .order("created_at", desc=True)
+            .limit(200)
+            .execute()
+        )
+
+        # Calculate average response time in business hours
+        response_times = []
+        if responded.data:
+            from dateutil.parser import isoparse
+            for conv in responded.data:
+                created = isoparse(conv["created_at"])
+                first_resp = isoparse(conv["first_response_at"])
+                bh = calculate_business_hours(created, first_resp)
+                response_times.append(bh)
+
+        avg_response_hours = (
+            round(sum(response_times) / len(response_times), 1)
+            if response_times else 0.0
+        )
+
+        # Get pending (unanswered) conversations
+        pending = (
+            sb.table("conversations")
+            .select("id, created_at", count="exact")
+            .is_("first_response_at", "null")
+            .neq("status", "resolvido")
+            .execute()
+        )
+
+        pending_count = pending.count or 0
+
+        # Count breached (exceeding threshold)
+        breached_count = 0
+        if pending.data:
+            from dateutil.parser import isoparse
+            for conv in pending.data:
+                created = isoparse(conv["created_at"])
+                elapsed = calculate_business_hours(created, now)
+                if elapsed >= SUPPORT_SLA_ALERT_THRESHOLD_HOURS:
+                    breached_count += 1
+
+        return {
+            "avg_response_hours": avg_response_hours,
+            "pending_count": pending_count,
+            "breached_count": breached_count,
+        }
+
+    except Exception as e:
+        logger.error(f"STORY-353: Failed to get support SLA metrics: {e}")
+        raise HTTPException(status_code=500, detail="Erro ao calcular metricas de SLA")
+
+
 def _assign_plan(sb, user_id: str, plan_id: str):
     """Internal: assign plan creating subscription record."""
     from datetime import datetime, timezone, timedelta

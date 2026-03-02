@@ -245,7 +245,7 @@ async def reply_to_conversation(
     # Verify conversation exists and user has access
     conv_result = await sb_execute(
         sb.table("conversations")
-        .select("id, user_id, status")
+        .select("id, user_id, status, created_at, first_response_at")
         .eq("id", conversation_id)
         .single()
     )
@@ -267,6 +267,31 @@ async def reply_to_conversation(
             "read_by_admin": admin,      # if user replies, admin hasn't read yet
         })
     )
+
+    # STORY-353 AC2: Track first admin response time
+    if admin and not conv.get("first_response_at"):
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        try:
+            await sb_execute(
+                sb.table("conversations")
+                .update({"first_response_at": now.isoformat()})
+                .eq("id", conversation_id)
+                .is_("first_response_at", "null")
+            )
+            # Calculate response time in business hours
+            from business_hours import calculate_business_hours
+            from dateutil.parser import isoparse
+            created_at = isoparse(conv["created_at"])
+            response_hours = calculate_business_hours(created_at, now)
+            from metrics import SUPPORT_RESPONSE_TIME_HOURS
+            SUPPORT_RESPONSE_TIME_HOURS.observe(response_hours)
+            logger.info(
+                "First response for conversation %s: %.1f business hours",
+                conversation_id[:8], response_hours,
+            )
+        except Exception as e:
+            logger.warning("Failed to track first_response_at: %s", e)
 
     # Auto-transition status
     new_status = "respondido" if admin else "aberto"

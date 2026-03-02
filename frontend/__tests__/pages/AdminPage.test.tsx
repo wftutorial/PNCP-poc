@@ -500,6 +500,7 @@ describe('AdminPage Component', () => {
         })
         .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ runs: [] }) })
         .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ sources: {} }) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ avg_response_hours: 0, pending_count: 0, breached_count: 0 }) })
         .mockImplementationOnce(
           () => new Promise((resolve) => setTimeout(() => resolve({
             ok: true,
@@ -649,7 +650,8 @@ describe('AdminPage Component', () => {
       });
       mockFetch
         .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ runs: [] }) })
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ sources: {} }) });
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ sources: {} }) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ avg_response_hours: 0, pending_count: 0, breached_count: 0 }) });
 
       render(<AdminPage />);
 
@@ -662,8 +664,8 @@ describe('AdminPage Component', () => {
         fireEvent.click(deleteButton);
       });
 
-      // Only the initial fetch should have been made
-      expect(mockFetch).toHaveBeenCalledTimes(3);
+      // Only the initial fetch should have been made (users + recon + status + sla)
+      expect(mockFetch).toHaveBeenCalledTimes(4);
     });
   });
 

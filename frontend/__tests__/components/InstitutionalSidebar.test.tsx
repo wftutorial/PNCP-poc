@@ -1,6 +1,22 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, act, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import InstitutionalSidebar from '../../app/components/InstitutionalSidebar';
+
+// STORY-358: Global fetch mock for signup variant (jsdom lacks fetch)
+const originalFetch = global.fetch;
+beforeEach(() => {
+  // Provide a default no-op fetch that returns fallback for all signup renders
+  if (!global.fetch) {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ display_value: 'centenas', avg_bids_per_day: 0 }),
+    } as Response);
+  }
+});
+afterEach(() => {
+  global.fetch = originalFetch;
+  jest.restoreAllMocks();
+});
 
 describe('InstitutionalSidebar', () => {
   describe('Login Variant', () => {
@@ -77,12 +93,14 @@ describe('InstitutionalSidebar', () => {
       expect(screen.getByText('Dados protegidos e conformidade LGPD')).toBeInTheDocument();
     });
 
-    it('renders signup statistics', () => {
+    it('renders signup statistics with fallback before API resolves', () => {
+      // Before the API responds, the component shows "centenas" as the fallback value
+      // for the licitações/dia stat (STORY-358 AC4)
       render(<InstitutionalSidebar variant="signup" />);
 
       expect(screen.getByText('27')).toBeInTheDocument();
       expect(screen.getByText('estados cobertos')).toBeInTheDocument();
-      expect(screen.getByText('1000+')).toBeInTheDocument();
+      expect(screen.getByText('centenas')).toBeInTheDocument();
       expect(screen.getByText('licitações/dia')).toBeInTheDocument();
       expect(screen.getByText('100%')).toBeInTheDocument();
       expect(screen.getByText('fonte oficial')).toBeInTheDocument();
@@ -201,6 +219,62 @@ describe('InstitutionalSidebar', () => {
       render(<InstitutionalSidebar variant="signup" />);
 
       expect(screen.queryByText('Cobertura nacional de fontes oficiais')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('STORY-358: Dynamic Daily Volume', () => {
+    it('shows "centenas" as fallback when API fetch fails', async () => {
+      global.fetch = jest.fn().mockRejectedValue(new Error('Network error'));
+
+      await act(async () => {
+        render(<InstitutionalSidebar variant="signup" />);
+      });
+
+      expect(screen.getByText('centenas')).toBeInTheDocument();
+      expect(screen.getByText('licitações/dia')).toBeInTheDocument();
+    });
+
+    it('shows dynamic value after successful API fetch', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ display_value: '1200+' }),
+      } as Response);
+
+      await act(async () => {
+        render(<InstitutionalSidebar variant="signup" />);
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('1200+')).toBeInTheDocument();
+      });
+      expect(screen.getByText('licitações/dia')).toBeInTheDocument();
+    });
+
+    it('does NOT fetch for login variant', async () => {
+      global.fetch = jest.fn();
+
+      await act(async () => {
+        render(<InstitutionalSidebar variant="login" />);
+      });
+
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('shows "centenas" fallback when API returns non-ok response', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        json: async () => ({ display_value: '999+' }),
+      } as Response);
+
+      await act(async () => {
+        render(<InstitutionalSidebar variant="signup" />);
+      });
+
+      await waitFor(() => {
+        // Non-ok response is treated as null — fallback applies
+        expect(screen.getByText('centenas')).toBeInTheDocument();
+      });
+      expect(screen.getByText('licitações/dia')).toBeInTheDocument();
     });
   });
 });

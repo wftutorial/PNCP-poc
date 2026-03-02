@@ -549,6 +549,13 @@ FILTER_DISCARD_RATE = _create_histogram(
     buckets=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.95, 0.99, 1.0],
 )
 
+# STORY-358 AC1: Total bids processed through the search pipeline (per source)
+BIDS_PROCESSED_TOTAL = _create_counter(
+    "smartlic_bids_processed_total",
+    "Total bids processed through the search pipeline",
+    labelnames=["source"],
+)
+
 # STORY-350 AC3: Per-source bids fetched (enables future coverage measurement)
 SOURCES_BIDS_FETCHED = _create_counter(
     "smartlic_sources_bids_fetched_total",

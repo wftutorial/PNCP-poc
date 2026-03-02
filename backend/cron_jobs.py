@@ -1374,3 +1374,97 @@ async def _support_sla_loop() -> None:
         except Exception as e:
             logger.error("STORY-353 SLA loop error: %s", e, exc_info=True)
             await asyncio.sleep(300)
+
+
+# ============================================================================
+# STORY-358: Daily volume recording (daily at 07:00 UTC = 04:00 BRT)
+# ============================================================================
+
+DAILY_VOLUME_INTERVAL_SECONDS = 24 * 60 * 60
+DAILY_VOLUME_HOUR_UTC = 7  # 07:00 UTC = 04:00 BRT
+
+
+async def start_daily_volume_task() -> asyncio.Task:
+    """STORY-358 AC2: Start the daily volume recording background task.
+
+    Calculates initial delay to align with 07:00 UTC,
+    then runs every 24 hours.
+    Returns the Task so it can be cancelled during shutdown.
+    """
+    task = asyncio.create_task(_daily_volume_loop(), name="daily_volume")
+    logger.info("STORY-358: Daily volume recording task started (daily at 07:00 UTC)")
+    return task
+
+
+async def record_daily_volume() -> dict:
+    """STORY-358 AC2: Record count of bids processed in the last 24 hours.
+
+    Queries search_sessions for sessions completed in the last 24h,
+    sums total_raw to get total bids processed.
+    Logs the result for observability.
+
+    Returns dict with volume stats.
+    """
+    try:
+        from supabase_client import get_supabase, sb_execute
+
+        sb = get_supabase()
+        now = datetime.now(timezone.utc)
+        yesterday = (now - timedelta(hours=24)).isoformat()
+
+        # Sum total_raw from all completed sessions in the last 24h
+        result = await sb_execute(
+            sb.table("search_sessions")
+            .select("total_raw")
+            .gte("created_at", yesterday)
+            .in_("status", ["completed", "completed_partial"])
+        )
+
+        sessions = result.data or []
+        total_bids = sum(s.get("total_raw") or 0 for s in sessions)
+        session_count = len(sessions)
+
+        logger.info(
+            "STORY-358 daily volume: %d bids processed across %d sessions in last 24h (at %s)",
+            total_bids, session_count, now.isoformat(),
+        )
+
+        return {
+            "total_bids_24h": total_bids,
+            "session_count": session_count,
+            "recorded_at": now.isoformat(),
+        }
+
+    except Exception as e:
+        logger.error("STORY-358: Daily volume recording error: %s", e, exc_info=True)
+        return {"total_bids_24h": 0, "session_count": 0, "error": str(e)}
+
+
+async def _daily_volume_loop() -> None:
+    """STORY-358 AC2: Record daily volume at 07:00 UTC."""
+    # Calculate delay until next 07:00 UTC
+    now = datetime.now(timezone.utc)
+    target = now.replace(hour=DAILY_VOLUME_HOUR_UTC, minute=0, second=0, microsecond=0)
+    if now >= target:
+        target += timedelta(days=1)
+    initial_delay = (target - now).total_seconds()
+    logger.info(
+        "STORY-358: Daily volume first run in %.0f seconds (at %s)",
+        initial_delay, target.isoformat(),
+    )
+    await asyncio.sleep(initial_delay)
+
+    while True:
+        try:
+            result = await record_daily_volume()
+            logger.info(
+                "STORY-358 daily volume cycle: %s at %s",
+                result, datetime.now(timezone.utc).isoformat(),
+            )
+            await asyncio.sleep(DAILY_VOLUME_INTERVAL_SECONDS)
+        except asyncio.CancelledError:
+            logger.info("STORY-358: Daily volume task cancelled")
+            break
+        except Exception as e:
+            logger.error("STORY-358 daily volume loop error: %s", e, exc_info=True)
+            await asyncio.sleep(600)

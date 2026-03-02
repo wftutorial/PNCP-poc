@@ -43,7 +43,7 @@ from log_sanitizer import mask_user_id
 from redis_pool import get_fallback_cache
 from search_cache import save_to_cache as _supabase_save_cache, get_from_cache as _supabase_get_cache, get_from_cache_cascade
 from fastapi import HTTPException
-from metrics import SEARCH_DURATION, FETCH_DURATION, CACHE_HITS, CACHE_MISSES, ACTIVE_SEARCHES, SEARCHES, FILTER_DECISIONS, SEARCH_RESPONSE_STATE, FILTER_INPUT_TOTAL, FILTER_OUTPUT_TOTAL, FILTER_DISCARD_RATE
+from metrics import SEARCH_DURATION, FETCH_DURATION, CACHE_HITS, CACHE_MISSES, ACTIVE_SEARCHES, SEARCHES, FILTER_DECISIONS, SEARCH_RESPONSE_STATE, FILTER_INPUT_TOTAL, FILTER_OUTPUT_TOTAL, FILTER_DISCARD_RATE, BIDS_PROCESSED_TOTAL
 from viability import assess_batch as viability_assess_batch
 from telemetry import get_tracer, optional_span
 
@@ -1336,6 +1336,11 @@ class SearchPipeline:
                 f"({consolidation_result.duplicates_removed} dupes removed)"
                 f"{' [PARTIAL]' if ctx.is_partial else ''}"
             )
+
+            # STORY-358 AC1: Increment bids processed counter per source
+            for sr in consolidation_result.source_results:
+                if sr.record_count > 0:
+                    BIDS_PROCESSED_TOTAL.labels(source=sr.source_code).inc(sr.record_count)
         except AllSourcesFailedError as e:
             # CRIT-002 AC13: Update session on AllSourcesFailedError
             if ctx.session_id:

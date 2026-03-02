@@ -14,7 +14,7 @@ from typing import Any, Callable, Dict, List, Optional, Set
 from utils.error_reporting import report_error  # GTM-RESILIENCE-E02: centralized error emission
 from clients.base import SourceAdapter, SourceStatus, UnifiedProcurement, SourceError
 from source_config.sources import source_health_registry
-from metrics import FETCH_DURATION, API_ERRORS
+from metrics import FETCH_DURATION, API_ERRORS, SOURCES_BIDS_FETCHED
 from telemetry import get_tracer, optional_span
 from bulkhead import SourceBulkhead, get_bulkhead
 
@@ -536,6 +536,21 @@ class ConsolidationService:
                 seen_ufs_in_results.add(uf)
         completed_ufs_list = sorted(seen_ufs_in_results & requested_ufs) if requested_ufs else sorted(seen_ufs_in_results)
         pending_ufs_list = sorted(requested_ufs - seen_ufs_in_results) if requested_ufs else []
+
+        # STORY-350 AC3: Increment per-source bids fetched counter
+        for sr in source_results:
+            if sr.record_count > 0:
+                uf_counts: Dict[str, int] = {}
+                for record in all_records:
+                    src = getattr(record, "source_code", None) or getattr(record, "fonte", "")
+                    if str(src).lower() == sr.source_code.lower():
+                        uf = getattr(record, "uf", "") or "unknown"
+                        uf_counts[uf] = uf_counts.get(uf, 0) + 1
+                if uf_counts:
+                    for uf, count in uf_counts.items():
+                        SOURCES_BIDS_FETCHED.labels(source=sr.source_code, uf=uf).inc(count)
+                else:
+                    SOURCES_BIDS_FETCHED.labels(source=sr.source_code, uf="all").inc(sr.record_count)
 
         logger.info(
             f"[CONSOLIDATION] Complete: {total_before} raw -> {total_after} deduped "

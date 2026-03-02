@@ -498,6 +498,8 @@ describe('AdminPage Component', () => {
           ok: true,
           json: () => Promise.resolve({ users: [], total: 0 }),
         })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ runs: [] }) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ sources: {} }) })
         .mockImplementationOnce(
           () => new Promise((resolve) => setTimeout(() => resolve({
             ok: true,
@@ -645,6 +647,9 @@ describe('AdminPage Component', () => {
         ok: true,
         json: () => Promise.resolve({ users: mockUsers, total: 1 }),
       });
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ runs: [] }) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ sources: {} }) });
 
       render(<AdminPage />);
 
@@ -658,7 +663,7 @@ describe('AdminPage Component', () => {
       });
 
       // Only the initial fetch should have been made
-      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledTimes(3);
     });
   });
 

@@ -26,13 +26,13 @@ Claim quantificado sem fonte de dados. 3 fontes vs 1.400+ portais de competidore
 
 ## Critérios de Aceite
 
-- [ ] AC1: Substituir "+98%" por "Fontes oficiais consolidadas" em `DataSourcesSection.tsx` (linhas 31, 57, 59, 73)
-- [ ] AC2: Substituir "+98% cobertura" por "Cobertura nacional via fontes oficiais" em `valueProps.ts:172`
-- [ ] AC3: Criar métrica `smartlic_sources_bids_fetched_total` (labels: source, uf) em `metrics.py` — permite calcular cobertura real no futuro
-- [ ] AC4: Adicionar "+98%" ao array BANNED_PHRASES em `valueProps.ts`
-- [ ] AC5: Atualizar testes e2e que verificam "+98%" (`landing-page.spec.ts`, `institutional-pages.spec.ts`)
-- [ ] AC6: Criar card no `/admin` mostrando "Fontes ativas" com status real de cada fonte (UP/DOWN/DEGRADED)
-- [ ] AC7: Documentar em `proofPoints` (comparisons.ts) a cobertura real: "3 fontes oficiais federais + portal de compras públicas"
+- [x] AC1: Substituir "+98%" por "Fontes oficiais consolidadas" em `DataSourcesSection.tsx` (linhas 31, 57, 59, 73)
+- [x] AC2: Substituir "+98% cobertura" por "Cobertura nacional via fontes oficiais" em `valueProps.ts:172`
+- [x] AC3: Criar métrica `smartlic_sources_bids_fetched_total` (labels: source, uf) em `metrics.py` — permite calcular cobertura real no futuro
+- [x] AC4: Adicionar "+98%" ao array BANNED_PHRASES em `valueProps.ts`
+- [x] AC5: Atualizar testes e2e que verificam "+98%" (`landing-page.spec.ts`, `institutional-pages.spec.ts`)
+- [x] AC6: Criar card no `/admin` mostrando "Fontes ativas" com status real de cada fonte (UP/DOWN/DEGRADED)
+- [x] AC7: Documentar em `proofPoints` (comparisons.ts) a cobertura real: "3 fontes oficiais federais + portal de compras públicas"
 
 ## Arquivos Afetados
 

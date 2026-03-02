@@ -107,6 +107,54 @@ async def _check_pipeline_write_access(user: dict) -> None:
         )
 
 
+async def _check_pipeline_limit(user: dict) -> None:
+    """STORY-356: Check if user has reached their pipeline item limit.
+
+    Trial users: max TRIAL_PAYWALL_MAX_PIPELINE (5) items.
+    Paid users: no limit.
+    Masters/admins: no limit.
+    """
+    from quota import check_quota
+    from authorization import has_master_access
+    from config import TRIAL_PAYWALL_MAX_PIPELINE
+
+    user_id = user["id"]
+
+    # Masters/admins have no limit
+    try:
+        is_master = await has_master_access(user_id)
+        if is_master:
+            return
+    except Exception:
+        pass
+
+    # Only trial users have a pipeline limit
+    quota_info = await asyncio.to_thread(check_quota, user_id)
+    if quota_info.plan_id != "free_trial":
+        return
+
+    limit = TRIAL_PAYWALL_MAX_PIPELINE
+
+    # Count current items
+    sb = get_supabase()
+    result = await sb_execute(
+        sb.table("pipeline_items")
+        .select("id", count="exact")
+        .eq("user_id", user_id)
+    )
+    current = result.count if result.count is not None else len(result.data or [])
+
+    if current >= limit:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error_code": "PIPELINE_LIMIT_EXCEEDED",
+                "limit": limit,
+                "current": current,
+            },
+        )
+
+
 @router.post("/pipeline", status_code=201)
 async def create_pipeline_item(
     item: PipelineItemCreate,
@@ -115,9 +163,11 @@ async def create_pipeline_item(
     """Add a procurement opportunity to the user's pipeline (AC2).
 
     STORY-265 AC2: Trial expired cannot add items.
+    STORY-356: Enforce pipeline item limit (trial: 5 items max).
     Returns 409 if the item already exists (UNIQUE constraint on user_id + pncp_id).
     """
     await _check_pipeline_write_access(user)
+    await _check_pipeline_limit(user)
 
     user_id = user["id"]
     sb = get_supabase()

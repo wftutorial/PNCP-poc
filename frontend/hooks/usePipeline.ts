@@ -70,7 +70,17 @@ export function usePipeline() {
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         if (res.status === 409) throw new Error("Esta licitação já está no seu pipeline.");
-        if (res.status === 403) throw new Error(data.detail?.message || "Pipeline não disponível no seu plano.");
+        if (res.status === 403) {
+          // STORY-356: Detect pipeline limit exceeded
+          if (data.detail?.error_code === "PIPELINE_LIMIT_EXCEEDED") {
+            const err = new Error(`Limite de ${data.detail.limit} itens no pipeline atingido.`);
+            (err as any).isPipelineLimitExceeded = true;
+            (err as any).limit = data.detail.limit;
+            (err as any).current = data.detail.current;
+            throw err;
+          }
+          throw new Error(data.detail?.message || "Pipeline não disponível no seu plano.");
+        }
         throw new Error(data.detail || "Erro ao adicionar ao pipeline.");
       }
       const newItem = await res.json();

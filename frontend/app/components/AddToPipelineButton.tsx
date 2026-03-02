@@ -12,7 +12,7 @@ interface AddToPipelineButtonProps {
 
 export function AddToPipelineButton({ licitacao, className = "" }: AddToPipelineButtonProps) {
   const { addItem } = usePipeline();
-  const [status, setStatus] = useState<"idle" | "loading" | "saved" | "error" | "upgrade">("idle");
+  const [status, setStatus] = useState<"idle" | "loading" | "saved" | "error" | "upgrade" | "limit">("idle");
   const [errorMsg, setErrorMsg] = useState("");
 
   const handleClick = async (e: React.MouseEvent) => {
@@ -39,6 +39,10 @@ export function AddToPipelineButton({ licitacao, className = "" }: AddToPipeline
       const raw = err.message || "";
       if (raw.includes("já está no")) {
         setStatus("saved");
+      } else if (err.isPipelineLimitExceeded) {
+        // STORY-356 AC4: Pipeline limit exceeded — show upgrade state
+        setStatus("limit");
+        setErrorMsg(raw);
       } else if (raw.includes("plano") || raw.includes("disponível")) {
         setStatus("upgrade");
         setErrorMsg(getUserFriendlyError(err));
@@ -59,6 +63,8 @@ export function AddToPipelineButton({ licitacao, className = "" }: AddToPipeline
       ? "Erro"
       : status === "upgrade"
       ? "Upgrade"
+      : status === "limit"
+      ? "Limite"
       : "Pipeline";
 
   const colorClass =
@@ -66,7 +72,7 @@ export function AddToPipelineButton({ licitacao, className = "" }: AddToPipeline
       ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"
       : status === "error"
       ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"
-      : status === "upgrade"
+      : status === "upgrade" || status === "limit"
       ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300"
       : "bg-brand-blue/10 text-brand-blue hover:bg-brand-blue/20";
 
@@ -75,7 +81,7 @@ export function AddToPipelineButton({ licitacao, className = "" }: AddToPipeline
       onClick={handleClick}
       disabled={status === "loading" || status === "saved"}
       className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors ${colorClass} disabled:opacity-60 ${className}`}
-      title={status === "upgrade" ? errorMsg : status === "error" ? errorMsg : "Salvar no pipeline"}
+      title={status === "upgrade" || status === "limit" ? errorMsg : status === "error" ? errorMsg : "Salvar no pipeline"}
     >
       {status === "loading" && (
         <span className="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-1 align-middle" />

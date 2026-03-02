@@ -21,6 +21,11 @@ async def _noop_check_pipeline_write_access(user):
     return None
 
 
+async def _noop_check_pipeline_limit(user):
+    """Async no-op mock for _check_pipeline_limit (STORY-356)."""
+    return None
+
+
 MOCK_USER = {"id": "user-pipeline-uuid", "email": "pipeline@test.com", "role": "authenticated"}
 MOCK_USER_2 = {"id": "user-other-uuid", "email": "other@test.com", "role": "authenticated"}
 MOCK_MASTER = {"id": "master-uuid", "email": "master@test.com", "role": "authenticated"}
@@ -90,6 +95,7 @@ SAMPLE_ITEM = {
 
 class TestCreatePipelineItem:
 
+    @patch("routes.pipeline._check_pipeline_limit", _noop_check_pipeline_limit)
     @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
     @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
     @patch("routes.pipeline.get_supabase")
@@ -115,6 +121,7 @@ class TestCreatePipelineItem:
         assert body["pncp_id"] == PNCP_ID
         assert body["stage"] == "descoberta"
 
+    @patch("routes.pipeline._check_pipeline_limit", _noop_check_pipeline_limit)
     @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
     @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
     @patch("routes.pipeline.get_supabase")
@@ -137,6 +144,7 @@ class TestCreatePipelineItem:
         assert resp.status_code == 409
         assert "já está no seu pipeline" in resp.json()["detail"]
 
+    @patch("routes.pipeline._check_pipeline_limit", _noop_check_pipeline_limit)
     @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
     @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
     @patch("routes.pipeline.get_supabase")
@@ -170,6 +178,7 @@ class TestCreatePipelineItem:
 
         assert resp.status_code == 422
 
+    @patch("routes.pipeline._check_pipeline_limit", _noop_check_pipeline_limit)
     @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
     @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
     @patch("routes.pipeline.get_supabase")

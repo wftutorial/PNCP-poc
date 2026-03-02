@@ -1,178 +1,598 @@
 bundle:
-  name: Ataque Turbo — Outreach com Licitacoes Reais
+  name: Ataque Turbo — Prospecção Cirúrgica com Licitações Reais
   icon: "\U0001F4A5"
+  version: "2.0"
   description: |
-    Squad de prospeccao ativa que combina dados reais do PNCP com emails
-    ultra-personalizados. Modelo freemium teaser: mostra fracao gratuita
-    das licitacoes encontradas + CTA para PDF completo via PIX.
+    Squad de prospecção ativa que cruza dados reais do PNCP com perfis
+    de empresas vencedoras frequentes de licitações para gerar emails
+    ultra-personalizados com oportunidades irresistíveis.
 
-    Workflow: Executa *acha-leads (Lean mode, sem OpenAI API), busca
-    licitacoes abertas reais por setor/UF de cada lead, e gera emails
-    com analise detalhada das oportunidades de amostra.
+    Modelo freemium teaser: mostra fração gratuita das licitações
+    encontradas + CTA para relatório completo (PDF) via PIX.
 
-    Fonte de leads: turbocash.md (Tier 1 + Tier 2) + novos via PNCP.
-    Output: docs/ataque-turbo-NNN.md (numeracao sequencial, leads ineditos).
+    PRINCÍPIO FUNDAMENTAL: Qualidade > Quantidade. Cada lead recebe
+    investigação nível CSI — cruzamento profundo entre histórico de
+    vitórias, perfil empresarial e editais abertos no momento.
+
+    ESTÁGIO DO PRODUTO: SmartLic.tech está em preparativos finais antes
+    do lançamento oficial. O algoritmo de busca e classificação está
+    validado e operacional. Assinaturas NÃO devem ser incentivadas.
+    O valor entregue é o relatório de oportunidades (produto-serviço).
 
 agents:
-  - analyst        # Lead: buy-intent scoring, decisao de fracao gratis caso a caso, pricing
-  - data-engineer  # PNCP API queries (curl), agregacao, enriquecimento Receita Federal
-  - dev            # Executar curl commands, processar dados, gerar arquivos de saida
-  - po             # Personalizacao de emails, proposta de valor, CTA, tom de voz
+  - analyst        # Lead: qualificação de leads, decisão de fração grátis, pricing, investigação de perfil
+  - data-engineer  # PNCP + Receita Federal API queries, agregação, cruzamento de dados
+  - dev            # Executar curl commands, processar dados, gerar arquivos de saída
+  - po             # Personalização de emails, proposta de valor, CTA, alinhamento com copy do site
 
 workflows:
-  - acha-leads (Lean mode)
+  - acha-leads (Lean mode, sem OpenAI API)
 
 tasks:
   - acha-leads.md
 
 references:
-  - docs/sessions/2026-02/turbocash.md       # Playbook de monetizacao + pipeline de leads
-  - .aios-core/development/tasks/acha-leads.md  # Workflow de prospeccao buy-intent
+  - docs/sessions/2026-02/turbocash.md                # Playbook de monetização + pipeline de leads
+  - .aios-core/development/tasks/acha-leads.md         # Workflow de prospecção buy-intent
+  - frontend/app/page.tsx                              # Landing page — tom e copy de referência
+  - frontend/lib/value-propositions.ts                 # Biblioteca de proposições de valor
+  - backend/search_pipeline.py                         # _build_pncp_link() para links de editais
+  - backend/sectors_data.yaml                          # 15 setores com keywords
+
+# ═══════════════════════════════════════════════════════════════════
+# IDENTIDADE DO REMETENTE
+# ═══════════════════════════════════════════════════════════════════
+
+sender:
+  name: "Tiago Sasaki"
+  title: "Engenheiro de Software"
+  company: "CONFENGE Avaliações e Inteligência Artificial"
+  product: "SmartLic.tech"
+  role_description: "Engenheiro de software da CONFENGE e criador do SmartLic.tech"
+  email_domain: "@confenge.com.br"
+  signature: |
+    Tiago Sasaki
+    Engenheiro de Software — CONFENGE
+    Criador do SmartLic.tech
+    smartlic.tech
+
+product_stage:
+  status: "Preparativos finais antes do lançamento oficial"
+  algorithm_status: "Validado e operacional"
+  what_is_ready: "Algoritmo de busca multi-fonte, classificação setorial por IA, análise de viabilidade 4 fatores"
+  what_is_NOT_ready: "Assinaturas e planos de acesso contínuo"
+  positioning: |
+    O SmartLic.tech é uma plataforma de inteligência de decisão para licitações
+    públicas, criada pela CONFENGE. O algoritmo de busca já está validado —
+    consolida fontes oficiais, classifica por relevância setorial e avalia
+    viabilidade com critérios objetivos. Estamos nos preparativos finais antes
+    do lançamento oficial. Por ora, oferecemos relatórios personalizados de
+    oportunidades como serviço.
+  NEVER_say:
+    - "Assine o SmartLic"
+    - "Plano Pro"
+    - "Trial grátis"
+    - "Assinatura"
+    - "Plataforma SaaS"
+  ALWAYS_say:
+    - "Algoritmo validado"
+    - "Fontes oficiais"
+    - "Critérios objetivos de viabilidade"
+    - "Relatório personalizado de oportunidades"
+
+# ═══════════════════════════════════════════════════════════════════
+# PÚBLICO-ALVO (EXPANDIDO)
+# ═══════════════════════════════════════════════════════════════════
+
+target_audience:
+  tier_1_consultorias:
+    description: "Consultorias de licitação — multiplicadores de receita"
+    examples: "Triunfo Legis, Concreta Licitações, Brasil Licitar, LicitaMundo"
+    approach: "Parceria + relatório para clientes deles"
+    source: "turbocash.md pipeline de leads"
+
+  tier_1_empresas_b2g:
+    description: "Empresas B2G com faturamento relevante e histórico de vitórias em licitações"
+    qualification: |
+      TODOS os critérios abaixo devem ser satisfeitos:
+      1. Vencedora frequente de licitações (≥3 contratos homologados nos últimos 12 meses)
+      2. Porte relevante (capital_social ≥ R$100.000 OU porte "DEMAIS"/"EPP")
+      3. CNAE compatível com setor que tenha editais abertos no momento
+      4. Compra do PDF deve ser no-brainer (valor do relatório << valor das oportunidades)
+    approach: "Relatório de oportunidades direto para o decisor"
+    discovery: "Via PNCP API contratos homologados → Receita Federal → cruzamento com editais abertos"
+
+  tier_2_empresas_b2g:
+    description: "Empresas B2G menores mas com padrão consistente de participação"
+    qualification: "≥5 participações nos últimos 6 meses, win rate < 30% (sinal de gargalo)"
+    approach: "Relatório focado em eficiência de triagem"
+
+# ═══════════════════════════════════════════════════════════════════
+# APIs E CURL COMMANDS (REFERÊNCIA TÉCNICA)
+# ═══════════════════════════════════════════════════════════════════
+
+api_reference:
+  pncp:
+    base_url: "https://pncp.gov.br/api/consulta/v1"
+    max_page_size: 50  # CRÍTICO: >50 retorna HTTP 400
+    date_format: "YYYYMMDD"
+
+    endpoints:
+      search_open_tenders: |
+        # Buscar editais abertos (publicações recentes)
+        curl -s "https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao\
+          ?dataInicial={YYYYMMDD}\
+          &dataFinal={YYYYMMDD}\
+          &pagina=1\
+          &tamanhoPagina=50" | python -m json.tool
+
+      contracts_bulk: |
+        # Contratos publicados em período (tamanhoPagina max 500 — diferente de contratacoes!)
+        # ATENÇÃO: NÃO existe filtro cnpjFornecedor. Filtrar client-side por niFornecedor.
+        curl -s "https://pncp.gov.br/api/consulta/v1/contratos\
+          ?dataInicial={YYYYMMDD}\
+          &dataFinal={YYYYMMDD}\
+          &pagina=1\
+          &tamanhoPagina=500" | python -m json.tool
+
+        # Filtrar por fornecedor client-side:
+        # data['data'][i]['niFornecedor'] == CNPJ_ALVO
+
+      procurement_detail: |
+        # Detalhe de uma compra específica
+        curl -s "https://pncp.gov.br/api/consulta/v1/orgaos/{CNPJ_ORGAO}/compras/{ANO}/{SEQUENCIAL}" \
+          | python -m json.tool
+
+      procurement_items: |
+        # Itens de uma compra (com detalhes dos objetos)
+        curl -s "https://pncp.gov.br/api/consulta/v1/orgaos/{CNPJ_ORGAO}/compras/{ANO}/{SEQUENCIAL}/itens?pagina=1" \
+          | python -m json.tool
+
+      item_results: |
+        # Resultados/vencedores de um item (API de Manutenção — /api/pncp/, não /api/consulta/)
+        curl -s "https://pncp.gov.br/api/pncp/v1/orgaos/{CNPJ_ORGAO}/compras/{ANO}/{SEQUENCIAL}/itens/{NUM_ITEM}/resultados" \
+          | python -m json.tool
+        # Retorna: niFornecedor, nomeRazaoSocialFornecedor, valorTotalHomologado, porteFornecedorNome
+
+      items_maintenance: |
+        # Itens via API de Manutenção (inclui temResultado e situacaoCompraItemNome)
+        curl -s "https://pncp.gov.br/api/pncp/v1/orgaos/{CNPJ_ORGAO}/compras/{ANO}/{SEQUENCIAL}/itens?pagina=1" \
+          | python -m json.tool
+        # situacaoCompraItem: 1=Aberto, 2=Homologado, 3=Deserto, 5=Fracassado
+
+    link_construction: |
+      URL do edital no portal:
+        https://pncp.gov.br/app/editais/{CNPJ_ORGAO}/{ANO}/{SEQUENCIAL}
+
+      Construção a partir de numeroControlePNCP (formato: {CNPJ}-{TIPO}-{SEQ_PADDED}/{ANO}):
+        1. Split por "/" → [antes, ano]
+        2. Split antes por "-" → [cnpj, tipo, sequencial]
+        3. Strip leading zeros do sequencial
+        4. URL: https://pncp.gov.br/app/editais/{cnpj}/{ano}/{sequencial_sem_zeros}
+
+      Prioridade de link:
+        1. linkSistemaOrigem (86% preenchido)
+        2. linkProcessoEletronico (sempre vazio, defensive fallback)
+        3. URL construída via numeroControlePNCP (14% dos registros)
+
+      Já implementado em: backend/search_pipeline.py → _build_pncp_link()
+
+    key_response_fields: |
+      Publicações (editais abertos):
+        - numeroControlePNCP: identificador único
+        - orgaoEntidade.cnpj: CNPJ do órgão
+        - orgaoEntidade.razaoSocial: nome do órgão
+        - objetoCompra: descrição do objeto
+        - valorTotalEstimado: valor estimado
+        - anoCompra, sequencialCompra: para construir link
+        - dataAberturaProposta: prazo para propostas
+        - modalidadeNome: modalidade da licitação
+        - unidadeOrgao.ufSigla: UF
+        - linkSistemaOrigem: link externo do edital
+
+      Contratos (histórico de vitórias):
+        - niFornecedor: CNPJ do fornecedor
+        - nomeRazaoSocialFornecedor: nome do fornecedor
+        - objetoContrato: objeto contratado
+        - valorGlobal: valor do contrato
+        - orgaoEntidade.razaoSocial: órgão contratante
+        - dataAssinatura: data da assinatura
+
+  receita_federal:
+    primary_api: "OpenCNPJ (melhor para batch — 50 req/s, sem auth)"
+    fallback_api: "BrasilAPI (3-5 req/s, sem auth)"
+
+    endpoints:
+      opencnpj: |
+        # RECOMENDADO para batch (50 req/s, sem autenticação)
+        curl -s "https://api.opencnpj.org/{CNPJ_SEM_PONTUACAO}" | python -m json.tool
+
+      brasilapi: |
+        # Fallback (3-5 req/s)
+        curl -s "https://brasilapi.com.br/api/cnpj/v1/{CNPJ_SEM_PONTUACAO}" | python -m json.tool
+
+    key_response_fields: |
+      - razao_social: nome oficial da empresa
+      - nome_fantasia: nome comercial
+      - cnae_principal / cnae_fiscal: atividade econômica principal
+      - cnaes_secundarios: atividades secundárias
+      - porte_empresa / porte: MEI, ME, EPP, DEMAIS
+      - capital_social: capital social (proxy de porte financeiro)
+      - situacao_cadastral: ATIVA, BAIXADA, etc.
+      - logradouro, municipio, uf: endereço
+      - email, telefones: contato
+      - qsa: quadro societário (nomes dos sócios e qualificação)
+
+    revenue_estimation: |
+      IMPORTANTE: Nenhuma API pública fornece faturamento real.
+      Proxies disponíveis:
+      - capital_social: indicador de porte (correlação moderada com faturamento)
+      - porte: MEI (< R$81K/ano), ME (< R$360K), EPP (< R$4.8M), DEMAIS (> R$4.8M)
+      - Volume de contratos PNCP: soma de valorGlobal nos últimos 12 meses
+      - Nº de funcionários: não disponível publicamente
+      O @analyst deve usar porte + volume de contratos como proxy de faturamento.
+
+# ═══════════════════════════════════════════════════════════════════
+# WORKFLOW DE EXECUÇÃO (5 FASES)
+# ═══════════════════════════════════════════════════════════════════
 
 coordination:
   lead_agent: analyst
+  quality_philosophy: |
+    QUALIDADE > QUANTIDADE. Cada lead é investigado em profundidade.
+    Melhor 3 leads com emails irresistíveis do que 10 leads genéricos.
+    Investigação nível CSI: cruzar todas as fontes disponíveis para
+    cada lead antes de redigir o email.
+
   execution_sequence:
-    - phase: prospeccao
+    - phase: 1_discovery
+      name: "Descoberta de Vencedores Frequentes"
       agents: [data-engineer, dev]
       deliverable: |
-        Query PNCP API via curl para:
-        1. Participacoes e homologacoes dos leads (historico)
-        2. Licitacoes abertas por setor/UF de cada lead (ultimos 10 dias)
-        Sem chamadas OpenAI API.
+        Para cada setor de interesse:
+        1. Query PNCP /contratos com filtros de data (últimos 12 meses)
+        2. Agregar por cnpjFornecedor: contar vitórias, somar valores, listar órgãos
+        3. Identificar empresas com ≥3 contratos homologados
+        4. Filtrar empresas com padrão consistente (não apenas 1 contrato grande)
+        Output: Lista de CNPJs candidatos com métricas de participação
 
-    - phase: enriquecimento
-      agents: [data-engineer]
-      dependencies: [prospeccao]
+    - phase: 2_enrichment
+      name: "Investigação CSI do Lead"
+      agents: [data-engineer, analyst]
+      dependencies: [1_discovery]
       deliverable: |
-        Enriquecer leads com Receita Federal (CNPJ, CNAE, porte).
-        Cruzar perfil do lead com licitacoes encontradas.
+        Para cada CNPJ candidato:
+        1. Query OpenCNPJ → razão social, CNAE, porte, capital social, QSA, contato
+        2. Verificar se porte justifica compra do relatório (no-brainer test)
+        3. Analisar padrão de vitórias: setores, valores médios, órgãos frequentes
+        4. Identificar sócios/decisores via QSA (nome + qualificação)
+        5. Descartar se: situação != ATIVA, capital_social < R$50.000, sem contato
 
-    - phase: qualificacao
+        Critério no-brainer: valor total de oportunidades abertas encontradas
+        deve ser ≥10x o preço do relatório. Se empresa vence licitações de
+        R$200K+ e o relatório custa R$1.500, é no-brainer (133x).
+
+    - phase: 3_matching
+      name: "Cruzamento Editais Abertos × Perfil do Lead"
+      agents: [data-engineer, analyst]
+      dependencies: [2_enrichment]
+      deliverable: |
+        Para cada lead qualificado:
+        1. Determinar setores/keywords relevantes (do CNAE + histórico de vitórias)
+        2. Query PNCP publicações abertas (últimos 10 dias) com filtros de setor/UF
+        3. Filtrar editais que matcham o perfil do lead:
+           - Mesmo setor/CNAE
+           - UF compatível (mesma UF ou UFs onde já venceu)
+           - Faixa de valor compatível (dentro do range histórico do lead)
+           - Modalidade compatível
+        4. Ranquear editais por relevância (maior match com perfil = mais relevante)
+        5. Construir link PNCP para cada edital: https://pncp.gov.br/app/editais/{CNPJ}/{ANO}/{SEQ}
+        6. Contar total N de oportunidades encontradas
+
+        Se N = 0 para um lead: descartar (não há valor a entregar).
+        Se N < 3: avaliar se vale incluir (pode ser email mais curto).
+
+    - phase: 4_qualification
+      name: "Qualificação Final e Decisões do @analyst"
       agents: [analyst]
-      dependencies: [enriquecimento]
+      dependencies: [3_matching]
       deliverable: |
-        Para cada lead, decidir:
-        - Quantas licitacoes mostrar gratis (fracao do total)
-        - Preco do PDF completo (baseado no valor das oportunidades)
-        - Quais licitacoes sao a melhor amostra (maior impacto de convencimento)
+        Para cada lead com oportunidades encontradas, o @analyst decide:
 
-    - phase: email_creation
+        A) FRAÇÃO GRÁTIS (quantas licitações mostrar no email):
+           Diretriz geral (ajustável caso a caso):
+           | Total (N) | Mostrar grátis (K) | Ratio  |
+           |:---------:|:------------------:|:------:|
+           | 1-5       | 1                  | ~20%   |
+           | 6-15      | 2                  | ~15%   |
+           | 16-30     | 3                  | ~10%   |
+           | 31+       | 3-4                | <10%   |
+
+           Fatores que influenciam:
+           - Valor agregado (alto valor = menos amostra)
+           - Perfil do lead (lead grande merece amostra mais impressionante)
+           - Qualidade das amostras (escolher as mais impactantes)
+
+        B) QUAIS licitações mostrar (a melhor amostra):
+           Critérios para seleção da amostra:
+           - Maior match com histórico de vitórias do lead
+           - Maior valor estimado (impressiona mais)
+           - Prazo razoável (não muito próximo do vencimento)
+           - Diversidade de órgãos (mostra amplitude da cobertura)
+
+        C) PREÇO do relatório completo:
+           Base: R$1.500 (micro/pequena) a R$3.000 (média empresa)
+           Critérios: valor total das oportunidades, porte do lead, complexidade
+           Regra: preço ≤ 1% do valor total de oportunidades encontradas
+
+        D) ANÁLISE DE RELEVÂNCIA para cada licitação de amostra:
+           Para cada oportunidade mostrada no email, redigir justificativa:
+           - Por que esta licitação é relevante PARA ESTE LEAD ESPECÍFICO
+           - Cruzar com vitórias passadas (mesmo tipo de objeto/órgão/valor)
+           - Indicar modalidade, prazo, valor estimado
+           - Indicar nível de concorrência esperado (se dados disponíveis)
+
+    - phase: 5_email_and_save
+      name: "Redação do Email + Salvamento Automático"
       agents: [po, dev]
-      dependencies: [qualificacao]
+      dependencies: [4_qualification]
       deliverable: |
-        Email personalizado por lead contendo:
-        1. "Encontramos N licitacoes de interesse da [Empresa]"
-        2. K amostra(s) com analise detalhada (motivos de relevancia)
-        3. CTA: PDF completo com N licitacoes + viabilidade por R$X via PIX
-        Sem uso de OpenAI — copywriting manual via template.
+        Para cada lead, gerar email personalizado seguindo:
+        1. Template com acentuação correta em PT-BR
+        2. Identidade do remetente: Tiago Sasaki, Eng. Software CONFENGE
+        3. Cada oportunidade com link oficial do PNCP
+        4. Análise personalizada de por que cada oportunidade é relevante
+        5. CTA: relatório completo via PIX
+        6. Tom alinhado com landing page (inteligência de decisão, filtro estratégico)
 
-    - phase: output
-      agents: [dev]
-      dependencies: [email_creation]
-      deliverable: |
-        Arquivo docs/ataque-turbo-NNN.md com:
-        - Metadata da execucao (data, setores, parametros)
-        - Lista completa de leads processados
-        - Emails prontos para envio (copy/paste)
-        - Resumo de metricas (total licitacoes, leads, taxa estimada de resposta)
+        SALVAMENTO AUTOMÁTICO (OBRIGATÓRIO — executar sem pedir confirmação):
+        7. Determinar próximo número sequencial (ler docs/ataque-turbo-*.md existentes)
+        8. Salvar arquivo completo em docs/ataque-turbo-NNN.md usando Write tool
+        9. Confirmar salvamento no output final com path do arquivo
+        O usuário NUNCA deve precisar pedir para salvar. É automático.
 
-fracao_gratis_guidelines: |
-  O @analyst decide caso a caso quantas licitacoes mostrar gratuitamente.
-  Diretriz geral (pode ser ajustada por contexto):
+# ═══════════════════════════════════════════════════════════════════
+# COPY E TOM DE VOZ (ALINHADO COM LANDING PAGE)
+# ═══════════════════════════════════════════════════════════════════
 
-  | Total encontrado | Mostrar gratis | Ratio aproximado |
-  |:---:|:---:|:---:|
-  | 1-5              | 1              | ~20%             |
-  | 6-15             | 2              | ~15%             |
-  | 16-30            | 3              | ~10%             |
-  | 31+              | 3-4            | <10%             |
+copy_guidelines:
+  positioning: "Inteligência de decisão para licitações públicas"
+  algorithm_description: |
+    O SmartLic consolida fontes oficiais, classifica por relevância setorial
+    e avalia viabilidade com critérios objetivos — modalidade, prazo, valor
+    e compatibilidade geográfica.
 
-  Fatores que influenciam a decisao:
-  - Valor agregado das licitacoes (alto valor = menos amostra)
-  - Perfil do lead (Tier 1 pode receber mais para impressionar)
-  - Qualidade da amostra (escolher as mais impactantes)
+  preferred_phrases:
+    - "Filtro estratégico de oportunidades"
+    - "Avaliação objetiva de viabilidade"
+    - "Vale a pena ou não, e por quê"
+    - "Chance real de retorno"
+    - "Elimina o que não faz sentido para o seu perfil"
+    - "Critérios de viabilidade"
+    - "Foco no que paga"
+    - "Fontes oficiais verificadas"
 
-pricing_guidelines: |
-  O @analyst define preco do PDF caso a caso, baseado em:
-  - Valor total das licitacoes encontradas
-  - Quantidade de oportunidades
-  - Porte e setor do lead
-  - Referencia base: R$1.500 (micro/pequena) a R$3.000 (media empresa)
-  - Inclui 30 dias gratis do SmartLic Pro
+  BANNED_phrases:
+    - "PNCP" (dizer "fontes oficiais" em vez disso)
+    - "Descobrir" / "Explorar" (muito fraco para o valor entregue)
+    - "Plano" / "Assinatura" / "Pacote" / "Busca"
+    - "Inteligência automatizada" / "Inovador"
+    - "95% de precisão" ou qualquer métrica de velocidade/acurácia
+    - "Agregador de dados"
+    - "IA generativa" (dizer "algoritmo de classificação" em vez disso)
+    - "Assine" / "Teste grátis" / "Trial"
+
+  language_rules:
+    - "Acentuação correta obrigatória em todo texto PT-BR"
+    - "Usar cedilha (ç), til (ã, õ), agudo (á, é, í, ó, ú), circunflexo (â, ê, ô)"
+    - "Revisar cada email antes de finalizar"
+    - "Números: R$ com ponto para milhares (R$ 1.500, R$ 200.000)"
+
+# ═══════════════════════════════════════════════════════════════════
+# TEMPLATE DE EMAIL
+# ═══════════════════════════════════════════════════════════════════
 
 email_template: |
-  Estrutura do email (adaptada pelo @po por lead):
+  Estrutura do email (adaptada pelo @po caso a caso, SEMPRE com acentuação PT-BR):
 
   ---
-  Assunto: [Empresa] — encontramos {N} licitacoes abertas no perfil de voces
+  Assunto: {Nome da Empresa} — identificamos {N} oportunidades de licitação no perfil de vocês
 
-  Ola {Nome},
+  Olá {Nome do decisor ou genérico},
 
-  Sou Tiago Sasaki, fundador do SmartLic — plataforma de inteligencia em
-  licitacoes que usa IA para filtrar e classificar oportunidades por setor.
+  Sou Tiago Sasaki, engenheiro de software da CONFENGE e criador do
+  SmartLic.tech — uma plataforma de inteligência de decisão para licitações
+  públicas que estamos finalizando para lançamento.
 
-  {Parágrafo personalizado sobre a empresa — pesquisa, vitórias passadas, setor}
+  {Parágrafo personalizado CSI — demonstrar conhecimento profundo:
+   - Mencionar setor de atuação (inferido do CNAE/histórico)
+   - Referência sutil ao volume de participação em licitações
+   - Frase que mostre que o algoritmo entende o perfil da empresa}
 
-  Rodei uma busca no SmartLic para o perfil da {Empresa} e encontramos
-  **{N} licitacoes abertas** com alta relevancia. Aqui estao {K} delas:
+  Nosso algoritmo de classificação — já validado e operacional — consolida
+  fontes oficiais e avalia cada edital contra critérios objetivos de
+  viabilidade: compatibilidade setorial, faixa de valor, prazo e geografia.
 
-  {Licitacao 1 — analise detalhada: orgao, valor, modalidade, prazo, motivos de relevancia}
-  {Licitacao 2 — analise detalhada (se K >= 2)}
-  {Licitacao 3 — analise detalhada (se K >= 3)}
+  Rodei uma análise para o perfil da {Empresa} e o filtro identificou
+  **{N} licitações abertas** com alta relevância. Aqui estão {K} delas:
 
-  As outras {N-K} oportunidades incluem editais de {resumo dos setores/valores}.
+  **1. {Objeto resumido}**
+  • Órgão: {razaoSocial do órgão}
+  • Valor estimado: R$ {valor}
+  • Modalidade: {modalidade}
+  • Prazo: {dataAberturaProposta}
+  • Link: {https://pncp.gov.br/app/editais/CNPJ/ANO/SEQ}
+  • **Por que é relevante para a {Empresa}:** {Análise personalizada —
+    cruzamento com histórico de vitórias, setor, valor, órgão familiar}
 
-  **Quer receber a lista completa com analise de viabilidade para cada uma?**
-  Enviamos o PDF com as {N} licitacoes detalhadas por R${preco} via PIX.
-  Inclui 30 dias gratis do SmartLic Pro para monitorar novas oportunidades.
+  {Repetir para licitação 2 e 3 se K >= 2 ou 3}
 
-  Abraco,
+  As outras {N-K} oportunidades incluem editais de {resumo dos
+  setores/valores/órgãos}, todos filtrados pelo mesmo critério de
+  compatibilidade com o perfil da {Empresa}.
+
+  **Quer receber a lista completa com análise de viabilidade para cada uma?**
+  Enviamos o relatório em PDF com as {N} oportunidades detalhadas por
+  R$ {preço} via PIX. Cada oportunidade vem com avaliação objetiva de
+  viabilidade e link direto para o edital oficial.
+
+  Fico à disposição para qualquer dúvida.
+
+  Abraço,
   Tiago Sasaki
-  Fundador, SmartLic
+  Engenheiro de Software — CONFENGE
+  Criador do SmartLic.tech
   smartlic.tech
   ---
 
+  REGRAS DO TEMPLATE:
+  - Acentuação correta OBRIGATÓRIA (á, é, í, ó, ú, ã, õ, ç, â, ê, ô)
+  - Cada licitação DEVE ter link oficial do PNCP
+  - Análise de relevância DEVE ser personalizada (cruzar com perfil)
+  - NUNCA mencionar "assinatura", "plano", "trial"
+  - NUNCA fabricar dados — usar apenas dados reais do PNCP
+  - Tom: profissional, direto, focado em valor financeiro
+
+# ═══════════════════════════════════════════════════════════════════
+# OUTPUT E REGRAS DE ARQUIVO
+# ═══════════════════════════════════════════════════════════════════
+
 output_rules:
   file_pattern: "docs/ataque-turbo-{NNN}.md"
-  numbering: sequential (001, 002, 003...)
-  unique_leads: true  # Cada execucao deve ter leads ineditos (nao repetir de runs anteriores)
+  numbering: "Sequencial (001, 002, 003...). Verificar último existente antes de criar."
+  unique_leads: true
   dedup_strategy: |
     Antes de gerar output, ler todos os docs/ataque-turbo-*.md existentes
-    e extrair CNPJs/nomes de empresas ja abordados. Excluir da execucao atual.
+    e extrair CNPJs/nomes de empresas já abordados. Excluir da execução atual.
+
+  file_structure: |
+    # Ataque Turbo #{NNN} — {Data}
+
+    ## Metadata
+    - Data de execução: {YYYY-MM-DD HH:MM}
+    - Setores analisados: {lista}
+    - UFs: {lista}
+    - Período de editais: {data_inicial} a {data_final}
+    - APIs consultadas: PNCP (contratos + publicações), OpenCNPJ
+
+    ## Resumo
+    - Leads processados: {N}
+    - Emails gerados: {N}
+    - Total de oportunidades encontradas: {N}
+    - Valor total estimado das oportunidades: R$ {valor}
+
+    ## Lead 1 — {Nome da Empresa}
+    ### Perfil (Receita Federal)
+    - CNPJ: {formatado}
+    - Razão Social: {nome}
+    - CNAE: {código} — {descrição}
+    - Porte: {porte}
+    - Capital Social: R$ {valor}
+    - UF: {UF}
+    - Sócios: {nomes dos sócios do QSA}
+
+    ### Histórico de Licitações (PNCP)
+    - Contratos nos últimos 12 meses: {N}
+    - Valor total contratado: R$ {valor}
+    - Órgãos frequentes: {lista}
+    - Setores de atuação: {lista}
+
+    ### Oportunidades Encontradas
+    - Total: {N}
+    - Valor total estimado: R$ {valor}
+    - Amostra grátis: {K} de {N} ({ratio}%)
+    - Preço do relatório: R$ {preço}
+    - Justificativa do preço: {explicação}
+
+    ### Email
+    ```
+    {email completo pronto para copy/paste}
+    ```
+
+    ---
+    {Repetir para cada lead}
+
+    ## Métricas da Execução
+    - Tempo total: {duração}
+    - Requests PNCP: {N}
+    - Requests OpenCNPJ: {N}
+    - Leads descartados: {N} (motivos: {lista})
+
+# ═══════════════════════════════════════════════════════════════════
+# CONSTRAINTS E QUALITY GATES
+# ═══════════════════════════════════════════════════════════════════
+
+auto_save:
+  enabled: true
+  description: |
+    O relatório DEVE ser salvo automaticamente ao final da execução.
+    O usuário NUNCA deve precisar pedir para salvar.
+    Usar Write tool para criar docs/ataque-turbo-NNN.md.
+    Confirmar salvamento com path completo no output final.
 
 constraints:
-  - Zero chamadas OpenAI API (emails escritos manualmente via template)
-  - Dados reais do PNCP (curl direto para API publica)
-  - Leads ineditos a cada execucao (dedup contra runs anteriores)
-  - tamanhoPagina=50 (limite PNCP, >50 = HTTP 400)
-  - Rate limiting: respeitar Retry-After do PNCP
-  - Receita Federal: 1 req/sec
+  - "SALVAR AUTOMATICAMENTE ao final — nunca esperar pedido do usuário"
+  - "Zero chamadas OpenAI API — emails redigidos manualmente pelo squad"
+  - "Dados exclusivamente reais do PNCP e Receita Federal — NUNCA fabricar"
+  - "Acentuação correta em todo texto PT-BR"
+  - "Cada oportunidade DEVE incluir link oficial do edital no PNCP"
+  - "Leads inéditos a cada execução (dedup contra runs anteriores)"
+  - "tamanhoPagina: 50 para /contratacoes (editais), 500 para /contratos (vitórias)"
+  - "Rate limiting: respeitar Retry-After do PNCP"
+  - "OpenCNPJ: até 50 req/s (respeitar, não abusar)"
+  - "Identidade: SEMPRE Tiago Sasaki, Eng. Software CONFENGE"
+  - "NUNCA incentivar assinaturas ou mencionar planos"
+  - "Qualidade > Quantidade — menos leads, mais profundidade"
+
+quality_gates:
+  pre_email:
+    - "Lead tem ≥3 contratos homologados nos últimos 12 meses?"
+    - "Porte justifica compra do relatório (no-brainer test)?"
+    - "Existem editais abertos que matcham o perfil?"
+    - "Link PNCP de cada edital foi verificado/construído?"
+    - "Análise de relevância é personalizada (não genérica)?"
+  pre_output:
+    - "Acentuação revisada em todos os emails?"
+    - "Todos os links PNCP estão no formato correto?"
+    - "Nenhum dado fabricado — todos verificáveis via API?"
+    - "Tom alinhado com copy da landing page?"
+    - "Nenhuma menção a assinatura/plano/trial?"
+    - "Dedup verificado contra ataque-turbo-*.md anteriores?"
 
 success_criteria:
-  - minimum_leads: 5
-  - real_pncp_data: true
-  - zero_openai_calls: true
-  - emails_ready_to_send: true
-  - pricing_per_lead: true
-  - fracao_gratis_justified: true
-  - dedup_against_previous_runs: true
+  - "minimum_qualified_leads: 3 (qualidade > quantidade)"
+  - "real_pncp_data: true (verificável)"
+  - "zero_openai_calls: true"
+  - "emails_ready_to_send: true (copy/paste)"
+  - "all_links_verified: true"
+  - "proper_pt_br_accents: true"
+  - "personalized_relevance_analysis: true (não genérico)"
+  - "no_brainer_test_passed: true (todos os leads)"
+  - "dedup_against_previous_runs: true"
+  - "sender_identity_correct: true (CONFENGE, não SmartLic)"
+
+# ═══════════════════════════════════════════════════════════════════
+# ATIVAÇÃO E NOTAS
+# ═══════════════════════════════════════════════════════════════════
 
 when_to_use:
-  - Prospeccao ativa de novos clientes para SmartLic
-  - Cold outreach com dados reais de licitacoes
-  - Campanhas de aquisicao a custo negativo (diagnostico pago)
-  - Geracao de pipeline de vendas founder-led
+  - "Prospecção ativa de novos clientes (consultorias + empresas B2G diretas)"
+  - "Cold outreach com dados reais de licitações abertas"
+  - "Campanhas de aquisição a custo negativo (relatório pago)"
+  - "Geração de pipeline de vendas founder-led"
+  - "Validação do product-market fit pré-lançamento"
 
 activation: |
   Para ativar este squad:
-  1. /squad-creator
-  2. Carregar: squad-ataque-turbo
-  3. Executar: *acha-leads --mode lean
-  4. Output: docs/ataque-turbo-NNN.md
+  1. /squad-creator → carregar squad-ataque-turbo
+  2. Ou direto: *acha-leads --mode lean
+  3. Output: docs/ataque-turbo-NNN.md
 
 notes:
-  - Modelo inspirado no TurboCash playbook (Acao 1 + Acao 2)
-  - Preco referencia: R$1.500 (diagnostico) — ajustavel pelo @analyst
-  - Follow-up D+3 para quem nao respondeu (script no turbocash.md)
-  - Meta: 13 outreach -> 2-3 respostas (15-23% reply) -> 1 demo -> 1 conversao
-  - Apos 3 runs com >=15% response rate, graduar para Scale mode do acha-leads
+  - "Modelo inspirado no TurboCash playbook (Ação 1 + Ação 2)"
+  - "Preço referência: R$1.500 a R$3.000 — ajustável pelo @analyst"
+  - "Follow-up D+3 para quem não respondeu (script no turbocash.md)"
+  - "Meta: investigação CSI → emails irresistíveis → conversão"
+  - "Após 3 runs com >=15% response rate, graduar para Scale mode"
+  - "Público expandido: consultorias (turbocash) + empresas B2G diretas (PNCP)"
+  - "Faturamento inferido via: porte + capital_social + volume de contratos PNCP"

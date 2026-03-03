@@ -133,7 +133,7 @@ class TestBackgroundResultsRedis:
             mock_redis_async.setex.assert_called_once()
             call_args = mock_redis_async.setex.call_args
             assert call_args[0][0] == "smartlic:results:search-001"
-            assert call_args[0][1] == 1800  # 30 min TTL
+            assert call_args[0][1] == 14400  # 4h TTL (STORY-362 AC2)
             data = json.loads(call_args[0][2])
             assert data["total_filtrado"] == 42
 
@@ -444,8 +444,8 @@ class TestTTLCleanup:
     """AC8: All temporary Redis keys have EXPIRE set."""
 
     @pytest.mark.asyncio
-    async def test_results_ttl_30min(self, mock_redis_async):
-        """AC8: Background results stored with 30min TTL."""
+    async def test_results_ttl_4h(self, mock_redis_async):
+        """AC8: Background results stored with 4h TTL (STORY-362 AC2)."""
         from routes.search import _persist_results_to_redis
 
         with patch("routes.search.get_redis_pool", new_callable=AsyncMock, return_value=mock_redis_async):
@@ -453,7 +453,7 @@ class TestTTLCleanup:
 
             call_args = mock_redis_async.setex.call_args
             ttl = call_args[0][1]
-            assert ttl == 1800  # 30 min
+            assert ttl == 14400  # 4 hours (STORY-362)
 
     def test_arbiter_ttl_1h(self, mock_redis_sync):
         """AC8: Arbiter cache stored with 1h TTL."""

@@ -1542,3 +1542,74 @@ async def _daily_volume_loop() -> None:
             else:
                 logger.error("STORY-358 daily volume loop error: %s", e, exc_info=True)
             await asyncio.sleep(600)
+
+
+# ============================================================================
+# STORY-362 AC7: Expired search results cleanup (every 6 hours)
+# ============================================================================
+
+RESULTS_CLEANUP_INTERVAL_SECONDS = 6 * 60 * 60
+
+
+async def start_results_cleanup_task() -> asyncio.Task:
+    """STORY-362 AC7: Start periodic expired search results cleanup.
+
+    Deletes rows from search_results_store where expires_at < now().
+    Runs immediately on startup, then every 6 hours.
+    """
+    task = asyncio.create_task(_results_cleanup_loop(), name="results_cleanup")
+    logger.info("STORY-362: Expired results cleanup task started (interval: 6h)")
+    return task
+
+
+async def cleanup_expired_results() -> dict:
+    """STORY-362 AC7: Delete expired search results from Supabase L3.
+
+    Returns dict with count of deleted rows.
+    """
+    try:
+        from supabase_client import get_supabase, sb_execute
+
+        sb = get_supabase()
+        now = datetime.now(timezone.utc).isoformat()
+
+        result = await sb_execute(
+            sb.table("search_results_store")
+            .delete()
+            .lt("expires_at", now)
+        )
+
+        deleted = len(result.data) if result and result.data else 0
+        logger.info(
+            "STORY-362: Cleaned up %d expired search results at %s",
+            deleted, now,
+        )
+        return {"deleted": deleted, "cleaned_at": now}
+
+    except Exception as e:
+        if _is_cb_or_connection_error(e):
+            logger.warning("STORY-362: Results cleanup skipped (Supabase unavailable): %s", e)
+        else:
+            logger.error("STORY-362: Results cleanup error: %s", e, exc_info=True)
+        return {"deleted": 0, "error": str(e)}
+
+
+async def _results_cleanup_loop() -> None:
+    """STORY-362 AC7: Cleanup loop — runs immediately, then every 6h."""
+    while True:
+        try:
+            result = await cleanup_expired_results()
+            logger.info(
+                "STORY-362 results cleanup cycle: %s at %s",
+                result, datetime.now(timezone.utc).isoformat(),
+            )
+            await asyncio.sleep(RESULTS_CLEANUP_INTERVAL_SECONDS)
+        except asyncio.CancelledError:
+            logger.info("STORY-362: Results cleanup task cancelled")
+            break
+        except Exception as e:
+            if _is_cb_or_connection_error(e):
+                logger.warning("STORY-362 results cleanup loop skipped: %s", e)
+            else:
+                logger.error("STORY-362 results cleanup loop error: %s", e, exc_info=True)
+            await asyncio.sleep(300)

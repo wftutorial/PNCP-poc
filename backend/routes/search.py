@@ -154,7 +154,7 @@ from search_pipeline import _build_pncp_link, _calcular_urgencia, _calcular_dias
 # A-04 + STORY-294: Background fetch results (in-memory L1 + Redis L2)
 # ---------------------------------------------------------------------------
 _background_results: Dict[str, Dict[str, Any]] = {}
-_RESULTS_TTL = 600  # 10 minutes (in-memory)
+_RESULTS_TTL = 3600  # 1 hour (in-memory) — STORY-362 AC1
 _active_background_tasks: Dict[str, asyncio.Task] = {}
 _MAX_BACKGROUND_TASKS = 5  # Budget: max concurrent background fetches
 
@@ -219,6 +219,89 @@ async def _persist_results_to_redis(search_id: str, response: Any) -> None:
         logger.warning(f"STORY-294: Failed to persist results to Redis: {e}")
 
 
+async def _persist_results_to_supabase(
+    search_id: str, user_id: str, response: Any
+) -> None:
+    """STORY-362 AC5: Persist results to Supabase L3 for long-term access.
+
+    Fire-and-forget: errors are logged, never raised.
+    Uses service_role so RLS INSERT is allowed.
+    """
+    import json as _json
+    from datetime import datetime, timezone, timedelta
+
+    try:
+        from supabase_client import get_supabase, sb_execute
+        from config import RESULTS_SUPABASE_TTL_HOURS
+
+        db = get_supabase()
+        if not db:
+            return
+
+        # Serialize response
+        if hasattr(response, "model_dump"):
+            data = response.model_dump(mode="json")
+        elif hasattr(response, "dict"):
+            data = response.dict()
+        elif isinstance(response, dict):
+            data = response
+        else:
+            return
+
+        sector = data.get("setor", "")
+        ufs = data.get("ufs", [])
+        total_filtered = data.get("total_filtrado", 0)
+        expires_at = (
+            datetime.now(timezone.utc) + timedelta(hours=RESULTS_SUPABASE_TTL_HOURS)
+        ).isoformat()
+
+        await sb_execute(
+            db.table("search_results_store").upsert({
+                "search_id": search_id,
+                "user_id": user_id,
+                "results": _json.loads(_json.dumps(data, default=str)),
+                "sector": sector,
+                "ufs": ufs,
+                "total_filtered": total_filtered,
+                "expires_at": expires_at,
+            })
+        )
+        logger.debug(f"STORY-362: Results persisted to Supabase L3: {search_id}")
+
+    except Exception as e:
+        logger.warning(f"STORY-362: Failed to persist results to Supabase L3: {e}")
+
+
+async def _get_results_from_supabase(search_id: str) -> Optional[Dict[str, Any]]:
+    """STORY-362 AC6: Read results from Supabase L3 (long-term persistence)."""
+    from datetime import datetime, timezone
+
+    try:
+        from supabase_client import get_supabase, sb_execute
+
+        db = get_supabase()
+        if not db:
+            return None
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        result = await sb_execute(
+            db.table("search_results_store")
+            .select("results")
+            .eq("search_id", search_id)
+            .gt("expires_at", now_iso)
+            .limit(1)
+        )
+
+        if result and result.data and len(result.data) > 0:
+            logger.debug(f"STORY-362: Results retrieved from Supabase L3: {search_id}")
+            return result.data[0]["results"]
+
+    except Exception as e:
+        logger.warning(f"STORY-362: Failed to read results from Supabase L3: {e}")
+
+    return None
+
+
 async def _get_results_from_redis(search_id: str) -> Optional[Dict[str, Any]]:
     """STORY-294 AC5: Read results from Redis (cross-worker)."""
     import json as _json
@@ -253,10 +336,10 @@ def get_background_results(search_id: str) -> Optional[BuscaResponse]:
 
 
 async def get_background_results_async(search_id: str) -> Optional[Dict[str, Any]]:
-    """Retrieve search results: in-memory L1 → Redis L2 → ARQ Worker results.
+    """Retrieve search results: L1 (memory) → L2 (Redis) → ARQ → L3 (Supabase).
 
     STORY-294 AC5: Cross-worker result retrieval via Redis.
-    GTM-ARCH-001: Also checks ARQ Worker results as last resort.
+    STORY-362 AC6: Supabase L3 fallback for long-term persistence.
     """
     # L1: Check in-memory first (same worker — fast path)
     sync_result = get_background_results(search_id)
@@ -268,11 +351,16 @@ async def get_background_results_async(search_id: str) -> Optional[Dict[str, Any
     if redis_result:
         return redis_result
 
-    # L3: Check ARQ Worker results (job_queue)
+    # ARQ: Check ARQ Worker results (job_queue)
     from job_queue import get_job_result
     arq_result = await get_job_result(search_id, "search_result")
     if arq_result:
         return arq_result
+
+    # L3: Check Supabase (long-term persistence — STORY-362 AC6)
+    supabase_result = await _get_results_from_supabase(search_id)
+    if supabase_result:
+        return supabase_result
 
     return None
 
@@ -931,6 +1019,8 @@ async def _execute_background_fetch(
         # Store results for /buscar-results/{search_id}
         store_background_results(search_id, response)
         await _persist_results_to_redis(search_id, response)
+        # STORY-362 AC5: Fire-and-forget L3 persist
+        asyncio.create_task(_persist_results_to_supabase(search_id, user.get("id", ""), response))
 
         # Calculate diff summary for refresh_available event
         cached_ids = set()
@@ -1076,9 +1166,11 @@ async def _run_async_search(
         # STORY-320 AC3: Apply trial paywall truncation
         response = _apply_trial_paywall(response, user)
 
-        # Persist results: L1 (memory) + L2 (Redis) + L3 (Supabase session update)
+        # Persist results: L1 (memory) + L2 (Redis) + L3 (Supabase)
         store_background_results(search_id, response)
         await _persist_results_to_redis(search_id, response)
+        # STORY-362 AC5: Fire-and-forget L3 persist
+        asyncio.create_task(_persist_results_to_supabase(search_id, user.get("id", ""), response))
         asyncio.create_task(_update_session_on_complete(search_id, user.get("id"), response))
 
         # Emit terminal SSE event

@@ -885,7 +885,8 @@ COMPRASGOV_CB_ENABLED: bool = os.getenv("COMPRASGOV_CB_ENABLED", "true").lower()
 # STORY-294: State Externalization to Redis
 # ============================================================================
 # TTLs for externalized state stores (seconds)
-RESULTS_REDIS_TTL: int = int(os.getenv("RESULTS_REDIS_TTL", "1800"))  # 30 min
+RESULTS_REDIS_TTL: int = int(os.getenv("RESULTS_REDIS_TTL", "14400"))  # 4 hours — STORY-362 AC2
+RESULTS_SUPABASE_TTL_HOURS: int = int(os.getenv("RESULTS_SUPABASE_TTL_HOURS", "24"))  # 24h — STORY-362 AC4
 ARBITER_REDIS_TTL: int = int(os.getenv("ARBITER_REDIS_TTL", "3600"))  # 1 hour
 STATE_STORE_REDIS_PREFIX: str = os.getenv("STATE_STORE_REDIS_PREFIX", "smartlic:")
 

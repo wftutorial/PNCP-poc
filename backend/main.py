@@ -412,7 +412,7 @@ async def lifespan(app_instance: FastAPI):
     await get_arq_pool()
 
     # UX-303 AC8: Start periodic cache cleanup
-    from cron_jobs import start_cache_cleanup_task, start_session_cleanup_task, start_cache_refresh_task, warmup_top_params, start_warmup_task, start_trial_sequence_task, start_reconciliation_task, start_health_canary_task, start_revenue_share_task, start_sector_stats_task, start_support_sla_task, start_daily_volume_task
+    from cron_jobs import start_cache_cleanup_task, start_session_cleanup_task, start_cache_refresh_task, warmup_top_params, start_warmup_task, start_trial_sequence_task, start_reconciliation_task, start_health_canary_task, start_revenue_share_task, start_sector_stats_task, start_support_sla_task, start_daily_volume_task, start_results_cleanup_task
     cleanup_task = await start_cache_cleanup_task()
 
     # CRIT-011 AC7: Start periodic session cleanup (stale + old sessions)
@@ -442,6 +442,9 @@ async def lifespan(app_instance: FastAPI):
 
     # STORY-358 AC2: Start daily volume recording (07:00 UTC)
     daily_volume_task = await start_daily_volume_task()
+
+    # STORY-362 AC7: Start periodic expired search results cleanup (every 6h)
+    results_cleanup_task = await start_results_cleanup_task()
 
     # P1.2: Start startup cache warm-up (top sector+UF combinations)
     warmup_task = await start_warmup_task()
@@ -599,6 +602,13 @@ async def lifespan(app_instance: FastAPI):
     daily_volume_task.cancel()
     try:
         await daily_volume_task
+    except (Exception, asyncio.CancelledError):
+        pass
+
+    # STORY-362: Cancel expired results cleanup
+    results_cleanup_task.cancel()
+    try:
+        await results_cleanup_task
     except (Exception, asyncio.CancelledError):
         pass
 

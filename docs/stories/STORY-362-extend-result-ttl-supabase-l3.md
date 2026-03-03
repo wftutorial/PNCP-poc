@@ -1,6 +1,6 @@
 # STORY-362 — Extend Result TTLs & Add Supabase L3 Persistence
 
-**Status:** pending
+**Status:** completed
 **Priority:** P1 — Production (PDF/Excel "busca expirada" para buscas bem-sucedidas)
 **Origem:** Conselho CTO Advisory — Analise de exports quebrados (2026-03-03)
 **Componentes:** backend/routes/search.py, backend/config.py, supabase/migrations/
@@ -33,13 +33,13 @@ Adicionalmente, nao existe persistencia L3 (Supabase) para resultados de busca. 
 
 ### TTL Extension
 
-- [ ] **AC1:** Aumentar `_RESULTS_TTL` de 600 para 3600 (1h in-memory)
-- [ ] **AC2:** Aumentar `RESULTS_REDIS_TTL` de 1800 para 14400 (4h Redis) via env var (manter retrocompatibilidade)
-- [ ] **AC3:** Documentar novos TTLs no `.env.example`
+- [x] **AC1:** Aumentar `_RESULTS_TTL` de 600 para 3600 (1h in-memory)
+- [x] **AC2:** Aumentar `RESULTS_REDIS_TTL` de 1800 para 14400 (4h Redis) via env var (manter retrocompatibilidade)
+- [x] **AC3:** Documentar novos TTLs no `.env.example`
 
 ### Supabase L3 Persistence
 
-- [ ] **AC4:** Criar tabela `search_results_store` via migration:
+- [x] **AC4:** Criar tabela `search_results_store` via migration:
   ```sql
   CREATE TABLE search_results_store (
     search_id UUID PRIMARY KEY,
@@ -57,17 +57,17 @@ Adicionalmente, nao existe persistencia L3 (Supabase) para resultados de busca. 
   CREATE POLICY "Users can read own results" ON search_results_store
     FOR SELECT USING (auth.uid() = user_id);
   ```
-- [ ] **AC5:** Apos `store_background_results()` + `_persist_results_to_redis()`, persistir tambem no Supabase (fire-and-forget, nao bloqueia resposta)
-- [ ] **AC6:** `get_background_results_async()` ganha fallback L3: L1 → L2 → ARQ → Supabase
-- [ ] **AC7:** Criar cron job para limpar resultados expirados (`expires_at < now()`) — rodar a cada 6h
+- [x] **AC5:** Apos `store_background_results()` + `_persist_results_to_redis()`, persistir tambem no Supabase (fire-and-forget, nao bloqueia resposta)
+- [x] **AC6:** `get_background_results_async()` ganha fallback L3: L1 → L2 → ARQ → Supabase
+- [x] **AC7:** Criar cron job para limpar resultados expirados (`expires_at < now()`) — rodar a cada 6h
 
 ### Validacao
 
-- [ ] **AC8:** PDF funciona 2h apos a busca original (L1 expirou, L2 ativo)
-- [ ] **AC9:** PDF funciona 6h apos a busca original (L1 e L2 expiraram, L3 Supabase ativo)
-- [ ] **AC10:** Apos restart do backend, resultados ainda acessiveis via L2/L3
-- [ ] **AC11:** Testes existentes passam sem regressao (patch de mocks se necessario)
-- [ ] **AC12:** RLS impede usuario A de acessar resultados do usuario B
+- [x] **AC8:** PDF funciona 2h apos a busca original (L1 expirou, L2 ativo)
+- [x] **AC9:** PDF funciona 6h apos a busca original (L1 e L2 expiraram, L3 Supabase ativo)
+- [x] **AC10:** Apos restart do backend, resultados ainda acessiveis via L2/L3
+- [x] **AC11:** Testes existentes passam sem regressao (patch de mocks se necessario)
+- [x] **AC12:** RLS impede usuario A de acessar resultados do usuario B
 
 ## Arquivos Impactados
 

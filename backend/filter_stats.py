@@ -86,16 +86,6 @@ class FilterStatsTracker:
         with self._lock:
             self._stats[reason].append(entry)
 
-        # Structured log — queryable by log aggregation (e.g. Datadog, Loki)
-        logger.info(
-            "filter_rejection",
-            extra={
-                "reason_code": reason,
-                "sector": sector,
-                "event_type": "filter_reject",
-            },
-        )
-
     def get_stats(self, days: int = 7) -> Dict:
         """Get rejection counts for the last *days* days.
 

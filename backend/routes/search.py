@@ -1686,10 +1686,17 @@ async def buscar_licitacoes(
                 await tracker.emit_degraded("source_failure", _build_degraded_detail(ctx))
                 await remove_tracker(request.search_id)
             from search_pipeline import _convert_to_licitacao_items
+            from llm import gerar_resumo_fallback
             items = _convert_to_licitacao_items(ctx.licitacoes_filtradas)
+            _fb_resumo = gerar_resumo_fallback(ctx.licitacoes_filtradas)
+            _qi = ctx.quota_info
             partial_response = BuscaResponse(
                 licitacoes=items,
-                total_encontrado=len(ctx.licitacoes_filtradas),
+                resumo=_fb_resumo,
+                excel_available=ctx.excel_available,
+                quota_used=_qi.quota_used if _qi else 0,
+                quota_remaining=_qi.quota_remaining if _qi else 999,
+                total_raw=len(ctx.licitacoes_raw),
                 total_filtrado=len(ctx.licitacoes_filtradas),
                 is_partial=True,
                 degradation_reason=f"Resultado parcial — erro interno: {type(e).__name__}",

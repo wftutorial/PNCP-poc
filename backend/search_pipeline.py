@@ -2014,7 +2014,7 @@ class SearchPipeline:
             input_count=_input_count,
             output_count=_output_count,
             sector=_sector,
-            search_id=ctx.search_id or "",
+            search_id=getattr(ctx.request, "search_id", "") or "",
         )
 
         # Diagnostic sample
@@ -2608,8 +2608,9 @@ class SearchPipeline:
                         except Exception:
                             pass
 
+                    _ctx_search_id = getattr(ctx.request, "search_id", None) or ""
                     await store_pending_review_bids(
-                        search_id=ctx.search_id,
+                        search_id=_ctx_search_id,
                         bids=_pending_bids,
                         sector_name=_sector_name,
                     )
@@ -2617,7 +2618,7 @@ class SearchPipeline:
                     if await is_queue_available():
                         await enqueue_job(
                             "reclassify_pending_bids_job",
-                            search_id=ctx.search_id,
+                            search_id=_ctx_search_id,
                             sector_name=_sector_name,
                             sector_id=_sector_id,
                             attempt=1,
@@ -2625,7 +2626,7 @@ class SearchPipeline:
                         )
                         logger.info(
                             f"STORY-354: Enqueued reclassify job for {len(_pending_bids)} bids "
-                            f"(search_id={ctx.search_id})"
+                            f"(search_id={_ctx_search_id})"
                         )
             except Exception as _pr_err:
                 logger.warning(f"STORY-354: Failed to enqueue reclassify job: {_pr_err}")

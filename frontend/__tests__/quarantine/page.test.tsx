@@ -7,16 +7,6 @@ import '@testing-library/jest-dom';
 // Import the search page (previously at root, now at /buscar)
 import HomePage from '@/app/buscar/page';
 
-// Mock Supabase client
-jest.mock('../lib/supabase', () => ({
-  supabase: {
-    auth: {
-      getSession: jest.fn().mockResolvedValue({ data: { session: null }, error: null }),
-      onAuthStateChange: jest.fn().mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } }),
-    },
-  },
-}));
-
 // Mock AuthProvider to avoid Supabase dependency
 jest.mock('@/components/AuthProvider', () => ({
   AuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,

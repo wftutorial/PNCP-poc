@@ -92,15 +92,6 @@ jest.mock("../lib/utils/dateDiffInDays", () => ({
   dateDiffInDays: () => 10,
 }));
 
-jest.mock("../lib/supabase", () => ({
-  supabase: {
-    auth: {
-      getSession: jest.fn().mockResolvedValue({ data: { session: null }, error: null }),
-      refreshSession: jest.fn().mockResolvedValue({ data: { session: null }, error: null }),
-    },
-  },
-}));
-
 // ---- Constants & helpers ----
 
 const defaultSSEReturn = {

@@ -10,6 +10,31 @@ jest.mock('uuid', () => ({
   v4: () => 'test-uuid-12345',
 }));
 
+// Global mock for Supabase browser client (STORY-366)
+// Eliminates need for per-file jest.mock('../lib/supabase', ...) in most test files.
+// Test files that need custom behavior can still override with a local jest.mock().
+jest.mock('./lib/supabase', () => {
+  const mockSupabase = {
+    auth: {
+      getSession: jest.fn().mockResolvedValue({ data: { session: null }, error: null }),
+      onAuthStateChange: jest.fn(() => ({
+        data: { subscription: { unsubscribe: jest.fn() } },
+      })),
+      refreshSession: jest.fn().mockResolvedValue({ data: { session: null } }),
+    },
+    from: jest.fn(() => ({
+      select: jest.fn().mockReturnValue({ data: [], error: null }),
+      insert: jest.fn().mockReturnValue({ data: null, error: null }),
+      update: jest.fn().mockReturnValue({ data: null, error: null }),
+      delete: jest.fn().mockReturnValue({ data: null, error: null }),
+    })),
+  };
+  return {
+    supabase: mockSupabase,
+    getSupabase: jest.fn(() => mockSupabase),
+  };
+});
+
 // Polyfill for Next.js 14+ compatibility
 import { TextEncoder, TextDecoder } from 'util'
 

@@ -14,10 +14,6 @@ jest.mock('../hooks/useAnalytics', () => ({
   useAnalytics: () => ({ trackEvent: jest.fn() }),
 }));
 
-jest.mock('../lib/supabase', () => ({
-  supabase: { auth: { refreshSession: jest.fn().mockResolvedValue({ data: { session: null } }) } },
-}));
-
 // Mock useAuth
 jest.mock('../app/components/AuthProvider', () => ({
   useAuth: () => ({

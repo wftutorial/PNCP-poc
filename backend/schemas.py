@@ -276,6 +276,8 @@ class SearchStatusResponse(BaseModel):
 
     Populated from in-memory progress tracker + state machine (lightweight, <50ms).
     No database queries — reads only from in-memory state.
+
+    STORY-364 AC1: Includes excel_url and excel_status for polling fallback.
     """
     search_id: str = Field(..., description="UUID of the search")
     status: str = Field(..., description="running, completed, failed, or timeout")
@@ -286,6 +288,8 @@ class SearchStatusResponse(BaseModel):
     results_url: Optional[str] = Field(None, description="URL to fetch full results (set when completed)")
     elapsed_s: float = Field(0.0, description="Seconds since search started")
     created_at: Optional[str] = Field(None, description="ISO timestamp when search was created")
+    excel_url: Optional[str] = Field(None, description="Signed URL for Excel download (set when ready)")
+    excel_status: Optional[str] = Field(None, description="Excel generation status: processing, ready, failed, skipped")
 
 
 class BuscaRequest(BaseModel):

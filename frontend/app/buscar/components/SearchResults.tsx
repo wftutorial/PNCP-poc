@@ -75,6 +75,7 @@ export interface SearchResultsProps {
   downloadError: string | null;
   onDownload: () => void;
   onSearch: () => void;
+  onRegenerateExcel?: () => void;
 
   // Plan & auth
   planInfo: {
@@ -176,7 +177,7 @@ export default function SearchResults({
   result, rawCount,
   ufsSelecionadas, sectorName,
   searchMode, termosArray, ordenacao, onOrdenacaoChange,
-  downloadLoading, downloadError, onDownload, onSearch,
+  downloadLoading, downloadError, onDownload, onSearch, onRegenerateExcel,
   planInfo, session, onShowUpgradeModal, onTrackEvent,
   // STORY-257B props
   ufStatuses, ufTotalFound = 0, ufAllComplete,
@@ -786,7 +787,7 @@ export default function SearchResults({
                     if (isFailed) {
                       return (
                         <button
-                          onClick={onSearch}
+                          onClick={onRegenerateExcel || onSearch}
                           disabled={loading}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium
                                      bg-amber-600 hover:bg-amber-700 text-white rounded-button

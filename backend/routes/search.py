@@ -840,6 +840,15 @@ async def search_status_endpoint(
                 results_count = getattr(bg_result, "total_filtrado", 0)
             results_url = f"/v1/search/{search_id}/results"
 
+        # STORY-364 AC1: Include Excel status from job result
+        excel_url = None
+        excel_status_val = None
+        from job_queue import get_job_result
+        excel_result = await get_job_result(search_id, "excel_result")
+        if excel_result:
+            excel_url = excel_result.get("download_url")
+            excel_status_val = excel_result.get("excel_status")
+
         return SearchStatusResponse(
             search_id=search_id,
             status=status,
@@ -850,6 +859,8 @@ async def search_status_endpoint(
             results_url=results_url,
             elapsed_s=elapsed_s,
             created_at=created_at_str,
+            excel_url=excel_url,
+            excel_status=excel_status_val,
         )
 
     # --- Slow path: fall back to DB-based status (backward compat) ---
@@ -876,6 +887,15 @@ async def search_status_endpoint(
     if mapped_status == "completed":
         results_url = f"/v1/search/{search_id}/results"
 
+    # STORY-364 AC1: Include Excel status from job result (slow path)
+    excel_url_db = None
+    excel_status_db = None
+    from job_queue import get_job_result as _get_job_result
+    excel_result_db = await _get_job_result(search_id, "excel_result")
+    if excel_result_db:
+        excel_url_db = excel_result_db.get("download_url")
+        excel_status_db = excel_result_db.get("excel_status")
+
     return SearchStatusResponse(
         search_id=search_id,
         status=mapped_status,
@@ -886,6 +906,8 @@ async def search_status_endpoint(
         results_url=results_url,
         elapsed_s=elapsed_s,
         created_at=db_status.get("started_at"),
+        excel_url=excel_url_db,
+        excel_status=excel_status_db,
     )
 
 
@@ -944,6 +966,14 @@ async def get_search_results_v1(
     """
     result = await get_background_results_async(search_id)
     if result is not None:
+        # STORY-364 AC2: Merge Excel job result if not already in response
+        if isinstance(result, dict) and not result.get("download_url"):
+            from job_queue import get_job_result as _gjr
+            _excel = await _gjr(search_id, "excel_result")
+            if _excel and _excel.get("download_url"):
+                result["download_url"] = _excel["download_url"]
+                result["excel_status"] = _excel.get("excel_status", "ready")
+
         return StarletteJSONResponse(
             content=result if isinstance(result, dict) else result,
             headers={"Cache-Control": "max-age=300"},
@@ -966,6 +996,89 @@ async def get_search_results_v1(
     raise HTTPException(
         status_code=404,
         detail="Resultados não encontrados ou expirados. Execute uma nova busca.",
+    )
+
+
+# ---------------------------------------------------------------------------
+# STORY-364 AC7-AC8: Regenerate Excel from stored results
+# ---------------------------------------------------------------------------
+
+@router.post("/v1/search/{search_id}/regenerate-excel")
+async def regenerate_excel_endpoint(
+    search_id: str,
+    user: dict = Depends(require_auth),
+):
+    """STORY-364 AC7-AC8: Regenerate Excel from stored results without re-running search.
+
+    - 202: Excel generation job enqueued
+    - 404: Results not found or expired
+    """
+    result = await get_background_results_async(search_id)
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Resultados não encontrados ou expirados. Execute uma nova busca.",
+        )
+
+    # Extract licitacoes from stored result
+    if isinstance(result, dict):
+        licitacoes = result.get("licitacoes", [])
+    elif hasattr(result, "licitacoes"):
+        licitacoes = result.licitacoes
+    else:
+        licitacoes = []
+
+    if not licitacoes:
+        raise HTTPException(
+            status_code=404,
+            detail="Nenhuma licitação nos resultados armazenados.",
+        )
+
+    from job_queue import enqueue_job, is_queue_available
+
+    if await is_queue_available():
+        await enqueue_job(
+            "excel_generation_job",
+            search_id=search_id,
+            licitacoes=licitacoes,
+            allow_excel=True,
+        )
+        return StarletteJSONResponse(
+            status_code=202,
+            content={
+                "message": "Gerando Excel...",
+                "search_id": search_id,
+                "excel_status": "processing",
+            },
+        )
+
+    # Inline fallback when ARQ unavailable
+    try:
+        excel_buffer = create_excel(licitacoes)
+        excel_bytes = excel_buffer.read()
+        from storage import upload_excel
+        storage_result = upload_excel(excel_bytes, search_id)
+        if storage_result:
+            download_url = storage_result["signed_url"]
+            from job_queue import persist_job_result
+            await persist_job_result(
+                search_id, "excel_result",
+                {"excel_status": "ready", "download_url": download_url},
+            )
+            return {
+                "excel_status": "ready",
+                "download_url": download_url,
+                "search_id": search_id,
+            }
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(
+            f"[Regenerate Excel] Inline generation failed: {e}", exc_info=True,
+        )
+
+    raise HTTPException(
+        status_code=500,
+        detail="Erro ao gerar Excel. Tente novamente.",
     )
 
 

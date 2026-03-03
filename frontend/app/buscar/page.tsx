@@ -801,6 +801,7 @@ function HomePageContent() {
                 downloadError={search.downloadError}
                 onDownload={handleDownloadWithGuard}
                 onSearch={search.buscar}
+                onRegenerateExcel={search.handleRegenerateExcel}
                 planInfo={planInfo}
                 session={session}
                 onShowUpgradeModal={handleShowUpgradeModal}

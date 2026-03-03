@@ -408,6 +408,35 @@ async def get_job_result(search_id: str, field: str) -> Optional[Any]:
 
 
 # ==========================================================================
+# STORY-364 AC3: Update main results key with Excel URL
+# ==========================================================================
+
+async def _update_results_excel_url(search_id: str, download_url: str) -> None:
+    """Patch the main results key in Redis with the Excel download URL.
+
+    Called after Excel generation completes so that GET /search/{id}/results
+    returns download_url even if the SSE event was missed.
+    """
+    from redis_pool import get_redis_pool
+
+    redis = await get_redis_pool()
+    if redis is None:
+        return
+
+    try:
+        key = f"smartlic:results:{search_id}"
+        raw = await redis.get(key)
+        if raw:
+            data = json.loads(raw)
+            data["download_url"] = download_url
+            data["excel_status"] = "ready"
+            await redis.set(key, json.dumps(data), keepttl=True)
+            logger.info(f"[Excel] Updated main results key with excel_url: {search_id}")
+    except Exception as e:
+        logger.warning(f"Failed to update results with excel_url for {search_id}: {e}")
+
+
+# ==========================================================================
 # Job Functions (Track 2 + Track 3)
 # ==========================================================================
 
@@ -507,6 +536,10 @@ async def excel_generation_job(
     excel_status = "ready" if download_url else "failed"
     result = {"excel_status": excel_status, "download_url": download_url}
     await persist_job_result(search_id, "excel_result", result)
+
+    # STORY-364 AC3: Also update main results key with excel_url
+    if download_url:
+        await _update_results_excel_url(search_id, download_url)
 
     # AC20: Emit SSE event
     tracker = await get_tracker(search_id)

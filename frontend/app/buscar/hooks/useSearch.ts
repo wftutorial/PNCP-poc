@@ -141,6 +141,8 @@ export interface UseSearchReturn {
   /** CRIT-SSE-FIX AC1: View partial results without destroying search state */
   viewPartialResults: () => void;
   handleDownload: () => Promise<void>;
+  /** STORY-364 AC7: Regenerate Excel from stored results without re-running search */
+  handleRegenerateExcel: () => Promise<void>;
   handleSaveSearch: () => void;
   confirmSaveSearch: () => void;
   handleLoadSearch: (search: SavedSearch) => void;
@@ -458,6 +460,90 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
       }, 30_000);
     }
   }, [loading, effectiveEvent]);
+
+  // =========================================================================
+  // STORY-364 AC4-AC6: Excel polling fallback when SSE disconnects
+  // =========================================================================
+  const excelPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const excelPollingCountRef = useRef(0);
+
+  useEffect(() => {
+    const shouldPoll = !!(
+      result
+      && result.excel_status === 'processing'
+      && !result.download_url
+      && !result.download_id
+      && (sseDisconnected || !sseAvailable)
+      && !loading
+    );
+
+    if (!shouldPoll) {
+      if (excelPollingRef.current) {
+        clearInterval(excelPollingRef.current);
+        excelPollingRef.current = null;
+      }
+      // Reset counter when Excel is resolved
+      if (result?.excel_status !== 'processing') {
+        excelPollingCountRef.current = 0;
+      }
+      return;
+    }
+
+    const pollExcelStatus = async () => {
+      // AC6: Max 12 attempts (60s total)
+      if (excelPollingCountRef.current >= 12) {
+        if (excelPollingRef.current) {
+          clearInterval(excelPollingRef.current);
+          excelPollingRef.current = null;
+        }
+        return;
+      }
+
+      excelPollingCountRef.current++;
+
+      try {
+        const headers: Record<string, string> = {};
+        if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
+
+        const sid = asyncSearchIdRef.current || searchId;
+        if (!sid) return;
+
+        const res = await fetch(
+          `/api/search-status?search_id=${encodeURIComponent(sid)}`,
+          { headers },
+        );
+        if (!res.ok) return;
+
+        const data = await res.json();
+        // AC5: When polling returns excel_url, update result
+        if (data.excel_url) {
+          setResult(prev => prev ? {
+            ...prev,
+            download_url: data.excel_url,
+            excel_status: 'ready' as const,
+          } : prev);
+          if (excelPollingRef.current) {
+            clearInterval(excelPollingRef.current);
+            excelPollingRef.current = null;
+          }
+          excelPollingCountRef.current = 0;
+        }
+      } catch (e) {
+        console.warn('[STORY-364] Excel polling failed:', e);
+      }
+    };
+
+    // Start polling: immediate first check + every 5s
+    pollExcelStatus();
+    excelPollingRef.current = setInterval(pollExcelStatus, 5000);
+
+    return () => {
+      if (excelPollingRef.current) {
+        clearInterval(excelPollingRef.current);
+        excelPollingRef.current = null;
+      }
+    };
+  }, [result?.excel_status, result?.download_url, result?.download_id, sseDisconnected, sseAvailable, loading, searchId, session?.access_token]);
 
   const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || "SmartLic.tech";
 
@@ -1161,6 +1247,60 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
     }
   };
 
+  // STORY-364 AC7: Regenerate Excel without re-running search
+  const handleRegenerateExcel = async () => {
+    const sid = asyncSearchIdRef.current || searchId;
+    if (!sid) {
+      setDownloadError("Sem ID de busca para regenerar Excel.");
+      return;
+    }
+
+    // Set processing state
+    setResult(prev => prev ? { ...prev, excel_status: 'processing' as const, download_url: null } : prev);
+    excelPollingCountRef.current = 0;
+
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
+
+      const res = await fetch(`/api/regenerate-excel/${encodeURIComponent(sid)}`, {
+        method: 'POST',
+        headers,
+      });
+
+      if (res.status === 404) {
+        setDownloadError("Resultados expirados. Faça uma nova busca.");
+        setResult(prev => prev ? { ...prev, excel_status: 'failed' as const } : prev);
+        return;
+      }
+
+      if (!res.ok) {
+        setDownloadError("Erro ao regenerar Excel. Tente novamente.");
+        setResult(prev => prev ? { ...prev, excel_status: 'failed' as const } : prev);
+        return;
+      }
+
+      const data = await res.json();
+
+      // If inline generation returned ready result
+      if (data.excel_status === 'ready' && data.download_url) {
+        setResult(prev => prev ? {
+          ...prev,
+          download_url: data.download_url,
+          excel_status: 'ready' as const,
+        } : prev);
+        return;
+      }
+
+      // 202 — job queued, polling will pick it up via the effect above
+      // excel_status is already 'processing'
+    } catch (e) {
+      console.error('[STORY-364] Regenerate Excel failed:', e);
+      setDownloadError("Erro de rede ao regenerar Excel.");
+      setResult(prev => prev ? { ...prev, excel_status: 'failed' as const } : prev);
+    }
+  };
+
   const handleSaveSearch = () => {
     if (!result) return;
     const defaultName = filters.searchMode === "setor"
@@ -1304,7 +1444,7 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
     showSaveDialog, setShowSaveDialog,
     saveSearchName, setSaveSearchName,
     saveError, isMaxCapacity,
-    buscar, buscarForceFresh, cancelSearch, viewPartialResults, handleDownload,
+    buscar, buscarForceFresh, cancelSearch, viewPartialResults, handleDownload, handleRegenerateExcel,
     handleSaveSearch, confirmSaveSearch, handleLoadSearch, handleRefresh,
     estimateSearchTime, restoreSearchStateOnMount,
     getRetryCooldown,

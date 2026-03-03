@@ -416,6 +416,12 @@ async def _cache_refresh_loop() -> None:
 
     while True:
         try:
+            # CRIT-050 AC6: Respect feature flag each iteration
+            from config import CACHE_REFRESH_ENABLED
+            if not CACHE_REFRESH_ENABLED:
+                await asyncio.sleep(CACHE_REFRESH_INTERVAL_SECONDS)
+                continue
+
             result = await refresh_stale_cache_entries()
             logger.info(
                 f"Cache refresh cycle: {result} "

@@ -2285,8 +2285,8 @@ class SearchPipeline:
             ctx.response = BuscaResponse(
                 resumo=ctx.resumo,
                 licitacoes=[],
-                excel_base64=None if not ctx.quota_info or not ctx.quota_info.capabilities["allow_excel"] else "",
-                excel_available=ctx.quota_info.capabilities["allow_excel"] if ctx.quota_info else False,
+                excel_base64=None if not ctx.quota_info or not (ctx.quota_info.capabilities or {}).get("allow_excel", False) else "",
+                excel_available=(ctx.quota_info.capabilities or {}).get("allow_excel", False) if ctx.quota_info else False,
                 quota_used=new_quota_used,
                 quota_remaining=quota_remaining,
                 total_raw=len(ctx.licitacoes_raw),
@@ -2294,7 +2294,7 @@ class SearchPipeline:
                 filter_stats=fs,
                 termos_utilizados=ctx.custom_terms if ctx.custom_terms else None,
                 stopwords_removidas=ctx.stopwords_removed if ctx.stopwords_removed else None,
-                upgrade_message="Exportar Excel disponível no plano Máquina (R$ 597/mês)." if ctx.quota_info and not ctx.quota_info.capabilities["allow_excel"] else None,
+                upgrade_message="Exportar Excel disponível no plano Máquina (R$ 597/mês)." if ctx.quota_info and not (ctx.quota_info.capabilities or {}).get("allow_excel", False) else None,
                 sources_used=[ds.source for ds in ctx.data_sources if ds.records > 0] if ctx.data_sources else None,
                 source_stats=ctx.source_stats_data,
                 hidden_by_min_match=ctx.hidden_by_min_match if ctx.custom_terms else None,
@@ -2345,7 +2345,7 @@ class SearchPipeline:
 
         ctx.excel_base64 = None
         ctx.download_url = None
-        ctx.excel_available = ctx.quota_info.capabilities["allow_excel"] if ctx.quota_info else False
+        ctx.excel_available = (ctx.quota_info.capabilities or {}).get("allow_excel", False) if ctx.quota_info else False
         ctx.upgrade_message = None
 
         if queue_available and search_id:
@@ -2708,6 +2708,14 @@ class SearchPipeline:
 
         Errors in session save do NOT fail the search request.
         """
+        # CRIT-050 AC8: Ensure resumo is never None (fallback if stage_generate crashed)
+        if ctx.resumo is None:
+            from llm import gerar_resumo_fallback
+            ctx.resumo = gerar_resumo_fallback(
+                ctx.licitacoes_filtradas,
+                sector_name=ctx.sector.name if ctx.sector else "geral",
+            )
+
         # AC26: Emit structured log per search completion
         elapsed_ms = int((sync_time_module.time() - ctx.start_time) * 1000)
         # CRIT-005 AC3: Increment response state counter

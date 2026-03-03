@@ -1360,6 +1360,7 @@ except Exception:
 
 async def _worker_on_startup(ctx: dict) -> None:
     """CRIT-038: Harden ARQ worker's Redis pool with socket_timeout.
+    CRIT-051: Configure logging to stdout (Railway treats stderr as error).
 
     ARQ's RedisSettings doesn't expose socket_timeout (only conn_timeout which
     maps to socket_connect_timeout). Without socket_timeout, individual Redis
@@ -1370,6 +1371,18 @@ async def _worker_on_startup(ctx: dict) -> None:
     directly into the worker's connection pool kwargs, ensuring all new connections
     inherit hardened timeout settings.
     """
+    # CRIT-051: Redirect app-level logging to stdout so Railway classifies
+    # log entries by their actual level instead of marking everything as error.
+    # Without this, all logger.info/warning calls go to stderr (Python default),
+    # which Railway shows as red/error severity.
+    import os as _os
+    try:
+        from config import setup_logging
+        setup_logging(level=_os.getenv("LOG_LEVEL", "INFO"))
+        logger.info("CRIT-051: Worker logging configured to stdout")
+    except Exception as _log_err:
+        logger.warning(f"CRIT-051: Failed to configure worker logging: {_log_err}")
+
     redis = ctx.get("redis")
     if redis and hasattr(redis, "connection_pool"):
         pool = redis.connection_pool

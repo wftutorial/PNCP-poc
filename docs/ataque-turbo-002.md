@@ -393,83 +393,81 @@ Descadastrar: responda "remover".
 - **Órgãos frequentes:** EBSERH, Min. Saúde, Min. Trabalho
 - **Perfil de atuação:** Engenharia predial, instalações, manutenção hospitalar, obras federais nacionais
 
-### Oportunidades: 56 editais | R$285M | Preço: R$3.000
+### Oportunidades: 56 editais | R$285M | Preço: R$297 (tripwire)
 
-### Cadência de Emails (2 toques — máx. conversão)
+### Cadência RELÂMPAGO (3 emails + LinkedIn em 5 dias)
 
-#### Touch 1 (D+0) — Pitch Completo
-
+#### LinkedIn — Conexão (D-1)
 ```
-Assunto A: 56 licitações para a Araujo Abreu — 18 com prazo em 15 dias
-Assunto B: Araujo Abreu — R$285M em oportunidades abertas
-
-Olá Francisco,
-
-A Araujo Abreu acumulou mais de R$127 milhões em contratos
-federais — EBSERH, Ministério da Saúde, Ministério do
-Trabalho. Com capital de R$22 milhões e atuação nacional em
-engenharia predial e instalações, é um dos perfis mais robustos
-que já mapeamos.
-
-Nosso algoritmo cruza dados públicos do PNCP e Portal da
-Transparência com o perfil de cada empresa. Rodei uma análise
-para a Araujo Abreu e identifiquei **56 licitações abertas** em
-14 estados. Valor total: R$285 milhões. 18 vencem nos próximos
-15 dias.
-
-Três com maior match:
-
-**1. Pavimentação de estradas rurais — Cruzeiro do Iguaçu/PR**
-• R$8.224.904 | Concorrência Presencial | Convênio SEAB
-• Prazo: 16/03/2026
-• Link: https://pncp.gov.br/app/editais/95589230000144/2026/30
-
-**2. Projeto executivo + complementares — Balneário Camboriú/SC**
-• R$859.743 | Concorrência Eletrônica
-• Prazo: 30/03/2026
-• Link: https://pncp.gov.br/app/editais/83102285000107/2026/22
-
-**3. Construção de 20 unidades habitacionais — Santa Clara d'Oeste/SP**
-• Programa Moradia Digna | R$2.928.865 | Concorrência Presencial
-• Prazo: 08/04/2026
-• Link: https://santaclaradoeste.sp.gov.br/?pag=T0RZPU9EYz1PR009T1RrPU9EWT1PVEE9T1dFPQ==&view=LIST-LICIT&mod
-
-As outras 53 incluem infraestrutura, pavimentação, habitação
-e serviços de engenharia em 14 estados — todas filtradas por
-compatibilidade com o perfil e histórico da Araujo Abreu.
-
-Envio o relatório completo com análise de viabilidade das 56
-oportunidades por R$3.000 via PIX.
-
-Faz sentido para a Araujo Abreu?
-
-Abraço,
-Tiago Sasaki
-Engenheiro de Software — CONFENGE
-smartlic.tech
-
-Ref: AT-002-AAB
-Dados de contratações públicas (PNCP, Portal da Transparência, Lei 14.133/2021).
-Descadastrar: responda "remover".
+Francisco, trabalho com inteligência em licitações.
+Vi o perfil da Araujo Abreu. Aceita a conexão?
 ```
 
-#### Touch 2 (D+4) — Urgência + Breakup
-
+#### Email 1 — Tripwire R$297 (D+0)
 ```
-Assunto: 18 editais com prazo próximo — Araujo Abreu
+Assunto: 56 editais para a Araujo Abreu
 
 Francisco,
 
-18 dos 56 editais que identifiquei para a Araujo Abreu vencem
-nos próximos dias. São oportunidades em 8 estados — incluindo
-pavimentação de R$8,2M no PR (prazo 16/03) e projetos em SC
-(prazo 30/03).
+A Araujo Abreu fechou R$127M em contratos federais — EBSERH,
+Min. Saúde, Min. Trabalho. Rodei nosso algoritmo contra o perfil
+de vocês e encontrei 56 editais abertos em 14 estados — R$285M
+em oportunidades.
 
-Depois do prazo, essas janelas não reabrem.
+4 deles:
 
-Se não fizer sentido agora, sem problema — fazemos novas
-varreduras regularmente. Se quiser receber um mapeamento
-atualizado no futuro, é só responder este email.
+1. Pavimentação estradas rurais — Cruzeiro do Iguaçu/PR — R$8,2M — prazo 16/03
+2. Projeto executivo — Balneário Camboriú/SC — R$860K — prazo 30/03
+3. Habitação Moradia Digna — Santa Clara d'Oeste/SP — R$2,9M — prazo 08/04
+4. Manutenção predial — EBSERH/BA — R$4,1M — prazo 20/03
+
+Envio a lista completa com análise de viabilidade por R$297 via PIX.
+Inclui 7 dias de acesso à plataforma de monitoramento.
+
+Tiago
+smartlic.tech
+
+Ref: AT-002-AAB
+Dados de contratações públicas (PNCP, Lei 14.133/2021).
+Descadastrar: responda "remover".
+```
+
+#### Email 2 — Urgência (D+2)
+```
+Assunto: re: 56 editais para a Araujo Abreu
+
+Francisco,
+
+18 daqueles editais têm prazo nos próximos 7 dias. São
+oportunidades em 8 estados.
+
+Se a Araujo Abreu quiser avaliar, precisa ser esta semana.
+
+Mando a lista completa com os prazos?
+
+Tiago
+
+Ref: AT-002-AAB
+Descadastrar: responda "remover".
+```
+
+#### LinkedIn DM (D+3)
+```
+Francisco, enviei um email com 56 editais de engenharia
+compatíveis com a Araujo Abreu. 18 têm prazo esta semana. Viu?
+```
+
+#### Email 3 — Breakup (D+5)
+```
+Assunto: última vez, Francisco
+
+Francisco,
+
+Encontrei 56 oportunidades para a Araujo Abreu, totalizando
+R$285M. Algumas já venceram o prazo desde meu primeiro email.
+
+Se fizer sentido em outro momento, me responda. Mantenho o
+perfil de vocês no radar.
 
 Tiago
 smartlic.tech

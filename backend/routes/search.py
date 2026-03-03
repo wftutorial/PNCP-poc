@@ -14,6 +14,7 @@ When cache exists, returns immediately and spawns background live fetch.
 """
 
 import asyncio
+import os
 import time as sync_time
 import uuid as _uuid
 
@@ -68,7 +69,8 @@ logger = get_sanitized_logger(__name__)
 router = APIRouter(tags=["search"])
 
 # CRIT-012 AC2: Heartbeat interval reduced from 30s to 15s
-_SSE_HEARTBEAT_INTERVAL = 15.0
+# STORY-365 AC5: Configurable via SSE_HEARTBEAT_INTERVAL_S env var
+_SSE_HEARTBEAT_INTERVAL = float(os.environ.get("SSE_HEARTBEAT_INTERVAL_S", "15"))
 _SSE_WAIT_HEARTBEAT_EVERY = 10  # Every 10 iterations of 0.5s = 5s
 
 # CRIT-026-ROOT: Polled XREAD constants (replacing XREAD BLOCK).
@@ -761,7 +763,7 @@ async def buscar_progress_stream(
         event_generator(),
         media_type="text/event-stream",
         headers={
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-store",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
         },

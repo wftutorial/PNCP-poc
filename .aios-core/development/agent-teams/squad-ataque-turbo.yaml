@@ -1,15 +1,21 @@
 bundle:
   name: Ataque Turbo — Prospecção Cirúrgica com Licitações Reais
   icon: "\U0001F4A5"
-  version: "3.0"
+  version: "4.0"
   description: |
     Squad de prospecção ativa que cruza dados reais de MÚLTIPLAS fontes
     públicas de licitações (PNCP, ComprasGov, Portal da Transparência,
     Compras.dados.gov.br) com perfis de empresas vencedoras frequentes
-    para gerar emails ultra-personalizados com oportunidades irresistíveis.
+    para gerar cadências multi-touch com oportunidades irresistíveis.
 
-    Modelo freemium teaser: mostra fração gratuita das licitações
-    encontradas + CTA para relatório completo (PDF) via PIX.
+    CADÊNCIA 4-TOUCH + LINKEDIN: Cada lead recebe sequência de 4 emails
+    em 14 dias (D0, D3, D7, D14) + conexão LinkedIn (D5). CTA progressivo:
+    Email 1 = soft (interesse), Email 2 = valor + preço, Email 3 = urgência,
+    Email 4 = breakup. NUNCA preço no primeiro contato.
+
+    INFRAESTRUTURA DE DELIVERABILITY: Domínio dedicado para outreach
+    (outreach.confenge.com.br) com SPF+DKIM+DMARC p=reject. Warmup de
+    14-21 dias. Max 20 emails/inbox/dia. Sem isso, emails vão para spam.
 
     PRINCÍPIO FUNDAMENTAL: Qualidade > Quantidade. Cada lead recebe
     investigação nível CSI — cruzamento profundo entre histórico de
@@ -23,6 +29,10 @@ bundle:
     do lançamento oficial. O algoritmo de busca e classificação está
     validado e operacional. Assinaturas NÃO devem ser incentivadas.
     O valor entregue é o relatório de oportunidades (produto-serviço).
+
+    COMPLIANCE LGPD: Dados de portais públicos de contratações (PNCP,
+    Lei 14.133/2021) = base jurídica forte (legítimo interesse, Art. 10).
+    Todo email DEVE incluir opt-out ("responda remover") e fonte dos dados.
 
 agents:
   - analyst        # Lead: qualificação de leads, decisão de fração grátis, pricing, investigação de perfil
@@ -55,10 +65,15 @@ sender:
   product: "SmartLic.tech"
   role_description: "Engenheiro de software da CONFENGE e criador do SmartLic.tech"
   email_domain: "@confenge.com.br"
+  outreach_domain: "outreach.confenge.com.br"  # Domínio dedicado para cold outreach (SPF+DKIM+DMARC)
+  pix_key: "tiago.sasaki@confenge.com.br"      # Chave PIX para link copia-e-cola nos emails
+  linkedin_profile: "https://linkedin.com/in/tiagosasaki"  # Para conexões D+5
   signature: |
     Tiago Sasaki
     Engenheiro de Software — CONFENGE
-    Criador do SmartLic.tech
+    smartlic.tech
+  signature_short: |
+    Tiago
     smartlic.tech
 
 product_stage:
@@ -246,13 +261,19 @@ api_reference:
   comprasgov_v3:
     description: "ComprasGov v3 — Dados Abertos (Portal de Compras Governamentais)"
     base_url: "https://dadosabertos.compras.gov.br"
+    status: |
+      ⚠️ INDISPONÍVEL (2026-03-02): Endpoints retornaram HTTP 404 no último run.
+      /modulo-fornecedor/1_consultarFornecedor → 404
+      /modulo-contratacoes/3_consultarResultadoItensContratacoes_PNCP_14133 → 404
+      Possível migração de endpoint ou mudança de API. Investigar antes do próximo run.
+      FALLBACK: usar Portal da Transparência (API key já configurada) como fonte complementar.
     auth: |
       JWT Token obrigatório. Registrar em dadosabertos.compras.gov.br e fazer login:
       POST /usuarios/criar (registro) → POST /autenticacao/login (JWT)
       Header: Authorization: Bearer {JWT_TOKEN}
       Sem auth, endpoints retornam 404.
     coverage: "Federal (compras.gov.br — licitações federais)"
-    priority: 3  # Terceira fonte (após PNCP=1 e PCP=2)
+    priority: 3  # Terceira fonte (após PNCP=1 e TCU=2)
 
     endpoints:
       search_supplier: |
@@ -588,17 +609,21 @@ coordination:
            - Se prazo ≤5 dias: alertar urgência explicitamente no email
 
     - phase: 5_email_and_save
-      name: "Redação do Email + Relatório Individual + Salvamento Automático"
+      name: "Redação da Cadência 4-Touch + Relatório Individual + Salvamento"
       agents: [po, analyst, dev]
       dependencies: [4_qualification]
       deliverable: |
-        PARTE A — EMAIL (para cada lead):
-        1. Template com acentuação correta em PT-BR
-        2. Identidade do remetente: Tiago Sasaki, Eng. Software CONFENGE
-        3. Cada oportunidade da amostra com link oficial do edital
-        4. Análise personalizada de por que cada oportunidade é relevante
-        5. CTA: relatório completo via PIX
-        6. Tom alinhado com landing page (inteligência de decisão, filtro estratégico)
+        PARTE A — CADÊNCIA DE EMAILS (para cada lead):
+        1. Gerar TODOS os 4 emails + nota LinkedIn da cadência (ver email_sequence)
+        2. Email 1: soft CTA, amostras com análise, SEM preço, hook temporal
+        3. Email 2: prova social, primeira menção ao preço, reply-thread
+        4. LinkedIn: nota de conexão ≤300 chars referenciando email
+        5. Email 3: urgência com prazos reais, CTA direto
+        6. Email 4: breakup respeitoso, porta aberta
+        7. Subject lines curtos (3-6 palavras), 2 variantes A/B para Email 1
+        8. LGPD footer + tracking code em TODOS os emails
+        9. Tom alinhado com landing page (inteligência de decisão, filtro estratégico)
+        10. Registrar lead no tracking sheet (docs/ataque-turbo-tracking.md)
 
         PARTE B — RELATÓRIO INDIVIDUAL (para cada lead):
         7. Gerar .md com TODAS as {N} oportunidades (não apenas a amostra K)
@@ -638,14 +663,14 @@ copy_guidelines:
     - "Fontes oficiais verificadas"
 
   BANNED_phrases:
-    - "PNCP" (dizer "fontes oficiais" em vez disso)
-    - "Descobrir" / "Explorar" (muito fraco para o valor entregue)
-    - "Plano" / "Assinatura" / "Pacote" / "Busca"
-    - "Inteligência automatizada" / "Inovador"
-    - "95% de precisão" ou qualquer métrica de velocidade/acurácia
-    - "Agregador de dados"
-    - "IA generativa" (dizer "algoritmo de classificação" em vez disso)
-    - "Assine" / "Teste grátis" / "Trial"
+    - 'PNCP (dizer "fontes oficiais" em vez disso)'
+    - 'Descobrir / Explorar (muito fraco para o valor entregue)'
+    - 'Plano / Assinatura / Pacote / Busca'
+    - 'Inteligência automatizada / Inovador'
+    - '95% de precisão ou qualquer métrica de velocidade/acurácia'
+    - 'Agregador de dados'
+    - 'IA generativa (dizer "algoritmo de classificação" em vez disso)'
+    - 'Assine / Teste grátis / Trial'
 
   language_rules:
     - "Acentuação correta obrigatória em todo texto PT-BR"
@@ -654,71 +679,455 @@ copy_guidelines:
     - "Números: R$ com ponto para milhares (R$ 1.500, R$ 200.000)"
 
 # ═══════════════════════════════════════════════════════════════════
-# TEMPLATE DE EMAIL
+# INFRAESTRUTURA DE DELIVERABILITY (CRÍTICO — sem isso, emails vão pra spam)
 # ═══════════════════════════════════════════════════════════════════
 
-email_template: |
-  Estrutura do email (adaptada pelo @po caso a caso, SEMPRE com acentuação PT-BR):
+deliverability:
+  domain: "outreach.confenge.com.br"
+  description: |
+    Domínio DEDICADO para cold outreach — NUNCA usar confenge.com.br ou
+    smartlic.tech diretamente. Se domínio principal for marcado como spam,
+    prejudica todo o negócio.
 
-  ---
-  Assunto: {Nome da Empresa} — identificamos {N} oportunidades de licitação no perfil de vocês
+  authentication:
+    spf: "v=spf1 include:_spf.google.com ~all"
+    dkim: "Configurar via Google Workspace ou provedor"
+    dmarc: "v=DMARC1; p=reject; rua=mailto:dmarc@confenge.com.br"
+    notes: |
+      DMARC p=reject é o padrão 2026. Google e Microsoft REJEITAM
+      ativamente emails sem SPF+DKIM+DMARC desde Nov/2025.
 
-  Olá {Nome do decisor ou genérico},
+  warmup:
+    duration_days: 14-21
+    initial_volume: "5-10 emails/dia (para contatos conhecidos)"
+    ramp_up: "Aumentar 5/dia a cada 3 dias"
+    max_volume: "20 emails/inbox/dia (sweet spot 2026)"
+    absolute_max: "35-50 emails/inbox/dia (risco elevado)"
+    inboxes_per_domain: 3-5
+    notes: |
+      NUNCA iniciar cold outreach sem warmup completo.
+      Enviar para contatos conhecidos (fornecedores, parceiros) durante
+      o período de warmup. Incluir respostas reais (não só envio).
 
-  Sou Tiago Sasaki, engenheiro de software da CONFENGE e criador do
-  SmartLic.tech — uma plataforma de inteligência de decisão para licitações
-  públicas que estamos finalizando para lançamento.
+  sending_rules:
+    max_per_inbox_per_day: 20
+    best_days: ["Terça", "Quarta", "Quinta"]
+    best_hours: "08:00-10:00 BRT (horário do lead)"
+    worst_days: ["Segunda (backlog)", "Sexta (desengajamento)"]
+    notes: |
+      Quinta-feira tem o maior reply rate (6.87% vs média).
+      8-11 PM também performa bem (executivos leem após expediente).
 
-  {Parágrafo personalizado CSI — demonstrar conhecimento profundo:
-   - Mencionar setor de atuação (inferido do CNAE/histórico)
-   - Referência sutil ao volume de participação em licitações
-   - Frase que mostre que o algoritmo entende o perfil da empresa}
+# ═══════════════════════════════════════════════════════════════════
+# CADÊNCIA MULTI-TOUCH (4 EMAILS + LINKEDIN EM 14 DIAS)
+# ═══════════════════════════════════════════════════════════════════
 
-  Nosso algoritmo de classificação — já validado e operacional — consolida
-  fontes oficiais e avalia cada edital contra critérios objetivos de
-  viabilidade: compatibilidade setorial, faixa de valor, prazo e geografia.
+cadence:
+  name: "Cadência Ataque Turbo — 4-Touch + LinkedIn"
+  description: |
+    Sequência de 5 pontos de contato em 14 dias. Cada touch tem objetivo
+    específico e CTA progressivo. NUNCA enviar preço no Email 1.
 
-  Rodei uma análise para o perfil da {Empresa} e o filtro identificou
-  **{N} licitações abertas** com alta relevância. Aqui estão {K} delas:
+    Benchmarks 2026:
+    - 58% das respostas vêm do Email 1; 42% dos follow-ups
+    - Multi-channel (email+LinkedIn) = 287% melhor que single-channel
+    - CTAs soft (interesse) = 30% de sucesso (2x hard ask)
 
-  **1. {Objeto resumido}**
-  • Órgão: {razaoSocial do órgão}
-  • Valor estimado: R$ {valor}
-  • Modalidade: {modalidade}
-  • Prazo para proposta: {dataAberturaProposta — DD/MM/AAAA} ({X dias restantes})
-  • Link do edital: {https://pncp.gov.br/app/editais/CNPJ/ANO/SEQ}
-  • **Por que é relevante para a {Empresa}:** {Análise personalizada —
-    cruzamento com histórico de vitórias, setor, valor, órgão familiar}
+  sequence:
+    - touch: 1
+      channel: email
+      day: "D+0"
+      name: "Abertura — Soft CTA"
+      objective: "Gerar curiosidade. Demonstrar conhecimento profundo do lead."
+      cta_type: "interest_based"
+      cta_example: "Faz sentido para a {Empresa} receber a análise completa?"
+      subject_strategy: "Curto (3-6 palavras). Variante A: '{N} licitações para a {Empresa}'. Variante B: '{empresa} — oportunidades até {mês}'"
+      includes_price: false
+      includes_sample: true  # K editais de amostra com análise de relevância
+      signature: full  # Assinatura completa com título
 
-  {Repetir para licitação 2 e 3 se K >= 2 ou 3}
+    - touch: 2
+      channel: email
+      day: "D+3"
+      name: "Valor + Prova Social + Preço"
+      objective: "Adicionar credibilidade. Primeira menção ao preço."
+      cta_type: "value_plus_ask"
+      cta_example: "Envio a lista completa com análise de viabilidade por R${preço}."
+      subject_strategy: "'re: {subject do Email 1}' (thread)"
+      includes_price: true
+      includes_sample: false
+      social_proof: "Nosso algoritmo já mapeou R$X milhões em oportunidades para empresas de {setor} no último mês."
+      signature: short  # Só nome + smartlic.tech
 
-  As outras {N-K} oportunidades incluem editais de {resumo dos
-  setores/valores/órgãos}, todos filtrados pelo mesmo critério de
-  compatibilidade com o perfil da {Empresa}.
+    - touch: 3
+      channel: linkedin
+      day: "D+5"
+      name: "Conexão LinkedIn"
+      objective: "Canal alternativo. Referência ao email enviado."
+      cta_type: "connection_request"
+      max_chars: 300  # Limite do LinkedIn para nota de conexão
+      template: |
+        {Nome}, sou o Tiago da CONFENGE. Enviei um email com {N}
+        oportunidades de licitação em {UFs} compatíveis com o perfil
+        da {Empresa}. Vi que vocês atuam em {setor} — achei que
+        poderia ser útil. Aceita a conexão?
+      notes: |
+        Máximo 20 conexões/dia no LinkedIn. Usar perfil pessoal do Tiago.
+        Se lead aceitar, NÃO enviar pitch imediato — esperar Email 3.
 
-  **Quer receber a lista completa com análise de viabilidade para cada uma?**
-  Enviamos o relatório em PDF com as {N} oportunidades detalhadas por
-  R$ {preço} via PIX. Cada oportunidade vem com avaliação objetiva de
-  viabilidade e link direto para o edital oficial.
+    - touch: 4
+      channel: email
+      day: "D+7"
+      name: "Urgência Específica"
+      objective: "Criar urgência real com prazos próximos."
+      cta_type: "specific_ask"
+      cta_example: "Posso enviar a lista completa ainda hoje. Quer que eu mande?"
+      subject_strategy: "'prazo {DD/MM} — {empresa}' (urgência real, não fabricada)"
+      includes_price: false
+      includes_sample: false
+      urgency_data: "Mencionar editais com prazo ≤10 dias restantes"
+      signature: short
 
-  Fico à disposição para qualquer dúvida.
+    - touch: 5
+      channel: email
+      day: "D+14"
+      name: "Breakup"
+      objective: "Encerrar com elegância. Deixar porta aberta."
+      cta_type: "permission_close"
+      cta_example: "Se em algum momento quiserem receber um mapeamento atualizado, é só responder este email."
+      subject_strategy: "'encerro por aqui, {nome}'"
+      includes_price: false
+      includes_sample: false
+      signature: short
+      notes: |
+        Breakup emails têm reply rate surpreendentemente alto (3-5%).
+        Tom: respeitoso, sem culpa, porta aberta. Psicologia de perda.
 
-  Abraço,
-  Tiago Sasaki
-  Engenheiro de Software — CONFENGE
-  Criador do SmartLic.tech
-  smartlic.tech
-  ---
+  urgency_threshold_days: 5  # Editais com ≤5 dias recebem tag [URGENTE]
+  urgency_rules: |
+    Se lead tem editais com prazo ≤5 dias:
+    - Email 1: incluir alerta "⚠ {N} editais com prazo nos próximos 5 dias"
+    - Email 3 (urgência): priorizar esses editais no corpo
+    - Subject do Email 3: usar data real do prazo mais urgente
 
-  REGRAS DO TEMPLATE:
-  - Acentuação correta OBRIGATÓRIA (á, é, í, ó, ú, ã, õ, ç, â, ê, ô)
-  - Cada licitação DEVE ter link oficial do edital
-  - Cada licitação DEVE ter prazo de apresentação de proposta (data + dias restantes)
-  - Análise de relevância DEVE ser personalizada (cruzar com perfil)
-  - NUNCA incluir editais com prazo já expirado
-  - NUNCA mencionar "assinatura", "plano", "trial"
-  - NUNCA fabricar dados — usar apenas dados reais das APIs
-  - Tom: profissional, direto, focado em valor financeiro
+# ═══════════════════════════════════════════════════════════════════
+# SUBJECT LINE STRATEGY (CURTO = MELHOR)
+# ═══════════════════════════════════════════════════════════════════
+
+subject_line_strategy:
+  max_words: 6
+  max_chars: 40
+  tone: "lowercase, casual — como colega, não vendedor"
+  ab_testing: true  # Gerar 2 variantes por lead, alternar
+
+  rules:
+    - "1-8 palavras (1-2 é o ideal segundo dados Gong 2026)"
+    - "NUNCA usar '?' no subject (reduz open rate em 56%)"
+    - "NUNCA ALL CAPS, emojis, ou '!!!' (red flags de spam)"
+    - "Incluir nome da empresa (personalização obrigatória)"
+    - "Números aumentam especificidade: '10 licitações' > 'oportunidades'"
+    - "Evitar trigger words: 'grátis', 'urgente', 'limitado', 'oferta'"
+
+  templates:
+    email_1_variant_a: "{N} licitações para a {Empresa}"
+    email_1_variant_b: "{empresa} — oportunidades até {mês}"
+    email_2: "re: {subject do Email 1}"
+    email_3: "prazo {DD/MM} — {empresa}"
+    email_4: "encerro por aqui, {nome}"
+
+  banned_subjects:
+    - "{Empresa} — identificamos {N} oportunidades de licitação no perfil de vocês"  # Antigo, muito longo
+    - "Oportunidade imperdível"
+    - "Não perca"
+    - "Exclusivo para você"
+
+# ═══════════════════════════════════════════════════════════════════
+# CTA PROGRESSION (SOFT → HARD → BREAKUP)
+# ═══════════════════════════════════════════════════════════════════
+
+cta_progression:
+  description: |
+    CTA evolui ao longo da cadência. Email 1 NUNCA menciona preço.
+    Single CTA por email (aumenta cliques em 371%).
+    Interest-based CTAs têm 30% de sucesso (2x outros tipos).
+
+  rules:
+    - "UM único CTA por email (nunca múltiplos pedidos)"
+    - "Email 1: NUNCA preço, NUNCA link de pagamento, NUNCA calendly"
+    - "Email 2: primeira menção ao preço, sempre com âncora de valor"
+    - "Email 3: sem preço, foco em urgência e ação imediata"
+    - "Email 4: sem preço, sem pressão, permissão para encerrar"
+    - "Preço sempre ancorado: 'R$1.500 para R$11.7M em oportunidades'"
+
+  progression:
+    email_1: "Faz sentido para a {Empresa} receber a análise completa?"
+    email_2: "Envio a lista completa com análise de viabilidade por R${preço}."
+    email_3: "Posso enviar a lista completa ainda hoje. Quer que eu mande?"
+    email_4: "Se em algum momento quiserem um mapeamento atualizado, é só responder."
+
+# ═══════════════════════════════════════════════════════════════════
+# LGPD COMPLIANCE
+# ═══════════════════════════════════════════════════════════════════
+
+lgpd_compliance:
+  legal_basis: "Legítimo interesse (Art. 10, LGPD)"
+  justification: |
+    Dados obtidos de portais públicos de contratações governamentais
+    (PNCP — obrigatório por Lei 14.133/2021, Art. 174). Empresas que
+    participam de licitações publicam voluntariamente seus dados em
+    bases governamentais. O contato tem finalidade específica (informar
+    sobre oportunidades compatíveis com perfil de atuação da empresa).
+    Base jurídica significativamente mais forte que dados scrapeados
+    de LinkedIn ou listas compradas.
+
+  required_in_every_email:
+    footer: |
+      Ref: {TRACKING_CODE}
+      Dados de contratações públicas (PNCP, Lei 14.133/2021).
+      Descadastrar: responda "remover".
+    notes: |
+      Footer OBRIGATÓRIO em TODOS os 4 emails da cadência.
+      Se lead responder "remover": PARAR IMEDIATAMENTE toda cadência.
+      Manter registro de opt-outs em docs/ataque-turbo-tracking.md.
+
+  data_sources_documentation: |
+    Manter em docs/lgpd-lia-outreach.md um Legitimate Interest Assessment:
+    1. Fonte dos dados: PNCP, TCU, OpenCNPJ (portais públicos)
+    2. Finalidade: informar empresa sobre oportunidades de licitação
+    3. Necessidade: dados mínimos (CNPJ, razão social, CNAE, contato)
+    4. Balanceamento: interesse da empresa (oportunidades) > risco de privacidade
+    5. Salvaguardas: opt-out fácil, dados não compartilhados com terceiros
+
+# ═══════════════════════════════════════════════════════════════════
+# TRACKING E CRM MÍNIMO
+# ═══════════════════════════════════════════════════════════════════
+
+tracking:
+  code_format: "AT-{NNN}-{SLUG}"  # Ex: AT-001-PEN (Pentágono), AT-001-SOL (Solovia)
+  description: |
+    Código único por lead incluído no rodapé de cada email.
+    Permite rastrear respostas e atribuir conversões.
+
+  crm_file: "docs/ataque-turbo-tracking.md"
+  crm_structure: |
+    # Ataque Turbo — Tracking de Leads
+
+    | Run | Lead | CNPJ | Tracking | Email 1 | Email 2 | LinkedIn | Email 3 | Email 4 | Resposta | Conversão | Valor | Notas |
+    |-----|------|------|----------|---------|---------|----------|---------|---------|----------|-----------|-------|-------|
+    | 001 | Pentágono | 47.026.679/0001-51 | AT-001-PEN | DD/MM | DD/MM | DD/MM | DD/MM | DD/MM | — | — | — | — |
+
+  status_values:
+    - "pendente"      # Ainda não enviado
+    - "email_1"       # Email 1 enviado
+    - "email_2"       # Email 2 enviado
+    - "linkedin"      # Conexão LinkedIn enviada
+    - "email_3"       # Email 3 enviado
+    - "email_4"       # Email 4 (breakup) enviado
+    - "respondeu"     # Lead respondeu (qualquer email)
+    - "converteu"     # Lead pagou relatório
+    - "removido"      # Lead pediu opt-out
+    - "descartado"    # Lead eliminado (sem editais, sancionado, etc.)
+
+  ab_testing: |
+    Registrar variante de subject usada por lead:
+    | Lead | Subject Variante | Open (Y/N) | Reply (Y/N) |
+    Após 20+ leads, analisar qual variante performa melhor.
+
+# ═══════════════════════════════════════════════════════════════════
+# DECISION-MAKER TARGETING (ALÉM DO QSA)
+# ═══════════════════════════════════════════════════════════════════
+
+decision_maker_targeting:
+  description: |
+    QSA (Receita Federal) lista sócios LEGAIS — que podem ser investidores
+    passivos, não decisores operacionais. Buscar o decisor REAL antes de enviar.
+
+  priority_order:
+    - step: 1
+      source: "LinkedIn da empresa"
+      target: "Diretor Comercial, Gerente de Licitações, Engenheiro Responsável"
+      time: "5-10 min/lead"
+      notes: "Buscar no LinkedIn pelo nome da empresa + cargo"
+    - step: 2
+      source: "Site da empresa"
+      target: "Página 'Equipe', 'Sobre', ou 'Contato' com nomes"
+      time: "2-5 min/lead"
+    - step: 3
+      source: "QSA (OpenCNPJ)"
+      target: "Sócio-Administrador (qualificação 49) ou Diretor (qualificação 05)"
+      time: "0 min (já coletado na Phase 2)"
+      notes: "FALLBACK — usar apenas se steps 1-2 falharem"
+
+  personalization_rule: |
+    Se decisor identificado via LinkedIn/site: usar nome + cargo no email.
+    Se apenas QSA disponível: usar nome do sócio-administrador.
+    Se nenhum nome: usar "Prezado(a) responsável pela área de licitações".
+    NUNCA usar "Prezado(a) Sr(a)" genérico — perda de personalização.
+
+# ═══════════════════════════════════════════════════════════════════
+# TEMPLATE DE EMAIL (SEQUÊNCIA DE 4 TOQUES)
+# ═══════════════════════════════════════════════════════════════════
+
+email_sequence:
+  description: |
+    Sequência de 4 emails + 1 LinkedIn. Cada template abaixo é ADAPTADO
+    pelo @po caso a caso, SEMPRE com acentuação PT-BR. Os templates são
+    referência — personalizar com dados reais de cada lead.
+
+  # ─────────────────────────────────────────────────────
+  # EMAIL 1 — ABERTURA (D+0) — SOFT CTA, SEM PREÇO
+  # ─────────────────────────────────────────────────────
+  email_1_opening: |
+    Assunto (variante A): {N} licitações para a {Empresa}
+    Assunto (variante B): {empresa} — oportunidades até {mês}
+
+    Olá {Nome do decisor},
+
+    {HOOK TEMPORAL — abrir com "por que agora":
+     "Vi que a {Empresa} venceu contratos de {tipo} para {órgão} nos
+     últimos meses. Neste momento existem {N} editais abertos com perfil
+     idêntico — {Y} com prazo nos próximos 10 dias."}
+
+    {PARÁGRAFO CSI — demonstrar conhecimento:
+     Mencionar CNAE, setor, padrão de contratos, órgãos frequentes.
+     Frase que mostre investigação profunda, não template genérico.}
+
+    Nosso algoritmo de classificação — já validado e operacional —
+    consolida fontes oficiais e avalia cada edital contra critérios
+    objetivos de viabilidade: compatibilidade setorial, faixa de valor,
+    prazo e geografia.
+
+    Rodei uma análise para o perfil da {Empresa} e o filtro identificou
+    **{N} licitações abertas com prazo hábil**. Separei as {K} com
+    maior match com o histórico de vocês:
+
+    **1. {Objeto resumido} ({Município/UF})**
+    • Órgão: {razaoSocial}
+    • Valor estimado: R$ {valor}
+    • Modalidade: {modalidade}
+    • Prazo para proposta: {DD/MM/AAAA} ({X} dias restantes)
+    • Link: {URL oficial}
+    • **Relevância para a {Empresa}:** {análise cirúrgica}
+
+    {Repetir para K amostras}
+
+    As outras {N-K} incluem {resumo dos setores/valores}, todas
+    filtradas pelo mesmo critério de compatibilidade.
+
+    Faz sentido para a {Empresa} receber a análise completa?
+
+    Abraço,
+    Tiago Sasaki
+    Engenheiro de Software — CONFENGE
+    smartlic.tech
+
+    Ref: {TRACKING_CODE}
+    Dados de contratações públicas (PNCP, Lei 14.133/2021).
+    Descadastrar: responda "remover".
+
+  # ─────────────────────────────────────────────────────
+  # EMAIL 2 — VALOR + PROVA SOCIAL + PREÇO (D+3)
+  # ─────────────────────────────────────────────────────
+  email_2_value: |
+    Assunto: re: {subject do Email 1}
+
+    {Nome}, voltando aqui.
+
+    {PROVA SOCIAL: "Desde que montamos o algoritmo, já mapeamos mais de
+    R${total_mapeado} em oportunidades para empresas de {setor} só em {UF}.
+    Boa parte dessas empresas não sabia que esses editais existiam — a
+    informação é pública, mas está espalhada em dezenas de portais."}
+
+    Das {N} oportunidades que encontrei para a {Empresa}, {Y} têm prazo
+    de proposta nos próximos 15 dias. Se vocês já participam de licitações
+    ativamente, isso pode representar contratos que passariam despercebidos.
+
+    Envio a lista completa com análise de viabilidade por R$ {preço}.
+    Cada oportunidade vem com avaliação objetiva e link direto do edital.
+    Se nenhuma se aplicar ao perfil de vocês, me avise — feedback me
+    ajuda a calibrar o filtro.
+
+    Abraço,
+    Tiago
+    smartlic.tech
+
+    Ref: {TRACKING_CODE}
+    Descadastrar: responda "remover".
+
+  # ─────────────────────────────────────────────────────
+  # LINKEDIN — CONEXÃO (D+5)
+  # ─────────────────────────────────────────────────────
+  linkedin_connection: |
+    {Nome}, sou o Tiago da CONFENGE. Enviei um email com {N}
+    oportunidades de licitação em {UFs} compatíveis com o perfil
+    da {Empresa}. Vi que vocês atuam em {setor} — achei que
+    poderia ser útil. Aceita a conexão?
+
+    REGRAS:
+    - Máximo 300 caracteres (limite LinkedIn)
+    - NUNCA mencionar preço no LinkedIn
+    - Se aceitar, esperar Email 3 antes de mandar mensagem
+
+  # ─────────────────────────────────────────────────────
+  # EMAIL 3 — URGÊNCIA ESPECÍFICA (D+7)
+  # ─────────────────────────────────────────────────────
+  email_3_urgency: |
+    Assunto: prazo {DD/MM} — {empresa}
+
+    {Nome},
+
+    {Y} dos editais que identifiquei para a {Empresa} têm prazo de
+    proposta nos próximos {X} dias. {Se participam de concorrências
+    em {UF}, esse é o tipo de janela que não volta.}
+
+    Posso enviar a lista completa ainda hoje. Quer que eu mande?
+
+    Tiago
+    smartlic.tech
+
+    Ref: {TRACKING_CODE}
+    Descadastrar: responda "remover".
+
+  # ─────────────────────────────────────────────────────
+  # EMAIL 4 — BREAKUP (D+14)
+  # ─────────────────────────────────────────────────────
+  email_4_breakup: |
+    Assunto: encerro por aqui, {nome}
+
+    {Nome},
+
+    Compartilhei {N} oportunidades de licitação compatíveis com o
+    perfil da {Empresa} nas últimas semanas. Entendo que o timing
+    pode não ter sido ideal.
+
+    Vou parar de enviar atualizações, mas se em algum momento
+    quiserem receber um mapeamento atualizado, é só responder
+    este email.
+
+    Abraço,
+    Tiago
+
+    Ref: {TRACKING_CODE}
+    Descadastrar: responda "remover".
+
+  # ─────────────────────────────────────────────────────
+  # REGRAS GLOBAIS DA SEQUÊNCIA
+  # ─────────────────────────────────────────────────────
+  sequence_rules:
+    - "Acentuação correta OBRIGATÓRIA (á, é, í, ó, ú, ã, õ, ç, â, ê, ô)"
+    - "Cada licitação DEVE ter link oficial do edital"
+    - "Cada licitação DEVE ter prazo (data + dias restantes)"
+    - "Análise de relevância DEVE ser personalizada (não genérica)"
+    - "NUNCA incluir editais com prazo já expirado"
+    - "NUNCA mencionar 'assinatura', 'plano', 'trial'"
+    - "NUNCA fabricar dados — usar apenas dados reais das APIs"
+    - "LGPD footer obrigatório em TODOS os 4 emails"
+    - "Tracking code obrigatório em TODOS os emails"
+    - "Email 1: SEM PREÇO. Preço apenas a partir do Email 2"
+    - "Linguagem de amostra: 'Separei as {K} com maior match' (NÃO 'Aqui estão {K} delas')"
+    - "Tom: profissional, direto, focado em valor financeiro"
+    - "Se lead responder 'remover': PARAR TODA a cadência imediatamente"
+    - "Se lead responder positivamente em qualquer email: sair da cadência automática"
 
 # ═══════════════════════════════════════════════════════════════════
 # OUTPUT E REGRAS DE ARQUIVO
@@ -790,9 +1199,34 @@ output_rules:
       |---|--------|-------|-------|----------------|----------------|------|
       | 1 | ...    | ...   | ...   | DD/MM/AAAA     | X dias         | ...  |
 
-    ### Email
+    ### Cadência de Emails (4 toques + LinkedIn)
+
+    #### Email 1 — Abertura (D+0) — Soft CTA
     ```
-    {email completo pronto para copy/paste}
+    Assunto A: {variante A}
+    Assunto B: {variante B}
+
+    {email 1 completo pronto para copy/paste}
+    ```
+
+    #### Email 2 — Valor + Preço (D+3)
+    ```
+    {email 2 completo}
+    ```
+
+    #### LinkedIn — Conexão (D+5)
+    ```
+    {nota de conexão ≤300 chars}
+    ```
+
+    #### Email 3 — Urgência (D+7)
+    ```
+    {email 3 completo}
+    ```
+
+    #### Email 4 — Breakup (D+14)
+    ```
+    {email 4 completo}
     ```
 
     ---
@@ -938,6 +1372,19 @@ constraints:
   - "Qualidade > Quantidade — menos leads, mais profundidade"
   - "TESTE DE IMPACTO obrigatório: email deve causar reação 'CARALHO' (ver quality_gates.impact_test)"
   - "Consultar TODAS as fontes disponíveis (não apenas PNCP) antes de concluir busca"
+  # ── Novas constraints v4.0 (Conselho de Outreach) ──
+  - "CADÊNCIA OBRIGATÓRIA: gerar 4 emails + 1 LinkedIn por lead (nunca email único)"
+  - "EMAIL 1 SEM PREÇO: CTA soft only. Preço apenas a partir do Email 2"
+  - "SUBJECT CURTO: máximo 6 palavras, 40 caracteres. 2 variantes A/B por lead"
+  - "LGPD FOOTER em TODOS os emails: Ref + fonte dos dados + opt-out"
+  - "TRACKING CODE em TODOS os emails: formato AT-{NNN}-{SLUG}"
+  - "DECISOR REAL: buscar LinkedIn/site antes de usar QSA como fallback"
+  - "URGÊNCIA REAL: editais ≤5 dias recebem destaque. Nunca fabricar urgência"
+  - "PROVA SOCIAL no Email 2: citar volume real mapeado pelo algoritmo"
+  - "HOOK TEMPORAL no Email 1: abrir com 'por que agora' (contrato recente + editais abertos)"
+  - "LINGUAGEM DE AMOSTRA: 'Separei as {K} com maior match' (nunca 'Aqui estão {K} delas')"
+  - "OPT-OUT IMEDIATO: se lead responder 'remover', parar TODA cadência"
+  - "TRACKING SHEET: registrar cada lead em docs/ataque-turbo-tracking.md"
 
 quality_gates:
   impact_test: |
@@ -977,6 +1424,19 @@ quality_gates:
     - "Análise de relevância é personalizada (não genérica)?"
     - "Dedup cross-source aplicado (sem duplicatas entre PNCP/ComprasGov/TCU/etc.)?"
     - "TESTE DE IMPACTO: email causa reação 'CARALHO'? (ver impact_test)"
+    - "Decisor identificado (LinkedIn > site > QSA)? Não enviar para sócio passivo."
+    - "Editais urgentes (≤5 dias) sinalizados com destaque no corpo?"
+  pre_cadence:
+    - "TODOS os 4 emails + LinkedIn gerados para cada lead?"
+    - "Email 1 NÃO contém preço?"
+    - "Subject line do Email 1 tem ≤6 palavras?"
+    - "2 variantes A/B de subject geradas para Email 1?"
+    - "CTA é progressivo (soft → valor → urgência → breakup)?"
+    - "LGPD footer presente em TODOS os emails?"
+    - "Tracking code (AT-NNN-SLUG) presente em TODOS os emails?"
+    - "Linguagem de amostra usa 'maior match' (não 'aqui estão')?"
+    - "Hook temporal no Email 1 (por que agora)?"
+    - "Prova social no Email 2 (R$X mapeados no setor)?"
   pre_output:
     - "Acentuação revisada em todos os emails?"
     - "Todos os links de editais estão no formato correto e funcionais?"
@@ -985,6 +1445,8 @@ quality_gates:
     - "Nenhuma menção a assinatura/plano/trial?"
     - "Dedup verificado contra ataque-turbo-*.md anteriores?"
     - "Fontes multi-source documentadas no metadata do relatório?"
+    - "Lead registrado no tracking sheet (docs/ataque-turbo-tracking.md)?"
+    - "Cadência completa (4 emails + LinkedIn) pronta para cada lead?"
 
 success_criteria:
   - "minimum_qualified_leads: 3 (qualidade > quantidade)"
@@ -1001,6 +1463,18 @@ success_criteria:
   - "no_brainer_test_passed: true (todos os leads)"
   - "dedup_against_previous_runs: true"
   - "sender_identity_correct: true (CONFENGE, não SmartLic)"
+  # ── Novos critérios v4.0 ──
+  - "full_cadence_generated: true (4 emails + LinkedIn por lead)"
+  - "email_1_no_price: true (soft CTA only)"
+  - "subject_line_short: true (≤6 palavras, ≤40 chars)"
+  - "ab_variants_generated: true (2 subjects por lead)"
+  - "lgpd_footer_all_emails: true"
+  - "tracking_code_all_emails: true"
+  - "tracking_sheet_updated: true (docs/ataque-turbo-tracking.md)"
+  - "decision_maker_identified: true (LinkedIn > site > QSA)"
+  - "temporal_hook_email_1: true ('por que agora')"
+  - "social_proof_email_2: true (volume real mapeado)"
+  - "urgency_flagged: true (editais ≤5 dias destacados)"
 
 # ═══════════════════════════════════════════════════════════════════
 # ATIVAÇÃO E NOTAS
@@ -1022,10 +1496,19 @@ activation: |
 notes:
   - "Modelo inspirado no TurboCash playbook (Ação 1 + Ação 2)"
   - "Preço referência: R$1.500 a R$3.000 — ajustável pelo @analyst"
-  - "Follow-up D+3 para quem não respondeu (script no turbocash.md)"
-  - "Meta: investigação CSI multi-fonte → emails irresistíveis → reação 'CARALHO' → conversão"
+  - "Cadência 4-touch + LinkedIn: D0 (email soft), D3 (email valor+preço), D5 (LinkedIn), D7 (email urgência), D14 (email breakup)"
+  - "Meta: investigação CSI multi-fonte → cadência irresistível → reação 'CARALHO' → conversão"
   - "Após 3 runs com >=15% response rate, graduar para Scale mode"
   - "Público expandido: consultorias (turbocash) + empresas B2G diretas"
-  - "Fontes: PNCP (primária), TCU (qualificação+contratos, sem auth), ComprasGov v3 (JWT), Portal da Transparência (API key), Compras.dados.gov.br (legacy)"
+  - "Fontes: PNCP (primária), TCU (qualificação+contratos, sem auth), ComprasGov v3 (⚠️ 404, investigar), Portal da Transparência (API key), Compras.dados.gov.br (legacy)"
   - "Faturamento inferido via: porte + capital_social + volume TOTAL de contratos (cross-source)"
   - "Dedup cross-source baseado no padrão já implementado em backend/consolidation.py"
+  # ── Novas notas v4.0 ──
+  - "Deliverability: domínio dedicado outreach.confenge.com.br + SPF+DKIM+DMARC p=reject + warmup 14-21 dias"
+  - "Subject lines: máx 6 palavras. A/B testing obrigatório. Lowercase casual."
+  - "LGPD: dados de PNCP = legítimo interesse (Art. 10). Footer com opt-out em TODOS os emails."
+  - "Tracking: código AT-{NNN}-{SLUG} + planilha em docs/ataque-turbo-tracking.md"
+  - "Decisor: buscar LinkedIn > site > QSA. Sócio do QSA é FALLBACK, não primeira opção."
+  - "Benchmarks-alvo: 45-55% open, 12-18% reply (signal-based), 10-20% conversão"
+  - "Envio: Ter-Qui, 08-10h BRT. Máx 20 emails/inbox/dia. Nunca seg/sex."
+  - "Após 20+ leads: analisar A/B de subjects, calibrar cadência, avaliar ferramenta de automação"

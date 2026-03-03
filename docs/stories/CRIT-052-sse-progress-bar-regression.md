@@ -1,6 +1,6 @@
 # CRIT-052: SSE Progress Bar — Barra de Progresso Retrocede e Reconexão Silenciosa
 
-**Status:** 🔴 Pendente
+**Status:** 🟢 Concluído
 **Prioridade:** P1 — Importante (UX core)
 **Sprint:** Próximo
 **Criado:** 2026-03-03
@@ -25,14 +25,16 @@ causando a impressão de que a busca "voltou" e confundindo o usuário.
 
 ## Acceptance Criteria
 
-- [ ] AC1: Frontend mantém high-water mark do progresso (nunca mostra valor menor que o anterior)
-- [ ] AC2: Se SSE reconectar, barra mostra "Reconectando..." ao invés de voltar para 0%
-- [ ] AC3: Progress events com `progress=-1` são ignorados pelo cálculo da barra
-- [ ] AC4: Se busca completar durante reconexão, resultado é exibido normalmente
-- [ ] AC5: Testes E2E validam progresso monotônico (nunca decresce)
+- [x] AC1: Frontend mantém high-water mark do progresso (nunca mostra valor menor que o anterior)
+- [x] AC2: Se SSE reconectar, barra mostra "Reconectando..." ao invés de voltar para 0%
+- [x] AC3: Progress events com `progress=-1` são ignorados pelo cálculo da barra
+- [x] AC4: Se busca completar durante reconexão, resultado é exibido normalmente
+- [x] AC5: Testes E2E validam progresso monotônico (nunca decresce)
 
-## Arquivos Afetados
+## Arquivos Modificados
 
-- `frontend/app/buscar/page.tsx` — SSE handling, progress state
-- `frontend/app/api/buscar-progress/[searchId]/route.ts` — SSE proxy
-- `backend/progress.py` — progress event generation
+- `frontend/hooks/useSearchSSE.ts` — AC1: progressHighWaterRef (monotonic progress), AC3: metadata event filtering
+- `frontend/components/EnhancedLoadingProgress.tsx` — AC2: isReconnecting prop + "Reconectando..." indicator
+- `frontend/app/buscar/components/SearchResults.tsx` — AC2: pass isReconnecting to EnhancedLoadingProgress
+- `frontend/__tests__/hooks/crit-052-sse-progress-regression.test.tsx` — AC5: 16 tests (high-water mark, reconnection, metadata filtering, monotonic)
+- `frontend/__tests__/components/crit-052-reconnecting-indicator.test.tsx` — AC5: 6 tests (reconnecting UI indicator)

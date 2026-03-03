@@ -40,6 +40,8 @@ export interface EnhancedLoadingProgressProps {
   degradedMessage?: string;
   /** CRIT-005 AC22: Show timeout overlay before switching to error */
   showTimeoutOverlay?: boolean;
+  /** CRIT-052 AC2: Show reconnecting indicator during SSE reconnection */
+  isReconnecting?: boolean;
 }
 
 interface Stage {
@@ -130,6 +132,7 @@ export function EnhancedLoadingProgress({
   isDegraded = false,
   degradedMessage,
   showTimeoutOverlay = false,
+  isReconnecting = false,
 }: EnhancedLoadingProgressProps) {
   const [simulatedProgress, setSimulatedProgress] = useState(0);
   const [currentStage, setCurrentStage] = useState(1);
@@ -484,7 +487,15 @@ export function EnhancedLoadingProgress({
       </div>
 
       {/* STORY-359 AC1+AC2+AC3: SSE status indicator — discrete, informative, not alarming */}
-      {sseDisconnected ? (
+      {/* CRIT-052 AC2: Show reconnecting indicator during SSE reconnection */}
+      {isReconnecting ? (
+        <div className="mt-2 flex items-center gap-1.5 text-[10px] text-amber-600 dark:text-amber-400" data-testid="sse-reconnecting-indicator">
+          <svg className="w-3.5 h-3.5 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          <span>Reconectando...</span>
+        </div>
+      ) : sseDisconnected ? (
         <div className="mt-2 flex items-center gap-1.5 text-[10px] text-ink-muted" data-testid="sse-fallback-indicator">
           <svg className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />

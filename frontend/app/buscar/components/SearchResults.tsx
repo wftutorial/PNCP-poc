@@ -379,6 +379,7 @@ export default function SearchResults({
               sseEvent={sseEvent}
               useRealProgress={useRealProgress && sseAvailable}
               sseDisconnected={sseDisconnected}
+              isReconnecting={isReconnecting}
               onStageChange={onStageChange}
               ufAllComplete={ufAllComplete}
               isDegraded={isDegraded}

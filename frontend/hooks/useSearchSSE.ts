@@ -210,6 +210,9 @@ export function useSearchSSE({
   // STORY-354 AC6: Pending review reclassification update
   const [pendingReviewUpdate, setPendingReviewUpdate] = useState<PendingReviewUpdate | null>(null);
 
+  // CRIT-052 AC1: High-water mark — progress must never decrease
+  const progressHighWaterRef = useRef(0);
+
   const eventSourceRef = useRef<EventSource | null>(null);
   const retryAttemptRef = useRef(0);
   // STORY-297 AC6: Track last received event ID for reconnection
@@ -287,9 +290,28 @@ export function useSearchSSE({
         // Fall through to setCurrentEvent — batch_progress carries progress=10-55%
       }
 
-      // Set as current event for all other stages
-      setCurrentEvent(event);
-      onEventRef.current?.(event);
+      // CRIT-052 AC1: Enforce monotonic progress — never show a value lower than the max seen.
+      // Update high-water mark and clamp progress for non-negative values.
+      if (event.progress >= 0) {
+        progressHighWaterRef.current = Math.max(progressHighWaterRef.current, event.progress);
+        event.progress = progressHighWaterRef.current;
+      }
+
+      // CRIT-052 AC3: Don't update currentEvent for metadata-only events with progress=-1.
+      // These are informational (source status, filter stats) and would cause the progress
+      // bar to fall back to simulated progress, potentially showing a lower value.
+      const isMetadataEvent = event.progress === -1 && (
+        event.stage === 'source_complete' ||
+        event.stage === 'source_error' ||
+        event.stage === 'filter_summary' ||
+        event.stage === 'pending_review'
+      );
+
+      if (!isMetadataEvent) {
+        // Set as current event for progress-bearing and terminal stages
+        setCurrentEvent(event);
+        onEventRef.current?.(event);
+      }
 
       // STORY-295: Handle source_complete and source_error events
       if (event.stage === 'source_complete' || event.stage === 'source_error') {
@@ -453,6 +475,8 @@ export function useSearchSSE({
     setSseAvailable(true);
     retryAttemptRef.current = 0;
     lastEventIdRef.current = '';
+    // CRIT-052 AC1: Reset high-water mark for new search
+    progressHighWaterRef.current = 0;
 
     // Build SSE URL through Next.js proxy
     // Auth token passed as query param since EventSource doesn't support custom headers

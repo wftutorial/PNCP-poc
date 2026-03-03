@@ -13,9 +13,9 @@
 
 | Run | Lead | CNPJ | Tracking | Subject Var | E1 (D0) | E2 (D3) | LI (D5) | E3 (D7) | E4 (D14) | Resposta | Conversão | Valor | Notas |
 |-----|------|------|----------|-------------|---------|---------|---------|---------|----------|----------|-----------|-------|-------|
-| 001 | Pentágono Serviços | 47.026.679/0001-51 | AT-001-PEN | — | — | — | — | — | — | — | — | R$1.500 | 10 editais SP |
-| 001 | Solovia Engenharia | 08.806.914/0001-56 | AT-001-SOL | — | — | — | — | — | — | — | — | R$2.500 | 26 editais SP/MG/PR/ES |
-| 001 | Barra Nova Engenharia | 05.338.129/0001-28 | AT-001-BAR | — | — | — | — | — | — | — | — | R$1.500 | 12 editais MG/ES |
+| 001 | Pentágono Serviços | 47.026.679/0001-51 | AT-001-PEN | — | 03/03 | — | — | — | — | — | — | R$1.500 | 10 editais SP. E2: 06/03, LI: 08/03, E3: 10/03, E4: 17/03 |
+| 001 | Solovia Engenharia | 08.806.914/0001-56 | AT-001-SOL | — | 03/03 | — | — | — | — | — | — | R$2.500 | 26 editais SP/MG/PR/ES. E2: 06/03, LI: 08/03, E3: 10/03, E4: 17/03 |
+| 001 | Barra Nova Engenharia | 05.338.129/0001-28 | AT-001-BAR | — | 03/03 | — | — | — | — | — | — | R$1.500 | 12 editais MG/ES. E2: 06/03, LI: 08/03, E3: 10/03, E4: 17/03 |
 
 ## Status Legend
 - `—` = Pendente
@@ -39,7 +39,7 @@
 | Métrica | Run 001 | Run 002 | Run 003 | Total |
 |---------|---------|---------|---------|-------|
 | Leads abordados | 3 | — | — | 3 |
-| Emails enviados (E1) | 0 | — | — | 0 |
+| Emails enviados (E1) | 3 | — | — | 3 |
 | Respostas | 0 | — | — | 0 |
 | Reply rate | — | — | — | — |
 | Conversões | 0 | — | — | 0 |

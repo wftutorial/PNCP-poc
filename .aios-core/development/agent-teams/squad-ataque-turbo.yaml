@@ -262,18 +262,17 @@ api_reference:
     description: "ComprasGov v3 — Dados Abertos (Portal de Compras Governamentais)"
     base_url: "https://dadosabertos.compras.gov.br"
     status: |
-      ⚠️ INDISPONÍVEL (2026-03-02): Endpoints retornaram HTTP 404 no último run.
-      /modulo-fornecedor/1_consultarFornecedor → 404
-      /modulo-contratacoes/3_consultarResultadoItensContratacoes_PNCP_14133 → 404
-      Possível migração de endpoint ou mudança de API. Investigar antes do próximo run.
-      FALLBACK: usar Portal da Transparência (API key já configurada) como fonte complementar.
+      🚫 FORA DO AR (confirmado 2026-03-03): Homepage inteira retorna HTTP 404.
+      Não é problema de auth — a API está completamente indisponível.
+      Última verificação: 2026-03-03 via Playwright (site retorna JSON 404).
+      NÃO USAR até nova verificação. Revisitar em 2 semanas.
     auth: |
       JWT Token obrigatório. Registrar em dadosabertos.compras.gov.br e fazer login:
       POST /usuarios/criar (registro) → POST /autenticacao/login (JWT)
       Header: Authorization: Bearer {JWT_TOKEN}
       Sem auth, endpoints retornam 404.
     coverage: "Federal (compras.gov.br — licitações federais)"
-    priority: 3  # Terceira fonte (após PNCP=1 e TCU=2)
+    priority: 99  # DESATIVADA — site fora do ar desde 2026-03-02
 
     endpoints:
       search_supplier: |
@@ -308,59 +307,105 @@ api_reference:
   portal_transparencia:
     description: "Portal da Transparência — API de Contratos e Licitações Federais"
     base_url: "https://api.portaldatransparencia.gov.br/api-de-dados"
+    status: |
+      ✅ VERIFICADO FUNCIONANDO (2026-03-03). Token configurado em backend/.env.
+      Env var: PORTAL_TRANSPARENCIA_API_KEY (32 chars, prefixo ccbd...).
+      Testado com sucesso: /pessoa-juridica, /contratos/cpf-cnpj, /licitacoes/modalidades.
     auth: |
-      Token obrigatório (cadastro gratuito em portaldatransparencia.gov.br)
+      Token obrigatório (já configurado em backend/.env)
       Header: chave-api-dados: {TOKEN}
       Rate limit: 90 req/min (06h-01h), 450 req/min (01h-06h)
-    coverage: "Federal — contratos, licitações, despesas"
-    priority: 4  # Quarta fonte
+      Carregar token: PT_KEY=$(grep PORTAL_TRANSPARENCIA_API_KEY backend/.env | cut -d '=' -f2 | tr -d '"' | tr -d "'")
+    coverage: "Federal — contratos, licitações, sanções, despesas"
+    priority: 3  # Terceira fonte (promovida — ComprasGov v3 está fora do ar)
 
     endpoints:
+      # ── ENDPOINT ESTRELA: check de sanções em 1 call ──
+      sanctions_check: |
+        # MELHOR ENDPOINT PARA QUALIFICAÇÃO: retorna flags booleanas de TODAS as bases
+        # sancionadoCEIS, sancionadoCNEP, sancionadoCEPIM, sancionadoCEAF
+        # MAIS CONFIÁVEL que queries individuais /ceis e /cnep (que retornam resultados genéricos)
+        # USAR ESTE em vez do TCU certidões para check de sanções
+        curl -s -H "chave-api-dados: $PT_KEY" \
+          "https://api.portaldatransparencia.gov.br/api-de-dados/pessoa-juridica\
+          ?cnpj={CNPJ_SEM_PONTUACAO}"
+
+        # Resposta inclui:
+        # cnpj, razaoSocial, nomeFantasia
+        # sancionadoCEIS: true/false (Cadastro de Empresas Inidôneas e Suspensas)
+        # sancionadoCNEP: true/false (Cadastro Nacional de Empresas Punidas)
+        # sancionadoCEPIM: true/false (Cadastro de Entidades Privadas sem fins lucrativos Impedidas)
+        # sancionadoCEAF: true/false (Cadastro de Expulsões da Administração Federal)
+        # possuiContratacao: true/false (tem contratos federais)
+        # participanteLicitacao: true/false (já participou de licitações federais)
+        # favorecidoDespesas: true/false (recebeu pagamentos federais)
+        #
+        # REGRA: se QUALQUER sanção = true → DESCARTAR lead imediatamente
+        # BÔNUS: possuiContratacao e participanteLicitacao indicam presença federal
+
       contracts_by_supplier: |
         # OURO PARA PROSPECÇÃO: contratos por CNPJ do fornecedor (endpoint dedicado!)
-        curl -s -H "chave-api-dados: {TOKEN}" \
+        # Retorna histórico completo de contratos federais — objeto, valores, órgãos, datas
+        curl -s -H "chave-api-dados: $PT_KEY" \
           "https://api.portaldatransparencia.gov.br/api-de-dados/contratos/cpf-cnpj\
           ?cpfCnpj={CNPJ_SEM_PONTUACAO}\
-          &pagina=1" | python -m json.tool
+          &pagina=1"
 
-      contracts_by_date: |
-        # Contratos por período (todos os fornecedores)
-        curl -s -H "chave-api-dados: {TOKEN}" \
+        # Campos-chave por contrato:
+        # id, numero, objeto, fundamentoLegal, situacaoContrato, modalidadeCompra
+        # compra: { numero, objeto, numeroProcesso, contatoResponsavel }
+        # unidadeGestora: { codigo, nome, orgaoVinculado: { sigla, nome } }
+        # fornecedor: { cnpjFormatado, nome, razaoSocialReceita, nomeFantasiaReceita, tipo }
+        # dataAssinatura, dataInicioVigencia, dataFimVigencia
+        # valorInicialCompra, valorFinalCompra
+        #
+        # IMPORTANTE: contatoResponsavel no campo compra = nome do responsável no órgão
+
+      contracts_by_organ: |
+        # Contratos por órgão + período (requer codigoOrgao obrigatório)
+        curl -s -H "chave-api-dados: $PT_KEY" \
           "https://api.portaldatransparencia.gov.br/api-de-dados/contratos\
-          ?dataInicial={DD/MM/AAAA}&dataFinal={DD/MM/AAAA}\
-          &pagina=1" | python -m json.tool
+          ?codigoOrgao={CODIGO_ORGAO}\
+          &dataInicial={DD/MM/AAAA}&dataFinal={DD/MM/AAAA}\
+          &pagina=1"
+        # ATENÇÃO: codigoOrgao é OBRIGATÓRIO (sem ele → HTTP 400)
+
+      open_tenders: |
+        # Licitações por órgão + período (max 1 mês por query)
+        curl -s -H "chave-api-dados: $PT_KEY" \
+          "https://api.portaldatransparencia.gov.br/api-de-dados/licitacoes\
+          ?codigoOrgao={CODIGO_ORGAO}\
+          &dataInicial={DD/MM/AAAA}&dataFinal={DD/MM/AAAA}\
+          &pagina=1"
+        # ATENÇÃO: codigoOrgao OBRIGATÓRIO + período máximo 1 mês
 
       bid_participants: |
         # Participantes de uma licitação (quem competiu, quem venceu)
-        curl -s -H "chave-api-dados: {TOKEN}" \
+        curl -s -H "chave-api-dados: $PT_KEY" \
           "https://api.portaldatransparencia.gov.br/api-de-dados/licitacoes/participantes\
           ?codigoUG={CODIGO_UG}&numero={NUMERO}&codigoModalidade={COD_MOD}\
-          &pagina=1" | python -m json.tool
+          &pagina=1"
 
-      open_tenders: |
-        # Licitações em andamento
-        curl -s -H "chave-api-dados: {TOKEN}" \
-          "https://api.portaldatransparencia.gov.br/api-de-dados/licitacoes\
-          ?dataInicial={DD/MM/AAAA}&dataFinal={DD/MM/AAAA}\
-          &pagina=1" | python -m json.tool
-
-      legal_entity: |
-        # Dados de pessoa jurídica (complementar ao OpenCNPJ)
-        curl -s -H "chave-api-dados: {TOKEN}" \
-          "https://api.portaldatransparencia.gov.br/api-de-dados/pessoa-juridica\
-          ?cnpj={CNPJ_SEM_PONTUACAO}" | python -m json.tool
+      modalities: |
+        # Lista de modalidades de licitação (códigos de referência)
+        curl -s -H "chave-api-dados: $PT_KEY" \
+          "https://api.portaldatransparencia.gov.br/api-de-dados/licitacoes/modalidades"
+        # Retorna: 1=Convite, 2=Tomada, 3=Concorrência, 5=Pregão, 6=Dispensa, 7=Inexigibilidade...
 
     key_fields: |
-      Contratos: fornecedor (cnpjCpf, nome), objeto, valor, vigencia, orgao
-      Participantes: fornecedor, resultado (vencedor/perdedor), valor proposto
+      pessoa-juridica: cnpj, razaoSocial, sancionadoCEIS/CNEP/CEPIM/CEAF (booleans), possuiContratacao
+      Contratos: id, numero, objeto, fornecedor(cnpj,nome), valorInicialCompra, valorFinalCompra,
+                 unidadeGestora(codigo,nome,orgaoVinculado), dataAssinatura, compra.contatoResponsavel
       Licitações: modalidade, objeto, valorEstimado, orgao, situacao
+      Participantes: fornecedor, resultado (vencedor/perdedor), valor proposto
 
     notes: |
-      ATENÇÃO: Requer cadastro prévio para obter token (gratuito).
-      Cadastro: portaldatransparencia.gov.br/api-de-dados/cadastrar-email
-      Rate limit: 90 req/min (06h-01h), 300 req/min (01h-06h)
-      Se token não disponível, PNCP + TCU cobrem a maioria dos dados.
-      Swagger: https://api.portaldatransparencia.gov.br/
+      ✅ Token CONFIGURADO e TESTADO (2026-03-03).
+      Swagger: https://api.portaldatransparencia.gov.br/swagger-ui/index.html
+      Rate limit: 90 req/min (06h-01h), 450 req/min (01h-06h)
+      LIMITAÇÃO: /contratos e /licitacoes exigem codigoOrgao (não dá para buscar "todos os órgãos").
+      WORKAROUND: usar /contratos/cpf-cnpj (busca por fornecedor, SEM restrição de órgão).
+      /pessoa-juridica é o check mais rápido e confiável de sanções (1 call, flags booleanas).
 
   compras_dados_legacy:
     description: "Compras.dados.gov.br — API Legacy de Fornecedores"
@@ -434,11 +479,22 @@ api_reference:
         # USAR PARA: verificar se sócios do QSA estão impedidos
 
     qualification_workflow: |
-      WORKFLOW DE QUALIFICAÇÃO VIA TCU (executar para cada lead):
-      1. Consultar certidões consolidadas → descartar se sancionado
-      2. Verificar sócios do QSA (via OpenCNPJ) contra inabilitados
-      3. Se lead passa nos dois checks → prosseguir para investigação
-      Este check é GRATUITO e SEM AUTH — executar antes de investir tempo na investigação CSI.
+      WORKFLOW DE QUALIFICAÇÃO (2 camadas — executar para cada lead):
+
+      CAMADA 1 — Portal da Transparência /pessoa-juridica (PREFERENCIAL):
+        curl -s -H "chave-api-dados: $PT_KEY" \
+          "https://api.portaldatransparencia.gov.br/api-de-dados/pessoa-juridica?cnpj={CNPJ}"
+        → Retorna flags booleanas: sancionadoCEIS, sancionadoCNEP, sancionadoCEPIM, sancionadoCEAF
+        → Se QUALQUER = true → DESCARTAR imediatamente
+        → Mais confiável que queries individuais /ceis e /cnep (que retornam resultados não filtrados)
+        → BÔNUS: possuiContratacao, participanteLicitacao (indicadores de presença federal)
+
+      CAMADA 2 — TCU Inabilitados (complementar):
+        → Verificar sócios do QSA (via OpenCNPJ) contra lista TCU de inabilitados
+        curl -s "https://contas.tcu.gov.br/ords/condenacao/consulta/inabilitados/{CPF_SOCIO}"
+        → Se sócio-administrador inabilitado → DESCARTAR lead
+
+      Se lead passa nas 2 camadas → prosseguir para investigação CSI.
 
   # ───────────────────────────────────────────────────────────────
   # ESTRATÉGIA DE DEDUP CROSS-SOURCE
@@ -469,9 +525,9 @@ api_reference:
       Quando mesmo edital/contrato aparece em múltiplas fontes, manter o de maior prioridade:
         1. PNCP (mais completo, link oficial funcional, fed+estadual+municipal)
         2. TCU Contratos (verificado, sem auth, mas limitado a contratos do TCU)
-        3. ComprasGov v3 (dados abertos federais, requer JWT)
-        4. Portal da Transparência (complementar, requer API key)
-        5. Compras.dados.gov.br legacy (menor granularidade, intermitente)
+        3. Portal da Transparência (✅ token configurado, contratos federais detalhados)
+        4. Compras.dados.gov.br legacy (menor granularidade, intermitente)
+        — ComprasGov v3: DESATIVADO (fora do ar desde 2026-03-02)
 
       Exceção: se a fonte de menor prioridade tem mais dados (ex: valor estimado
       preenchido vs ausente), ENRIQUECER o registro de maior prioridade com esses dados.
@@ -501,14 +557,15 @@ coordination:
       deliverable: |
         Para cada setor de interesse:
         1. Query PNCP /contratos com filtros de data (últimos 12 meses) — tamanhoPagina=500
-        2. Query ComprasGov v3 /modulo-fornecedor para fornecedores por CNAE do setor
-        3. Query ComprasGov v3 /resultado-itens para vencedores recentes (Lei 14.133)
-        4. (Opcional) Query Portal da Transparência contratos se token disponível
+        2. Query Portal da Transparência /contratos/cpf-cnpj para CNPJs encontrados no step 1
+           (enriquece com contratos federais adicionais que podem não estar no PNCP)
+        3. Query TCU /termos-contratuais para contratos do TCU (sem auth)
+        4. [DESATIVADO] ComprasGov v3 — fora do ar desde 2026-03-02
         5. DEDUP cross-source: aplicar Tier 1 + Tier 2 (ver dedup_strategy)
         6. Agregar por cnpjFornecedor: contar vitórias (TOTAL cross-source), somar valores, listar órgãos
         7. Identificar empresas com ≥3 contratos homologados (somando todas as fontes)
         8. Filtrar empresas com padrão consistente (não apenas 1 contrato grande)
-        9. Manter campo `fontes` por registro (e.g., ["PNCP", "ComprasGov"])
+        9. Manter campo `fontes` por registro (e.g., ["PNCP", "Portal Transparência", "TCU"])
         Output: Lista de CNPJs candidatos com métricas de participação e cobertura multi-fonte
 
     - phase: 2_enrichment
@@ -517,17 +574,23 @@ coordination:
       dependencies: [1_discovery]
       deliverable: |
         Para cada CNPJ candidato:
-        1. CHECK TCU PRIMEIRO (gratuito, sem auth, elimina rápido):
-           a. Certidões consolidadas → descartar se QUALQUER sanção ativa (CEIS/CNEP/TCU/CNJ)
-           b. Verificar sócios contra lista de inabilitados
+        1. CHECK SANÇÕES PRIMEIRO (Portal da Transparência — 1 call, mais confiável):
+           curl -s -H "chave-api-dados: $PT_KEY" \
+             "https://api.portaldatransparencia.gov.br/api-de-dados/pessoa-juridica?cnpj={CNPJ}"
+           → Se sancionadoCEIS=true OU sancionadoCNEP=true OU sancionadoCEPIM=true → DESCARTAR
+           → BÔNUS: possuiContratacao e participanteLicitacao indicam presença federal
+        2. Verificar sócios contra lista TCU inabilitados (sem auth):
+           curl -s "https://contas.tcu.gov.br/ords/condenacao/consulta/inabilitados/{CPF}"
            Se sancionado → DESCARTAR IMEDIATAMENTE (não gastar tempo)
-        2. Query OpenCNPJ → razão social, CNAE, porte, capital social, QSA, contato
-        3. Verificar se porte justifica compra do relatório (no-brainer test)
-        4. Analisar padrão de vitórias: setores, valores médios, órgãos frequentes
-           (agregar dados cross-source: PNCP + ComprasGov + TCU + Portal Transparência)
-        5. Identificar sócios/decisores via QSA (nome + qualificação)
-        6. (Opcional) Portal da Transparência: contratos/cpf-cnpj para perfil federal completo
-        7. Descartar se: situação != ATIVA, capital_social < R$50.000, sem contato
+        3. Query OpenCNPJ → razão social, CNAE, porte, capital social, QSA, contato
+        4. Query Portal da Transparência /contratos/cpf-cnpj → perfil federal completo:
+           objetos contratados, valores, órgãos, datas, contatoResponsavel
+           (COMPLEMENTAR ao PNCP — pode ter contratos federais não publicados no PNCP)
+        5. Verificar se porte justifica compra do relatório (no-brainer test)
+        6. Analisar padrão de vitórias: setores, valores médios, órgãos frequentes
+           (agregar dados cross-source: PNCP + Portal Transparência + TCU)
+        7. Identificar sócios/decisores via QSA (nome + qualificação)
+        8. Descartar se: situação != ATIVA, capital_social < R$50.000, sem contato
 
         Critério no-brainer: valor total de oportunidades abertas encontradas
         deve ser ≥10x o preço do relatório. Se empresa vence licitações de
@@ -541,8 +604,9 @@ coordination:
         Para cada lead qualificado:
         1. Determinar setores/keywords relevantes (do CNAE + histórico de vitórias)
         2. Query PNCP publicações abertas (últimos 10 dias) com filtros de setor/UF
-        3. Query ComprasGov v3 resultado-itens para contratações recentes abertas
-        4. (Opcional) Query Portal da Transparência licitações abertas se token disponível
+        3. [DESATIVADO] ComprasGov v3 — fora do ar
+        4. Query Portal da Transparência /licitacoes por órgãos frequentes do lead
+           (requer codigoOrgao + período max 1 mês — usar órgãos do histórico de contratos)
         5. DEDUP cross-source: aplicar Tier 1 + Tier 2 antes de filtrar
         6. Filtrar editais dedupados que matcham o perfil do lead:
            - Mesmo setor/CNAE
@@ -1163,7 +1227,7 @@ output_rules:
     - Setores analisados: {lista}
     - UFs: {lista}
     - Período de editais: {data_inicial} a {data_final}
-    - APIs consultadas: PNCP, TCU, ComprasGov v3, Portal da Transparência, OpenCNPJ
+    - APIs consultadas: PNCP, TCU, Portal da Transparência (✅), OpenCNPJ [ComprasGov v3: DESATIVADO]
 
     ## Resumo
     - Leads processados: {N}
@@ -1241,11 +1305,11 @@ output_rules:
     - Tempo total: {duração}
     - Requests PNCP: {N}
     - Requests TCU (certidões + contratos + inabilitados): {N}
-    - Requests ComprasGov v3: {N}
-    - Requests Portal da Transparência: {N}
+    - Requests ComprasGov v3: DESATIVADO
+    - Requests Portal da Transparência (pessoa-juridica + contratos/cpf-cnpj): {N}
     - Requests OpenCNPJ: {N}
     - Editais pré-dedup: {N} | Pós-dedup: {N} | Duplicatas removidas: {N}
-    - Leads descartados por sanção TCU/CEIS/CNEP: {N}
+    - Leads descartados por sanção (Portal Transparência + TCU): {N}
     - Fontes utilizadas: {lista de fontes que retornaram dados}
     - Leads descartados total: {N} (motivos: {lista})
 
@@ -1371,7 +1435,7 @@ constraints:
   - "NUNCA incentivar assinaturas ou mencionar planos"
   - "Qualidade > Quantidade — menos leads, mais profundidade"
   - "TESTE DE IMPACTO obrigatório: email deve causar reação 'CARALHO' (ver quality_gates.impact_test)"
-  - "Consultar TODAS as fontes disponíveis (não apenas PNCP) antes de concluir busca"
+  - "Consultar TODAS as fontes ativas (PNCP + Portal Transparência + TCU + OpenCNPJ) antes de concluir busca"
   # ── Novas constraints v4.0 (Conselho de Outreach) ──
   - "CADÊNCIA OBRIGATÓRIA: gerar 4 emails + 1 LinkedIn por lead (nunca email único)"
   - "EMAIL 1 SEM PREÇO: CTA soft only. Preço apenas a partir do Email 2"
@@ -1415,7 +1479,7 @@ quality_gates:
     ╚══════════════════════════════════════════════════════════════╝
 
   pre_email:
-    - "Certidão TCU consolidada verificada (NADA_CONSTA em todas)?"
+    - "Portal da Transparência /pessoa-juridica verificado (sancionadoCEIS/CNEP/CEPIM/CEAF = false)?"
     - "Sócios do QSA verificados contra lista TCU inabilitados?"
     - "Lead tem ≥3 contratos homologados nos últimos 12 meses (cross-source)?"
     - "Porte justifica compra do relatório (no-brainer test)?"

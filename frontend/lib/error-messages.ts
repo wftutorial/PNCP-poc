@@ -290,14 +290,14 @@ export function translateAuthError(message: string): string {
  * These are more specific than getUserFriendlyError() and take precedence when error_code is present.
  */
 export const ERROR_CODE_MESSAGES: Record<string, string> = {
-  BACKEND_UNAVAILABLE: "Nossos servidores estão sendo atualizados. Tente novamente em alguns instantes.",
-  SOURCE_UNAVAILABLE: "Nossas fontes de dados estão temporariamente indisponíveis.",
-  ALL_SOURCES_FAILED: "Nenhuma fonte de dados respondeu. Tente novamente em alguns minutos.",
-  TIMEOUT: "A busca demorou mais que o esperado. Tente reduzir o número de estados.",
-  RATE_LIMIT: "Limite de requisições atingido. Aguarde alguns minutos.",
-  QUOTA_EXCEEDED: "Você atingiu o limite de análises deste mês.",
-  VALIDATION_ERROR: "Parâmetros de busca inválidos. Verifique os filtros.",
-  INTERNAL_ERROR: "Erro interno. Nossa equipe foi notificada.",
+  BACKEND_UNAVAILABLE: "Estamos voltando em instantes. Tente novamente em alguns segundos.",
+  SOURCE_UNAVAILABLE: "As fontes de dados estão temporariamente em manutenção. Tente novamente em breve.",
+  ALL_SOURCES_FAILED: "Nenhuma fonte respondeu a tempo. Tente novamente em 2-3 minutos.",
+  TIMEOUT: "A análise demorou mais que o esperado. Tente com menos estados ou um período menor.",
+  RATE_LIMIT: "Muitas análises em sequência. Aguarde 1 minuto e tente novamente.",
+  QUOTA_EXCEEDED: "Suas análises deste mês foram utilizadas. Faça upgrade para continuar.",
+  VALIDATION_ERROR: "Verifique os filtros selecionados e tente novamente.",
+  INTERNAL_ERROR: "Algo deu errado do nosso lado. Nossa equipe já foi avisada.",
 };
 
 // =============================================================================

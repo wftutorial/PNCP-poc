@@ -15,18 +15,18 @@ As mensagens de erro atuais cobrem "o que aconteceu" e "o que fazer" mas omitem 
 
 ## Critérios de Aceitação
 
-- [ ] AC1: Reescrever `ERROR_CODE_MESSAGES` com estrutura empática:
+- [x] AC1: Reescrever `ERROR_CODE_MESSAGES` com estrutura empática:
   - `BACKEND_UNAVAILABLE`: "Estamos voltando em instantes. Tente novamente em alguns segundos."
   - `SOURCE_UNAVAILABLE`: "As fontes de dados estão temporariamente em manutenção. Tente novamente em breve."
   - `ALL_SOURCES_FAILED`: "Nenhuma fonte respondeu a tempo. Tente novamente em 2-3 minutos."
   - `TIMEOUT`: "A análise demorou mais que o esperado. Tente com menos estados ou um período menor."
   - `RATE_LIMIT`: "Muitas análises em sequência. Aguarde 1 minuto e tente novamente."
-  - `QUOTA_EXCEEDED`: (ver STORY-COPY-371 AC6)
+  - `QUOTA_EXCEEDED`: "Suas análises deste mês foram utilizadas. Faça upgrade para continuar."
   - `VALIDATION_ERROR`: "Verifique os filtros selecionados e tente novamente."
   - `INTERNAL_ERROR`: "Algo deu errado do nosso lado. Nossa equipe já foi avisada."
-- [ ] AC2: Cada mensagem tem no máximo 20 palavras
-- [ ] AC3: Nenhuma mensagem culpa o usuário
-- [ ] AC4: Testes atualizados
+- [x] AC2: Cada mensagem tem no máximo 20 palavras
+- [x] AC3: Nenhuma mensagem culpa o usuário
+- [x] AC4: Testes atualizados
 
 ## Copy Recomendada
 

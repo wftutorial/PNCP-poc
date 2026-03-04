@@ -231,25 +231,25 @@ import { getMessageFromErrorCode, ERROR_CODE_MESSAGES } from "../lib/error-messa
 describe("T12: Error code to friendly message mapping", () => {
   it("should map known error codes to Portuguese messages", () => {
     expect(getMessageFromErrorCode("SOURCE_UNAVAILABLE")).toBe(
-      "Nossas fontes de dados estão temporariamente indisponíveis."
+      "As fontes de dados estão temporariamente em manutenção. Tente novamente em breve."
     );
     expect(getMessageFromErrorCode("TIMEOUT")).toBe(
-      "A busca demorou mais que o esperado. Tente reduzir o número de estados."
+      "A análise demorou mais que o esperado. Tente com menos estados ou um período menor."
     );
     expect(getMessageFromErrorCode("QUOTA_EXCEEDED")).toBe(
-      "Você atingiu o limite de análises deste mês."
+      "Suas análises deste mês foram utilizadas. Faça upgrade para continuar."
     );
     expect(getMessageFromErrorCode("RATE_LIMIT")).toBe(
-      "Limite de requisições atingido. Aguarde alguns minutos."
+      "Muitas análises em sequência. Aguarde 1 minuto e tente novamente."
     );
     expect(getMessageFromErrorCode("ALL_SOURCES_FAILED")).toBe(
-      "Nenhuma fonte de dados respondeu. Tente novamente em alguns minutos."
+      "Nenhuma fonte respondeu a tempo. Tente novamente em 2-3 minutos."
     );
     expect(getMessageFromErrorCode("VALIDATION_ERROR")).toBe(
-      "Parâmetros de busca inválidos. Verifique os filtros."
+      "Verifique os filtros selecionados e tente novamente."
     );
     expect(getMessageFromErrorCode("INTERNAL_ERROR")).toBe(
-      "Erro interno. Nossa equipe foi notificada."
+      "Algo deu errado do nosso lado. Nossa equipe já foi avisada."
     );
   });
 });

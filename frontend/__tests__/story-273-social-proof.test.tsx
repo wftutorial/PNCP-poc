@@ -92,7 +92,7 @@ jest.mock('../app/components/landing/FinalCTA', () => {
     return (
       <section data-testid="final-cta">
         <p data-testid="beta-counter">
-          Mais de <span>10 empresas</span> já testaram — uniformes, TI, engenharia, saúde e facilities
+          Empresas de engenharia, TI, saúde, uniformes e facilities já analisam oportunidades com SmartLic
         </p>
         FinalCTA
       </section>
@@ -122,12 +122,12 @@ describe('STORY-273 + SAB-006: Landing Page Social Proof Integration', () => {
       expect(screen.getByTestId('beta-counter')).toBeInTheDocument();
     });
 
-    it('should display beta count message', () => {
-      expect(screen.getByText(/10 empresas/)).toBeInTheDocument();
+    it('should display sector-based social proof message', () => {
+      expect(screen.getByText(/Empresas de engenharia, TI, saúde, uniformes e facilities/)).toBeInTheDocument();
     });
 
-    it('should display sectors involved', () => {
-      expect(screen.getByText(/uniformes, TI, engenharia, saúde e facilities/)).toBeInTheDocument();
+    it('should use present continuous "já analisam" instead of past tense', () => {
+      expect(screen.getByText(/já analisam oportunidades com SmartLic/)).toBeInTheDocument();
     });
   });
 

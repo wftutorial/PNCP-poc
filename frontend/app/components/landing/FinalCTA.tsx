@@ -41,7 +41,7 @@ export default function FinalCTA({ className = '' }: FinalCTAProps) {
           }`}
           data-testid="beta-counter"
         >
-          Mais de <span className="text-white font-semibold">10 empresas</span> já testaram — uniformes, TI, engenharia, saúde e facilities
+          Empresas de engenharia, TI, saúde, uniformes e facilities já analisam oportunidades com SmartLic
         </p>
 
         <div

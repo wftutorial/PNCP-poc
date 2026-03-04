@@ -158,6 +158,8 @@ export interface SearchResultsProps {
   onDownload: () => void;
   onSearch: () => void;
   onRegenerateExcel?: () => void;
+  /** UX-405 AC5: Consecutive Excel failure count */
+  excelFailCount?: number;
 
   // Plan & auth
   planInfo: {
@@ -263,7 +265,7 @@ export default function SearchResults({
   result, rawCount,
   ufsSelecionadas, sectorName,
   searchMode, termosArray, ordenacao, onOrdenacaoChange,
-  downloadLoading, downloadError, onDownload, onSearch, onRegenerateExcel,
+  downloadLoading, downloadError, onDownload, onSearch, onRegenerateExcel, excelFailCount = 0,
   planInfo, session, onShowUpgradeModal, onTrackEvent,
   // STORY-257B props
   ufStatuses, ufTotalFound = 0, ufAllComplete,
@@ -879,7 +881,19 @@ export default function SearchResults({
                     }
 
                     if (isFailed) {
-                      return (
+                      // UX-405 AC5: After 2 consecutive failures, disable button with inline message
+                      const isMaxRetries = excelFailCount >= 2;
+                      return isMaxRetries ? (
+                        <span
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-ink-muted"
+                          data-testid="excel-unavailable-message"
+                        >
+                          Excel temporariamente indisponível —{" "}
+                          <a href="/ajuda" className="underline hover:text-ink">
+                            suporte
+                          </a>
+                        </span>
+                      ) : (
                         <button
                           onClick={onRegenerateExcel || onSearch}
                           disabled={loading}
@@ -887,6 +901,7 @@ export default function SearchResults({
                                      bg-amber-600 hover:bg-amber-700 text-white rounded-button
                                      disabled:opacity-50 disabled:cursor-not-allowed"
                           data-testid="excel-retry-button"
+                          title="A geração automática falhou. Clique para tentar novamente."
                         >
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />

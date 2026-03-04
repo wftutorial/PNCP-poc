@@ -167,6 +167,8 @@ export interface UseSearchReturn {
   showingPartialResults: boolean;
   /** STAB-006 AC3: Dismiss partial results banner */
   dismissPartialResults: () => void;
+  /** UX-405 AC5: Consecutive Excel regeneration failure count */
+  excelFailCount: number;
   /** STAB-003 AC5: True when search elapsed >100s (finalizing) */
   isFinalizing: boolean;
   /** STAB-009 AC5: True when async 202 mode is active */
@@ -257,6 +259,10 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
 
   // SAB-005 AC1: Skeleton timeout — shows banner after 30s without data update
   const [skeletonTimeoutReached, setSkeletonTimeoutReached] = useState(false);
+
+  // UX-405: Excel failure tracking — toast dedup + consecutive failure count
+  const excelFailCountRef = useRef(0);
+  const excelToastFiredRef = useRef(false);
   const skeletonTimeoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // SAB-001 AC4: Keep ref in sync with state for closure-safe reads
@@ -365,11 +371,18 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
       } : prev);
     } else if (event.stage === 'excel_ready') {
       // Update the result's download_url when Excel is ready
-      setResult(prev => prev ? {
-        ...prev,
-        download_url: event.detail.download_url || null,
-        excel_status: (event.detail.excel_status === 'failed' ? 'failed' : 'ready') as BuscaResult['excel_status'],
-      } : prev);
+      if (event.detail.excel_status === 'failed') {
+        handleExcelFailure(false);
+      } else {
+        // Reset failure tracking on success
+        excelFailCountRef.current = 0;
+        excelToastFiredRef.current = false;
+        setResult(prev => prev ? {
+          ...prev,
+          download_url: event.detail.download_url || null,
+          excel_status: 'ready' as BuscaResult['excel_status'],
+        } : prev);
+      }
     } else if (event.stage === 'uf_complete' || event.stage === 'partial_results') {
       // STAB-006 AC4: Save partial results to localStorage on each SSE update
       const sid = asyncSearchIdRef.current || searchId;
@@ -385,7 +398,7 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
       asyncSearchIdRef.current = null;
       setLoading(false);
       setError({
-        message: event.detail.error || event.message || 'Erro no processamento da busca',
+        message: event.detail.error || event.message || 'Erro no processamento da análise',
         rawMessage: event.detail.error || event.message || '',
         errorCode: event.detail.error_code || null,
         searchId: searchId,
@@ -680,6 +693,9 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
     setRawCount(0);
     setError(null);
     setQuotaError(null);
+    // UX-405: Reset Excel failure tracking on new search
+    excelFailCountRef.current = 0;
+    excelToastFiredRef.current = false;
     // CRIT-030 AC4: Clear live fetch state from previous search
     setLiveFetchInProgress(false);
     liveFetchSearchIdRef.current = null;
@@ -886,7 +902,7 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
           if (response.status === 403) {
             // STORY-265 AC13: Detect trial_expired specifically
             const isTrialExpired = err.error === "trial_expired" || err.detail?.error === "trial_expired";
-            const errorMessage = err.detail?.message || err.message || "Suas buscas acabaram.";
+            const errorMessage = err.detail?.message || err.message || "Suas análises acabaram.";
             if (isTrialExpired) {
               setQuotaError("trial_expired");
             } else {
@@ -1181,7 +1197,7 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
     // STORY-202 CROSS-C02: Support both download_url (object storage) and download_id (filesystem)
     // UX-349 AC1: Show error instead of silently returning when no download available
     if (!result?.download_id && !result?.download_url) {
-      setDownloadError("Excel ainda não disponível. Faça uma nova busca para gerar a planilha.");
+      setDownloadError("Excel ainda não disponível. Faça uma nova análise para gerar a planilha.");
       return;
     }
     setDownloadError(null);
@@ -1209,7 +1225,7 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
 
       if (!response.ok) {
         if (response.status === 401) { window.location.href = "/login"; throw new Error('Faça login para continuar'); }
-        if (response.status === 404) throw new Error('Arquivo expirado. Faça uma nova busca para gerar o Excel.');
+        if (response.status === 404) throw new Error('Arquivo expirado. Faça uma nova análise para gerar o Excel.');
         throw new Error('Não foi possível baixar o arquivo. Tente novamente.');
       }
 
@@ -1247,13 +1263,39 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
     }
   };
 
+  // UX-405: Centralized Excel failure handler — toast, Mixpanel, retry tracking
+  const handleExcelFailure = (isRegenerateAttempt: boolean) => {
+    excelFailCountRef.current += 1;
+    const attempt = excelFailCountRef.current;
+
+    // AC4: Mixpanel event
+    const sid = asyncSearchIdRef.current || searchId;
+    trackEvent('excel_generation_failed', { search_id: sid, attempt_number: attempt });
+
+    // AC1 + AC3: Toast (deduplicated per search via ref)
+    if (!excelToastFiredRef.current) {
+      excelToastFiredRef.current = true;
+      toast.error("Não foi possível gerar o Excel. Você pode tentar novamente.");
+    } else if (isRegenerateAttempt && attempt >= 2) {
+      // AC3: More detailed toast on repeated regeneration failure
+      toast.error("Excel indisponível. Tente novamente em alguns instantes ou faça uma nova busca.");
+    } else if (isRegenerateAttempt) {
+      toast.error("Não foi possível gerar o Excel. Você pode tentar novamente.");
+    }
+
+    setResult(prev => prev ? { ...prev, excel_status: 'failed' as const } : prev);
+  };
+
   // STORY-364 AC7: Regenerate Excel without re-running search
   const handleRegenerateExcel = async () => {
     const sid = asyncSearchIdRef.current || searchId;
     if (!sid) {
-      setDownloadError("Sem ID de busca para regenerar Excel.");
+      setDownloadError("Sem ID de análise para regenerar Excel.");
       return;
     }
+
+    // AC5: Block if already at max retries
+    if (excelFailCountRef.current >= 2) return;
 
     // Set processing state
     setResult(prev => prev ? { ...prev, excel_status: 'processing' as const, download_url: null } : prev);
@@ -1269,14 +1311,14 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
       });
 
       if (res.status === 404) {
-        setDownloadError("Resultados expirados. Faça uma nova busca.");
-        setResult(prev => prev ? { ...prev, excel_status: 'failed' as const } : prev);
+        setDownloadError("Resultados expirados. Faça uma nova análise.");
+        handleExcelFailure(true);
         return;
       }
 
       if (!res.ok) {
         setDownloadError("Erro ao regenerar Excel. Tente novamente.");
-        setResult(prev => prev ? { ...prev, excel_status: 'failed' as const } : prev);
+        handleExcelFailure(true);
         return;
       }
 
@@ -1284,6 +1326,9 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
 
       // If inline generation returned ready result
       if (data.excel_status === 'ready' && data.download_url) {
+        // Reset failure tracking on success
+        excelFailCountRef.current = 0;
+        excelToastFiredRef.current = false;
         setResult(prev => prev ? {
           ...prev,
           download_url: data.download_url,
@@ -1297,17 +1342,17 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
     } catch (e) {
       console.error('[STORY-364] Regenerate Excel failed:', e);
       setDownloadError("Erro de rede ao regenerar Excel.");
-      setResult(prev => prev ? { ...prev, excel_status: 'failed' as const } : prev);
+      handleExcelFailure(true);
     }
   };
 
   const handleSaveSearch = () => {
     if (!result) return;
     const defaultName = filters.searchMode === "setor"
-      ? (filters.sectorName || "Busca personalizada")
+      ? (filters.sectorName || "Análise personalizada")
       : filters.termosArray.length > 0
-        ? `Busca: "${filters.termosArray.join(', ')}"`
-        : "Busca personalizada";
+        ? `Análise: "${filters.termosArray.join(', ')}"`
+        : "Análise personalizada";
     setSaveSearchName(defaultName);
     setSaveError(null);
     setShowSaveDialog(true);
@@ -1315,7 +1360,7 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
 
   const confirmSaveSearch = () => {
     try {
-      saveNewSearch(saveSearchName || "Busca sem nome", {
+      saveNewSearch(saveSearchName || "Análise sem nome", {
         ufs: Array.from(filters.ufsSelecionadas),
         dataInicial: filters.dataInicial,
         dataFinal: filters.dataFinal,
@@ -1324,12 +1369,12 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
         termosBusca: filters.searchMode === "termos" ? filters.termosArray.join(", ") : undefined,
       });
       trackEvent('saved_search_created', { search_name: saveSearchName, search_mode: filters.searchMode });
-      toast.success(`Busca "${saveSearchName || "Busca sem nome"}" salva com sucesso!`);
+      toast.success(`Análise "${saveSearchName || "Análise sem nome"}" salva com sucesso!`);
       setShowSaveDialog(false);
       setSaveSearchName("");
       setSaveError(null);
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : "Erro ao salvar busca");
+      setSaveError(error instanceof Error ? error.message : "Erro ao salvar análise");
       toast.error(`Erro ao salvar: ${error instanceof Error ? error.message : "Erro desconhecido"}`);
     }
   };
@@ -1381,7 +1426,7 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
       if (formState.endDate) filters.setDataFinal(formState.endDate);
       if (formState.setor) { filters.setSearchMode('setor'); filters.setSetorId(formState.setor); }
       if (formState.includeKeywords?.length) { filters.setSearchMode('termos'); filters.setTermosArray(formState.includeKeywords); }
-      toast.success('Resultados da busca restaurados! Voce pode fazer o download agora.');
+      toast.success('Resultados da análise restaurados! Voce pode fazer o download agora.');
       trackEvent('search_state_auto_restored', { download_id: restored.downloadId });
     }
   };
@@ -1398,7 +1443,7 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
       const response = await fetch(`/api/buscar-results/${encodeURIComponent(sid)}`, { headers });
       if (!response.ok) {
         console.warn(`[A-04] Failed to fetch live results: ${response.status}`);
-        toast.info("Não foi possível carregar os dados atualizados. Tente uma nova busca.");
+        toast.info("Não foi possível carregar os dados atualizados. Tente uma nova análise.");
         return;
       }
 
@@ -1460,5 +1505,6 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
     asyncSearchActive,
     sseReconnectAttempts: sseReconnectAttemptsRef.current,
     skeletonTimeoutReached,
+    excelFailCount: excelFailCountRef.current,
   };
 }

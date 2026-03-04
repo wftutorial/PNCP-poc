@@ -770,6 +770,7 @@ function HomePageContent() {
                 onDownload={search.handleDownload}
                 onSearch={search.buscar}
                 onRegenerateExcel={search.handleRegenerateExcel}
+                excelFailCount={search.excelFailCount}
                 planInfo={planInfo}
                 session={session}
                 onShowUpgradeModal={handleShowUpgradeModal}

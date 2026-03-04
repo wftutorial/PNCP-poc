@@ -9,6 +9,7 @@ import CompatibilityBadge from "../buscar/components/CompatibilityBadge";
 import ActionLabel from "../buscar/components/ActionLabel";
 import DeepAnalysisModal from "../buscar/components/DeepAnalysisModal";
 import { AddToPipelineButton } from "./AddToPipelineButton";
+import { formatCurrencyBR } from "../../lib/format-currency";
 
 interface LicitacoesPreviewProps {
   /** List of bid items to display */
@@ -184,13 +185,12 @@ export function LicitacoesPreview({
   const visibleItems = licitacoes.slice(0, previewCount);
   const blurredItems = licitacoes.slice(previewCount);
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
+  /** UX-401 AC4+AC5: Unified currency formatting with null/0 handling */
+  const formatCurrency = (value: number | null | undefined): string => {
+    if (value === null || value === undefined || value === 0) {
+      return "Valor não informado";
+    }
+    return formatCurrencyBR(value);
   };
 
   const formatDate = (dateStr: string | null) => {
@@ -390,7 +390,7 @@ interface BidCardProps {
   index: number;
   highlightTerms: (text: string, terms: string[]) => ReactNode;
   searchTerms: string[];
-  formatCurrency: (value: number) => string;
+  formatCurrency: (value: number | null | undefined) => string;
   formatDate: (dateStr: string | null) => string;
   getRelevanceBadge: (score?: number | null) => ReactNode;
   getRelevanceSourceBadge: (source?: string | null) => ReactNode;

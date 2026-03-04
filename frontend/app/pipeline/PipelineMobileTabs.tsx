@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { STAGES_ORDER, STAGE_CONFIG, type PipelineItem, type PipelineStage } from "./types";
 import { toast } from "sonner";
+import { formatCurrencyBR } from "../../lib/format-currency";
 
 interface PipelineMobileTabsProps {
   items: PipelineItem[];
@@ -38,8 +39,8 @@ export function PipelineMobileTabs({ items, onUpdateItem, onRemoveItem }: Pipeli
     }
   };
 
-  const formatCurrency = (value: number) =>
-    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+  /** UX-401 AC5+AC7: Unified currency formatting with abbreviations */
+  const formatCurrency = (value: number) => formatCurrencyBR(value);
 
   const tabItems = getItemsByStage(activeTab);
 

@@ -5,6 +5,7 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { differenceInDays, parseISO } from "date-fns";
 import type { PipelineItem } from "./types";
+import { formatCurrencyBR } from "../../lib/format-currency";
 
 interface PipelineCardProps {
   item: PipelineItem;
@@ -44,8 +45,8 @@ export function PipelineCard({ item, isDragging, onRemove, onUpdateNotes }: Pipe
       ? "border-l-yellow-500"
       : "border-l-transparent";
 
-  const formatCurrency = (value: number) =>
-    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+  /** UX-401 AC5+AC7: Unified currency formatting with abbreviations */
+  const formatCurrency = (value: number) => formatCurrencyBR(value);
 
   return (
     <div

@@ -13,19 +13,23 @@ A função `completenessCount()` na página de conta trata `faixa_valor_min=0` c
 - Isso significa que mesmo com o check `!= null`, o valor `0` é incluído na array mas depois filtrado por `Boolean`.
 
 ## Critérios de Aceitação
-- [ ] AC1: Substituir `fields.filter(Boolean)` por `fields.filter(f => f !== null && f !== undefined)` para preservar valores falsy válidos como `0`.
-- [ ] AC2: `faixa_valor_min=0` deve contar como campo preenchido.
-- [ ] AC3: `faixa_valor_min=null` deve contar como campo NÃO preenchido.
-- [ ] AC4: `capacidade_funcionarios=0` deve contar como campo preenchido (mesma lógica).
-- [ ] AC5: Indicador visual deve refletir corretamente "7/7 campos preenchidos" quando todos estão preenchidos (incluindo zeros).
+- [x] AC1: Substituir `fields.filter(Boolean)` por `fields.filter(f => f !== null && f !== undefined)` para preservar valores falsy válidos como `0`.
+- [x] AC2: `faixa_valor_min=0` deve contar como campo preenchido.
+- [x] AC3: `faixa_valor_min=null` deve contar como campo NÃO preenchido.
+- [x] AC4: `capacidade_funcionarios=0` deve contar como campo preenchido (mesma lógica).
+- [x] AC5: Indicador visual deve refletir corretamente "7/7 campos preenchidos" quando todos estão preenchidos (incluindo zeros).
 
 ## Arquivos Impactados
 - `frontend/app/conta/page.tsx` — Fix em `completenessCount()`.
 
 ## Testes Necessários
-- [ ] Teste que `completenessCount({ faixa_valor_min: 0, ... })` retorna count incluindo esse campo.
-- [ ] Teste que `completenessCount({ faixa_valor_min: null, ... })` NÃO inclui esse campo.
-- [ ] Teste que todos os campos preenchidos (incluindo zeros) retorna `TOTAL_PROFILE_FIELDS`.
+- [x] Teste que `completenessCount({ faixa_valor_min: 0, ... })` retorna count incluindo esse campo.
+- [x] Teste que `completenessCount({ faixa_valor_min: null, ... })` NÃO inclui esse campo.
+- [x] Teste que todos os campos preenchidos (incluindo zeros) retorna `TOTAL_PROFILE_FIELDS`.
 
 ## Notas Técnicas
 - Bug clássico de JavaScript: `[0, null, undefined, "", 1].filter(Boolean)` retorna `[1]`. A correção é `filter(f => f !== null && f !== undefined)`.
+
+## File List
+- `frontend/app/conta/page.tsx` — Fixed `completenessCount()`, exported function + interface + constant
+- `frontend/__tests__/ux-409-profile-completeness-zero.test.tsx` — 9 unit tests (all pass)

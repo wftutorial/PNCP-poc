@@ -48,7 +48,7 @@ const ALL_UFS = [
 ];
 
 // ─── Profile context type ─────────────────────────────────────────────────────
-interface ProfileContext {
+export interface ProfileContext {
   ufs_atuacao?: string[];
   setor_principal?: string;
   faixa_valor_min?: number | null;
@@ -60,7 +60,7 @@ interface ProfileContext {
   atestados?: string[];
 }
 
-function completenessCount(ctx: ProfileContext): number {
+export function completenessCount(ctx: ProfileContext): number {
   const fields = [
     ctx.ufs_atuacao?.length ? ctx.ufs_atuacao : null,
     ctx.porte_empresa || null,
@@ -70,10 +70,10 @@ function completenessCount(ctx: ProfileContext): number {
     ctx.faturamento_anual != null ? ctx.faturamento_anual : null,
     ctx.atestados?.length ? ctx.atestados : null,
   ];
-  return fields.filter(Boolean).length;
+  return fields.filter(f => f !== null && f !== undefined).length;
 }
 
-const TOTAL_PROFILE_FIELDS = 7;
+export const TOTAL_PROFILE_FIELDS = 7;
 
 export default function ContaPage() {
   const { user, session, loading: authLoading, signOut } = useAuth();

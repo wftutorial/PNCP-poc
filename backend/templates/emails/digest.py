@@ -17,7 +17,7 @@ from templates.emails.base import email_base, SMARTLIC_GREEN, FRONTEND_URL
 # Viability badge colors and labels
 _VIABILITY_COLORS = {
     "alta": {"bg": "#e8f5e9", "text": "#2e7d32", "label": "Alta viabilidade"},
-    "media": {"bg": "#fff8e1", "text": "#f57f17", "label": "Viabilidade media"},
+    "media": {"bg": "#fff8e1", "text": "#f57f17", "label": "Viabilidade média"},
     "baixa": {"bg": "#ffebee", "text": "#c62828", "label": "Baixa viabilidade"},
 }
 
@@ -68,11 +68,11 @@ def _render_opportunity_row(opp: dict, index: int) -> str:
     Returns:
         HTML table row string.
     """
-    titulo = opp.get("titulo", "Sem titulo")
+    titulo = opp.get("titulo", "Sem título")
     if len(titulo) > 120:
         titulo = titulo[:117] + "..."
 
-    orgao = opp.get("orgao", "Orgao nao informado")
+    orgao = opp.get("orgao", "Órgão não informado")
     if len(orgao) > 60:
         orgao = orgao[:57] + "..."
 
@@ -81,7 +81,7 @@ def _render_opportunity_row(opp: dict, index: int) -> str:
     viability_score = opp.get("viability_score")
     badge = _viability_badge(viability_score)
 
-    valor_display = _format_brl(valor) if valor > 0 else "Valor nao informado"
+    valor_display = _format_brl(valor) if valor > 0 else "Valor não informado"
 
     bg_color = "#ffffff" if index % 2 == 1 else "#f9f9f9"
 
@@ -157,7 +157,7 @@ def render_daily_digest_email(
         </p>
         """
         return email_base(
-            title="Resumo diario — SmartLic",
+            title="Resumo diário — SmartLic",
             body_html=body,
             is_transactional=False,
             unsubscribe_url=f"{FRONTEND_URL}/conta",
@@ -208,9 +208,9 @@ def render_daily_digest_email(
     </p>
 
     <p style="color: #888; font-size: 12px; text-align: center; margin: 16px 0 0;">
-      Viability badges indicam a relevancia da oportunidade para seu perfil.
+      Os indicadores de viabilidade mostram a compatibilidade da oportunidade com seu perfil.
       <br>
-      Para ajustar suas preferencias de alerta,
+      Para ajustar suas preferências de alerta,
       <a href="{FRONTEND_URL}/conta" style="color: #888; text-decoration: underline;">acesse sua conta</a>.
     </p>
     """

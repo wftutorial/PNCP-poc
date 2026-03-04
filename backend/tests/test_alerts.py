@@ -1257,7 +1257,7 @@ class TestAlertDigestEmail:
         )
 
         assert "https://pncp.gov.br/app/editais/789" in html
-        assert "Ver no PNCP" in html
+        assert "Ver edital completo" in html
 
 
 # ============================================================================
@@ -1510,11 +1510,11 @@ class TestTemplateHelpers:
         assert "Alta viabilidade" in html
 
     def test_viability_badge_medium(self):
-        """Score 0.4-0.7 produces 'Viabilidade media' badge."""
+        """Score 0.4-0.7 produces 'Viabilidade média' badge."""
         from templates.emails.alert_digest import _viability_badge
 
         html = _viability_badge(0.5)
-        assert "media" in html.lower()
+        assert "média" in html.lower()
 
     def test_viability_badge_low(self):
         """Score < 0.4 produces 'Baixa viabilidade' badge."""

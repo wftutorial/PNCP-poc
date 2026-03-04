@@ -18,7 +18,7 @@ from templates.emails.base import email_base, SMARTLIC_GREEN, FRONTEND_URL
 # Viability badge colors and labels (same as digest.py)
 _VIABILITY_COLORS = {
     "alta": {"bg": "#e8f5e9", "text": "#2e7d32", "label": "Alta viabilidade"},
-    "media": {"bg": "#fff8e1", "text": "#f57f17", "label": "Viabilidade media"},
+    "media": {"bg": "#fff8e1", "text": "#f57f17", "label": "Viabilidade média"},
     "baixa": {"bg": "#ffebee", "text": "#c62828", "label": "Baixa viabilidade"},
 }
 
@@ -72,11 +72,11 @@ def _render_opportunity_row(opp: dict, index: int) -> str:
     Returns:
         HTML table row string.
     """
-    titulo = opp.get("titulo", "Sem titulo")
+    titulo = opp.get("titulo", "Sem título")
     if len(titulo) > 120:
         titulo = titulo[:117] + "..."
 
-    orgao = opp.get("orgao", "Orgao nao informado")
+    orgao = opp.get("orgao", "Órgão não informado")
     if len(orgao) > 60:
         orgao = orgao[:57] + "..."
 
@@ -87,7 +87,7 @@ def _render_opportunity_row(opp: dict, index: int) -> str:
     viability_score = opp.get("viability_score")
 
     badge = _viability_badge(viability_score)
-    valor_display = _format_brl(valor) if valor > 0 else "Valor nao informado"
+    valor_display = _format_brl(valor) if valor > 0 else "Valor não informado"
     modalidade_display = f" &middot; {modalidade}" if modalidade else ""
 
     bg_color = "#ffffff" if index % 2 == 1 else "#f9f9f9"
@@ -114,13 +114,13 @@ def _render_opportunity_row(opp: dict, index: int) -> str:
           <span style="color: {SMARTLIC_GREEN}; font-weight: 600;">{valor_display}</span>
           &nbsp;&nbsp;{badge}
         </p>
-        {_render_pncp_link(link_pncp)}
+        {_render_edital_link(link_pncp)}
       </td>
     </tr>"""
 
 
-def _render_pncp_link(link_pncp: str) -> str:
-    """Render a small 'Ver no PNCP' link below the opportunity details.
+def _render_edital_link(link_pncp: str) -> str:
+    """Render a small 'Ver edital completo' link below the opportunity details.
 
     Args:
         link_pncp: Full URL to the PNCP edital page.
@@ -134,7 +134,7 @@ def _render_pncp_link(link_pncp: str) -> str:
     return (
         f'<p style="margin: 4px 0 0; font-size: 12px;">'
         f'<a href="{link_pncp}" style="color: #1976d2; text-decoration: underline;">'
-        f'Ver no PNCP &rarr;</a></p>'
+        f'Ver edital completo &rarr;</a></p>'
     )
 
 
@@ -169,10 +169,10 @@ def render_alert_digest_email(
     if not opportunities:
         body = f"""
         <h1 style="color: #333; font-size: 22px; margin: 0 0 16px;">
-          Ola, {user_name}!
+          Olá, {user_name}!
         </h1>
         <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 8px;">
-          Seu alerta <strong>{alert_name}</strong> nao encontrou novas oportunidades hoje.
+          Seu alerta <strong>{alert_name}</strong> não encontrou novas oportunidades hoje.
         </p>
         <p style="color: #555; font-size: 15px; line-height: 1.6; margin: 0 0 24px;">
           Continuaremos monitorando e avisaremos assim que houver novidades.
@@ -185,7 +185,7 @@ def render_alert_digest_email(
         </p>
         <p style="color: #888; font-size: 12px; text-align: center; margin: 16px 0 0;">
           Para ajustar ou desativar este alerta,
-          <a href="{FRONTEND_URL}/conta" style="color: #888; text-decoration: underline;">acesse suas preferencias</a>.
+          <a href="{FRONTEND_URL}/conta" style="color: #888; text-decoration: underline;">acesse suas preferências</a>.
         </p>
         """
         return email_base(
@@ -209,7 +209,7 @@ def render_alert_digest_email(
 
     body = f"""
     <h1 style="color: #333; font-size: 22px; margin: 0 0 8px;">
-      Ola, {user_name}!
+      Olá, {user_name}!
     </h1>
     <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
       Seu alerta <strong>{alert_name}</strong> encontrou
@@ -254,10 +254,10 @@ def render_alert_digest_email(
 
     <!-- Footer preferences (AC18) -->
     <p style="color: #888; font-size: 12px; text-align: center; margin: 16px 0 0;">
-      Viability badges indicam a relevancia da oportunidade para seu perfil.
+      Os indicadores de viabilidade mostram a compatibilidade da oportunidade com seu perfil.
       <br>
       Para ajustar ou desativar este alerta,
-      <a href="{FRONTEND_URL}/conta" style="color: #888; text-decoration: underline;">acesse suas preferencias</a>.
+      <a href="{FRONTEND_URL}/conta" style="color: #888; text-decoration: underline;">acesse suas preferências</a>.
     </p>
     """
 
@@ -293,7 +293,7 @@ def render_consolidated_digest_email(
     if not alerts_with_items:
         body = f"""
         <h1 style="color: #333; font-size: 22px; margin: 0 0 16px;">
-          Ola, {user_name}!
+          Olá, {user_name}!
         </h1>
         <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
           Nenhum dos seus alertas encontrou novas oportunidades hoje.
@@ -307,7 +307,7 @@ def render_consolidated_digest_email(
         </p>
         """
         return email_base(
-            title="Resumo diario — SmartLic",
+            title="Resumo diário — SmartLic",
             body_html=body,
             is_transactional=False,
             unsubscribe_url=unsubscribe_url,
@@ -340,7 +340,7 @@ def render_consolidated_digest_email(
 
     body = f"""
     <h1 style="color: #333; font-size: 22px; margin: 0 0 8px;">
-      Ola, {user_name}!
+      Olá, {user_name}!
     </h1>
     <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
       Seus alertas encontraram <strong>{total_opps}</strong>
@@ -375,7 +375,7 @@ def render_consolidated_digest_email(
 
     <p style="color: #888; font-size: 12px; text-align: center; margin: 16px 0 0;">
       Para gerenciar seus alertas,
-      <a href="{FRONTEND_URL}/alertas" style="color: #888; text-decoration: underline;">acesse suas configuracoes</a>.
+      <a href="{FRONTEND_URL}/alertas" style="color: #888; text-decoration: underline;">acesse suas configurações</a>.
     </p>
     """
 

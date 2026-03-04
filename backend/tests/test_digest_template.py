@@ -46,7 +46,7 @@ class TestRenderDailyDigestEmail:
         assert "Prefeitura de Sao Paulo" in html
         assert "SP" in html
         assert "Alta viabilidade" in html  # score 0.85
-        assert "Viabilidade media" in html  # score 0.5
+        assert "Viabilidade média" in html  # score 0.5
         assert "Ver todas as oportunidades" in html
         assert "/buscar?auto=true" in html
 
@@ -106,7 +106,7 @@ class TestRenderDailyDigestEmail:
         # Should not crash, just no badge
         assert "Material de escritorio" in html
         assert "Alta viabilidade" not in html
-        assert "Viabilidade media" not in html
+        assert "Viabilidade média" not in html
         assert "Baixa viabilidade" not in html
 
     def test_truncates_long_titulo(self):
@@ -161,7 +161,7 @@ class TestRenderDailyDigestEmail:
             "total_novas": 1, "setor_nome": "test", "total_valor": 0,
         })
 
-        assert "Valor nao informado" in html
+        assert "Valor não informado" in html
 
 
 class TestViabilityBadge:
@@ -176,7 +176,7 @@ class TestViabilityBadge:
     def test_media_viability(self):
         from templates.emails.digest import _viability_badge
         badge = _viability_badge(0.5)
-        assert "Viabilidade media" in badge
+        assert "Viabilidade média" in badge
         assert "#f57f17" in badge  # amber text
 
     def test_baixa_viability(self):
@@ -198,7 +198,7 @@ class TestViabilityBadge:
     def test_boundary_0_4(self):
         from templates.emails.digest import _viability_badge
         badge = _viability_badge(0.4)
-        assert "Viabilidade media" in badge
+        assert "Viabilidade média" in badge
 
 
 class TestFormatBrl:

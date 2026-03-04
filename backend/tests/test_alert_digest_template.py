@@ -85,7 +85,7 @@ class TestRenderAlertDigestEmail:
         )
 
         assert "Maria" in html
-        assert "nao encontrou novas oportunidades" in html
+        assert "não encontrou novas oportunidades" in html
         assert "Fazer busca manual" in html
 
     def test_renders_single_opportunity(self):
@@ -134,7 +134,7 @@ class TestRenderAlertDigestEmail:
         )
 
         assert "https://pncp.gov.br/item-001" in html
-        assert "Ver no PNCP" in html
+        assert "Ver edital completo" in html
 
     def test_handles_no_pncp_link(self):
         from templates.emails.alert_digest import render_alert_digest_email
@@ -372,7 +372,7 @@ class TestFormatHelpers:
         from templates.emails.alert_digest import _viability_badge
 
         badge = _viability_badge(0.5)
-        assert "media" in badge.lower()
+        assert "média" in badge.lower()
 
     def test_viability_badge_baixa(self):
         from templates.emails.alert_digest import _viability_badge

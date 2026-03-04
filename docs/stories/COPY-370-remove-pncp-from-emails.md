@@ -14,11 +14,11 @@ A regra do CLAUDE.md é explícita: mencionar "PNCP" em texto voltado ao usuári
 
 ## Critérios de Aceitação
 
-- [ ] AC1: `_render_pncp_link()` retorna "Ver edital completo →" em vez de "Ver no PNCP →"
-- [ ] AC2: Footer dos emails substitui "Viability badges indicam a relevancia da oportunidade para seu perfil." por "Os indicadores de viabilidade mostram a compatibilidade da oportunidade com seu perfil."
-- [ ] AC3: Docstrings internas podem manter "PNCP" (não é user-facing), mas HTML renderizado não
-- [ ] AC4: `alert_digest.py` e `digest.py` ambos corrigidos
-- [ ] AC5: Acentos corrigidos em todo o template: "Ola" → "Olá", "nao" → "não", "titulo" → "título", "Orgao" → "Órgão", "numero" → "número", "preferencias" → "preferências", "relevancia" → "relevância", "diario" → "diário", "configuracoes" → "configurações"
+- [x] AC1: `_render_pncp_link()` retorna "Ver edital completo →" em vez de "Ver no PNCP →"
+- [x] AC2: Footer dos emails substitui "Viability badges indicam a relevancia da oportunidade para seu perfil." por "Os indicadores de viabilidade mostram a compatibilidade da oportunidade com seu perfil."
+- [x] AC3: Docstrings internas podem manter "PNCP" (não é user-facing), mas HTML renderizado não
+- [x] AC4: `alert_digest.py` e `digest.py` ambos corrigidos
+- [x] AC5: Acentos corrigidos em todo o template: "Ola" → "Olá", "nao" → "não", "titulo" → "título", "Orgao" → "Órgão", "numero" → "número", "preferencias" → "preferências", "relevancia" → "relevância", "diario" → "diário", "configuracoes" → "configurações"
 
 ## Copy Recomendada
 

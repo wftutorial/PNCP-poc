@@ -106,6 +106,20 @@ LLM_DURATION = _create_histogram(
     buckets=[0.1, 0.25, 0.5, 1, 2, 5],
 )
 
+# UX-402 AC3: Total duration of zero-match batch classification
+LLM_ZERO_MATCH_BATCH_DURATION = _create_histogram(
+    "smartlic_llm_zero_match_batch_duration_seconds",
+    "Total LLM zero-match batch classification duration",
+    buckets=[0.1, 0.25, 0.5, 1, 2, 3, 5, 10],
+)
+
+# UX-402 AC8: Distribution of batch sizes sent to LLM
+LLM_ZERO_MATCH_BATCH_SIZE = _create_histogram(
+    "smartlic_llm_zero_match_batch_size",
+    "Number of items per LLM zero-match batch call",
+    buckets=[1, 5, 10, 15, 20, 25, 30, 40, 50],
+)
+
 # CRIT-003 AC22: Time spent in each pipeline state
 STATE_DURATION = _create_histogram(
     "smartlic_search_state_duration_seconds",

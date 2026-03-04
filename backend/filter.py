@@ -2969,8 +2969,11 @@ def aplicar_todos_filtros(
 
         if zero_match_pool:
             from llm_arbiter import classify_contract_primary_match as _classify_zm
+            from llm_arbiter import _classify_zero_match_batch as _classify_batch
             from sectors import get_sector as _get_sector_zm
             from concurrent.futures import ThreadPoolExecutor, as_completed
+            from config import LLM_ZERO_MATCH_BATCH_ENABLED, LLM_ZERO_MATCH_BATCH_SIZE
+            import time as _time_zm
 
             try:
                 setor_config_zm = _get_sector_zm(setor)
@@ -2978,10 +2981,9 @@ def aplicar_todos_filtros(
             except (KeyError, Exception):
                 setor_name_zm = setor
 
-            # AC6: Concurrent LLM calls with max 10 threads (equivalent to Semaphore(10))
-            def _classify_one(lic_item: dict) -> tuple[dict, dict]:
+            # UX-402: Helper to extract objeto/valor from a lic dict
+            def _extract_item(lic_item: dict) -> dict:
                 obj = lic_item.get("objetoCompra", "")
-                # STORY-328 AC14: Use stripped text for LLM classification
                 obj = _strip_org_context(obj)
                 val = lic_item.get("valorTotalEstimado") or lic_item.get("valorEstimado") or 0
                 if isinstance(val, str):
@@ -2991,109 +2993,194 @@ def aplicar_todos_filtros(
                         val = 0.0
                 else:
                     val = float(val) if val else 0.0
-                # STORY-267 AC2: Use term-aware prompt when custom_terms present
-                if _use_term_prompt_zm and custom_terms:
-                    result = _classify_zm(
-                        objeto=obj,
-                        valor=val,
-                        setor_name=None,
-                        termos_busca=custom_terms,
-                        prompt_level="zero_match",
-                        setor_id=None,
+                return {"objeto": obj, "valor": val}
+
+            # UX-402: Process a single LLM result and apply to lic_item
+            def _apply_result(lic_item: dict, llm_result: dict) -> None:
+                is_relevant = llm_result.get("is_primary", False) if isinstance(llm_result, dict) else llm_result
+                if is_relevant:
+                    stats["llm_zero_match_aprovadas"] += 1
+                    if custom_terms:
+                        from metrics import TERM_SEARCH_LLM_ACCEPTS
+                        TERM_SEARCH_LLM_ACCEPTS.labels(zone="zero_match").inc()
+                    lic_item["_relevance_source"] = "llm_zero_match"
+                    lic_item["_term_density"] = 0.0
+                    lic_item["_matched_terms"] = []
+                    # D-02 AC4: Confidence capped at 70 for zero-match
+                    if isinstance(llm_result, dict):
+                        raw_conf = llm_result.get("confidence", 60)
+                        lic_item["_confidence_score"] = min(raw_conf, 70)
+                        lic_item["_llm_evidence"] = llm_result.get("evidence", [])
+                    else:
+                        lic_item["_confidence_score"] = 60
+                        lic_item["_llm_evidence"] = []
+                    resultado_llm_zero.append(lic_item)
+                    logger.debug(
+                        f"LLM zero_match: ACCEPT conf={lic_item.get('_confidence_score')} "
+                        f"objeto={lic_item.get('objetoCompra', '')[:80]}"
                     )
                 else:
-                    result = _classify_zm(
-                        objeto=obj,
-                        valor=val,
-                        setor_name=setor_name_zm,
-                        prompt_level="zero_match",
-                        setor_id=setor,
-                    )
-                return lic_item, result
+                    _is_pending = isinstance(llm_result, dict) and llm_result.get("pending_review", False)
+                    if _is_pending:
+                        stats["pending_review_count"] += 1
+                        lic_item["_relevance_source"] = "pending_review"
+                        lic_item["_term_density"] = 0.0
+                        lic_item["_matched_terms"] = []
+                        lic_item["_confidence_score"] = 0
+                        lic_item["_llm_evidence"] = []
+                        lic_item["_pending_review"] = True
+                        resultado_pending_review.append(lic_item)
+                        logger.info(
+                            f"LLM zero_match: PENDING_REVIEW (LLM unavailable) "
+                            f"objeto={lic_item.get('objetoCompra', '')[:80]}"
+                        )
+                    else:
+                        stats["llm_zero_match_rejeitadas"] += 1
+                        if custom_terms:
+                            from metrics import TERM_SEARCH_LLM_REJECTS
+                            TERM_SEARCH_LLM_REJECTS.labels(zone="zero_match").inc()
+                        if isinstance(llm_result, dict):
+                            lic_item["_llm_rejection_reason"] = llm_result.get("rejection_reason", "")
+                        logger.debug(
+                            f"LLM zero_match: REJECT objeto={lic_item.get('objetoCompra', '')[:80]}"
+                        )
 
             _llm_total = len(zero_match_pool)
-            _llm_completed = 0
-            with ThreadPoolExecutor(max_workers=10) as executor:
-                futures = {
-                    executor.submit(_classify_one, lic): lic
-                    for lic in zero_match_pool
-                }
-                for future in as_completed(futures):
-                    _llm_completed += 1
-                    stats["llm_zero_match_calls"] += 1
-                    # STORY-329 AC3: LLM zero-match progress
-                    if on_progress:
-                        on_progress(_llm_completed, _llm_total, "llm_classify")
-                    try:
-                        lic_item, llm_result = future.result()
-                        is_relevant = llm_result.get("is_primary", False) if isinstance(llm_result, dict) else llm_result
-                        if is_relevant:
-                            stats["llm_zero_match_aprovadas"] += 1
-                            # STORY-267 AC16: Track term search metrics
-                            if custom_terms:
-                                from metrics import TERM_SEARCH_LLM_ACCEPTS
-                                TERM_SEARCH_LLM_ACCEPTS.labels(zone="zero_match").inc()
-                            # AC8: Tag relevance source
-                            lic_item["_relevance_source"] = "llm_zero_match"
-                            lic_item["_term_density"] = 0.0
-                            lic_item["_matched_terms"] = []
-                            # D-02 AC4: Confidence capped at 70 for zero-match
-                            if isinstance(llm_result, dict):
-                                raw_conf = llm_result.get("confidence", 60)
-                                lic_item["_confidence_score"] = min(raw_conf, 70)
-                                lic_item["_llm_evidence"] = llm_result.get("evidence", [])
-                            else:
-                                lic_item["_confidence_score"] = 60
-                                lic_item["_llm_evidence"] = []
-                            resultado_llm_zero.append(lic_item)
-                            logger.debug(
-                                f"LLM zero_match: ACCEPT conf={lic_item.get('_confidence_score')} "
-                                f"objeto={lic_item.get('objetoCompra', '')[:80]}"
-                            )
-                        else:
-                            # STORY-354 AC1: Check if LLM returned PENDING_REVIEW
-                            _is_pending = isinstance(llm_result, dict) and llm_result.get("pending_review", False)
-                            if _is_pending:
-                                stats["pending_review_count"] += 1
-                                lic_item["_relevance_source"] = "pending_review"
-                                lic_item["_term_density"] = 0.0
-                                lic_item["_matched_terms"] = []
-                                lic_item["_confidence_score"] = 0
-                                lic_item["_llm_evidence"] = []
-                                lic_item["_pending_review"] = True
-                                resultado_pending_review.append(lic_item)
-                                logger.info(
-                                    f"LLM zero_match: PENDING_REVIEW (LLM unavailable) "
-                                    f"objeto={lic_item.get('objetoCompra', '')[:80]}"
+            _batch_used = False
+
+            # UX-402 AC2/AC6: Try batch mode first, fallback to individual on failure
+            if LLM_ZERO_MATCH_BATCH_ENABLED:
+                try:
+                    from metrics import LLM_ZERO_MATCH_BATCH_DURATION, LLM_ZERO_MATCH_BATCH_SIZE as _BATCH_SIZE_METRIC
+                    _batch_start = _time_zm.time()
+
+                    # Split into batches of LLM_ZERO_MATCH_BATCH_SIZE
+                    batch_items = [_extract_item(lic) for lic in zero_match_pool]
+                    batches = [
+                        batch_items[i:i + LLM_ZERO_MATCH_BATCH_SIZE]
+                        for i in range(0, len(batch_items), LLM_ZERO_MATCH_BATCH_SIZE)
+                    ]
+                    batch_lic_groups = [
+                        zero_match_pool[i:i + LLM_ZERO_MATCH_BATCH_SIZE]
+                        for i in range(0, len(zero_match_pool), LLM_ZERO_MATCH_BATCH_SIZE)
+                    ]
+
+                    # AC8: Observe batch sizes
+                    for batch in batches:
+                        _BATCH_SIZE_METRIC.observe(len(batch))
+
+                    # Run batches in parallel via ThreadPoolExecutor
+                    all_results: list[tuple[int, list[dict]]] = []
+                    with ThreadPoolExecutor(max_workers=3) as executor:
+                        future_to_idx = {}
+                        for idx, batch in enumerate(batches):
+                            if _use_term_prompt_zm and custom_terms:
+                                fut = executor.submit(
+                                    _classify_batch,
+                                    items=batch,
+                                    setor_name=None,
+                                    setor_id=None,
+                                    termos_busca=custom_terms,
                                 )
+                            else:
+                                fut = executor.submit(
+                                    _classify_batch,
+                                    items=batch,
+                                    setor_name=setor_name_zm,
+                                    setor_id=setor,
+                                    termos_busca=None,
+                                )
+                            future_to_idx[fut] = idx
+
+                        for future in as_completed(future_to_idx):
+                            idx = future_to_idx[future]
+                            batch_results = future.result()  # raises on error
+                            all_results.append((idx, batch_results))
+
+                    # Sort by original batch index and apply results
+                    all_results.sort(key=lambda x: x[0])
+                    _llm_completed = 0
+                    for idx, batch_results in all_results:
+                        lic_group = batch_lic_groups[idx]
+                        for lic_item, llm_result in zip(lic_group, batch_results):
+                            _llm_completed += 1
+                            stats["llm_zero_match_calls"] += 1
+                            if on_progress:
+                                on_progress(_llm_completed, _llm_total, "llm_classify")
+                            _apply_result(lic_item, llm_result)
+
+                    _batch_elapsed = _time_zm.time() - _batch_start
+                    LLM_ZERO_MATCH_BATCH_DURATION.observe(_batch_elapsed)
+                    _batch_used = True
+                    logger.info(
+                        f"UX-402: Batch mode completed {_llm_total} items in {_batch_elapsed:.2f}s "
+                        f"({len(batches)} batches)"
+                    )
+
+                except Exception as e:
+                    logger.warning(
+                        f"UX-402 AC2: Batch classification failed, falling back to individual: {e}"
+                    )
+                    # Reset counters for fallback path (batch partial results discarded)
+                    stats["llm_zero_match_calls"] = 0
+                    stats["llm_zero_match_aprovadas"] = 0
+                    stats["llm_zero_match_rejeitadas"] = 0
+                    stats["pending_review_count"] = 0
+                    resultado_llm_zero.clear()
+                    resultado_pending_review.clear()
+
+            # AC2/AC6: Fallback to individual calls (or when batch disabled)
+            if not _batch_used:
+                def _classify_one(lic_item: dict) -> tuple[dict, dict]:
+                    item = _extract_item(lic_item)
+                    if _use_term_prompt_zm and custom_terms:
+                        result = _classify_zm(
+                            objeto=item["objeto"],
+                            valor=item["valor"],
+                            setor_name=None,
+                            termos_busca=custom_terms,
+                            prompt_level="zero_match",
+                            setor_id=None,
+                        )
+                    else:
+                        result = _classify_zm(
+                            objeto=item["objeto"],
+                            valor=item["valor"],
+                            setor_name=setor_name_zm,
+                            prompt_level="zero_match",
+                            setor_id=setor,
+                        )
+                    return lic_item, result
+
+                _llm_completed = 0
+                with ThreadPoolExecutor(max_workers=10) as executor:
+                    futures = {
+                        executor.submit(_classify_one, lic): lic
+                        for lic in zero_match_pool
+                    }
+                    for future in as_completed(futures):
+                        _llm_completed += 1
+                        stats["llm_zero_match_calls"] += 1
+                        if on_progress:
+                            on_progress(_llm_completed, _llm_total, "llm_classify")
+                        try:
+                            lic_item, llm_result = future.result()
+                            _apply_result(lic_item, llm_result)
+                        except Exception as e:
+                            from config import LLM_FALLBACK_PENDING_ENABLED
+                            if LLM_FALLBACK_PENDING_ENABLED:
+                                stats["pending_review_count"] += 1
+                                lic_ref = futures[future]
+                                lic_ref["_relevance_source"] = "pending_review"
+                                lic_ref["_term_density"] = 0.0
+                                lic_ref["_matched_terms"] = []
+                                lic_ref["_confidence_score"] = 0
+                                lic_ref["_pending_review"] = True
+                                resultado_pending_review.append(lic_ref)
+                                logger.warning(f"LLM zero_match: FAILED → PENDING_REVIEW: {e}")
                             else:
                                 stats["llm_zero_match_rejeitadas"] += 1
-                                # STORY-267 AC16: Track term search metrics
-                                if custom_terms:
-                                    from metrics import TERM_SEARCH_LLM_REJECTS
-                                    TERM_SEARCH_LLM_REJECTS.labels(zone="zero_match").inc()
-                                # D-02 AC6: Store rejection reason for audit
-                                if isinstance(llm_result, dict):
-                                    lic_item["_llm_rejection_reason"] = llm_result.get("rejection_reason", "")
-                                logger.debug(
-                                    f"LLM zero_match: REJECT objeto={lic_item.get('objetoCompra', '')[:80]}"
-                                )
-                    except Exception as e:
-                        # STORY-354 AC1: On executor failure, use PENDING_REVIEW if flag enabled
-                        from config import LLM_FALLBACK_PENDING_ENABLED
-                        if LLM_FALLBACK_PENDING_ENABLED:
-                            stats["pending_review_count"] += 1
-                            lic_ref = futures[future]
-                            lic_ref["_relevance_source"] = "pending_review"
-                            lic_ref["_term_density"] = 0.0
-                            lic_ref["_matched_terms"] = []
-                            lic_ref["_confidence_score"] = 0
-                            lic_ref["_pending_review"] = True
-                            resultado_pending_review.append(lic_ref)
-                            logger.warning(f"LLM zero_match: FAILED → PENDING_REVIEW: {e}")
-                        else:
-                            stats["llm_zero_match_rejeitadas"] += 1
-                            logger.error(f"LLM zero_match: FAILED (REJECT fallback): {e}")
+                                logger.error(f"LLM zero_match: FAILED (REJECT fallback): {e}")
 
             logger.info(
                 f"GTM-FIX-028 LLM Zero Match: "

@@ -355,6 +355,19 @@ LLM_ZERO_MATCH_ENABLED: bool = str_to_bool(
     os.getenv("LLM_ZERO_MATCH_ENABLED", "true")
 )
 
+# UX-402: LLM Zero Match Batch — classify up to 20 bids per LLM call
+# When enabled, sends numbered list of objects in a single prompt instead of
+# individual calls. Reduces ~50 calls to ~3, cutting zero-match latency from ~8s to ~1.5s.
+LLM_ZERO_MATCH_BATCH_ENABLED: bool = str_to_bool(
+    os.getenv("LLM_ZERO_MATCH_BATCH_ENABLED", "true")
+)
+
+# UX-402 AC1: Max items per batch call (GPT-4.1-nano handles 20 easily within token limits)
+LLM_ZERO_MATCH_BATCH_SIZE: int = int(os.getenv("LLM_ZERO_MATCH_BATCH_SIZE", "20"))
+
+# UX-402 AC7: Timeout per batch call in seconds
+LLM_ZERO_MATCH_BATCH_TIMEOUT: float = float(os.getenv("LLM_ZERO_MATCH_BATCH_TIMEOUT", "5.0"))
+
 # STORY-354 AC8: LLM fallback to PENDING_REVIEW instead of REJECT for zero-match bids
 # When enabled, bids with 0% keyword density that fail LLM classification are marked
 # PENDING_REVIEW instead of silently discarded. Allows reclassification when LLM returns.
@@ -467,6 +480,7 @@ _FEATURE_FLAG_REGISTRY: dict[str, tuple[str, str]] = {
     "SYNONYM_MATCHING_ENABLED": ("SYNONYM_MATCHING_ENABLED", "true"),
     "ZERO_RESULTS_RELAXATION_ENABLED": ("ZERO_RESULTS_RELAXATION_ENABLED", "true"),
     "LLM_ZERO_MATCH_ENABLED": ("LLM_ZERO_MATCH_ENABLED", "true"),
+    "LLM_ZERO_MATCH_BATCH_ENABLED": ("LLM_ZERO_MATCH_BATCH_ENABLED", "true"),
     "CO_OCCURRENCE_RULES_ENABLED": ("CO_OCCURRENCE_RULES_ENABLED", "true"),
     "FILTER_DEBUG_MODE": ("FILTER_DEBUG_MODE", "false"),
     "ITEM_INSPECTION_ENABLED": ("ITEM_INSPECTION_ENABLED", "true"),

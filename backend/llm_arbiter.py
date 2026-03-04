@@ -823,6 +823,274 @@ Os termos buscados descrevem o OBJETO PRINCIPAL deste contrato (não itens secun
         return result
 
 
+# ============================================================================
+# UX-402: Batch zero-match classification
+# ============================================================================
+
+
+def _build_zero_match_batch_prompt(
+    setor_id: Optional[str],
+    setor_name: str,
+    items: list[dict],
+) -> str:
+    """Build a batch prompt for classifying multiple zero-match items at once (AC1).
+
+    Args:
+        setor_id: Sector ID for sector-aware prompt
+        setor_name: Human-readable sector name
+        items: List of dicts with 'objeto' (str) and 'valor' (float)
+
+    Returns:
+        Prompt string with numbered list of items
+    """
+    from sectors import get_sector
+
+    # Build sector context
+    description = setor_name
+    keywords_section = ""
+    exclusions_section = ""
+    neg_section = ""
+
+    if setor_id:
+        try:
+            config = get_sector(setor_id)
+            description = config.description or setor_name
+            keywords = sorted(config.keywords)[:5]
+            keywords_section = "\nPalavras-chave do setor: " + ", ".join(keywords)
+            exclusions = sorted(config.exclusions)[:3]
+            if exclusions:
+                exclusions_section = "\nExemplos de NÃO: " + ", ".join(exclusions)
+            _neg_examples = _get_sector_negative_examples(setor_id)
+            if _neg_examples:
+                neg_lines = "; ".join(_neg_examples[:3])
+                neg_section = f"\nARMADILHAS (nome de órgão ≠ setor): {neg_lines}"
+        except (KeyError, Exception):
+            logger.warning(f"Sector '{setor_id}' not found for batch prompt, using fallback")
+
+    # Build numbered item list
+    item_lines = []
+    for i, item in enumerate(items, 1):
+        obj = item["objeto"][:200]  # Truncate each to save tokens
+        val = item["valor"]
+        val_display = f"R$ {val:,.2f}" if val > 0 else "N/I"
+        item_lines.append(f"{i}. [{val_display}] {obj}")
+
+    items_text = "\n".join(item_lines)
+
+    return f"""Você classifica licitações públicas em lote. Analise cada contrato e determine se é PRIMARIAMENTE sobre o setor especificado.
+
+SETOR: {setor_name}
+DESCRIÇÃO: {description}
+{keywords_section}
+{exclusions_section}
+{neg_section}
+
+ATENÇÃO: IGNORE nomes de órgãos/secretarias. Foque no que está sendo CONTRATADO.
+
+CONTRATOS:
+{items_text}
+
+Responda APENAS com uma lista numerada de YES ou NO, uma por linha. Exemplo:
+1. YES
+2. NO
+3. YES"""
+
+
+def _build_zero_match_batch_prompt_terms(
+    termos: list[str],
+    items: list[dict],
+) -> str:
+    """Build a batch prompt for term-based zero-match classification (AC1).
+
+    Args:
+        termos: User's custom search terms
+        items: List of dicts with 'objeto' (str) and 'valor' (float)
+
+    Returns:
+        Prompt string with numbered list of items
+    """
+    termos_display = ", ".join(termos)
+
+    item_lines = []
+    for i, item in enumerate(items, 1):
+        obj = item["objeto"][:200]
+        val = item["valor"]
+        val_display = f"R$ {val:,.2f}" if val > 0 else "N/I"
+        item_lines.append(f"{i}. [{val_display}] {obj}")
+
+    items_text = "\n".join(item_lines)
+
+    return f"""Você classifica licitações públicas em lote. Analise cada contrato e determine se é RELEVANTE para os termos buscados.
+
+Termos buscados: {termos_display}
+
+CONTRATOS:
+{items_text}
+
+Responda APENAS com uma lista numerada de YES ou NO, uma por linha. Exemplo:
+1. YES
+2. NO
+3. YES"""
+
+
+def _parse_batch_response(raw_content: str, expected_count: int) -> Optional[list[bool]]:
+    """Parse a batch YES/NO response into a list of booleans (AC1, AC5).
+
+    Args:
+        raw_content: Raw LLM response with numbered YES/NO lines
+        expected_count: Number of expected responses
+
+    Returns:
+        List of booleans (True=YES, False=NO), or None if count mismatch (AC5)
+    """
+    import re
+    lines = raw_content.strip().split("\n")
+    results = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        # Match patterns like "1. YES", "1.YES", "1) YES", "1 YES", "YES"
+        match = re.match(r'^\d+[\.\):\s]*\s*(YES|NO|SIM|NAO|NÃO)\s*$', line, re.IGNORECASE)
+        if match:
+            decision = match.group(1).upper()
+            results.append(decision in ("YES", "SIM"))
+
+    if len(results) != expected_count:
+        logger.warning(
+            f"UX-402 AC5: Batch response count mismatch: "
+            f"expected={expected_count}, got={len(results)}. "
+            f"Rejecting all (zero noise philosophy). Raw: {raw_content[:300]!r}"
+        )
+        return None
+
+    return results
+
+
+def _classify_zero_match_batch(
+    items: list[dict],
+    setor_name: Optional[str] = None,
+    setor_id: Optional[str] = None,
+    termos_busca: Optional[list[str]] = None,
+    search_id: str = "",
+) -> list[dict]:
+    """Classify multiple zero-match items in a single LLM call (AC1).
+
+    Sends up to 20 items per batch. Returns list of classification results
+    in the same order as input items.
+
+    Args:
+        items: List of dicts with 'objeto' and 'valor' keys
+        setor_name: Sector name (for sector-based classification)
+        setor_id: Sector ID (for sector-aware prompt)
+        termos_busca: Custom search terms (for term-based classification)
+        search_id: For cost tracking
+
+    Returns:
+        List of dicts with 'is_primary', 'confidence', 'evidence', 'rejection_reason',
+        'needs_more_data' keys. Same length as input.
+    """
+    from config import LLM_ZERO_MATCH_BATCH_TIMEOUT
+
+    if not items:
+        return []
+
+    # Build prompt
+    if termos_busca:
+        user_prompt = _build_zero_match_batch_prompt_terms(termos_busca, items)
+    else:
+        user_prompt = _build_zero_match_batch_prompt(setor_id, setor_name or "", items)
+
+    system_prompt = (
+        "Você é um classificador conservador de licitações públicas. "
+        "Em caso de dúvida, responda NO. "
+        "Responda APENAS com uma lista numerada de YES ou NO."
+    )
+
+    try:
+        _llm_start = _time_module.time()
+        response = _get_client().chat.completions.create(
+            model=LLM_MODEL,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            max_tokens=max(len(items) * 15, 100),  # ~15 tokens per "N. YES\n"
+            temperature=LLM_TEMPERATURE,
+            timeout=LLM_ZERO_MATCH_BATCH_TIMEOUT,
+        )
+        _llm_elapsed = _time_module.time() - _llm_start
+
+        raw_content = response.choices[0].message.content.strip()
+
+        # Track token usage
+        usage = getattr(response, "usage", None)
+        if usage and search_id:
+            _log_token_usage(
+                search_id,
+                input_tokens=getattr(usage, "prompt_tokens", 0),
+                output_tokens=getattr(usage, "completion_tokens", 0),
+            )
+
+        # Parse response
+        decisions = _parse_batch_response(raw_content, len(items))
+
+        if decisions is None:
+            # AC5: Count mismatch → reject all
+            LLM_CALLS.labels(model=LLM_MODEL, decision="BATCH_MISMATCH", zone="zero_match_batch").inc()
+            return [
+                {
+                    "is_primary": False,
+                    "confidence": 0,
+                    "evidence": [],
+                    "rejection_reason": "Batch response count mismatch",
+                    "needs_more_data": False,
+                }
+                for _ in items
+            ]
+
+        # Build results
+        results = []
+        yes_count = 0
+        no_count = 0
+        for is_yes in decisions:
+            if is_yes:
+                yes_count += 1
+                results.append({
+                    "is_primary": True,
+                    "confidence": 60,  # Batch has lower confidence than individual
+                    "evidence": [],
+                    "rejection_reason": None,
+                    "needs_more_data": False,
+                })
+            else:
+                no_count += 1
+                results.append({
+                    "is_primary": False,
+                    "confidence": 0,
+                    "evidence": [],
+                    "rejection_reason": "LLM batch: not primarily about sector",
+                    "needs_more_data": False,
+                })
+
+        # Prometheus metrics
+        LLM_DURATION.labels(model=LLM_MODEL, decision="BATCH").observe(_llm_elapsed)
+        LLM_CALLS.labels(model=LLM_MODEL, decision="SIM", zone="zero_match_batch").inc(yes_count)
+        LLM_CALLS.labels(model=LLM_MODEL, decision="NAO", zone="zero_match_batch").inc(no_count)
+
+        logger.info(
+            f"UX-402: Batch zero-match classified {len(items)} items in {_llm_elapsed:.2f}s: "
+            f"{yes_count} YES, {no_count} NO"
+        )
+
+        return results
+
+    except Exception as e:
+        LLM_CALLS.labels(model=LLM_MODEL, decision="ERROR", zone="zero_match_batch").inc()
+        logger.error(f"UX-402: Batch zero-match FAILED: {e}")
+        raise  # Let caller handle fallback
+
+
 def classify_contract_recovery(
     objeto: str,
     valor: float,

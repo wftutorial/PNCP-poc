@@ -138,11 +138,38 @@ describe('TrialExpiringBanner', () => {
     jest.clearAllMocks();
   });
 
-  it('renders when daysRemaining is 1', () => {
+  it('renders "termina hoje" when daysRemaining is 0', () => {
+    render(<TrialExpiringBanner daysRemaining={0} />);
+
+    // COPY-369 AC1: daysRemaining === 0 → "termina hoje"
+    expect(screen.getByText(/acesso completo.*termina hoje/i)).toBeInTheDocument();
+  });
+
+  it('renders "termina amanhã" when daysRemaining is 1', () => {
     render(<TrialExpiringBanner daysRemaining={1} />);
 
-    // STORY-264 AC8: Emphasizes full access ending
+    // COPY-369 AC1: daysRemaining === 1 → "termina amanhã"
     expect(screen.getByText(/acesso completo.*termina amanhã/i)).toBeInTheDocument();
+  });
+
+  it('renders "termina em 3 dias" when daysRemaining is 3', () => {
+    render(<TrialExpiringBanner daysRemaining={3} />);
+
+    // COPY-369 AC1: daysRemaining >= 2 → "termina em {N} dias"
+    expect(screen.getByText(/acesso completo.*termina em 3 dias/i)).toBeInTheDocument();
+  });
+
+  it('renders "termina em 6 dias" when daysRemaining is 6', () => {
+    render(<TrialExpiringBanner daysRemaining={6} />);
+
+    // COPY-369 AC1: daysRemaining >= 2 → "termina em {N} dias"
+    expect(screen.getByText(/acesso completo.*termina em 6 dias/i)).toBeInTheDocument();
+  });
+
+  it('shows updated subtext with daily price (COPY-369 AC2)', () => {
+    render(<TrialExpiringBanner daysRemaining={3} />);
+
+    expect(screen.getByText(/R\$ 9,90\/dia/)).toBeInTheDocument();
   });
 
   it('does not render when daysRemaining > 6 (STORY-319: threshold from day 8)', () => {

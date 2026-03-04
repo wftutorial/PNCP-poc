@@ -15,13 +15,13 @@ O banner `TrialExpiringBanner` exibe fixamente "Seu acesso completo ao SmartLic 
 
 ## Critérios de Aceitação
 
-- [ ] AC1: Copy do banner usa `daysRemaining` dinamicamente:
+- [x] AC1: Copy do banner usa `daysRemaining` dinamicamente:
   - `daysRemaining === 0`: "Seu acesso completo ao SmartLic termina hoje."
   - `daysRemaining === 1`: "Seu acesso completo ao SmartLic termina amanhã."
   - `daysRemaining >= 2`: "Seu acesso completo ao SmartLic termina em {N} dias."
-- [ ] AC2: Subtexto ajustado: "Continue com acesso a todas as funcionalidades a partir de R$ 9,90/dia."
-- [ ] AC3: Testes atualizados para validar copy dinâmica para `daysRemaining` = 0, 1, 3, 6
-- [ ] AC4: CTA permanece "Continuar tendo vantagem" (já está bom)
+- [x] AC2: Subtexto ajustado: "Continue com acesso a todas as funcionalidades a partir de R$ 9,90/dia."
+- [x] AC3: Testes atualizados para validar copy dinâmica para `daysRemaining` = 0, 1, 3, 6
+- [x] AC4: CTA permanece "Continuar tendo vantagem" (já está bom)
 
 ## Copy Recomendada
 

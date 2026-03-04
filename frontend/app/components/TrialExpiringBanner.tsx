@@ -20,6 +20,14 @@ export function TrialExpiringBanner({ daysRemaining, onConvert }: TrialExpiringB
   // STORY-319 AC8: Show from day 8 (6 days remaining) of 14-day trial
   if (dismissed || daysRemaining > 6) return null;
 
+  // COPY-369 AC1: Dynamic copy based on daysRemaining
+  const expiryMessage =
+    daysRemaining === 0
+      ? "Seu acesso completo ao SmartLic termina hoje."
+      : daysRemaining === 1
+        ? "Seu acesso completo ao SmartLic termina amanhã."
+        : `Seu acesso completo ao SmartLic termina em ${daysRemaining} dias.`;
+
   const handleDismiss = () => {
     setDismissed(true);
     trackEvent("trial_expiring_banner_dismissed", { days_remaining: daysRemaining });
@@ -46,10 +54,10 @@ export function TrialExpiringBanner({ daysRemaining, onConvert }: TrialExpiringB
           </div>
           <div className="min-w-0">
             <p className="font-semibold text-amber-800 dark:text-amber-200 text-sm">
-              Seu acesso completo ao SmartLic termina amanhã.
+              {expiryMessage}
             </p>
             <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
-              Mantenha acesso a todas as funcionalidades a partir de R$ 297/mês.
+              Continue com acesso a todas as funcionalidades a partir de R$ 9,90/dia.
             </p>
           </div>
         </div>

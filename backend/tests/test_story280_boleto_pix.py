@@ -642,7 +642,7 @@ class TestAC5BoletoEmailTemplate:
         assert "Joao Silva" in html
         assert "SmartLic Pro" in html
         assert "28/02/2026" in html
-        assert "vence amanha" in html.lower()
+        assert "vence amanhã" in html.lower()
         assert "smartlic.tech/planos" in html
 
     def test_boleto_expired_renders_html(self):

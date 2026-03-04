@@ -237,7 +237,7 @@ def render_alert_digest_email(
       <tr>
         <td style="padding: 10px 16px; background-color: #f5f5f5; border-bottom: 2px solid #eee;">
           <span style="font-size: 13px; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: 0.5px;">
-            Top oportunidades &mdash; {alert_name}
+            Melhores oportunidades &mdash; {alert_name}
           </span>
         </td>
       </tr>

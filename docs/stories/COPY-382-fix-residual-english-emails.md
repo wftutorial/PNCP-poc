@@ -14,10 +14,10 @@ Inglês residual nos templates de email: "Top oportunidades" (anglicismo desnece
 
 ## Critérios de Aceitação
 
-- [ ] AC1: `alert_digest.py:240` — "Top oportunidades" → "Melhores oportunidades"
-- [ ] AC2: Verificar todos os templates de email para inglês residual (buscar palavras em inglês)
-- [ ] AC3: Confirmar que todos os acentos estão corretos nos templates (ver STORY-COPY-370 AC5)
-- [ ] AC4: "Viabilidade media" → "Viabilidade média" em `_VIABILITY_COLORS`
+- [x] AC1: `alert_digest.py:240` — "Top oportunidades" → "Melhores oportunidades"
+- [x] AC2: Verificar todos os templates de email para inglês residual (buscar palavras em inglês)
+- [x] AC3: Confirmar que todos os acentos estão corretos nos templates (ver STORY-COPY-370 AC5)
+- [x] AC4: "Viabilidade media" → "Viabilidade média" em `_VIABILITY_COLORS`
 
 ## Copy Recomendada
 

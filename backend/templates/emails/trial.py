@@ -4,9 +4,9 @@ STORY-321 AC7-AC9: Trial email templates — 6 emails over 14-day trial.
 Compressed sequence (replaces STORY-310 8-email sequence):
 - Day 0:  Welcome — onboarding CTA ("Fazer primeira busca")
 - Day 3:  Engagement — stats de uso, destaques ("Explorar mais setores")
-- Day 7:  Paywall alert — paywall ativa amanha ("Assine antes do limite")
-- Day 10: Valor acumulado — social proof R$X ("Nao perca esse progresso")
-- Day 13: Ultimo dia — escassez ("Assinar agora")
+- Day 7:  Paywall alert — paywall ativa amanhã ("Assine antes do limite")
+- Day 10: Valor acumulado — social proof R$X ("Não perca esse progresso")
+- Day 13: Último dia — escassez ("Assinar agora")
 - Day 16: Expirado — reengajamento com cupom 20% off ("Voltar com 20% off")
 """
 
@@ -80,7 +80,7 @@ def _unsubscribe_block(unsubscribe_url: str) -> str:
     return f"""
     <p style="color: #999; font-size: 12px; text-align: center; margin: 24px 0 0;">
       <a href="{unsubscribe_url}" style="color: #999; text-decoration: underline;">
-        Nao desejo receber emails sobre o trial
+        Não desejo receber emails sobre o trial
       </a>
     </p>"""
 
@@ -106,20 +106,20 @@ def render_trial_welcome_email(user_name: str, unsubscribe_url: str = "") -> str
         unsubscribe_url: URL for one-click unsubscribe.
     """
     body = f"""
-    {_preheader("Seu trial de 14 dias comecou. Faca sua primeira análise agora.")}
+    {_preheader("Seu trial de 14 dias começou. Faça sua primeira análise agora.")}
     <h1 style="color: #333; font-size: 22px; margin: 0 0 16px;">
       Bem-vindo ao SmartLic, {user_name}!
     </h1>
     <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
-      Seu trial de 14 dias comecou. Agora voce tem acesso completo a
-      plataforma de inteligencia em licitacoes mais avancada do Brasil.
+      Seu trial de 14 dias começou. Agora você tem acesso completo à
+      plataforma de inteligência em licitações mais avançada do Brasil.
     </p>
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 24px;">
       <tr>
         <td style="background-color: #e8f5e9; border-radius: 8px; padding: 16px; border-left: 4px solid {SMARTLIC_GREEN};">
           <p style="color: #1b5e20; font-size: 14px; margin: 0 0 12px; font-weight: 600;">
-            3 passos para comecar:
+            3 passos para começar:
           </p>
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
             <tr>
@@ -131,7 +131,7 @@ def render_trial_welcome_email(user_name: str, unsubscribe_url: str = "") -> str
             <tr>
               <td style="padding: 6px 0; color: #555; font-size: 14px;">
                 <strong style="color: {SMARTLIC_GREEN}; font-size: 18px; margin-right: 8px;">2.</strong>
-                Faca sua primeira análise com IA
+                Faça sua primeira análise com IA
               </td>
             </tr>
             <tr>
@@ -152,7 +152,7 @@ def render_trial_welcome_email(user_name: str, unsubscribe_url: str = "") -> str
       </a>
     </p>
     <p style="color: #888; font-size: 13px; text-align: center; margin: 16px 0 0;">
-      Seu trial gratuito de 14 dias comecou hoje.
+      Seu trial gratuito de 14 dias começou hoje.
     </p>
     {_unsubscribe_block(unsubscribe_url)}
     """
@@ -182,25 +182,25 @@ def render_trial_engagement_email(user_name: str, stats: dict, unsubscribe_url: 
     opps = stats.get("opportunities_found", 0)
 
     if has_usage and value > 0:
-        preheader_text = f"Voce ja analisou {_format_brl(value)} em oportunidades"
-        headline = f"Voce ja analisou {_format_brl(value)} em oportunidades"
+        preheader_text = f"Você já analisou {_format_brl(value)} em oportunidades"
+        headline = f"Você já analisou {_format_brl(value)} em oportunidades"
         intro = (
-            f"Ola, {user_name}! Em apenas 3 dias no SmartLic, voce ja esta "
-            f"descobrindo oportunidades reais de licitacao."
+            f"Olá, {user_name}! Em apenas 3 dias no SmartLic, você já está "
+            f"descobrindo oportunidades reais de licitação."
         )
     elif has_usage and opps > 0:
         preheader_text = f"{opps} oportunidades encontradas em 3 dias"
         headline = f"{opps} oportunidades encontradas em 3 dias"
         intro = (
-            f"Ola, {user_name}! Voce ja encontrou {opps} oportunidades. "
+            f"Olá, {user_name}! Você já encontrou {opps} oportunidades. "
             f"Explore mais setores para ampliar seus resultados."
         )
     else:
-        preheader_text = "Voce ainda tem 11 dias para descobrir oportunidades"
-        headline = "Voce ainda tem 11 dias para descobrir oportunidades"
+        preheader_text = "Você ainda tem 11 dias para descobrir oportunidades"
+        headline = "Você ainda tem 11 dias para descobrir oportunidades"
         intro = (
-            f"Ola, {user_name}! Seu trial do SmartLic esta apenas comecando e "
-            f"ha oportunidades esperando por voce. Faca sua primeira análise agora!"
+            f"Olá, {user_name}! Seu trial do SmartLic está apenas começando e "
+            f"há oportunidades esperando por você. Faça sua primeira análise agora!"
         )
 
     body = f"""
@@ -250,18 +250,18 @@ def render_trial_paywall_alert_email(user_name: str, stats: dict, unsubscribe_ur
     value = stats.get("total_value_estimated", 0.0)
 
     if has_usage and value > 0:
-        value_line = f"Voce ja descobriu <strong>{_format_brl(value)}</strong> em oportunidades. "
+        value_line = f"Você já descobriu <strong>{_format_brl(value)}</strong> em oportunidades. "
     else:
         value_line = ""
 
     body = f"""
-    {_preheader("A partir de amanha, resultados ficam limitados. Assine antes.")}
+    {_preheader("A partir de amanhã, resultados ficam limitados. Assine antes.")}
     <h1 style="color: #333; font-size: 22px; margin: 0 0 16px;">
-      Metade do trial — a partir de amanha, preview limitado
+      Metade do trial — a partir de amanhã, preview limitado
     </h1>
     <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
-      Ola, {user_name}! Voce esta na metade do seu trial de 14 dias.
-      {value_line}A partir de amanha, os resultados de busca serao
+      Olá, {user_name}! Você está na metade do seu trial de 14 dias.
+      {value_line}A partir de amanhã, os resultados de busca serão
       exibidos em modo preview (limitado a 10 resultados).
     </p>
     {_stats_block(stats, show_pipeline=True) if has_usage else ''}
@@ -270,7 +270,7 @@ def render_trial_paywall_alert_email(user_name: str, stats: dict, unsubscribe_ur
       <tr>
         <td style="background-color: #fff3e0; border-radius: 8px; padding: 16px; border-left: 4px solid #ff9800;">
           <p style="color: #e65100; font-size: 14px; margin: 0; font-weight: 600;">
-            O que muda a partir de amanha:
+            O que muda a partir de amanhã:
           </p>
           <ul style="color: #555; font-size: 14px; margin: 8px 0 0; padding-left: 20px;">
             <li>Resultados limitados a 10 por busca (preview)</li>
@@ -283,7 +283,7 @@ def render_trial_paywall_alert_email(user_name: str, stats: dict, unsubscribe_ur
 
     <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
       Assine o SmartLic Pro <strong>antes do limite</strong> e mantenha acesso
-      completo a todos os resultados, pipeline ilimitado e relatorios Excel.
+      completo a todos os resultados, pipeline ilimitado e relatórios Excel.
     </p>
 
     <p style="text-align: center; margin: 24px 0 16px;">
@@ -299,7 +299,7 @@ def render_trial_paywall_alert_email(user_name: str, stats: dict, unsubscribe_ur
     """
 
     return email_base(
-        title="Metade do trial — preview limitado amanha",
+        title="Metade do trial — preview limitado amanhã",
         body_html=body,
         is_transactional=False,
         unsubscribe_url=unsubscribe_url,
@@ -324,10 +324,10 @@ def render_trial_value_email(user_name: str, stats: dict, unsubscribe_url: str =
 
     if value > 0:
         big_value = _format_brl(value)
-        preheader_text = f"Voce ja analisou {big_value} em oportunidades. Nao perca."
-        headline = f"Voce ja analisou {big_value}"
+        preheader_text = f"Você já analisou {big_value} em oportunidades. Não perca."
+        headline = f"Você já analisou {big_value}"
     elif opps > 0:
-        preheader_text = f"{opps} oportunidades encontradas. Nao perca esse progresso."
+        preheader_text = f"{opps} oportunidades encontradas. Não perca esse progresso."
         headline = f"{opps} oportunidades encontradas"
     else:
         preheader_text = "Restam 4 dias. Descubra oportunidades antes que seu trial expire."
@@ -361,19 +361,19 @@ def render_trial_value_email(user_name: str, stats: dict, unsubscribe_url: str =
       {headline}
     </h1>
     <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
-      Ola, {user_name}! Seu trial termina em 4 dias. Veja o progresso que voce
-      construiu ate agora:
+      Olá, {user_name}! Seu trial termina em 4 dias. Veja o progresso que você
+      construiu até agora:
     </p>
     {value_highlight}
     {_stats_block(stats, show_pipeline=True) if value == 0 and opps > 0 else ''}
     <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
-      Nao perca esse progresso. Com o SmartLic Pro, voce mantem acesso a tudo:
-      análises ilimitadas, IA de classificacao, pipeline e relatorios Excel.
+      Não perca esse progresso. Com o SmartLic Pro, você mantém acesso a tudo:
+      análises ilimitadas, IA de classificação, pipeline e relatórios Excel.
     </p>
     <p style="text-align: center; margin: 24px 0 16px;">
       <a href="{FRONTEND_URL}/planos" class="btn"
          style="display: inline-block; padding: 14px 32px; background-color: {SMARTLIC_GREEN}; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
-        Nao perca esse progresso
+        Não perca esse progresso
       </a>
     </p>
     <p style="color: #888; font-size: 13px; text-align: center; margin: 16px 0 0;">
@@ -383,7 +383,7 @@ def render_trial_value_email(user_name: str, stats: dict, unsubscribe_url: str =
     """
 
     return email_base(
-        title="Voce ja analisou oportunidades — SmartLic",
+        title="Você já analisou oportunidades — SmartLic",
         body_html=body,
         is_transactional=False,
         unsubscribe_url=unsubscribe_url,
@@ -406,18 +406,18 @@ def render_trial_last_day_email(user_name: str, stats: dict, unsubscribe_url: st
     opps = stats.get("opportunities_found", 0)
 
     if value > 0:
-        preheader_text = f"Amanha voce perde acesso a {_format_brl(value)} em oportunidades."
+        preheader_text = f"Amanhã você perde acesso a {_format_brl(value)} em oportunidades."
     else:
-        preheader_text = "Amanha seu acesso expira. Assine agora."
+        preheader_text = "Amanhã seu acesso expira. Assine agora."
 
     body = f"""
     {_preheader(preheader_text)}
     <h1 style="color: #d32f2f; font-size: 22px; margin: 0 0 16px;">
-      Amanha seu acesso expira — nao perca o que voce construiu
+      Amanhã seu acesso expira — não perca o que você construiu
     </h1>
     <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
-      Ola, {user_name}! Este e o <strong>ultimo dia</strong> do seu trial no SmartLic.
-      Amanha voce perdera acesso as funcionalidades completas.
+      Olá, {user_name}! Este é o <strong>último dia</strong> do seu trial no SmartLic.
+      Amanhã você perderá acesso às funcionalidades completas.
     </p>
     <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 8px;">
       <strong>Resumo do seu trial:</strong>
@@ -428,10 +428,10 @@ def render_trial_last_day_email(user_name: str, stats: dict, unsubscribe_url: st
       <tr>
         <td style="background-color: #fff3e0; border-radius: 8px; padding: 16px; border-left: 4px solid #ff9800;">
           <p style="color: #e65100; font-size: 14px; margin: 0; font-weight: 600;">
-            Ative hoje e nao perca nenhuma oportunidade
+            Ative hoje e não perca nenhuma oportunidade
           </p>
           <p style="color: #555; font-size: 14px; margin: 8px 0 0;">
-            SmartLic Pro — R$ 397/mes &nbsp;|&nbsp;
+            SmartLic Pro — R$ 397/mês &nbsp;|&nbsp;
             Economia de 20% no plano anual
           </p>
         </td>
@@ -441,14 +441,14 @@ def render_trial_last_day_email(user_name: str, stats: dict, unsubscribe_url: st
     <p style="text-align: center; margin: 24px 0 16px;">
       <a href="{FRONTEND_URL}/planos" class="btn"
          style="display: inline-block; padding: 14px 32px; background-color: #d32f2f; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
-        Assinar agora — R$ 397/mes
+        Assinar agora — R$ 397/mês
       </a>
     </p>
     {_unsubscribe_block(unsubscribe_url)}
     """
 
     return email_base(
-        title="Ultimo dia de trial — SmartLic",
+        title="Último dia de trial — SmartLic",
         body_html=body,
         is_transactional=False,
         unsubscribe_url=unsubscribe_url,
@@ -478,9 +478,9 @@ def render_trial_expired_email(
 
     if opps > 0 or pipeline > 0:
         if pipeline > 0:
-            headline = f"Suas {pipeline} oportunidades estao esperando por voce"
+            headline = f"Suas {pipeline} oportunidades estão esperando por você"
         else:
-            headline = f"Suas {opps} oportunidades estao esperando por voce"
+            headline = f"Suas {opps} oportunidades estão esperando por você"
         preheader_text = f"Sentimos sua falta. Volte com 20% off."
     else:
         headline = "Sentimos sua falta"
@@ -496,7 +496,7 @@ def render_trial_expired_email(
       {headline}
     </h1>
     <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
-      Ola, {user_name}! Seu trial expirou, mas seus dados ficam salvos por 30 dias.
+      Olá, {user_name}! Seu trial expirou, mas seus dados ficam salvos por 30 dias.
       Reative o acesso para continuar de onde parou.
     </p>
     {_stats_block(stats, show_pipeline=True) if (opps > 0 or pipeline > 0) else ''}
@@ -505,7 +505,7 @@ def render_trial_expired_email(
       <tr>
         <td style="background-color: #e8f5e9; border-radius: 8px; padding: 16px; border-left: 4px solid {SMARTLIC_GREEN};">
           <p style="color: #1b5e20; font-size: 14px; margin: 0;">
-            Seus dados ficam salvos por 30 dias — análises, pipeline e historico.
+            Seus dados ficam salvos por 30 dias — análises, pipeline e histórico.
           </p>
         </td>
       </tr>
@@ -522,7 +522,7 @@ def render_trial_expired_email(
             20% OFF
           </p>
           <p style="color: rgba(255,255,255,0.85); font-size: 14px; margin: 4px 0 0;">
-            no primeiro mes do SmartLic Pro
+            no primeiro mês do SmartLic Pro
           </p>
         </td>
       </tr>

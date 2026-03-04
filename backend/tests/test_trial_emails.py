@@ -144,7 +144,7 @@ class TestWelcomeEmail:
     def test_contains_buscar_cta(self):
         html = render_trial_welcome_email("Test")
         assert "/buscar" in html
-        assert "primeira busca" in html.lower()
+        assert "primeira análise" in html.lower()
 
     def test_contains_preheader(self):
         html = render_trial_welcome_email("Test")
@@ -217,7 +217,7 @@ class TestPaywallAlertEmail:
 
     def test_mentions_tomorrow(self):
         html = render_trial_paywall_alert_email("Test", SAMPLE_STATS)
-        assert "amanha" in html.lower()
+        assert "amanhã" in html.lower()
 
     def test_lists_what_changes(self):
         """AC7: Lists what changes after paywall."""
@@ -273,9 +273,9 @@ class TestValueEmail:
         assert "font-size: 36px" in html  # Big number
 
     def test_cta_nao_perca(self):
-        """AC1: CTA is 'Nao perca esse progresso'."""
+        """AC1: CTA is 'Não perca esse progresso'."""
         html = render_trial_value_email("Test", SAMPLE_STATS)
-        assert "Nao perca esse progresso" in html
+        assert "Não perca esse progresso" in html
 
     def test_links_to_planos(self):
         html = render_trial_value_email("Test", SAMPLE_STATS)
@@ -333,7 +333,7 @@ class TestLastDayEmail:
 
     def test_mentions_tomorrow(self):
         html = render_trial_last_day_email("Test", {})
-        assert "Amanha" in html
+        assert "Amanhã" in html
 
     def test_cta_assinar_agora(self):
         """AC1: CTA is 'Assinar agora'."""
@@ -421,7 +421,7 @@ class TestExpiredEmail:
             coupon_checkout_url="https://smartlic.tech/planos?coupon=X",
         )
         assert "20% OFF" in html
-        assert "primeiro mes" in html.lower()
+        assert "primeiro mês" in html.lower()
 
 
 # ============================================================================

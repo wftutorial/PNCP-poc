@@ -16,7 +16,7 @@ def render_boleto_reminder_email(
     """
     Render boleto payment reminder email.
 
-    STORY-280 AC5: Sent day 2 after boleto generation (vence amanha).
+    STORY-280 AC5: Sent day 2 after boleto generation (vence amanhã).
 
     Args:
         user_name: User's display name.
@@ -25,14 +25,14 @@ def render_boleto_reminder_email(
     """
     body = f"""
     <h1 style="color: #333; font-size: 22px; margin: 0 0 16px;">
-      Seu boleto vence amanha
+      Seu boleto vence amanhã
     </h1>
     <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
-      Ola, {user_name}! Seu boleto para ativacao do plano <strong>{plan_name}</strong>
+      Olá, {user_name}! Seu boleto para ativação do plano <strong>{plan_name}</strong>
       vence em <strong style="color: #ff9800;">{boleto_due_date}</strong>.
     </p>
     <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
-      Efetue o pagamento para garantir a ativacao do seu plano sem interrupcoes.
+      Efetue o pagamento para garantir a ativação do seu plano sem interrupções.
     </p>
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
@@ -54,8 +54,8 @@ def render_boleto_reminder_email(
     </table>
 
     <p style="color: #555; font-size: 14px; line-height: 1.6; margin: 0 0 24px;">
-      Se voce ja efetuou o pagamento, por favor desconsidere este lembrete.
-      O processamento do boleto pode levar ate 1 dia util.
+      Se você já efetuou o pagamento, por favor desconsidere este lembrete.
+      O processamento do boleto pode levar até 1 dia útil.
     </p>
 
     <p style="text-align: center; margin: 16px 0;">
@@ -68,7 +68,7 @@ def render_boleto_reminder_email(
     """
 
     return email_base(
-        title="Lembrete: Boleto vence amanha — SmartLic",
+        title="Lembrete: Boleto vence amanhã — SmartLic",
         body_html=body,
         is_transactional=True,
     )
@@ -92,12 +92,12 @@ def render_boleto_expired_email(
       Seu boleto expirou
     </h1>
     <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
-      Ola, {user_name}! O boleto para ativacao do plano <strong>{plan_name}</strong>
+      Olá, {user_name}! O boleto para ativação do plano <strong>{plan_name}</strong>
       expirou sem pagamento.
     </p>
     <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
-      Nao se preocupe — voce pode gerar um novo boleto a qualquer momento
-      na pagina de planos.
+      Não se preocupe — você pode gerar um novo boleto a qualquer momento
+      na página de planos.
     </p>
 
     <p style="text-align: center; margin: 24px 0 16px;">
@@ -109,7 +109,7 @@ def render_boleto_expired_email(
     </p>
 
     <p style="color: #888; font-size: 14px; line-height: 1.6; margin: 24px 0 0;">
-      Se preferir, voce tambem pode pagar com cartao de credito para ativacao imediata.
+      Se preferir, você também pode pagar com cartão de crédito para ativação imediata.
     </p>
     """
 

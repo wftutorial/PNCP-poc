@@ -596,7 +596,7 @@ function BidCard({
                     bidId={item.pncp_id || `${idPrefix}-${index}`}
                     setorId={setorId}
                     bidObjeto={item.objeto}
-                    bidValor={item.valor}
+                    bidValor={item.valor ?? undefined}
                     bidUf={item.uf}
                     confidenceScore={typeof item.confidence === "string" ? (item.confidence === "high" ? 90 : item.confidence === "medium" ? 60 : 30) : undefined}
                     relevanceSource={item.relevance_source || undefined}
@@ -618,7 +618,7 @@ function BidCard({
         bidData={{
           objeto: item.objeto,
           orgao: item.orgao,
-          valor: item.valor,
+          valor: item.valor ?? undefined,
           modalidade: item.modalidade ?? undefined,
           uf: item.uf,
         }}

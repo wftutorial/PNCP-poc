@@ -192,10 +192,10 @@ describe("Pipeline empty state (AC1-AC3)", () => {
   it("AC1: shows educative empty state with 3 steps when no items", () => {
     render(<PipelinePage />);
 
-    expect(screen.getByText("Seu Pipeline de Oportunidades")).toBeInTheDocument();
-    expect(screen.getByText(/Busque licitações em/)).toBeInTheDocument();
-    expect(screen.getByText(/Clique em "Acompanhar"/)).toBeInTheDocument();
-    expect(screen.getByText(/Arraste entre as colunas/)).toBeInTheDocument();
+    expect(screen.getByText("Aqui você acompanha suas oportunidades")).toBeInTheDocument();
+    expect(screen.getByText(/Faça uma análise em Buscar/)).toBeInTheDocument();
+    expect(screen.getByText(/Clique em Acompanhar na oportunidade desejada/)).toBeInTheDocument();
+    expect(screen.getByText(/Arraste entre colunas conforme o processo avança/)).toBeInTheDocument();
   });
 
   it("AC2: CTA links to /buscar", () => {
@@ -228,7 +228,7 @@ describe("Pipeline empty state (AC1-AC3)", () => {
     render(<PipelinePage />);
 
     await waitFor(() => {
-      expect(screen.queryByText("Seu Pipeline de Oportunidades")).not.toBeInTheDocument();
+      expect(screen.queryByText("Aqui você acompanha suas oportunidades")).not.toBeInTheDocument();
     });
     expect(screen.getAllByTestId("pipeline-column").length).toBeGreaterThan(0);
   });

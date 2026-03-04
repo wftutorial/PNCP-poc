@@ -15,13 +15,13 @@ O empty state atual do pipeline é funcional mas clínico.
 
 ## Critérios de Aceitação
 
-- [ ] AC1: Title: "Seu Pipeline de Oportunidades" → "Aqui você acompanha suas oportunidades"
-- [ ] AC2: Description: "Arraste licitações para cá e acompanhe do início ao fim." → "Encontre oportunidades na busca e traga para cá. Arraste entre as colunas para acompanhar cada etapa."
-- [ ] AC3: Steps reescritos:
+- [x] AC1: Title: "Seu Pipeline de Oportunidades" → "Aqui você acompanha suas oportunidades"
+- [x] AC2: Description: "Arraste licitações para cá e acompanhe do início ao fim." → "Encontre oportunidades na busca e traga para cá. Arraste entre as colunas para acompanhar cada etapa."
+- [x] AC3: Steps reescritos:
   - "Busque licitações em Buscar" → "Faça uma análise em Buscar"
   - "Clique em Acompanhar numa oportunidade" → "Clique em Acompanhar na oportunidade desejada"
   - "Arraste entre as colunas conforme avança" → "Arraste entre colunas conforme o processo avança"
-- [ ] AC4: Testes atualizados
+- [x] AC4: Testes atualizados
 
 ## Copy Recomendada
 

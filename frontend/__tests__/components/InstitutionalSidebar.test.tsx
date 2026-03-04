@@ -57,8 +57,8 @@ describe('InstitutionalSidebar', () => {
       expect(screen.getByText('estados cobertos')).toBeInTheDocument();
       expect(screen.getByText('15')).toBeInTheDocument();
       expect(screen.getByText('setores especializados')).toBeInTheDocument();
-      expect(screen.getByText('24h')).toBeInTheDocument();
-      expect(screen.getByText('atualização diária')).toBeInTheDocument();
+      expect(screen.getByText('3')).toBeInTheDocument();
+      expect(screen.getByText('fontes oficiais integradas')).toBeInTheDocument();
     });
   });
 

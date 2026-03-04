@@ -154,7 +154,7 @@ const SIDEBAR_CONTENT: SidebarContentMap = {
     stats: [
       { value: "27", label: "estados cobertos" },
       { value: "15", label: "setores especializados" },
-      { value: "24h", label: "atualização diária" },
+      { value: "3", label: "fontes oficiais integradas" },
     ],
   },
   signup: {

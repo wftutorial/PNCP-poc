@@ -32,6 +32,9 @@ import { formatCurrencyBR } from "../../lib/format-currency";
 
 const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || "SmartLic.tech";
 
+// UX-406: Feature flag — organizations/teams not yet implemented in backend
+const ORGS_ENABLED = process.env.NEXT_PUBLIC_ORGS_ENABLED === "true";
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -167,7 +170,7 @@ function QuotaRing({ used, total }: { used: number; total: number }) {
         </text>
       </svg>
       <p className="text-xs text-[var(--ink-secondary)] mt-1">
-        {used} de {total === -1 ? "ilimitado" : total} buscas
+        {used} de {total === -1 ? "ilimitado" : total} análises
       </p>
     </div>
   );
@@ -249,8 +252,9 @@ export default function DashboardPage() {
   }, [session?.access_token]);
 
   // AC19: Fetch org membership — show team toggle only for owners/admins
+  // UX-406: Gated by ORGS_ENABLED — backend endpoint doesn't exist yet
   useEffect(() => {
-    if (!session?.access_token) return;
+    if (!ORGS_ENABLED || !session?.access_token) return;
     fetch("/api/organizations/me", {
       headers: { Authorization: `Bearer ${session.access_token}` },
     })
@@ -267,8 +271,9 @@ export default function DashboardPage() {
   }, [session?.access_token]);
 
   // AC19: Fetch team dashboard data when switching to team view
+  // UX-406: Gated by ORGS_ENABLED — backend endpoint doesn't exist yet
   useEffect(() => {
-    if (viewMode !== "team" || !userOrg || !session?.access_token) return;
+    if (!ORGS_ENABLED || viewMode !== "team" || !userOrg || !session?.access_token) return;
     setTeamLoading(true);
     fetch(`/api/organizations/${userOrg.id}/dashboard`, {
       headers: { Authorization: `Bearer ${session.access_token}` },
@@ -362,17 +367,17 @@ export default function DashboardPage() {
 
     const rows = [
       ["Metrica", "Valor"],
-      ["Total de Buscas", String(summary.total_searches)],
+      ["Total de Análises", String(summary.total_searches)],
       ["Total de Downloads", String(summary.total_downloads)],
       ["Oportunidades Encontradas", String(summary.total_opportunities)],
       ["Valor Total Descoberto", String(summary.total_value_discovered)],
       ["Horas Economizadas", String(summary.estimated_hours_saved)],
       ["Taxa de Sucesso", `${summary.success_rate}%`],
       [""],
-      ["Top UFs", "Buscas", "Valor"],
+      ["Top UFs", "Análises", "Valor"],
       ...dimensions.top_ufs.map((u) => [u.name, String(u.count), String(u.value)]),
       [""],
-      ["Top Setores", "Buscas", "Valor"],
+      ["Top Setores", "Análises", "Valor"],
       ...dimensions.top_sectors.map((s) => [getSectorDisplayName(s.name), String(s.count), String(s.value)]),
     ];
 
@@ -574,7 +579,7 @@ export default function DashboardPage() {
               {`Seu Painel de Inteligência`}
             </h2>
             <p className="text-[var(--ink-secondary)] mb-6 max-w-md mx-auto">
-              {`Após suas primeiras buscas, você verá aqui:`}
+              {`Após suas primeiras análises, você verá aqui:`}
             </p>
             <ul className="text-left max-w-sm mx-auto mb-8 space-y-2">
               <li className="flex items-center gap-2 text-sm text-[var(--ink-secondary)]">
@@ -596,7 +601,7 @@ export default function DashboardPage() {
                          rounded-button hover:bg-[var(--brand-blue)] transition-colors font-medium"
               data-testid="empty-state-cta"
             >
-              Fazer primeira busca
+              Fazer primeira análise
 
               <svg aria-hidden="true" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
@@ -666,7 +671,8 @@ export default function DashboardPage() {
       />
       <div className="max-w-6xl mx-auto py-8 px-4">
         {/* AC19: Team/personal data toggle — shown only to org owners/admins */}
-        {userOrg && (
+        {/* UX-406: Gated by ORGS_ENABLED feature flag */}
+        {ORGS_ENABLED && userOrg && (
           <div className="flex items-center gap-2 mb-4" data-testid="team-toggle">
             <button
               onClick={() => setViewMode("personal")}
@@ -697,7 +703,7 @@ export default function DashboardPage() {
         )}
 
         {/* AC19: Team loading spinner */}
-        {viewMode === "team" && teamLoading && (
+        {ORGS_ENABLED && viewMode === "team" && teamLoading && (
           <div className="flex items-center gap-2 mb-4 text-sm text-[var(--ink-secondary)]" data-testid="team-loading">
             <div className="w-4 h-4 border-2 border-[var(--brand-blue)] border-t-transparent rounded-full animate-spin" />
             Carregando dados da equipe...
@@ -710,7 +716,7 @@ export default function DashboardPage() {
             Membro desde {formatDate(summary.member_since)}
           </p>
         )}
-        {viewMode === "team" && userOrg && (
+        {ORGS_ENABLED && viewMode === "team" && userOrg && (
           <p className="text-sm text-[var(--ink-muted)] mb-6">
             Dados agregados da equipe — {userOrg.name}
           </p>
@@ -752,14 +758,14 @@ export default function DashboardPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 mb-8">
             <StatCard
               icon={"\uD83D\uDD0D"}
-              label="Buscas realizadas"
+              label="Análises realizadas"
               value={formatNumber(summary.total_searches)}
             />
             <StatCard
               icon={"\uD83D\uDCCB"}
               label="Oportunidades encontradas"
               value={formatNumber(summary.total_opportunities)}
-              subtitle={`~${summary.avg_results_per_search} por busca`}
+              subtitle={`~${summary.avg_results_per_search} por análise`}
             />
             <StatCard
               icon={"\uD83D\uDCB0"}
@@ -771,8 +777,8 @@ export default function DashboardPage() {
               icon={"\u23F1\uFE0F"}
               label="Horas economizadas"
               value={`${formatNumber(summary.estimated_hours_saved)}h`}
-              subtitle="vs busca manual em portais"
-              tooltip={`Estimativa: ${formatNumber(summary.total_searches)} buscas × 2h por busca manual em portais governamentais`}
+              subtitle="vs análise manual em portais"
+              tooltip={`Estimativa: ${formatNumber(summary.total_searches)} análises × 2h por análise manual em portais governamentais`}
             />
             <StatCard
               icon={"\u2705"}
@@ -852,7 +858,7 @@ export default function DashboardPage() {
                     stroke="#116dff"
                     strokeWidth={2}
                     dot={{ fill: "#116dff", r: 4 }}
-                    name="Buscas"
+                    name="Análises"
                   />
                   <Line
                     type="monotone"
@@ -877,7 +883,7 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
             <div className="bg-[var(--surface-0)] border border-[var(--border)] rounded-card p-6" data-testid="dimensions-error">
               <h2 className="text-lg font-display font-semibold text-[var(--ink)] mb-4">
-                Estados mais buscados
+                Estados mais analisados
               </h2>
               <ErrorStateWithRetry
                 message={`Dados indisponíveis.`}
@@ -887,7 +893,7 @@ export default function DashboardPage() {
             </div>
             <div className="bg-[var(--surface-0)] border border-[var(--border)] rounded-card p-6" data-testid="dimensions-error">
               <h2 className="text-lg font-display font-semibold text-[var(--ink)] mb-4">
-                Setores mais buscados
+                Setores mais analisados
               </h2>
               <ErrorStateWithRetry
                 message={`Dados indisponíveis.`}
@@ -901,7 +907,7 @@ export default function DashboardPage() {
             {/* Top UFs */}
             <div className="bg-[var(--surface-0)] border border-[var(--border)] rounded-card p-6">
               <h2 className="text-lg font-display font-semibold text-[var(--ink)] mb-4">
-                Estados mais buscados
+                Estados mais analisados
               </h2>
               {dimensions && dimensions.top_ufs.length > 0 ? (
                 <div className="flex gap-6">
@@ -957,7 +963,7 @@ export default function DashboardPage() {
             {/* Top Sectors */}
             <div className="bg-[var(--surface-0)] border border-[var(--border)] rounded-card p-6">
               <h2 className="text-lg font-display font-semibold text-[var(--ink)] mb-4">
-                Setores mais buscados
+                Setores mais analisados
               </h2>
               {sectorChartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={200}>
@@ -976,7 +982,7 @@ export default function DashboardPage() {
                       tickFormatter={(v: string) => v.length > 22 ? v.slice(0, 20) + "\u2026" : v}
                     />
                     <Tooltip content={<ChartTooltip />} />
-                    <Bar dataKey="count" fill="#116dff" radius={[0, 4, 4, 0]} name="Buscas" />
+                    <Bar dataKey="count" fill="#116dff" radius={[0, 4, 4, 0]} name="Análises" />
                   </BarChart>
                 </ResponsiveContainer>
               ) : (

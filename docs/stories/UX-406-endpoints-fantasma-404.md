@@ -13,20 +13,20 @@ A página de dashboard faz fetch para `/api/organizations/me` (linha 254) — en
 - O `.catch(() => {})` silencia o erro no JS mas o 404 ainda aparece no console do browser e no proxy log.
 
 ## Critérios de Aceitação
-- [ ] AC1: Encapsular chamadas a `/api/organizations/me` e `/api/organizations/{id}/dashboard` dentro de feature flag `NEXT_PUBLIC_ORGS_ENABLED` (default: `false`).
-- [ ] AC2: Quando feature flag desativada, não fazer nenhum fetch e não renderizar toggle Team/Personal.
-- [ ] AC3: Nenhum console error 404 no dashboard quando feature desativada.
-- [ ] AC4: Manter todo o código de organizações intacto (não deletar), apenas gated pela feature flag para quando o backend for implementado.
-- [ ] AC5: Adicionar `NEXT_PUBLIC_ORGS_ENABLED` ao `.env.example` com documentação.
+- [x] AC1: Encapsular chamadas a `/api/organizations/me` e `/api/organizations/{id}/dashboard` dentro de feature flag `NEXT_PUBLIC_ORGS_ENABLED` (default: `false`).
+- [x] AC2: Quando feature flag desativada, não fazer nenhum fetch e não renderizar toggle Team/Personal.
+- [x] AC3: Nenhum console error 404 no dashboard quando feature desativada.
+- [x] AC4: Manter todo o código de organizações intacto (não deletar), apenas gated pela feature flag para quando o backend for implementado.
+- [x] AC5: Adicionar `NEXT_PUBLIC_ORGS_ENABLED` ao `.env.example` com documentação.
 
 ## Arquivos Impactados
 - `frontend/app/dashboard/page.tsx` — Feature flag guard nos useEffects de organização.
 - `frontend/.env.example` — Nova variável documentada.
 
 ## Testes Necessários
-- [ ] Teste que dashboard NÃO faz fetch a `/api/organizations/me` quando flag desativada.
-- [ ] Teste que toggle Team/Personal não renderiza quando flag desativada.
-- [ ] Teste que dashboard funciona normalmente quando flag desativada (sem regressão em analytics).
+- [x] Teste que dashboard NÃO faz fetch a `/api/organizations/me` quando flag desativada.
+- [x] Teste que toggle Team/Personal não renderiza quando flag desativada.
+- [x] Teste que dashboard funciona normalmente quando flag desativada (sem regressão em analytics).
 
 ## Notas Técnicas
 - O pattern de feature flags frontend já existe no projeto. Seguir o mesmo padrão.

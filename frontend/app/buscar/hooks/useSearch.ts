@@ -833,7 +833,7 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
             modalidades: filters.modalidades.length > 0 ? filters.modalidades : undefined,
             valor_minimo: filters.valorMin,
             valor_maximo: filters.valorMax,
-            esferas: filters.esferas.length > 0 ? filters.esferas : undefined,
+            esferas: filters.esferas.length > 0 && filters.esferas.length < 3 ? filters.esferas : undefined,  // UX-403 AC3: all 3 selected = no filter
             municipios: filters.municipios.length > 0 ? filters.municipios.map(m => m.codigo) : undefined,
             ordenacao: filters.ordenacao,
             force_fresh: forceFresh || undefined,

@@ -13,12 +13,12 @@ O filtro de esfera governamental (Federal/Estadual/Municipal) inicia com todas a
 - `frontend/app/buscar/components/FilterPanel.tsx:62`: Accordion "Filtragem por Esfera" colapsado por padrão.
 
 ## Critérios de Aceitação
-- [ ] AC1: Backend (`filter.py`): Quando `esferas=["F", "E", "M"]` (todas selecionadas), tratar como `esferas=None` e pular o filtro inteiramente.
-- [ ] AC2: Backend (`filter.py`): Quando esfera não pode ser determinada (sem `esferaId` e sem match por keywords), incluir a licitação (fail-open) em vez de rejeitar (fail-close). Adicionar campo `_esfera_inferred: bool` para rastreabilidade.
-- [ ] AC3: Frontend (`useSearchFilters.ts`): Quando todas as 3 esferas estão selecionadas, enviar `esferas: undefined` (não enviar o campo) na request ao backend.
-- [ ] AC4: Frontend (`FilterPanel.tsx`): Renomear label "Filtragem por Esfera" para "Filtros avançados de localização" para melhor discoverability.
-- [ ] AC5: Frontend: Adicionar indicador visual (badge com count) no botão do accordion quando filtros de localização estão ativos e diferem do padrão.
-- [ ] AC6: Logar `stats["esfera_indeterminada"]` count no backend para monitorar quantas licitações têm esfera desconhecida.
+- [x] AC1: Backend (`filter.py`): Quando `esferas=["F", "E", "M"]` (todas selecionadas), tratar como `esferas=None` e pular o filtro inteiramente.
+- [x] AC2: Backend (`filter.py`): Quando esfera não pode ser determinada (sem `esferaId` e sem match por keywords), incluir a licitação (fail-open) em vez de rejeitar (fail-close). Adicionar campo `_esfera_inferred: bool` para rastreabilidade.
+- [x] AC3: Frontend (`useSearchFilters.ts`): Quando todas as 3 esferas estão selecionadas, enviar `esferas: undefined` (não enviar o campo) na request ao backend.
+- [x] AC4: Frontend (`FilterPanel.tsx`): Renomear label "Filtragem por Esfera" para "Filtros avançados de localização" para melhor discoverability.
+- [x] AC5: Frontend: Adicionar indicador visual (badge com count) no botão do accordion quando filtros de localização estão ativos e diferem do padrão.
+- [x] AC6: Logar `stats["esfera_indeterminada"]` count no backend para monitorar quantas licitações têm esfera desconhecida.
 
 ## Arquivos Impactados
 - `backend/filter.py` — Lógica de fail-open para esfera indeterminada; skip quando todas selecionadas.
@@ -27,11 +27,11 @@ O filtro de esfera governamental (Federal/Estadual/Municipal) inicia com todas a
 - `frontend/app/buscar/components/FilterPanel.tsx` — Renomear label, badge de filtros ativos.
 
 ## Testes Necessários
-- [ ] Backend: Teste que `esferas=["F","E","M"]` retorna mesma quantidade que `esferas=None`.
-- [ ] Backend: Teste que licitação sem `esferaId` é incluída (fail-open).
-- [ ] Backend: Teste que `stats["esfera_indeterminada"]` é incrementado corretamente.
-- [ ] Frontend: Teste que 3 esferas selecionadas não envia campo `esferas` no request body.
-- [ ] Frontend: Teste que accordion mostra badge quando filtro difere do padrão.
+- [x] Backend: Teste que `esferas=["F","E","M"]` retorna mesma quantidade que `esferas=None`.
+- [x] Backend: Teste que licitação sem `esferaId` é incluída (fail-open).
+- [x] Backend: Teste que `stats["esfera_indeterminada"]` é incrementado corretamente.
+- [x] Frontend: Teste que 3 esferas selecionadas não envia campo `esferas` no request body.
+- [x] Frontend: Teste que accordion mostra badge quando filtro difere do padrão.
 
 ## Notas Técnicas
 - A mudança para fail-open pode aumentar resultados irrelevantes. Monitorar via `esfera_indeterminada` e considerar adicionar classificação de esfera por IA (CNPJ range analysis) em story futura.

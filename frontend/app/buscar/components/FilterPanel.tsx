@@ -54,7 +54,15 @@ export default function FilterPanel({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
-          Filtragem por Esfera
+          Filtros avançados de localização
+          {(() => {
+            const activeCount = (esferas.length > 0 && esferas.length < 3 ? 1 : 0) + (municipios.length > 0 ? 1 : 0);
+            return activeCount > 0 ? (
+              <span className="ml-2 inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold rounded-full bg-brand-blue text-white" aria-label={`${activeCount} filtro${activeCount > 1 ? 's' : ''} ativo${activeCount > 1 ? 's' : ''}`}>
+                {activeCount}
+              </span>
+            ) : null;
+          })()}
           <svg className={`w-4 h-4 ml-auto transition-transform ${locationFiltersOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>

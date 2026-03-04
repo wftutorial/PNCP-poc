@@ -2318,6 +2318,7 @@ def aplicar_todos_filtros(
         "rejeitadas_uf": 0,
         "rejeitadas_status": 0,
         "rejeitadas_esfera": 0,
+        "esfera_indeterminada": 0,  # UX-403 AC6: bids with unknown sphere (fail-open)
         "rejeitadas_modalidade": 0,
         "rejeitadas_municipio": 0,
         "rejeitadas_orgao": 0,
@@ -2447,9 +2448,14 @@ def aplicar_todos_filtros(
         resultado_status = resultado_uf
 
     # Etapa 3: Filtro de Esfera
-    if esferas:
+    # UX-403 AC1: When all 3 spheres selected, treat as None (skip filter)
+    esferas_efetivas = esferas
+    if esferas and set(e.upper() for e in esferas) == {"F", "E", "M"}:
+        esferas_efetivas = None
+
+    if esferas_efetivas:
         resultado_esfera: List[dict] = []
-        esferas_upper = [e.upper() for e in esferas]
+        esferas_upper = [e.upper() for e in esferas_efetivas]
 
         for lic in resultado_status:
             esfera_id = (
@@ -2460,6 +2466,9 @@ def aplicar_todos_filtros(
 
             if esfera_id in esferas_upper:
                 resultado_esfera.append(lic)
+            elif esfera_id:
+                # Known sphere but doesn't match filter — reject
+                stats["rejeitadas_esfera"] += 1
             else:
                 # Fallback por tipo de órgão
                 tipo_orgao = (lic.get("tipoOrgao", "") or lic.get("nomeOrgao", "")).lower()
@@ -2474,11 +2483,15 @@ def aplicar_todos_filtros(
                 if matched:
                     resultado_esfera.append(lic)
                 else:
-                    stats["rejeitadas_esfera"] += 1
+                    # UX-403 AC2: fail-open — include bid with unknown sphere
+                    lic["_esfera_inferred"] = False
+                    resultado_esfera.append(lic)
+                    stats["esfera_indeterminada"] += 1  # UX-403 AC6
 
         logger.debug(
             f"  Após filtro Esfera: {len(resultado_esfera)} "
-            f"(rejeitadas: {stats['rejeitadas_esfera']})"
+            f"(rejeitadas: {stats['rejeitadas_esfera']}, "
+            f"indeterminadas: {stats['esfera_indeterminada']})"
         )
     else:
         resultado_esfera = resultado_status

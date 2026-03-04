@@ -1,20 +1,17 @@
 /**
  * EnhancedLoadingProgress Component
- * 5-stage loading progress indicator with:
+ * Educational carousel loading with:
  * - SSE real-time progress (Phase 2) with fallback to time-based simulation
  * - Asymptotic progress cap at 95% to avoid false "100%" display
+ * - B2G educational carousel replacing technical stage indicators
  * - Honest overtime messaging when search takes longer than expected
  * - Cancel button for user control
  *
- * Stages:
- * 1. Connecting to PNCP API (10%)
- * 2. Fetching data from X states (40%)
- * 3. Filtering results (70%)
- * 4. Generating AI summary (90%)
- * 5. Preparing Excel report (100%)
+ * UX-411: Replaced 5-stage technical indicators and countdown with
+ * educational B2G carousel that reduces perceived wait time.
  */
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import type { SearchProgressEvent } from '../hooks/useSearchSSE';
 
 export interface EnhancedLoadingProgressProps {
@@ -44,44 +41,18 @@ export interface EnhancedLoadingProgressProps {
   isReconnecting?: boolean;
 }
 
+// Internal stages for progress logic (not displayed to user)
 interface Stage {
   id: number;
-  label: string;
   progressTarget: number;
-  description: string;
 }
 
 const STAGES: Stage[] = [
-  {
-    id: 1,
-    label: 'Consultando fontes oficiais',
-    progressTarget: 10,
-    description: 'Consultando fontes oficiais de contratações públicas',
-  },
-  {
-    id: 2,
-    label: 'Buscando dados',
-    progressTarget: 10,
-    description: 'Coletando licitações dos estados selecionados',
-  },
-  {
-    id: 3,
-    label: 'Filtrando resultados',
-    progressTarget: 70,
-    description: 'Aplicando filtros de setor, valor e relevância',
-  },
-  {
-    id: 4,
-    label: 'Avaliando oportunidades',
-    progressTarget: 90,
-    description: 'Gerando avaliação estratégica por IA',
-  },
-  {
-    id: 5,
-    label: 'Preparando Excel',
-    progressTarget: 100,
-    description: 'Formatando planilha para download',
-  },
+  { id: 1, progressTarget: 10 },
+  { id: 2, progressTarget: 10 },
+  { id: 3, progressTarget: 70 },
+  { id: 4, progressTarget: 90 },
+  { id: 5, progressTarget: 100 },
 ];
 
 // Map SSE stage names to stage IDs
@@ -93,6 +64,27 @@ const SSE_STAGE_MAP: Record<string, number> = {
   excel: 5,
   complete: 5,
 };
+
+/** UX-411 AC5: Educational B2G carousel tips */
+const B2G_TIPS = [
+  'O Brasil homologou mais de R$ 1 trilhão em contratações públicas em 2025. Sua empresa pode capturar parte desse mercado.',
+  'Empate ficto (5%): No pregão eletrônico, se sua proposta estiver até 5% acima e você for ME/EPP, você pode cobrir o lance vencedor.',
+  'Licitações exclusivas até R$ 80 mil podem ser reservadas para micro e pequenas empresas (LC 123/2006).',
+  'Desde a Lei 14.133/2021, o PNCP é o canal oficial obrigatório para publicação de editais de todos os entes federativos.',
+  'Inversão de fases: Na nova lei, propostas são julgadas ANTES da habilitação — agilizando o processo decisivamente.',
+  'Pregão eletrônico é a modalidade mais usada no Brasil, representando mais de 60% das contratações públicas.',
+  'Você pode participar de licitações em qualquer estado do Brasil, independente de onde sua empresa está sediada.',
+  'Contratos públicos costumam ter pagamento garantido por dotação orçamentária — menor risco de inadimplência que o setor privado.',
+  'A margem de preferência para produtos nacionais pode chegar a 25% em determinados setores estratégicos.',
+  'Consórcio de empresas: Pequenas empresas podem se unir em consórcio para participar de licitações maiores.',
+  'O prazo médio para pagamento em contratos públicos é de 30 dias após a entrega — preveja isso no fluxo de caixa.',
+  'Atestados de capacidade técnica são o documento mais importante na habilitação. Mantenha-os sempre atualizados.',
+  'Inexigibilidade de licitação: Se sua empresa oferece serviço exclusivo, pode contratar diretamente com o órgão público.',
+  'A pesquisa de preços no PNCP permite consultar valores históricos para formar preço competitivo nas suas propostas.',
+  'Certidões negativas (FGTS, INSS, Fazenda) são exigidas em praticamente todas as licitações. Mantenha-as em dia.',
+];
+
+const CAROUSEL_INTERVAL_MS = 6000;
 
 /** CRIT-006 AC20-21: Graduated honest overtime messages with SSE progress awareness */
 function getOvertimeMessage(overBySeconds: number, stateCount: number, estimatedTime: number, elapsedTime: number, sseProgress?: number): string {
@@ -138,6 +130,12 @@ export function EnhancedLoadingProgress({
   const [currentStage, setCurrentStage] = useState(1);
   const [elapsedTime, setElapsedTime] = useState(0);
 
+  // UX-411: Carousel state
+  const [currentTipIndex, setCurrentTipIndex] = useState(0);
+  const [isFading, setIsFading] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+  const carouselIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   // Track last SSE progress for smooth fallback
   const lastSseProgressRef = useRef(0);
 
@@ -154,7 +152,6 @@ export function EnhancedLoadingProgress({
   }, [onStageChange]);
 
   // Track SSE progress in ref for fallback smoothing.
-  // P2.1: Update whenever SSE has real data — do not gate behind useRealProgress.
   useEffect(() => {
     if (sseEvent && sseEvent.progress >= 0) {
       lastSseProgressRef.current = sseEvent.progress;
@@ -181,47 +178,65 @@ export function EnhancedLoadingProgress({
     return () => clearInterval(interval);
   }, [estimatedTime]);
 
-  // GTM-FIX-035 AC3: Compute UF-aware progress that syncs states processed with percentage.
-  // STORY-329 AC6: Fetch stage caps at 60% (not 70%) so filtering micro-steps 60→70 are visible.
+  // UX-411 AC5: Carousel auto-rotation with hover pause (AC11)
+  const advanceTip = useCallback(() => {
+    setIsFading(true);
+    // After fade-out, switch tip and fade-in
+    setTimeout(() => {
+      setCurrentTipIndex(prev => (prev + 1) % B2G_TIPS.length);
+      setIsFading(false);
+    }, 300);
+  }, []);
+
+  useEffect(() => {
+    if (isHovered) {
+      if (carouselIntervalRef.current) {
+        clearInterval(carouselIntervalRef.current);
+        carouselIntervalRef.current = null;
+      }
+      return;
+    }
+
+    carouselIntervalRef.current = setInterval(advanceTip, CAROUSEL_INTERVAL_MS);
+
+    return () => {
+      if (carouselIntervalRef.current) {
+        clearInterval(carouselIntervalRef.current);
+        carouselIntervalRef.current = null;
+      }
+    };
+  }, [isHovered, advanceTip]);
+
+  // GTM-FIX-035 AC3: Compute UF-aware progress
+  // STORY-329 AC6: Fetch stage caps at 60%
   const ufBasedProgress = (() => {
     if (stateCount <= 0) return simulatedProgress;
-    // P2.1: Always use real uf_index from SSE when available — do not gate behind useRealProgress.
-    // Falls back to prop statesProcessed (which is updated from SSE in useSearch, or slow timer).
     const sseUfIndex = sseEvent?.detail?.uf_index;
     const effectiveStatesProcessed = (typeof sseUfIndex === 'number' && sseUfIndex > 0)
       ? sseUfIndex
       : statesProcessed;
-    if (effectiveStatesProcessed <= 0 && !ufAllComplete) return Math.min(simulatedProgress, 10); // Cap at connecting stage
+    if (effectiveStatesProcessed <= 0 && !ufAllComplete) return Math.min(simulatedProgress, 10);
     const ufRatio = ufAllComplete ? 1 : Math.min(effectiveStatesProcessed / stateCount, 1);
-    // Map UF ratio to 10%-60% range (fetch stage ends at 60%, filtering covers 60→70)
     return 10 + (ufRatio * 50);
   })();
 
-  // Determine effective progress, stage, and message from SSE or simulation.
-  // P2.1: Always prefer real SSE/UF data. Progress must never go backwards (use Math.max).
+  // Determine effective progress from SSE or simulation
   let effectiveProgress: number;
   if (sseEvent && sseEvent.progress >= 0) {
-    // SSE has real progress — reconcile with UF-based progress to avoid contradictions.
-    // In the fetch stage, UF completion gives more accurate granular data than the coarse SSE %.
     if (sseEvent.stage === 'fetching' || (!sseEvent.stage && sseEvent.progress < 60)) {
       effectiveProgress = Math.max(sseEvent.progress, ufBasedProgress);
     } else {
-      // STORY-329 AC6: Post-fetch stages (filtering 60→70, etc.): trust SSE progress directly.
-      // Don't floor with ufBasedProgress — it would mask filtering micro-steps.
       effectiveProgress = Math.max(sseEvent.progress, lastSseProgressRef.current);
     }
   } else {
-    // No SSE — use UF-aware progress (better than pure time simulation).
     effectiveProgress = Math.max(ufBasedProgress, lastSseProgressRef.current);
   }
 
-  // Determine stage from SSE or from effective progress.
-  // P2.1: Use SSE stage whenever available — do not gate behind useRealProgress.
+  // Determine stage from SSE or from effective progress (internal logic only)
   let effectiveStageId: number;
   if (sseEvent && SSE_STAGE_MAP[sseEvent.stage]) {
     effectiveStageId = SSE_STAGE_MAP[sseEvent.stage];
   } else {
-    // Derive from effective progress
     effectiveStageId = 1;
     for (const stage of STAGES) {
       if (effectiveProgress >= stage.progressTarget) {
@@ -241,26 +256,7 @@ export function EnhancedLoadingProgress({
     }
   }, [effectiveStageId]);
 
-  const activeStage = STAGES.find(s => s.id === currentStage) || STAGES[0];
-
-  // GTM-FIX-035 AC4: Contextual status description with source count and time estimate.
-  // P2.1: Use SSE message whenever available — do not gate behind useRealProgress.
-  const statusDescription = (() => {
-    if (sseEvent?.message) return sseEvent.message;
-    if (currentStage === 1) {
-      return `Consultando fontes oficiais. Resultados em aproximadamente ${estimatedTime}s.`;
-    }
-    if (currentStage === 2 && stateCount > 0) {
-      const remaining = Math.max(0, estimatedTime - elapsedTime);
-      return remaining > 0
-        ? `Coletando dados de ${stateCount} ${stateCount === 1 ? 'estado' : 'estados'}. ~${remaining}s restantes.`
-        : `Coletando dados de ${stateCount} ${stateCount === 1 ? 'estado' : 'estados'}.`;
-    }
-    return activeStage.description;
-  })();
-
-  // States processed: prefer real SSE uf_index, fall back to prop (already SSE-synced in useSearch).
-  // P2.1: Do not gate behind useRealProgress — SSE data is always more accurate than timer.
+  // States processed display
   const sseUfIndexForDisplay = sseEvent?.detail?.uf_index;
   const effectiveStatesProcessed = (typeof sseUfIndexForDisplay === 'number' && sseUfIndexForDisplay > 0)
     ? sseUfIndexForDisplay
@@ -270,8 +266,7 @@ export function EnhancedLoadingProgress({
   const isOvertime = elapsedTime > estimatedTime;
   const overtimeSeconds = elapsedTime - estimatedTime;
 
-  // CRIT-006 AC20: Get current SSE progress for overtime message.
-  // P2.1: Use SSE progress whenever available — do not gate behind useRealProgress.
+  // CRIT-006 AC20: Get current SSE progress for overtime message
   const currentSseProgress = sseEvent && sseEvent.progress >= 0
     ? sseEvent.progress
     : undefined;
@@ -280,7 +275,6 @@ export function EnhancedLoadingProgress({
   const progressBarColor = isDegraded
     ? 'bg-gradient-to-r from-amber-500 to-amber-600'
     : 'bg-gradient-to-r from-brand-blue to-brand-blue-hover';
-  const accentTextColor = isDegraded ? 'text-amber-600 dark:text-amber-400' : 'text-brand-blue';
 
   return (
     <div
@@ -292,8 +286,8 @@ export function EnhancedLoadingProgress({
       role="status"
       aria-live="polite"
       aria-label={isDegraded
-        ? `Resultados disponíveis com ressalvas`
-        : `Analisando oportunidades, ${Math.floor(progressPercentage)}% concluído`}
+        ? 'Resultados disponíveis com ressalvas'
+        : 'Analisando oportunidades'}
       data-testid={isDegraded ? 'degraded-progress' : 'loading-progress'}
     >
       {/* CRIT-005 AC22: Timeout overlay */}
@@ -305,64 +299,38 @@ export function EnhancedLoadingProgress({
         </div>
       )}
 
-      {/* Header with spinner */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <svg
-            className="animate-spin h-6 w-6 text-brand-blue"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-          >
-            <circle
-              className="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="4"
-              fill="none"
-            />
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            />
-          </svg>
-          <div>
-            <p className="text-base sm:text-lg font-semibold text-ink">
-              {activeStage.label}
-            </p>
-            <p className="text-xs sm:text-sm text-ink-secondary mt-0.5">
-              {statusDescription}
-            </p>
-          </div>
-        </div>
-
-        <div className="text-right">
-          <p className={`text-2xl font-bold font-data tabular-nums ${accentTextColor}`}>
-            {Math.floor(progressPercentage)}%
-          </p>
-          <p className="text-xs text-ink-muted">
-            {elapsedTime >= 300
-              ? `${Math.floor(elapsedTime / 60)}m ${elapsedTime % 60}s`
-              : `${elapsedTime}s`}
-            {!isOvertime && (
-              <>
-                {' / '}
-                {estimatedTime >= 300
-                  ? `${Math.floor(estimatedTime / 60)}m ${estimatedTime % 60}s`
-                  : `~${estimatedTime}s`}
-              </>
-            )}
-          </p>
-        </div>
+      {/* AC4: Header with spinner and "Analisando oportunidades..." */}
+      <div className="flex items-center gap-3 mb-4">
+        <svg
+          className={`animate-spin h-6 w-6 ${isDegraded ? 'text-amber-500' : 'text-brand-blue'}`}
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <circle
+            className="opacity-25"
+            cx="12"
+            cy="12"
+            r="10"
+            stroke="currentColor"
+            strokeWidth="4"
+            fill="none"
+          />
+          <path
+            className="opacity-75"
+            fill="currentColor"
+            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+          />
+        </svg>
+        <p className="text-base sm:text-lg font-semibold text-ink">
+          Analisando oportunidades...
+        </p>
       </div>
 
-      {/* Progress bar */}
-      <div className="mb-4">
-        <div className="w-full bg-surface-2 rounded-full h-3 overflow-hidden">
+      {/* AC3: Progress bar — animated, no percentage */}
+      <div className="mb-5">
+        <div className="w-full bg-surface-2 rounded-full h-2.5 overflow-hidden">
           <div
-            className={`${progressBarColor} h-3 rounded-full transition-all duration-500 ease-out`}
+            className={`${progressBarColor} h-2.5 rounded-full transition-all duration-700 ease-out`}
             style={{ width: `${progressPercentage}%` }}
             role="progressbar"
             aria-valuenow={progressPercentage}
@@ -372,50 +340,47 @@ export function EnhancedLoadingProgress({
         </div>
       </div>
 
-      {/* Stage indicators */}
-      <div className="flex justify-between items-start gap-2 mb-4">
-        {STAGES.map((stage) => {
-          const isCompleted = currentStage > stage.id;
-          const isActive = currentStage === stage.id;
-          const isPending = currentStage < stage.id;
+      {/* AC5 + AC10 + AC11: Educational B2G carousel */}
+      <div
+        className="mb-4 p-4 bg-surface-1 dark:bg-surface-2 rounded-lg min-h-[80px] flex flex-col justify-between"
+        data-testid="b2g-carousel"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        <div className="flex items-start gap-3">
+          <span className="text-lg flex-shrink-0 mt-0.5" aria-hidden="true">💡</span>
+          <p
+            className={`text-sm text-ink-secondary leading-relaxed transition-opacity duration-300 ${
+              isFading ? 'opacity-0' : 'opacity-100'
+            }`}
+            data-testid="carousel-tip"
+          >
+            {B2G_TIPS[currentTipIndex]}
+          </p>
+        </div>
 
-          return (
-            <div
-              key={stage.id}
-              className="flex flex-col items-center flex-1"
-            >
-              <div
-                className={`
-                  w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold transition-all duration-300
-                  ${isCompleted ? (isDegraded ? 'bg-amber-500 text-white scale-100' : 'bg-brand-blue text-white scale-100') : ''}
-                  ${isActive ? (isDegraded ? 'bg-amber-500 text-white scale-110 ring-2 ring-amber-500 ring-offset-2' : 'bg-brand-blue text-white scale-110 ring-2 ring-brand-blue ring-offset-2') : ''}
-                  ${isPending ? 'bg-surface-2 text-ink-muted scale-90' : ''}
-                `}
-                aria-label={`Stage ${stage.id}: ${isCompleted ? 'Completed' : isActive ? 'In progress' : 'Pending'}`}
-              >
-                {isCompleted ? (
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" role="img" aria-label="Completed">
-                    <path
-                      fillRule="evenodd"
-                      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                ) : (
-                  stage.id
-                )}
-              </div>
-              <p
-                className={`
-                  text-[10px] sm:text-xs text-center mt-1.5 transition-colors duration-300
-                  ${isActive ? (isDegraded ? 'text-amber-600 dark:text-amber-400 font-semibold' : 'text-brand-blue font-semibold') : 'text-ink-muted'}
-                `}
-              >
-                {stage.label}
-              </p>
-            </div>
-          );
-        })}
+        {/* AC10: Dot indicators */}
+        <div className="flex justify-center gap-1.5 mt-3" data-testid="carousel-dots">
+          {B2G_TIPS.map((_, index) => (
+            <button
+              key={index}
+              type="button"
+              className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
+                index === currentTipIndex
+                  ? (isDegraded ? 'bg-amber-500 w-3' : 'bg-brand-blue w-3')
+                  : 'bg-ink-muted/30'
+              }`}
+              onClick={() => {
+                setIsFading(true);
+                setTimeout(() => {
+                  setCurrentTipIndex(index);
+                  setIsFading(false);
+                }, 300);
+              }}
+              aria-label={`Dica ${index + 1} de ${B2G_TIPS.length}`}
+            />
+          ))}
+        </div>
       </div>
 
       {/* A-02 AC9: Degraded state amber message */}
@@ -431,21 +396,21 @@ export function EnhancedLoadingProgress({
         </div>
       )}
 
-      {/* STORY-329 AC4: Long-running filter message (>30s filtering) */}
+      {/* STORY-329 AC4: Long-running filter message */}
       {sseEvent?.detail?.is_long_running && !isOvertime && !isDegraded && (
         <div className="mb-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/40 rounded-lg text-sm text-blue-800 dark:text-blue-200" data-testid="long-running-message">
           Volume grande, pode levar até 2 min
         </div>
       )}
 
-      {/* Overtime warning message — CRIT-006 AC20-21: uses SSE progress */}
+      {/* AC7: Overtime warning message — CRIT-006 AC20-21 */}
       {isOvertime && !isDegraded && (
-        <div className="mb-3 p-3 bg-warning-subtle border border-warning/20 rounded-lg text-sm text-warning-dark">
+        <div className="mb-3 p-3 bg-warning-subtle border border-warning/20 rounded-lg text-sm text-warning-dark" data-testid="overtime-message">
           {getOvertimeMessage(overtimeSeconds, stateCount, estimatedTime, elapsedTime, currentSseProgress)}
         </div>
       )}
 
-      {/* Meta information */}
+      {/* AC6: Meta information — states processed + cancel */}
       <div className="flex justify-between items-center text-xs text-ink-secondary pt-3 border-t border-strong">
         <span>
           {effectiveStatesProcessed > 0 ? (
@@ -464,30 +429,19 @@ export function EnhancedLoadingProgress({
           )}
         </span>
 
-        <div className="flex items-center gap-3">
-          <span>
-            {!isOvertime
-              ? estimatedTime - elapsedTime >= 60
-                ? `~${Math.floor((estimatedTime - elapsedTime) / 60)}m restantes`
-                : `~${Math.max(0, estimatedTime - elapsedTime)}s restantes`
-              : ''}
-          </span>
-
-          {/* CRIT-006 AC15: Cancel button visible from start (no delay) */}
-          {onCancel && (
-            <button
-              onClick={onCancel}
-              className="text-xs text-ink-muted hover:text-error transition-colors underline underline-offset-2"
-              type="button"
-            >
-              Cancelar
-            </button>
-          )}
-        </div>
+        {/* AC8: Cancel button */}
+        {onCancel && (
+          <button
+            onClick={onCancel}
+            className="text-xs text-ink-muted hover:text-error transition-colors underline underline-offset-2"
+            type="button"
+          >
+            Cancelar
+          </button>
+        )}
       </div>
 
-      {/* STORY-359 AC1+AC2+AC3: SSE status indicator — discrete, informative, not alarming */}
-      {/* CRIT-052 AC2: Show reconnecting indicator during SSE reconnection */}
+      {/* STORY-359/CRIT-052: SSE status indicator */}
       {isReconnecting ? (
         <div className="mt-2 flex items-center gap-1.5 text-[10px] text-amber-600 dark:text-amber-400" data-testid="sse-reconnecting-indicator">
           <svg className="w-3.5 h-3.5 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">

@@ -13,11 +13,11 @@ O componente `EnhancedLoadingProgress` exibe 5 estágios técnicos ("Consultando
 - Linhas 375-419: Stage indicators (círculos numerados 1-5) — informação técnica sem valor para usuário.
 
 ## Critérios de Aceitação
-- [ ] AC1: Remover os 5 stage indicators (círculos numerados) do componente visual.
-- [ ] AC2: Remover display de countdown (`{elapsedTime}s / ~{estimatedTime}s` e `~{remaining}s restantes`).
-- [ ] AC3: Manter progress bar (barra azul animada) mas sem porcentagem numérica. Barra deve animar suavemente de 0% a 95% usando o cálculo assintótico existente.
-- [ ] AC4: Manter spinner SVG com texto "Analisando oportunidades..." (singular, sem detalhes técnicos).
-- [ ] AC5: Adicionar carrossel de dicas B2G que troca automaticamente a cada 6 segundos com transição fade. Conteúdo inicial (15 dicas):
+- [x] AC1: Remover os 5 stage indicators (círculos numerados) do componente visual.
+- [x] AC2: Remover display de countdown (`{elapsedTime}s / ~{estimatedTime}s` e `~{remaining}s restantes`).
+- [x] AC3: Manter progress bar (barra azul animada) mas sem porcentagem numérica. Barra deve animar suavemente de 0% a 95% usando o cálculo assintótico existente.
+- [x] AC4: Manter spinner SVG com texto "Analisando oportunidades..." (singular, sem detalhes técnicos).
+- [x] AC5: Adicionar carrossel de dicas B2G que troca automaticamente a cada 6 segundos com transição fade. Conteúdo inicial (15 dicas):
 
   1. "O Brasil homologou mais de R$ 1 trilhão em contratações públicas em 2025. Sua empresa pode capturar parte desse mercado."
   2. "Empate ficto (5%): No pregão eletrônico, se sua proposta estiver até 5% acima e você for ME/EPP, você pode cobrir o lance vencedor."
@@ -35,30 +35,32 @@ O componente `EnhancedLoadingProgress` exibe 5 estágios técnicos ("Consultando
   14. "A pesquisa de preços no PNCP permite consultar valores históricos para formar preço competitivo nas suas propostas."
   15. "Certidões negativas (FGTS, INSS, Fazenda) são exigidas em praticamente todas as licitações. Mantenha-as em dia."
 
-- [ ] AC6: Manter display "X de Y estados processados" na parte inferior (útil e não causa ansiedade).
-- [ ] AC7: Manter mensagens de overtime (`getOvertimeMessage`) para buscas que excedem o tempo estimado.
-- [ ] AC8: Manter funcionalidade de cancel button.
-- [ ] AC9: Manter tratamento de estado degradado (amber scheme) e timeout overlay.
-- [ ] AC10: Carrossel deve ter indicadores de dots (pontos) na parte inferior para mostrar posição.
-- [ ] AC11: Carrossel deve pausar animação quando usuário passa o mouse por cima (hover pause).
-- [ ] AC12: Interface interna (props do componente) não deve mudar — manter compatibilidade com `useSearch` e `page.tsx`.
+- [x] AC6: Manter display "X de Y estados processados" na parte inferior (útil e não causa ansiedade).
+- [x] AC7: Manter mensagens de overtime (`getOvertimeMessage`) para buscas que excedem o tempo estimado.
+- [x] AC8: Manter funcionalidade de cancel button.
+- [x] AC9: Manter tratamento de estado degradado (amber scheme) e timeout overlay.
+- [x] AC10: Carrossel deve ter indicadores de dots (pontos) na parte inferior para mostrar posição.
+- [x] AC11: Carrossel deve pausar animação quando usuário passa o mouse por cima (hover pause).
+- [x] AC12: Interface interna (props do componente) não deve mudar — manter compatibilidade com `useSearch` e `page.tsx`.
 
 ## Arquivos Impactados
 - `frontend/components/EnhancedLoadingProgress.tsx` — Rewrite do render: remover stages, countdown; adicionar carrossel.
 - `frontend/__tests__/EnhancedLoadingProgress.test.tsx` — Atualizar testes para nova estrutura.
+- `frontend/__tests__/buscar/degraded-visual.test.tsx` — Atualizar testes (remover refs a stages/percentage).
+- `frontend/__tests__/story329-filter-progress.test.tsx` — Atualizar testes (usar aria-valuenow em vez de texto %).
 
 ## Testes Necessários
-- [ ] Teste que carrossel renderiza pelo menos 1 dica.
-- [ ] Teste que carrossel troca dica após 6s (fake timers).
-- [ ] Teste que progress bar anima sem mostrar porcentagem.
-- [ ] Teste que spinner e texto "Analisando oportunidades..." estão presentes.
-- [ ] Teste que stages indicators NÃO estão no DOM.
-- [ ] Teste que countdown (`~Xs restantes`) NÃO está no DOM.
-- [ ] Teste que overtime message ainda aparece.
-- [ ] Teste que cancel button funciona.
-- [ ] Teste que estado degraded (amber) funciona.
-- [ ] Teste que hover pausa o carrossel.
-- [ ] Snapshot visual do novo componente.
+- [x] Teste que carrossel renderiza pelo menos 1 dica.
+- [x] Teste que carrossel troca dica após 6s (fake timers).
+- [x] Teste que progress bar anima sem mostrar porcentagem.
+- [x] Teste que spinner e texto "Analisando oportunidades..." estão presentes.
+- [x] Teste que stages indicators NÃO estão no DOM.
+- [x] Teste que countdown (`~Xs restantes`) NÃO está no DOM.
+- [x] Teste que overtime message ainda aparece.
+- [x] Teste que cancel button funciona.
+- [x] Teste que estado degraded (amber) funciona.
+- [x] Teste que hover pausa o carrossel.
+- [x] Snapshot visual do novo componente.
 
 ## Notas Técnicas
 - Carrossel pode usar `setInterval` com `useState` para index rotation. Limpar no cleanup.

@@ -2,6 +2,7 @@
  * STORY-329: Filter progress animation tests.
  * AC6: Frontend animates smoothly between micro-steps (60→62→64→66→68→70).
  * AC8: Test frontend simulating sequence 60→62→...→70 verifying animation.
+ * UX-411: Updated — percentage display removed; verify via aria-valuenow instead.
  */
 
 import React from 'react';
@@ -20,7 +21,7 @@ describe('STORY-329: Filter progress animation', () => {
   });
 
   describe('AC6/AC8: Smooth micro-step animation during filtering', () => {
-    it('should display 60% when filtering starts', () => {
+    it('should set aria-valuenow to 60 when filtering starts', () => {
       render(
         <EnhancedLoadingProgress
           currentStep={3}
@@ -37,10 +38,11 @@ describe('STORY-329: Filter progress animation', () => {
         />
       );
 
-      expect(screen.getByText('60%')).toBeInTheDocument();
+      const progressBar = screen.getByRole('progressbar');
+      expect(progressBar).toHaveAttribute('aria-valuenow', '60');
     });
 
-    it('should animate through micro-steps 60→62→64→66→68→70', () => {
+    it('should animate through micro-steps 60→62→64→66→68→70 via aria-valuenow', () => {
       const steps = [60, 62, 64, 66, 68, 70];
 
       const { rerender } = render(
@@ -59,7 +61,8 @@ describe('STORY-329: Filter progress animation', () => {
         />
       );
 
-      expect(screen.getByText(`${steps[0]}%`)).toBeInTheDocument();
+      const progressBar = screen.getByRole('progressbar');
+      expect(progressBar).toHaveAttribute('aria-valuenow', `${steps[0]}`);
 
       for (let i = 1; i < steps.length; i++) {
         rerender(
@@ -78,7 +81,7 @@ describe('STORY-329: Filter progress animation', () => {
           />
         );
 
-        expect(screen.getByText(`${steps[i]}%`)).toBeInTheDocument();
+        expect(progressBar).toHaveAttribute('aria-valuenow', `${steps[i]}`);
       }
     });
 
@@ -99,10 +102,13 @@ describe('STORY-329: Filter progress animation', () => {
         />
       );
 
-      expect(screen.getByText('Filtrando: 150/500')).toBeInTheDocument();
+      // UX-411: SSE messages are no longer displayed as status description
+      // but the carousel shows educational tips instead. Verify progress via aria.
+      const progressBar = screen.getByRole('progressbar');
+      expect(progressBar).toHaveAttribute('aria-valuenow', '63');
     });
 
-    it('should display LLM classification progress message', () => {
+    it('should display LLM classification progress via aria-valuenow', () => {
       render(
         <EnhancedLoadingProgress
           currentStep={3}
@@ -119,12 +125,11 @@ describe('STORY-329: Filter progress animation', () => {
         />
       );
 
-      expect(screen.getByText('Classificação IA: 5/20 sem keywords')).toBeInTheDocument();
+      const progressBar = screen.getByRole('progressbar');
+      expect(progressBar).toHaveAttribute('aria-valuenow', '67');
     });
 
     it('should not go backwards from fetch progress to filtering', () => {
-      // After all UFs complete, ufBasedProgress would be 60%
-      // Filtering SSE at 60% should show 60%, not regress
       const { rerender } = render(
         <EnhancedLoadingProgress
           currentStep={2}
@@ -141,8 +146,9 @@ describe('STORY-329: Filter progress animation', () => {
         />
       );
 
-      // After all UFs, should show 60% (ufBasedProgress: 10 + 1*50 = 60)
-      const fetchProgress = parseInt(screen.getByText(/%/).textContent || '0');
+      // After all UFs, should show >= 55% (ufBasedProgress: 10 + 1*50 = 60)
+      const progressBar = screen.getByRole('progressbar');
+      const fetchProgress = parseInt(progressBar.getAttribute('aria-valuenow') || '0');
       expect(fetchProgress).toBeGreaterThanOrEqual(55);
 
       // Now filtering starts at 60%
@@ -162,7 +168,7 @@ describe('STORY-329: Filter progress animation', () => {
         />
       );
 
-      const filterProgress = parseInt(screen.getByText(/%/).textContent || '0');
+      const filterProgress = parseInt(progressBar.getAttribute('aria-valuenow') || '0');
       // Should not go below 60%
       expect(filterProgress).toBeGreaterThanOrEqual(60);
     });
@@ -259,7 +265,7 @@ describe('STORY-329: Filter progress animation', () => {
   });
 
   describe('AC5: LLM skipped handling', () => {
-    it('should display llm_skipped message from SSE', () => {
+    it('should accept llm_skipped detail without crashing', () => {
       render(
         <EnhancedLoadingProgress
           currentStep={3}
@@ -276,7 +282,9 @@ describe('STORY-329: Filter progress animation', () => {
         />
       );
 
-      expect(screen.getByText(/Classificação IA ignorada/)).toBeInTheDocument();
+      // UX-411: SSE messages are not displayed as text, but component should not crash
+      const progressBar = screen.getByRole('progressbar');
+      expect(progressBar).toHaveAttribute('aria-valuenow', '70');
     });
   });
 
@@ -300,8 +308,8 @@ describe('STORY-329: Filter progress animation', () => {
 
       // With ufAllComplete=true, ufBasedProgress = 10 + (1 * 50) = 60
       // effectiveProgress = max(55, 60) = 60 (in fetching branch)
-      const progressText = screen.getByText(/%/);
-      const progressValue = parseInt(progressText.textContent || '0');
+      const progressBar = screen.getByRole('progressbar');
+      const progressValue = parseInt(progressBar.getAttribute('aria-valuenow') || '0');
       expect(progressValue).toBeLessThanOrEqual(60);
     });
   });

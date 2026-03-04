@@ -1,16 +1,16 @@
 /**
  * EnhancedLoadingProgress Component Tests
- * Feature #2 - Phase 3 Day 9
- * Target: +5% test coverage
+ * UX-411: Educational B2G carousel replacing technical stage indicators
  */
 
 import React from 'react';
-import { render, screen, waitFor, act } from '@testing-library/react';
+import { render, screen, waitFor, act, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { EnhancedLoadingProgress } from '../components/EnhancedLoadingProgress';
 
 describe('EnhancedLoadingProgress Component', () => {
   const mockOnStageChange = jest.fn();
+  const mockOnCancel = jest.fn();
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -18,13 +18,12 @@ describe('EnhancedLoadingProgress Component', () => {
   });
 
   afterEach(() => {
-    // Clean up all timers before switching back to real timers
     jest.clearAllTimers();
     jest.useRealTimers();
   });
 
-  describe('TC-LOADING-001: Basic rendering', () => {
-    it('should render loading indicator with initial stage', () => {
+  describe('UX-411: Carousel renders tips', () => {
+    it('should render at least 1 B2G tip in the carousel', () => {
       render(
         <EnhancedLoadingProgress
           currentStep={1}
@@ -33,39 +32,33 @@ describe('EnhancedLoadingProgress Component', () => {
         />
       );
 
-      expect(screen.getByRole('status')).toBeInTheDocument();
-      // Use getAllByText and check first match (main heading) to handle duplicates
-      expect(screen.getAllByText('Consultando fontes oficiais')[0]).toBeInTheDocument();
-      expect(screen.getByText(/Consultando fontes oficiais\. Resultados em aproximadamente 60s\./)).toBeInTheDocument();
+      const carousel = screen.getByTestId('b2g-carousel');
+      expect(carousel).toBeInTheDocument();
+
+      const tip = screen.getByTestId('carousel-tip');
+      expect(tip).toBeInTheDocument();
+      expect(tip.textContent).toBeTruthy();
+      // First tip should be the default
+      expect(tip).toHaveTextContent(/trilhão em contratações públicas/);
     });
 
-    it('should display state count correctly', () => {
+    it('should render dot indicators for all 15 tips', () => {
       render(
         <EnhancedLoadingProgress
           currentStep={1}
           estimatedTime={60}
-          stateCount={27}
+          stateCount={3}
         />
       );
 
-      expect(screen.getByText(/Analisando em todo o Brasil/)).toBeInTheDocument();
-    });
-
-    it('should display singular state when count is 1', () => {
-      render(
-        <EnhancedLoadingProgress
-          currentStep={1}
-          estimatedTime={60}
-          stateCount={1}
-        />
-      );
-
-      expect(screen.getByText(/Processando 1 estado/)).toBeInTheDocument();
+      const dots = screen.getByTestId('carousel-dots');
+      const dotButtons = dots.querySelectorAll('button');
+      expect(dotButtons).toHaveLength(15);
     });
   });
 
-  describe('TC-LOADING-002: Progress calculation', () => {
-    it('should start at 0% progress', () => {
+  describe('UX-411: Carousel rotates after 6 seconds', () => {
+    it('should change tip after 6 seconds', async () => {
       render(
         <EnhancedLoadingProgress
           currentStep={1}
@@ -74,237 +67,42 @@ describe('EnhancedLoadingProgress Component', () => {
         />
       );
 
-      // Initially should show 0%
-      expect(screen.getByText('0%')).toBeInTheDocument();
+      const tip = screen.getByTestId('carousel-tip');
+      const firstTip = tip.textContent;
+
+      // Advance 6s for interval + 300ms for fade transition
+      act(() => {
+        jest.advanceTimersByTime(6300);
+      });
+
+      await waitFor(() => {
+        const currentTip = screen.getByTestId('carousel-tip');
+        expect(currentTip.textContent).not.toBe(firstTip);
+      });
     });
 
-    it('should update progress over time', async () => {
+    it('should cycle through tips sequentially', async () => {
       render(
         <EnhancedLoadingProgress
           currentStep={1}
-          estimatedTime={10}
+          estimatedTime={60}
           stateCount={3}
         />
       );
 
-      // Fast-forward 5 seconds (50% of 10s estimated time)
+      // Advance to second tip
       act(() => {
-        jest.advanceTimersByTime(5000);
+        jest.advanceTimersByTime(6300);
       });
 
       await waitFor(() => {
-        const progressText = screen.getByText(/\d+%/);
-        const percentage = parseInt(progressText.textContent || '0');
-        expect(percentage).toBeGreaterThan(0);
-        expect(percentage).toBeLessThanOrEqual(100);
-      });
-    });
-
-    it('should cap progress at 100%', async () => {
-      render(
-        <EnhancedLoadingProgress
-          currentStep={1}
-          estimatedTime={5}
-          stateCount={3}
-        />
-      );
-
-      // Fast-forward past estimated time (10s > 5s)
-      act(() => {
-        jest.advanceTimersByTime(10000);
-      });
-
-      await waitFor(() => {
-        const progressText = screen.getByText(/\d+%/);
-        const percentage = parseInt(progressText.textContent || '0');
-        expect(percentage).toBeLessThanOrEqual(100);
+        expect(screen.getByTestId('carousel-tip')).toHaveTextContent(/Empate ficto/);
       });
     });
   });
 
-  describe('TC-LOADING-003: Stage transitions', () => {
-    it('should transition through stages as progress increases', async () => {
-      // GTM-FIX-035: With UF-based progress, stages now depend on statesProcessed
-      // Stage 1 (0-10%): Consultando fontes oficiais
-      // Stage 2 (10-70%): Buscando dados (driven by UF completion)
-      // Stage 3 (70%+): Filtrando resultados
-      const { rerender } = render(
-        <EnhancedLoadingProgress
-          currentStep={1}
-          estimatedTime={50}
-          stateCount={3}
-          statesProcessed={0}
-          onStageChange={mockOnStageChange}
-        />
-      );
-
-      // Stage 1: Consultando fontes oficiais (0% progress, no states processed)
-      expect(screen.getAllByText('Consultando fontes oficiais')[0]).toBeInTheDocument();
-
-      // Rerender with 2 of 3 states processed → 10 + (2/3 * 60) = 50% → Stage 2
-      rerender(
-        <EnhancedLoadingProgress
-          currentStep={1}
-          estimatedTime={50}
-          stateCount={3}
-          statesProcessed={2}
-          onStageChange={mockOnStageChange}
-        />
-      );
-      // "Buscando dados" appears both in header and in stage indicator
-      expect(screen.getAllByText('Buscando dados').length).toBeGreaterThanOrEqual(1);
-
-      // Rerender with all states processed + ufAllComplete → 70% → Stage 3
-      rerender(
-        <EnhancedLoadingProgress
-          currentStep={1}
-          estimatedTime={50}
-          stateCount={3}
-          statesProcessed={3}
-          ufAllComplete={true}
-          onStageChange={mockOnStageChange}
-        />
-      );
-      expect(screen.getAllByText('Filtrando resultados')[0]).toBeInTheDocument();
-    });
-
-    it('should call onStageChange callback when stage changes', async () => {
-      render(
-        <EnhancedLoadingProgress
-          currentStep={1}
-          estimatedTime={20}
-          stateCount={3}
-          onStageChange={mockOnStageChange}
-        />
-      );
-
-      // Fast-forward to trigger stage 2 (40% of 20s = 8s)
-      // Need to reach 40% threshold for stage 2
-      act(() => {
-        jest.advanceTimersByTime(9000);
-      });
-
-      await waitFor(() => {
-        expect(mockOnStageChange).toHaveBeenCalledWith(expect.any(Number));
-      });
-    });
-  });
-
-  describe('TC-LOADING-004: Elapsed time display', () => {
-    it('should display elapsed time in seconds', async () => {
-      render(
-        <EnhancedLoadingProgress
-          currentStep={1}
-          estimatedTime={60}
-          stateCount={3}
-        />
-      );
-
-      // Fast-forward 10 seconds
-      act(() => {
-        jest.advanceTimersByTime(10000);
-      });
-
-      await waitFor(() => {
-        expect(screen.getByText(/10s/)).toBeInTheDocument();
-        expect(screen.getByText(/~60s/)).toBeInTheDocument();
-      });
-    });
-
-    it('should show remaining time estimate', async () => {
-      render(
-        <EnhancedLoadingProgress
-          currentStep={1}
-          estimatedTime={30}
-          stateCount={3}
-          statesProcessed={1}
-        />
-      );
-
-      // Fast-forward 10 seconds
-      act(() => {
-        jest.advanceTimersByTime(10000);
-      });
-
-      await waitFor(() => {
-        // GTM-FIX-035: "~20s restantes" appears in both status description and meta area
-        expect(screen.getAllByText(/~20s restantes/).length).toBeGreaterThanOrEqual(1);
-      });
-    });
-
-    it('should show overtime message when elapsed exceeds estimated', async () => {
-      render(
-        <EnhancedLoadingProgress
-          currentStep={1}
-          estimatedTime={10}
-          stateCount={3}
-        />
-      );
-
-      // Fast-forward past estimated time
-      act(() => {
-        jest.advanceTimersByTime(15000);
-      });
-
-      await waitFor(() => {
-        expect(screen.getByText(/Quase pronto, finalizando\.\.\./)).toBeInTheDocument();
-      });
-    });
-  });
-
-  describe('TC-LOADING-005: Stage indicators', () => {
-    it('should show all 5 stage circles', () => {
-      render(
-        <EnhancedLoadingProgress
-          currentStep={1}
-          estimatedTime={60}
-          stateCount={3}
-        />
-      );
-
-      // Should have 5 stage indicators (1 to 5)
-      const stages = screen.getAllByText(/^[1-5]$/);
-      expect(stages).toHaveLength(5);
-    });
-
-    it('should mark completed stages with checkmark', async () => {
-      render(
-        <EnhancedLoadingProgress
-          currentStep={1}
-          estimatedTime={20}
-          stateCount={3}
-        />
-      );
-
-      // Fast-forward to stage 3 (40% of 20s = 8s)
-      act(() => {
-        jest.advanceTimersByTime(9000);
-      });
-
-      await waitFor(() => {
-        // Stages 1 and 2 should be completed (showing checkmarks)
-        const completedStages = screen.getAllByRole('img', { hidden: true });
-        expect(completedStages.length).toBeGreaterThan(0);
-      });
-    });
-  });
-
-  describe('TC-LOADING-006: Accessibility', () => {
-    it('should have proper ARIA labels', () => {
-      render(
-        <EnhancedLoadingProgress
-          currentStep={1}
-          estimatedTime={60}
-          stateCount={3}
-        />
-      );
-
-      const statusElement = screen.getByRole('status');
-      expect(statusElement).toHaveAttribute('aria-live', 'polite');
-      expect(statusElement).toHaveAttribute('aria-label', expect.stringContaining('Analisando oportunidades'));
-    });
-
-    it('should have progressbar role with correct values', () => {
+  describe('UX-411: Progress bar without percentage', () => {
+    it('should render progress bar without numeric percentage', () => {
       render(
         <EnhancedLoadingProgress
           currentStep={1}
@@ -314,35 +112,36 @@ describe('EnhancedLoadingProgress Component', () => {
       );
 
       const progressBar = screen.getByRole('progressbar');
-      expect(progressBar).toHaveAttribute('aria-valuenow', '0');
-      expect(progressBar).toHaveAttribute('aria-valuemin', '0');
-      expect(progressBar).toHaveAttribute('aria-valuemax', '100');
+      expect(progressBar).toBeInTheDocument();
+
+      // No percentage text should exist in the component
+      const percentageElements = screen.queryByText(/^\d+%$/);
+      expect(percentageElements).not.toBeInTheDocument();
     });
 
-    it('should update aria-valuenow as progress changes', async () => {
+    it('should animate progress bar width over time', async () => {
       render(
         <EnhancedLoadingProgress
           currentStep={1}
-          estimatedTime={20}
+          estimatedTime={10}
           stateCount={3}
+          statesProcessed={2}
         />
       );
 
-      // Fast-forward 10 seconds (50% of 20s)
+      const progressBar = screen.getByRole('progressbar');
+
       act(() => {
-        jest.advanceTimersByTime(10000);
+        jest.advanceTimersByTime(5000);
       });
 
       await waitFor(() => {
-        const progressBar = screen.getByRole('progressbar');
-        const valueNow = parseInt(progressBar.getAttribute('aria-valuenow') || '0');
-        expect(valueNow).toBeGreaterThan(0);
-        expect(valueNow).toBeLessThanOrEqual(100);
+        const width = progressBar.style.width;
+        const percentage = parseFloat(width);
+        expect(percentage).toBeGreaterThan(0);
       });
     });
-  });
 
-  describe('TC-LOADING-007: Progress bar visual', () => {
     it('should render gradient progress bar', () => {
       render(
         <EnhancedLoadingProgress
@@ -357,99 +156,102 @@ describe('EnhancedLoadingProgress Component', () => {
       expect(progressBar).toHaveClass('from-brand-blue');
       expect(progressBar).toHaveClass('to-brand-blue-hover');
     });
+  });
 
-    it('should update progress bar width based on percentage', async () => {
+  describe('UX-411: Spinner and text', () => {
+    it('should show spinner and "Analisando oportunidades..." text', () => {
       render(
         <EnhancedLoadingProgress
           currentStep={1}
-          estimatedTime={10}
+          estimatedTime={60}
           stateCount={3}
         />
       );
 
-      const progressBar = screen.getByRole('progressbar');
+      expect(screen.getByText('Analisando oportunidades...')).toBeInTheDocument();
+      // SVG spinner should be present (with animate-spin class)
+      const svg = document.querySelector('svg.animate-spin');
+      expect(svg).toBeInTheDocument();
+    });
+  });
 
-      // Initially 0%
-      expect(progressBar).toHaveStyle({ width: '0%' });
+  describe('UX-411: Stage indicators removed', () => {
+    it('should NOT have numbered stage indicators (1-5) in the DOM', () => {
+      render(
+        <EnhancedLoadingProgress
+          currentStep={1}
+          estimatedTime={60}
+          stateCount={3}
+        />
+      );
 
-      // Fast-forward 5 seconds (50% of 10s)
+      // No stage indicator circles with numbers 1-5
+      for (let i = 1; i <= 5; i++) {
+        // Check for standalone numbers used as stage indicators
+        const elements = screen.queryAllByText(new RegExp(`^${i}$`));
+        // Filter out carousel dot aria-labels
+        const stageIndicators = elements.filter(el => {
+          return el.closest('[class*="rounded-full"]') !== null &&
+                 el.closest('[data-testid="carousel-dots"]') === null;
+        });
+        expect(stageIndicators).toHaveLength(0);
+      }
+
+      // No stage labels
+      expect(screen.queryByText('Consultando fontes oficiais')).not.toBeInTheDocument();
+      expect(screen.queryByText('Buscando dados')).not.toBeInTheDocument();
+      expect(screen.queryByText('Filtrando resultados')).not.toBeInTheDocument();
+      expect(screen.queryByText('Avaliando oportunidades')).not.toBeInTheDocument();
+      expect(screen.queryByText('Preparando Excel')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('UX-411: Countdown removed', () => {
+    it('should NOT show countdown text in the DOM', async () => {
+      render(
+        <EnhancedLoadingProgress
+          currentStep={1}
+          estimatedTime={60}
+          stateCount={3}
+        />
+      );
+
       act(() => {
-        jest.advanceTimersByTime(5000);
+        jest.advanceTimersByTime(10000);
       });
 
       await waitFor(() => {
-        const width = progressBar.style.width;
-        const percentage = parseInt(width);
-        expect(percentage).toBeGreaterThan(0);
+        // No elapsed/estimated time display
+        expect(screen.queryByText(/\d+s \/ ~\d+s/)).not.toBeInTheDocument();
+        // No remaining time display
+        expect(screen.queryByText(/~\d+s restantes/)).not.toBeInTheDocument();
+        // No percentage display
+        expect(screen.queryByText(/^\d+%$/)).not.toBeInTheDocument();
       });
     });
   });
 
-  describe('TC-LOADING-035: GTM-FIX-035 Progress UX improvements', () => {
-    it('AC3: should sync progress with UF completion (statesProcessed drives percentage)', () => {
+  describe('UX-411 AC7: Overtime message', () => {
+    it('should still show overtime message when elapsed exceeds estimated', async () => {
       render(
         <EnhancedLoadingProgress
           currentStep={1}
-          estimatedTime={60}
-          stateCount={5}
-          statesProcessed={3}
-        />
-      );
-
-      // STORY-329: UF-based progress now caps at 60% (was 70%)
-      // With 3 of 5 states processed, UF-based progress = 10 + (3/5 * 50) = 40%
-      const progressText = screen.getByText(/\d+%/);
-      const percentage = parseInt(progressText.textContent || '0');
-      expect(percentage).toBeGreaterThanOrEqual(40);
-    });
-
-    it('AC3: should show 60% when all UFs complete (ufAllComplete=true)', () => {
-      render(
-        <EnhancedLoadingProgress
-          currentStep={1}
-          estimatedTime={60}
+          estimatedTime={10}
           stateCount={3}
-          statesProcessed={3}
-          ufAllComplete={true}
         />
       );
 
-      // STORY-329: ufAllComplete=true → ufRatio=1 → 10 + (1 * 50) = 60% (was 70%)
-      // Capped at 60% to allow filtering micro-steps 60→70
-      const progressText = screen.getByText(/\d+%/);
-      const percentage = parseInt(progressText.textContent || '0');
-      expect(percentage).toBeGreaterThanOrEqual(60);
+      act(() => {
+        jest.advanceTimersByTime(15000);
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('overtime-message')).toBeInTheDocument();
+        expect(screen.getByText(/Quase pronto, finalizando\.\.\./)).toBeInTheDocument();
+      });
     });
 
-    it('AC3: should cap at connecting stage (10%) when no states processed yet', () => {
-      render(
-        <EnhancedLoadingProgress
-          currentStep={1}
-          estimatedTime={60}
-          stateCount={5}
-          statesProcessed={0}
-        />
-      );
-
-      const progressText = screen.getByText(/\d+%/);
-      const percentage = parseInt(progressText.textContent || '0');
-      expect(percentage).toBeLessThanOrEqual(10);
-    });
-
-    it('AC4: should show contextual message with source count and time estimate', () => {
-      render(
-        <EnhancedLoadingProgress
-          currentStep={1}
-          estimatedTime={45}
-          stateCount={3}
-          statesProcessed={0}
-        />
-      );
-
-      expect(screen.getByText(/Consultando fontes oficiais\. Resultados em aproximadamente 45s\./)).toBeInTheDocument();
-    });
-
-    it('AC5: should show 2x overrun reassurance message', async () => {
+    it('should show 2x overrun message', async () => {
       render(
         <EnhancedLoadingProgress
           currentStep={1}
@@ -459,18 +261,269 @@ describe('EnhancedLoadingProgress Component', () => {
         />
       );
 
-      // Fast-forward past 2x estimate (>20s)
       act(() => {
         jest.advanceTimersByTime(21000);
       });
 
       await waitFor(() => {
         expect(screen.getByText(/Esta busca está demorando mais que o normal/)).toBeInTheDocument();
-        expect(screen.getByText(/os resultados serão exibidos automaticamente/)).toBeInTheDocument();
       });
     });
+  });
 
-    it('AC2: should accept sseDisconnected prop without crashing', () => {
+  describe('UX-411 AC8: Cancel button', () => {
+    it('should render cancel button when onCancel is provided', () => {
+      render(
+        <EnhancedLoadingProgress
+          currentStep={1}
+          estimatedTime={60}
+          stateCount={3}
+          onCancel={mockOnCancel}
+        />
+      );
+
+      const cancelButton = screen.getByText('Cancelar');
+      expect(cancelButton).toBeInTheDocument();
+    });
+
+    it('should call onCancel when clicked', () => {
+      render(
+        <EnhancedLoadingProgress
+          currentStep={1}
+          estimatedTime={60}
+          stateCount={3}
+          onCancel={mockOnCancel}
+        />
+      );
+
+      fireEvent.click(screen.getByText('Cancelar'));
+      expect(mockOnCancel).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not render cancel button when onCancel is not provided', () => {
+      render(
+        <EnhancedLoadingProgress
+          currentStep={1}
+          estimatedTime={60}
+          stateCount={3}
+        />
+      );
+
+      expect(screen.queryByText('Cancelar')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('UX-411 AC9: Degraded state', () => {
+    it('should show amber scheme when isDegraded is true', () => {
+      render(
+        <EnhancedLoadingProgress
+          currentStep={1}
+          estimatedTime={60}
+          stateCount={3}
+          isDegraded={true}
+        />
+      );
+
+      const container = screen.getByTestId('degraded-progress');
+      expect(container).toBeInTheDocument();
+
+      // Progress bar should have amber colors
+      const progressBar = screen.getByRole('progressbar');
+      expect(progressBar).toHaveClass('from-amber-500');
+      expect(progressBar).toHaveClass('to-amber-600');
+    });
+
+    it('should show degraded message', () => {
+      render(
+        <EnhancedLoadingProgress
+          currentStep={1}
+          estimatedTime={60}
+          stateCount={3}
+          isDegraded={true}
+          degradedMessage="Dados de cache"
+        />
+      );
+
+      expect(screen.getByTestId('degraded-message')).toBeInTheDocument();
+      expect(screen.getByText('Dados de cache')).toBeInTheDocument();
+    });
+
+    it('should show default degraded message when no custom message', () => {
+      render(
+        <EnhancedLoadingProgress
+          currentStep={1}
+          estimatedTime={60}
+          stateCount={3}
+          isDegraded={true}
+        />
+      );
+
+      expect(screen.getByText('Resultados disponíveis com ressalvas')).toBeInTheDocument();
+    });
+  });
+
+  describe('UX-411 AC11: Hover pauses carousel', () => {
+    it('should pause carousel on mouse enter and resume on mouse leave', async () => {
+      render(
+        <EnhancedLoadingProgress
+          currentStep={1}
+          estimatedTime={60}
+          stateCount={3}
+        />
+      );
+
+      const carousel = screen.getByTestId('b2g-carousel');
+      const tip = screen.getByTestId('carousel-tip');
+      const firstTip = tip.textContent;
+
+      // Hover over carousel
+      fireEvent.mouseEnter(carousel);
+
+      // Advance 12 seconds (2 full rotations normally)
+      act(() => {
+        jest.advanceTimersByTime(12000);
+      });
+
+      // Tip should NOT have changed during hover
+      expect(screen.getByTestId('carousel-tip')).toHaveTextContent(firstTip!);
+
+      // Mouse leave — carousel resumes
+      fireEvent.mouseLeave(carousel);
+
+      // Advance 6.3s (one rotation + fade)
+      act(() => {
+        jest.advanceTimersByTime(6300);
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('carousel-tip').textContent).not.toBe(firstTip);
+      });
+    });
+  });
+
+  describe('UX-411 AC6: States processed display', () => {
+    it('should show "X de Y estados processados"', () => {
+      render(
+        <EnhancedLoadingProgress
+          currentStep={1}
+          estimatedTime={60}
+          stateCount={5}
+          statesProcessed={3}
+        />
+      );
+
+      expect(screen.getByText('3')).toBeInTheDocument();
+      expect(screen.getByText('5')).toBeInTheDocument();
+      expect(screen.getByText(/estados processados/)).toBeInTheDocument();
+    });
+
+    it('should show singular "estado processado" for count=1', () => {
+      render(
+        <EnhancedLoadingProgress
+          currentStep={1}
+          estimatedTime={60}
+          stateCount={1}
+          statesProcessed={0}
+        />
+      );
+
+      expect(screen.getByText(/Processando 1 estado$/)).toBeInTheDocument();
+    });
+
+    it('should show "Analisando em todo o Brasil" for 27 states', () => {
+      render(
+        <EnhancedLoadingProgress
+          currentStep={1}
+          estimatedTime={60}
+          stateCount={27}
+        />
+      );
+
+      expect(screen.getByText(/Analisando em todo o Brasil/)).toBeInTheDocument();
+    });
+  });
+
+  describe('UX-411 AC12: Props compatibility', () => {
+    it('should accept all existing props without error', () => {
+      expect(() =>
+        render(
+          <EnhancedLoadingProgress
+            currentStep={1}
+            estimatedTime={60}
+            stateCount={3}
+            onStageChange={mockOnStageChange}
+            statesProcessed={2}
+            onCancel={mockOnCancel}
+            sseEvent={{ stage: 'fetching', progress: 35, message: 'Buscando...', detail: { uf_index: 2 } } as any}
+            useRealProgress={true}
+            sseDisconnected={false}
+            ufAllComplete={false}
+            isDegraded={false}
+            degradedMessage=""
+            showTimeoutOverlay={false}
+            isReconnecting={false}
+          />
+        )
+      ).not.toThrow();
+    });
+
+    it('should still call onStageChange when stage changes', () => {
+      const { rerender } = render(
+        <EnhancedLoadingProgress
+          currentStep={1}
+          estimatedTime={60}
+          stateCount={3}
+          statesProcessed={0}
+          onStageChange={mockOnStageChange}
+        />
+      );
+
+      // Rerender with states processed to trigger stage change
+      rerender(
+        <EnhancedLoadingProgress
+          currentStep={1}
+          estimatedTime={60}
+          stateCount={3}
+          statesProcessed={2}
+          onStageChange={mockOnStageChange}
+        />
+      );
+
+      expect(mockOnStageChange).toHaveBeenCalled();
+    });
+  });
+
+  describe('Timeout overlay', () => {
+    it('should show timeout overlay when showTimeoutOverlay is true', () => {
+      render(
+        <EnhancedLoadingProgress
+          currentStep={1}
+          estimatedTime={60}
+          stateCount={3}
+          showTimeoutOverlay={true}
+        />
+      );
+
+      expect(screen.getByText(/Busca expirou — preparando resultados/)).toBeInTheDocument();
+    });
+  });
+
+  describe('SSE indicators', () => {
+    it('should show reconnecting indicator', () => {
+      render(
+        <EnhancedLoadingProgress
+          currentStep={1}
+          estimatedTime={60}
+          stateCount={3}
+          isReconnecting={true}
+        />
+      );
+
+      expect(screen.getByTestId('sse-reconnecting-indicator')).toBeInTheDocument();
+      expect(screen.getByText('Reconectando...')).toBeInTheDocument();
+    });
+
+    it('should show SSE disconnected indicator', () => {
       render(
         <EnhancedLoadingProgress
           currentStep={1}
@@ -480,38 +533,117 @@ describe('EnhancedLoadingProgress Component', () => {
         />
       );
 
-      // STORY-359: Replaced banner with discrete indicator
+      expect(screen.getByTestId('sse-fallback-indicator')).toBeInTheDocument();
       expect(screen.getByText(/Progresso estimado \(conexão em tempo real indisponível\)/)).toBeInTheDocument();
+    });
+
+    it('should show real-time indicator when SSE event is present', () => {
+      render(
+        <EnhancedLoadingProgress
+          currentStep={1}
+          estimatedTime={60}
+          stateCount={3}
+          sseEvent={{ stage: 'fetching', progress: 20, message: '' } as any}
+        />
+      );
+
+      expect(screen.getByTestId('sse-realtime-indicator')).toBeInTheDocument();
+      expect(screen.getByText('Progresso em tempo real')).toBeInTheDocument();
     });
   });
 
-  describe('TC-LOADING-008: Edge cases', () => {
-    it('should handle very short estimated time (< 1s)', () => {
+  describe('Progress calculation (internal)', () => {
+    it('should cap at connecting stage (10%) when no states processed yet', () => {
       render(
         <EnhancedLoadingProgress
           currentStep={1}
-          estimatedTime={0.5}
-          stateCount={1}
+          estimatedTime={60}
+          stateCount={5}
+          statesProcessed={0}
         />
       );
 
-      expect(screen.getByRole('status')).toBeInTheDocument();
+      const progressBar = screen.getByRole('progressbar');
+      const value = parseInt(progressBar.getAttribute('aria-valuenow') || '0');
+      expect(value).toBeLessThanOrEqual(10);
     });
 
-    it('should handle very long estimated time (> 5min)', () => {
+    it('should update aria-valuenow as progress changes', async () => {
       render(
         <EnhancedLoadingProgress
           currentStep={1}
-          estimatedTime={360}
-          stateCount={27}
+          estimatedTime={20}
+          stateCount={3}
+          statesProcessed={2}
         />
       );
 
-      // Component formats as "6m 0s" for times > 5min (appears multiple times in UI)
-      expect(screen.getAllByText(/6m/)[0]).toBeInTheDocument();
+      const progressBar = screen.getByRole('progressbar');
+      const valueNow = parseInt(progressBar.getAttribute('aria-valuenow') || '0');
+      expect(valueNow).toBeGreaterThan(0);
+      expect(valueNow).toBeLessThanOrEqual(100);
+    });
+  });
+
+  describe('Accessibility', () => {
+    it('should have proper ARIA labels', () => {
+      render(
+        <EnhancedLoadingProgress
+          currentStep={1}
+          estimatedTime={60}
+          stateCount={3}
+        />
+      );
+
+      const statusElement = screen.getByRole('status');
+      expect(statusElement).toHaveAttribute('aria-live', 'polite');
+      expect(statusElement).toHaveAttribute('aria-label', 'Analisando oportunidades');
     });
 
-    it('should handle state count = 0', () => {
+    it('should have progressbar role with correct values', () => {
+      render(
+        <EnhancedLoadingProgress
+          currentStep={1}
+          estimatedTime={60}
+          stateCount={3}
+        />
+      );
+
+      const progressBar = screen.getByRole('progressbar');
+      expect(progressBar).toHaveAttribute('aria-valuenow');
+      expect(progressBar).toHaveAttribute('aria-valuemin', '0');
+      expect(progressBar).toHaveAttribute('aria-valuemax', '100');
+    });
+
+    it('should show degraded aria-label when isDegraded', () => {
+      render(
+        <EnhancedLoadingProgress
+          currentStep={1}
+          estimatedTime={60}
+          stateCount={3}
+          isDegraded={true}
+        />
+      );
+
+      const statusElement = screen.getByRole('status');
+      expect(statusElement).toHaveAttribute('aria-label', 'Resultados disponíveis com ressalvas');
+    });
+  });
+
+  describe('Edge cases', () => {
+    it('should handle very short estimated time', () => {
+      expect(() =>
+        render(
+          <EnhancedLoadingProgress
+            currentStep={1}
+            estimatedTime={0.5}
+            stateCount={1}
+          />
+        )
+      ).not.toThrow();
+    });
+
+    it('should handle stateCount = 0', () => {
       render(
         <EnhancedLoadingProgress
           currentStep={1}
@@ -521,6 +653,36 @@ describe('EnhancedLoadingProgress Component', () => {
       );
 
       expect(screen.getByText(/Processando 0 estados/)).toBeInTheDocument();
+    });
+
+    it('should handle long-running filter message', () => {
+      render(
+        <EnhancedLoadingProgress
+          currentStep={1}
+          estimatedTime={60}
+          stateCount={3}
+          sseEvent={{ stage: 'filtering', progress: 65, message: '', detail: { is_long_running: true } } as any}
+        />
+      );
+
+      expect(screen.getByTestId('long-running-message')).toBeInTheDocument();
+      expect(screen.getByText(/Volume grande, pode levar até 2 min/)).toBeInTheDocument();
+    });
+  });
+
+  describe('Snapshot', () => {
+    it('should match visual snapshot of new carousel component', () => {
+      const { container } = render(
+        <EnhancedLoadingProgress
+          currentStep={1}
+          estimatedTime={60}
+          stateCount={5}
+          statesProcessed={2}
+          onCancel={mockOnCancel}
+        />
+      );
+
+      expect(container.firstChild).toMatchSnapshot();
     });
   });
 });

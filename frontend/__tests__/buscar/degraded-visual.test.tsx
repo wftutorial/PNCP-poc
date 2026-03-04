@@ -1,6 +1,7 @@
 /**
  * Tests for EnhancedLoadingProgress degraded visual state
  * GTM-RESILIENCE-A02 AC14 — Amber visual transition for degraded data
+ * UX-411: Updated to reflect carousel-based component (no stages/percentage/countdown)
  */
 
 import React from 'react';
@@ -59,7 +60,6 @@ describe('EnhancedLoadingProgress - GTM-RESILIENCE-A02 Degraded Visuals', () => 
       );
 
       const progressBar = screen.getByRole('progressbar');
-      const progressBarParent = progressBar.parentElement;
 
       // Progress bar should have amber gradient
       expect(progressBar).toHaveClass('bg-gradient-to-r');
@@ -71,7 +71,7 @@ describe('EnhancedLoadingProgress - GTM-RESILIENCE-A02 Degraded Visuals', () => 
       expect(progressBar).not.toHaveClass('to-brand-blue-hover');
     });
 
-    it('should apply amber color to percentage text when degraded', () => {
+    it('should apply amber color to spinner when degraded', () => {
       render(
         <EnhancedLoadingProgress
           {...defaultProps}
@@ -79,32 +79,10 @@ describe('EnhancedLoadingProgress - GTM-RESILIENCE-A02 Degraded Visuals', () => 
         />
       );
 
-      // Find percentage text by looking for aria-valuemax attribute on progressbar
-      const progressBar = screen.getByRole('progressbar');
-      const percentage = parseInt(progressBar.getAttribute('aria-valuenow') || '0');
-
-      // Find text containing the percentage (using getAllByText since there might be multiple)
-      const percentageElements = screen.getAllByText(new RegExp(`${percentage}%`));
-      const percentageText = percentageElements.find(el => el.classList.contains('font-bold'));
-
-      expect(percentageText).toBeInTheDocument();
-      expect(percentageText).toHaveClass('text-amber-600');
-    });
-
-    it('should apply amber styling to active stage indicator when degraded', () => {
-      render(
-        <EnhancedLoadingProgress
-          {...defaultProps}
-          isDegraded={true}
-        />
-      );
-
-      // Active stage (stage 1 by default) — pick the stage indicator label (second occurrence)
-      const labels = screen.getAllByText('Consultando fontes oficiais');
-      const stageLabel = labels.find(el => el.classList.contains('text-center'));
-      expect(stageLabel).toBeDefined();
-      expect(stageLabel).toHaveClass('text-amber-600');
-      expect(stageLabel).toHaveClass('font-semibold');
+      // UX-411: Spinner changes to amber when degraded
+      const spinner = document.querySelector('svg.animate-spin');
+      expect(spinner).toBeInTheDocument();
+      expect(spinner).toHaveClass('text-amber-500');
     });
   });
 
@@ -152,7 +130,7 @@ describe('EnhancedLoadingProgress - GTM-RESILIENCE-A02 Degraded Visuals', () => 
       expect(progressBar).not.toHaveClass('to-amber-600');
     });
 
-    it('should apply blue color to percentage text when not degraded', () => {
+    it('should apply blue color to spinner when not degraded', () => {
       render(
         <EnhancedLoadingProgress
           {...defaultProps}
@@ -160,30 +138,10 @@ describe('EnhancedLoadingProgress - GTM-RESILIENCE-A02 Degraded Visuals', () => 
         />
       );
 
-      const progressBar = screen.getByRole('progressbar');
-      const percentage = parseInt(progressBar.getAttribute('aria-valuenow') || '0');
-
-      const percentageElements = screen.getAllByText(new RegExp(`${percentage}%`));
-      const percentageText = percentageElements.find(el => el.classList.contains('font-bold'));
-
-      expect(percentageText).toBeInTheDocument();
-      expect(percentageText).toHaveClass('text-brand-blue');
-    });
-
-    it('should apply blue styling to active stage indicator when not degraded', () => {
-      render(
-        <EnhancedLoadingProgress
-          {...defaultProps}
-          isDegraded={false}
-        />
-      );
-
-      // Active stage (stage 1 by default) — pick the stage indicator label (second occurrence)
-      const labels = screen.getAllByText('Consultando fontes oficiais');
-      const stageLabel = labels.find(el => el.classList.contains('text-center'));
-      expect(stageLabel).toBeDefined();
-      expect(stageLabel).toHaveClass('text-brand-blue');
-      expect(stageLabel).toHaveClass('font-semibold');
+      // UX-411: Spinner is blue when not degraded
+      const spinner = document.querySelector('svg.animate-spin');
+      expect(spinner).toBeInTheDocument();
+      expect(spinner).toHaveClass('text-brand-blue');
     });
   });
 
@@ -254,13 +212,13 @@ describe('EnhancedLoadingProgress - GTM-RESILIENCE-A02 Degraded Visuals', () => 
       );
 
       const container = screen.getByTestId('loading-progress');
-      expect(container).toHaveAttribute('aria-label', expect.stringMatching(/Analisando oportunidades, \d+% concluído/));
+      // UX-411: aria-label no longer includes percentage
+      expect(container).toHaveAttribute('aria-label', 'Analisando oportunidades');
     });
   });
 
   describe('AC14: Overtime message should NOT show when degraded', () => {
     it('should not show overtime message when isDegraded=true even if elapsed > estimated', () => {
-      // Mock Date.now to simulate elapsed time > estimated time
       const originalDateNow = Date.now;
       const startTime = 1000000;
       Date.now = jest.fn(() => startTime + 60000); // 60s elapsed

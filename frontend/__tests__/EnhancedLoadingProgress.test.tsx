@@ -48,7 +48,7 @@ describe('EnhancedLoadingProgress Component', () => {
         />
       );
 
-      expect(screen.getByText(/Buscando em todo o Brasil/)).toBeInTheDocument();
+      expect(screen.getByText(/Analisando em todo o Brasil/)).toBeInTheDocument();
     });
 
     it('should display singular state when count is 1', () => {
@@ -301,7 +301,7 @@ describe('EnhancedLoadingProgress Component', () => {
 
       const statusElement = screen.getByRole('status');
       expect(statusElement).toHaveAttribute('aria-live', 'polite');
-      expect(statusElement).toHaveAttribute('aria-label', expect.stringContaining('Buscando licitações'));
+      expect(statusElement).toHaveAttribute('aria-label', expect.stringContaining('Analisando oportunidades'));
     });
 
     it('should have progressbar role with correct values', () => {

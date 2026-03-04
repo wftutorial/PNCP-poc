@@ -107,7 +107,7 @@ export function deriveSearchPhase(input: SearchPhaseInput): SearchPhase {
 /** Human-readable labels for each phase (used in tests + telemetry) */
 export const PHASE_LABELS: Record<SearchPhase, string> = {
   idle: "Aguardando busca",
-  searching: "Buscando licitações",
+  searching: "Analisando oportunidades",
   partial_available: "Resultados parciais disponíveis",
   completed: "Busca concluída",
   empty_results: "Nenhum resultado encontrado",

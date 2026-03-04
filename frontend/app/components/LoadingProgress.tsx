@@ -45,7 +45,7 @@ const STAGES = [
   },
   {
     id: 'fetching' as SearchStage,
-    label: "Buscando licitações",
+    label: "Analisando oportunidades",
     icon: "📥",
     progressStart: 20,
     progressEnd: 50,

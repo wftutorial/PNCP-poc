@@ -15,16 +15,16 @@ Loading states são o microcopy de maior ROI: o usuário está preso olhando, en
 
 ## Critérios de Aceitação
 
-- [ ] AC1: `useSearchPolling.ts` — Substituir mensagens de status por versões narrativas:
+- [x] AC1: `useSearchPolling.ts` — Substituir mensagens de status por versões narrativas:
   - `validating` → "Preparando sua análise..."
   - `fetching`/`execute`/`fetch` → "Consultando fontes oficiais..."
   - `filtering`/`filter` → "Classificando por relevância para seu setor..."
   - `ranking` → "Ordenando as melhores oportunidades..."
   - `complete` → "Análise concluída"
-- [ ] AC2: `LoadingProgress.tsx:40` — "Buscando licitações..." → "Analisando oportunidades..."
-- [ ] AC3: `EnhancedLoadingProgress.tsx:296` — "Buscando licitações, {N}% completo" → "Analisando oportunidades, {N}% concluído"
-- [ ] AC4: `EnhancedLoadingProgress.tsx:453,463` — "Buscando em todo o Brasil..." → "Analisando em todo o Brasil..."
-- [ ] AC5: Testes atualizados para novas strings
+- [x] AC2: `LoadingProgress.tsx:40` — "Buscando licitações..." → "Analisando oportunidades..."
+- [x] AC3: `EnhancedLoadingProgress.tsx:296` — "Buscando licitações, {N}% completo" → "Analisando oportunidades, {N}% concluído"
+- [x] AC4: `EnhancedLoadingProgress.tsx:453,463` — "Buscando em todo o Brasil..." → "Analisando em todo o Brasil..."
+- [x] AC5: Testes atualizados para novas strings
 
 ## Copy Recomendada
 

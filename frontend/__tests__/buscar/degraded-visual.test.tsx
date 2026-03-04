@@ -254,7 +254,7 @@ describe('EnhancedLoadingProgress - GTM-RESILIENCE-A02 Degraded Visuals', () => 
       );
 
       const container = screen.getByTestId('loading-progress');
-      expect(container).toHaveAttribute('aria-label', expect.stringMatching(/Buscando licitações, \d+% completo/));
+      expect(container).toHaveAttribute('aria-label', expect.stringMatching(/Analisando oportunidades, \d+% concluído/));
     });
   });
 

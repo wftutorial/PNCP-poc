@@ -37,7 +37,7 @@ export function LoadingProgress({
           />
         </svg>
         <p className="text-base sm:text-lg font-medium text-ink">
-          Buscando licitações...
+          Analisando oportunidades...
         </p>
       </div>
 

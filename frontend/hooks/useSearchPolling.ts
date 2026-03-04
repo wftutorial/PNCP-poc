@@ -127,25 +127,26 @@ export function useSearchPolling({
 }
 
 function _stageMessage(status: string, stage: string | null): string {
-  if (status === 'completed') return 'Busca concluída!';
+  if (status === 'completed') return 'Análise concluída';
   if (status === 'failed') return 'Erro no processamento';
   if (status === 'timed_out') return 'Tempo limite excedido';
   if (status === 'rate_limited') return 'Limite de requisições excedido';
 
   const stageMessages: Record<string, string> = {
     // Long-form (state machine states)
-    validating: 'Validando requisição...',
-    fetching: 'Buscando dados...',
-    filtering: 'Filtrando resultados...',
+    validating: 'Preparando sua análise...',
+    fetching: 'Consultando fontes oficiais...',
+    filtering: 'Classificando por relevância para seu setor...',
+    ranking: 'Ordenando as melhores oportunidades...',
     enriching: 'Enriquecendo resultados...',
     generating: 'Gerando relatórios...',
     persisting: 'Salvando resultados...',
     // Short-form (pipeline stage names from backend)
-    validate: 'Validando requisição...',
+    validate: 'Preparando sua análise...',
     prepare: 'Preparando busca...',
-    execute: 'Buscando dados...',
-    fetch: 'Buscando dados...',
-    filter: 'Filtrando resultados...',
+    execute: 'Consultando fontes oficiais...',
+    fetch: 'Consultando fontes oficiais...',
+    filter: 'Classificando por relevância para seu setor...',
     enrich: 'Enriquecendo resultados...',
     generate: 'Gerando relatórios...',
     persist: 'Salvando resultados...',

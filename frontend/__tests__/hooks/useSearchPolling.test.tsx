@@ -179,7 +179,7 @@ describe("useSearchPolling", () => {
 
     expect(result.current.asProgressEvent?.stage).toBe("filter");
     expect(result.current.asProgressEvent?.progress).toBe(60);
-    expect(result.current.asProgressEvent?.message).toContain("Filtrando");
+    expect(result.current.asProgressEvent?.message).toContain("Classificando");
   });
 
   it("converts completed to 'complete' stage", async () => {

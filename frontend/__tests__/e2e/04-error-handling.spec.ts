@@ -181,7 +181,7 @@ test.describe('Error Handling Scenarios', () => {
     await searchButton.click();
 
     // Verify loading indicator appears immediately (be specific to avoid multiple matches)
-    const loadingDiv = page.getByText('Buscando licitações...');
+    const loadingDiv = page.getByText('Analisando oportunidades...');
     await expect(loadingDiv).toBeVisible({ timeout: 1000 });
 
     // Verify search button shows loading state

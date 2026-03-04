@@ -293,7 +293,7 @@ export function EnhancedLoadingProgress({
       aria-live="polite"
       aria-label={isDegraded
         ? `Resultados disponíveis com ressalvas`
-        : `Buscando licitações, ${Math.floor(progressPercentage)}% completo`}
+        : `Analisando oportunidades, ${Math.floor(progressPercentage)}% concluído`}
       data-testid={isDegraded ? 'degraded-progress' : 'loading-progress'}
     >
       {/* CRIT-005 AC22: Timeout overlay */}
@@ -450,7 +450,7 @@ export function EnhancedLoadingProgress({
         <span>
           {effectiveStatesProcessed > 0 ? (
             stateCount >= 27 ? (
-              <>Buscando em todo o Brasil...</>
+              <>Analisando em todo o Brasil...</>
             ) : (
               <>
                 <span className="font-semibold text-brand-blue">{effectiveStatesProcessed}</span>
@@ -460,7 +460,7 @@ export function EnhancedLoadingProgress({
               </>
             )
           ) : (
-            stateCount >= 27 ? 'Buscando em todo o Brasil...' : `Processando ${stateCount} ${stateCount === 1 ? 'estado' : 'estados'}`
+            stateCount >= 27 ? 'Analisando em todo o Brasil...' : `Processando ${stateCount} ${stateCount === 1 ? 'estado' : 'estados'}`
           )}
         </span>
 

@@ -186,8 +186,8 @@ class TestBuildPncpLinkPriority:
         assert "pncp.gov.br/app/editais" in result
         assert "12345678000190" in result
 
-    def test_returns_empty_when_no_link_data(self):
-        """Returns empty string when no link data is available."""
+    def test_returns_none_when_no_link_data(self):
+        """UX-400 AC2: Returns None (not empty string) when no link data is available."""
         from search_pipeline import _build_pncp_link
 
-        assert _build_pncp_link({}) == ""
+        assert _build_pncp_link({}) is None

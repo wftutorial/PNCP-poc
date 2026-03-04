@@ -1019,7 +1019,7 @@ class PNCPClient:
                     raise PNCPAPIError(
                         f"PNCP 422 after all {len(format_rotation)} date formats for "
                         f"UF={params.get('uf', '?')} mod={params.get('codigoModalidadeContratacao', '?')}. "
-                        f"Reduza o período de busca."
+                        f"Reduza o período da análise."
                     )
 
                 # CRIT-043 AC3+AC4: 400 on page>1 is expected (past last page)
@@ -1780,7 +1780,7 @@ class AsyncPNCPClient:
                     raise PNCPAPIError(
                         f"PNCP 422 after all {len(format_rotation)} date formats for "
                         f"UF={params.get('uf', '?')} mod={params.get('codigoModalidadeContratacao', '?')}. "
-                        f"Reduza o período de busca."
+                        f"Reduza o período da análise."
                     )
 
                 # CRIT-043 AC2: 400 on page>1 = past last page, return empty
@@ -2455,10 +2455,30 @@ class PNCPLegacyAdapter:
                 modalidade=item.get("modalidadeNome", ""),
                 modalidade_id=item.get("modalidadeId"),
                 situacao=item.get("situacaoCompraNome", ""),
-                link_edital=item.get("linkSistemaOrigem", ""),
+                link_edital=self._build_link_edital(item),
                 link_portal=item.get("linkProcessoEletronico", ""),
                 raw_data=item,
             )
+
+    @staticmethod
+    def _build_link_edital(item: Dict[str, Any]) -> str:
+        """Build link_edital with fallback from PNCP fields (UX-400 AC1).
+
+        Priority: linkSistemaOrigem > constructed URL from orgaoCnpj/anoCompra/sequencialCompra.
+        Returns empty string only if all fields are missing (downstream _build_pncp_link
+        has additional fallback from numeroControlePNCP).
+        """
+        link = item.get("linkSistemaOrigem") or ""
+        if link:
+            return link
+
+        cnpj = item.get("cnpjOrgao", "")
+        ano = item.get("anoCompra", "")
+        seq = item.get("sequencialCompra", "")
+        if cnpj and ano and seq:
+            return f"https://pncp.gov.br/app/editais/{cnpj}/{ano}/{seq}"
+
+        return ""
 
     def normalize(self, raw_record):
         pass

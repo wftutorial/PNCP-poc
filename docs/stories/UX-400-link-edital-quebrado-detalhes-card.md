@@ -18,13 +18,13 @@ O botão "Ver Edital" é a principal call-to-action do card de licitação — e
 - `frontend/app/components/LicitacaoCard.tsx:459-630`: Card mostra Objeto, Órgão, Modalidade, Datas e Valor, mas não mostra número do edital, CNPJ, esfera, fonte (PNCP/PCP/ComprasGov) ou link alternativo ao PNCP.
 
 ## Critérios de Aceitação
-- [ ] AC1: Backend (`pncp_client.py`): Quando `linkSistemaOrigem` estiver vazio/null, construir link fallback usando template `https://pncp.gov.br/app/editais/{orgaoCnpj}/{ano}/{sequencialCompra}` (campos já presentes na resposta PNCP).
-- [ ] AC2: Backend: Garantir que `link_edital` nunca seja string vazia — deve ser URL válida ou `null`.
-- [ ] AC3: Frontend (`LicitacaoCard.tsx`): Quando `licitacao.link` for `null`/vazio, desabilitar botão "Ver Edital" com tooltip "Link indisponível na fonte" e estilo visual `opacity-50 cursor-not-allowed`.
-- [ ] AC4: Frontend (`LicitacaoCard.tsx`): Adicionar badge de fonte de dados (PNCP/PCP/ComprasGov) usando campo `_source` já retornado pelo backend. Badge compacto com ícone.
-- [ ] AC5: Frontend (`LicitacaoCard.tsx`): Mostrar número do edital (`numeroCompra` ou `pncp_id`) quando disponível, abaixo do título.
-- [ ] AC6: Frontend (`LicitacaoCard.tsx`): Mostrar CNPJ do órgão formatado quando disponível, ao lado do nome do órgão.
-- [ ] AC7: Nenhum link `<a href="">` deve existir no DOM quando o link do edital não está disponível.
+- [x] AC1: Backend (`pncp_client.py`): Quando `linkSistemaOrigem` estiver vazio/null, construir link fallback usando template `https://pncp.gov.br/app/editais/{orgaoCnpj}/{ano}/{sequencialCompra}` (campos já presentes na resposta PNCP).
+- [x] AC2: Backend: Garantir que `link_edital` nunca seja string vazia — deve ser URL válida ou `null`.
+- [x] AC3: Frontend (`LicitacaoCard.tsx`): Quando `licitacao.link` for `null`/vazio, desabilitar botão "Ver Edital" com tooltip "Link indisponível na fonte" e estilo visual `opacity-50 cursor-not-allowed`.
+- [x] AC4: Frontend (`LicitacaoCard.tsx`): Adicionar badge de fonte de dados (PNCP/PCP/ComprasGov) usando campo `_source` já retornado pelo backend. Badge compacto com ícone.
+- [x] AC5: Frontend (`LicitacaoCard.tsx`): Mostrar número do edital (`numeroCompra` ou `pncp_id`) quando disponível, abaixo do título.
+- [x] AC6: Frontend (`LicitacaoCard.tsx`): Mostrar CNPJ do órgão formatado quando disponível, ao lado do nome do órgão.
+- [x] AC7: Nenhum link `<a href="">` deve existir no DOM quando o link do edital não está disponível.
 
 ## Arquivos Impactados
 - `backend/pncp_client.py` — Construir link fallback a partir de campos PNCP; nunca retornar `""`.
@@ -32,12 +32,12 @@ O botão "Ver Edital" é a principal call-to-action do card de licitação — e
 - `frontend/app/types.ts` — Garantir que tipo `Licitacao` permite `link: string | null`.
 
 ## Testes Necessários
-- [ ] Backend: Teste unitário para link fallback quando `linkSistemaOrigem` ausente.
-- [ ] Backend: Teste unitário confirmando que `link_edital` nunca retorna `""`.
-- [ ] Frontend: Teste que card com `link=""` não renderiza `<a href="">`.
-- [ ] Frontend: Teste que card com `link=null` mostra botão desabilitado com tooltip.
-- [ ] Frontend: Teste que badge de fonte renderiza corretamente para cada source.
-- [ ] Frontend: Snapshot visual do card com e sem link.
+- [x] Backend: Teste unitário para link fallback quando `linkSistemaOrigem` ausente.
+- [x] Backend: Teste unitário confirmando que `link_edital` nunca retorna `""`.
+- [x] Frontend: Teste que card com `link=""` não renderiza `<a href="">`.
+- [x] Frontend: Teste que card com `link=null` mostra botão desabilitado com tooltip.
+- [x] Frontend: Teste que badge de fonte renderiza corretamente para cada source.
+- [x] Frontend: Snapshot visual do card com e sem link.
 
 ## Notas Técnicas
 - O PNCP popula `linkSistemaOrigem` em ~86% dos registros. Para os 14% restantes, o link fallback com CNPJ+ano+sequencial resolve a maioria.

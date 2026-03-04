@@ -169,15 +169,15 @@ class TestBuildPncpLink:
         result = _build_pncp_link(lic)
         assert result == "https://pncp.gov.br/app/editais/12345678000100/2026/1"
 
-    def test_returns_empty_when_no_data(self):
-        """Returns empty string when no link fields exist."""
+    def test_returns_none_when_no_data(self):
+        """UX-400 AC2: Returns None (not empty string) when no link fields exist."""
         lic = {}
-        assert _build_pncp_link(lic) == ""
+        assert _build_pncp_link(lic) is None
 
-    def test_returns_empty_for_malformed_numero_controle(self):
-        """Malformed numeroControlePNCP handled gracefully, returns empty."""
+    def test_returns_none_for_malformed_numero_controle(self):
+        """UX-400 AC2: Malformed numeroControlePNCP handled gracefully, returns None."""
         lic = {"numeroControlePNCP": "invalid-format"}
-        assert _build_pncp_link(lic) == ""
+        assert _build_pncp_link(lic) is None
 
 
 # ============================================================================

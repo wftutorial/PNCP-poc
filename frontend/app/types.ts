@@ -38,7 +38,13 @@ export interface SanctionsSummary {
 }
 
 /** Individual bid item for display in search results */
-export type LicitacaoItem = components["schemas"]["LicitacaoItem"] & {
+export type LicitacaoItem = Omit<components["schemas"]["LicitacaoItem"], "link"> & {
+  /** UX-400 AC2: Link may be null when no URL is available */
+  link: string | null;
+  /** UX-400 AC5: Procurement number (edital number or codigoCompra) */
+  numero_compra?: string | null;
+  /** UX-400 AC6: CNPJ of the issuing government agency */
+  cnpj_orgao?: string | null;
   /** Sanctions check result (only when check_sanctions=true in request) — STORY-256 AC11 */
   supplier_sanctions?: SanctionsSummary | null;
   /** GTM-FIX-028 AC8: How relevance was determined */

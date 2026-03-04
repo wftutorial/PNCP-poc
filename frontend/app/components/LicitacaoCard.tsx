@@ -344,6 +344,20 @@ function truncateText(text: string, maxLength: number): string {
   return text.substring(0, maxLength).trim() + "...";
 }
 
+/** UX-400 AC6: Format CNPJ with mask (XX.XXX.XXX/XXXX-XX) */
+function formatCnpj(cnpj: string): string {
+  const digits = cnpj.replace(/\D/g, "");
+  if (digits.length !== 14) return cnpj;
+  return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12)}`;
+}
+
+/** UX-400 AC4: Source display labels and colors */
+const SOURCE_CONFIG: Record<string, { label: string; color: string }> = {
+  PNCP: { label: "PNCP", color: "bg-blue-100 text-blue-800" },
+  PCP: { label: "PCP", color: "bg-purple-100 text-purple-800" },
+  ComprasGov: { label: "ComprasGov", color: "bg-green-100 text-green-800" },
+};
+
 /**
  * Calculate time remaining until deadline with clear messaging
  */
@@ -425,7 +439,7 @@ export function LicitacaoCard({
         await navigator.share({
           title: `Licitação: ${truncateText(licitacao.objeto, 50)}`,
           text: `${licitacao.orgao} - ${formatCurrency(licitacao.valor)}`,
-          url: licitacao.link,
+          url: licitacao.link || undefined,
         });
       } catch (err) {
         // User cancelled or share failed
@@ -434,7 +448,7 @@ export function LicitacaoCard({
     } else {
       // Fallback: copy link to clipboard
       try {
-        await navigator.clipboard.writeText(licitacao.link);
+        await navigator.clipboard.writeText(licitacao.link || "");
         // Could show a toast notification here
       } catch (err) {
         console.error("Failed to copy link:", err);
@@ -463,6 +477,15 @@ export function LicitacaoCard({
           {/* STORY-256 AC14: Sanctions badge */}
           {licitacao.supplier_sanctions && (
             <SanctionsBadge sanctions={licitacao.supplier_sanctions} />
+          )}
+          {/* UX-400 AC4: Data source badge */}
+          {licitacao._source && SOURCE_CONFIG[licitacao._source] && (
+            <span
+              data-testid="source-badge"
+              className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${SOURCE_CONFIG[licitacao._source].color}`}
+            >
+              {SOURCE_CONFIG[licitacao._source].label}
+            </span>
           )}
           {licitacao.modalidade && (
             <span className="inline-flex items-center px-2 py-0.5 rounded bg-surface-2 text-ink-secondary text-xs font-medium">
@@ -502,8 +525,22 @@ export function LicitacaoCard({
             : licitacao.objeto}
         </h3>
 
-        {/* Orgao */}
-        <p className="text-sm text-ink-secondary truncate">{licitacao.orgao}</p>
+        {/* UX-400 AC5: Edital number below title */}
+        {(licitacao.numero_compra || licitacao.pncp_id) && (
+          <p className="text-xs text-ink-muted font-mono">
+            {licitacao.numero_compra || licitacao.pncp_id}
+          </p>
+        )}
+
+        {/* Orgao + UX-400 AC6: CNPJ */}
+        <p className="text-sm text-ink-secondary truncate">
+          {licitacao.orgao}
+          {licitacao.cnpj_orgao && (
+            <span className="text-ink-muted ml-1">
+              (CNPJ: {formatCnpj(licitacao.cnpj_orgao)})
+            </span>
+          )}
+        </p>
 
         {/* Location Info */}
         <div className="flex items-center gap-1 text-sm text-ink-muted">
@@ -629,18 +666,33 @@ export function LicitacaoCard({
 
       {/* Actions Footer */}
       <div className="flex items-center justify-between gap-2 p-4 pt-3 border-t border-white/15 dark:border-white/10 bg-white/20 dark:bg-white/5">
-        {/* Primary Action: View source */}
-        <a
-          href={licitacao.link}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 px-4 py-2 bg-brand-navy text-white text-sm font-medium rounded-button
-                     hover:bg-brand-blue-hover transition-colors"
-        >
-          <DocumentIcon className="w-4 h-4" />
-          Ver Edital
-          <ExternalLinkIcon className="w-3.5 h-3.5" />
-        </a>
+        {/* Primary Action: View source — UX-400 AC3+AC7 */}
+        {licitacao.link ? (
+          <a
+            href={licitacao.link}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-brand-navy text-white text-sm font-medium rounded-button
+                       hover:bg-brand-blue-hover transition-colors"
+          >
+            <DocumentIcon className="w-4 h-4" />
+            Ver Edital
+            <ExternalLinkIcon className="w-3.5 h-3.5" />
+          </a>
+        ) : (
+          <InfoTooltip content="Link indisponível na fonte">
+            <span
+              className="inline-flex items-center gap-2 px-4 py-2 bg-brand-navy text-white text-sm font-medium rounded-button
+                         opacity-50 cursor-not-allowed"
+              aria-disabled="true"
+              role="button"
+            >
+              <DocumentIcon className="w-4 h-4" />
+              Ver Edital
+              <ExternalLinkIcon className="w-3.5 h-3.5" />
+            </span>
+          </InfoTooltip>
+        )}
 
         {/* Secondary Actions */}
         <div className="flex items-center gap-1">

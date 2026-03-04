@@ -95,7 +95,7 @@ def _maybe_send_quota_email(user_id: str, quota_used: int, quota_info) -> None:
             )
             send_email_async(
                 to=email,
-                subject=f"Limite de buscas atingido — {plan_name}",
+                subject=f"Limite de análises atingido — {plan_name}",
                 html=html,
                 tags=[{"name": "category", "value": "quota_exhausted"}],
             )
@@ -109,7 +109,7 @@ def _maybe_send_quota_email(user_id: str, quota_used: int, quota_info) -> None:
             )
             send_email_async(
                 to=email,
-                subject=f"Aviso de cota: {quota_used}/{max_quota} buscas usadas",
+                subject=f"Aviso de cota: {quota_used}/{max_quota} análises usadas",
                 html=html,
                 tags=[{"name": "category", "value": "quota_warning"}],
             )
@@ -124,14 +124,14 @@ def _maybe_send_quota_email(user_id: str, quota_used: int, quota_info) -> None:
 # Helper functions (moved from routes/search.py)
 # ============================================================================
 
-def _build_pncp_link(lic: dict) -> str:
+def _build_pncp_link(lic: dict) -> str | None:
     """Build PNCP link from bid data.
 
     Priority: linkSistemaOrigem (86% populated) > linkProcessoEletronico (0% — dead field,
-    kept as defensive fallback) > constructed URL from numeroControlePNCP.
+    kept as defensive fallback) > constructed URL from numeroControlePNCP >
+    cnpjOrgao/anoCompra/sequencialCompra (UX-400 AC1).
 
-    CRIT-FLT-008: PNCP API audit confirmed linkProcessoEletronico is always empty.
-    linkSistemaOrigem is the only reliable link field (present in 86% of records).
+    UX-400 AC2: Returns None (not "") when no link can be constructed.
     """
     link = lic.get("linkSistemaOrigem") or lic.get("linkProcessoEletronico")
 
@@ -151,7 +151,15 @@ def _build_pncp_link(lic: dict) -> str:
             except Exception as e:
                 logger.debug(f"PNCP link extraction failed for {numero_controle}: {e}")
 
-    return link or ""
+    if not link:
+        # UX-400 AC1: Fallback from direct PNCP fields
+        cnpj = lic.get("cnpjOrgao", "")
+        ano = lic.get("anoCompra", "")
+        seq = lic.get("sequencialCompra", "")
+        if cnpj and ano and seq:
+            link = f"https://pncp.gov.br/app/editais/{cnpj}/{ano}/{seq}"
+
+    return link or None
 
 
 def _calcular_urgencia(dias_restantes: int | None) -> str | None:
@@ -283,6 +291,8 @@ def _convert_to_licitacao_items(licitacoes: list[dict]) -> list[LicitacaoItem]:
                 dias_restantes=dias_rest,
                 urgencia=_calcular_urgencia(dias_rest),
                 link=_build_pncp_link(lic),
+                numero_compra=lic.get("numeroEdital") or lic.get("codigoCompra") or None,
+                cnpj_orgao=lic.get("cnpjOrgao") or None,
                 source=lic.get("_source"),
                 relevance_score=lic.get("_relevance_score"),
                 matched_terms=lic.get("_matched_terms"),
@@ -756,7 +766,7 @@ class SearchPipeline:
                         status_code=429,
                         detail=(
                             f"Limite de {_max_monthly} "
-                            f"buscas mensais atingido. Renova em "
+                            f"análises mensais atingido. Renova em "
                             f"{ctx.quota_info.quota_reset_date.strftime('%d/%m/%Y')}."
                         )
                     )
@@ -1026,7 +1036,7 @@ class SearchPipeline:
 
         # SSE: Starting fetch
         if ctx.tracker:
-            msg = f"Iniciando busca em {len(request.ufs)} estados..."
+            msg = f"Iniciando análise em {len(request.ufs)} estados..."
             if enable_multi_source:
                 msg += " (multi-fonte ativo)"
             await ctx.tracker.emit("fetching", 10, msg)
@@ -1568,7 +1578,7 @@ class SearchPipeline:
                 ctx.is_partial = True
                 ctx.response_state = "empty_failure"
                 ctx.degradation_guidance = (
-                    f"A busca excedeu o tempo limite de {fetch_timeout // 60} minutos "
+                    f"A análise excedeu o tempo limite de {fetch_timeout // 60} minutos "
                     f"e não há resultados em cache disponíveis. "
                     f"Tente com menos estados ou um período menor."
                 )
@@ -1775,7 +1785,7 @@ class SearchPipeline:
                 ctx.is_partial = True
                 ctx.response_state = "cached"  # GTM-RESILIENCE-A01 AC6
                 ctx.degradation_reason = (
-                    "PNCP ficou indisponível durante a busca (circuit breaker ativado). "
+                    "PNCP ficou indisponível durante a análise (circuit breaker ativado). "
                     "Mostrando resultados do cache."
                 )
                 ctx.data_sources = [
@@ -1792,7 +1802,7 @@ class SearchPipeline:
                     "Tente novamente em alguns minutos ou reduza o número de estados."
                 )
                 ctx.degradation_reason = (
-                    "PNCP ficou indisponível durante a busca (circuit breaker ativado). "
+                    "PNCP ficou indisponível durante a análise (circuit breaker ativado). "
                     "Tente novamente em alguns minutos."
                 )
                 ctx.data_sources = [
@@ -1863,7 +1873,7 @@ class SearchPipeline:
                 raise HTTPException(
                     status_code=504,
                     detail=(
-                        f"A busca excedeu o tempo limite de {fetch_timeout // 60} minutos "
+                        f"A análise excedeu o tempo limite de {fetch_timeout // 60} minutos "
                         f"e não há resultados em cache disponíveis. "
                         f"Tente com menos estados ou um período menor."
                     ),
@@ -2305,7 +2315,7 @@ class SearchPipeline:
                 alerta_urgencia=None,
                 recomendacoes=[],
                 alertas_urgencia=[],
-                insight_setorial=f"Não foram encontradas oportunidades de {ctx.sector.name.lower()} nos filtros selecionados. Considere ampliar o período ou os estados de busca.",
+                insight_setorial=f"Não foram encontradas oportunidades de {ctx.sector.name.lower()} nos filtros selecionados. Considere ampliar o período ou os estados da análise.",
             )
 
             new_quota_used = ctx.quota_info.quota_used if ctx.quota_info else 0

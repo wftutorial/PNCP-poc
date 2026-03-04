@@ -15,14 +15,14 @@ Empty states devem validar o esforço, explicar o porquê, e oferecer alternativ
 
 ## Critérios de Aceitação
 
-- [ ] AC1: Headline do OnboardingEmptyState: "Nenhuma oportunidade encontrada para seu perfil" → "Sua busca foi concluída"
-- [ ] AC2: Subtexto: "Não encontramos oportunidades recentes para o seu perfil. Isso é normal para segmentos muito específicos." → "Não encontramos oportunidades compatíveis no período selecionado. Isso acontece em buscas mais específicas — e pode mudar nos próximos dias."
-- [ ] AC3: Sugestões reescritas com copy ativa:
+- [x] AC1: Headline do OnboardingEmptyState: "Nenhuma oportunidade encontrada para seu perfil" → "Sua busca foi concluída"
+- [x] AC2: Subtexto: "Não encontramos oportunidades recentes para o seu perfil. Isso é normal para segmentos muito específicos." → "Não encontramos oportunidades compatíveis no período selecionado. Isso acontece em buscas mais específicas — e pode mudar nos próximos dias."
+- [x] AC3: Sugestões reescritas com copy ativa:
   - "Adicionar mais estados" → "Incluir estados vizinhos"
   - "Ampliar a faixa de valor" → "Ampliar a faixa de valor estimado"
   - "Expandir o período de análise" → "Estender o período para 15 ou 30 dias"
-- [ ] AC4: CTA "Ajustar Filtros" → "Refinar busca"
-- [ ] AC5: Testes atualizados
+- [x] AC4: CTA "Ajustar Filtros" → "Refinar busca"
+- [x] AC5: Testes atualizados
 
 ## Copy Recomendada
 

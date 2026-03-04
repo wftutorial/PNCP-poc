@@ -95,24 +95,24 @@ function OnboardingEmptyState({ onAdjustFilters }: { onAdjustFilters: () => void
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
       </svg>
       <h3 className="text-lg font-semibold text-[var(--ink)] mb-2">
-        Nenhuma oportunidade encontrada para seu perfil
+        Sua busca foi concluída
       </h3>
       <p className="text-sm text-[var(--ink-secondary)] mb-4 max-w-md mx-auto">
-        Não encontramos oportunidades recentes para o seu perfil. Isso é normal para segmentos muito específicos.
+        Não encontramos oportunidades compatíveis no período selecionado. Isso acontece em buscas mais específicas — e pode mudar nos próximos dias.
       </p>
       <div className="space-y-2 text-sm text-[var(--ink-secondary)] mb-4">
-        <p>Sugestões para ampliar resultados:</p>
+        <p>Para ampliar resultados, tente:</p>
         <ul className="list-disc list-inside text-left max-w-sm mx-auto space-y-1">
-          <li>Adicionar mais estados</li>
-          <li>Ampliar a faixa de valor</li>
-          <li>Expandir o período de análise</li>
+          <li>Incluir estados vizinhos</li>
+          <li>Ampliar a faixa de valor estimado</li>
+          <li>Estender o período para 15 ou 30 dias</li>
         </ul>
       </div>
       <button
         onClick={onAdjustFilters}
         className="px-4 py-2 rounded-lg bg-[var(--brand-blue)] text-white text-sm font-medium hover:bg-[var(--brand-blue-hover)] transition-colors"
       >
-        Ajustar Filtros
+        Refinar busca
       </button>
     </div>
   );

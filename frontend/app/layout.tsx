@@ -35,8 +35,7 @@ const dmMono = DM_Mono({
   display: "swap",
 });
 
-// Force rebuild to pick up NEXT_PUBLIC_APP_NAME from Railway (SmartLic.tech)
-const appName = process.env.NEXT_PUBLIC_APP_NAME || "SmartLic.tech";
+import { APP_NAME } from "../lib/config";
 
 /* GTM-006 AC6: Explicit viewport configuration */
 export const viewport: Viewport = {
@@ -49,7 +48,7 @@ export const metadata: Metadata = {
   // GTM-COPY-006 AC1: Decision-strategy positioning (max 60 chars)
   title: {
     default: `SmartLic — Filtre Licitações por Viabilidade Real`,
-    template: `%s | ${appName}`,
+    template: `%s | ${APP_NAME}`,
   },
   // GTM-COPY-006 AC2: Result-oriented, no unverifiable claims (max 155 chars)
   description: "Analise a viabilidade de licitações antes de investir tempo. SmartLic cruza seu perfil com cada edital e recomenda apenas o que tem chance real de retorno.",
@@ -72,7 +71,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: `SmartLic — Descubra Quais Licitações Valem Seu Tempo`,
     description: "Avaliação de viabilidade por setor, região e modalidade. Filtre editais com critérios objetivos e invista tempo apenas onde há retorno real.",
-    siteName: appName,
+    siteName: APP_NAME,
     url: "https://smartlic.tech",
     type: "website",
     locale: "pt_BR",
@@ -81,7 +80,7 @@ export const metadata: Metadata = {
         url: "/api/og",
         width: 1200,
         height: 630,
-        alt: `${appName} — Inteligência de decisão em licitações públicas`,
+        alt: `${APP_NAME} — Inteligência de decisão em licitações públicas`,
       },
     ],
   },

@@ -29,8 +29,7 @@ import {
 import { TrialUpsellCTA } from "../../components/billing/TrialUpsellCTA";
 import { usePlan } from "../../hooks/usePlan";
 import { formatCurrencyBR } from "../../lib/format-currency";
-
-const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || "SmartLic.tech";
+import { APP_NAME } from "../../lib/config";
 
 // UX-406: Feature flag — organizations/teams not yet implemented in backend
 const ORGS_ENABLED = process.env.NEXT_PUBLIC_ORGS_ENABLED === "true";

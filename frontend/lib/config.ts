@@ -178,5 +178,11 @@ export const config = {
   },
 } as const;
 
+/**
+ * Consolidated APP_NAME constant (TD-002 FE-24)
+ * Import this instead of redeclaring per-file.
+ */
+export const APP_NAME = config.branding.appName;
+
 // Type-safe config access
 export type Config = typeof config;

@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { dateDiffInDays } from "../../../lib/utils/dateDiffInDays";
 import { getCorrelationId, logCorrelatedRequest } from "../../../lib/utils/correlationId";
 import { supabase } from "../../../lib/supabase";
+import { APP_NAME } from "../../../lib/config";
 
 export interface SearchFiltersSnapshot {
   ufs: Set<string>;
@@ -557,8 +558,6 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
       }
     };
   }, [result?.excel_status, result?.download_url, result?.download_id, sseDisconnected, sseAvailable, loading, searchId, session?.access_token]);
-
-  const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || "SmartLic.tech";
 
   const estimateSearchTime = (ufCount: number, dateRangeDays: number): number => {
     // GTM-FIX-027 T4 AC23: Recalibrated for tamanhoPagina=500 (was 20)

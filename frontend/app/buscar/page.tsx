@@ -37,9 +37,7 @@ import { dateDiffInDays } from "../../lib/utils/dateDiffInDays";
 import { toast } from "sonner";
 import { checkHasLastSearch, getLastSearch } from "../../lib/lastSearchCache";
 import type { BuscaResult } from "../types";
-
-// White label branding configuration
-const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || "SmartLic.tech";
+import { APP_NAME } from "../../lib/config";
 
 // ============================================================================
 // GTM-004: Onboarding Auto-Search Banners (AC11-13)

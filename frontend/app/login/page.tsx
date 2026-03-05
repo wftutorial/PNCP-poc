@@ -8,6 +8,7 @@ import Link from "next/link";
 import InstitutionalSidebar from "../components/InstitutionalSidebar";
 import { toast } from "sonner";
 import { translateAuthError } from "../../lib/error-messages";
+import { APP_NAME } from "../../lib/config";
 import dynamic from "next/dynamic";
 
 // STORY-317: Lazy load to avoid supabase import at module level (breaks tests)
@@ -15,8 +16,6 @@ const TotpVerificationScreen = dynamic(
   () => import("../../components/auth/TotpVerificationScreen").then(mod => ({ default: mod.TotpVerificationScreen })),
   { ssr: false }
 );
-
-const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || "SmartLic.tech";
 
 // Map error codes to user-friendly messages
 const ERROR_MESSAGES: Record<string, string> = {

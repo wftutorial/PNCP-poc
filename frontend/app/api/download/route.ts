@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { readFile } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
+import { APP_NAME } from "../../../lib/config";
 
 // STORY-210 AC5: Allowed domains for redirect URLs (Supabase storage only)
 const ALLOWED_REDIRECT_HOSTS = [
@@ -88,7 +89,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const buffer = await readFile(filePath);
-    const appNameSlug = (process.env.NEXT_PUBLIC_APP_NAME || "SmartLic.tech").replace(/[\s.]+/g, '_');
+    const appNameSlug = APP_NAME.replace(/[\s.]+/g, '_');
     const filename = `${appNameSlug}_${new Date().toISOString().split("T")[0]}.xlsx`;
 
     console.log(`✅ Download served from filesystem: ${id} (${buffer.length} bytes) [legacy mode]`);

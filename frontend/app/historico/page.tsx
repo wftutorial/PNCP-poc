@@ -11,8 +11,7 @@ import { useRouter } from "next/navigation";
 import { useAnalytics } from "../../hooks/useAnalytics";
 import { getUserFriendlyError } from "../../lib/error-messages";
 import { formatCurrencyBR } from "../../lib/format-currency";
-
-const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || "SmartLic.tech";
+import { APP_NAME } from "../../lib/config";
 
 // UX-354 -> UX-356: Shared sector slug -> display name mapping
 import { getSectorDisplayName } from "../../lib/constants/sector-names";

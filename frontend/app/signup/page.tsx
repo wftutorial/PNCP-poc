@@ -8,8 +8,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import InstitutionalSidebar from "../components/InstitutionalSidebar";
-
-const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || "SmartLic.tech";
+import { APP_NAME } from "../../lib/config";
 
 // STORY-258: Email type result
 type EmailCheckResult = {

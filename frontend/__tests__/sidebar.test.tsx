@@ -31,6 +31,14 @@ jest.mock("../app/components/AuthProvider", () => ({
   }),
 }));
 
+// Mock usePlan
+jest.mock("../hooks/usePlan", () => ({
+  usePlan: () => ({
+    planInfo: null,
+    loading: false,
+  }),
+}));
+
 // Mock localStorage
 const localStorageMock = (() => {
   let store: Record<string, string> = {};
@@ -211,5 +219,67 @@ describe("Sidebar", () => {
     const dashboardLink = screen.getByText("Dashboard").closest("a");
     expect(dashboardLink?.className).toContain("border-l-4");
     expect(dashboardLink?.className).toContain("border-transparent");
+  });
+
+  // ── TD-002 FE-12/FE-13: Accessibility ──
+
+  // AC8: Sign out button has aria-label
+  it("TD-002 AC8: sign out button has aria-label", () => {
+    render(<Sidebar />);
+    const sairButton = screen.getByLabelText("Sair");
+    expect(sairButton).toBeInTheDocument();
+    expect(sairButton.tagName).toBe("BUTTON");
+  });
+
+  // AC8: Collapse toggle has aria-label
+  it("TD-002 AC8: collapse toggle has aria-label", () => {
+    render(<Sidebar />);
+    const toggle = screen.getByLabelText("Recolher menu");
+    expect(toggle).toBeInTheDocument();
+  });
+
+  // AC8: Collapsed nav items get aria-label with their label text
+  it("TD-002 AC8: collapsed nav items have aria-label", () => {
+    localStorageMock.getItem.mockReturnValue("true");
+    render(<Sidebar />);
+    // When collapsed, nav links should have aria-label
+    expect(screen.getByLabelText("Buscar")).toBeInTheDocument();
+    expect(screen.getByLabelText("Dashboard")).toBeInTheDocument();
+  });
+
+  // AC9: SVG icons have aria-hidden="true"
+  it("TD-002 AC9: icon SVGs are aria-hidden", () => {
+    render(<Sidebar />);
+    const sidebar = screen.getByTestId("sidebar");
+    const svgs = sidebar.querySelectorAll("svg");
+    svgs.forEach((svg) => {
+      expect(svg).toHaveAttribute("aria-hidden", "true");
+    });
+  });
+
+  // AC11: Sign out icon wrapper has aria-hidden
+  it("TD-002 AC11: sign out icon span is aria-hidden", () => {
+    render(<Sidebar />);
+    const sairButton = screen.getByLabelText("Sair");
+    const iconSpan = sairButton.querySelector("span[aria-hidden]");
+    expect(iconSpan).toHaveAttribute("aria-hidden", "true");
+  });
+
+  // AC12: Uses lucide-react icons (no inline SVG path data)
+  it("TD-002 AC12: uses lucide-react icons (no inline heroicon paths)", () => {
+    render(<Sidebar />);
+    const sidebar = screen.getByTestId("sidebar");
+    // lucide-react renders SVGs without the complex heroicon paths
+    const svgs = sidebar.querySelectorAll("svg");
+    expect(svgs.length).toBeGreaterThan(0);
+    // Verify no inline heroicon-style stroke paths (complex d attributes > 100 chars)
+    svgs.forEach((svg) => {
+      const paths = svg.querySelectorAll("path");
+      paths.forEach((path) => {
+        const d = path.getAttribute("d") || "";
+        // lucide-react paths are simpler; heroicon paths are very long
+        expect(d.length).toBeLessThan(300);
+      });
+    });
   });
 });

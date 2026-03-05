@@ -11,6 +11,7 @@ import { formatCurrency, ROI_DISCLAIMER } from '@/lib/copy/roi';
 import { usePlan } from "../../hooks/usePlan";
 import { toast } from "sonner";
 import TestimonialSection, { TESTIMONIALS } from "../../components/TestimonialSection";
+import { Button } from "../../components/ui/button";
 
 interface UserProfile {
   plan_id?: string;
@@ -459,12 +460,13 @@ export default function PlanosPage() {
             </ul>
 
             {/* CTA Button */}
-            <button
+            <Button
+              variant="primary"
+              size="lg"
+              className="w-full text-lg font-bold hover:shadow-lg"
               onClick={hasFullAccess ? handleManageSubscription : handleCheckout}
               disabled={checkoutLoading || portalLoading}
-              className="w-full py-4 rounded-button text-lg font-bold transition-all
-                bg-[var(--brand-navy)] text-white hover:bg-[var(--brand-blue)] hover:shadow-lg
-                disabled:opacity-50 disabled:cursor-not-allowed"
+              loading={checkoutLoading || portalLoading}
             >
               {checkoutLoading || portalLoading
                 ? "Processando..."
@@ -477,7 +479,7 @@ export default function PlanosPage() {
                 : userStatus === "trial"
                 ? "Assinar agora"
                 : "Começar a filtrar oportunidades"}
-            </button>
+            </Button>
 
             <p className="mt-3 text-center text-xs text-[var(--ink-muted)]">
               Cancele quando quiser. Sem contrato de fidelidade. Pagamento seguro via Stripe.

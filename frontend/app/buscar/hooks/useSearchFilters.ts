@@ -241,7 +241,7 @@ export function useSearchFilters(clearResult: () => void): SearchFiltersState {
 
   // URL params handling
   useEffect(() => {
-    if (urlParamsApplied) return;
+    if (urlParamsApplied || !searchParams) return;
     const ufsParam = searchParams.get('ufs');
     const dataInicialParam = searchParams.get('data_inicial');
     const dataFinalParam = searchParams.get('data_final');

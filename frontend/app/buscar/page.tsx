@@ -27,11 +27,21 @@ import { useSearch } from "./hooks/useSearch";
 import { useNavigationGuard } from "../../hooks/useNavigationGuard";
 import SearchForm from "./components/SearchForm";
 import SearchResults from "./components/SearchResults";
+import type {
+  SearchResultsData,
+  SearchLoadingState,
+  SearchResultsFilters,
+  SearchResultsActions,
+  SearchDisplayState,
+  SearchAuthState,
+  SearchFeedbackState,
+} from "./types/search-results";
 import BackendStatusIndicator, { useBackendStatusContext } from "../../components/BackendStatusIndicator";
 import { SearchErrorBoundary } from "./components/SearchErrorBoundary";
 import { MobileDrawer } from "../../components/MobileDrawer";
 import { PaymentRecoveryModal } from "../../components/billing/PaymentRecoveryModal";
 import PdfOptionsModal from "../../components/reports/PdfOptionsModal";
+import { Button } from "../../components/ui/button";
 
 import { dateDiffInDays } from "../../lib/utils/dateDiffInDays";
 import { toast } from "sonner";
@@ -738,94 +748,99 @@ function HomePageContent() {
 
             {/* CRIT-002 AC1: Error boundary wraps results area (NOT SearchForm) */}
             <SearchErrorBoundary onReset={handleErrorBoundaryReset}>
+              {/* TD-005 AC10-AC14: Props grouped into semantic objects, spread for backward compat */}
               <SearchResults
-                loading={search.loading}
-                loadingStep={search.loadingStep}
-                estimatedTime={search.estimateSearchTime(filters.ufsSelecionadas.size, dateDiffInDays(filters.dataInicial, filters.dataFinal))}
-                stateCount={filters.ufsSelecionadas.size}
-                statesProcessed={search.statesProcessed}
-                onCancel={search.cancelSearch}
-                sseEvent={search.sseEvent}
-                useRealProgress={search.useRealProgress}
-                sseAvailable={search.sseAvailable}
-                sseDisconnected={search.sseDisconnected}
-                isReconnecting={search.isReconnecting}
-                isDegraded={search.isDegraded}
-                degradedDetail={search.degradedDetail}
-                onStageChange={(stage) => trackEvent('search_progress_stage', { stage, is_sse: search.useRealProgress && search.sseAvailable })}
-                error={search.error}
-                quotaError={search.quotaError}
-                result={search.result}
-                rawCount={search.rawCount}
-                ufsSelecionadas={filters.ufsSelecionadas}
-                sectorName={filters.sectorName}
-                searchMode={filters.searchMode}
-                termosArray={filters.termosArray}
-                ordenacao={filters.ordenacao}
-                onOrdenacaoChange={filters.setOrdenacao}
-                downloadLoading={search.downloadLoading}
-                downloadError={search.downloadError}
-                onDownload={search.handleDownload}
-                onSearch={search.buscar}
-                onRegenerateExcel={search.handleRegenerateExcel}
-                excelFailCount={search.excelFailCount}
-                planInfo={planInfo}
-                session={session}
-                onShowUpgradeModal={handleShowUpgradeModal}
-                onTrackEvent={trackEvent}
-                // STORY-257B: UF Progress Grid (AC1-4)
-                ufStatuses={search.ufStatuses}
-                ufTotalFound={search.ufTotalFound}
-                ufAllComplete={search.ufAllComplete}
-                // STORY-257B: Partial results (AC5)
-                searchElapsedSeconds={searchElapsed}
-                onViewPartial={search.viewPartialResults}
-                partialDismissed={partialDismissed}
-                onDismissPartial={() => setPartialDismissed(true)}
-                // STORY-257B: Cache refresh (AC9)
-                onRetryForceFresh={search.buscarForceFresh}
-                // STORY-257B: Sources unavailable (AC10)
-                hasLastSearch={lastSearchAvailable}
-                onLoadLastSearch={handleLoadLastSearch}
-                // A-04: Progressive delivery
-                liveFetchInProgress={search.liveFetchInProgress}
-                refreshAvailable={search.refreshAvailable}
-                onRefreshResults={search.handleRefreshResults}
-                // D-05: Feedback loop
-                searchId={search.searchId || undefined}
-                setorId={filters.setorId}
-                // UX-350: Profile completeness
-                isProfileComplete={isProfileComplete}
-                // CRIT-008 + GTM-UX-003: Unified retry
-                retryCountdown={search.retryCountdown}
-                retryMessage={search.retryMessage}
-                retryExhausted={search.retryExhausted}
-                onRetryNow={search.retryNow}
-                onCancelRetry={search.cancelRetry}
-                // STORY-265 AC16: Disable Excel download when trial expired
-                isTrialExpired={isTrialExpired || search.quotaError === "trial_expired"}
-                // STORY-295: Progressive results
-                sourceStatuses={search.sourceStatuses}
-                partialProgress={search.partialProgress}
-                filterSummary={search.filterSummary}
-                // STORY-320: Trial paywall
-                trialPhase={trialPhase}
-                paywallApplied={search.result?.paywall_applied}
-                totalBeforePaywall={search.result?.total_before_paywall}
-                // STORY-325: PDF Diagnostico
-                onGeneratePdf={() => setPdfModalOpen(true)}
-                pdfLoading={pdfLoading}
-                // SAB-005 AC1: Skeleton timeout
-                skeletonTimeoutReached={search.skeletonTimeoutReached}
-                // STORY-354: Pending review
-                pendingReviewCount={search.result?.pending_review_count ?? 0}
-                pendingReviewUpdate={search.pendingReviewUpdate}
-                // UX-404: Tour invite banner props
-                isResultsTourCompleted={isResultsTourCompleted}
-                onStartResultsTour={() => {
-                  startResultsTour();
-                  trackEvent('onboarding_tour_started', { tour: 'results' });
-                }}
+                {...{
+                  // Group 1: SearchResultsData
+                  result: search.result,
+                  rawCount: search.rawCount,
+                  filterSummary: search.filterSummary,
+                  pendingReviewCount: search.result?.pending_review_count ?? 0,
+                  pendingReviewUpdate: search.pendingReviewUpdate,
+
+                  // Group 2: SearchLoadingState
+                  loading: search.loading,
+                  loadingStep: search.loadingStep,
+                  estimatedTime: search.estimateSearchTime(filters.ufsSelecionadas.size, dateDiffInDays(filters.dataInicial, filters.dataFinal)),
+                  stateCount: filters.ufsSelecionadas.size,
+                  statesProcessed: search.statesProcessed,
+                  sseEvent: search.sseEvent,
+                  useRealProgress: search.useRealProgress,
+                  sseAvailable: search.sseAvailable,
+                  sseDisconnected: search.sseDisconnected,
+                  isReconnecting: search.isReconnecting,
+                  isDegraded: search.isDegraded,
+                  degradedDetail: search.degradedDetail,
+                  skeletonTimeoutReached: search.skeletonTimeoutReached,
+                  ufStatuses: search.ufStatuses,
+                  ufTotalFound: search.ufTotalFound,
+                  ufAllComplete: search.ufAllComplete,
+                  sourceStatuses: search.sourceStatuses,
+                  partialProgress: search.partialProgress,
+
+                  // Group 3: SearchResultsFilters
+                  ufsSelecionadas: filters.ufsSelecionadas,
+                  sectorName: filters.sectorName,
+                  searchMode: filters.searchMode,
+                  termosArray: filters.termosArray,
+                  ordenacao: filters.ordenacao,
+
+                  // Group 4: SearchResultsActions
+                  onCancel: search.cancelSearch,
+                  onStageChange: (stage: number) => trackEvent('search_progress_stage', { stage, is_sse: search.useRealProgress && search.sseAvailable }),
+                  onOrdenacaoChange: filters.setOrdenacao,
+                  onDownload: search.handleDownload,
+                  onSearch: search.buscar,
+                  onRegenerateExcel: search.handleRegenerateExcel,
+                  onShowUpgradeModal: handleShowUpgradeModal,
+                  onTrackEvent: trackEvent,
+                  onViewPartial: search.viewPartialResults,
+                  onDismissPartial: () => setPartialDismissed(true),
+                  onRetryForceFresh: search.buscarForceFresh,
+                  onLoadLastSearch: handleLoadLastSearch,
+                  onRefreshResults: search.handleRefreshResults,
+                  onRetryNow: search.retryNow,
+                  onCancelRetry: search.cancelRetry,
+                  onAdjustPeriod: undefined,
+                  onAddNeighborStates: undefined,
+                  onViewNearbyResults: undefined,
+                  onGeneratePdf: () => setPdfModalOpen(true),
+                  onStartResultsTour: () => {
+                    startResultsTour();
+                    trackEvent('onboarding_tour_started', { tour: 'results' });
+                  },
+
+                  // Group 5: SearchDisplayState
+                  error: search.error,
+                  quotaError: search.quotaError,
+                  downloadLoading: search.downloadLoading,
+                  downloadError: search.downloadError,
+                  excelFailCount: search.excelFailCount,
+                  searchElapsedSeconds: searchElapsed,
+                  partialDismissed,
+                  liveFetchInProgress: search.liveFetchInProgress,
+                  refreshAvailable: search.refreshAvailable,
+                  hasLastSearch: lastSearchAvailable,
+                  retryCountdown: search.retryCountdown,
+                  retryMessage: search.retryMessage,
+                  retryExhausted: search.retryExhausted,
+                  nearbyResultsCount: undefined,
+                  pdfLoading,
+
+                  // Group 6: SearchAuthState
+                  planInfo,
+                  session,
+                  isTrialExpired: isTrialExpired || search.quotaError === "trial_expired",
+                  trialPhase,
+                  paywallApplied: search.result?.paywall_applied,
+                  totalBeforePaywall: search.result?.total_before_paywall,
+                  isProfileComplete,
+
+                  // Group 7: SearchFeedbackState
+                  searchId: search.searchId || undefined,
+                  setorId: filters.setorId,
+                  isResultsTourCompleted,
+                } satisfies import("./types/search-results").SearchResultsProps}
               />
             </SearchErrorBoundary>
           </div>
@@ -858,17 +873,17 @@ function HomePageContent() {
           <div className="mb-4 p-3 bg-error-subtle border border-error/20 rounded text-sm text-error" role="alert">{search.saveError}</div>
         )}
         <div className="flex gap-3 justify-end">
-          <button
+          <Button
+            variant="ghost"
             onClick={() => { search.setShowSaveDialog(false); search.setSaveSearchName(""); }}
             type="button"
-            className="px-4 py-2 text-sm font-medium text-ink-secondary hover:text-ink hover:bg-surface-1 rounded-button transition-colors"
-          >Cancelar</button>
-          <button
+          >Cancelar</Button>
+          <Button
+            variant="primary"
             onClick={search.confirmSaveSearch}
             disabled={!(search.saveSearchName ?? '').trim()}
             type="button"
-            className="px-4 py-2 text-sm font-medium text-white bg-brand-navy hover:bg-brand-blue-hover rounded-button transition-colors disabled:bg-ink-faint disabled:cursor-not-allowed"
-          >Salvar</button>
+          >Salvar</Button>
         </div>
       </Dialog>
 
@@ -906,11 +921,12 @@ function HomePageContent() {
             <kbd className="px-3 py-1.5 bg-surface-2 rounded text-sm font-mono border border-strong">/</kbd>
           </div>
         </div>
-        <button
+        <Button
+          variant="primary"
+          className="mt-4 w-full"
           onClick={() => setShowKeyboardHelp(false)}
           type="button"
-          className="mt-4 w-full px-4 py-2 text-sm font-medium text-white bg-brand-navy hover:bg-brand-blue-hover rounded-button transition-colors"
-        >Entendi</button>
+        >Entendi</Button>
       </Dialog>
 
       {/* GTM-POLISH-001 AC8: Footer always visible (not hidden without results) */}

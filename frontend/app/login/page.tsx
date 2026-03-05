@@ -9,6 +9,7 @@ import InstitutionalSidebar from "../components/InstitutionalSidebar";
 import { toast } from "sonner";
 import { translateAuthError } from "../../lib/error-messages";
 import { APP_NAME } from "../../lib/config";
+import { Button } from "../../components/ui/button";
 import dynamic from "next/dynamic";
 
 // STORY-317: Lazy load to avoid supabase import at module level (breaks tests)
@@ -254,14 +255,14 @@ function LoginContent() {
           <p className="text-[var(--ink-secondary)] mb-6">
             Sua sessão está ativa como <strong>{session.user.email}</strong>
           </p>
-          <button
+          <Button
+            variant="primary"
+            size="lg"
+            className="w-full mb-3"
             onClick={() => router.push("/buscar")}
-            className="w-full py-3 bg-[var(--brand-navy)] text-white rounded-button
-                       font-semibold hover:bg-[var(--brand-blue)] transition-colors
-                       mb-3"
           >
             Ir para o painel
-          </button>
+          </Button>
           <Link
             href="/conta"
             className="block w-full py-2 text-sm text-[var(--ink-muted)] hover:text-[var(--brand-blue)] transition-colors"
@@ -467,24 +468,15 @@ function LoginContent() {
           )}
 
           {/* SAB-012 AC12: Secondary submit — less prominent than Google OAuth */}
-          <button
+          <Button
             type="submit"
+            variant="primary"
+            className="w-full"
             disabled={loading}
-            className="w-full py-2.5 bg-[var(--brand-navy)] text-white rounded-button
-                       font-medium text-sm hover:bg-[var(--brand-blue)] transition-colors
-                       disabled:opacity-50 disabled:cursor-not-allowed
-                       flex items-center justify-center gap-2"
+            loading={loading}
           >
-            {loading ? (
-              <>
-                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-                Entrando...
-              </>
-            ) : mode === "magic" ? "Enviar link" : "Entrar"}
-          </button>
+            {loading ? "Entrando..." : mode === "magic" ? "Enviar link" : "Entrar"}
+          </Button>
         </form>
 
         <p className="mt-6 text-center text-sm text-[var(--ink-secondary)]">

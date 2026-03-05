@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { Button } from "../../components/ui/button";
 import {
   DndContext,
   DragOverlay,
@@ -465,12 +466,12 @@ export default function PipelinePage() {
               >
                 Assinar SmartLic Pro
               </a>
-              <button
+              <Button
+                variant="outline"
                 onClick={() => setShowPipelineLimitModal(false)}
-                className="px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border)] rounded-button transition-colors"
               >
                 Fechar
-              </button>
+              </Button>
             </div>
           </div>
         </div>

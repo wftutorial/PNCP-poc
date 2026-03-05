@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import InstitutionalSidebar from "../components/InstitutionalSidebar";
 import { APP_NAME } from "../../lib/config";
+import { Button } from "../../components/ui/button";
 
 // STORY-258: Email type result
 type EmailCheckResult = {
@@ -711,28 +712,20 @@ export default function SignupPage() {
 
           {/* SAB-007 AC5/AC6/AC7: Submit button with tooltip, transition, spinner */}
           <div className="relative group">
-            <button
+            <Button
               type="submit"
-              disabled={loading || !isFormValid}
-              className={`w-full py-3 rounded-button font-semibold
-                         flex items-center justify-center gap-2
-                         transition-all duration-300 ease-in-out
+              variant="primary"
+              size="lg"
+              className={`w-full transition-all duration-300 ease-in-out font-semibold
                          ${isFormValid
-                           ? "bg-[var(--brand-navy)] text-white hover:bg-[var(--brand-blue)] shadow-md hover:shadow-lg"
-                           : "bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed"
-                         }
-                         ${loading ? "opacity-80 cursor-wait" : ""}`}
+                           ? "shadow-md hover:shadow-lg"
+                           : "!bg-gray-300 dark:!bg-gray-700 !text-gray-500 dark:!text-gray-400 cursor-not-allowed"
+                         }`}
+              disabled={loading || !isFormValid}
+              loading={loading}
             >
-              {loading ? (
-                <>
-                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                  Criando conta...
-                </>
-              ) : "Criar conta"}
-            </button>
+              {loading ? "Criando conta..." : "Criar conta"}
+            </Button>
             {/* AC5: Tooltip when disabled */}
             {!isFormValid && !loading && (
               <div

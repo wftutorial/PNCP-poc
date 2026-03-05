@@ -21,6 +21,18 @@ import { LlmSourceBadge } from "./LlmSourceBadge";
 import { ErrorDetail } from "./ErrorDetail";
 import type { SearchError } from "../hooks/useSearch";
 import { ZeroResultsSuggestions } from "./ZeroResultsSuggestions";
+// TD-005 AC10: Import grouped prop types
+import type {
+  SearchResultsProps,
+  SearchResultsData,
+  SearchLoadingState,
+  SearchResultsFilters,
+  SearchResultsActions,
+  SearchDisplayState,
+  SearchAuthState,
+  SearchFeedbackState,
+  SearchResultsGroupedProps,
+} from "../types/search-results";
 import { FilterRelaxedBanner } from "./FilterRelaxedBanner";
 import { ExpiredCacheBanner } from "./ExpiredCacheBanner";
 import SourceStatusGrid from "./SourceStatusGrid";
@@ -113,150 +125,19 @@ export function TourInviteBanner({
   );
 }
 
-export interface SearchResultsProps {
-  // Loading state
-  loading: boolean;
-  loadingStep: number;
-  estimatedTime: number;
-  stateCount: number;
-  statesProcessed: number;
-  onCancel: () => void;
-  sseEvent: SearchProgressEvent | null;
-  useRealProgress: boolean;
-  sseAvailable: boolean;
-  /** GTM-FIX-033 AC3: SSE disconnected flag */
-  sseDisconnected?: boolean;
-  /** STORY-297 AC9: SSE reconnecting indicator */
-  isReconnecting?: boolean;
-  /** A-02 AC8: search completed with degraded data */
-  isDegraded?: boolean;
-  /** A-02 AC10: metadata from SSE degraded event */
-  degradedDetail?: SearchProgressEvent['detail'] | null;
-  onStageChange: (stage: number) => void;
-
-  // Error state — CRIT-009 AC7: structured SearchError
-  error: SearchError | null;
-  quotaError: string | null;
-
-  // Result
-  result: BuscaResult | null;
-  rawCount: number;
-
-  // Empty state
-  ufsSelecionadas: Set<string>;
-  sectorName: string;
-
-  // Results display
-  searchMode: "setor" | "termos";
-  termosArray: string[];
-  ordenacao: OrdenacaoOption;
-  onOrdenacaoChange: (ord: OrdenacaoOption) => void;
-
-  // Download
-  downloadLoading: boolean;
-  downloadError: string | null;
-  onDownload: () => void;
-  onSearch: () => void;
-  onRegenerateExcel?: () => void;
-  /** UX-405 AC5: Consecutive Excel failure count */
-  excelFailCount?: number;
-
-  // Plan & auth
-  planInfo: {
-    plan_id: string;
-    plan_name: string;
-    quota_used: number;
-    quota_reset_date: string;
-    trial_expires_at?: string | null;
-    subscription_status?: string;
-    capabilities: {
-      max_history_days: number;
-      max_requests_per_month: number;
-      allow_excel: boolean;
-    };
-  } | null;
-  session: { access_token: string } | null;
-  onShowUpgradeModal: (plan?: string, source?: string) => void;
-
-  // Analytics
-  onTrackEvent: (name: string, data: Record<string, any>) => void;
-
-  // STORY-257B: UF Progress Grid (AC1-4)
-  ufStatuses?: Map<string, UfStatus>;
-  ufTotalFound?: number;
-  ufAllComplete?: boolean;
-
-  // STORY-257B: Partial results (AC5-6)
-  searchElapsedSeconds?: number;
-  onViewPartial?: () => void;
-  partialDismissed?: boolean;
-  onDismissPartial?: () => void;
-
-  // STORY-257B: Cache refresh (AC8-9)
-  onRetryForceFresh?: () => void;
-
-  // STORY-257B: Sources unavailable (AC10)
-  hasLastSearch?: boolean;
-  onLoadLastSearch?: () => void;
-
-  // A-04: Progressive delivery
-  liveFetchInProgress?: boolean;
-  refreshAvailable?: RefreshAvailableInfo | null;
-  onRefreshResults?: () => void;
-
-  // D-05: Feedback loop
-  searchId?: string;
-  setorId?: string;
-
-  // UX-350 AC6: Profile completeness for recommendation context
-  isProfileComplete?: boolean;
-
-  // CRIT-008 AC5 + GTM-UX-003: Unified retry mechanism
-  retryCountdown?: number | null;
-  /** GTM-UX-003 AC4-AC7: Contextual retry message */
-  retryMessage?: string | null;
-  /** GTM-UX-003 AC9: All retry attempts exhausted */
-  retryExhausted?: boolean;
-  onRetryNow?: () => void;
-  onCancelRetry?: () => void;
-
-  // GTM-UX-002 AC10-12: Zero results actionable suggestions
-  onAdjustPeriod?: () => void;
-  onAddNeighborStates?: () => void;
-  nearbyResultsCount?: number;
-  onViewNearbyResults?: () => void;
-
-  // STORY-265 AC16: Trial expired — disable Excel download
-  isTrialExpired?: boolean;
-
-  // STORY-295: Progressive results
-  sourceStatuses?: Map<string, SourceStatus>;
-  partialProgress?: PartialProgress | null;
-
-  // STORY-327: Filter summary (raw vs filtered)
-  filterSummary?: FilterSummary | null;
-
-  // STORY-320: Trial paywall
-  trialPhase?: "full_access" | "limited_access" | "not_trial";
-  paywallApplied?: boolean;
-  totalBeforePaywall?: number | null;
-
-  // STORY-325: PDF Diagnostico
-  onGeneratePdf?: (options: { clientName: string; maxItems: number }) => void;
-  pdfLoading?: boolean;
-
-  // SAB-005 AC1: Skeleton timeout
-  skeletonTimeoutReached?: boolean;
-
-  // STORY-354 AC3: Pending review bids count
-  pendingReviewCount?: number;
-  /** STORY-354 AC6: Pending review reclassification update from SSE */
-  pendingReviewUpdate?: { reclassifiedCount: number; acceptedCount: number; rejectedCount: number } | null;
-
-  // UX-404: Tour invite banner
-  isResultsTourCompleted?: () => boolean;
-  onStartResultsTour?: () => void;
-}
+// TD-005 AC10-AC14: SearchResultsProps is now defined in ../types/search-results.ts
+// Re-export for backward compatibility with external importers
+export type { SearchResultsProps } from "../types/search-results";
+export type {
+  SearchResultsData,
+  SearchLoadingState,
+  SearchResultsFilters,
+  SearchResultsActions,
+  SearchDisplayState,
+  SearchAuthState,
+  SearchFeedbackState,
+  SearchResultsGroupedProps,
+} from "../types/search-results";
 
 export default function SearchResults({
   loading, loadingStep, estimatedTime, stateCount, statesProcessed,

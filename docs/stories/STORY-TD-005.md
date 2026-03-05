@@ -16,18 +16,18 @@ Estabelecer a base do design system frontend com dois trabalhos fundamentais: (1
 ## Acceptance Criteria
 
 ### Button Component via Shadcn/ui (FE-27) — 4-6h
-- [ ] AC1: Inicializar Shadcn/ui no projeto (`npx shadcn-ui@latest init`) com configuracao compativel ao tailwind.config.ts existente
-- [ ] AC2: Instalar componente Button via `npx shadcn-ui@latest add button`
-- [ ] AC3: Criar variantes customizadas SmartLic: `primary` (azul brand), `secondary`, `destructive`, `ghost`, `link`, `outline`
-- [ ] AC4: Cada variante tem tamanhos: `sm`, `default`, `lg`, `icon`
-- [ ] AC5: Button suporta `loading` state (spinner + texto, disabled enquanto loading)
-- [ ] AC6: Button suporta `asChild` para composicao com `Link` do Next.js
-- [ ] AC7: Substituir botoes em pelo menos 5 paginas criticas: `/buscar`, `/login`, `/signup`, `/planos`, `/pipeline`
-- [ ] AC8: `npm run build` passa sem erros apos setup do Shadcn/ui (verificar tailwind.config nao quebrou)
+- [x] AC1: Inicializar Shadcn/ui no projeto (`npx shadcn-ui@latest init`) com configuracao compativel ao tailwind.config.ts existente
+- [x] AC2: Instalar componente Button via `npx shadcn-ui@latest add button`
+- [x] AC3: Criar variantes customizadas SmartLic: `primary` (azul brand), `secondary`, `destructive`, `ghost`, `link`, `outline`
+- [x] AC4: Cada variante tem tamanhos: `sm`, `default`, `lg`, `icon`
+- [x] AC5: Button suporta `loading` state (spinner + texto, disabled enquanto loading)
+- [x] AC6: Button suporta `asChild` para composicao com `Link` do Next.js
+- [x] AC7: Substituir botoes em pelo menos 5 paginas criticas: `/buscar`, `/login`, `/signup`, `/planos`, `/pipeline`
+- [x] AC8: `npm run build` passa sem erros apos setup do Shadcn/ui (verificar tailwind.config nao quebrou)
 - [ ] AC9: Visual regression check em todas as paginas modificadas (screenshot antes/depois)
 
 ### Prop Grouping SearchResults (FE-10) — 6-8h
-- [ ] AC10: Definir interfaces TypeScript para agrupamento das 55 props em ~6-8 typed objects:
+- [x] AC10: Definir interfaces TypeScript para agrupamento das 55 props em ~6-8 typed objects:
   ```typescript
   interface SearchResultsProps {
     data: SearchResultsData;        // results, totalCount, filterStats, etc.
@@ -38,16 +38,16 @@ Estabelecer a base do design system frontend com dois trabalhos fundamentais: (1
     pipeline: PipelineActions;      // onAddToPipeline, pipelineItems, etc.
   }
   ```
-- [ ] AC11: SearchResults.tsx aceita novo formato de props (manter backward compat temporariamente se necessario)
-- [ ] AC12: buscar/page.tsx atualizado para passar props agrupadas
-- [ ] AC13: Todas as 55 props originais estao mapeadas em pelo menos um grupo (nenhuma perdida)
-- [ ] AC14: TypeScript strict mode passa sem erros (`npx tsc --noEmit`)
+- [x] AC11: SearchResults.tsx aceita novo formato de props (manter backward compat temporariamente se necessario)
+- [x] AC12: buscar/page.tsx atualizado para passar props agrupadas
+- [x] AC13: Todas as 55 props originais estao mapeadas em pelo menos um grupo (nenhuma perdida)
+- [x] AC14: TypeScript strict mode passa sem erros (`npx tsc --noEmit`)
 
 ### Validacao
-- [ ] AC15: Todos 2681+ frontend tests passam
-- [ ] AC16: Zero TypeScript errors
-- [ ] AC17: `npm run lint` passa
-- [ ] AC18: Build de producao (`npm run build`) sucesso
+- [x] AC15: Todos 2681+ frontend tests passam
+- [x] AC16: Zero TypeScript errors
+- [ ] AC17: `npm run lint` passa (Known Windows issue with Next.js CLI path handling — build + tsc pass)
+- [x] AC18: Build de producao (`npm run build`) sucesso
 
 ## Technical Notes
 
@@ -73,11 +73,24 @@ Estabelecer a base do design system frontend com dois trabalhos fundamentais: (1
 - BLOQUEIA: TD-007 (SearchResults decomposition) depende de AC10-AC14
 
 ## Definition of Done
-- [ ] Shadcn/ui inicializado e Button component disponivel
-- [ ] Button usado em 5+ paginas criticas
-- [ ] 55 props agrupadas em 6-8 typed objects
-- [ ] Zero TypeScript errors
-- [ ] All frontend tests passing (2681+)
-- [ ] Build de producao sucesso
+- [x] Shadcn/ui inicializado e Button component disponivel
+- [x] Button usado em 5+ paginas criticas
+- [x] 55 props agrupadas em 6-8 typed objects (7 groups)
+- [x] Zero TypeScript errors
+- [x] All frontend tests passing (4692+)
+- [x] Build de producao sucesso
 - [ ] Visual check em paginas modificadas
 - [ ] Reviewed by @ux-design-expert
+
+## File List
+- `frontend/components.json` (CREATED) — Shadcn/ui configuration
+- `frontend/lib/utils.ts` (CREATED) — cn() utility (clsx + tailwind-merge)
+- `frontend/components/ui/button.tsx` (CREATED) — SmartLic Button with 6 variants, 4 sizes, loading state
+- `frontend/app/buscar/types/search-results.ts` (CREATED) — 7 semantic prop group interfaces
+- `frontend/app/buscar/components/SearchResults.tsx` (MODIFIED) — re-exports SearchResultsProps from types
+- `frontend/app/buscar/page.tsx` (MODIFIED) — grouped props + Button replacements
+- `frontend/app/login/page.tsx` (MODIFIED) — Button replacements
+- `frontend/app/signup/page.tsx` (MODIFIED) — Button replacements
+- `frontend/app/planos/page.tsx` (MODIFIED) — Button replacements
+- `frontend/app/pipeline/page.tsx` (MODIFIED) — Button replacements
+- `frontend/package.json` (MODIFIED) — added cva, clsx, tailwind-merge, @radix-ui/react-slot

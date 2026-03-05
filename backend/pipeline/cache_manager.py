@@ -2,6 +2,9 @@
 
 Handles search results caching (L1 InMemory + L2 Supabase),
 cache key computation, stale-while-revalidate, and cache fallback logic.
+
+CRIT-051: Per-UF composable cache — caches results per individual UF so that
+warmup (per-UF) and multi-UF searches share the same cache entries.
 """
 
 import hashlib
@@ -14,6 +17,7 @@ from search_cache import (
     save_to_cache as _supabase_save_cache,
     get_from_cache as _supabase_get_cache,
     get_from_cache_cascade,
+    _dedup_cross_uf,
 )
 from schemas import DataSourceStatus
 
@@ -35,6 +39,19 @@ def _compute_cache_key(request) -> str:
     return f"search_cache:{hashlib.sha256(params_json.encode()).hexdigest()}"
 
 
+def _compute_cache_key_per_uf(request, uf: str) -> str:
+    """CRIT-051 AC1: Compute cache key for a SINGLE UF."""
+    params = {
+        "setor_id": request.setor_id,
+        "ufs": [uf],
+        "status": request.status.value if request.status else None,
+        "modalidades": sorted(request.modalidades) if request.modalidades else None,
+        "modo_busca": request.modo_busca,
+    }
+    params_json = json.dumps(params, sort_keys=True)
+    return f"search_cache:{hashlib.sha256(params_json.encode()).hexdigest()}"
+
+
 def _read_cache(cache_key: str):
     """Read from InMemoryCache. Returns parsed dict or None."""
     cache = get_fallback_cache()
@@ -47,6 +64,65 @@ def _read_cache(cache_key: str):
         return None
 
 
+def _read_cache_composed(request) -> dict | None:
+    """CRIT-051 AC2: Compose InMemory cache results from per-UF entries.
+
+    Returns composed dict with cached_ufs/missing_ufs, or None if insufficient coverage.
+    """
+    from search_cache import CACHE_PARTIAL_HIT_THRESHOLD
+    from metrics import CACHE_COMPOSITION_TOTAL, CACHE_COMPOSITION_COVERAGE
+
+    ufs = sorted(request.ufs) if request.ufs else []
+    if len(ufs) <= 1:
+        return None  # Single UF — use regular cache
+
+    cached_ufs = []
+    missing_ufs = []
+    all_licitacoes = []
+    oldest_cached_at = None
+
+    for uf in ufs:
+        key = _compute_cache_key_per_uf(request, uf)
+        entry = _read_cache(key)
+        if entry and entry.get("licitacoes"):
+            cached_ufs.append(uf)
+            all_licitacoes.extend(entry["licitacoes"])
+            entry_cached_at = entry.get("cached_at")
+            if entry_cached_at:
+                if oldest_cached_at is None or entry_cached_at < oldest_cached_at:
+                    oldest_cached_at = entry_cached_at
+        else:
+            missing_ufs.append(uf)
+
+    coverage = len(cached_ufs) / len(ufs) if ufs else 0
+    coverage_pct = coverage * 100
+    CACHE_COMPOSITION_COVERAGE.observe(coverage_pct)
+
+    if coverage < CACHE_PARTIAL_HIT_THRESHOLD:
+        CACHE_COMPOSITION_TOTAL.labels(result="miss").inc()
+        return None
+
+    # CRIT-051 AC5: Dedup cross-UF
+    all_licitacoes = _dedup_cross_uf(all_licitacoes)
+
+    result_type = "full_hit" if not missing_ufs else "partial_hit"
+    CACHE_COMPOSITION_TOTAL.labels(result=result_type).inc()
+
+    logger.info(
+        f"CRIT-051: InMemory composition {result_type} — "
+        f"{len(cached_ufs)}/{len(ufs)} UFs, {len(all_licitacoes)} results"
+    )
+
+    return {
+        "licitacoes": all_licitacoes,
+        "total": len(all_licitacoes),
+        "cached_at": oldest_cached_at,
+        "cached_ufs": cached_ufs,
+        "missing_ufs": missing_ufs,
+        "composition_coverage": coverage_pct,
+    }
+
+
 def _write_cache(cache_key: str, data: dict) -> None:
     """Write search results to InMemoryCache with TTL."""
     cache = get_fallback_cache()
@@ -54,6 +130,43 @@ def _write_cache(cache_key: str, data: dict) -> None:
         cache.setex(cache_key, SEARCH_CACHE_TTL, json.dumps(data, default=str))
     except Exception as e:
         logger.warning(f"Failed to write search cache: {e}")
+
+
+def _write_cache_per_uf(request, results: list) -> int:
+    """CRIT-051 AC1: Write results to InMemory cache grouped by UF.
+
+    Groups results by their 'uf' field and writes one cache entry per UF.
+    Returns number of UFs successfully cached.
+    """
+    results_by_uf: dict[str, list] = {}
+    for r in results:
+        uf = r.get("uf", "").upper()
+        if uf:
+            results_by_uf.setdefault(uf, []).append(r)
+
+    ufs_saved = 0
+    now_iso = datetime.now(timezone.utc).isoformat()
+    for uf, uf_results in results_by_uf.items():
+        key = _compute_cache_key_per_uf(request, uf)
+        data = {
+            "licitacoes": uf_results,
+            "total": len(uf_results),
+            "cached_at": now_iso,
+            "search_params": {
+                "setor_id": request.setor_id,
+                "ufs": [uf],
+                "status": request.status.value if request.status else None,
+            },
+        }
+        _write_cache(key, data)
+        ufs_saved += 1
+
+    if ufs_saved > 0:
+        logger.debug(
+            f"CRIT-051: Per-UF InMemory cache wrote {ufs_saved} UFs "
+            f"({len(results)} total results)"
+        )
+    return ufs_saved
 
 
 def _build_cache_params(request) -> dict:

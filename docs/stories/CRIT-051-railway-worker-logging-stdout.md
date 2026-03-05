@@ -1,6 +1,6 @@
 # CRIT-051: Railway Worker Logging — stderr→stdout para Severidade Correta
 
-**Status:** 🔴 Pendente
+**Status:** ✅ Concluído (código implementado, AC5 aguarda deploy)
 **Prioridade:** P1 — Importante (observabilidade)
 **Sprint:** Atual
 **Criado:** 2026-03-03
@@ -23,12 +23,12 @@ Estas linhas são INFO mas aparecem como ERROR (vermelho) porque saem em stderr.
 
 ## Acceptance Criteria
 
-- [ ] AC1: `_worker_on_startup()` chama `setup_logging()` de config.py
-- [ ] AC2: `arq_log_config` dict criado em job_queue.py com `"stream": "ext://sys.stdout"`
-- [ ] AC3: `start.sh` passa `--custom-log-dict job_queue.arq_log_config` ao ARQ
-- [ ] AC4: `_cache_refresh_loop()` em cron_jobs.py respeita `CACHE_REFRESH_ENABLED`
+- [x] AC1: `_worker_on_startup()` chama `setup_logging()` de config.py
+- [x] AC2: `arq_log_config` dict criado em job_queue.py com `"stream": "ext://sys.stdout"`
+- [x] AC3: `start.sh` passa `--custom-log-dict job_queue.arq_log_config` ao ARQ
+- [x] AC4: `_cache_refresh_loop()` em cron_jobs.py respeita `CACHE_REFRESH_ENABLED`
 - [ ] AC5: Logs do worker aparecem como INFO (branco) no Railway após deploy
-- [ ] AC6: Teste unitário verifica que `arq_log_config` usa `ext://sys.stdout`
+- [x] AC6: Teste unitário verifica que `arq_log_config` usa `ext://sys.stdout`
 
 ## Referências
 

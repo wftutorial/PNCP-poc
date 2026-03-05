@@ -26,43 +26,43 @@ Mudar a granularidade do cache de "conjunto exato de UFs" para "UF individual", 
 ## Acceptance Criteria
 
 ### AC1: Cache granular por UF
-- [ ] `save_to_cache` persiste resultados por `(setor_id, uf_individual, status, modalidades, modo_busca)` — uma entrada por UF
-- [ ] Cada entrada armazena os resultados raw daquela UF especifica
-- [ ] TTL mantido: L1 InMemory 4h, L2 Supabase 24h
+- [x] `save_to_cache` persiste resultados por `(setor_id, uf_individual, status, modalidades, modo_busca)` — uma entrada por UF
+- [x] Cada entrada armazena os resultados raw daquela UF especifica
+- [x] TTL mantido: L1 InMemory 4h, L2 Supabase 24h
 
 ### AC2: Composicao na leitura
-- [ ] `get_from_cache` recebe lista de UFs e compoe resultado agregando entradas individuais
-- [ ] Retorna `cache_hit: true` se >= 50% das UFs tem cache (threshold configuravel via `CACHE_PARTIAL_HIT_THRESHOLD`)
-- [ ] Campo `cached_ufs` e `missing_ufs` no retorno para transparencia
+- [x] `get_from_cache` recebe lista de UFs e compoe resultado agregando entradas individuais
+- [x] Retorna `cache_hit: true` se >= 50% das UFs tem cache (threshold configuravel via `CACHE_PARTIAL_HIT_THRESHOLD`)
+- [x] Campo `cached_ufs` e `missing_ufs` no retorno para transparencia
 
 ### AC3: Busca hibrida (cache + fetch)
-- [ ] Se cache tem 20/27 UFs, buscar apenas as 7 faltantes nas fontes ao vivo
-- [ ] Merge resultados cached + fresh antes de passar para filtragem
-- [ ] Log: `"Hybrid fetch: 20 UFs from cache, 7 from live sources"`
+- [x] Se cache tem 20/27 UFs, buscar apenas as 7 faltantes nas fontes ao vivo
+- [x] Merge resultados cached + fresh antes de passar para filtragem
+- [x] Log: `"Hybrid fetch: 20 UFs from cache, 7 from live sources"`
 
 ### AC4: Warmup agora alimenta cache real
-- [ ] Warmup por UF individual (ja faz) agora e diretamente util para buscas multi-UF
-- [ ] Nenhuma mudanca necessaria no warmup — a composicao resolve
+- [x] Warmup por UF individual (ja faz) agora e diretamente util para buscas multi-UF
+- [x] Nenhuma mudanca necessaria no warmup — a composicao resolve
 
 ### AC5: Dedup cross-UF
-- [ ] Licitacoes que aparecem em multiplas UFs (ex: licitacao federal) sao deduplicadas apos composicao
-- [ ] Usar mesma logica de dedup do consolidation.py
+- [x] Licitacoes que aparecem em multiplas UFs (ex: licitacao federal) sao deduplicadas apos composicao
+- [x] Usar mesma logica de dedup do consolidation.py
 
 ### AC6: Retrocompatibilidade
-- [ ] Cache entries antigas (hash exato) continuam sendo lidas por 24h (TTL natural)
-- [ ] Novas escritas usam formato granular
-- [ ] Zero downtime na transicao
+- [x] Cache entries antigas (hash exato) continuam sendo lidas por 24h (TTL natural)
+- [x] Novas escritas usam formato granular
+- [x] Zero downtime na transicao
 
 ### AC7: Metricas
-- [ ] `smartlic_cache_composition_total` (labels: full_hit, partial_hit, miss)
-- [ ] `smartlic_cache_composition_coverage` histogram (% de UFs encontradas no cache)
+- [x] `smartlic_cache_composition_total` (labels: full_hit, partial_hit, miss)
+- [x] `smartlic_cache_composition_coverage` histogram (% de UFs encontradas no cache)
 
 ### AC8: Testes
-- [ ] Test: warmup cacheia SP individual → busca SP+RJ retorna SP do cache + RJ live
-- [ ] Test: todas UFs no cache → busca retorna 100% cached
-- [ ] Test: nenhuma UF no cache → busca faz fetch completo
-- [ ] Test: threshold 50% respeitado
-- [ ] Test: dedup cross-UF funciona
+- [x] Test: warmup cacheia SP individual → busca SP+RJ retorna SP do cache + RJ live
+- [x] Test: todas UFs no cache → busca retorna 100% cached
+- [x] Test: nenhuma UF no cache → busca faz fetch completo
+- [x] Test: threshold 50% respeitado
+- [x] Test: dedup cross-UF funciona
 
 ## Arquivos Afetados
 

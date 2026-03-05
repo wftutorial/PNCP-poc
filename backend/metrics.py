@@ -674,6 +674,19 @@ PARTIAL_RESULTS_SERVED_TOTAL = _create_counter(
     "CRIT-053: Times partial results were served to users",
 )
 
+# CRIT-051 AC7: Cache composition metrics (per-UF composable cache)
+CACHE_COMPOSITION_TOTAL = _create_counter(
+    "smartlic_cache_composition_total",
+    "CRIT-051: Cache composition outcomes for per-UF composable cache",
+    labelnames=["result"],  # full_hit, partial_hit, miss
+)
+
+CACHE_COMPOSITION_COVERAGE = _create_histogram(
+    "smartlic_cache_composition_coverage",
+    "CRIT-051: Percentage of UFs found in cache during composition",
+    buckets=[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100],
+)
+
 
 # ============================================================================
 # ASGI app factory for /metrics endpoint

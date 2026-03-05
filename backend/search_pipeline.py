@@ -67,8 +67,11 @@ from pipeline.helpers import (  # noqa: E402
 from pipeline.cache_manager import (  # noqa: E402
     SEARCH_CACHE_TTL,
     _compute_cache_key,
+    _compute_cache_key_per_uf,
     _read_cache,
+    _read_cache_composed,
     _write_cache,
+    _write_cache_per_uf,
     _build_cache_params,
     _maybe_trigger_revalidation,
     _build_degraded_detail,
@@ -599,6 +602,35 @@ class SearchPipeline:
 
         # AC10: Respect force_fresh flag
         if not request.force_fresh:
+            # CRIT-051 AC2: Try composed per-UF cache first (multi-UF requests)
+            composed = _read_cache_composed(request)
+            if composed and composed.get("licitacoes"):
+                logger.info(
+                    f"CRIT-051: Composed cache HIT — "
+                    f"{len(composed.get('cached_ufs', []))} UFs cached, "
+                    f"{len(composed.get('missing_ufs', []))} missing, "
+                    f"{len(composed['licitacoes'])} results"
+                )
+                missing_ufs = composed.get("missing_ufs", [])
+                if not missing_ufs:
+                    # Full hit — all UFs from cache
+                    ctx.licitacoes_raw = composed["licitacoes"]
+                    ctx.cached = True
+                    ctx.cached_at = composed.get("cached_at")
+                    ctx.cache_status = "fresh"
+                    ctx.cache_level = "composed"
+                    CACHE_HITS.labels(level="composed", freshness="fresh").inc()
+                    return
+                else:
+                    # CRIT-051 AC3: Partial hit — store cached results, fetch missing UFs only
+                    ctx._composed_cached_results = composed["licitacoes"]
+                    ctx._missing_ufs = missing_ufs
+                    ctx._cached_ufs = composed.get("cached_ufs", [])
+                    logger.info(
+                        f"CRIT-051: Hybrid fetch — {len(ctx._cached_ufs)} UFs from cache, "
+                        f"{len(missing_ufs)} from live sources"
+                    )
+
             cached = _read_cache(cache_key)
             if cached:
                 logger.debug(f"Cache HIT for search (cached_at={cached.get('cached_at', 'unknown')})")
@@ -697,11 +729,15 @@ class SearchPipeline:
         # Hierarchy: FE proxy (480s) > Pipeline (360s) > Consolidation (300s) > Per-Source (180s) > Per-UF (90s)
         FETCH_TIMEOUT = int(os.environ.get("SEARCH_FETCH_TIMEOUT", str(6 * 60)))  # 6 minutes
 
+        # CRIT-051 AC3: Hybrid fetch — only fetch missing UFs if partial cache hit
+        _hybrid_ufs = getattr(ctx, "_missing_ufs", None)
+
         if enable_multi_source:
             await self._execute_multi_source(
                 ctx, request, deps, modalidades_to_fetch, status_value,
                 uf_progress_callback, FETCH_TIMEOUT,
                 uf_status_callback=uf_status_callback,
+                ufs_override=_hybrid_ufs,
             )
         else:
             await self._execute_pncp_only(
@@ -735,6 +771,24 @@ class SearchPipeline:
         enriquecer_com_status_inferido(ctx.licitacoes_raw)
         logger.debug(f"Status inference complete for {len(ctx.licitacoes_raw)} bids")
 
+        # CRIT-051 AC3: Merge cached results with fresh results (hybrid fetch)
+        _composed_cached = getattr(ctx, "_composed_cached_results", None)
+        if _composed_cached:
+            from search_cache import _dedup_cross_uf
+            _cached_count = len(_composed_cached)
+            _fresh_count = len(ctx.licitacoes_raw)
+            ctx.licitacoes_raw = _dedup_cross_uf(_composed_cached + ctx.licitacoes_raw)
+            logger.info(
+                f"CRIT-051: Hybrid merge — {_cached_count} cached + {_fresh_count} fresh "
+                f"= {len(ctx.licitacoes_raw)} after dedup"
+            )
+            # Clean up temporary attributes
+            del ctx._composed_cached_results
+            if hasattr(ctx, "_missing_ufs"):
+                del ctx._missing_ufs
+            if hasattr(ctx, "_cached_ufs"):
+                del ctx._cached_ufs
+
         # STORY-257A AC8 + GTM-FIX-010 AC3: Cache write-through on successful fetch
         if ctx.licitacoes_raw and len(ctx.licitacoes_raw) > 0:
             cache_data = {
@@ -748,6 +802,8 @@ class SearchPipeline:
                 },
             }
             _write_cache(cache_key, cache_data)
+            # CRIT-051 AC1: Also write per-UF entries for composable cache
+            _write_cache_per_uf(request, ctx.licitacoes_raw)
             logger.debug(f"Cache WRITE: {len(ctx.licitacoes_raw)} results cached (TTL={SEARCH_CACHE_TTL}s)")
 
             # GTM-FIX-010 AC3: Also persist to Supabase for cross-restart resilience
@@ -763,16 +819,19 @@ class SearchPipeline:
                     "failed_ufs": list(ctx.failed_ufs or []),
                     "total_requested": len(request.ufs),
                 }
+                _cache_params = {
+                    "setor_id": request.setor_id,
+                    "ufs": request.ufs,
+                    "status": request.status.value if request.status else None,
+                    "modalidades": request.modalidades,
+                    "modo_busca": request.modo_busca,
+                }
                 try:
-                    await _supabase_save_cache(
+                    # CRIT-051 AC1: Save per-UF to Supabase (also saves combined for retrocompat)
+                    from search_cache import save_to_cache_per_uf
+                    await save_to_cache_per_uf(
                         user_id=ctx.user["id"],
-                        params={
-                            "setor_id": request.setor_id,
-                            "ufs": request.ufs,
-                            "status": request.status.value if request.status else None,
-                            "modalidades": request.modalidades,
-                            "modo_busca": request.modo_busca,
-                        },
+                        params=_cache_params,
                         results=ctx.licitacoes_raw,
                         sources=sources,
                         fetch_duration_ms=fetch_elapsed_ms,
@@ -784,8 +843,13 @@ class SearchPipeline:
     async def _execute_multi_source(
         self, ctx, request, deps, modalidades_to_fetch, status_value,
         uf_progress_callback, fetch_timeout, uf_status_callback=None,
+        ufs_override: list[str] | None = None,
     ):
-        """Multi-source consolidation path (STORY-177)."""
+        """Multi-source consolidation path (STORY-177).
+
+        Args:
+            ufs_override: CRIT-051 AC3 — if set, fetch only these UFs (hybrid fetch).
+        """
         logger.debug("Multi-source fetch enabled, using ConsolidationService")
         from consolidation import ConsolidationService
         from clients.compras_gov_client import ComprasGovAdapter
@@ -810,13 +874,16 @@ class SearchPipeline:
         pcp_cb = get_circuit_breaker("pcp")
         comprasgov_cb = get_circuit_breaker("comprasgov")
 
+        # CRIT-051 AC3: Use overridden UFs for hybrid fetch
+        _fetch_ufs = ufs_override if ufs_override else request.ufs
+
         if source_config.pncp.enabled:
             if pncp_cb.is_degraded:
                 logger.warning("[MULTI-SOURCE] PNCP circuit breaker OPEN — skipping source")
                 skipped_sources.append("PNCP")
             else:
                 adapters["PNCP"] = PNCPLegacyAdapter(
-                    ufs=request.ufs,
+                    ufs=_fetch_ufs,
                     modalidades=modalidades_to_fetch,
                     status=status_value,
                     on_uf_complete=uf_progress_callback,
@@ -939,7 +1006,7 @@ class SearchPipeline:
                 consolidation_svc.fetch_all(
                     data_inicial=request.data_inicial,
                     data_final=request.data_final,
-                    ufs=set(request.ufs),
+                    ufs=set(_fetch_ufs),
                     on_source_complete=source_complete_cb,
                     on_early_return=early_return_cb,
                     on_source_done=source_done_cb,

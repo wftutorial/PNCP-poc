@@ -177,6 +177,26 @@ def compute_search_hash_without_dates(params: dict) -> str:
     return hashlib.sha256(params_json.encode()).hexdigest()
 
 
+def compute_search_hash_per_uf(params: dict, uf: str) -> str:
+    """CRIT-051 AC1: Deterministic hash for a SINGLE UF (composable cache).
+
+    Same as compute_search_hash but always uses ufs=[single_uf].
+    This allows warmup (which caches per-UF) and multi-UF searches
+    (which compose from per-UF entries) to share the same cache keys.
+    """
+    normalized = {
+        "setor_id": params.get("setor_id"),
+        "ufs": [uf],  # Single UF, always sorted (just one element)
+        "status": params.get("status"),
+        "modalidades": sorted(params.get("modalidades") or []) or None,
+        "modo_busca": params.get("modo_busca"),
+        "date_from": _normalize_date(params.get("date_from") or params.get("data_inicio") or params.get("data_inicial")),
+        "date_to": _normalize_date(params.get("date_to") or params.get("data_fim") or params.get("data_final")),
+    }
+    params_json = json.dumps(normalized, sort_keys=True)
+    return hashlib.sha256(params_json.encode()).hexdigest()
+
+
 def compute_global_hash(params: dict) -> str:
     """GTM-ARCH-002 AC2: Global cache hash — setor + ufs + dates, WITHOUT user_id.
 
@@ -589,6 +609,222 @@ async def save_to_cache(
         logger.error(f"All cache levels failed for save: {e}")
         _track_cache_operation("save", False, CacheLevel.MISS, len(results), 0)
         return {"level": CacheLevel.MISS, "success": False}
+
+
+# ============================================================================
+# CRIT-051: Per-UF composable cache save
+# ============================================================================
+
+
+async def save_to_cache_per_uf(
+    user_id: str,
+    params: dict,
+    results: list,
+    sources: list[str],
+    *,
+    fetch_duration_ms: Optional[int] = None,
+    coverage: Optional[dict] = None,
+) -> dict:
+    """CRIT-051 AC1: Save results grouped by UF — one cache entry per UF.
+
+    Groups results by their 'uf' field and saves each UF's results independently.
+    Also saves the combined entry (retrocompatibility with old hash).
+    Returns dict with {level, success, ufs_saved}.
+    """
+    from metrics import CACHE_COMPOSITION_TOTAL
+
+    # Group results by UF
+    results_by_uf: dict[str, list] = {}
+    no_uf_results = []
+    for r in results:
+        uf = r.get("uf", "").upper()
+        if uf:
+            results_by_uf.setdefault(uf, []).append(r)
+        else:
+            no_uf_results.append(r)
+
+    ufs_saved = []
+    first_result = {"level": CacheLevel.MISS, "success": False}
+
+    # Save per-UF entries
+    for uf, uf_results in results_by_uf.items():
+        per_uf_params = {**params, "ufs": [uf]}
+        try:
+            result = await save_to_cache(
+                user_id, per_uf_params, uf_results, sources,
+                fetch_duration_ms=fetch_duration_ms, coverage=coverage,
+            )
+            if result.get("success"):
+                ufs_saved.append(uf)
+                if first_result["level"] == CacheLevel.MISS:
+                    first_result = result
+        except Exception as e:
+            logger.warning(f"CRIT-051: Failed to save per-UF cache for {uf}: {e}")
+
+    # Also save combined entry for retrocompatibility (AC6)
+    try:
+        await save_to_cache(
+            user_id, params, results, sources,
+            fetch_duration_ms=fetch_duration_ms, coverage=coverage,
+        )
+    except Exception as e:
+        logger.debug(f"CRIT-051: Combined cache save failed (non-fatal, per-UF already saved): {e}")
+
+    logger.info(
+        f"CRIT-051: Per-UF cache saved {len(ufs_saved)}/{len(results_by_uf)} UFs "
+        f"({len(results)} total results, {len(no_uf_results)} without UF)"
+    )
+    first_result["ufs_saved"] = ufs_saved
+    return first_result
+
+
+# ============================================================================
+# CRIT-051: Per-UF composable cache read
+# ============================================================================
+
+# Configurable threshold for partial cache hits (AC2)
+CACHE_PARTIAL_HIT_THRESHOLD = float(os.getenv("CACHE_PARTIAL_HIT_THRESHOLD", "0.5"))
+
+
+async def get_from_cache_composed(
+    user_id: str,
+    params: dict,
+) -> Optional[dict]:
+    """CRIT-051 AC2: Compose cache results from individual UF entries.
+
+    For each UF in the request, tries to find a per-UF cache entry.
+    Returns composed results if >= CACHE_PARTIAL_HIT_THRESHOLD of UFs are cached.
+
+    Returns dict with:
+        results, cached_at, cached_sources, cache_age_hours, is_stale,
+        cache_level, cached_ufs, missing_ufs, composition_coverage
+    Returns None if insufficient cache coverage.
+    """
+    from metrics import CACHE_COMPOSITION_TOTAL, CACHE_COMPOSITION_COVERAGE
+
+    ufs = sorted(params.get("ufs", []))
+    if not ufs or len(ufs) <= 1:
+        # Single UF — no composition needed, use regular cache
+        return await get_from_cache(user_id, params)
+
+    cached_ufs = []
+    missing_ufs = []
+    all_results = []
+    oldest_cached_at = None
+    worst_status = "fresh"
+    sources_seen = set()
+    cache_levels_seen = set()
+
+    for uf in ufs:
+        per_uf_params = {**params, "ufs": [uf]}
+        try:
+            entry = await get_from_cache(user_id, per_uf_params)
+            if entry and entry.get("results"):
+                cached_ufs.append(uf)
+                all_results.extend(entry["results"])
+
+                # Track oldest entry for freshness
+                entry_cached_at = entry.get("cached_at")
+                if entry_cached_at:
+                    if oldest_cached_at is None or entry_cached_at < oldest_cached_at:
+                        oldest_cached_at = entry_cached_at
+
+                # Track worst status
+                entry_status = entry.get("cache_status", "fresh")
+                if entry_status == "expired" or (entry_status == "stale" and worst_status == "fresh"):
+                    worst_status = entry_status
+
+                # Collect sources and levels
+                for src in (entry.get("cached_sources") or []):
+                    sources_seen.add(src)
+                if entry.get("cache_level"):
+                    cache_levels_seen.add(entry["cache_level"])
+            else:
+                missing_ufs.append(uf)
+        except Exception as e:
+            logger.debug(f"CRIT-051: Per-UF cache read failed for {uf}: {e}")
+            missing_ufs.append(uf)
+
+    coverage = len(cached_ufs) / len(ufs) if ufs else 0
+    coverage_pct = coverage * 100
+    CACHE_COMPOSITION_COVERAGE.observe(coverage_pct)
+
+    if coverage < CACHE_PARTIAL_HIT_THRESHOLD:
+        CACHE_COMPOSITION_TOTAL.labels(result="miss").inc()
+        logger.info(
+            f"CRIT-051: Cache composition MISS — {len(cached_ufs)}/{len(ufs)} UFs "
+            f"({coverage_pct:.0f}% < {CACHE_PARTIAL_HIT_THRESHOLD*100:.0f}% threshold)"
+        )
+        return None
+
+    # CRIT-051 AC5: Dedup cross-UF
+    all_results = _dedup_cross_uf(all_results)
+
+    result_type = "full_hit" if not missing_ufs else "partial_hit"
+    CACHE_COMPOSITION_TOTAL.labels(result=result_type).inc()
+
+    logger.info(
+        f"CRIT-051: Cache composition {result_type} — {len(cached_ufs)}/{len(ufs)} UFs, "
+        f"{len(all_results)} results (deduped)"
+    )
+
+    return {
+        "results": all_results,
+        "cached_at": oldest_cached_at,
+        "cached_sources": sorted(sources_seen),
+        "cache_age_hours": _compute_age_hours(oldest_cached_at),
+        "is_stale": worst_status != "fresh",
+        "cache_level": "composed",
+        "cache_status": worst_status,
+        "cache_priority": "warm",
+        "cache_fallback": False,
+        "cache_date_range": None,
+        # CRIT-051 specific fields
+        "cached_ufs": cached_ufs,
+        "missing_ufs": missing_ufs,
+        "composition_coverage": coverage_pct,
+    }
+
+
+def _dedup_cross_uf(results: list) -> list:
+    """CRIT-051 AC5: Deduplicate results that appear in multiple UFs.
+
+    Uses codigoCompra (numeroControlePNCP) as primary dedup key,
+    falls back to (nomeOrgao + objetoCompra[:100]) for PCP/ComprasGov.
+    """
+    seen: dict[str, dict] = {}
+    deduped = []
+    for r in results:
+        # Primary key: codigoCompra / numeroControlePNCP
+        key = r.get("codigoCompra") or r.get("numeroControlePNCP", "")
+        if not key:
+            # Fallback key for non-PNCP sources
+            orgao = r.get("nomeOrgao", "")
+            obj = (r.get("objetoCompra") or "")[:100]
+            key = f"{orgao}|{obj}" if orgao and obj else ""
+
+        if not key:
+            deduped.append(r)
+            continue
+
+        if key not in seen:
+            seen[key] = r
+            deduped.append(r)
+
+    return deduped
+
+
+def _compute_age_hours(cached_at: Optional[str]) -> float:
+    """Compute age in hours from an ISO timestamp string."""
+    if not cached_at:
+        return 0.0
+    try:
+        dt = datetime.fromisoformat(str(cached_at).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return (datetime.now(timezone.utc) - dt).total_seconds() / 3600
+    except (ValueError, TypeError):
+        return 0.0
 
 
 # ============================================================================

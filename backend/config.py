@@ -374,6 +374,10 @@ LLM_ZERO_MATCH_BATCH_TIMEOUT: float = float(os.getenv("LLM_ZERO_MATCH_BATCH_TIME
 # CRIT-057: Time budget for zero-match LLM classification inside filter
 FILTER_ZERO_MATCH_BUDGET_S: float = float(os.getenv("FILTER_ZERO_MATCH_BUDGET_S", "30"))
 
+# CRIT-058: Cap + sampling for zero-match LLM classification
+MAX_ZERO_MATCH_ITEMS: int = int(os.getenv("MAX_ZERO_MATCH_ITEMS", "200"))
+ZERO_MATCH_VALUE_RATIO: float = float(os.getenv("ZERO_MATCH_VALUE_RATIO", "0.7"))
+
 LLM_FALLBACK_PENDING_ENABLED: bool = str_to_bool(
     os.getenv("LLM_FALLBACK_PENDING_ENABLED", "true")
 )

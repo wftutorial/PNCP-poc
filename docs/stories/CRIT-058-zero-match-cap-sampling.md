@@ -3,7 +3,7 @@
 **Prioridade:** HIGH
 **Componente:** Backend — filter.py, config.py
 **Origem:** Incidente 2026-03-05 — 1.831 itens zero-match geraram 92 batches LLM (~62s so de API calls)
-**Status:** TODO
+**Status:** DONE
 **Dependencias:** CRIT-057 (budget guard deve existir como safety net)
 **Estimativa:** 4-6h
 
@@ -27,57 +27,57 @@ Nao existe cap no volume de itens enviados ao LLM zero-match. `filter.py:2983` e
 ## Acceptance Criteria
 
 ### AC1: Cap configuravel de itens zero-match
-- [ ] `MAX_ZERO_MATCH_ITEMS` em config.py (default: 200, env var configuravel)
-- [ ] Se `len(zero_match_pool) > MAX_ZERO_MATCH_ITEMS`:
+- [x] `MAX_ZERO_MATCH_ITEMS` em config.py (default: 200, env var configuravel)
+- [x] Se `len(zero_match_pool) > MAX_ZERO_MATCH_ITEMS`:
   - Classificar apenas os primeiros `MAX_ZERO_MATCH_ITEMS`
   - Restantes vao para `pending_review`
-- [ ] Log: `"[CRIT-058] Zero-match pool capped: {classified}/{total} items (cap={cap})"`
+- [x] Log: `"[CRIT-058] Zero-match pool capped: {classified}/{total} items (cap={cap})"`
 
 ### AC2: Priorizacao por valor antes do cap
-- [ ] Ordenar `zero_match_pool` por `valorTotalEstimado` decrescente ANTES de aplicar o cap
-- [ ] Licitacoes de maior valor tem prioridade de classificacao LLM
-- [ ] Licitacoes sem valor (`None`, `0`, `""`) ficam no final da fila
+- [x] Ordenar `zero_match_pool` por `valorTotalEstimado` decrescente ANTES de aplicar o cap
+- [x] Licitacoes de maior valor tem prioridade de classificacao LLM
+- [x] Licitacoes sem valor (`None`, `0`, `""`) ficam no final da fila
 
 ### AC3: Sampling misto (valor + aleatorio)
-- [ ] Dos `MAX_ZERO_MATCH_ITEMS` slots:
+- [x] Dos `MAX_ZERO_MATCH_ITEMS` slots:
   - 70% (140) para os de maior valor (deterministic, reproducible)
   - 30% (60) sample aleatorio do restante (diversidade)
-- [ ] Seed do random baseado no `search_id` (reproducibilidade para debug)
-- [ ] Proporção configuravel: `ZERO_MATCH_VALUE_RATIO` (default: 0.7)
+- [x] Seed do random baseado no `search_id` (reproducibilidade para debug)
+- [x] Proporção configuravel: `ZERO_MATCH_VALUE_RATIO` (default: 0.7)
 
 ### AC4: Metrica de cap atingido
-- [ ] Counter: `smartlic_zero_match_cap_applied_total` (incrementa quando cap ativo)
-- [ ] Histogram: `smartlic_zero_match_pool_size` (tamanho do pool antes do cap)
-- [ ] Gauge/label no filter_summary: `zero_match_capped: true/false`, `zero_match_cap_value: N`
+- [x] Counter: `smartlic_zero_match_cap_applied_total` (incrementa quando cap ativo)
+- [x] Histogram: `smartlic_zero_match_pool_size` (tamanho do pool antes do cap)
+- [x] Gauge/label no filter_summary: `zero_match_capped: true/false`, `zero_match_cap_value: N`
 
 ### AC5: Pending review para itens deferidos
-- [ ] Itens que nao foram classificados por causa do cap recebem:
+- [x] Itens que nao foram classificados por causa do cap recebem:
   - `_relevance_source = "pending_review"`
   - `_pending_review = True`
   - `_pending_review_reason = "zero_match_cap_exceeded"`
-- [ ] Distinguir de CRIT-057 (`budget_exceeded`) vs CRIT-058 (`cap_exceeded`)
+- [x] Distinguir de CRIT-057 (`budget_exceeded`) vs CRIT-058 (`cap_exceeded`)
 
 ### AC6: Log de impacto
-- [ ] Quando cap e aplicado, logar:
+- [x] Quando cap e aplicado, logar:
   - Valor total estimado dos itens classificados vs deferidos
   - Quantidade por faixa de valor: >1M, 100K-1M, 10K-100K, <10K
-- [ ] Nivel: INFO (nao warning — cap e behavior esperado)
+- [x] Nivel: INFO (nao warning — cap e behavior esperado)
 
 ### AC7: Testes
-- [ ] `test_crit058_zero_match_cap.py` com no minimo:
+- [x] `test_crit058_zero_match_cap.py` com no minimo:
   - Pool de 500 itens, cap de 200 → 200 classificados, 300 pending_review
   - Priorizacao por valor: top-200 por valor sao classificados primeiro
   - Sampling misto: 70% valor + 30% random (com seed fixo)
   - Cap de 0 → todos pending_review (edge case)
   - Cap de 9999 + pool de 50 → classifica todos (cap nao ativado)
   - Itens sem valor vao pro final da fila de priorizacao
-- [ ] Zero regressoes nos testes existentes de filter
+- [x] Zero regressoes nos testes existentes de filter
 
 ### AC8: Compatibilidade com CRIT-057
-- [ ] Cap (CRIT-058) aplica ANTES do loop LLM
-- [ ] Budget guard (CRIT-057) aplica DURANTE o loop LLM
-- [ ] Ambos geram `pending_review` — razoes distinguiveis
-- [ ] Se cap reduz pool para 200 e budget de 30s e suficiente → CRIT-057 nao dispara
+- [x] Cap (CRIT-058) aplica ANTES do loop LLM
+- [x] Budget guard (CRIT-057) aplica DURANTE o loop LLM
+- [x] Ambos geram `pending_review` — razoes distinguiveis
+- [x] Se cap reduz pool para 200 e budget de 30s e suficiente → CRIT-057 nao dispara
 
 ## Notas de Implementacao
 
@@ -128,4 +128,6 @@ if len(zero_match_pool) > MAX_ZERO_MATCH_ITEMS:
 | `backend/config.py` | `MAX_ZERO_MATCH_ITEMS`, `ZERO_MATCH_VALUE_RATIO` |
 | `backend/filter.py` | Cap + sort + sampling antes do loop LLM |
 | `backend/metrics.py` | `smartlic_zero_match_cap_applied_total`, `smartlic_zero_match_pool_size` |
-| `backend/tests/test_crit058_zero_match_cap.py` | Testes |
+| `backend/schemas.py` | `FilterStats` — `zero_match_capped`, `zero_match_cap_value` |
+| `frontend/app/types.ts` | `FilterStats` — `zero_match_capped`, `zero_match_cap_value` |
+| `backend/tests/test_crit058_zero_match_cap.py` | 24 testes — cap, priorizacao, sampling, metrics, edge cases |

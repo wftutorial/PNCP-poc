@@ -2980,6 +2980,94 @@ def aplicar_todos_filtros(
                     continue
                 zero_match_pool.append(lic)
 
+        # ====================================================================
+        # CRIT-058: Cap + prioritize zero-match pool (sampling inteligente)
+        # ====================================================================
+        # Applies BEFORE the LLM loop (CRIT-057 budget guard applies DURING).
+        from config import MAX_ZERO_MATCH_ITEMS, ZERO_MATCH_VALUE_RATIO
+        from metrics import ZERO_MATCH_CAP_APPLIED_TOTAL, ZERO_MATCH_POOL_SIZE
+
+        stats["zero_match_capped"] = False
+        stats["zero_match_cap_value"] = MAX_ZERO_MATCH_ITEMS
+
+        if zero_match_pool:
+            ZERO_MATCH_POOL_SIZE.observe(len(zero_match_pool))
+
+        if len(zero_match_pool) > MAX_ZERO_MATCH_ITEMS:
+            import random as _random_058
+            from middleware import search_id_var as _sid_var_058
+            _sid_058 = _sid_var_058.get(None)
+            _rng = _random_058.Random(hash(_sid_058) if _sid_058 else 42)
+
+            # AC2: Sort by value descending (None/0/"" go to end)
+            def _get_valor_for_sort(lic_item: dict) -> float:
+                val = lic_item.get("valorTotalEstimado") or lic_item.get("valorEstimado") or 0
+                if isinstance(val, str):
+                    try:
+                        return float(val.replace(".", "").replace(",", "."))
+                    except ValueError:
+                        return 0.0
+                return float(val) if val else 0.0
+
+            zero_match_pool.sort(key=_get_valor_for_sort, reverse=True)
+
+            # AC3: Split — top by value + random sample from remainder
+            n_value = int(MAX_ZERO_MATCH_ITEMS * ZERO_MATCH_VALUE_RATIO)
+            n_random = MAX_ZERO_MATCH_ITEMS - n_value
+
+            top_value = zero_match_pool[:n_value]
+            remainder = zero_match_pool[n_value:]
+            random_sample = _rng.sample(remainder, min(n_random, len(remainder)))
+
+            to_classify = top_value + random_sample
+            to_classify_ids = {id(x) for x in to_classify}
+
+            # AC5: Mark deferred items as pending_review
+            to_defer = [x for x in zero_match_pool if id(x) not in to_classify_ids]
+            for lic_item in to_defer:
+                lic_item["_relevance_source"] = "pending_review"
+                lic_item["_pending_review"] = True
+                lic_item["_pending_review_reason"] = "zero_match_cap_exceeded"
+                lic_item["_term_density"] = 0.0
+                lic_item["_matched_terms"] = []
+                lic_item["_confidence_score"] = 0
+                lic_item["_llm_evidence"] = []
+                resultado_pending_review.append(lic_item)
+                stats["pending_review_count"] += 1
+
+            # AC4: Metrics
+            stats["zero_match_capped"] = True
+            ZERO_MATCH_CAP_APPLIED_TOTAL.inc()
+
+            # AC6: Impact log with value bands
+            classified_vals = [_get_valor_for_sort(x) for x in to_classify]
+            deferred_vals = [_get_valor_for_sort(x) for x in to_defer]
+
+            def _count_bands(vals: list) -> dict:
+                bands = {">1M": 0, "100K-1M": 0, "10K-100K": 0, "<10K": 0}
+                for v in vals:
+                    if v > 1_000_000:
+                        bands[">1M"] += 1
+                    elif v > 100_000:
+                        bands["100K-1M"] += 1
+                    elif v > 10_000:
+                        bands["10K-100K"] += 1
+                    else:
+                        bands["<10K"] += 1
+                return bands
+
+            logger.info(
+                f"[CRIT-058] Zero-match pool capped: {len(to_classify)}/{len(zero_match_pool)} items "
+                f"(cap={MAX_ZERO_MATCH_ITEMS}). "
+                f"Value split: {n_value} by value + {len(random_sample)} random. "
+                f"Classified bands={_count_bands(classified_vals)}, "
+                f"Deferred bands={_count_bands(deferred_vals)}, "
+                f"Classified total value={sum(classified_vals):,.0f}, "
+                f"Deferred total value={sum(deferred_vals):,.0f}"
+            )
+
+            zero_match_pool = to_classify
+
         if zero_match_pool:
             from llm_arbiter import classify_contract_primary_match as _classify_zm
             from llm_arbiter import _classify_zero_match_batch as _classify_batch

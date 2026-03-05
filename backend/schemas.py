@@ -788,6 +788,9 @@ class FilterStats(BaseModel):
     llm_zero_match_skipped_short: int = Field(default=0, description="Zero-match bids skipped due to objeto < 20 chars")
     # CRIT-057 AC2/AC4: Zero-match budget tracking
     zero_match_budget_exceeded: int = Field(default=0, description="Zero-match bids deferred due to time budget")
+    # CRIT-058 AC4: Zero-match cap tracking
+    zero_match_capped: bool = Field(default=False, description="Whether zero-match pool was capped")
+    zero_match_cap_value: int = Field(default=200, description="Cap value applied to zero-match pool")
 
 
 class SanctionsSummarySchema(BaseModel):

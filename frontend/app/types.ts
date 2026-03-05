@@ -29,6 +29,8 @@ export type FilterStats = components["schemas"]["FilterStats"] & {
   llm_zero_match_skipped_short?: number;
   /** CRIT-057 AC5: Number of zero-match items deferred due to time budget */
   zero_match_budget_exceeded?: number;
+  zero_match_capped?: boolean;
+  zero_match_cap_value?: number;
 };
 
 /** Lightweight sanctions summary for search result badges (STORY-256 AC11) */

@@ -591,6 +591,18 @@ FILTER_ZERO_MATCH_DURATION = _create_histogram(
     buckets=[1, 2, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180],
 )
 
+# CRIT-058 AC4: Zero-match cap metrics
+ZERO_MATCH_CAP_APPLIED_TOTAL = _create_counter(
+    "smartlic_zero_match_cap_applied_total",
+    "CRIT-058: Times zero-match cap was applied (pool exceeded MAX_ZERO_MATCH_ITEMS)",
+)
+
+ZERO_MATCH_POOL_SIZE = _create_histogram(
+    "smartlic_zero_match_pool_size",
+    "CRIT-058: Size of zero-match pool before cap",
+    buckets=[10, 25, 50, 100, 200, 300, 500, 750, 1000, 1500, 2000, 3000, 5000],
+)
+
 FILTER_PASSTHROUGH_TOTAL = _create_counter(
     "smartlic_filter_passthrough_total",
     "Filter pass-through decisions for non-standard records",

@@ -3,7 +3,7 @@
 **Prioridade:** MEDIUM
 **Componente:** Backend — search_pipeline.py, search_cache.py, cron_jobs.py
 **Origem:** Analise pos-incidente 2026-03-05 — cache persiste resultados parciais mesmo apos fonte primaria recuperar
-**Status:** TODO
+**Status:** DONE
 **Dependencias:** CRIT-053 (sources_degraded ja existe no pipeline)
 **Estimativa:** 4-6h
 
@@ -37,45 +37,45 @@ if ctx.licitacoes_raw and len(ctx.licitacoes_raw) > 0:
 ## Acceptance Criteria
 
 ### AC1: Quality score na escrita do cache
-- [ ] Adicionar `quality_score` ao cache_data em `search_pipeline.py:794`:
+- [x] Adicionar `quality_score` ao cache_data em `search_pipeline.py:794`:
   - `1.0` — todas as fontes succeeded (PNCP + PCP v2 + ComprasGov)
   - `0.7` — fonte primaria ok, secundarias falharam
   - `0.3` — fonte primaria degraded/failed, so secundarias
   - `0.0` — nenhuma fonte retornou dados
-- [ ] Adicionar `sources_succeeded: List[str]` ao cache_data
-- [ ] Adicionar `sources_degraded: List[str]` ao cache_data
-- [ ] Aplicar em ambos: `_write_cache()` (L1) e `save_to_cache_per_uf()` (L2 Supabase)
+- [x] Adicionar `sources_succeeded: List[str]` ao cache_data
+- [x] Adicionar `sources_degraded: List[str]` ao cache_data
+- [x] Aplicar em ambos: `_write_cache()` (L1) e `save_to_cache_per_uf()` (L2 Supabase)
 
 ### AC2: Na leitura, preferir refresh se quality < 1.0 e fontes saudaveis
-- [ ] Em `_read_cache()` e `_read_cache_composed()`:
+- [x] Em `_read_cache()` e `_read_cache_composed()`:
   - Se `quality_score < 1.0` E cron canary diz PNCP healthy → tratar como STALE (nao FRESH)
   - SWR behavior: servir dados cacheados E disparar background revalidation
   - Log: `"Cache HIT (quality={qs}) but primary source recovered — triggering revalidation"`
-- [ ] Se `quality_score >= 1.0` → comportamento normal (FRESH ate TTL)
-- [ ] Se cron canary diz PNCP degraded → servir cache parcial normalmente (melhor que nada)
+- [x] Se `quality_score >= 1.0` → comportamento normal (FRESH ate TTL)
+- [x] Se cron canary diz PNCP degraded → servir cache parcial normalmente (melhor que nada)
 
 ### AC3: Nao cachear resultados vazios de fonte degradada
-- [ ] Se `ctx.sources_degraded` nao e vazio E `len(ctx.licitacoes_raw) == 0`:
+- [x] Se `ctx.sources_degraded` nao e vazio E `len(ctx.licitacoes_raw) == 0`:
   - NAO salvar no cache (nem L1 nem L2)
   - Log: `"Cache SKIP: all sources degraded and zero results"`
-- [ ] Se `len(ctx.licitacoes_raw) > 0` mesmo com degradacao → salvar com quality_score baixo
+- [x] Se `len(ctx.licitacoes_raw) > 0` mesmo com degradacao → salvar com quality_score baixo
   (dados parciais sao melhores que nenhum dado no cache)
 
 ### AC4: Auto-revalidacao quando PNCP recupera
-- [ ] No cron canary (`cron_jobs.py`), quando PNCP transiciona de degraded → healthy:
+- [x] No cron canary (`cron_jobs.py`), quando PNCP transiciona de degraded → healthy:
   - Incrementar counter global `_pncp_recovery_epoch` (int, thread-safe)
   - Log: `"PNCP recovered (epoch={N}) — degraded cache entries will be revalidated on next read"`
-- [ ] Em `_read_cache()`: comparar `cache_entry.epoch` com `_pncp_recovery_epoch`
+- [x] Em `_read_cache()`: comparar `cache_entry.epoch` com `_pncp_recovery_epoch`
   - Se epoch do cache < recovery epoch → tratar como STALE (forcar revalidation)
-- [ ] Abordagem lazy (nao invalida ativamente, revalida no proximo acesso) — mais simples e seguro
+- [x] Abordagem lazy (nao invalida ativamente, revalida no proximo acesso) — mais simples e seguro
 
 ### AC5: Metricas
-- [ ] Counter: `smartlic_cache_quality_write_total` (labels: quality_bucket=full|partial|empty)
-- [ ] Counter: `smartlic_cache_quality_revalidation_total` (revalidacoes disparadas por quality)
-- [ ] Histogram: `smartlic_cache_quality_score` (observar score em cada write)
+- [x] Counter: `smartlic_cache_quality_write_total` (labels: quality_bucket=full|partial|empty)
+- [x] Counter: `smartlic_cache_quality_revalidation_total` (revalidacoes disparadas por quality)
+- [x] Histogram: `smartlic_cache_quality_score` (observar score em cada write)
 
 ### AC6: Testes
-- [ ] `test_crit056_cache_quality.py`:
+- [x] `test_crit056_cache_quality.py`:
   - Write com todas fontes ok → quality_score=1.0
   - Write com PNCP degraded + PCP ok → quality_score=0.3
   - Write com zero results + degraded → NAO salva no cache
@@ -83,7 +83,7 @@ if ctx.licitacoes_raw and len(ctx.licitacoes_raw) > 0:
   - Read com quality<1.0 + PNCP degraded → retorna normalmente (melhor que nada)
   - PNCP recovery epoch increment → cache entries antigas forçam revalidation
   - quality_score propagado corretamente para L1 e L2
-- [ ] Zero regressoes em testes existentes de cache (search_cache, search_pipeline)
+- [x] Zero regressoes em testes existentes de cache (search_cache, search_pipeline)
 
 ## Notas de Implementacao
 
@@ -135,8 +135,8 @@ if cached:
 | Arquivo | Mudanca |
 |---------|---------|
 | `backend/search_pipeline.py` | quality_score + sources na escrita do cache |
-| `backend/search_cache.py` | quality check na leitura, skip para empty degraded |
-| `backend/pipeline/cache_manager.py` | `_read_cache` e `_write_cache` com quality metadata |
+| `backend/search_cache.py` | quality check na leitura L2, coverage-based staleness |
+| `backend/pipeline/cache_manager.py` | `_read_cache` quality/epoch check, `_write_cache_per_uf` quality propagation |
 | `backend/cron_jobs.py` | `_pncp_recovery_epoch` counter, transition detection |
 | `backend/metrics.py` | 3 novas metricas de cache quality |
-| `backend/tests/test_crit056_cache_quality.py` | Testes |
+| `backend/tests/test_crit056_cache_quality.py` | 21 testes |

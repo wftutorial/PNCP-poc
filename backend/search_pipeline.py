@@ -620,6 +620,26 @@ class SearchPipeline:
                     ctx.cache_status = "fresh"
                     ctx.cache_level = "composed"
                     CACHE_HITS.labels(level="composed", freshness="fresh").inc()
+                    # CRIT-056 AC2: Quality-stale → serve but trigger revalidation
+                    if composed.get("_swr_stale") and ctx.user and ctx.user.get("id"):
+                        from metrics import CACHE_QUALITY_REVALIDATION_TOTAL
+                        from search_cache import trigger_background_revalidation as _trigger_reval
+                        CACHE_QUALITY_REVALIDATION_TOTAL.inc()
+                        _cache_params = _build_cache_params(request)
+                        _request_data = {
+                            "ufs": request.ufs,
+                            "data_inicial": request.data_inicial,
+                            "data_final": request.data_final,
+                            "modalidades": request.modalidades,
+                            "setor_id": request.setor_id,
+                        }
+                        asyncio.create_task(
+                            _trigger_reval(
+                                user_id=ctx.user["id"],
+                                params=_cache_params,
+                                request_data=_request_data,
+                            )
+                        )
                     return
                 else:
                     # CRIT-051 AC3: Partial hit — store cached results, fetch missing UFs only
@@ -640,6 +660,26 @@ class SearchPipeline:
                 ctx.cache_status = "fresh"  # InMemory cache is always fresh (< 6h TTL)
                 ctx.cache_level = "redis"  # InMemory serves as L2 cache
                 CACHE_HITS.labels(level="memory", freshness="fresh").inc()
+                # CRIT-056 AC2: Quality-stale → serve but trigger revalidation
+                if cached.get("_swr_stale") and ctx.user and ctx.user.get("id"):
+                    from metrics import CACHE_QUALITY_REVALIDATION_TOTAL
+                    from search_cache import trigger_background_revalidation as _trigger_reval
+                    CACHE_QUALITY_REVALIDATION_TOTAL.inc()
+                    _cache_params = _build_cache_params(request)
+                    _request_data = {
+                        "ufs": request.ufs,
+                        "data_inicial": request.data_inicial,
+                        "data_final": request.data_final,
+                        "modalidades": request.modalidades,
+                        "setor_id": request.setor_id,
+                    }
+                    asyncio.create_task(
+                        _trigger_reval(
+                            user_id=ctx.user["id"],
+                            params=_cache_params,
+                            request_data=_request_data,
+                        )
+                    )
                 # Skip the actual fetch — go straight to filtering
                 return
             else:
@@ -790,7 +830,29 @@ class SearchPipeline:
                 del ctx._cached_ufs
 
         # STORY-257A AC8 + GTM-FIX-010 AC3: Cache write-through on successful fetch
-        if ctx.licitacoes_raw and len(ctx.licitacoes_raw) > 0:
+        # CRIT-056 AC1: Compute quality score based on source status
+        _sources_ok = (
+            [ds.source for ds in ctx.data_sources if ds.status == "succeeded"]
+            if ctx.data_sources else []
+        )
+        _sources_deg = list(ctx.sources_degraded or [])
+        if "PNCP" in _sources_ok:
+            _quality = 1.0 if not _sources_deg else 0.7
+        elif _sources_ok:
+            _quality = 0.3  # No primary, but secondary ok
+        else:
+            _quality = 0.0
+
+        # CRIT-056 AC5: Track quality metrics
+        from metrics import CACHE_QUALITY_WRITE_TOTAL, CACHE_QUALITY_SCORE
+        _q_bucket = "full" if _quality >= 1.0 else ("partial" if _quality > 0 else "empty")
+
+        # CRIT-056 AC3: Don't cache empty results from degraded sources
+        if _quality < 0.5 and not ctx.licitacoes_raw:
+            logger.info("CRIT-056: Cache SKIP — sources degraded and zero results")
+            CACHE_QUALITY_WRITE_TOTAL.labels(quality_bucket="empty").inc()
+        elif ctx.licitacoes_raw and len(ctx.licitacoes_raw) > 0:
+            from cron_jobs import get_pncp_recovery_epoch
             cache_data = {
                 "licitacoes": ctx.licitacoes_raw,
                 "total": len(ctx.licitacoes_raw),
@@ -800,11 +862,19 @@ class SearchPipeline:
                     "ufs": request.ufs,
                     "status": request.status.value if request.status else None,
                 },
+                # CRIT-056 AC1: Quality metadata
+                "quality_score": _quality,
+                "sources_succeeded": _sources_ok,
+                "sources_degraded": _sources_deg,
+                "recovery_epoch": get_pncp_recovery_epoch(),
             }
             _write_cache(cache_key, cache_data)
             # CRIT-051 AC1: Also write per-UF entries for composable cache
-            _write_cache_per_uf(request, ctx.licitacoes_raw)
-            logger.debug(f"Cache WRITE: {len(ctx.licitacoes_raw)} results cached (TTL={SEARCH_CACHE_TTL}s)")
+            _write_cache_per_uf(request, ctx.licitacoes_raw, quality_score=_quality,
+                                sources_succeeded=_sources_ok, sources_degraded=_sources_deg)
+            CACHE_QUALITY_WRITE_TOTAL.labels(quality_bucket=_q_bucket).inc()
+            CACHE_QUALITY_SCORE.observe(_quality)
+            logger.debug(f"Cache WRITE: {len(ctx.licitacoes_raw)} results cached (TTL={SEARCH_CACHE_TTL}s, quality={_quality})")
 
             # GTM-FIX-010 AC3: Also persist to Supabase for cross-restart resilience
             # B-03 AC2/AC6/AC7: Include health metadata (fetch_duration_ms, coverage)

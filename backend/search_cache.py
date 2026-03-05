@@ -1276,7 +1276,7 @@ def _process_cache_hit(data: dict, params_hash: str, level: CacheLevel) -> Optio
     except (ValueError, KeyError):
         pass
 
-    return {
+    result = {
         "results": data.get("results", []),
         "cached_at": fetched_at_str,
         "cached_sources": data.get("sources_json") or ["pncp"],
@@ -1286,6 +1286,26 @@ def _process_cache_hit(data: dict, params_hash: str, level: CacheLevel) -> Optio
         "cache_status": status,
         "cache_priority": cache_priority,
     }
+
+    # CRIT-056 AC2: Check if L2 cache was written during degraded period
+    # Coverage data reveals if sources were missing during the write
+    coverage = data.get("coverage")
+    if coverage and isinstance(coverage, dict):
+        failed_ufs = coverage.get("failed_ufs", [])
+        total_req = coverage.get("total_requested", 0)
+        if failed_ufs and total_req > 0:
+            # Partial coverage — check if PNCP has recovered
+            try:
+                from cron_jobs import get_pncp_cron_status
+                pncp_status = get_pncp_cron_status().get("status")
+                if pncp_status == "healthy" and not is_stale:
+                    # Override freshness to stale to trigger revalidation
+                    result["is_stale"] = True
+                    result["cache_status"] = CacheStatus.STALE
+            except Exception:
+                pass
+
+    return result
 
 
 def _process_cache_hit_allow_expired(data: dict, params_hash: str, level: CacheLevel) -> Optional[dict]:

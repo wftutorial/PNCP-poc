@@ -732,6 +732,24 @@ WARMUP_COVERAGE_RATIO = _create_gauge(
     "CRIT-055: Warmup UF coverage ratio (cached UFs / total UFs)",
 )
 
+# CRIT-056 AC5: Cache quality score metrics
+CACHE_QUALITY_WRITE_TOTAL = _create_counter(
+    "smartlic_cache_quality_write_total",
+    "CRIT-056: Cache writes by quality bucket",
+    labelnames=["quality_bucket"],  # full, partial, empty
+)
+
+CACHE_QUALITY_REVALIDATION_TOTAL = _create_counter(
+    "smartlic_cache_quality_revalidation_total",
+    "CRIT-056: Revalidations triggered by low cache quality score",
+)
+
+CACHE_QUALITY_SCORE = _create_histogram(
+    "smartlic_cache_quality_score",
+    "CRIT-056: Cache quality score distribution on writes",
+    buckets=[0.0, 0.1, 0.2, 0.3, 0.5, 0.7, 0.8, 0.9, 1.0],
+)
+
 
 # ============================================================================
 # ASGI app factory for /metrics endpoint

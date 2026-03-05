@@ -53,15 +53,44 @@ def _compute_cache_key_per_uf(request, uf: str) -> str:
 
 
 def _read_cache(cache_key: str):
-    """Read from InMemoryCache. Returns parsed dict or None."""
+    """Read from InMemoryCache. Returns parsed dict or None.
+
+    CRIT-056 AC2/AC4: If quality_score < 1.0 and PNCP has recovered,
+    marks entry as stale (_swr_stale=True) to trigger background revalidation.
+    """
     cache = get_fallback_cache()
     raw = cache.get(cache_key)
     if raw is None:
         return None
     try:
-        return json.loads(raw)
+        data = json.loads(raw)
     except (json.JSONDecodeError, TypeError):
         return None
+
+    # CRIT-056 AC2: Check quality vs current PNCP health
+    qs = data.get("quality_score", 1.0)  # backward compat: assume full if missing
+    if qs < 1.0:
+        from cron_jobs import get_pncp_cron_status, get_pncp_recovery_epoch
+        pncp_status = get_pncp_cron_status().get("status")
+        if pncp_status == "healthy":
+            data["_swr_stale"] = True
+            logger.info(
+                f"CRIT-056: Cache HIT (quality={qs}) but primary source recovered "
+                f"— marking stale for revalidation"
+            )
+    # CRIT-056 AC4: Check recovery epoch
+    entry_epoch = data.get("recovery_epoch", 0)
+    if entry_epoch is not None:
+        from cron_jobs import get_pncp_recovery_epoch
+        current_epoch = get_pncp_recovery_epoch()
+        if entry_epoch < current_epoch:
+            data["_swr_stale"] = True
+            logger.info(
+                f"CRIT-056: Cache entry epoch={entry_epoch} < recovery epoch={current_epoch} "
+                f"— marking stale for revalidation"
+            )
+
+    return data
 
 
 def _read_cache_composed(request) -> dict | None:
@@ -80,6 +109,8 @@ def _read_cache_composed(request) -> dict | None:
     missing_ufs = []
     all_licitacoes = []
     oldest_cached_at = None
+    any_stale = False  # CRIT-056: Track if any entry is quality-stale
+    worst_quality = 1.0  # CRIT-056: Track worst quality across UF entries
 
     for uf in ufs:
         key = _compute_cache_key_per_uf(request, uf)
@@ -91,6 +122,12 @@ def _read_cache_composed(request) -> dict | None:
             if entry_cached_at:
                 if oldest_cached_at is None or entry_cached_at < oldest_cached_at:
                     oldest_cached_at = entry_cached_at
+            # CRIT-056: Propagate stale flag from quality check
+            if entry.get("_swr_stale"):
+                any_stale = True
+            entry_qs = entry.get("quality_score", 1.0)
+            if entry_qs < worst_quality:
+                worst_quality = entry_qs
         else:
             missing_ufs.append(uf)
 
@@ -111,9 +148,10 @@ def _read_cache_composed(request) -> dict | None:
     logger.info(
         f"CRIT-051: InMemory composition {result_type} — "
         f"{len(cached_ufs)}/{len(ufs)} UFs, {len(all_licitacoes)} results"
+        + (f" (quality={worst_quality}, stale={any_stale})" if worst_quality < 1.0 else "")
     )
 
-    return {
+    result = {
         "licitacoes": all_licitacoes,
         "total": len(all_licitacoes),
         "cached_at": oldest_cached_at,
@@ -121,6 +159,10 @@ def _read_cache_composed(request) -> dict | None:
         "missing_ufs": missing_ufs,
         "composition_coverage": coverage_pct,
     }
+    # CRIT-056: Propagate quality stale flag to composed result
+    if any_stale:
+        result["_swr_stale"] = True
+    return result
 
 
 def _write_cache(cache_key: str, data: dict) -> None:
@@ -132,12 +174,18 @@ def _write_cache(cache_key: str, data: dict) -> None:
         logger.warning(f"Failed to write search cache: {e}")
 
 
-def _write_cache_per_uf(request, results: list) -> int:
+def _write_cache_per_uf(request, results: list, *,
+                        quality_score: float = 1.0,
+                        sources_succeeded: list | None = None,
+                        sources_degraded: list | None = None) -> int:
     """CRIT-051 AC1: Write results to InMemory cache grouped by UF.
 
     Groups results by their 'uf' field and writes one cache entry per UF.
+    CRIT-056 AC1: Propagates quality metadata to per-UF entries.
     Returns number of UFs successfully cached.
     """
+    from cron_jobs import get_pncp_recovery_epoch
+
     results_by_uf: dict[str, list] = {}
     for r in results:
         uf = r.get("uf", "").upper()
@@ -146,6 +194,7 @@ def _write_cache_per_uf(request, results: list) -> int:
 
     ufs_saved = 0
     now_iso = datetime.now(timezone.utc).isoformat()
+    _epoch = get_pncp_recovery_epoch()
     for uf, uf_results in results_by_uf.items():
         key = _compute_cache_key_per_uf(request, uf)
         data = {
@@ -157,6 +206,11 @@ def _write_cache_per_uf(request, results: list) -> int:
                 "ufs": [uf],
                 "status": request.status.value if request.status else None,
             },
+            # CRIT-056 AC1: Quality metadata
+            "quality_score": quality_score,
+            "sources_succeeded": sources_succeeded or [],
+            "sources_degraded": sources_degraded or [],
+            "recovery_epoch": _epoch,
         }
         _write_cache(key, data)
         ufs_saved += 1
@@ -164,7 +218,7 @@ def _write_cache_per_uf(request, results: list) -> int:
     if ufs_saved > 0:
         logger.debug(
             f"CRIT-051: Per-UF InMemory cache wrote {ufs_saved} UFs "
-            f"({len(results)} total results)"
+            f"({len(results)} total results, quality={quality_score})"
         )
     return ufs_saved
 

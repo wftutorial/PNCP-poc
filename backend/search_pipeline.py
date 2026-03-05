@@ -16,7 +16,6 @@ AC8: No deferred imports — all imports at module level.
 """
 
 import asyncio
-import hashlib
 import json
 import logging
 import os
@@ -40,7 +39,6 @@ from storage import upload_excel
 from llm import gerar_resumo, gerar_resumo_fallback
 from authorization import get_admin_ids, get_master_quota_info
 from log_sanitizer import mask_user_id
-from redis_pool import get_fallback_cache
 from search_cache import save_to_cache as _supabase_save_cache, get_from_cache as _supabase_get_cache, get_from_cache_cascade
 from fastapi import HTTPException
 from metrics import SEARCH_DURATION, FETCH_DURATION, CACHE_HITS, CACHE_MISSES, ACTIVE_SEARCHES, SEARCHES, FILTER_DECISIONS, SEARCH_RESPONSE_STATE, FILTER_INPUT_TOTAL, FILTER_OUTPUT_TOTAL, FILTER_DISCARD_RATE, BIDS_PROCESSED_TOTAL
@@ -52,388 +50,31 @@ logger = logging.getLogger(__name__)
 # F-02 AC10: Tracer for pipeline spans
 _tracer = get_tracer("search_pipeline")
 
-
 # ============================================================================
-# STORY-225: Quota email notification helper
+# TD-008 AC20: Helper functions delegated to pipeline/ package
+# Re-exported here for backward compatibility with existing imports.
 # ============================================================================
-
-def _maybe_send_quota_email(user_id: str, quota_used: int, quota_info) -> None:
-    """Send quota warning/exhaustion email if threshold reached.
-
-    AC10: Warning at 80% usage.
-    AC11: Exhaustion at 100% usage.
-    Fire-and-forget: never blocks the search pipeline.
-    """
-    try:
-        max_quota = quota_info.capabilities.get("max_requests_per_month", 0)
-        if max_quota <= 0:
-            return
-
-        pct = quota_used / max_quota
-        reset_date = quota_info.quota_reset_date.strftime("%d/%m/%Y")
-
-        # Get user email
-        from supabase_client import get_supabase
-        sb = get_supabase()
-        profile = sb.table("profiles").select("email, full_name, email_unsubscribed").eq("id", user_id).single().execute()
-        if not profile.data or not profile.data.get("email"):
-            return
-        if profile.data.get("email_unsubscribed"):
-            return
-
-        email = profile.data["email"]
-        name = profile.data.get("full_name") or email.split("@")[0]
-        plan_name = quota_info.plan_name
-
-        from email_service import send_email_async
-
-        if pct >= 1.0:
-            from templates.emails.quota import render_quota_exhausted_email
-            html = render_quota_exhausted_email(
-                user_name=name, plan_name=plan_name,
-                quota_limit=max_quota, reset_date=reset_date,
-            )
-            send_email_async(
-                to=email,
-                subject=f"Limite de análises atingido — {plan_name}",
-                html=html,
-                tags=[{"name": "category", "value": "quota_exhausted"}],
-            )
-        elif pct >= 0.8 and (quota_used - 1) / max_quota < 0.8:
-            # Only send at the exact crossing of 80% threshold
-            from templates.emails.quota import render_quota_warning_email
-            html = render_quota_warning_email(
-                user_name=name, plan_name=plan_name,
-                quota_used=quota_used, quota_limit=max_quota,
-                reset_date=reset_date,
-            )
-            send_email_async(
-                to=email,
-                subject=f"Aviso de cota: {quota_used}/{max_quota} análises usadas",
-                html=html,
-                tags=[{"name": "category", "value": "quota_warning"}],
-            )
-    except Exception as e:
-        # Never fail the search pipeline due to email errors
-        logger.error(f"Failed to send quota email for user {mask_user_id(user_id)}: {e}")
-        import sentry_sdk
-        sentry_sdk.capture_exception(e)
-
-
-# ============================================================================
-# Helper functions (moved from routes/search.py)
-# ============================================================================
-
-def _build_pncp_link(lic: dict) -> str | None:
-    """Build PNCP link from bid data.
-
-    Priority: linkSistemaOrigem (86% populated) > linkProcessoEletronico (0% — dead field,
-    kept as defensive fallback) > constructed URL from numeroControlePNCP >
-    cnpjOrgao/anoCompra/sequencialCompra (UX-400 AC1).
-
-    UX-400 AC2: Returns None (not "") when no link can be constructed.
-    """
-    link = lic.get("linkSistemaOrigem") or lic.get("linkProcessoEletronico")
-
-    if not link:
-        numero_controle = lic.get("numeroControlePNCP", "")
-        if numero_controle:
-            try:
-                partes = numero_controle.split("/")
-                if len(partes) == 2:
-                    ano = partes[1]
-                    cnpj_tipo_seq = partes[0].split("-")
-                    if len(cnpj_tipo_seq) >= 3:
-                        cnpj = cnpj_tipo_seq[0]
-                        sequencial = cnpj_tipo_seq[2].lstrip("0")
-                        if cnpj and ano and sequencial:
-                            link = f"https://pncp.gov.br/app/editais/{cnpj}/{ano}/{sequencial}"
-            except Exception as e:
-                logger.debug(f"PNCP link extraction failed for {numero_controle}: {e}")
-
-    if not link:
-        # UX-400 AC1: Fallback from direct PNCP fields
-        cnpj = lic.get("cnpjOrgao", "")
-        ano = lic.get("anoCompra", "")
-        seq = lic.get("sequencialCompra", "")
-        if cnpj and ano and seq:
-            link = f"https://pncp.gov.br/app/editais/{cnpj}/{ano}/{seq}"
-
-    return link or None
-
-
-def _calcular_urgencia(dias_restantes: int | None) -> str | None:
-    """Classify urgency based on days remaining until deadline."""
-    if dias_restantes is None:
-        return None
-    if dias_restantes < 0:
-        return "encerrada"
-    if dias_restantes < 7:
-        return "critica"
-    if dias_restantes < 14:
-        return "alta"
-    if dias_restantes <= 30:
-        return "media"
-    return "baixa"
-
-
-def _calcular_dias_restantes(data_encerramento_str: str | None) -> int | None:
-    """Calculate days remaining from today to the deadline date."""
-    if not data_encerramento_str:
-        return None
-    try:
-        from datetime import date
-        enc = date.fromisoformat(data_encerramento_str[:10])
-        return (enc - date.today()).days
-    except (ValueError, TypeError):
-        return None
-
-
-def _build_coverage_metrics(ctx: "SearchContext") -> tuple[int, list[UfStatusDetail]]:
-    """Build coverage_pct and ufs_status_detail from search context (GTM-RESILIENCE-A05 AC1-AC2)."""
-    requested_ufs = list(ctx.request.ufs)
-    total_requested = len(requested_ufs)
-    if total_requested == 0:
-        return 100, []
-
-    failed_set = set(ctx.failed_ufs or [])
-
-    # Count raw results per UF for results_count
-    uf_counts: dict[str, int] = {}
-    for lic in ctx.licitacoes_raw:
-        uf = lic.get("uf", "")
-        if uf:
-            uf_counts[uf] = uf_counts.get(uf, 0) + 1
-
-    details: list[UfStatusDetail] = []
-    succeeded_count = 0
-    for uf in requested_ufs:
-        if uf in failed_set:
-            details.append(UfStatusDetail(uf=uf, status="timeout", results_count=0))
-        else:
-            succeeded_count += 1
-            details.append(UfStatusDetail(
-                uf=uf,
-                status="ok",
-                results_count=uf_counts.get(uf, 0),
-            ))
-
-    coverage_pct = int((succeeded_count / total_requested) * 100)
-    return coverage_pct, details
-
-
-def _build_coverage_metadata(ctx: "SearchContext") -> "CoverageMetadata":
-    """GTM-RESILIENCE-C03 AC2: Build consolidated CoverageMetadata from search context."""
-    requested = list(ctx.request.ufs)
-    processed = list(ctx.succeeded_ufs or [])
-    failed = list(ctx.failed_ufs or [])
-    total = len(requested)
-    coverage = round(len(processed) / total * 100, 1) if total > 0 else 0.0
-
-    # Determine freshness based on response state and cache status
-    if ctx.response_state == "live" or (not ctx.cached and ctx.response_state != "cached"):
-        freshness = "live"
-    elif ctx.cache_status == "fresh":
-        freshness = "cached_fresh"
-    else:
-        freshness = "cached_stale"
-
-    # Determine timestamp
-    if ctx.cached and ctx.cached_at:
-        data_timestamp = ctx.cached_at
-    else:
-        data_timestamp = datetime.now(_tz.utc).isoformat()
-
-    return CoverageMetadata(
-        ufs_requested=requested,
-        ufs_processed=processed,
-        ufs_failed=failed,
-        coverage_pct=coverage,
-        data_timestamp=data_timestamp,
-        freshness=freshness,
-    )
-
-
-def _map_confidence(relevance_source: str | None) -> str | None:
-    """C-02 AC2: Map relevance_source to categorical confidence level.
-
-    Returns 'high', 'medium', 'low', or None (for legacy results).
-    """
-    if not relevance_source:
-        return None
-    mapping = {
-        "keyword": "high",
-        "llm_standard": "medium",
-        "llm_conservative": "low",
-        "llm_zero_match": "low",
-    }
-    return mapping.get(relevance_source)
-
-
-def _convert_to_licitacao_items(licitacoes: list[dict]) -> list[LicitacaoItem]:
-    """Convert raw bid dictionaries to LicitacaoItem objects for frontend display."""
-    items = []
-    for lic in licitacoes:
-        try:
-            data_enc = lic.get("dataEncerramentoProposta", "")[:10] if lic.get("dataEncerramentoProposta") else None
-            dias_rest = _calcular_dias_restantes(data_enc)
-            item = LicitacaoItem(
-                pncp_id=lic.get("codigoCompra", lic.get("numeroControlePNCP", "")),
-                objeto=lic.get("objetoCompra", "")[:500],
-                orgao=lic.get("nomeOrgao", ""),
-                uf=lic.get("uf", ""),
-                municipio=lic.get("municipio"),
-                valor=lic.get("valorTotalEstimado") or None,
-                modalidade=lic.get("modalidadeNome"),
-                data_publicacao=lic.get("dataPublicacaoPncp", "")[:10] if lic.get("dataPublicacaoPncp") else None,
-                data_abertura=lic.get("dataAberturaProposta", "")[:10] if lic.get("dataAberturaProposta") else None,
-                data_encerramento=data_enc,
-                dias_restantes=dias_rest,
-                urgencia=_calcular_urgencia(dias_rest),
-                link=_build_pncp_link(lic),
-                numero_compra=lic.get("numeroEdital") or lic.get("codigoCompra") or None,
-                cnpj_orgao=lic.get("cnpjOrgao") or None,
-                source=lic.get("_source"),
-                relevance_score=lic.get("_relevance_score"),
-                matched_terms=lic.get("_matched_terms"),
-                relevance_source=lic.get("_relevance_source"),
-                # D-02 AC7: Confidence score and LLM evidence for frontend
-                confidence_score=lic.get("_confidence_score"),
-                llm_evidence=lic.get("_llm_evidence"),
-                # C-02 AC2: Map relevance_source to categorical confidence
-                confidence=_map_confidence(lic.get("_relevance_source")),
-                # D-04 AC1: Viability assessment (orthogonal to relevance)
-                viability_score=lic.get("_viability_score"),
-                viability_level=lic.get("_viability_level"),
-                viability_factors=lic.get("_viability_factors"),
-                # CRIT-FLT-003 AC2: Value source indicator
-                value_source=lic.get("_value_source"),
-            )
-            items.append(item)
-        except Exception as e:
-            logger.error(f"Failed to convert bid to LicitacaoItem: {e}")
-            import sentry_sdk
-            sentry_sdk.capture_exception(e)
-            from metrics import ITEMS_CONVERSION_ERRORS
-            ITEMS_CONVERSION_ERRORS.inc()
-            continue
-    return items
-
-
-# ============================================================================
-# STORY-257A: Search results cache helpers
-# ============================================================================
-
-SEARCH_CACHE_TTL = 4 * 3600  # 4 hours
-
-
-def _compute_cache_key(request) -> str:
-    """Compute deterministic cache key from search params (excluding dates)."""
-    params = {
-        "setor_id": request.setor_id,
-        "ufs": sorted(request.ufs),
-        "status": request.status.value if request.status else None,
-        "modalidades": sorted(request.modalidades) if request.modalidades else None,
-        "modo_busca": request.modo_busca,
-    }
-    params_json = json.dumps(params, sort_keys=True)
-    return f"search_cache:{hashlib.sha256(params_json.encode()).hexdigest()}"
-
-
-def _read_cache(cache_key: str):
-    """Read from InMemoryCache. Returns parsed dict or None."""
-    cache = get_fallback_cache()
-    raw = cache.get(cache_key)
-    if raw is None:
-        return None
-    try:
-        return json.loads(raw)
-    except (json.JSONDecodeError, TypeError):
-        return None
-
-
-def _write_cache(cache_key: str, data: dict) -> None:
-    """Write search results to InMemoryCache with TTL."""
-    cache = get_fallback_cache()
-    try:
-        cache.setex(cache_key, SEARCH_CACHE_TTL, json.dumps(data, default=str))
-    except Exception as e:
-        logger.warning(f"Failed to write search cache: {e}")
-
-
-def _build_cache_params(request) -> dict:
-    """Build normalized params dict from BuscaRequest for cache lookup (A-03 AC5-AC7)."""
-    return {
-        "setor_id": request.setor_id,
-        "ufs": request.ufs,
-        "status": request.status.value if request.status else None,
-        "modalidades": request.modalidades,
-        "modo_busca": request.modo_busca,
-    }
-
-
-async def _maybe_trigger_revalidation(
-    user_id: str, request, stale_cache: dict | None,
-) -> None:
-    """B-01: Trigger background revalidation after serving stale cache.
-
-    Called from all 5 error handlers that serve stale cache.
-    Non-blocking, non-fatal — failures are silently logged.
-    """
-    if not stale_cache or not stale_cache.get("is_stale"):
-        return
-    try:
-        from search_cache import trigger_background_revalidation
-        await trigger_background_revalidation(
-            user_id=user_id,
-            params=_build_cache_params(request),
-            request_data={
-                "ufs": request.ufs,
-                "data_inicial": request.data_inicial,
-                "data_final": request.data_final,
-                "modalidades": request.modalidades,
-                "setor_id": request.setor_id,
-            },
-            search_id=getattr(request, "search_id", None),
-        )
-    except Exception as e:
-        logger.debug(f"Revalidation trigger failed (non-fatal): {e}")
-
-
-def _build_degraded_detail(ctx: "SearchContext") -> dict:
-    """Build SSE degraded event detail dict from SearchContext (A-02 AC6)."""
-    detail: dict = {}
-    # Cache freshness
-    if ctx.cached_at:
-        try:
-            from datetime import datetime, timezone
-            cached_dt = datetime.fromisoformat(ctx.cached_at.replace("Z", "+00:00"))
-            age_hours = (datetime.now(timezone.utc) - cached_dt).total_seconds() / 3600
-            detail["cache_age_hours"] = round(age_hours, 1)
-        except (ValueError, TypeError):
-            pass
-    if ctx.cache_level:
-        detail["cache_level"] = ctx.cache_level
-
-    # Source failure info
-    sources_failed = []
-    sources_ok = []
-    if ctx.data_sources:
-        for ds in ctx.data_sources:
-            if ds.status in ("error", "timeout"):
-                sources_failed.append(ds.source)
-            elif ds.status == "ok":
-                sources_ok.append(ds.source)
-    detail["sources_failed"] = sources_failed
-    detail["sources_ok"] = sources_ok
-
-    # Coverage
-    total_ufs = len(ctx.request.ufs) if ctx.request else 0
-    succeeded = len(ctx.succeeded_ufs) if ctx.succeeded_ufs else 0
-    detail["coverage_pct"] = int((succeeded / total_ufs * 100) if total_ufs > 0 else 0)
-
-    return detail
-
+from pipeline.helpers import (  # noqa: E402
+    _build_pncp_link,
+    _calcular_urgencia,
+    _calcular_dias_restantes,
+    _map_confidence,
+    _convert_to_licitacao_items,
+    _build_coverage_metrics,
+    _build_coverage_metadata,
+    _maybe_send_quota_email,
+)
+from pipeline.cache_manager import (  # noqa: E402
+    SEARCH_CACHE_TTL,
+    _compute_cache_key,
+    _read_cache,
+    _write_cache,
+    _build_cache_params,
+    _maybe_trigger_revalidation,
+    _build_degraded_detail,
+    apply_stale_cache,
+    set_empty_failure,
+)
 
 # ============================================================================
 # SearchPipeline

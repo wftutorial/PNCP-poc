@@ -390,7 +390,7 @@ class TestAC15Stage4CrashPartialResponse:
     @patch("search_pipeline.get_from_cache_cascade", new_callable=AsyncMock, return_value=None)
     @patch("search_pipeline._supabase_save_cache", new_callable=AsyncMock)
     @patch("search_pipeline._supabase_get_cache", new_callable=AsyncMock, return_value=None)
-    @patch("search_pipeline.get_fallback_cache", new_callable=AsyncMock, return_value=None)
+    @patch("pipeline.cache_manager.get_fallback_cache", new_callable=AsyncMock, return_value=None)
     async def test_stage_filter_exception_uses_fallback_resumo(
         self, mock_fallback_cache, mock_supa_get, mock_supa_save,
         mock_cache_cascade, mock_quota

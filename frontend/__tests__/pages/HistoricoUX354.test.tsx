@@ -50,10 +50,14 @@ jest.mock('../../lib/error-messages', () => ({
   getMessageFromErrorCode: () => null,
 }));
 
+// Mock useSessions — replaces global.fetch session logic
+const mockUseSessions = jest.fn();
+jest.mock('../../hooks/useSessions', () => ({
+  useSessions: (opts: any) => mockUseSessions(opts),
+}));
+
 // --- Test data ---
 const mockSession = { access_token: 'test-token-354' };
-const mockFetch = jest.fn();
-global.fetch = mockFetch;
 
 function makeSession(overrides: Record<string, unknown> = {}) {
   return {
@@ -85,22 +89,24 @@ describe('UX-354: Histórico Unicode, Sector Slugs, English Errors', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockUseAuth.mockReturnValue({ session: mockSession, loading: false });
+    // Default: empty
+    mockUseSessions.mockReturnValue({
+      sessions: [],
+      total: 0,
+      loading: false,
+      error: null,
+      errorTimestamp: null,
+      refresh: jest.fn(),
+    });
   });
 
   // =========================================================================
   // AC1: Header renders "Histórico" (not unicode escape)
   // =========================================================================
   test('AC1: header shows "Histórico" page title in DOM', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({ sessions: [], total: 0 }),
-    });
-
     render(<HistoricoPage />);
 
     // PageHeader h1 is always rendered (hidden on mobile via CSS, but in DOM).
-    // JSX string literals do not interpret unicode escapes at compile time,
-    // so "Hist\u00f3rico" in JSX props renders as a literal backslash sequence.
     const heading = screen.getByRole('heading', { level: 1 });
     // Verify the heading contains the page title text (partial match is safe)
     expect(heading).toHaveTextContent(/Hist/);
@@ -111,12 +117,13 @@ describe('UX-354: Histórico Unicode, Sector Slugs, English Errors', () => {
   // AC2-AC3, AC6: Sector slugs → display names
   // =========================================================================
   test('AC6: sector "vestuario" renders as "Vestuário e Uniformes"', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({
-        sessions: [makeSession({ sectors: ['vestuario'] })],
-        total: 1,
-      }),
+    mockUseSessions.mockReturnValue({
+      sessions: [makeSession({ sectors: ['vestuario'] })],
+      total: 1,
+      loading: false,
+      error: null,
+      errorTimestamp: null,
+      refresh: jest.fn(),
     });
 
     render(<HistoricoPage />);
@@ -127,12 +134,13 @@ describe('UX-354: Histórico Unicode, Sector Slugs, English Errors', () => {
   });
 
   test('sector "alimentos" renders as "Alimentos e Merenda"', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({
-        sessions: [makeSession({ sectors: ['alimentos'] })],
-        total: 1,
-      }),
+    mockUseSessions.mockReturnValue({
+      sessions: [makeSession({ sectors: ['alimentos'] })],
+      total: 1,
+      loading: false,
+      error: null,
+      errorTimestamp: null,
+      refresh: jest.fn(),
     });
 
     render(<HistoricoPage />);
@@ -143,12 +151,13 @@ describe('UX-354: Histórico Unicode, Sector Slugs, English Errors', () => {
   });
 
   test('sector "engenharia" renders as "Engenharia, Projetos e Obras"', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({
-        sessions: [makeSession({ sectors: ['engenharia'] })],
-        total: 1,
-      }),
+    mockUseSessions.mockReturnValue({
+      sessions: [makeSession({ sectors: ['engenharia'] })],
+      total: 1,
+      loading: false,
+      error: null,
+      errorTimestamp: null,
+      refresh: jest.fn(),
     });
 
     render(<HistoricoPage />);
@@ -159,12 +168,13 @@ describe('UX-354: Histórico Unicode, Sector Slugs, English Errors', () => {
   });
 
   test('sector "saude" renders as "Saúde"', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({
-        sessions: [makeSession({ sectors: ['saude'] })],
-        total: 1,
-      }),
+    mockUseSessions.mockReturnValue({
+      sessions: [makeSession({ sectors: ['saude'] })],
+      total: 1,
+      loading: false,
+      error: null,
+      errorTimestamp: null,
+      refresh: jest.fn(),
     });
 
     render(<HistoricoPage />);
@@ -175,12 +185,13 @@ describe('UX-354: Histórico Unicode, Sector Slugs, English Errors', () => {
   });
 
   test('sector "materiais_hidraulicos" renders as "Materiais Hidráulicos e Saneamento"', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({
-        sessions: [makeSession({ sectors: ['materiais_hidraulicos'] })],
-        total: 1,
-      }),
+    mockUseSessions.mockReturnValue({
+      sessions: [makeSession({ sectors: ['materiais_hidraulicos'] })],
+      total: 1,
+      loading: false,
+      error: null,
+      errorTimestamp: null,
+      refresh: jest.fn(),
     });
 
     render(<HistoricoPage />);
@@ -191,12 +202,13 @@ describe('UX-354: Histórico Unicode, Sector Slugs, English Errors', () => {
   });
 
   test('multiple sectors render as comma-separated display names', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({
-        sessions: [makeSession({ sectors: ['vestuario', 'software'] })],
-        total: 1,
-      }),
+    mockUseSessions.mockReturnValue({
+      sessions: [makeSession({ sectors: ['vestuario', 'software'] })],
+      total: 1,
+      loading: false,
+      error: null,
+      errorTimestamp: null,
+      refresh: jest.fn(),
     });
 
     render(<HistoricoPage />);
@@ -209,12 +221,13 @@ describe('UX-354: Histórico Unicode, Sector Slugs, English Errors', () => {
   });
 
   test('unknown sector falls back to raw slug', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({
-        sessions: [makeSession({ sectors: ['unknown_sector'] })],
-        total: 1,
-      }),
+    mockUseSessions.mockReturnValue({
+      sessions: [makeSession({ sectors: ['unknown_sector'] })],
+      total: 1,
+      loading: false,
+      error: null,
+      errorTimestamp: null,
+      refresh: jest.fn(),
     });
 
     render(<HistoricoPage />);
@@ -238,15 +251,16 @@ describe('UX-354: Histórico Unicode, Sector Slugs, English Errors', () => {
   // AC4-AC5, AC7: Error messages in PT-BR
   // =========================================================================
   test('AC7: "Server restart — retry recommended" renders PT-BR', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({
-        sessions: [makeSession({
-          status: 'failed',
-          error_message: 'Server restart — retry recommended',
-        })],
-        total: 1,
-      }),
+    mockUseSessions.mockReturnValue({
+      sessions: [makeSession({
+        status: 'failed',
+        error_message: 'Server restart — retry recommended',
+      })],
+      total: 1,
+      loading: false,
+      error: null,
+      errorTimestamp: null,
+      refresh: jest.fn(),
     });
 
     render(<HistoricoPage />);
@@ -259,15 +273,16 @@ describe('UX-354: Histórico Unicode, Sector Slugs, English Errors', () => {
   });
 
   test('AC4: "Server restart during processing" renders PT-BR', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({
-        sessions: [makeSession({
-          status: 'failed',
-          error_message: 'Server restart during processing',
-        })],
-        total: 1,
-      }),
+    mockUseSessions.mockReturnValue({
+      sessions: [makeSession({
+        status: 'failed',
+        error_message: 'Server restart during processing',
+      })],
+      total: 1,
+      loading: false,
+      error: null,
+      errorTimestamp: null,
+      refresh: jest.fn(),
     });
 
     render(<HistoricoPage />);
@@ -279,15 +294,16 @@ describe('UX-354: Histórico Unicode, Sector Slugs, English Errors', () => {
   });
 
   test('AC5: "Pipeline failed" renders PT-BR', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({
-        sessions: [makeSession({
-          status: 'failed',
-          error_message: 'Pipeline failed',
-        })],
-        total: 1,
-      }),
+    mockUseSessions.mockReturnValue({
+      sessions: [makeSession({
+        status: 'failed',
+        error_message: 'Pipeline failed',
+      })],
+      total: 1,
+      loading: false,
+      error: null,
+      errorTimestamp: null,
+      refresh: jest.fn(),
     });
 
     render(<HistoricoPage />);
@@ -299,15 +315,16 @@ describe('UX-354: Histórico Unicode, Sector Slugs, English Errors', () => {
   });
 
   test('AC5: "Connection reset" renders PT-BR', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({
-        sessions: [makeSession({
-          status: 'failed',
-          error_message: 'Connection reset by peer',
-        })],
-        total: 1,
-      }),
+    mockUseSessions.mockReturnValue({
+      sessions: [makeSession({
+        status: 'failed',
+        error_message: 'Connection reset by peer',
+      })],
+      total: 1,
+      loading: false,
+      error: null,
+      errorTimestamp: null,
+      refresh: jest.fn(),
     });
 
     render(<HistoricoPage />);
@@ -320,15 +337,16 @@ describe('UX-354: Histórico Unicode, Sector Slugs, English Errors', () => {
 
   // UX-357: timed_out now always shows canonical timeout message
   test('AC5: timed_out shows unified timeout message (UX-357)', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({
-        sessions: [makeSession({
-          status: 'timed_out',
-          error_message: 'All sources failed to respond',
-        })],
-        total: 1,
-      }),
+    mockUseSessions.mockReturnValue({
+      sessions: [makeSession({
+        status: 'timed_out',
+        error_message: 'All sources failed to respond',
+      })],
+      total: 1,
+      loading: false,
+      error: null,
+      errorTimestamp: null,
+      refresh: jest.fn(),
     });
 
     render(<HistoricoPage />);
@@ -343,12 +361,13 @@ describe('UX-354: Histórico Unicode, Sector Slugs, English Errors', () => {
   // AC8: Zero regression
   // =========================================================================
   test('AC8: completed session renders count and currency', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({
-        sessions: [makeSession({ total_filtered: 42, valor_total: 1500000 })],
-        total: 1,
-      }),
+    mockUseSessions.mockReturnValue({
+      sessions: [makeSession({ total_filtered: 42, valor_total: 1500000 })],
+      total: 1,
+      loading: false,
+      error: null,
+      errorTimestamp: null,
+      refresh: jest.fn(),
     });
 
     render(<HistoricoPage />);
@@ -361,9 +380,13 @@ describe('UX-354: Histórico Unicode, Sector Slugs, English Errors', () => {
   });
 
   test('AC8: empty state renders with a link to start the first search', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({ sessions: [], total: 0 }),
+    mockUseSessions.mockReturnValue({
+      sessions: [],
+      total: 0,
+      loading: false,
+      error: null,
+      errorTimestamp: null,
+      refresh: jest.fn(),
     });
 
     render(<HistoricoPage />);
@@ -372,18 +395,18 @@ describe('UX-354: Histórico Unicode, Sector Slugs, English Errors', () => {
     await waitFor(() => {
       expect(screen.getByTestId('empty-state')).toBeInTheDocument();
     });
-    // Verify the CTA link text is rendered (data-testid="empty-state-cta" is on a Link
-    // which is mocked as plain <a> without prop forwarding — use text content instead)
+    // Verify the CTA link text is rendered
     expect(screen.getByText(/Fazer primeira análise/i)).toBeInTheDocument();
   });
 
   test('AC8: UF display works correctly', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({
-        sessions: [makeSession({ ufs: ['SP', 'RJ', 'MG'] })],
-        total: 1,
-      }),
+    mockUseSessions.mockReturnValue({
+      sessions: [makeSession({ ufs: ['SP', 'RJ', 'MG'] })],
+      total: 1,
+      loading: false,
+      error: null,
+      errorTimestamp: null,
+      refresh: jest.fn(),
     });
 
     render(<HistoricoPage />);
@@ -394,12 +417,13 @@ describe('UX-354: Histórico Unicode, Sector Slugs, English Errors', () => {
   });
 
   test('AC8: status badge shows "Concluída"', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({
-        sessions: [makeSession({ status: 'completed' })],
-        total: 1,
-      }),
+    mockUseSessions.mockReturnValue({
+      sessions: [makeSession({ status: 'completed' })],
+      total: 1,
+      loading: false,
+      error: null,
+      errorTimestamp: null,
+      refresh: jest.fn(),
     });
 
     render(<HistoricoPage />);

@@ -75,14 +75,25 @@ jest.mock('../../lib/error-messages', () => ({
   getMessageFromErrorCode: () => null,
 }));
 
-// Mock fetch
-const mockFetch = jest.fn();
-global.fetch = mockFetch;
+// Mock useSessions — replaces all global.fetch session logic
+const mockUseSessions = jest.fn();
+jest.mock('../../hooks/useSessions', () => ({
+  useSessions: (opts: any) => mockUseSessions(opts),
+}));
 
 describe('HistoricoPage Component', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockPush.mockClear();
+    // Default: loading state
+    mockUseSessions.mockReturnValue({
+      sessions: [],
+      total: 0,
+      loading: false,
+      error: null,
+      errorTimestamp: null,
+      refresh: jest.fn(),
+    });
   });
 
   describe('Loading state', () => {
@@ -97,6 +108,27 @@ describe('HistoricoPage Component', () => {
       // GTM-POLISH-001 AC1: Unified AuthLoadingScreen replaces generic "Carregando..."
       expect(screen.getByTestId('auth-loading-screen')).toBeInTheDocument();
     });
+
+    it('should show loading skeletons while fetching', () => {
+      mockUseAuth.mockReturnValue({
+        session: { access_token: 'test-token-123' },
+        loading: false,
+      });
+      mockUseSessions.mockReturnValue({
+        sessions: [],
+        total: 0,
+        loading: true,
+        error: null,
+        errorTimestamp: null,
+        refresh: jest.fn(),
+      });
+
+      render(<HistoricoPage />);
+
+      // Should show skeleton loaders
+      const skeletons = document.querySelectorAll('.animate-pulse');
+      expect(skeletons.length).toBeGreaterThan(0);
+    });
   });
 
   describe('Unauthenticated state', () => {
@@ -110,9 +142,6 @@ describe('HistoricoPage Component', () => {
     it('should show login prompt when not authenticated', () => {
       render(<HistoricoPage />);
 
-      // Page renders: "Fa\u00e7a login para ver seu hist\u00f3rico"
-      // JSX unicode escapes in string literals are NOT decoded by SWC — they render
-      // as literal backslash-u sequences. Match by partial text that is unambiguous.
       const loginPrompt = screen.getByText(/login para ver seu/i);
       expect(loginPrompt).toBeInTheDocument();
     });
@@ -138,84 +167,55 @@ describe('HistoricoPage Component', () => {
       });
     });
 
-    it('should fetch sessions on mount', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ sessions: [], total: 0 }),
-      });
-
+    it('should call useSessions on mount', () => {
       render(<HistoricoPage />);
 
-      await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith(
-          expect.stringContaining('/sessions'),
-          expect.objectContaining({
-            headers: { Authorization: 'Bearer test-token-123' },
-          })
-        );
-      });
+      expect(mockUseSessions).toHaveBeenCalledWith(
+        expect.objectContaining({ page: 0 })
+      );
     });
 
-    it('should show page title in header', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ sessions: [], total: 0 }),
-      });
-
+    it('should show page title in header', () => {
       render(<HistoricoPage />);
 
-      // PageHeader renders an h1 with title="Hist\u00f3rico" (JSX literal — backslash-u not decoded).
-      // Use partial text match to avoid unicode escape issues.
       const heading = screen.getByRole('heading', { level: 1 });
       expect(heading).toBeInTheDocument();
       expect(heading.textContent).toContain('Hist');
     });
 
-    it('should show loading skeletons while fetching', async () => {
-      mockFetch.mockImplementation(
-        () => new Promise((resolve) => setTimeout(() => resolve({
-          ok: true,
-          json: () => Promise.resolve({ sessions: [], total: 0 }),
-        }), 100))
-      );
-
-      render(<HistoricoPage />);
-
-      // Should show skeleton loaders
-      const skeletons = document.querySelectorAll('.animate-pulse');
-      expect(skeletons.length).toBeGreaterThan(0);
-    });
-
-    it('should show empty state when no sessions', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ sessions: [], total: 0 }),
+    it('should show empty state when no sessions', () => {
+      mockUseSessions.mockReturnValue({
+        sessions: [],
+        total: 0,
+        loading: false,
+        error: null,
+        errorTimestamp: null,
+        refresh: jest.fn(),
       });
 
       render(<HistoricoPage />);
 
-      // EmptyState component is shown with data-testid="empty-state"
-      await waitFor(() => {
-        expect(screen.getByTestId('empty-state')).toBeInTheDocument();
-      });
+      expect(screen.getByTestId('empty-state')).toBeInTheDocument();
     });
 
-    it('should show link to make first search when empty', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ sessions: [], total: 0 }),
+    it('should show link to make first search when empty', () => {
+      mockUseSessions.mockReturnValue({
+        sessions: [],
+        total: 0,
+        loading: false,
+        error: null,
+        errorTimestamp: null,
+        refresh: jest.fn(),
       });
 
       render(<HistoricoPage />);
 
-      await waitFor(() => {
-        const searchLink = screen.getByRole('link', { name: /Fazer primeira análise/i });
-        expect(searchLink).toBeInTheDocument();
-        expect(searchLink).toHaveAttribute('href', '/buscar');
-      });
+      const searchLink = screen.getByRole('link', { name: /Fazer primeira análise/i });
+      expect(searchLink).toBeInTheDocument();
+      expect(searchLink).toHaveAttribute('href', '/buscar');
     });
 
-    it('should display session list', async () => {
+    it('should display session list', () => {
       const mockSessions = [
         {
           id: '1',
@@ -239,21 +239,23 @@ describe('HistoricoPage Component', () => {
         },
       ];
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ sessions: mockSessions, total: 1 }),
+      mockUseSessions.mockReturnValue({
+        sessions: mockSessions,
+        total: 1,
+        loading: false,
+        error: null,
+        errorTimestamp: null,
+        refresh: jest.fn(),
       });
 
       render(<HistoricoPage />);
 
-      await waitFor(() => {
-        expect(screen.getByText(/SP, RJ/)).toBeInTheDocument();
-        expect(screen.getByText('25')).toBeInTheDocument();
-        expect(screen.getByText('Test summary')).toBeInTheDocument();
-      });
+      expect(screen.getByText(/SP, RJ/)).toBeInTheDocument();
+      expect(screen.getByText('25')).toBeInTheDocument();
+      expect(screen.getByText('Test summary')).toBeInTheDocument();
     });
 
-    it('should format currency correctly', async () => {
+    it('should format currency correctly', () => {
       const mockSessions = [
         {
           id: '1',
@@ -277,20 +279,22 @@ describe('HistoricoPage Component', () => {
         },
       ];
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ sessions: mockSessions, total: 1 }),
+      mockUseSessions.mockReturnValue({
+        sessions: mockSessions,
+        total: 1,
+        loading: false,
+        error: null,
+        errorTimestamp: null,
+        refresh: jest.fn(),
       });
 
       render(<HistoricoPage />);
 
-      await waitFor(() => {
-        // Brazilian currency format
-        expect(screen.getByText(/R\$/)).toBeInTheDocument();
-      });
+      // Brazilian currency format
+      expect(screen.getByText(/R\$/)).toBeInTheDocument();
     });
 
-    it('should display custom keywords when present', async () => {
+    it('should display custom keywords when present', () => {
       const mockSessions = [
         {
           id: '1',
@@ -314,58 +318,57 @@ describe('HistoricoPage Component', () => {
         },
       ];
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ sessions: mockSessions, total: 1 }),
+      mockUseSessions.mockReturnValue({
+        sessions: mockSessions,
+        total: 1,
+        loading: false,
+        error: null,
+        errorTimestamp: null,
+        refresh: jest.fn(),
       });
 
       render(<HistoricoPage />);
 
-      await waitFor(() => {
-        expect(screen.getByText(/Termos:/)).toBeInTheDocument();
-        expect(screen.getByText(/uniforme, camiseta/)).toBeInTheDocument();
-      });
+      expect(screen.getByText(/Termos:/)).toBeInTheDocument();
+      expect(screen.getByText(/uniforme, camiseta/)).toBeInTheDocument();
     });
 
-    it('should show total count in header', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ sessions: [], total: 5 }),
+    it('should show total count in header', () => {
+      mockUseSessions.mockReturnValue({
+        sessions: [],
+        total: 5,
+        loading: false,
+        error: null,
+        errorTimestamp: null,
+        refresh: jest.fn(),
       });
 
       render(<HistoricoPage />);
 
-      await waitFor(() => {
-        expect(screen.getByText(/5 análises realizadas/)).toBeInTheDocument();
-      });
+      expect(screen.getByText(/5 análises realizadas/)).toBeInTheDocument();
     });
 
-    it('should use singular form for 1 search', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ sessions: [], total: 1 }),
+    it('should use singular form for 1 search', () => {
+      mockUseSessions.mockReturnValue({
+        sessions: [],
+        total: 1,
+        loading: false,
+        error: null,
+        errorTimestamp: null,
+        refresh: jest.fn(),
       });
 
       render(<HistoricoPage />);
 
-      await waitFor(() => {
-        expect(screen.getByText(/1 análise realizada$/)).toBeInTheDocument();
-      });
+      expect(screen.getByText(/1 análise realizada$/)).toBeInTheDocument();
     });
 
-    it('should show Nova análise button', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ sessions: [], total: 0 }),
-      });
-
+    it('should show Nova análise button', () => {
       render(<HistoricoPage />);
 
-      await waitFor(() => {
-        const newSearchLink = screen.getByRole('link', { name: /Nova análise/i });
-        expect(newSearchLink).toBeInTheDocument();
-        expect(newSearchLink).toHaveAttribute('href', '/buscar');
-      });
+      const newSearchLink = screen.getByRole('link', { name: /Nova análise/i });
+      expect(newSearchLink).toBeInTheDocument();
+      expect(newSearchLink).toHaveAttribute('href', '/buscar');
     });
   });
 
@@ -404,105 +407,110 @@ describe('HistoricoPage Component', () => {
       });
     });
 
-    it('should not show pagination for single page', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ sessions: generateMockSessions(5), total: 5 }),
+    it('should not show pagination for single page', () => {
+      mockUseSessions.mockReturnValue({
+        sessions: generateMockSessions(5),
+        total: 5,
+        loading: false,
+        error: null,
+        errorTimestamp: null,
+        refresh: jest.fn(),
       });
 
       render(<HistoricoPage />);
 
-      await waitFor(() => {
-        // Wait for data to load
-        expect(screen.getByText('5 análises realizadas')).toBeInTheDocument();
-      });
-
+      expect(screen.getByText('5 análises realizadas')).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /Anterior/i })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /Pr/i })).not.toBeInTheDocument();
     });
 
-    it('should show pagination for multiple pages', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ sessions: generateMockSessions(20), total: 50 }),
+    it('should show pagination for multiple pages', () => {
+      mockUseSessions.mockReturnValue({
+        sessions: generateMockSessions(20),
+        total: 50,
+        loading: false,
+        error: null,
+        errorTimestamp: null,
+        refresh: jest.fn(),
       });
 
       render(<HistoricoPage />);
 
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: /Anterior/i })).toBeInTheDocument();
-      });
+      expect(screen.getByRole('button', { name: /Anterior/i })).toBeInTheDocument();
     });
 
-    it('should disable previous button on first page', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ sessions: generateMockSessions(20), total: 50 }),
+    it('should disable previous button on first page', () => {
+      mockUseSessions.mockReturnValue({
+        sessions: generateMockSessions(20),
+        total: 50,
+        loading: false,
+        error: null,
+        errorTimestamp: null,
+        refresh: jest.fn(),
       });
 
       render(<HistoricoPage />);
 
-      await waitFor(() => {
-        const prevButton = screen.getByRole('button', { name: /Anterior/i });
-        expect(prevButton).toBeDisabled();
-      });
+      const prevButton = screen.getByRole('button', { name: /Anterior/i });
+      expect(prevButton).toBeDisabled();
     });
 
-    it('should enable next button when more pages exist', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ sessions: generateMockSessions(20), total: 50 }),
+    it('should enable next button when more pages exist', () => {
+      mockUseSessions.mockReturnValue({
+        sessions: generateMockSessions(20),
+        total: 50,
+        loading: false,
+        error: null,
+        errorTimestamp: null,
+        refresh: jest.fn(),
       });
 
       render(<HistoricoPage />);
 
-      await waitFor(() => {
-        // Next button text is "Pr\u00f3ximo" (JSX literal) — match by partial text
-        const nextButton = screen.getByRole('button', { name: /Pr/ });
-        expect(nextButton).not.toBeDisabled();
-      });
+      // Next button text is "Próximo" — match by partial text
+      const nextButton = screen.getByRole('button', { name: /Pr/ });
+      expect(nextButton).not.toBeDisabled();
     });
 
-    it('should show current page number', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ sessions: generateMockSessions(20), total: 50 }),
+    it('should show current page number', () => {
+      mockUseSessions.mockReturnValue({
+        sessions: generateMockSessions(20),
+        total: 50,
+        loading: false,
+        error: null,
+        errorTimestamp: null,
+        refresh: jest.fn(),
       });
 
       render(<HistoricoPage />);
 
-      await waitFor(() => {
-        expect(screen.getByText(/1 de 3/)).toBeInTheDocument();
-      });
+      expect(screen.getByText(/1 de 3/)).toBeInTheDocument();
     });
 
     it('should navigate to next page', async () => {
-      mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ sessions: generateMockSessions(20), total: 50 }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ sessions: generateMockSessions(20), total: 50 }),
-        });
+      mockUseSessions.mockReturnValue({
+        sessions: generateMockSessions(20),
+        total: 50,
+        loading: false,
+        error: null,
+        errorTimestamp: null,
+        refresh: jest.fn(),
+      });
 
       render(<HistoricoPage />);
 
-      await waitFor(() => {
-        expect(screen.getByText(/1 de 3/)).toBeInTheDocument();
-      });
+      expect(screen.getByText(/1 de 3/)).toBeInTheDocument();
 
-      // Next button has text "Pr\u00f3ximo" (JSX literal) — match by partial
+      // Next button has text "Próximo" — match by partial
       const nextButton = screen.getByRole('button', { name: /Pr/ });
       await act(async () => {
         fireEvent.click(nextButton);
       });
 
+      // After clicking next, useSessions should be called with page: 1
       await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith(
-          expect.stringContaining('offset=20'),
-          expect.anything()
+        expect(mockUseSessions).toHaveBeenCalledWith(
+          expect.objectContaining({ page: 1 })
         );
       });
     });
@@ -520,29 +528,36 @@ describe('HistoricoPage Component', () => {
       });
     });
 
-    it('should handle fetch error gracefully', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
+    it('should handle fetch error gracefully', () => {
+      mockUseSessions.mockReturnValue({
+        sessions: [],
+        total: 0,
+        loading: false,
+        error: "Não foi possível carregar seu histórico.",
+        errorTimestamp: new Date().toISOString(),
+        refresh: jest.fn(),
       });
 
       render(<HistoricoPage />);
 
-      await waitFor(() => {
-        // Page shows ErrorStateWithRetry component with data-testid="error-state"
-        expect(screen.getByTestId('error-state')).toBeInTheDocument();
-      });
+      // Page shows ErrorStateWithRetry component with data-testid="error-state"
+      expect(screen.getByTestId('error-state')).toBeInTheDocument();
     });
 
-    it('should handle network error', async () => {
-      mockFetch.mockRejectedValueOnce(new Error('Network error'));
+    it('should handle network error', () => {
+      mockUseSessions.mockReturnValue({
+        sessions: [],
+        total: 0,
+        loading: false,
+        error: "Não foi possível carregar seu histórico.",
+        errorTimestamp: new Date().toISOString(),
+        refresh: jest.fn(),
+      });
 
       render(<HistoricoPage />);
 
-      await waitFor(() => {
-        // Page shows ErrorStateWithRetry component with data-testid="error-state"
-        expect(screen.getByTestId('error-state')).toBeInTheDocument();
-      });
+      // Page shows ErrorStateWithRetry component with data-testid="error-state"
+      expect(screen.getByTestId('error-state')).toBeInTheDocument();
     });
   });
 });

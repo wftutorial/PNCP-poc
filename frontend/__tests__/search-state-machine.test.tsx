@@ -17,12 +17,12 @@ import "@testing-library/jest-dom";
 
 describe("CRIT-027 AC10: buscar() clears result on new search", () => {
   it("useSearch source code sets result=null at start of buscar()", async () => {
-    // Read the useSearch source to verify the fix is in place
-    // This is a structural test that verifies the state machine fix
+    // Read the useSearchExecution source to verify the fix is in place
+    // (buscar() was extracted from useSearch.ts into useSearchExecution.ts)
     const fs = require("fs");
     const path = require("path");
     const source = fs.readFileSync(
-      path.join(__dirname, "../app/buscar/hooks/useSearch.ts"),
+      path.join(__dirname, "../app/buscar/hooks/useSearchExecution.ts"),
       "utf8"
     );
 
@@ -106,7 +106,7 @@ describe("CRIT-027: Error recovery backward compatibility", () => {
     const fs = require("fs");
     const path = require("path");
     const source = fs.readFileSync(
-      path.join(__dirname, "../app/buscar/hooks/useSearch.ts"),
+      path.join(__dirname, "../app/buscar/hooks/useSearchExecution.ts"),
       "utf8"
     );
 
@@ -128,7 +128,7 @@ describe("CRIT-027 AC10: No stale data contamination", () => {
     const fs = require("fs");
     const path = require("path");
     const source = fs.readFileSync(
-      path.join(__dirname, "../app/buscar/hooks/useSearch.ts"),
+      path.join(__dirname, "../app/buscar/hooks/useSearchExecution.ts"),
       "utf8"
     );
 

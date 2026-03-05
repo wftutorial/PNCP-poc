@@ -48,7 +48,6 @@ const createMockSession = (overrides: Partial<SearchSession> = {}): SearchSessio
 });
 
 // Stable reference to avoid infinite useEffect re-runs
-// (useAuth returns new object each call → session ref changes → useEffect re-fires)
 const mockAuthSession = { access_token: 'test-token' };
 
 jest.mock('../../app/components/AuthProvider', () => ({
@@ -100,27 +99,33 @@ jest.mock('../../lib/error-messages', () => ({
   getMessageFromErrorCode: () => null,
 }));
 
-function mockFetchWith(sessions: SearchSession[]) {
-  global.fetch = jest.fn().mockResolvedValue({
-    ok: true,
-    json: async () => ({
-      sessions,
-      total: sessions.length,
-      limit: 20,
-      offset: 0,
-    }),
+// Mock useSessions — replaces global.fetch session logic
+const mockUseSessions = jest.fn();
+jest.mock('../../hooks/useSessions', () => ({
+  useSessions: (opts: any) => mockUseSessions(opts),
+}));
+
+function mockSessionsWith(sessions: SearchSession[]) {
+  mockUseSessions.mockReturnValue({
+    sessions,
+    total: sessions.length,
+    loading: false,
+    error: null,
+    errorTimestamp: null,
+    refresh: jest.fn(),
   });
 }
 
 describe('HistoricoPage - Status Badges and Retry', () => {
   beforeEach(() => {
+    jest.clearAllMocks();
     mockPush.mockClear();
     mockTrackEvent.mockClear();
   });
 
   // FE1: test renders green badge for completed sessions
   test('FE1: renders green badge for completed sessions', async () => {
-    mockFetchWith([createMockSession({ status: 'completed' })]);
+    mockSessionsWith([createMockSession({ status: 'completed' })]);
 
     render(<HistoricoPage />);
 
@@ -131,7 +136,7 @@ describe('HistoricoPage - Status Badges and Retry', () => {
 
   // FE2: test renders red badge for failed sessions with error_message displayed
   test('FE2: renders red badge for failed sessions with error_message displayed', async () => {
-    mockFetchWith([createMockSession({
+    mockSessionsWith([createMockSession({
       status: 'failed',
       error_message: 'PNCP API timeout',
       error_code: 'TIMEOUT',
@@ -151,7 +156,7 @@ describe('HistoricoPage - Status Badges and Retry', () => {
 
   // FE3: test renders orange badge for timed_out sessions
   test('FE3: renders orange badge for timed_out sessions', async () => {
-    mockFetchWith([createMockSession({
+    mockSessionsWith([createMockSession({
       status: 'timed_out',
       error_message: 'Search exceeded maximum time limit',
     })]);
@@ -165,7 +170,7 @@ describe('HistoricoPage - Status Badges and Retry', () => {
 
   // FE4: test "Tentar novamente" button navigates to /buscar with correct params for failed session
   test('FE4: "Tentar novamente" button navigates to /buscar with correct params for failed session', async () => {
-    mockFetchWith([createMockSession({
+    mockSessionsWith([createMockSession({
       id: 'failed-session-123',
       status: 'failed',
       sectors: ['vestuario'],

@@ -1,67 +1,111 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useCallback } from "react";
+import useSWR from "swr";
 import { useAuth } from "../app/components/AuthProvider";
 import type { PipelineItem, PipelineStage } from "../app/pipeline/types";
 import { getUserFriendlyError } from "../lib/error-messages";
+import { FetchError } from "../lib/fetcher";
+
+/**
+ * TD-008 AC6/AC9/AC11/AC12: SWR-based pipeline hook.
+ * - GET uses useSWR with deduplication
+ * - Mutations use direct fetch + mutate() for cache invalidation
+ * - Optimistic updates via setItems in mutate callback
+ */
+
+const fetchPipelineWithAuth = async (url: string, token: string) => {
+  const res = await fetch(url, {
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new FetchError(
+      data.detail?.message || data.message || data.detail || "Erro ao carregar pipeline",
+      res.status
+    );
+  }
+  return res.json();
+};
 
 export function usePipeline() {
   const { session } = useAuth();
-  const [items, setItems] = useState<PipelineItem[]>([]);
-  const [alerts, setAlerts] = useState<PipelineItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [total, setTotal] = useState(0);
+  const accessToken = session?.access_token;
+
+  // AC6: SWR for GET /api/pipeline
+  const {
+    data: pipelineData,
+    error: pipelineError,
+    isLoading,
+    mutate,
+  } = useSWR(
+    accessToken ? ["/api/pipeline?limit=200", accessToken] : null,
+    ([url, token]: [string, string]) => fetchPipelineWithAuth(url, token),
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 5000,
+      errorRetryCount: 2,
+    }
+  );
+
+  // AC6: SWR for alerts
+  const { data: alertsData } = useSWR(
+    accessToken ? ["/api/pipeline?_path=/pipeline/alerts", accessToken] : null,
+    ([url, token]: [string, string]) => fetchPipelineWithAuth(url, token),
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 30000,
+      errorRetryCount: 1,
+    }
+  );
+
+  const items: PipelineItem[] = pipelineData?.items || [];
+  const alerts: PipelineItem[] = alertsData?.items || [];
+  const total: number = pipelineData?.total || 0;
 
   const authHeaders = useCallback(() => {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (session?.access_token) {
-      headers["Authorization"] = `Bearer ${session.access_token}`;
-    }
+    if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
     return headers;
-  }, [session]);
+  }, [accessToken]);
 
-  const fetchItems = useCallback(async (stage?: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams();
-      if (stage) params.set("stage", stage);
-      params.set("limit", "200");
-      const res = await fetch(`/api/pipeline?${params.toString()}`, {
-        headers: authHeaders(),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail?.message || data.message || data.detail || "Erro ao carregar pipeline");
+  // AC6: fetchItems triggers SWR revalidation (backward compat)
+  const fetchItems = useCallback(
+    async (stage?: string) => {
+      if (stage) {
+        // For stage-filtered fetches, do a direct fetch (SWR key is for all items)
+        try {
+          const params = new URLSearchParams();
+          params.set("stage", stage);
+          params.set("limit", "200");
+          const res = await fetch(`/api/pipeline?${params.toString()}`, {
+            headers: authHeaders(),
+          });
+          if (!res.ok) throw new Error("Erro ao carregar pipeline");
+          const data = await res.json();
+          return (data.items || []) as PipelineItem[];
+        } catch {
+          return [];
+        }
       }
-      const data = await res.json();
-      setItems(data.items || []);
-      setTotal(data.total || 0);
-      return data.items as PipelineItem[];
-    } catch (err: any) {
-      setError(getUserFriendlyError(err));
-      return [];
-    } finally {
-      setLoading(false);
-    }
-  }, [authHeaders]);
+      // No stage filter — revalidate SWR cache
+      const data = await mutate();
+      return (data?.items || []) as PipelineItem[];
+    },
+    [authHeaders, mutate]
+  );
 
   const fetchAlerts = useCallback(async () => {
-    try {
-      const res = await fetch("/api/pipeline?_path=/pipeline/alerts", {
-        headers: authHeaders(),
-      });
-      if (!res.ok) return;
-      const data = await res.json();
-      setAlerts(data.items || []);
-    } catch {
-      // Silent fail for alerts
-    }
-  }, [authHeaders]);
+    // SWR handles this automatically, but provide manual trigger for compat
+    await mutate();
+  }, [mutate]);
 
-  const addItem = useCallback(async (item: Omit<PipelineItem, "id" | "user_id" | "created_at" | "updated_at" | "version">) => {
-    try {
+  // AC9: Mutation — add item with AC12 cache invalidation
+  const addItem = useCallback(
+    async (item: Omit<PipelineItem, "id" | "user_id" | "created_at" | "updated_at" | "version">) => {
       const res = await fetch("/api/pipeline", {
         method: "POST",
         headers: authHeaders(),
@@ -71,7 +115,6 @@ export function usePipeline() {
         const data = await res.json().catch(() => ({}));
         if (res.status === 409) throw new Error("Esta licitação já está no seu pipeline.");
         if (res.status === 403) {
-          // STORY-356: Detect pipeline limit exceeded
           if (data.detail?.error_code === "PIPELINE_LIMIT_EXCEEDED") {
             const err = new Error(`Limite de ${data.detail.limit} itens no pipeline atingido.`);
             (err as any).isPipelineLimitExceeded = true;
@@ -84,16 +127,23 @@ export function usePipeline() {
         throw new Error(data.detail || "Erro ao adicionar ao pipeline.");
       }
       const newItem = await res.json();
-      setItems((prev) => [newItem, ...prev]);
+      // AC11: Optimistic update + AC12: cache invalidation
+      await mutate(
+        (current: any) => ({
+          ...current,
+          items: [newItem, ...(current?.items || [])],
+          total: (current?.total || 0) + 1,
+        }),
+        { revalidate: false }
+      );
       return newItem as PipelineItem;
-    } catch (err: any) {
-      throw err;
-    }
-  }, [authHeaders]);
+    },
+    [authHeaders, mutate]
+  );
 
-  const updateItem = useCallback(async (itemId: string, update: { stage?: PipelineStage; notes?: string; version?: number }) => {
-    try {
-      // STORY-307 AC12: Send version for optimistic locking
+  // AC9: Mutation — update item (stage/notes)
+  const updateItem = useCallback(
+    async (itemId: string, update: { stage?: PipelineStage; notes?: string; version?: number }) => {
       const currentItem = items.find((i) => i.id === itemId);
       const version = update.version ?? currentItem?.version;
       const res = await fetch("/api/pipeline", {
@@ -103,7 +153,6 @@ export function usePipeline() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        // STORY-307 AC11: Handle 409 Conflict — version mismatch
         if (res.status === 409) {
           const err = new Error(data.detail || "Item foi atualizado por outra operação. Recarregue a página.");
           (err as any).isConflict = true;
@@ -112,15 +161,24 @@ export function usePipeline() {
         throw new Error(data.detail || "Erro ao atualizar item.");
       }
       const updated = await res.json();
-      setItems((prev) => prev.map((i) => (i.id === itemId ? updated : i)));
+      // AC11: Optimistic update
+      await mutate(
+        (current: any) => ({
+          ...current,
+          items: (current?.items || []).map((i: PipelineItem) =>
+            i.id === itemId ? updated : i
+          ),
+        }),
+        { revalidate: false }
+      );
       return updated as PipelineItem;
-    } catch (err: any) {
-      throw err;
-    }
-  }, [authHeaders, items]);
+    },
+    [authHeaders, items, mutate]
+  );
 
-  const removeItem = useCallback(async (itemId: string) => {
-    try {
+  // AC9: Mutation — remove item
+  const removeItem = useCallback(
+    async (itemId: string) => {
       const res = await fetch(`/api/pipeline?id=${itemId}`, {
         method: "DELETE",
         headers: authHeaders(),
@@ -129,18 +187,25 @@ export function usePipeline() {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.detail || "Erro ao remover item.");
       }
-      setItems((prev) => prev.filter((i) => i.id !== itemId));
-    } catch (err: any) {
-      throw err;
-    }
-  }, [authHeaders]);
+      // AC11: Optimistic update
+      await mutate(
+        (current: any) => ({
+          ...current,
+          items: (current?.items || []).filter((i: PipelineItem) => i.id !== itemId),
+          total: Math.max(0, (current?.total || 0) - 1),
+        }),
+        { revalidate: false }
+      );
+    },
+    [authHeaders, mutate]
+  );
 
   return {
     items,
     alerts,
     total,
-    loading,
-    error,
+    loading: isLoading,
+    error: pipelineError ? getUserFriendlyError(pipelineError) : null,
     fetchItems,
     fetchAlerts,
     addItem,

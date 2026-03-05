@@ -1,20 +1,12 @@
 /**
- * TD-006 AC5: Isolated test suite for useTrialPhase hook.
+ * TD-006 AC5 / TD-008: Isolated test suite for useTrialPhase hook (SWR-based).
  *
- * Covers:
- * - Active trial (full_access phase, days 1-7)
- * - Limited access trial (days 8-14)
- * - Expired / not_trial (paid user)
- * - No session (unauthenticated)
- * - Loading state
- * - API error fallback to full_access
- * - Non-OK response fallback
- * - SessionStorage caching
- * - Cache TTL expiration
- * - Cache corruption handling
+ * SWR handles caching internally (replaces sessionStorage caching).
  */
 
-import { renderHook, act, waitFor } from "@testing-library/react";
+import { renderHook, waitFor } from "@testing-library/react";
+import React from "react";
+import { SWRConfig } from "swr";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -36,6 +28,15 @@ global.fetch = mockFetch;
 
 import { useTrialPhase } from "../../hooks/useTrialPhase";
 
+// Wrapper with isolated SWR cache per test
+function wrapper({ children }: { children: React.ReactNode }) {
+  return React.createElement(
+    SWRConfig,
+    { value: { provider: () => new Map(), dedupingInterval: 0, errorRetryCount: 0 } },
+    children
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Setup / Teardown
 // ---------------------------------------------------------------------------
@@ -43,10 +44,6 @@ import { useTrialPhase } from "../../hooks/useTrialPhase";
 beforeEach(() => {
   mockFetch.mockReset();
   currentSession = mockSession;
-  // Clear sessionStorage
-  if (typeof window !== "undefined") {
-    sessionStorage.clear();
-  }
 });
 
 // ---------------------------------------------------------------------------
@@ -65,9 +62,7 @@ describe("useTrialPhase (isolated)", () => {
       }),
     });
 
-    const { result } = renderHook(() => useTrialPhase());
-
-    expect(result.current.loading).toBe(true);
+    const { result } = renderHook(() => useTrialPhase(), { wrapper });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -89,7 +84,7 @@ describe("useTrialPhase (isolated)", () => {
       }),
     });
 
-    const { result } = renderHook(() => useTrialPhase());
+    const { result } = renderHook(() => useTrialPhase(), { wrapper });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -111,7 +106,7 @@ describe("useTrialPhase (isolated)", () => {
       }),
     });
 
-    const { result } = renderHook(() => useTrialPhase());
+    const { result } = renderHook(() => useTrialPhase(), { wrapper });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -126,7 +121,7 @@ describe("useTrialPhase (isolated)", () => {
   test("returns full_access with day=0 when no session", async () => {
     currentSession = null;
 
-    const { result } = renderHook(() => useTrialPhase());
+    const { result } = renderHook(() => useTrialPhase(), { wrapper });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -142,7 +137,7 @@ describe("useTrialPhase (isolated)", () => {
   test("starts in loading state", () => {
     mockFetch.mockImplementation(() => new Promise(() => {})); // never resolves
 
-    const { result } = renderHook(() => useTrialPhase());
+    const { result } = renderHook(() => useTrialPhase(), { wrapper });
 
     expect(result.current.loading).toBe(true);
     expect(result.current.phase).toBe("full_access");
@@ -152,7 +147,7 @@ describe("useTrialPhase (isolated)", () => {
   test("falls back to full_access on fetch error", async () => {
     mockFetch.mockRejectedValueOnce(new Error("Network failure"));
 
-    const { result } = renderHook(() => useTrialPhase());
+    const { result } = renderHook(() => useTrialPhase(), { wrapper });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -171,117 +166,41 @@ describe("useTrialPhase (isolated)", () => {
       json: async () => ({ detail: "Server error" }),
     });
 
-    const { result } = renderHook(() => useTrialPhase());
+    const { result } = renderHook(() => useTrialPhase(), { wrapper });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
     });
 
+    // SWR-based hook returns null from fetcher on non-OK, treated as no data
     expect(result.current.phase).toBe("full_access");
     expect(result.current.day).toBe(0);
   });
 
-  // 8. SessionStorage caching - uses cached value
-  test("uses sessionStorage cached value when fresh", async () => {
-    const cached = {
-      phase: "limited_access",
-      day: 9,
-      daysRemaining: 5,
-      cachedAt: Date.now(), // fresh
-    };
-    sessionStorage.setItem("smartlic_trial_phase", JSON.stringify(cached));
-
-    const { result } = renderHook(() => useTrialPhase());
-
-    await waitFor(() => {
-      expect(result.current.loading).toBe(false);
-    });
-
-    expect(result.current.phase).toBe("limited_access");
-    expect(result.current.day).toBe(9);
-    expect(result.current.daysRemaining).toBe(5);
-    expect(mockFetch).not.toHaveBeenCalled();
-  });
-
-  // 9. Cache TTL expiration
-  test("ignores expired cache and fetches from API", async () => {
-    const cached = {
-      phase: "limited_access",
-      day: 9,
-      daysRemaining: 5,
-      cachedAt: Date.now() - 400_000, // > 5 min TTL
-    };
-    sessionStorage.setItem("smartlic_trial_phase", JSON.stringify(cached));
-
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        trial_phase: "not_trial",
-        trial_day: 0,
-        days_remaining: 0,
-      }),
-    });
-
-    const { result } = renderHook(() => useTrialPhase());
-
-    await waitFor(() => {
-      expect(result.current.loading).toBe(false);
-    });
-
-    expect(result.current.phase).toBe("not_trial");
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-  });
-
-  // 10. Cache corruption handling
-  test("handles corrupted cache gracefully", async () => {
-    sessionStorage.setItem("smartlic_trial_phase", "not-valid-json{{");
-
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        trial_phase: "full_access",
-        trial_day: 1,
-        days_remaining: 13,
-      }),
-    });
-
-    const { result } = renderHook(() => useTrialPhase());
-
-    await waitFor(() => {
-      expect(result.current.loading).toBe(false);
-    });
-
-    expect(result.current.phase).toBe("full_access");
-    expect(result.current.day).toBe(1);
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-  });
-
-  // 11. Stores result in sessionStorage
-  test("caches API response in sessionStorage", async () => {
-    mockFetch.mockResolvedValueOnce({
+  // 8. SWR deduplication (replaces old sessionStorage caching test)
+  test("SWR deduplicates concurrent requests", async () => {
+    mockFetch.mockResolvedValue({
       ok: true,
       json: async () => ({
         trial_phase: "limited_access",
-        trial_day: 8,
-        days_remaining: 6,
+        trial_day: 9,
+        days_remaining: 5,
       }),
     });
 
-    renderHook(() => useTrialPhase());
+    const { result: r1 } = renderHook(() => useTrialPhase(), { wrapper });
+    const { result: r2 } = renderHook(() => useTrialPhase(), { wrapper });
 
     await waitFor(() => {
-      const cached = sessionStorage.getItem("smartlic_trial_phase");
-      expect(cached).not.toBeNull();
+      expect(r1.current.loading).toBe(false);
+      expect(r2.current.loading).toBe(false);
     });
 
-    const cached = JSON.parse(sessionStorage.getItem("smartlic_trial_phase")!);
-    expect(cached.phase).toBe("limited_access");
-    expect(cached.day).toBe(8);
-    expect(cached.daysRemaining).toBe(6);
-    expect(cached.cachedAt).toBeDefined();
+    expect(r1.current.phase).toBe("limited_access");
+    expect(r2.current.phase).toBe("limited_access");
   });
 
-  // 12. Passes authorization header
+  // 9. Passes authorization header
   test("sends Authorization header with session token", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
@@ -292,7 +211,7 @@ describe("useTrialPhase (isolated)", () => {
       }),
     });
 
-    renderHook(() => useTrialPhase());
+    renderHook(() => useTrialPhase(), { wrapper });
 
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledTimes(1);

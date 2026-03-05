@@ -11,6 +11,7 @@ import { SessionExpiredBanner } from "./components/SessionExpiredBanner";
 import { PaymentFailedBanner } from "../components/billing/PaymentFailedBanner";
 import { NavigationShell } from "../components/NavigationShell";
 import { BackendStatusProvider } from "../components/BackendStatusIndicator";
+import { SWRProvider } from "../components/SWRProvider";
 import { StructuredData } from "./components/StructuredData";
 import { GoogleAnalytics } from "./components/GoogleAnalytics";
 import { ClarityAnalytics } from "./components/ClarityAnalytics";
@@ -161,6 +162,7 @@ export default function RootLayout({
         </a>
         <AnalyticsProvider>
           <AuthProvider>
+            <SWRProvider>
             <ThemeProvider>
               <NProgressProvider>
                 <BackendStatusProvider>
@@ -175,6 +177,7 @@ export default function RootLayout({
                 </BackendStatusProvider>
               </NProgressProvider>
             </ThemeProvider>
+            </SWRProvider>
           </AuthProvider>
         </AnalyticsProvider>
       </body>

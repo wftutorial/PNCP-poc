@@ -629,6 +629,15 @@ describe("SearchResults — trial paywall integration", () => {
 // useTrialPhase Hook Tests
 // ===========================================================================
 
+// SWR wrapper to isolate cache between tests
+import { SWRConfig } from "swr";
+
+const swrWrapper = ({ children }: { children: React.ReactNode }) => (
+  <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0, errorRetryCount: 0 }}>
+    {children}
+  </SWRConfig>
+);
+
 describe("useTrialPhase hook", () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -643,7 +652,7 @@ describe("useTrialPhase hook", () => {
       () => new Promise(() => {}) // pending forever
     );
 
-    const { result } = renderHook(() => useTrialPhase());
+    const { result } = renderHook(() => useTrialPhase(), { wrapper: swrWrapper });
 
     expect(result.current.phase).toBe("full_access");
     expect(result.current.loading).toBe(true);
@@ -660,7 +669,7 @@ describe("useTrialPhase hook", () => {
     } as Response);
     (global as any).fetch = fetchMock;
 
-    const { result } = renderHook(() => useTrialPhase());
+    const { result } = renderHook(() => useTrialPhase(), { wrapper: swrWrapper });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -680,35 +689,39 @@ describe("useTrialPhase hook", () => {
       .fn()
       .mockRejectedValue(new Error("Network error"));
 
-    const { result } = renderHook(() => useTrialPhase());
+    const { result } = renderHook(() => useTrialPhase(), { wrapper: swrWrapper });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
     });
 
+    // SWR: on error with no data, hook returns full_access fallback
     expect(result.current.phase).toBe("full_access");
     expect(result.current.daysRemaining).toBe(999);
   });
 
   it("returns full_access when response is not ok", async () => {
+    // fetchTrialStatus returns null for non-ok responses
     (global as any).fetch = jest.fn().mockResolvedValue({
       ok: false,
       status: 401,
       json: async () => ({ detail: "Unauthorized" }),
     } as Response);
 
-    const { result } = renderHook(() => useTrialPhase());
+    const { result } = renderHook(() => useTrialPhase(), { wrapper: swrWrapper });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
     });
 
+    // fetchTrialStatus returns null for non-ok → hook returns full_access
     expect(result.current.phase).toBe("full_access");
   });
 
-  it("caches result in sessionStorage after successful fetch", async () => {
-    const sessionMock = mockSessionStorage();
-    (global as any).fetch = jest.fn().mockResolvedValue({
+  it("SWR deduplication prevents redundant fetches within interval", async () => {
+    // TD-008: SWR handles caching via dedupingInterval (5 min)
+    // This replaces the old sessionStorage cache test
+    const fetchMock = jest.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
         trial_phase: "full_access",
@@ -716,85 +729,24 @@ describe("useTrialPhase hook", () => {
         days_remaining: 11,
       }),
     } as Response);
-
-    const { result } = renderHook(() => useTrialPhase());
-
-    await waitFor(() => {
-      expect(result.current.loading).toBe(false);
-    });
-
-    expect(sessionMock.setItem).toHaveBeenCalledWith(
-      "smartlic_trial_phase",
-      expect.stringContaining("full_access")
-    );
-  });
-
-  it("returns cached phase from sessionStorage without fetching", async () => {
-    const cachedData = JSON.stringify({
-      phase: "not_trial",
-      day: 0,
-      daysRemaining: 0,
-      cachedAt: Date.now() - 60_000, // 1 minute ago (within 5-min TTL)
-    });
-
-    mockSessionStorage({
-      getItem: jest.fn((key: string) => {
-        if (key === "smartlic_trial_phase") return cachedData;
-        return null;
-      }),
-      setItem: jest.fn(),
-    });
-
-    const fetchMock = jest.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({}),
-    } as Response);
     (global as any).fetch = fetchMock;
 
-    const { result } = renderHook(() => useTrialPhase());
+    // Use a shared SWR cache for this test to verify deduplication
+    const sharedWrapper = ({ children }: { children: React.ReactNode }) => (
+      <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 300_000, errorRetryCount: 0 }}>
+        {children}
+      </SWRConfig>
+    );
+
+    const { result } = renderHook(() => useTrialPhase(), { wrapper: sharedWrapper });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
     });
 
-    expect(result.current.phase).toBe("not_trial");
-    // Fetch should NOT have been called since we have a valid cache
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it("ignores expired cache and fetches fresh data", async () => {
-    const expiredData = JSON.stringify({
-      phase: "not_trial",
-      day: 0,
-      daysRemaining: 0,
-      cachedAt: Date.now() - 400_000, // older than 5-min TTL
-    });
-
-    mockSessionStorage({
-      getItem: jest.fn((key: string) => {
-        if (key === "smartlic_trial_phase") return expiredData;
-        return null;
-      }),
-      setItem: jest.fn(),
-    });
-
-    (global as any).fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        trial_phase: "limited_access",
-        trial_day: 9,
-        days_remaining: 5,
-      }),
-    } as Response);
-
-    const { result } = renderHook(() => useTrialPhase());
-
-    await waitFor(() => {
-      expect(result.current.loading).toBe(false);
-    });
-
-    // Should have fetched fresh data (not the expired cached "not_trial")
-    expect(result.current.phase).toBe("limited_access");
+    expect(result.current.phase).toBe("full_access");
+    // Fetch should have been called once
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("returns full_access when not authenticated (no session)", async () => {
@@ -806,7 +758,7 @@ describe("useTrialPhase hook", () => {
     } as Response);
     (global as any).fetch = fetchMock;
 
-    const { result } = renderHook(() => useTrialPhase());
+    const { result } = renderHook(() => useTrialPhase(), { wrapper: swrWrapper });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -827,7 +779,7 @@ describe("useTrialPhase hook", () => {
     } as Response);
     (global as any).fetch = fetchMock;
 
-    const { result } = renderHook(() => useTrialPhase());
+    const { result } = renderHook(() => useTrialPhase(), { wrapper: swrWrapper });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -843,7 +795,7 @@ describe("useTrialPhase hook", () => {
       json: async () => ({}), // no trial_phase, no trial_day, etc.
     } as Response);
 
-    const { result } = renderHook(() => useTrialPhase());
+    const { result } = renderHook(() => useTrialPhase(), { wrapper: swrWrapper });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -864,7 +816,7 @@ describe("useTrialPhase hook", () => {
       }),
     } as Response);
 
-    const { result } = renderHook(() => useTrialPhase());
+    const { result } = renderHook(() => useTrialPhase(), { wrapper: swrWrapper });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);

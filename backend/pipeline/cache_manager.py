@@ -1,0 +1,178 @@
+"""Pipeline cache management — extracted from search_pipeline.py (TD-008 AC20).
+
+Handles search results caching (L1 InMemory + L2 Supabase),
+cache key computation, stale-while-revalidate, and cache fallback logic.
+"""
+
+import hashlib
+import json
+import logging
+from datetime import datetime, timezone
+
+from redis_pool import get_fallback_cache
+from search_cache import (
+    save_to_cache as _supabase_save_cache,
+    get_from_cache as _supabase_get_cache,
+    get_from_cache_cascade,
+)
+from schemas import DataSourceStatus
+
+logger = logging.getLogger(__name__)
+
+SEARCH_CACHE_TTL = 4 * 3600  # 4 hours
+
+
+def _compute_cache_key(request) -> str:
+    """Compute deterministic cache key from search params (excluding dates)."""
+    params = {
+        "setor_id": request.setor_id,
+        "ufs": sorted(request.ufs),
+        "status": request.status.value if request.status else None,
+        "modalidades": sorted(request.modalidades) if request.modalidades else None,
+        "modo_busca": request.modo_busca,
+    }
+    params_json = json.dumps(params, sort_keys=True)
+    return f"search_cache:{hashlib.sha256(params_json.encode()).hexdigest()}"
+
+
+def _read_cache(cache_key: str):
+    """Read from InMemoryCache. Returns parsed dict or None."""
+    cache = get_fallback_cache()
+    raw = cache.get(cache_key)
+    if raw is None:
+        return None
+    try:
+        return json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return None
+
+
+def _write_cache(cache_key: str, data: dict) -> None:
+    """Write search results to InMemoryCache with TTL."""
+    cache = get_fallback_cache()
+    try:
+        cache.setex(cache_key, SEARCH_CACHE_TTL, json.dumps(data, default=str))
+    except Exception as e:
+        logger.warning(f"Failed to write search cache: {e}")
+
+
+def _build_cache_params(request) -> dict:
+    """Build normalized params dict from BuscaRequest for cache lookup."""
+    return {
+        "setor_id": request.setor_id,
+        "ufs": request.ufs,
+        "status": request.status.value if request.status else None,
+        "modalidades": request.modalidades,
+        "modo_busca": request.modo_busca,
+    }
+
+
+async def _maybe_trigger_revalidation(user_id: str, request, stale_cache: dict | None) -> None:
+    """Trigger background revalidation after serving stale cache. Non-blocking."""
+    if not stale_cache or not stale_cache.get("is_stale"):
+        return
+    try:
+        from search_cache import trigger_background_revalidation
+        await trigger_background_revalidation(
+            user_id=user_id,
+            params=_build_cache_params(request),
+            request_data={
+                "ufs": request.ufs,
+                "data_inicial": request.data_inicial,
+                "data_final": request.data_final,
+                "modalidades": request.modalidades,
+                "setor_id": request.setor_id,
+            },
+            search_id=getattr(request, "search_id", None),
+        )
+    except Exception as e:
+        logger.debug(f"Revalidation trigger failed (non-fatal): {e}")
+
+
+def _build_degraded_detail(ctx) -> dict:
+    """Build SSE degraded event detail dict from SearchContext."""
+    detail: dict = {}
+    if ctx.cached_at:
+        try:
+            cached_dt = datetime.fromisoformat(ctx.cached_at.replace("Z", "+00:00"))
+            age_hours = (datetime.now(timezone.utc) - cached_dt).total_seconds() / 3600
+            detail["cache_age_hours"] = round(age_hours, 1)
+        except (ValueError, TypeError):
+            pass
+    if ctx.cache_level:
+        detail["cache_level"] = ctx.cache_level
+
+    sources_failed = []
+    sources_ok = []
+    if ctx.data_sources:
+        for ds in ctx.data_sources:
+            if ds.status in ("error", "timeout"):
+                sources_failed.append(ds.source)
+            elif ds.status == "ok":
+                sources_ok.append(ds.source)
+    detail["sources_failed"] = sources_failed
+    detail["sources_ok"] = sources_ok
+
+    total_ufs = len(ctx.request.ufs) if ctx.request else 0
+    succeeded = len(ctx.succeeded_ufs) if ctx.succeeded_ufs else 0
+    detail["coverage_pct"] = int((succeeded / total_ufs * 100) if total_ufs > 0 else 0)
+
+    return detail
+
+
+def apply_stale_cache(ctx, stale_cache: dict, degradation_reason: str,
+                      response_state: str = "cached", source_errors: dict | None = None) -> None:
+    """Apply stale cache results to search context — shared helper for all fetch failure paths."""
+    ctx.licitacoes_raw = stale_cache["results"]
+    ctx.cached = True
+    ctx.cached_at = stale_cache.get("cached_at")
+    ctx.cached_sources = stale_cache.get("cached_sources", ["PNCP"])
+    ctx.cache_status = (
+        stale_cache.get("cache_status", "stale")
+        if isinstance(stale_cache.get("cache_status"), str)
+        else ("stale" if stale_cache.get("is_stale") else "fresh")
+    )
+    ctx.cache_level = stale_cache.get("cache_level", "supabase")
+    ctx.cache_fallback = stale_cache.get("cache_fallback", False)
+    ctx.cache_date_range = stale_cache.get("cache_date_range")
+    ctx.is_partial = True
+    ctx.response_state = response_state
+    ctx.degradation_reason = degradation_reason
+
+    if source_errors:
+        ctx.data_sources = [
+            DataSourceStatus(source=src, status="error", records=0)
+            for src in source_errors
+        ]
+        ctx.source_stats_data = [
+            {"source_code": src, "record_count": 0, "duration_ms": 0,
+             "error": err, "status": "error"}
+            for src, err in source_errors.items()
+        ]
+    else:
+        ctx.data_sources = []
+        ctx.source_stats_data = []
+
+
+def set_empty_failure(ctx, degradation_reason: str, guidance: str,
+                      source_errors: dict | None = None) -> None:
+    """Set empty failure state on search context — shared helper for no-cache failure paths."""
+    ctx.licitacoes_raw = []
+    ctx.is_partial = True
+    ctx.response_state = "empty_failure"
+    ctx.degradation_guidance = guidance
+    ctx.degradation_reason = degradation_reason
+
+    if source_errors:
+        ctx.data_sources = [
+            DataSourceStatus(source=src, status="error", records=0)
+            for src in source_errors
+        ]
+        ctx.source_stats_data = [
+            {"source_code": src, "record_count": 0, "duration_ms": 0,
+             "error": err, "status": "error"}
+            for src, err in source_errors.items()
+        ]
+    else:
+        ctx.data_sources = []
+        ctx.source_stats_data = []

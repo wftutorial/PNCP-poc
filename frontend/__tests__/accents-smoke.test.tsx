@@ -67,7 +67,7 @@ describe("GTM-FIX-034: Portuguese accents smoke test", () => {
   describe("UX-355: Error message and label accents", () => {
     it("useSearch fallback error should contain accented 'licitações'", () => {
       const src = fs.readFileSync(
-        require.resolve("../app/buscar/hooks/useSearch.ts"),
+        require.resolve("../app/buscar/hooks/useSearchExecution.ts"),
         "utf-8"
       );
       expect(src).toContain("Erro ao buscar licitações");
@@ -75,14 +75,20 @@ describe("GTM-FIX-034: Portuguese accents smoke test", () => {
     });
 
     it("SearchResults should use accented 'licitações' in user-facing text", () => {
-      const src = fs.readFileSync(
+      // TD-007: SearchResults decomposed — check orchestrator + sub-components
+      const orchestrator = fs.readFileSync(
         require.resolve("../app/buscar/components/SearchResults.tsx"),
         "utf-8"
       );
-      expect(src).toContain("Licitações abertas");
-      expect(src).not.toMatch(/Licitacoes abertas/);
-      expect(src).toContain("licitações adicionais");
-      expect(src).not.toMatch(/licitacoes adicionais/);
+      const filters = fs.readFileSync(
+        require.resolve("../app/buscar/components/search-results/ResultsFilters.tsx"),
+        "utf-8"
+      );
+      const combined = orchestrator + filters;
+      expect(combined).toContain("Licitações abertas");
+      expect(combined).not.toMatch(/Licitacoes abertas/);
+      expect(combined).toContain("licitações adicionais");
+      expect(combined).not.toMatch(/licitacoes adicionais/);
     });
 
     it("error-messages mapping should match accented 'Erro ao buscar licitações'", () => {

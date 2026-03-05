@@ -26,6 +26,12 @@ jest.mock("../hooks/useAnalytics", () => ({
   useAnalytics: () => ({ trackEvent: jest.fn() }),
 }));
 
+// Mock usePlans (TD-008: now SWR-based, mock at hook level)
+const mockUsePlans = jest.fn();
+jest.mock("../hooks/usePlans", () => ({
+  usePlans: () => mockUsePlans(),
+}));
+
 // Mock LandingNavbar
 jest.mock("../app/components/landing/LandingNavbar", () => {
   return function MockLandingNavbar() {
@@ -75,7 +81,9 @@ beforeEach(() => {
     error: null,
     refresh: jest.fn(),
   });
-  // Default: API fails, uses fallback
+  // Default: usePlans returns null (fallback pricing used)
+  mockUsePlans.mockReturnValue({ plans: null, error: null, isLoading: false });
+  // Default: other fetch calls fail
   mockFetch.mockResolvedValue({ ok: false });
 });
 
@@ -188,7 +196,7 @@ describe("AC6: Pro vs Consultoria discount differentiation", () => {
 
 describe("AC2: Frontend pricing fetch with fallback", () => {
   it("uses fallback values when API fails", async () => {
-    mockFetch.mockResolvedValue({ ok: false });
+    mockUsePlans.mockReturnValue({ plans: null, error: new Error("fail"), isLoading: false });
     render(<PlanosPage />);
     // Should still show pricing from fallback constants
     await waitFor(() => {
@@ -197,27 +205,21 @@ describe("AC2: Frontend pricing fetch with fallback", () => {
   });
 
   it("uses API values when available", async () => {
-    mockFetch.mockImplementation((url: string) => {
-      if (typeof url === "string" && url.includes("/api/plans")) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({
-            plans: [
-              {
-                id: "smartlic_pro",
-                name: "SmartLic Pro",
-                price_brl: 397,
-                billing_periods: {
-                  monthly: { price_cents: 39700, discount_percent: 0 },
-                  semiannual: { price_cents: 35700, discount_percent: 10 },
-                  annual: { price_cents: 29700, discount_percent: 25 },
-                },
-              },
-            ],
-          }),
-        });
-      }
-      return Promise.resolve({ ok: false });
+    mockUsePlans.mockReturnValue({
+      plans: [
+        {
+          id: "smartlic_pro",
+          name: "SmartLic Pro",
+          price_brl: 397,
+          billing_periods: {
+            monthly: { price_cents: 39700, discount_percent: 0 },
+            semiannual: { price_cents: 35700, discount_percent: 10 },
+            annual: { price_cents: 29700, discount_percent: 25 },
+          },
+        },
+      ],
+      error: null,
+      isLoading: false,
     });
 
     render(<PlanosPage />);
@@ -225,32 +227,24 @@ describe("AC2: Frontend pricing fetch with fallback", () => {
     await waitFor(() => {
       expect(screen.getByText(/R\$\s*397/)).toBeInTheDocument();
     });
-    // Verify API was called
-    expect(mockFetch).toHaveBeenCalledWith("/api/plans");
   });
 
   it("updates pricing if API returns different values", async () => {
-    mockFetch.mockImplementation((url: string) => {
-      if (typeof url === "string" && url.includes("/api/plans")) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({
-            plans: [
-              {
-                id: "smartlic_pro",
-                name: "SmartLic Pro",
-                price_brl: 499,
-                billing_periods: {
-                  monthly: { price_cents: 49900, discount_percent: 0 },
-                  semiannual: { price_cents: 44900, discount_percent: 10 },
-                  annual: { price_cents: 37400, discount_percent: 25 },
-                },
-              },
-            ],
-          }),
-        });
-      }
-      return Promise.resolve({ ok: false });
+    mockUsePlans.mockReturnValue({
+      plans: [
+        {
+          id: "smartlic_pro",
+          name: "SmartLic Pro",
+          price_brl: 499,
+          billing_periods: {
+            monthly: { price_cents: 49900, discount_percent: 0 },
+            semiannual: { price_cents: 44900, discount_percent: 10 },
+            annual: { price_cents: 37400, discount_percent: 25 },
+          },
+        },
+      ],
+      error: null,
+      isLoading: false,
     });
 
     render(<PlanosPage />);

@@ -71,6 +71,18 @@ jest.mock("../components/PageHeader", () => ({
   ),
 }));
 
+// Mock usePlan to prevent SWR /api/me fetch calls interfering with retry count assertions
+jest.mock("../hooks/usePlan", () => ({
+  usePlan: () => ({
+    planInfo: { plan_id: "smartlic_pro", plan_name: "SmartLic Pro", capabilities: {} },
+    loading: false,
+    error: null,
+    isFromCache: false,
+    cachedAt: null,
+    refresh: jest.fn(),
+  }),
+}));
+
 jest.mock("recharts", () => ({
   BarChart: ({ children }: any) => <div data-testid="bar-chart">{children}</div>,
   Bar: () => <div data-testid="bar" />,

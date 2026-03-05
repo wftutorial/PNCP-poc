@@ -65,6 +65,20 @@ jest.mock("../components/PageHeader", () => ({
   PageHeader: ({ title }: any) => <div data-testid="page-header"><h1>{title}</h1></div>,
 }));
 
+// TD-008: historico page now uses useSessions SWR hook instead of global.fetch
+let mockUseSessionsReturn: any = {
+  sessions: [],
+  total: 0,
+  loading: false,
+  error: null,
+  errorTimestamp: null,
+  refresh: jest.fn(),
+  silentRefresh: jest.fn(),
+};
+jest.mock("../hooks/useSessions", () => ({
+  useSessions: () => mockUseSessionsReturn,
+}));
+
 jest.mock("recharts", () => ({
   BarChart: ({ children }: any) => <div data-testid="bar-chart">{children}</div>,
   Bar: () => <div />,
@@ -93,26 +107,51 @@ beforeEach(() => {
     isAdmin: false,
   };
   mockBackendStatus = "online";
+  mockUseSessionsReturn = {
+    sessions: [],
+    total: 0,
+    loading: false,
+    error: null,
+    errorTimestamp: null,
+    refresh: jest.fn(),
+    silentRefresh: jest.fn(),
+  };
 });
 
 // ─── T1: Historico mostra error state quando API falha ──────────────
 
 describe("T1: Historico shows error state when API fails", () => {
   it("should show ErrorStateWithRetry when /api/sessions fails", async () => {
-    (global.fetch as jest.Mock).mockRejectedValue(new Error("Network error"));
+    mockUseSessionsReturn = {
+      sessions: [],
+      total: 0,
+      loading: false,
+      error: "Não foi possível carregar seu histórico.",
+      errorTimestamp: new Date().toISOString(),
+      refresh: jest.fn(),
+      silentRefresh: jest.fn(),
+    };
 
     const HistoricoPage = require("../app/historico/page").default;
     render(<HistoricoPage />);
 
     await waitFor(() => {
       expect(screen.getByTestId("error-state")).toBeInTheDocument();
-      expect(screen.getByText(/Nao foi possivel carregar seu historico/)).toBeInTheDocument();
+      expect(screen.getByText(/possivel carregar/i)).toBeInTheDocument();
       expect(screen.getByTestId("error-retry-button")).toBeInTheDocument();
     });
   });
 
   it("should show ErrorStateWithRetry when /api/sessions returns non-ok", async () => {
-    (global.fetch as jest.Mock).mockResolvedValue({ ok: false, status: 503 });
+    mockUseSessionsReturn = {
+      sessions: [],
+      total: 0,
+      loading: false,
+      error: "Não foi possível carregar seu histórico.",
+      errorTimestamp: new Date().toISOString(),
+      refresh: jest.fn(),
+      silentRefresh: jest.fn(),
+    };
 
     const HistoricoPage = require("../app/historico/page").default;
     render(<HistoricoPage />);
@@ -167,15 +206,17 @@ describe("T2: Dashboard shows error state (not zeros) when API fails", () => {
 // ─── T4: Retry button funciona e recarrega dados ──────────────────
 
 describe("T4: Retry button works and reloads data", () => {
-  it("should call fetch again when retry button is clicked in Historico", async () => {
-    // First call fails
-    (global.fetch as jest.Mock)
-      .mockRejectedValueOnce(new Error("Network error"))
-      // Second call succeeds
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ sessions: [], total: 0, limit: 20, offset: 0 }),
-      });
+  it("should call refresh when retry button is clicked in Historico", async () => {
+    const mockRefresh = jest.fn();
+    mockUseSessionsReturn = {
+      sessions: [],
+      total: 0,
+      loading: false,
+      error: "Não foi possível carregar seu histórico.",
+      errorTimestamp: new Date().toISOString(),
+      refresh: mockRefresh,
+      silentRefresh: jest.fn(),
+    };
 
     const HistoricoPage = require("../app/historico/page").default;
     render(<HistoricoPage />);
@@ -188,10 +229,8 @@ describe("T4: Retry button works and reloads data", () => {
     // Click retry
     fireEvent.click(screen.getByTestId("error-retry-button"));
 
-    // Should trigger a second fetch
-    await waitFor(() => {
-      expect((global.fetch as jest.Mock).mock.calls.length).toBeGreaterThanOrEqual(2);
-    });
+    // Should trigger refresh via useSessions
+    expect(mockRefresh).toHaveBeenCalled();
   });
 });
 
@@ -199,10 +238,15 @@ describe("T4: Retry button works and reloads data", () => {
 
 describe("T5: Empty state different from error state visually", () => {
   it("should show EmptyState (not error) when Historico has no sessions", async () => {
-    (global.fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      json: async () => ({ sessions: [], total: 0, limit: 20, offset: 0 }),
-    });
+    mockUseSessionsReturn = {
+      sessions: [],
+      total: 0,
+      loading: false,
+      error: null,
+      errorTimestamp: null,
+      refresh: jest.fn(),
+      silentRefresh: jest.fn(),
+    };
 
     const HistoricoPage = require("../app/historico/page").default;
     render(<HistoricoPage />);
@@ -217,7 +261,15 @@ describe("T5: Empty state different from error state visually", () => {
   });
 
   it("should show ErrorState (not empty) when Historico API fails", async () => {
-    (global.fetch as jest.Mock).mockRejectedValue(new Error("Server error"));
+    mockUseSessionsReturn = {
+      sessions: [],
+      total: 0,
+      loading: false,
+      error: "Não foi possível carregar seu histórico.",
+      errorTimestamp: new Date().toISOString(),
+      refresh: jest.fn(),
+      silentRefresh: jest.fn(),
+    };
 
     const HistoricoPage = require("../app/historico/page").default;
     render(<HistoricoPage />);

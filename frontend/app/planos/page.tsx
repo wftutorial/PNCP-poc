@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { usePlans } from "../../hooks/usePlans";
 import { useAuth } from "../components/AuthProvider";
 import LandingNavbar from "../components/landing/LandingNavbar";
 import Link from "next/link";
@@ -97,46 +98,39 @@ export default function PlanosPage() {
   // STORY-323 AC17: Partner tracking state
   const [partnerName, setPartnerName] = useState<string | null>(null);
 
-  // STORY-360 AC2: Dynamic pricing from backend with static fallback
+  // TD-008 AC4: SWR-based dynamic pricing with static fallback
   type PricingMap = Record<BillingPeriod, { monthly: number; total: number; period: string; discount?: number }>;
-  const [proPricing, setProPricing] = useState<PricingMap>(PRICING_FALLBACK);
-  const [consultoriaPricing, setConsultoriaPricing] = useState<PricingMap>(CONSULTORIA_PRICING_FALLBACK);
+  const { plans: plansData } = usePlans();
 
-  useEffect(() => {
-    const fetchPricing = async () => {
-      try {
-        const res = await fetch("/api/plans");
-        if (!res.ok) return; // Keep fallback
-        const data = await res.json();
-        const plans = data.plans || [];
-        for (const plan of plans) {
-          const bp = plan.billing_periods;
-          if (!bp) continue;
-          const buildPricing = (base: PricingMap): PricingMap => {
-            const result = { ...base };
-            if (bp.monthly) {
-              const m = bp.monthly.price_cents / 100;
-              result.monthly = { monthly: m, total: m, period: "mês" };
-            }
-            if (bp.semiannual) {
-              const m = bp.semiannual.price_cents / 100;
-              result.semiannual = { monthly: m, total: m * 6, period: "semestre", discount: bp.semiannual.discount_percent || undefined };
-            }
-            if (bp.annual) {
-              const m = bp.annual.price_cents / 100;
-              result.annual = { monthly: m, total: m * 12, period: "ano", discount: bp.annual.discount_percent || undefined };
-            }
-            return result;
-          };
-          if (plan.id === "smartlic_pro") setProPricing(buildPricing(PRICING_FALLBACK));
-          if (plan.id === "consultoria") setConsultoriaPricing(buildPricing(CONSULTORIA_PRICING_FALLBACK));
+  const { proPricing, consultoriaPricing } = useMemo(() => {
+    let pro: PricingMap = PRICING_FALLBACK;
+    let consultoria: PricingMap = CONSULTORIA_PRICING_FALLBACK;
+    if (!plansData) return { proPricing: pro, consultoriaPricing: consultoria };
+
+    for (const plan of plansData) {
+      const bp = plan.billing_periods;
+      if (!bp) continue;
+      const buildPricing = (base: PricingMap): PricingMap => {
+        const result = { ...base };
+        if (bp.monthly) {
+          const m = bp.monthly.price_cents / 100;
+          result.monthly = { monthly: m, total: m, period: "mês" };
         }
-      } catch {
-        // Keep fallback values on network error
-      }
-    };
-    fetchPricing();
-  }, []);
+        if (bp.semiannual) {
+          const m = bp.semiannual.price_cents / 100;
+          result.semiannual = { monthly: m, total: m * 6, period: "semestre", discount: bp.semiannual.discount_percent || undefined };
+        }
+        if (bp.annual) {
+          const m = bp.annual.price_cents / 100;
+          result.annual = { monthly: m, total: m * 12, period: "ano", discount: bp.annual.discount_percent || undefined };
+        }
+        return result;
+      };
+      if (plan.id === "smartlic_pro") pro = buildPricing(PRICING_FALLBACK);
+      if (plan.id === "consultoria") consultoria = buildPricing(CONSULTORIA_PRICING_FALLBACK);
+    }
+    return { proPricing: pro, consultoriaPricing: consultoria };
+  }, [plansData]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);

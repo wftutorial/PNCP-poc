@@ -118,6 +118,20 @@ jest.mock("next/dynamic", () => {
   };
 });
 
+// TD-008: historico page now uses useSessions SWR hook instead of global.fetch
+let mockUseSessionsReturn: any = {
+  sessions: [],
+  total: 0,
+  loading: false,
+  error: null,
+  errorTimestamp: null,
+  refresh: jest.fn(),
+  silentRefresh: jest.fn(),
+};
+jest.mock("../hooks/useSessions", () => ({
+  useSessions: () => mockUseSessionsReturn,
+}));
+
 import HistoricoPage from "../app/historico/page";
 import { BottomNav } from "../components/BottomNav";
 import LoginPage from "../app/login/page";
@@ -169,13 +183,15 @@ describe("SAB-012 AC1-AC3: Search time display in Histórico", () => {
   });
 
   it("AC1: shows 'Análise profunda' label when duration > 60s", async () => {
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({
-        sessions: [makeSession({ duration_ms: 93800 })],
-        total: 1,
-      }),
-    });
+    mockUseSessionsReturn = {
+      sessions: [makeSession({ duration_ms: 93800 })],
+      total: 1,
+      loading: false,
+      error: null,
+      errorTimestamp: null,
+      refresh: jest.fn(),
+      silentRefresh: jest.fn(),
+    };
 
     render(<HistoricoPage />);
 
@@ -189,13 +205,15 @@ describe("SAB-012 AC1-AC3: Search time display in Histórico", () => {
   }, 10000);
 
   it("AC2: shows time badge when duration < 30s", async () => {
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({
-        sessions: [makeSession({ duration_ms: 5200 })],
-        total: 1,
-      }),
-    });
+    mockUseSessionsReturn = {
+      sessions: [makeSession({ duration_ms: 5200 })],
+      total: 1,
+      loading: false,
+      error: null,
+      errorTimestamp: null,
+      refresh: jest.fn(),
+      silentRefresh: jest.fn(),
+    };
 
     render(<HistoricoPage />);
 
@@ -208,13 +226,15 @@ describe("SAB-012 AC1-AC3: Search time display in Histórico", () => {
   }, 10000);
 
   it("AC3: hides time completely when duration is 30-60s", async () => {
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({
-        sessions: [makeSession({ duration_ms: 45000 })],
-        total: 1,
-      }),
-    });
+    mockUseSessionsReturn = {
+      sessions: [makeSession({ duration_ms: 45000 })],
+      total: 1,
+      loading: false,
+      error: null,
+      errorTimestamp: null,
+      refresh: jest.fn(),
+      silentRefresh: jest.fn(),
+    };
 
     render(<HistoricoPage />);
 
@@ -228,13 +248,15 @@ describe("SAB-012 AC1-AC3: Search time display in Histórico", () => {
   }, 10000);
 
   it("AC3: hides time when duration_ms is null", async () => {
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({
-        sessions: [makeSession({ duration_ms: null })],
-        total: 1,
-      }),
-    });
+    mockUseSessionsReturn = {
+      sessions: [makeSession({ duration_ms: null })],
+      total: 1,
+      loading: false,
+      error: null,
+      errorTimestamp: null,
+      refresh: jest.fn(),
+      silentRefresh: jest.fn(),
+    };
 
     render(<HistoricoPage />);
 
@@ -247,13 +269,15 @@ describe("SAB-012 AC1-AC3: Search time display in Histórico", () => {
   }, 10000);
 
   it("AC6: Histórico uses PT-BR currency formatting", async () => {
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({
-        sessions: [makeSession({ valor_total: 3_500_000 })],
-        total: 1,
-      }),
-    });
+    mockUseSessionsReturn = {
+      sessions: [makeSession({ valor_total: 3_500_000 })],
+      total: 1,
+      loading: false,
+      error: null,
+      errorTimestamp: null,
+      refresh: jest.fn(),
+      silentRefresh: jest.fn(),
+    };
 
     render(<HistoricoPage />);
 

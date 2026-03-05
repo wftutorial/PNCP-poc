@@ -49,10 +49,14 @@ jest.mock('../../lib/error-messages', () => ({
   getMessageFromErrorCode: () => null,
 }));
 
+// Mock useSessions — replaces global.fetch session logic
+const mockUseSessions = jest.fn();
+jest.mock('../../hooks/useSessions', () => ({
+  useSessions: (opts: any) => mockUseSessions(opts),
+}));
+
 // --- Test data ---
 const mockSession = { access_token: 'test-token-357' };
-const mockFetch = jest.fn();
-global.fetch = mockFetch;
 
 function makeSession(overrides: Record<string, unknown> = {}) {
   return {
@@ -89,15 +93,16 @@ describe('UX-357: Restart Error Message Consistency in Histórico', () => {
   // AC2: "failed" status with restart error → canonical failure message
   // =========================================================================
   test('AC2: failed + "O servidor reiniciou. Tente novamente." → canonical', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({
-        sessions: [makeSession({
-          status: 'failed',
-          error_message: 'O servidor reiniciou. Tente novamente.',
-        })],
-        total: 1,
-      }),
+    mockUseSessions.mockReturnValue({
+      sessions: [makeSession({
+        status: 'failed',
+        error_message: 'O servidor reiniciou. Tente novamente.',
+      })],
+      total: 1,
+      loading: false,
+      error: null,
+      errorTimestamp: null,
+      refresh: jest.fn(),
     });
 
     render(<HistoricoPage />);
@@ -109,15 +114,16 @@ describe('UX-357: Restart Error Message Consistency in Histórico', () => {
   });
 
   test('AC2: failed + "O servidor reiniciou durante o processamento." → canonical', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({
-        sessions: [makeSession({
-          status: 'failed',
-          error_message: 'O servidor reiniciou durante o processamento.',
-        })],
-        total: 1,
-      }),
+    mockUseSessions.mockReturnValue({
+      sessions: [makeSession({
+        status: 'failed',
+        error_message: 'O servidor reiniciou durante o processamento.',
+      })],
+      total: 1,
+      loading: false,
+      error: null,
+      errorTimestamp: null,
+      refresh: jest.fn(),
     });
 
     render(<HistoricoPage />);
@@ -129,15 +135,16 @@ describe('UX-357: Restart Error Message Consistency in Histórico', () => {
   });
 
   test('AC2: failed + English "Server restart" → canonical', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({
-        sessions: [makeSession({
-          status: 'failed',
-          error_message: 'Server restart — retry recommended',
-        })],
-        total: 1,
-      }),
+    mockUseSessions.mockReturnValue({
+      sessions: [makeSession({
+        status: 'failed',
+        error_message: 'Server restart — retry recommended',
+      })],
+      total: 1,
+      loading: false,
+      error: null,
+      errorTimestamp: null,
+      refresh: jest.fn(),
     });
 
     render(<HistoricoPage />);
@@ -152,15 +159,16 @@ describe('UX-357: Restart Error Message Consistency in Histórico', () => {
   // AC3: "timed_out" status → always shows canonical timeout message
   // =========================================================================
   test('AC3: timed_out + restart error → canonical timeout message', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({
-        sessions: [makeSession({
-          status: 'timed_out',
-          error_message: 'O servidor reiniciou durante o processamento.',
-        })],
-        total: 1,
-      }),
+    mockUseSessions.mockReturnValue({
+      sessions: [makeSession({
+        status: 'timed_out',
+        error_message: 'O servidor reiniciou durante o processamento.',
+      })],
+      total: 1,
+      loading: false,
+      error: null,
+      errorTimestamp: null,
+      refresh: jest.fn(),
     });
 
     render(<HistoricoPage />);
@@ -172,15 +180,16 @@ describe('UX-357: Restart Error Message Consistency in Histórico', () => {
   });
 
   test('AC3: timed_out without error_message → canonical timeout message', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({
-        sessions: [makeSession({
-          status: 'timed_out',
-          error_message: null,
-        })],
-        total: 1,
-      }),
+    mockUseSessions.mockReturnValue({
+      sessions: [makeSession({
+        status: 'timed_out',
+        error_message: null,
+      })],
+      total: 1,
+      loading: false,
+      error: null,
+      errorTimestamp: null,
+      refresh: jest.fn(),
     });
 
     render(<HistoricoPage />);
@@ -192,15 +201,16 @@ describe('UX-357: Restart Error Message Consistency in Histórico', () => {
   });
 
   test('AC3: timed_out + any error → canonical timeout (not error-specific)', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({
-        sessions: [makeSession({
-          status: 'timed_out',
-          error_message: 'Pipeline failed at stage consolidation',
-        })],
-        total: 1,
-      }),
+    mockUseSessions.mockReturnValue({
+      sessions: [makeSession({
+        status: 'timed_out',
+        error_message: 'Pipeline failed at stage consolidation',
+      })],
+      total: 1,
+      loading: false,
+      error: null,
+      errorTimestamp: null,
+      refresh: jest.fn(),
     });
 
     render(<HistoricoPage />);
@@ -231,15 +241,16 @@ describe('UX-357: Restart Error Message Consistency in Histórico', () => {
   // Regression: non-restart failed sessions still show localized error
   // =========================================================================
   test('regression: failed + non-restart error still localizes correctly', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({
-        sessions: [makeSession({
-          status: 'failed',
-          error_message: 'Pipeline failed',
-        })],
-        total: 1,
-      }),
+    mockUseSessions.mockReturnValue({
+      sessions: [makeSession({
+        status: 'failed',
+        error_message: 'Pipeline failed',
+      })],
+      total: 1,
+      loading: false,
+      error: null,
+      errorTimestamp: null,
+      refresh: jest.fn(),
     });
 
     render(<HistoricoPage />);
@@ -251,15 +262,16 @@ describe('UX-357: Restart Error Message Consistency in Histórico', () => {
   });
 
   test('regression: completed sessions do not show error message', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({
-        sessions: [makeSession({
-          status: 'completed',
-          error_message: null,
-        })],
-        total: 1,
-      }),
+    mockUseSessions.mockReturnValue({
+      sessions: [makeSession({
+        status: 'completed',
+        error_message: null,
+      })],
+      total: 1,
+      loading: false,
+      error: null,
+      errorTimestamp: null,
+      refresh: jest.fn(),
     });
 
     render(<HistoricoPage />);

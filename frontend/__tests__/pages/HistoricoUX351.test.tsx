@@ -78,6 +78,12 @@ jest.mock('../../lib/error-messages', () => ({
   getMessageFromErrorCode: () => null,
 }));
 
+// Mock useSessions — replaces global.fetch session logic
+const mockUseSessions = jest.fn();
+jest.mock('../../hooks/useSessions', () => ({
+  useSessions: (opts: any) => mockUseSessions(opts),
+}));
+
 // --- Helpers ---
 
 interface MockSession {
@@ -131,36 +137,21 @@ const ALL_27_UFS = [
   'RO', 'RR', 'RS', 'SC', 'SE', 'SP', 'TO',
 ];
 
-let fetchCallCount: number;
-let fetchResponses: Array<{ sessions: MockSession[]; total: number }>;
-
-function setupFetch(responses: Array<{ sessions: MockSession[]; total: number }>) {
-  fetchCallCount = 0;
-  fetchResponses = responses;
-  global.fetch = jest.fn().mockImplementation(() => {
-    const idx = Math.min(fetchCallCount, fetchResponses.length - 1);
-    fetchCallCount++;
-    return Promise.resolve({
-      ok: true,
-      json: () => Promise.resolve({
-        ...fetchResponses[idx],
-        limit: 20,
-        offset: 0,
-      }),
-    });
-  });
-}
-
 // --- Tests ---
 
 describe('UX-351: Historico Funcional', () => {
   beforeEach(() => {
-    jest.useFakeTimers();
+    jest.clearAllMocks();
     mockPush.mockClear();
-  });
-
-  afterEach(() => {
-    jest.useRealTimers();
+    // Default: empty sessions, not loading
+    mockUseSessions.mockReturnValue({
+      sessions: [],
+      total: 0,
+      loading: false,
+      error: null,
+      errorTimestamp: null,
+      refresh: jest.fn(),
+    });
   });
 
   // =========================================================================
@@ -169,11 +160,16 @@ describe('UX-351: Historico Funcional', () => {
   describe('AC12: Single entry per search', () => {
     test('renders exactly 1 card per session returned from API', async () => {
       const session = createSession({ id: 'unique-1', status: 'completed' });
-      setupFetch([{ sessions: [session], total: 1 }]);
-
-      await act(async () => {
-        render(<HistoricoPage />);
+      mockUseSessions.mockReturnValue({
+        sessions: [session],
+        total: 1,
+        loading: false,
+        error: null,
+        errorTimestamp: null,
+        refresh: jest.fn(),
       });
+
+      render(<HistoricoPage />);
 
       await waitFor(() => {
         const badges = screen.getAllByTestId('status-badge-completed');
@@ -186,11 +182,16 @@ describe('UX-351: Historico Funcional', () => {
         createSession({ id: 'a', status: 'completed', sectors: ['informatica'] }),
         createSession({ id: 'b', status: 'completed', sectors: ['saude'] }),
       ];
-      setupFetch([{ sessions, total: 2 }]);
-
-      await act(async () => {
-        render(<HistoricoPage />);
+      mockUseSessions.mockReturnValue({
+        sessions,
+        total: 2,
+        loading: false,
+        error: null,
+        errorTimestamp: null,
+        refresh: jest.fn(),
       });
+
+      render(<HistoricoPage />);
 
       await waitFor(() => {
         const badges = screen.getAllByTestId('status-badge-completed');
@@ -204,14 +205,16 @@ describe('UX-351: Historico Funcional', () => {
   // =========================================================================
   describe('AC13: Status updates via polling', () => {
     test('shows "Em andamento" for processing sessions', async () => {
-      setupFetch([{
+      mockUseSessions.mockReturnValue({
         sessions: [createSession({ status: 'processing', resumo_executivo: null })],
         total: 1,
-      }]);
-
-      await act(async () => {
-        render(<HistoricoPage />);
+        loading: false,
+        error: null,
+        errorTimestamp: null,
+        refresh: jest.fn(),
       });
+
+      render(<HistoricoPage />);
 
       await waitFor(() => {
         const badge = screen.getByTestId('status-badge-processing');
@@ -231,23 +234,41 @@ describe('UX-351: Historico Funcional', () => {
         resumo_executivo: 'Resultados prontos',
       });
 
-      setupFetch([
-        { sessions: [processingSession], total: 1 },
-        { sessions: [completedSession], total: 1 },
-      ]);
+      const processingReturn = {
+        sessions: [processingSession],
+        total: 1,
+        loading: false,
+        error: null,
+        errorTimestamp: null,
+        refresh: jest.fn(),
+        silentRefresh: jest.fn(),
+      };
+      const completedReturn = {
+        sessions: [completedSession],
+        total: 1,
+        loading: false,
+        error: null,
+        errorTimestamp: null,
+        refresh: jest.fn(),
+        silentRefresh: jest.fn(),
+      };
 
-      await act(async () => {
-        render(<HistoricoPage />);
-      });
+      // All calls during first render return processing
+      mockUseSessions.mockReturnValue(processingReturn);
+
+      const { rerender } = render(<HistoricoPage />);
 
       // Initially shows processing
       await waitFor(() => {
         expect(screen.getByTestId('status-badge-processing')).toBeInTheDocument();
       });
 
-      // Advance timer to trigger poll (5s interval)
+      // Switch to completed for subsequent renders
+      mockUseSessions.mockReturnValue(completedReturn);
+
+      // Simulate poll by re-rendering
       await act(async () => {
-        jest.advanceTimersByTime(5500);
+        rerender(<HistoricoPage />);
       });
 
       // Should now show completed
@@ -257,14 +278,16 @@ describe('UX-351: Historico Funcional', () => {
     });
 
     test('shows "Concluída" badge for completed status', async () => {
-      setupFetch([{
+      mockUseSessions.mockReturnValue({
         sessions: [createSession({ status: 'completed' })],
         total: 1,
-      }]);
-
-      await act(async () => {
-        render(<HistoricoPage />);
+        loading: false,
+        error: null,
+        errorTimestamp: null,
+        refresh: jest.fn(),
       });
+
+      render(<HistoricoPage />);
 
       await waitFor(() => {
         const badge = screen.getByTestId('status-badge-completed');
@@ -273,14 +296,16 @@ describe('UX-351: Historico Funcional', () => {
     });
 
     test('shows "Falhou" badge for failed status', async () => {
-      setupFetch([{
+      mockUseSessions.mockReturnValue({
         sessions: [createSession({ status: 'failed', error_message: 'Teste de erro' })],
         total: 1,
-      }]);
-
-      await act(async () => {
-        render(<HistoricoPage />);
+        loading: false,
+        error: null,
+        errorTimestamp: null,
+        refresh: jest.fn(),
       });
+
+      render(<HistoricoPage />);
 
       await waitFor(() => {
         const badge = screen.getByTestId('status-badge-failed');
@@ -289,14 +314,16 @@ describe('UX-351: Historico Funcional', () => {
     });
 
     test('shows "Tempo esgotado" badge for timed_out status', async () => {
-      setupFetch([{
+      mockUseSessions.mockReturnValue({
         sessions: [createSession({ status: 'timed_out', error_message: 'Timeout' })],
         total: 1,
-      }]);
-
-      await act(async () => {
-        render(<HistoricoPage />);
+        loading: false,
+        error: null,
+        errorTimestamp: null,
+        refresh: jest.fn(),
       });
+
+      render(<HistoricoPage />);
 
       await waitFor(() => {
         const badge = screen.getByTestId('status-badge-timed_out');
@@ -305,28 +332,26 @@ describe('UX-351: Historico Funcional', () => {
     });
 
     test('stops polling when all sessions are terminal', async () => {
-      setupFetch([{
+      // useSessions called with refreshInterval=0 for terminal sessions
+      mockUseSessions.mockReturnValue({
         sessions: [createSession({ status: 'completed' })],
         total: 1,
-      }]);
-
-      await act(async () => {
-        render(<HistoricoPage />);
+        loading: false,
+        error: null,
+        errorTimestamp: null,
+        refresh: jest.fn(),
       });
+
+      render(<HistoricoPage />);
 
       await waitFor(() => {
         expect(screen.getByTestId('status-badge-completed')).toBeInTheDocument();
       });
 
-      // Advance timer — should NOT trigger additional fetches
-      const callsBefore = (global.fetch as jest.Mock).mock.calls.length;
-      await act(async () => {
-        jest.advanceTimersByTime(15000);
-      });
-      const callsAfter = (global.fetch as jest.Mock).mock.calls.length;
-
-      // No additional fetches (all terminal)
-      expect(callsAfter).toBe(callsBefore);
+      // Verify useSessions was called with refreshInterval 0 (no polling) after terminal state
+      // The page sets pollInterval=0 when all sessions are terminal
+      const lastCall = mockUseSessions.mock.calls[mockUseSessions.mock.calls.length - 1][0];
+      expect(lastCall.refreshInterval).toBe(0);
     });
   });
 
@@ -335,14 +360,16 @@ describe('UX-351: Historico Funcional', () => {
   // =========================================================================
   describe('AC14: UF display formatting', () => {
     test('shows "Todo o Brasil" when all 27 UFs selected', async () => {
-      setupFetch([{
+      mockUseSessions.mockReturnValue({
         sessions: [createSession({ ufs: ALL_27_UFS })],
         total: 1,
-      }]);
-
-      await act(async () => {
-        render(<HistoricoPage />);
+        loading: false,
+        error: null,
+        errorTimestamp: null,
+        refresh: jest.fn(),
       });
+
+      render(<HistoricoPage />);
 
       await waitFor(() => {
         const ufDisplay = screen.getByTestId('uf-display');
@@ -351,14 +378,16 @@ describe('UX-351: Historico Funcional', () => {
     });
 
     test('shows all UFs when 5 or fewer selected', async () => {
-      setupFetch([{
+      mockUseSessions.mockReturnValue({
         sessions: [createSession({ ufs: ['SP', 'RJ', 'MG'] })],
         total: 1,
-      }]);
-
-      await act(async () => {
-        render(<HistoricoPage />);
+        loading: false,
+        error: null,
+        errorTimestamp: null,
+        refresh: jest.fn(),
       });
+
+      render(<HistoricoPage />);
 
       await waitFor(() => {
         const ufDisplay = screen.getByTestId('uf-display');
@@ -367,14 +396,16 @@ describe('UX-351: Historico Funcional', () => {
     });
 
     test('shows first 5 UFs + "outros" when more than 5 selected', async () => {
-      setupFetch([{
+      mockUseSessions.mockReturnValue({
         sessions: [createSession({ ufs: ['SP', 'RJ', 'MG', 'BA', 'PR', 'RS', 'SC', 'GO'] })],
         total: 1,
-      }]);
-
-      await act(async () => {
-        render(<HistoricoPage />);
+        loading: false,
+        error: null,
+        errorTimestamp: null,
+        refresh: jest.fn(),
       });
+
+      render(<HistoricoPage />);
 
       await waitFor(() => {
         const ufDisplay = screen.getByTestId('uf-display');
@@ -383,14 +414,16 @@ describe('UX-351: Historico Funcional', () => {
     });
 
     test('shows singular "outro" for exactly 6 UFs', async () => {
-      setupFetch([{
+      mockUseSessions.mockReturnValue({
         sessions: [createSession({ ufs: ['SP', 'RJ', 'MG', 'BA', 'PR', 'RS'] })],
         total: 1,
-      }]);
-
-      await act(async () => {
-        render(<HistoricoPage />);
+        loading: false,
+        error: null,
+        errorTimestamp: null,
+        refresh: jest.fn(),
       });
+
+      render(<HistoricoPage />);
 
       await waitFor(() => {
         const ufDisplay = screen.getByTestId('uf-display');
@@ -399,14 +432,16 @@ describe('UX-351: Historico Funcional', () => {
     });
 
     test('shows single UF normally', async () => {
-      setupFetch([{
+      mockUseSessions.mockReturnValue({
         sessions: [createSession({ ufs: ['SP'] })],
         total: 1,
-      }]);
-
-      await act(async () => {
-        render(<HistoricoPage />);
+        loading: false,
+        error: null,
+        errorTimestamp: null,
+        refresh: jest.fn(),
       });
+
+      render(<HistoricoPage />);
 
       await waitFor(() => {
         const ufDisplay = screen.getByTestId('uf-display');
@@ -420,17 +455,19 @@ describe('UX-351: Historico Funcional', () => {
   // =========================================================================
   describe('AC6-AC7: Error messages in Portuguese', () => {
     test('translates "Server restart" to Portuguese', async () => {
-      setupFetch([{
+      mockUseSessions.mockReturnValue({
         sessions: [createSession({
           status: 'failed',
           error_message: 'Server restart — retry recommended',
         })],
         total: 1,
-      }]);
-
-      await act(async () => {
-        render(<HistoricoPage />);
+        loading: false,
+        error: null,
+        errorTimestamp: null,
+        refresh: jest.fn(),
       });
+
+      render(<HistoricoPage />);
 
       await waitFor(() => {
         const errorEl = screen.getByTestId('error-message');
@@ -439,17 +476,19 @@ describe('UX-351: Historico Funcional', () => {
     });
 
     test('shows Portuguese error for timed_out with server restart', async () => {
-      setupFetch([{
+      mockUseSessions.mockReturnValue({
         sessions: [createSession({
           status: 'timed_out',
           error_message: 'Server restart during processing',
         })],
         total: 1,
-      }]);
-
-      await act(async () => {
-        render(<HistoricoPage />);
+        loading: false,
+        error: null,
+        errorTimestamp: null,
+        refresh: jest.fn(),
       });
+
+      render(<HistoricoPage />);
 
       // UX-357: timed_out always shows the canonical timeout message regardless of error_message
       await waitFor(() => {
@@ -463,28 +502,21 @@ describe('UX-351: Historico Funcional', () => {
   // AC15: Regression checks
   // =========================================================================
   describe('AC15: Regression checks', () => {
-    // AC15 tests do not use polling/timers — switch to real timers so waitFor
-    // retry callbacks can fire (fake timers block waitFor's internal setTimeout).
-    beforeEach(() => {
-      jest.useRealTimers();
-    });
-    afterEach(() => {
-      jest.useFakeTimers();
-    });
-
     test('completed session shows result count and value', async () => {
-      setupFetch([{
+      mockUseSessions.mockReturnValue({
         sessions: [createSession({
           status: 'completed',
           total_filtered: 42,
           valor_total: 1500000,
         })],
         total: 1,
-      }]);
-
-      await act(async () => {
-        render(<HistoricoPage />);
+        loading: false,
+        error: null,
+        errorTimestamp: null,
+        refresh: jest.fn(),
       });
+
+      render(<HistoricoPage />);
 
       await waitFor(() => {
         expect(screen.getByText('42')).toBeInTheDocument();
@@ -494,17 +526,19 @@ describe('UX-351: Historico Funcional', () => {
     });
 
     test('shows resumo_executivo for completed sessions', async () => {
-      setupFetch([{
+      mockUseSessions.mockReturnValue({
         sessions: [createSession({
           status: 'completed',
           resumo_executivo: 'Encontradas 42 oportunidades relevantes',
         })],
         total: 1,
-      }]);
-
-      await act(async () => {
-        render(<HistoricoPage />);
+        loading: false,
+        error: null,
+        errorTimestamp: null,
+        refresh: jest.fn(),
       });
+
+      render(<HistoricoPage />);
 
       await waitFor(() => {
         expect(screen.getByText('Encontradas 42 oportunidades relevantes')).toBeInTheDocument();
@@ -512,16 +546,18 @@ describe('UX-351: Historico Funcional', () => {
     });
 
     test('shows custom_keywords when present', async () => {
-      setupFetch([{
+      mockUseSessions.mockReturnValue({
         sessions: [createSession({
           custom_keywords: ['uniformes', 'escolares'],
         })],
         total: 1,
-      }]);
-
-      await act(async () => {
-        render(<HistoricoPage />);
+        loading: false,
+        error: null,
+        errorTimestamp: null,
+        refresh: jest.fn(),
       });
+
+      render(<HistoricoPage />);
 
       await waitFor(() => {
         expect(screen.getByText(/Termos:/)).toBeInTheDocument();
@@ -530,14 +566,16 @@ describe('UX-351: Historico Funcional', () => {
     });
 
     test('shows duration when available', async () => {
-      setupFetch([{
+      mockUseSessions.mockReturnValue({
         sessions: [createSession({ duration_ms: 12345 })],
         total: 1,
-      }]);
-
-      await act(async () => {
-        render(<HistoricoPage />);
+        loading: false,
+        error: null,
+        errorTimestamp: null,
+        refresh: jest.fn(),
       });
+
+      render(<HistoricoPage />);
 
       await waitFor(() => {
         expect(screen.getByText('12.3s')).toBeInTheDocument();

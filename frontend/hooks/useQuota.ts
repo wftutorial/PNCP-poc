@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { useAuth } from "../app/components/AuthProvider";
+import { useMemo } from "react";
+import { useUserProfile } from "./useUserProfile";
 
 interface QuotaInfo {
   planId: string | null;
@@ -11,8 +11,8 @@ interface QuotaInfo {
   isUnlimited: boolean;
   isFreeUser: boolean;
   isAdmin: boolean;
-  subscriptionStatus?: string; // "active" | "canceling" | "canceled" | etc.
-  subscriptionEndDate?: string; // ISO date string
+  subscriptionStatus?: string;
+  subscriptionEndDate?: string;
 }
 
 interface UseQuotaReturn {
@@ -22,141 +22,54 @@ interface UseQuotaReturn {
   refresh: () => Promise<void>;
 }
 
-const FREE_SEARCHES_LIMIT = 1000; // STORY-264: Full access during trial
-const UNLIMITED_THRESHOLD = 999990; // Lowered threshold to catch near-unlimited values
-const CACHE_KEY = "smartlic_cached_quota";
-const CACHE_TTL = 3600000; // 1 hour in milliseconds
+const FREE_SEARCHES_LIMIT = 1000;
+const UNLIMITED_THRESHOLD = 999990;
 
-interface CachedQuota {
-  data: QuotaInfo;
-  timestamp: number;
-}
-
+/**
+ * TD-008 AC3: SWR-based quota hook.
+ * Delegates to useUserProfile (SWR) for deduplication with usePlan.
+ */
 export function useQuota(): UseQuotaReturn {
-  const { session, user } = useAuth();
-  const [quota, setQuota] = useState<QuotaInfo | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { data, error, isLoading, mutate } = useUserProfile();
 
-  const fetchQuota = useCallback(async () => {
-    if (!session?.access_token || !user) {
-      setQuota(null);
-      return;
+  const quota = useMemo<QuotaInfo | null>(() => {
+    if (!data) return null;
+
+    const planId = data.plan_id as string;
+    const planName = data.plan_name as string;
+    const quotaRemaining = (data.quota_remaining as number) || 0;
+    const quotaUsed = (data.quota_used as number) || 0;
+    const isAdmin = data.is_admin === true;
+    const subscriptionStatus = data.subscription_status as string | undefined;
+    const subscriptionEndDate = data.subscription_end_date as string | undefined;
+
+    const isFreeUser = !isAdmin && (planId === "free" || planId === "free_trial");
+    const isUnlimited = !isFreeUser && (quotaRemaining >= UNLIMITED_THRESHOLD || isAdmin);
+
+    let creditsRemaining: number | null = null;
+    if (isFreeUser) {
+      creditsRemaining = Math.max(0, FREE_SEARCHES_LIMIT - quotaUsed);
+    } else if (!isUnlimited) {
+      creditsRemaining = quotaRemaining;
     }
 
-    setLoading(true);
-    setError(null);
+    return {
+      planId,
+      planName,
+      creditsRemaining,
+      totalSearches: quotaUsed,
+      isUnlimited,
+      isFreeUser,
+      isAdmin,
+      subscriptionStatus,
+      subscriptionEndDate,
+    };
+  }, [data]);
 
-    try {
-      const response = await fetch("/api/me", {
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error("Erro ao carregar informacoes de quota");
-      }
-
-      const data = await response.json();
-
-      // New format: UserProfileResponse has fields at root level
-      const planId = data.plan_id;
-      const planName = data.plan_name;
-      const quotaRemaining = data.quota_remaining;
-      const quotaUsed = data.quota_used || 0;
-      const isAdmin = data.is_admin === true;
-      const subscriptionStatus = data.subscription_status;
-      const subscriptionEndDate = data.subscription_end_date;
-
-      // Check if backend returned degraded data (free_trial) but we have a cached paid plan
-      if (planId === "free_trial" && typeof window !== "undefined") {
-        try {
-          const cached = localStorage.getItem(CACHE_KEY);
-          if (cached) {
-            const parsedCache: CachedQuota = JSON.parse(cached);
-            const cacheAge = Date.now() - parsedCache.timestamp;
-
-            // If cache is valid (< 1 hour) and contains a paid plan, use cached data
-            if (
-              cacheAge < CACHE_TTL &&
-              parsedCache.data.planId !== "free_trial" &&
-              parsedCache.data.planId !== "free"
-            ) {
-              console.warn(
-                "[useQuota] Backend returned free_trial but cached paid plan exists. Using cached data to prevent transient downgrade.",
-                {
-                  cachedPlan: parsedCache.data.planId,
-                  cacheAge: Math.round(cacheAge / 1000) + "s",
-                }
-              );
-              setQuota(parsedCache.data);
-              setLoading(false);
-              return;
-            }
-          }
-        } catch (cacheErr) {
-          console.error("[useQuota] Error reading cache:", cacheErr);
-        }
-      }
-
-      // Free user detection: plan_id starts with "free" and not admin
-      const isFreeUser = !isAdmin && (planId === "free" || planId === "free_trial");
-
-      // Detect unlimited users (admins, masters, sala_guerra, or very high quota)
-      // NOTE: Free users are NEVER unlimited - they have 3 free searches
-      const isUnlimited = !isFreeUser && (quotaRemaining >= UNLIMITED_THRESHOLD || isAdmin);
-
-      // Calculate credits remaining for display:
-      // - Unlimited users: null (show plan badge instead of count)
-      // - Free users: Always show FREE_SEARCHES_LIMIT - quotaUsed (handles stale backend data)
-      // - Paid users: Show actual quotaRemaining from backend
-      let creditsRemaining: number | null = null;
-      if (isFreeUser) {
-        // STORY-264: Free trial users get 1000 searches (full access during trial)
-        // Calculate remaining based on usage, handles stale backend data
-        creditsRemaining = Math.max(0, FREE_SEARCHES_LIMIT - quotaUsed);
-      } else if (!isUnlimited) {
-        creditsRemaining = quotaRemaining;
-      }
-
-      const quotaInfo: QuotaInfo = {
-        planId,
-        planName,
-        creditsRemaining,
-        totalSearches: quotaUsed,
-        isUnlimited,
-        isFreeUser,
-        isAdmin,
-        subscriptionStatus,
-        subscriptionEndDate,
-      };
-
-      // If data is from a paid plan (not free_trial, not free), cache it
-      if (planId !== "free_trial" && planId !== "free" && typeof window !== "undefined") {
-        try {
-          const cacheData: CachedQuota = {
-            data: quotaInfo,
-            timestamp: Date.now(),
-          };
-          localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
-        } catch (cacheErr) {
-          console.error("[useQuota] Error writing cache:", cacheErr);
-        }
-      }
-
-      setQuota(quotaInfo);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro desconhecido");
-      setQuota(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [session, user]);
-
-  useEffect(() => {
-    fetchQuota();
-  }, [fetchQuota]);
-
-  return { quota, loading, error, refresh: fetchQuota };
+  return {
+    quota,
+    loading: isLoading,
+    error: error ? "Erro ao carregar informações de quota" : null,
+    refresh: async () => { await mutate(); },
+  };
 }

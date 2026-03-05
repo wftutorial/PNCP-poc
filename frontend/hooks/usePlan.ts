@@ -1,8 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useEffect } from "react";
-import { useAuth } from "../app/components/AuthProvider";
-import { useFetchWithBackoff } from "./useFetchWithBackoff";
+import { useUserProfile } from "./useUserProfile";
 
 /**
  * Plan capabilities from backend PLAN_CAPABILITIES
@@ -45,133 +43,44 @@ interface UsePlanReturn {
   refresh: () => void;
 }
 
-const CACHE_KEY = "smartlic_cached_plan";
-const CACHE_TTL = 3600000; // 1 hour in milliseconds
-
-interface CachedPlan {
-  data: PlanInfo;
-  timestamp: number;
-}
-
-/** Read cached plan from localStorage (returns null if expired or missing) */
-function getCachedPlan(): CachedPlan | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const cached = localStorage.getItem(CACHE_KEY);
-    if (!cached) return null;
-    const parsed: CachedPlan = JSON.parse(cached);
-    if (Date.now() - parsed.timestamp >= CACHE_TTL) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-/** Write plan to localStorage cache */
-function setCachedPlan(plan: PlanInfo): void {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ data: plan, timestamp: Date.now() }));
-  } catch {
-    // Ignore storage errors
-  }
-}
-
 /**
- * Hook to fetch user's plan information and capabilities.
- * CRIT-031 AC5-AC7: Uses useFetchWithBackoff for exponential backoff (max 3 retries, 2s→4s→8s).
- * CRIT-028: Falls back to cached plan on error (fail to last known plan).
+ * TD-008 AC3: SWR-based plan hook.
+ * Preserves CRIT-028 "fail to last known plan" + CRIT-031 exponential backoff via SWR retry.
  */
 export function usePlan(): UsePlanReturn {
-  const { session, user } = useAuth();
+  const { data, error, isLoading, isFromCache, cachedAt, mutate } =
+    useUserProfile();
 
-  // Use stable primitives to avoid re-fetch on object identity changes
-  const accessToken = session?.access_token;
-  const userId = user?.id;
-
-  const fetchPlan = useCallback(
-    async (signal: AbortSignal): Promise<PlanInfo | null> => {
-      if (!accessToken || !userId) return null;
-
-      const response = await fetch("/api/me", {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        signal,
-      });
-
-      if (!response.ok) {
-        throw new Error("Erro ao carregar informações do plano");
+  const planInfo: PlanInfo | null = data
+    ? {
+        user_id: (data.user_id as string) || "",
+        email: (data.email as string) || "",
+        plan_id: (data.plan_id as string) || "free_trial",
+        plan_name: (data.plan_name as string) || "",
+        capabilities: (data.capabilities as PlanCapabilities) || {
+          max_history_days: 0,
+          allow_excel: false,
+          max_requests_per_month: 0,
+          max_requests_per_min: 0,
+          max_summary_tokens: 0,
+          priority: "low",
+        },
+        quota_used: (data.quota_used as number) || 0,
+        quota_remaining: (data.quota_remaining as number) || 0,
+        quota_reset_date: (data.quota_reset_date as string) || "",
+        trial_expires_at: (data.trial_expires_at as string) || null,
+        subscription_status: (data.subscription_status as string) || "",
+        dunning_phase: (data.dunning_phase as string) || "",
+        days_since_failure: (data.days_since_failure as number) ?? null,
       }
-
-      const data: PlanInfo = await response.json();
-
-      // CRIT-028: Degradation detection — backend returned free_trial but cached paid plan exists
-      if (data.plan_id === "free_trial") {
-        const cached = getCachedPlan();
-        if (cached && cached.data.plan_id !== "free_trial" && cached.data.plan_id !== "free") {
-          console.warn(
-            "[usePlan] Backend returned free_trial but cached paid plan exists. Using cached.",
-            { cachedPlan: cached.data.plan_id }
-          );
-          return cached.data;
-        }
-      }
-
-      // Cache paid plans for fallback
-      if (data.plan_id !== "free_trial" && data.plan_id !== "free") {
-        setCachedPlan(data);
-      }
-
-      return data;
-    },
-    [accessToken, userId]
-  );
-
-  // CRIT-031 AC5-AC7: Exponential backoff — max 3 retries (2s → 4s → 8s)
-  const {
-    data,
-    loading,
-    error: fetchError,
-    manualRetry,
-  } = useFetchWithBackoff<PlanInfo | null>(fetchPlan, {
-    enabled: !!accessToken && !!userId,
-    maxRetries: 3,
-    initialDelayMs: 2000,
-    maxDelayMs: 8000,
-    timeoutMs: 10000,
-  });
-
-  // CRIT-028 AC1-AC2: On error, fall back to cached plan (fail to last known plan)
-  // GTM-UX-004 AC2: Track whether data comes from cache + when it was cached
-  const { effectivePlanInfo, isFromCache, cachedAt } = useMemo(() => {
-    if (data) return { effectivePlanInfo: data, isFromCache: false, cachedAt: null };
-    if (fetchError) {
-      const cached = getCachedPlan();
-      if (cached) {
-        return { effectivePlanInfo: cached.data, isFromCache: true, cachedAt: cached.timestamp };
-      }
-    }
-    return { effectivePlanInfo: null, isFromCache: false, cachedAt: null };
-  }, [data, fetchError]);
-
-  // CRIT-031 AC7: Limited console warnings (max 1 per error state change, not 12)
-  useEffect(() => {
-    if (fetchError && !data) {
-      const cached = getCachedPlan();
-      if (cached) {
-        console.warn("[usePlan] Backend error — using cached plan info:", cached.data.plan_id);
-      } else {
-        // CRIT-028 AC6: Downgrade to warn to avoid console error spam
-        console.warn("[usePlan] Failed to fetch plan info:", fetchError);
-      }
-    }
-  }, [fetchError, data]);
+    : null;
 
   return {
-    planInfo: effectivePlanInfo,
-    loading,
-    error: fetchError,
+    planInfo,
+    loading: isLoading,
+    error: error ? "Erro ao carregar informações do plano" : null,
     isFromCache,
     cachedAt,
-    refresh: manualRetry,
+    refresh: () => mutate(),
   };
 }

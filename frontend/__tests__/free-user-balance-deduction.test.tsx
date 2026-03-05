@@ -17,8 +17,10 @@
  * - Quota refresh after failed searches (should not deduct)
  */
 
+import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import { renderHook, act } from '@testing-library/react';
+import { SWRConfig } from 'swr';
 
 // Mock fetch
 const mockFetch = jest.fn();
@@ -133,6 +135,13 @@ describe('Balance Deduction Verification', () => {
   });
 
   describe('AC2: Frontend useQuota hook calculates correctly', () => {
+    // SWR wrapper to isolate cache between tests
+    const swrWrapper = ({ children }: { children: React.ReactNode }) => (
+      <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0, errorRetryCount: 0 }}>
+        {children}
+      </SWRConfig>
+    );
+
     it('should calculate creditsRemaining as 1000 - quota_used for free users (STORY-264)', async () => {
       // Mock /api/me response
       mockFetch.mockResolvedValueOnce({
@@ -147,7 +156,7 @@ describe('Balance Deduction Verification', () => {
       });
 
       const { useQuota } = await import('../hooks/useQuota');
-      const { result } = renderHook(() => useQuota());
+      const { result } = renderHook(() => useQuota(), { wrapper: swrWrapper });
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false);
@@ -171,7 +180,7 @@ describe('Balance Deduction Verification', () => {
       });
 
       const { useQuota } = await import('../hooks/useQuota');
-      const { result } = renderHook(() => useQuota());
+      const { result } = renderHook(() => useQuota(), { wrapper: swrWrapper });
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false);
@@ -194,7 +203,7 @@ describe('Balance Deduction Verification', () => {
       });
 
       const { useQuota } = await import('../hooks/useQuota');
-      const { result } = renderHook(() => useQuota());
+      const { result } = renderHook(() => useQuota(), { wrapper: swrWrapper });
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false);
@@ -217,7 +226,7 @@ describe('Balance Deduction Verification', () => {
       });
 
       const { useQuota } = await import('../hooks/useQuota');
-      const { result } = renderHook(() => useQuota());
+      const { result } = renderHook(() => useQuota(), { wrapper: swrWrapper });
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false);
@@ -530,6 +539,13 @@ describe('Balance Deduction Verification', () => {
   });
 
   describe('AC7: Quota refresh mechanism', () => {
+    // SWR wrapper to isolate cache between tests
+    const swrWrapper = ({ children }: { children: React.ReactNode }) => (
+      <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0, errorRetryCount: 0 }}>
+        {children}
+      </SWRConfig>
+    );
+
     afterEach(() => {
       useQuotaMockOverride = null;
     });
@@ -546,7 +562,7 @@ describe('Balance Deduction Verification', () => {
       });
 
       const { useQuota } = await import('../hooks/useQuota');
-      const { result } = renderHook(() => useQuota());
+      const { result } = renderHook(() => useQuota(), { wrapper: swrWrapper });
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false);

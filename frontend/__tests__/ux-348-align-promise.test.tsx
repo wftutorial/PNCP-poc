@@ -17,6 +17,11 @@ jest.mock("next/link", () => {
   );
 });
 
+// Mock AddToPipelineButton — usePipeline now uses SWR + useAuth (TD-008)
+jest.mock("../app/components/AddToPipelineButton", () => ({
+  AddToPipelineButton: () => null,
+}));
+
 // ---- Component imports ----
 import { LicitacoesPreview } from "../app/components/LicitacoesPreview";
 import { EmptyState } from "../app/components/EmptyState";

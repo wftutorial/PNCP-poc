@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useAuth } from "../components/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { EmptyState } from "../../components/EmptyState";
@@ -9,6 +9,7 @@ import { AuthLoadingScreen } from "../../components/AuthLoadingScreen";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAnalytics } from "../../hooks/useAnalytics";
+import { useSessions } from "../../hooks/useSessions";
 import { getUserFriendlyError } from "../../lib/error-messages";
 import { formatCurrencyBR } from "../../lib/format-currency";
 import { APP_NAME } from "../../lib/config";
@@ -151,15 +152,22 @@ export default function HistoricoPage() {
   const { session, loading: authLoading } = useAuth();
   const router = useRouter();
   const { trackEvent } = useAnalytics();
-  const [sessions, setSessions] = useState<SearchSession[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
-  // AC1/AC2/AC14: Error state for distinguishing fetch errors from empty results
-  const [fetchError, setFetchError] = useState<string | null>(null);
-  const [errorTimestamp, setErrorTimestamp] = useState<string | null>(null);
   const limit = 20;
-  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // TD-008 AC7/AC13: SWR-based sessions with auto-polling for active sessions
+  const [pollInterval, setPollInterval] = useState(0);
+  const { sessions, total, loading, error: fetchError, errorTimestamp, refresh } = useSessions({
+    page,
+    limit,
+    refreshInterval: pollInterval,
+  });
+
+  // UX-351 AC3-AC5: Poll when sessions are in non-terminal state
+  useEffect(() => {
+    const hasActive = sessions.some((s: SearchSession) => !TERMINAL_STATUSES.has(s.status));
+    setPollInterval(hasActive ? 5000 : 0);
+  }, [sessions]);
 
   // Handle re-run search navigation (AC17: "Tentar novamente" for failed/timed_out)
   const handleRerunSearch = useCallback((searchSession: SearchSession) => {
@@ -191,56 +199,6 @@ export default function HistoricoPage() {
 
     router.push(`/buscar?${params.toString()}`);
   }, [router, trackEvent]);
-
-  const fetchSessions = useCallback(async (silent = false) => {
-    if (!session?.access_token) return;
-    if (!silent) setLoading(true);
-    try {
-      const res = await fetch(
-        `/api/sessions?limit=${limit}&offset=${page * limit}`,
-        { headers: { Authorization: `Bearer ${session.access_token}` } }
-      );
-      if (!res.ok) throw new Error("Erro ao carregar histórico");
-      const data = await res.json();
-      setSessions(data.sessions);
-      setTotal(data.total);
-      setFetchError(null);
-    } catch {
-      if (!silent) {
-        setFetchError("Não foi possível carregar seu histórico.");
-        setErrorTimestamp(new Date().toISOString());
-        setSessions([]);
-      }
-    } finally {
-      if (!silent) setLoading(false);
-    }
-  }, [session?.access_token, page]);
-
-  // Initial fetch
-  useEffect(() => {
-    if (authLoading || !session) return;
-    fetchSessions();
-  }, [session, authLoading, page, fetchSessions]);
-
-  // UX-351 AC3-AC5: Poll for updates when sessions are in non-terminal state
-  useEffect(() => {
-    const hasActiveSessions = sessions.some(
-      (s) => !TERMINAL_STATUSES.has(s.status)
-    );
-
-    if (hasActiveSessions) {
-      pollIntervalRef.current = setInterval(() => {
-        fetchSessions(true); // silent refresh
-      }, 5000);
-    }
-
-    return () => {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-        pollIntervalRef.current = null;
-      }
-    };
-  }, [sessions, fetchSessions]);
 
   // GTM-POLISH-001 AC1-AC3: Unified auth loading
   if (authLoading) {
@@ -301,7 +259,7 @@ export default function HistoricoPage() {
           <ErrorStateWithRetry
             message={fetchError}
             timestamp={errorTimestamp ?? undefined}
-            onRetry={() => fetchSessions()}
+            onRetry={() => refresh()}
           />
         ) : sessions.length === 0 ? (
           <EmptyState
@@ -318,7 +276,7 @@ export default function HistoricoPage() {
         ) : (
           <>
             <div className="space-y-4">
-              {sessions.map((s) => (
+              {sessions.map((s: SearchSession) => (
                 <div
                   key={s.id}
                   className="p-5 bg-[var(--surface-0)] border border-[var(--border)] rounded-card

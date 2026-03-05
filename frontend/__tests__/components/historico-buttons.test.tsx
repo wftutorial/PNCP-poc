@@ -43,44 +43,51 @@ jest.mock('../../lib/constants/sector-names', () => ({
   getSectorDisplayName: (s: string) => s,
 }));
 
+// Mock useSessions — replaces global.fetch session logic
+const mockUseSessions = jest.fn();
+jest.mock('../../hooks/useSessions', () => ({
+  useSessions: (opts: any) => mockUseSessions(opts),
+}));
+
 import HistoricoPage from '../../app/historico/page';
 
 describe('Historico Pagination Buttons (AC28-AC32)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // Mock fetch to return enough sessions for pagination (total > limit of 20)
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({
-        sessions: Array.from({ length: 20 }, (_, i) => ({
-          id: `session-${i}`,
-          sectors: ['informatica'],
-          ufs: ['SP'],
-          data_inicial: '2026-01-01',
-          data_final: '2026-01-10',
-          custom_keywords: null,
-          total_raw: 100,
-          total_filtered: 10,
-          valor_total: 50000,
-          resumo_executivo: 'Test',
-          created_at: '2026-01-01T00:00:00Z',
-          status: 'completed',
-          error_message: null,
-          error_code: null,
-          duration_ms: 5000,
-          pipeline_stage: null,
-          started_at: '2026-01-01T00:00:00Z',
-          response_state: null,
-        })),
-        total: 25,
-      }),
+    // Return enough sessions for pagination (total > limit of 20)
+    mockUseSessions.mockReturnValue({
+      sessions: Array.from({ length: 20 }, (_, i) => ({
+        id: `session-${i}`,
+        sectors: ['informatica'],
+        ufs: ['SP'],
+        data_inicial: '2026-01-01',
+        data_final: '2026-01-10',
+        custom_keywords: null,
+        total_raw: 100,
+        total_filtered: 10,
+        valor_total: 50000,
+        resumo_executivo: 'Test',
+        created_at: '2026-01-01T00:00:00Z',
+        status: 'completed',
+        error_message: null,
+        error_code: null,
+        duration_ms: 5000,
+        pipeline_stage: null,
+        started_at: '2026-01-01T00:00:00Z',
+        response_state: null,
+      })),
+      total: 25,
+      loading: false,
+      error: null,
+      errorTimestamp: null,
+      refresh: jest.fn(),
     });
   });
 
   it('renders pagination buttons with improved styling', async () => {
     render(<HistoricoPage />);
 
-    // Wait for fetch to complete and pagination to appear (total=25, limit=20 -> 2 pages)
+    // Wait for pagination to appear (total=25, limit=20 -> 2 pages)
     const prevButton = await screen.findByTestId('historico-prev', {}, { timeout: 5000 });
     const nextButton = await screen.findByTestId('historico-next', {}, { timeout: 5000 });
 

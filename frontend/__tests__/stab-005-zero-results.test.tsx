@@ -47,7 +47,8 @@ describe("ZeroResultsSuggestions", () => {
     expect(screen.getByTestId("zero-results-suggestions")).toBeInTheDocument();
     expect(screen.queryByTestId("source-total-message")).not.toBeInTheDocument();
     expect(screen.getByText(/1 estado/)).toBeInTheDocument();
-    expect(screen.getByText(/30 dias/)).toBeInTheDocument();
+    // Component no longer renders dayRange in the fallback message
+    expect(screen.getByText(/Tente ampliar o período/)).toBeInTheDocument();
   });
 
   it("renders filter stats breakdown when filterStats provided", () => {

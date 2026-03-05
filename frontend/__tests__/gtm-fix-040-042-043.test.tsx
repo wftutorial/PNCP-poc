@@ -184,7 +184,7 @@ describe("GTM-FIX-043 — SSE retry delay and initial error logging", () => {
     jest.useRealTimers();
   });
 
-  it("logs console.info (not console.warn) on the first SSE onerror", async () => {
+  it("logs console.warn on first SSE onerror and console.info for reconnect", async () => {
     // Import after mocking EventSource
     const { useSearchSSE } = await import("../hooks/useSearchSSE");
 
@@ -197,7 +197,7 @@ describe("GTM-FIX-043 — SSE retry delay and initial error logging", () => {
       await Promise.resolve();
     });
 
-    // Trigger first onerror (attempt 0 → should log info)
+    // Trigger first onerror (attempt 0)
     await act(async () => {
       const es = MockEventSource.instances[0];
       if (es?.onerror) {
@@ -205,23 +205,18 @@ describe("GTM-FIX-043 — SSE retry delay and initial error logging", () => {
       }
     });
 
-    // First failure must use console.info (expected async race condition)
-    expect(infoSpy).toHaveBeenCalledWith(
-      expect.stringContaining("SSE initial connection")
+    // STORY-367: First failure logs console.warn for connection failure
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("SSE connection failed")
     );
 
-    // Must NOT have logged a console.warn for the first failure
-    const firstFailureWarns = warnSpy.mock.calls.filter(
-      (args) =>
-        typeof args[0] === "string" &&
-        args[0].includes("SSE") &&
-        args[0].includes("attempt") &&
-        !args[0].includes("retry") // "retrying" in URL retry loop is separate
+    // Then console.info for reconnection scheduling
+    expect(infoSpy).toHaveBeenCalledWith(
+      expect.stringContaining("SSE reconnecting in")
     );
-    expect(firstFailureWarns).toHaveLength(0);
   });
 
-  it("retry delays array is [0, 3000, 6000] — first retry is immediate", async () => {
+  it("retry delays array is [1000, 2000, 4000] — first retry after 1s", async () => {
     const { useSearchSSE } = await import("../hooks/useSearchSSE");
 
     const { result } = renderHook(() =>
@@ -232,7 +227,7 @@ describe("GTM-FIX-043 — SSE retry delay and initial error logging", () => {
       await Promise.resolve();
     });
 
-    // Trigger first onerror — should schedule retry with 0ms delay
+    // Trigger first onerror — should schedule retry with 1000ms delay
     await act(async () => {
       const es = MockEventSource.instances[0];
       if (es?.onerror) {
@@ -240,14 +235,19 @@ describe("GTM-FIX-043 — SSE retry delay and initial error logging", () => {
       }
     });
 
-    // With 0ms delay, advancing 0ms should trigger a new connection
+    // With 1000ms delay, advancing 500ms should NOT trigger a new connection
     const instancesBefore = MockEventSource.instances.length;
     await act(async () => {
-      jest.advanceTimersByTime(0);
+      jest.advanceTimersByTime(500);
       await Promise.resolve();
     });
+    expect(MockEventSource.instances.length).toBe(instancesBefore);
 
-    // A new EventSource should have been created (immediate retry)
+    // After 1000ms total, a new EventSource should be created
+    await act(async () => {
+      jest.advanceTimersByTime(600);
+      await Promise.resolve();
+    });
     expect(MockEventSource.instances.length).toBeGreaterThan(instancesBefore);
   });
 });

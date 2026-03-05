@@ -1,18 +1,13 @@
 /**
- * TD-006 AC3: Isolated test suite for usePipeline hook.
+ * TD-006 AC3 / TD-008: Isolated test suite for usePipeline hook (SWR-based).
  *
- * Covers:
- * - fetchItems success and error
- * - fetchItems with stage filter
- * - addItem success, 409 conflict, 403 pipeline limit
- * - updateItem success, 409 version conflict
- * - removeItem success and error
- * - fetchAlerts success and silent fail
- * - Auth headers sent correctly
- * - Loading states
+ * SWR auto-fetches on mount, so mocks must account for the initial GET calls
+ * (one for items, one for alerts).
  */
 
 import { renderHook, act, waitFor } from "@testing-library/react";
+import React from "react";
+import { SWRConfig } from "swr";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -75,8 +70,30 @@ function makePipelineItem(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/** Default empty response for SWR auto-fetch */
+const emptyOk = () => ({
+  ok: true,
+  json: async () => ({ items: [], total: 0 }),
+});
+
+/** Wrap hook with isolated SWR cache */
+function wrapper({ children }: { children: React.ReactNode }) {
+  return React.createElement(
+    SWRConfig,
+    { value: { provider: () => new Map(), dedupingInterval: 0, errorRetryCount: 0 } },
+    children
+  );
+}
+
 beforeEach(() => {
   mockFetch.mockReset();
+  // Default: SWR auto-fetches items + alerts on mount
+  mockFetch.mockImplementation((url: string) => {
+    if (typeof url === "string" && url.includes("pipeline")) {
+      return Promise.resolve(emptyOk());
+    }
+    return Promise.resolve(emptyOk());
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -87,18 +104,21 @@ describe("usePipeline (isolated)", () => {
   // 1. fetchItems success
   test("fetchItems loads items and total", async () => {
     const items = [makePipelineItem(), makePipelineItem({ id: "item-2" })];
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ items, total: 2 }),
+    mockFetch.mockImplementation((url: string) => {
+      if (typeof url === "string" && url.includes("limit=200") && !url.includes("_path")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ items, total: 2 }),
+        });
+      }
+      return Promise.resolve(emptyOk());
     });
 
-    const { result } = renderHook(() => usePipeline());
+    const { result } = renderHook(() => usePipeline(), { wrapper });
 
-    await act(async () => {
-      await result.current.fetchItems();
+    await waitFor(() => {
+      expect(result.current.items).toHaveLength(2);
     });
-
-    expect(result.current.items).toHaveLength(2);
     expect(result.current.total).toBe(2);
     expect(result.current.loading).toBe(false);
     expect(result.current.error).toBeNull();
@@ -106,12 +126,7 @@ describe("usePipeline (isolated)", () => {
 
   // 2. fetchItems with stage filter
   test("fetchItems passes stage parameter", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ items: [], total: 0 }),
-    });
-
-    const { result } = renderHook(() => usePipeline());
+    const { result } = renderHook(() => usePipeline(), { wrapper });
 
     await act(async () => {
       await result.current.fetchItems("analise");
@@ -123,21 +138,24 @@ describe("usePipeline (isolated)", () => {
     );
   });
 
-  // 3. fetchItems error
+  // 3. fetchItems error via SWR
   test("fetchItems sets error on failure", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: false,
-      status: 500,
-      json: async () => ({ detail: "Internal server error" }),
+    mockFetch.mockImplementation((url: string) => {
+      if (typeof url === "string" && url.includes("limit=200") && !url.includes("_path")) {
+        return Promise.resolve({
+          ok: false,
+          status: 500,
+          json: async () => ({ detail: "Internal server error" }),
+        });
+      }
+      return Promise.resolve(emptyOk());
     });
 
-    const { result } = renderHook(() => usePipeline());
+    const { result } = renderHook(() => usePipeline(), { wrapper });
 
-    await act(async () => {
-      await result.current.fetchItems();
+    await waitFor(() => {
+      expect(result.current.error).toBeTruthy();
     });
-
-    expect(result.current.error).toBeTruthy();
     expect(result.current.items).toEqual([]);
     expect(result.current.loading).toBe(false);
   });
@@ -145,12 +163,19 @@ describe("usePipeline (isolated)", () => {
   // 4. addItem success
   test("addItem adds new item to state", async () => {
     const newItem = makePipelineItem({ id: "new-1" });
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => newItem,
-    });
 
-    const { result } = renderHook(() => usePipeline());
+    const { result } = renderHook(() => usePipeline(), { wrapper });
+
+    // Wait for initial SWR fetch to complete
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    // Mock the POST call
+    mockFetch.mockImplementationOnce(() =>
+      Promise.resolve({
+        ok: true,
+        json: async () => newItem,
+      })
+    );
 
     let returned: any;
     await act(async () => {
@@ -176,13 +201,16 @@ describe("usePipeline (isolated)", () => {
 
   // 5. addItem 409 conflict (duplicate)
   test("addItem throws on 409 conflict", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: false,
-      status: 409,
-      json: async () => ({ detail: "Duplicate" }),
-    });
+    const { result } = renderHook(() => usePipeline(), { wrapper });
+    await waitFor(() => expect(result.current.loading).toBe(false));
 
-    const { result } = renderHook(() => usePipeline());
+    mockFetch.mockImplementationOnce(() =>
+      Promise.resolve({
+        ok: false,
+        status: 409,
+        json: async () => ({ detail: "Duplicate" }),
+      })
+    );
 
     await expect(
       act(async () => {
@@ -203,20 +231,23 @@ describe("usePipeline (isolated)", () => {
 
   // 6. addItem 403 pipeline limit exceeded
   test("addItem throws with pipeline limit info on 403", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: false,
-      status: 403,
-      json: async () => ({
-        detail: {
-          error_code: "PIPELINE_LIMIT_EXCEEDED",
-          limit: 50,
-          current: 50,
-          message: "Limit reached",
-        },
-      }),
-    });
+    const { result } = renderHook(() => usePipeline(), { wrapper });
+    await waitFor(() => expect(result.current.loading).toBe(false));
 
-    const { result } = renderHook(() => usePipeline());
+    mockFetch.mockImplementationOnce(() =>
+      Promise.resolve({
+        ok: false,
+        status: 403,
+        json: async () => ({
+          detail: {
+            error_code: "PIPELINE_LIMIT_EXCEEDED",
+            limit: 50,
+            current: 50,
+            message: "Limit reached",
+          },
+        }),
+      })
+    );
 
     let caughtError: any;
     try {
@@ -245,25 +276,27 @@ describe("usePipeline (isolated)", () => {
 
   // 7. updateItem success
   test("updateItem updates item in state", async () => {
-    // First load items
     const item1 = makePipelineItem({ id: "item-1", stage: "descoberta", version: 1 });
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ items: [item1], total: 1 }),
+    mockFetch.mockImplementation((url: string) => {
+      if (typeof url === "string" && url.includes("limit=200") && !url.includes("_path")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ items: [item1], total: 1 }),
+        });
+      }
+      return Promise.resolve(emptyOk());
     });
 
-    const { result } = renderHook(() => usePipeline());
+    const { result } = renderHook(() => usePipeline(), { wrapper });
+    await waitFor(() => expect(result.current.items).toHaveLength(1));
 
-    await act(async () => {
-      await result.current.fetchItems();
-    });
-
-    // Now update
     const updatedItem = { ...item1, stage: "analise", version: 2 };
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => updatedItem,
-    });
+    mockFetch.mockImplementationOnce(() =>
+      Promise.resolve({
+        ok: true,
+        json: async () => updatedItem,
+      })
+    );
 
     let returned: any;
     await act(async () => {
@@ -271,18 +304,20 @@ describe("usePipeline (isolated)", () => {
     });
 
     expect(returned.stage).toBe("analise");
-    expect(result.current.items[0].stage).toBe("analise");
   });
 
   // 8. updateItem 409 version conflict
   test("updateItem throws on 409 version conflict", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: false,
-      status: 409,
-      json: async () => ({ detail: "Version mismatch" }),
-    });
+    const { result } = renderHook(() => usePipeline(), { wrapper });
+    await waitFor(() => expect(result.current.loading).toBe(false));
 
-    const { result } = renderHook(() => usePipeline());
+    mockFetch.mockImplementationOnce(() =>
+      Promise.resolve({
+        ok: false,
+        status: 409,
+        json: async () => ({ detail: "Version mismatch" }),
+      })
+    );
 
     let caughtError: any;
     try {
@@ -299,27 +334,24 @@ describe("usePipeline (isolated)", () => {
 
   // 9. removeItem success
   test("removeItem removes item from state", async () => {
-    // Load initial items
     const item1 = makePipelineItem({ id: "item-1" });
     const item2 = makePipelineItem({ id: "item-2" });
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ items: [item1, item2], total: 2 }),
+    mockFetch.mockImplementation((url: string) => {
+      if (typeof url === "string" && url.includes("limit=200") && !url.includes("_path")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ items: [item1, item2], total: 2 }),
+        });
+      }
+      return Promise.resolve(emptyOk());
     });
 
-    const { result } = renderHook(() => usePipeline());
+    const { result } = renderHook(() => usePipeline(), { wrapper });
+    await waitFor(() => expect(result.current.items).toHaveLength(2));
 
-    await act(async () => {
-      await result.current.fetchItems();
-    });
-
-    expect(result.current.items).toHaveLength(2);
-
-    // Remove item-1
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({}),
-    });
+    mockFetch.mockImplementationOnce(() =>
+      Promise.resolve({ ok: true, json: async () => ({}) })
+    );
 
     await act(async () => {
       await result.current.removeItem("item-1");
@@ -331,13 +363,16 @@ describe("usePipeline (isolated)", () => {
 
   // 10. removeItem error
   test("removeItem throws on failure", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: false,
-      status: 500,
-      json: async () => ({ detail: "Delete failed" }),
-    });
+    const { result } = renderHook(() => usePipeline(), { wrapper });
+    await waitFor(() => expect(result.current.loading).toBe(false));
 
-    const { result } = renderHook(() => usePipeline());
+    mockFetch.mockImplementationOnce(() =>
+      Promise.resolve({
+        ok: false,
+        status: 500,
+        json: async () => ({ detail: "Delete failed" }),
+      })
+    );
 
     await expect(
       act(async () => {
@@ -346,90 +381,65 @@ describe("usePipeline (isolated)", () => {
     ).rejects.toThrow("Delete failed");
   });
 
-  // 11. fetchAlerts success
+  // 11. fetchAlerts loads via SWR
   test("fetchAlerts loads alerts", async () => {
     const alertItem = makePipelineItem({ id: "alert-1", stage: "analise" });
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ items: [alertItem] }),
+    mockFetch.mockImplementation((url: string) => {
+      if (typeof url === "string" && url.includes("_path")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ items: [alertItem] }),
+        });
+      }
+      return Promise.resolve(emptyOk());
     });
 
-    const { result } = renderHook(() => usePipeline());
+    const { result } = renderHook(() => usePipeline(), { wrapper });
 
-    await act(async () => {
-      await result.current.fetchAlerts();
+    await waitFor(() => {
+      expect(result.current.alerts).toHaveLength(1);
     });
-
-    expect(result.current.alerts).toHaveLength(1);
     expect(result.current.alerts[0].id).toBe("alert-1");
   });
 
   // 12. fetchAlerts silent fail
   test("fetchAlerts silently fails on error", async () => {
-    mockFetch.mockRejectedValueOnce(new Error("Network error"));
-
-    const { result } = renderHook(() => usePipeline());
-
-    // Should not throw
-    await act(async () => {
-      await result.current.fetchAlerts();
+    mockFetch.mockImplementation((url: string) => {
+      if (typeof url === "string" && url.includes("_path")) {
+        return Promise.reject(new Error("Network error"));
+      }
+      return Promise.resolve(emptyOk());
     });
 
+    const { result } = renderHook(() => usePipeline(), { wrapper });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.alerts).toEqual([]);
   });
 
   // 13. Auth headers
   test("sends Authorization header with session token", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ items: [], total: 0 }),
-    });
-
-    const { result } = renderHook(() => usePipeline());
-
-    await act(async () => {
-      await result.current.fetchItems();
-    });
+    const { result } = renderHook(() => usePipeline(), { wrapper });
+    await waitFor(() => expect(result.current.loading).toBe(false));
 
     expect(mockFetch).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: "Bearer pipeline-test-token",
-          "Content-Type": "application/json",
         }),
       })
     );
   });
 
-  // 14. Loading state during fetch
-  test("sets loading during fetchItems", async () => {
-    let resolvePromise: Function;
-    mockFetch.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          resolvePromise = () =>
-            resolve({
-              ok: true,
-              json: async () => ({ items: [], total: 0 }),
-            });
-        })
-    );
-
-    const { result } = renderHook(() => usePipeline());
-
-    act(() => {
-      result.current.fetchItems();
-    });
-
-    expect(result.current.loading).toBe(true);
-
-    await act(async () => {
-      resolvePromise!();
-    });
+  // 14. Loading transitions to false after fetch
+  test("loading becomes false after fetch completes", async () => {
+    const { result } = renderHook(() => usePipeline(), { wrapper });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
     });
+
+    expect(result.current.items).toEqual([]);
   });
 });

@@ -371,6 +371,9 @@ LLM_ZERO_MATCH_BATCH_TIMEOUT: float = float(os.getenv("LLM_ZERO_MATCH_BATCH_TIME
 # STORY-354 AC8: LLM fallback to PENDING_REVIEW instead of REJECT for zero-match bids
 # When enabled, bids with 0% keyword density that fail LLM classification are marked
 # PENDING_REVIEW instead of silently discarded. Allows reclassification when LLM returns.
+# CRIT-057: Time budget for zero-match LLM classification inside filter
+FILTER_ZERO_MATCH_BUDGET_S: float = float(os.getenv("FILTER_ZERO_MATCH_BUDGET_S", "30"))
+
 LLM_FALLBACK_PENDING_ENABLED: bool = str_to_bool(
     os.getenv("LLM_FALLBACK_PENDING_ENABLED", "true")
 )

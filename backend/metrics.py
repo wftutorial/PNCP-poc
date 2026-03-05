@@ -583,6 +583,14 @@ PCP_STATUS_UNMAPPED_TOTAL = _create_counter(
     "PCP v2 records with unmapped status (treated as desconhecido)",
 )
 
+# CRIT-057 AC3: Duration of zero-match classification block (with budget awareness)
+FILTER_ZERO_MATCH_DURATION = _create_histogram(
+    "smartlic_filter_zero_match_duration_seconds",
+    "Total duration of zero-match LLM classification block",
+    labelnames=["mode", "budget_exceeded"],
+    buckets=[1, 2, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180],
+)
+
 FILTER_PASSTHROUGH_TOTAL = _create_counter(
     "smartlic_filter_passthrough_total",
     "Filter pass-through decisions for non-standard records",

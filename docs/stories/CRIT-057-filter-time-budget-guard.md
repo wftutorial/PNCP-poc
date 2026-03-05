@@ -3,7 +3,7 @@
 **Prioridade:** CRITICAL
 **Componente:** Backend — filter.py, config.py, search_pipeline.py
 **Origem:** Incidente 2026-03-05 — Busca Engenharia/7 UFs: filtro levou 157s (budget 90s), SSE AbortError em 208s
-**Status:** TODO
+**Status:** DONE
 **Dependencias:** Nenhuma (quick win independente)
 **Estimativa:** 1-2h
 
@@ -40,43 +40,43 @@ O guard pula LLM summary e viability, mas o dano ja foi feito — o filtro ja co
 ## Acceptance Criteria
 
 ### AC1: Time budget interno no loop zero-match
-- [ ] Adicionar `FILTER_ZERO_MATCH_BUDGET_S` em config.py (default: 30s, env var configuravel)
-- [ ] Dentro do loop de zero-match em `filter.py:3087+`, checar elapsed a cada batch completado
-- [ ] Se elapsed > budget: interromper loop, NÃO descartar itens restantes
-- [ ] Itens nao classificados devem ser marcados como `pending_review` (não rejeitados)
+- [x] Adicionar `FILTER_ZERO_MATCH_BUDGET_S` em config.py (default: 30s, env var configuravel)
+- [x] Dentro do loop de zero-match em `filter.py:3087+`, checar elapsed a cada batch completado
+- [x] Se elapsed > budget: interromper loop, NÃO descartar itens restantes
+- [x] Itens nao classificados devem ser marcados como `pending_review` (não rejeitados)
 
 ### AC2: Pending review fallback para itens nao classificados
-- [ ] Itens que nao passaram pelo LLM por budget timeout recebem:
+- [x] Itens que nao passaram pelo LLM por budget timeout recebem:
   - `_relevance_source = "pending_review"`
   - `_pending_review = True`
   - `_pending_review_reason = "zero_match_budget_exceeded"`
-- [ ] Contador: `stats["zero_match_budget_exceeded"] = N` (quantos ficaram sem classificar)
-- [ ] Log: `"[CRIT-057] Zero-match budget exceeded after {completed}/{total} items in {elapsed:.1f}s"`
+- [x] Contador: `stats["zero_match_budget_exceeded"] = N` (quantos ficaram sem classificar)
+- [x] Log: `"[CRIT-057] Zero-match budget exceeded after {completed}/{total} items in {elapsed:.1f}s"`
 
 ### AC3: Metrica de duracao do zero-match
-- [ ] Nova metrica Prometheus: `smartlic_filter_zero_match_duration_seconds` (Histogram)
-- [ ] Observar duracao total do bloco zero-match (batch ou individual)
-- [ ] Label: `mode=batch|individual`, `budget_exceeded=true|false`
+- [x] Nova metrica Prometheus: `smartlic_filter_zero_match_duration_seconds` (Histogram)
+- [x] Observar duracao total do bloco zero-match (batch ou individual)
+- [x] Label: `mode=batch|individual`, `budget_exceeded=true|false`
 
 ### AC4: Propagacao do budget para contexto de busca
-- [ ] `SearchContext.zero_match_budget_exceeded: bool = False`
-- [ ] `SearchContext.zero_match_classified: int = 0`
-- [ ] `SearchContext.zero_match_deferred: int = 0`
-- [ ] Incluir no `filter_summary` dict retornado ao frontend
+- [x] `SearchContext.zero_match_budget_exceeded: bool = False`
+- [x] `SearchContext.zero_match_classified: int = 0`
+- [x] `SearchContext.zero_match_deferred: int = 0`
+- [x] Incluir no `filter_summary` dict retornado ao frontend
 
 ### AC5: Frontend awareness (informativo)
-- [ ] Se `filter_summary.zero_match_budget_exceeded == true`, mostrar nota discreta:
+- [x] Se `filter_summary.zero_match_budget_exceeded == true`, mostrar nota discreta:
   "Algumas oportunidades estao em revisao e podem aparecer em breve"
-- [ ] Nao bloquear resultados — exibir o que ja foi classificado normalmente
+- [x] Nao bloquear resultados — exibir o que ja foi classificado normalmente
 
 ### AC6: Testes
-- [ ] `test_crit057_filter_time_budget.py` com no minimo:
+- [x] `test_crit057_filter_time_budget.py` com no minimo:
   - Budget de 0.1s + 100 itens zero-match → interrompe apos poucos batches
   - Itens restantes marcados como `pending_review` (nao rejeitados)
   - Metrica observada corretamente
   - SearchContext atualizado com contadores
   - Budget alto (999s) + 10 itens → classifica todos normalmente
-- [ ] Zero regressoes nos testes existentes de filter (306+)
+- [x] Zero regressoes nos testes existentes de filter (216 passed, 0 failed)
 
 ## Notas de Implementacao
 

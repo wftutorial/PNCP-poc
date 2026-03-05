@@ -402,10 +402,10 @@ describe("POST /api/buscar", () => {
 
     await POST(request);
 
-    // STAB-003 AC5: Verify setTimeout was called with 115s (115000ms)
+    // CRIT-060 AC1: Verify setTimeout was called with 180s (180000ms)
     expect(setTimeoutSpy).toHaveBeenCalledWith(
       expect.any(Function),
-      115 * 1000
+      180 * 1000
     );
 
     setTimeoutSpy.mockRestore();

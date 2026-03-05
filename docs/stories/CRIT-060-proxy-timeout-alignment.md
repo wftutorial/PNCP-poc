@@ -3,7 +3,7 @@
 **Prioridade:** HIGH
 **Componente:** Frontend — app/api/buscar/route.ts, app/api/buscar-progress/route.ts
 **Origem:** Incidente 2026-03-05 — SSE AbortError em 208s; proxy POST timeout 115s desalinhado com Railway 300s
-**Status:** TODO
+**Status:** DONE
 **Dependencias:** Nenhuma (fix isolado)
 **Estimativa:** 1h
 
@@ -33,17 +33,17 @@ Mas se o SSE cair (como aconteceu), o POST tambem ja foi abortado, e o usuario p
 ## Acceptance Criteria
 
 ### AC1: Ajustar timeout do proxy POST
-- [ ] `buscar/route.ts` AbortController: 115s → 180s
-- [ ] Comentario atualizado: `"Railway hard timeout: 300s; proxy stays below with margin"`
-- [ ] Manter STAB-003 AC5 label no comentario para rastreabilidade
+- [x] `buscar/route.ts` AbortController: 115s → 180s
+- [x] Comentario atualizado: `"Railway hard timeout: 300s; proxy stays below with margin"`
+- [x] Manter STAB-003 AC5 label no comentario para rastreabilidade
 
 ### AC2: Ajustar heartbeat interval para SSE
-- [ ] Verificar que heartbeat backend (`_SSE_HEARTBEAT_INTERVAL`) e menor que Railway idle timeout
-- [ ] Se Railway idle timeout e 60s e heartbeat e 15s → OK (CRIT-012 ja corrigiu)
-- [ ] Documentar a cadeia de timeouts no comentario do proxy SSE
+- [x] Verificar que heartbeat backend (`_SSE_HEARTBEAT_INTERVAL`) e menor que Railway idle timeout
+- [x] Se Railway idle timeout e 60s e heartbeat e 15s → OK (CRIT-012 ja corrigiu)
+- [x] Documentar a cadeia de timeouts no comentario do proxy SSE
 
 ### AC3: Documentar cadeia de timeouts atualizada
-- [ ] Atualizar CLAUDE.md secao "Timeout chain" com valores corretos:
+- [x] Atualizar CLAUDE.md secao "Timeout chain" com valores corretos:
   ```
   Railway(300s) > Gunicorn(180s) > Proxy POST(180s) > Pipeline(110s) >
   Consolidation(100s) > PerSource(80s) > PerUF(30s)
@@ -51,8 +51,8 @@ Mas se o SSE cair (como aconteceu), o POST tambem ja foi abortado, e o usuario p
   ```
 
 ### AC4: Teste
-- [ ] Atualizar `buscar.test.ts` se tiver assertion no timeout value
-- [ ] Nenhum teste novo necessario (e apenas mudanca de constante)
+- [x] Atualizar `buscar.test.ts` assertion no timeout value (115→180)
+- [x] Nenhum teste novo necessario (e apenas mudanca de constante)
 
 ## File List
 

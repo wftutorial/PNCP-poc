@@ -198,6 +198,14 @@ export default function SearchResults(props: SearchResultsProps) {
             </div>
           )}
 
+          {/* CRIT-057 AC5: Inform user when zero-match budget was exceeded */}
+          {result.filter_stats && (result.filter_stats.zero_match_budget_exceeded ?? 0) > 0 && (
+            <div className="px-4 py-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/40 rounded-card text-sm text-amber-800 dark:text-amber-200 flex items-center gap-2">
+              <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              <span>Algumas oportunidades estão em revisão e podem aparecer em breve</span>
+            </div>
+          )}
+
           <ResultsFilters ufsSelecionadas={ufsSelecionadas} searchMode={searchMode} sectorName={sectorName} />
 
           {(result.metadata || result.termos_utilizados || result.stopwords_removidas) && (

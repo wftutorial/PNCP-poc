@@ -10,6 +10,10 @@
  *           retry-once on BodyTimeoutError/terminated, Sentry breadcrumb.
  * CRIT-048: Controlled pipe with error recovery (AC6), upstream logging (AC2),
  *           MAX_SSE_RETRIES 1→2 (AC7).
+ * CRIT-060 AC2/AC3: Timeout chain documented:
+ *   Railway(300s) > Gunicorn(180s) > Proxy POST(180s) > Pipeline(110s) >
+ *   Consolidation(100s) > PerSource(80s) > PerUF(30s)
+ *   SSE: bodyTimeout(0) + heartbeat(15s) > Railway idle(60s)
  */
 
 import { NextRequest } from "next/server";

@@ -2036,7 +2036,14 @@ class SearchPipeline:
             llm_zero_match_aprovadas=ctx.filter_stats.get("llm_zero_match_aprovadas", 0),
             llm_zero_match_rejeitadas=ctx.filter_stats.get("llm_zero_match_rejeitadas", 0),
             llm_zero_match_skipped_short=ctx.filter_stats.get("llm_zero_match_skipped_short", 0),
+            # CRIT-057 AC4: Budget tracking
+            zero_match_budget_exceeded=ctx.filter_stats.get("zero_match_budget_exceeded", 0),
         )
+        # CRIT-057 AC4: Propagate budget status to SearchContext
+        if ctx.filter_stats.get("zero_match_budget_exceeded", 0) > 0:
+            ctx.zero_match_budget_exceeded = True
+            ctx.zero_match_classified = ctx.filter_stats.get("llm_zero_match_calls", 0)
+            ctx.zero_match_deferred = ctx.filter_stats.get("zero_match_budget_exceeded", 0)
 
         # Early return path: no results passed filters
         if not ctx.licitacoes_filtradas:

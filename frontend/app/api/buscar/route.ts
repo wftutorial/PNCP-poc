@@ -127,10 +127,11 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        // STAB-003 AC5: Proxy timeout reduced to 115s to stay below Railway's ~120s hard cutoff.
-        // Backend must respond within 115s; longer searches should use SSE/async mode.
+        // CRIT-060 AC1: Proxy timeout aligned with Railway hard timeout (300s).
+        // Railway(300s) > Gunicorn(180s) > Proxy POST(180s) > Pipeline(110s).
+        // STAB-003 AC5 label preserved for traceability.
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 115 * 1000);
+        const timeout = setTimeout(() => controller.abort(), 180 * 1000);
 
         response = await fetch(`${backendUrl}/v1/buscar`, {
           method: "POST",

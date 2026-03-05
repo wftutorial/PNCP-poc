@@ -85,6 +85,10 @@ class SearchContext:
     relaxation_level: Optional[int] = None
     # GTM-STAB-003 AC4: True when time budget forced simplified processing
     is_simplified: bool = False
+    # CRIT-057 AC4: Zero-match budget tracking
+    zero_match_budget_exceeded: bool = False
+    zero_match_classified: int = 0
+    zero_match_deferred: int = 0
     # GTM-STAB-005 AC3: Human-readable filter summary when results=0
     filter_summary: Optional[str] = None
 

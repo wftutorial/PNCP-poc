@@ -3060,6 +3060,10 @@ def aplicar_todos_filtros(
 
             _llm_total = len(zero_match_pool)
             _batch_used = False
+            # CRIT-057 AC1: Time budget for zero-match classification
+            from config import FILTER_ZERO_MATCH_BUDGET_S
+            stats["zero_match_budget_exceeded"] = 0
+            _zm_budget_hit = False
 
             # UX-402 AC2/AC6: Try batch mode first, fallback to individual on failure
             if LLM_ZERO_MATCH_BATCH_ENABLED:
@@ -3084,6 +3088,7 @@ def aplicar_todos_filtros(
 
                     # Run batches in parallel via ThreadPoolExecutor
                     all_results: list[tuple[int, list[dict]]] = []
+                    _completed_batch_indices: set = set()
                     with ThreadPoolExecutor(max_workers=3) as executor:
                         future_to_idx = {}
                         for idx, batch in enumerate(batches):
@@ -3106,7 +3111,37 @@ def aplicar_todos_filtros(
                             future_to_idx[fut] = idx
 
                         for future in as_completed(future_to_idx):
+                            # CRIT-057 AC1: Check time budget after each batch
+                            _zm_elapsed = _time_zm.time() - _batch_start
+                            if _zm_elapsed > FILTER_ZERO_MATCH_BUDGET_S:
+                                _zm_budget_hit = True
+                                # Cancel remaining futures
+                                for remaining_future in future_to_idx:
+                                    if future_to_idx[remaining_future] not in _completed_batch_indices:
+                                        remaining_future.cancel()
+                                # Mark unclassified items as pending_review
+                                for b_idx, b_group in enumerate(batch_lic_groups):
+                                    if b_idx not in _completed_batch_indices:
+                                        for lic_item in b_group:
+                                            lic_item["_relevance_source"] = "pending_review"
+                                            lic_item["_pending_review"] = True
+                                            lic_item["_pending_review_reason"] = "zero_match_budget_exceeded"
+                                            lic_item["_term_density"] = 0.0
+                                            lic_item["_matched_terms"] = []
+                                            lic_item["_confidence_score"] = 0
+                                            lic_item["_llm_evidence"] = []
+                                            resultado_pending_review.append(lic_item)
+                                            stats["zero_match_budget_exceeded"] += 1
+                                            stats["pending_review_count"] += 1
+                                logger.warning(
+                                    f"[CRIT-057] Zero-match budget exceeded after "
+                                    f"{len(_completed_batch_indices)}/{len(batches)} batches "
+                                    f"in {_zm_elapsed:.1f}s (budget={FILTER_ZERO_MATCH_BUDGET_S}s)"
+                                )
+                                break
+
                             idx = future_to_idx[future]
+                            _completed_batch_indices.add(idx)
                             batch_results = future.result()  # raises on error
                             all_results.append((idx, batch_results))
 
@@ -3124,10 +3159,21 @@ def aplicar_todos_filtros(
 
                     _batch_elapsed = _time_zm.time() - _batch_start
                     LLM_ZERO_MATCH_BATCH_DURATION.observe(_batch_elapsed)
+                    # CRIT-057 AC3: Observe zero-match duration with budget label
+                    try:
+                        from metrics import FILTER_ZERO_MATCH_DURATION
+                        FILTER_ZERO_MATCH_DURATION.labels(
+                            mode="batch",
+                            budget_exceeded=str(_zm_budget_hit).lower(),
+                        ).observe(_batch_elapsed)
+                    except Exception:
+                        pass
                     _batch_used = True
                     logger.info(
-                        f"UX-402: Batch mode completed {_llm_total} items in {_batch_elapsed:.2f}s "
-                        f"({len(batches)} batches)"
+                        f"UX-402: Batch mode completed {_llm_completed}/{_llm_total} items "
+                        f"in {_batch_elapsed:.2f}s ({len(batches)} batches)"
+                        + (f" [CRIT-057: budget hit, {stats['zero_match_budget_exceeded']} deferred]"
+                           if _zm_budget_hit else "")
                     )
 
                 except Exception as e:
@@ -3166,14 +3212,45 @@ def aplicar_todos_filtros(
                     return lic_item, result
 
                 _llm_completed = 0
+                _indiv_start = _time_zm.time()
+                _indiv_classified_ids: set = set()
                 with ThreadPoolExecutor(max_workers=10) as executor:
                     futures = {
                         executor.submit(_classify_one, lic): lic
                         for lic in zero_match_pool
                     }
                     for future in as_completed(futures):
+                        # CRIT-057 AC1: Check time budget after each individual result
+                        _zm_elapsed = _time_zm.time() - _indiv_start
+                        if _zm_elapsed > FILTER_ZERO_MATCH_BUDGET_S:
+                            _zm_budget_hit = True
+                            # Cancel remaining futures
+                            for remaining_future in futures:
+                                if id(futures[remaining_future]) not in _indiv_classified_ids:
+                                    remaining_future.cancel()
+                            # Mark unclassified items as pending_review
+                            for lic in zero_match_pool:
+                                if id(lic) not in _indiv_classified_ids:
+                                    lic["_relevance_source"] = "pending_review"
+                                    lic["_pending_review"] = True
+                                    lic["_pending_review_reason"] = "zero_match_budget_exceeded"
+                                    lic["_term_density"] = 0.0
+                                    lic["_matched_terms"] = []
+                                    lic["_confidence_score"] = 0
+                                    lic["_llm_evidence"] = []
+                                    resultado_pending_review.append(lic)
+                                    stats["zero_match_budget_exceeded"] += 1
+                                    stats["pending_review_count"] += 1
+                            logger.warning(
+                                f"[CRIT-057] Zero-match budget exceeded after "
+                                f"{_llm_completed}/{_llm_total} items "
+                                f"in {_zm_elapsed:.1f}s (budget={FILTER_ZERO_MATCH_BUDGET_S}s)"
+                            )
+                            break
+
                         _llm_completed += 1
                         stats["llm_zero_match_calls"] += 1
+                        _indiv_classified_ids.add(id(futures[future]))
                         if on_progress:
                             on_progress(_llm_completed, _llm_total, "llm_classify")
                         try:
@@ -3194,6 +3271,17 @@ def aplicar_todos_filtros(
                             else:
                                 stats["llm_zero_match_rejeitadas"] += 1
                                 logger.error(f"LLM zero_match: FAILED (REJECT fallback): {e}")
+
+                # CRIT-057 AC3: Observe zero-match duration (individual mode)
+                _indiv_elapsed = _time_zm.time() - _indiv_start
+                try:
+                    from metrics import FILTER_ZERO_MATCH_DURATION
+                    FILTER_ZERO_MATCH_DURATION.labels(
+                        mode="individual",
+                        budget_exceeded=str(_zm_budget_hit).lower(),
+                    ).observe(_indiv_elapsed)
+                except Exception:
+                    pass
 
             logger.info(
                 f"GTM-FIX-028 LLM Zero Match: "

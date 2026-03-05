@@ -786,6 +786,8 @@ class FilterStats(BaseModel):
     llm_zero_match_aprovadas: int = Field(default=0, description="Zero-match bids approved by LLM")
     llm_zero_match_rejeitadas: int = Field(default=0, description="Zero-match bids rejected by LLM")
     llm_zero_match_skipped_short: int = Field(default=0, description="Zero-match bids skipped due to objeto < 20 chars")
+    # CRIT-057 AC2/AC4: Zero-match budget tracking
+    zero_match_budget_exceeded: int = Field(default=0, description="Zero-match bids deferred due to time budget")
 
 
 class SanctionsSummarySchema(BaseModel):

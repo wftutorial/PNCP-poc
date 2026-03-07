@@ -17,11 +17,11 @@
 
 ## Critérios de Aceitação
 
-- [ ] AC1: `asyncio.Queue(maxsize=500)` no ProgressTracker
-- [ ] AC2: Drop-oldest quando queue cheia (backpressure)
-- [ ] AC3: Metric `smartlic_sse_queue_drops_total` para monitorar drops
-- [ ] AC4: Teste unitário valida comportamento com queue cheia
-- [ ] AC5: Zero regressions nos testes existentes
+- [x] AC1: `asyncio.Queue(maxsize=500)` no ProgressTracker
+- [x] AC2: Drop-oldest quando queue cheia (backpressure)
+- [x] AC3: Metric `smartlic_sse_queue_drops_total` para monitorar drops
+- [x] AC4: Teste unitário valida comportamento com queue cheia
+- [x] AC5: Zero regressions nos testes existentes
 
 ## Solução
 

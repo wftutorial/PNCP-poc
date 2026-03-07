@@ -86,7 +86,7 @@ class ProgressTracker:
     def __init__(self, search_id: str, uf_count: int, use_redis: bool = False):
         self.search_id = search_id
         self.uf_count = uf_count
-        self.queue: asyncio.Queue[ProgressEvent] = asyncio.Queue()
+        self.queue: asyncio.Queue[ProgressEvent] = asyncio.Queue(maxsize=500)
         self.created_at = time.time()
         self._ufs_completed = 0
         self._is_complete = False
@@ -175,6 +175,16 @@ class ProgressTracker:
         """
         self._event_counter += 1
         event_id = self._event_counter
+
+        # HARDEN-003 AC2: Drop oldest event when queue is full (backpressure)
+        if self.queue.full():
+            try:
+                self.queue.get_nowait()  # drop oldest
+            except asyncio.QueueEmpty:
+                pass
+            from metrics import SSE_QUEUE_DROPS
+            SSE_QUEUE_DROPS.inc()
+            logger.debug(f"SSE queue full for {self.search_id}, dropped oldest event")
 
         await self.queue.put(event)
 

@@ -209,6 +209,12 @@ RATE_LIMIT_EXCEEDED = _create_counter(
     labelnames=["endpoint", "limit_type"],
 )
 
+# HARDEN-003 AC3: SSE queue drops (backpressure when client disconnects)
+SSE_QUEUE_DROPS = _create_counter(
+    "smartlic_sse_queue_drops_total",
+    "SSE queue events dropped due to full queue (backpressure)",
+)
+
 # CRIT-012 AC8: SSE connection errors
 SSE_CONNECTION_ERRORS = _create_counter(
     "smartlic_sse_connection_errors_total",

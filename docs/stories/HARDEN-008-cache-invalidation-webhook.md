@@ -11,11 +11,11 @@ Stripe webhook atualiza `profiles.plan_type` mas não limpa `_plan_status_cache`
 
 ## Critérios de Aceitação
 
-- [ ] AC1: Webhook handler limpa `_plan_status_cache[user_id]` após update
-- [ ] AC2: `clear_plan_capabilities_cache()` chamado no webhook
-- [ ] AC3: Teste unitário valida invalidação no downgrade
-- [ ] AC4: Teste unitário valida invalidação no upgrade
-- [ ] AC5: Zero regressions
+- [x] AC1: Webhook handler limpa `_plan_status_cache[user_id]` após update
+- [x] AC2: `clear_plan_capabilities_cache()` chamado no webhook
+- [x] AC3: Teste unitário valida invalidação no downgrade
+- [x] AC4: Teste unitário valida invalidação no upgrade
+- [x] AC5: Zero regressions
 
 ## Arquivos Afetados
 

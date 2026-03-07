@@ -41,6 +41,7 @@ from fastapi import APIRouter, Request, HTTPException
 from supabase_client import get_supabase
 from cache import redis_cache
 from log_sanitizer import get_sanitized_logger
+from quota import invalidate_plan_status_cache, clear_plan_capabilities_cache
 
 logger = get_sanitized_logger(__name__)
 router = APIRouter()
@@ -353,6 +354,10 @@ async def _handle_checkout_session_completed(sb, event: stripe.Event):
         logger.warning(f"Cache invalidation failed on checkout activation (non-fatal): {e}")
         logger.info(f"Checkout activation complete: user_id={user_id}, plan={plan_id}")
 
+    # HARDEN-008: Invalidate in-memory plan caches to prevent stale quota
+    invalidate_plan_status_cache(user_id)
+    clear_plan_capabilities_cache()
+
     # STORY-323 AC6: Create partner referral on conversion
     _create_partner_referral_async(user_id, plan_result, session_data)
 
@@ -456,6 +461,10 @@ async def _handle_async_payment_succeeded(sb, event: stripe.Event):
     except Exception as e:
         logger.warning(f"Cache invalidation failed on async payment activation (non-fatal): {e}")
         logger.info(f"Async payment activation complete: user_id={user_id}, plan={plan_id}")
+
+    # HARDEN-008: Invalidate in-memory plan caches to prevent stale quota
+    invalidate_plan_status_cache(user_id)
+    clear_plan_capabilities_cache()
 
 
 async def _handle_async_payment_failed(sb, event: stripe.Event):
@@ -603,6 +612,10 @@ async def _handle_subscription_updated(sb, event: stripe.Event):
     except Exception as e:
         logger.warning(f"Cache invalidation failed (non-fatal): {e}")
 
+    # HARDEN-008: Invalidate in-memory plan caches to prevent stale quota
+    invalidate_plan_status_cache(user_id)
+    clear_plan_capabilities_cache()
+
 
 async def _handle_subscription_deleted(sb, event: stripe.Event):
     """
@@ -652,6 +665,10 @@ async def _handle_subscription_deleted(sb, event: stripe.Event):
     except Exception as e:
         logger.warning(f"Cache invalidation failed on deletion (non-fatal): {e}")
         logger.info(f"Subscription deactivated: user_id={user_id}")
+
+    # HARDEN-008: Invalidate in-memory plan caches to prevent stale quota
+    invalidate_plan_status_cache(user_id)
+    clear_plan_capabilities_cache()
 
     # STORY-323 AC7: Mark partner referral as churned
     _mark_partner_referral_churned(user_id)
@@ -732,6 +749,10 @@ async def _handle_invoice_payment_succeeded(sb, event: stripe.Event):
     except Exception as e:
         logger.warning(f"Cache invalidation failed on renewal (non-fatal): {e}")
         logger.info(f"Annual renewal processed: user_id={user_id}, new_expires={new_expires[:10]}")
+
+    # HARDEN-008: Invalidate in-memory plan caches to prevent stale quota
+    invalidate_plan_status_cache(user_id)
+    clear_plan_capabilities_cache()
 
     # STORY-225 AC12: Send payment confirmation email
     _send_payment_confirmation_email(sb, user_id, plan_id, invoice_data, new_expires)

@@ -65,6 +65,20 @@ def _get_cached_plan_status(user_id: str) -> Optional[str]:
         return plan_id
 
 
+def invalidate_plan_status_cache(user_id: str) -> None:
+    """Remove a specific user from the plan status cache.
+
+    HARDEN-008: Called by Stripe webhook handlers after plan_type updates
+    to prevent stale quota bypass (up to 5 min window).
+    """
+    with _plan_status_cache_lock:
+        removed = _plan_status_cache.pop(user_id, None)
+    if removed:
+        logger.info(f"Plan status cache invalidated for user {mask_user_id(user_id)}")
+    else:
+        logger.debug(f"Plan status cache miss (no entry) for user {mask_user_id(user_id)}")
+
+
 # ============================================================================
 # Plan Capabilities System
 # ============================================================================

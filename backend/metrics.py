@@ -215,6 +215,12 @@ SSE_QUEUE_DROPS = _create_counter(
     "SSE queue events dropped due to full queue (backpressure)",
 )
 
+# HARDEN-004 AC5: Periodic tracker cleanup count
+TRACKER_CLEANUP_COUNT = _create_counter(
+    "smartlic_tracker_cleanup_count",
+    "HARDEN-004: Number of stale trackers removed by periodic cleanup",
+)
+
 # CRIT-012 AC8: SSE connection errors
 SSE_CONNECTION_ERRORS = _create_counter(
     "smartlic_sse_connection_errors_total",

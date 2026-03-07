@@ -17,12 +17,12 @@
 
 ## Critérios de Aceitação
 
-- [ ] AC1: Background task `_periodic_tracker_cleanup()` roda a cada 120s
-- [ ] AC2: Task criada no lifespan handler do FastAPI
-- [ ] AC3: Task cancelada no shutdown
-- [ ] AC4: Cleanup inclui `_background_results` e `_active_background_tasks`
-- [ ] AC5: Metric `smartlic_tracker_cleanup_count` registra quantos trackers removidos
-- [ ] AC6: Teste unitário valida cleanup periódico
+- [x] AC1: Background task `_periodic_tracker_cleanup()` roda a cada 120s
+- [x] AC2: Task criada no lifespan handler do FastAPI
+- [x] AC3: Task cancelada no shutdown
+- [x] AC4: Cleanup inclui `_background_results` e `_active_background_tasks`
+- [x] AC5: Metric `smartlic_tracker_cleanup_count` registra quantos trackers removidos
+- [x] AC6: Teste unitário valida cleanup periódico
 
 ## Solução
 

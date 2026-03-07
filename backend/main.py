@@ -460,6 +460,10 @@ async def lifespan(app_instance: FastAPI):
     # STORY-362 AC7: Start periodic expired search results cleanup (every 6h)
     results_cleanup_task = await start_results_cleanup_task()
 
+    # HARDEN-004 AC2: Start periodic tracker cleanup (every 120s)
+    from progress import _periodic_tracker_cleanup
+    tracker_cleanup_task = asyncio.create_task(_periodic_tracker_cleanup())
+
     # P1.2: Start startup cache warm-up (top sector+UF combinations)
     warmup_task = await start_warmup_task()
 
@@ -623,6 +627,13 @@ async def lifespan(app_instance: FastAPI):
     results_cleanup_task.cancel()
     try:
         await results_cleanup_task
+    except (Exception, asyncio.CancelledError):
+        pass
+
+    # HARDEN-004 AC3: Cancel periodic tracker cleanup
+    tracker_cleanup_task.cancel()
+    try:
+        await tracker_cleanup_task
     except (Exception, asyncio.CancelledError):
         pass
 

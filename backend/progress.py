@@ -732,7 +732,7 @@ async def remove_tracker(search_id: str) -> None:
             logger.warning(f"Failed to remove tracker from Redis: {e}")
 
 
-def _cleanup_stale() -> None:
+def _cleanup_stale() -> int:
     """Remove trackers older than TTL (in-memory only).
 
     AC15: Don't remove trackers with active searches still processing in DB.
@@ -760,6 +760,23 @@ def _cleanup_stale() -> None:
         _active_trackers.pop(sid, None)
     if stale:
         logger.debug(f"Cleaned up {len(stale)} stale progress trackers")
+    return len(stale)
+
+
+_TRACKER_CLEANUP_INTERVAL = 120  # HARDEN-004 AC1: seconds between periodic cleanups
+
+
+async def _periodic_tracker_cleanup() -> None:
+    """HARDEN-004 AC1: Periodic cleanup of stale trackers every 120s."""
+    while True:
+        await asyncio.sleep(_TRACKER_CLEANUP_INTERVAL)
+        try:
+            cleaned = _cleanup_stale()
+            if cleaned > 0:
+                from metrics import TRACKER_CLEANUP_COUNT
+                TRACKER_CLEANUP_COUNT.inc(cleaned)
+        except Exception as e:
+            logger.warning(f"HARDEN-004: Tracker cleanup error: {e}")
 
 
 async def _store_tracker_metadata(search_id: str, uf_count: int) -> None:

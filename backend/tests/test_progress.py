@@ -566,6 +566,77 @@ class TestSSEReconnection:
             assert tracker._use_redis is True
 
 
+class TestHarden017PartialDataReplay:
+    """HARDEN-017: partial_data events excluded from replay history."""
+
+    @pytest.mark.asyncio
+    async def test_partial_data_excluded_from_event_history(self, mock_redis):
+        """AC2/AC4: partial_data events must NOT appear in _event_history."""
+        tracker = ProgressTracker("test-h017", uf_count=3, use_redis=False)
+
+        # Emit a normal event, then partial_data, then another normal event
+        await tracker.emit("fetching", 20, "Fetching...")
+        await tracker.emit_partial_data(
+            licitacoes=[{"id": "1", "titulo": "x" * 5000}],
+            batch_index=1,
+            ufs_completed=["SP"],
+            is_final=False,
+        )
+        await tracker.emit("filtering", 60, "Filtering...")
+
+        # All 3 events should be in queue (AC3: real-time SSE works)
+        assert tracker.queue.qsize() == 3
+
+        # But only 2 events in replay history (partial_data excluded)
+        assert len(tracker._event_history) == 2
+        stages_in_history = [data["stage"] for _, data in tracker._event_history]
+        assert "partial_data" not in stages_in_history
+        assert "fetching" in stages_in_history
+        assert "filtering" in stages_in_history
+
+    @pytest.mark.asyncio
+    async def test_partial_data_not_in_get_events_after(self, mock_redis):
+        """AC4: get_events_after() never returns partial_data."""
+        tracker = ProgressTracker("test-h017-replay", uf_count=2, use_redis=False)
+
+        await tracker.emit("connecting", 5, "Connecting...")
+        await tracker.emit_partial_data(
+            licitacoes=[{"id": "big"}],
+            batch_index=1,
+            ufs_completed=["RJ"],
+        )
+        await tracker.emit_complete()
+
+        replayed = tracker.get_events_after(0)
+        replayed_stages = [data["stage"] for _, data in replayed]
+        assert "partial_data" not in replayed_stages
+        assert "connecting" in replayed_stages
+        assert "complete" in replayed_stages
+
+    @pytest.mark.asyncio
+    async def test_replay_max_events_is_200(self, mock_redis):
+        """AC1: _REPLAY_MAX_EVENTS must be 200."""
+        from progress import _REPLAY_MAX_EVENTS
+        assert _REPLAY_MAX_EVENTS == 200
+
+    @pytest.mark.asyncio
+    async def test_partial_data_still_emitted_via_queue(self, mock_redis):
+        """AC3: partial_data events must still reach the queue for real-time SSE."""
+        tracker = ProgressTracker("test-h017-queue", uf_count=1, use_redis=False)
+
+        await tracker.emit_partial_data(
+            licitacoes=[{"id": "1"}, {"id": "2"}],
+            batch_index=1,
+            ufs_completed=["SP"],
+            is_final=True,
+        )
+
+        assert tracker.queue.qsize() == 1
+        event = await tracker.queue.get()
+        assert event.stage == "partial_data"
+        assert event.detail["total_items"] == 2
+
+
 class TestEdgeCases:
     """Additional edge case tests for robustness."""
 

@@ -38,7 +38,7 @@ _STREAM_EXPIRE_TTL = 300
 
 # STORY-297: SSE Last-Event-ID resumption constants
 _REPLAY_LIST_TTL = 600       # 10 minutes TTL for replay list
-_REPLAY_MAX_EVENTS = 1000    # Ring buffer max (AC5)
+_REPLAY_MAX_EVENTS = 200     # HARDEN-017 AC1: reduced from 1000 (ring buffer max)
 _REPLAY_KEY_PREFIX = "sse_events:"  # Redis list key prefix
 
 
@@ -187,6 +187,13 @@ class ProgressTracker:
             logger.debug(f"SSE queue full for {self.search_id}, dropped oldest event")
 
         await self.queue.put(event)
+
+        # HARDEN-017 AC2/AC3: partial_data events are emitted via queue (real-time SSE)
+        # but excluded from replay history (they are the largest events, 10KB+)
+        if event.stage == "partial_data":
+            if self._use_redis:
+                await self._publish_to_redis(event)
+            return
 
         event_dict = event.to_dict()
         self._event_history.append((event_id, event_dict))

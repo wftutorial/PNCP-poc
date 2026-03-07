@@ -11,16 +11,16 @@ SmartLic tem `/health` que retorna 200 sempre (process alive). Load balancer nã
 
 ## Critérios de Aceitação
 
-- [ ] AC1: `GET /health/live` — retorna 200 se processo alive (sem dependency checks)
-- [ ] AC2: `GET /health/ready` — retorna 200 se Redis + Supabase OK, 503 se não
-- [ ] AC3: Readiness checks com timeout individual (Redis 2s, Supabase 3s)
-- [ ] AC4: Response body inclui detalhes de cada check
-- [ ] AC5: `/health` existente mantido para backward compatibility
-- [ ] AC6: Railway healthcheck configurado para `/health/ready`
-- [ ] AC7: Teste unitário para cenários de dependência down
+- [x] AC1: `GET /health/live` — retorna 200 se processo alive (sem dependency checks)
+- [x] AC2: `GET /health/ready` — retorna 200 se Redis + Supabase OK, 503 se não
+- [x] AC3: Readiness checks com timeout individual (Redis 2s, Supabase 3s)
+- [x] AC4: Response body inclui detalhes de cada check
+- [x] AC5: `/health` existente mantido para backward compatibility
+- [x] AC6: Railway healthcheck configurado para `/health/ready`
+- [x] AC7: Teste unitário para cenários de dependência down
 
 ## Arquivos Afetados
 
-- `backend/routes/health.py` — novos endpoints
-- `backend/tests/test_health.py`
-- Railway config (healthcheck path)
+- `backend/main.py` — `/health/live` (new) + `/health/ready` (refactored)
+- `backend/tests/test_health_ready.py` — 15 tests (3 live + 7 ready + 2 timeout + 2 body + 1 compat)
+- `backend/railway.toml` — healthcheck already at `/health/ready` (unchanged)

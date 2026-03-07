@@ -43,7 +43,7 @@ from log_sanitizer import mask_email, mask_token, mask_user_id, mask_ip_address,
 # Load environment variables from .env file
 load_dotenv()
 
-from fastapi import FastAPI, Depends, Request
+from fastapi import FastAPI, Depends, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -231,7 +231,7 @@ def _before_send(event, hint):
 def _traces_sampler(sampling_context):
     """Exclude health checks from Sentry traces (GTM-RESILIENCE-E02 AC5)."""
     path = sampling_context.get("asgi_scope", {}).get("path", "")
-    if path in ("/health", "/v1/health", "/v1/health/cache"):
+    if path in ("/health", "/health/live", "/health/ready", "/v1/health", "/v1/health/cache"):
         return 0.0  # Never trace health checks
     return 0.1  # 10% for everything else
 
@@ -770,14 +770,14 @@ app.include_router(metrics_api_router, prefix="/v1")  # STORY-351: Discard rate
 
 # ============================================================================
 # TD-004: Legacy routes REMOVED — only /v1/ prefix remains.
-# Exceptions: /health, /health/ready, /docs, /redoc, /metrics, webhooks
+# Exceptions: /health, /health/live, /health/ready, /docs, /redoc, /metrics, webhooks
 # ============================================================================
 # Stripe webhook stays at root (Stripe callback URL already configured)
 app.include_router(stripe_webhook_router)
 
 # TD-004 AC4: Deprecation metric — tracks calls to removed legacy paths
 _ALLOWED_ROOT_PATHS = frozenset({
-    "/", "/health", "/health/ready", "/sources/health",
+    "/", "/health", "/health/live", "/health/ready", "/sources/health",
     "/docs", "/redoc", "/openapi.json", "/metrics",
     "/debug/pncp-test", "/v1/setores",
 })
@@ -933,24 +933,114 @@ async def root():
     }
 
 
-@app.get("/health/ready")
-async def health_ready():
-    """Lightweight liveness + readiness probe for Railway health checks.
+@app.get("/health/live")
+async def health_live():
+    """HARDEN-016 AC1: Pure liveness probe — process is alive, no dependency checks.
 
-    SLA-002: ALWAYS returns 200 if the process is running. Railway uses this
-    as healthcheckPath — returning non-200 or timing out causes Railway to
-    pull the container from the load balancer ("train not arrived" 404).
-
-    The `ready` field indicates whether full initialization completed,
-    but HTTP 200 is returned regardless to keep the container alive.
+    ALWAYS returns 200. Use this for container liveness checks where you only
+    need to know the process is running (not whether dependencies are reachable).
     """
     is_ready = _startup_time is not None
     uptime = round(time.monotonic() - _startup_time, 3) if is_ready else 0.0
     process_uptime = round(time.monotonic() - _process_start_time, 3)
     return {
+        "live": True,
         "ready": is_ready,
         "uptime_seconds": uptime,
         "process_uptime_seconds": process_uptime,
+    }
+
+
+# HARDEN-016 AC3: Individual dependency timeouts
+_READINESS_REDIS_TIMEOUT_S = 2.0
+_READINESS_SUPABASE_TIMEOUT_S = 3.0
+
+
+@app.get("/health/ready")
+async def health_ready(response: Response):
+    """HARDEN-016 AC2: Readiness probe — checks Redis + Supabase dependencies.
+
+    Returns 200 if ALL dependencies are reachable, 503 if ANY dependency is down.
+    AC3: Each check has an individual timeout (Redis 2s, Supabase 3s).
+    AC4: Response body includes per-check details (status, latency_ms, error).
+    AC6: Railway healthcheckPath points here.
+    """
+    checks: dict[str, dict] = {}
+    all_ok = True
+
+    # Redis check (AC3: 2s timeout)
+    redis_start = time.monotonic()
+    try:
+        from redis_pool import get_redis_pool
+        redis = await asyncio.wait_for(
+            get_redis_pool(),
+            timeout=_READINESS_REDIS_TIMEOUT_S,
+        )
+        if redis:
+            await asyncio.wait_for(
+                redis.ping(),
+                timeout=_READINESS_REDIS_TIMEOUT_S,
+            )
+            checks["redis"] = {
+                "status": "up",
+                "latency_ms": round((time.monotonic() - redis_start) * 1000),
+            }
+        else:
+            checks["redis"] = {"status": "down", "error": "pool unavailable"}
+            all_ok = False
+    except asyncio.TimeoutError:
+        checks["redis"] = {
+            "status": "down",
+            "error": "timeout",
+            "latency_ms": round((time.monotonic() - redis_start) * 1000),
+        }
+        all_ok = False
+    except Exception as e:
+        checks["redis"] = {
+            "status": "down",
+            "error": str(e)[:100],
+            "latency_ms": round((time.monotonic() - redis_start) * 1000),
+        }
+        all_ok = False
+
+    # Supabase check (AC3: 3s timeout)
+    sb_start = time.monotonic()
+    try:
+        from supabase_client import get_supabase, sb_execute
+        sb = get_supabase()
+        await asyncio.wait_for(
+            sb_execute(sb.table("profiles").select("id").limit(1)),
+            timeout=_READINESS_SUPABASE_TIMEOUT_S,
+        )
+        checks["supabase"] = {
+            "status": "up",
+            "latency_ms": round((time.monotonic() - sb_start) * 1000),
+        }
+    except asyncio.TimeoutError:
+        checks["supabase"] = {
+            "status": "down",
+            "error": "timeout",
+            "latency_ms": round((time.monotonic() - sb_start) * 1000),
+        }
+        all_ok = False
+    except Exception as e:
+        checks["supabase"] = {
+            "status": "down",
+            "error": str(e)[:100],
+            "latency_ms": round((time.monotonic() - sb_start) * 1000),
+        }
+        all_ok = False
+
+    is_ready = _startup_time is not None and all_ok
+    uptime = round(time.monotonic() - _startup_time, 3) if _startup_time else 0.0
+
+    if not is_ready:
+        response.status_code = 503
+
+    return {
+        "ready": is_ready,
+        "checks": checks,
+        "uptime_seconds": uptime,
     }
 
 

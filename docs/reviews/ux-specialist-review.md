@@ -1,332 +1,386 @@
 # UX Specialist Review
 
-**Reviewer:** @ux-design-expert (Pixel)
-**Date:** 2026-03-04
-**Documents Reviewed:** technical-debt-DRAFT.md v2.0, frontend-spec.md (Phase 3)
-**Supersedes:** ux-specialist-review.md v1 (2026-02-25)
+**Reviewer:** @ux-design-expert (Uma)
+**Date:** 2026-03-07
+**Documents Reviewed:** technical-debt-DRAFT.md v3.0 (2026-03-07), frontend-spec.md (Phase 3)
+**Supersedes:** ux-specialist-review.md v1 (2026-03-04, reviewer Pixel)
+**Codebase Snapshot:** branch `main`, commit `a1349fc2`
 
 ---
 
-## Review Summary
+## Validation Summary
 
-The DRAFT v2.0 accurately captures the vast majority of frontend/UX debts. Line counts and prop counts were validated against the codebase and are correct (SearchResults.tsx = 1,581 lines, ~55 top-level props; conta/page.tsx = 1,420 lines; useSearch.ts = 1,510 lines; buscar/page.tsx = 1,019 lines). The Sidebar SVG inline claim is confirmed (75 lines of SVG definitions in an `icons` object, no `aria-hidden` on any of them, though the nav and collapse button do have `aria-label`).
-
-**Key correction:** FE-18 (Blog/SEO pages are CSR) is **no longer accurate**. All blog pages (`/blog/*`, `/blog/programmatic/*`, `/blog/panorama/*`, `/blog/licitacoes/*`) and content pages (`/como-*`, `/licitacoes/*`) are already Server Components -- none have `"use client"`. The only CSR concern remaining is pages like `/planos` and `/features` which could benefit from SSG but are not SEO-critical programmatic pages. This significantly reduces the FE-18 severity.
-
-The design system gap (FE-27-32) is the most impactful cluster from a UX perspective. Inconsistent buttons, inputs, and cards create a "patchwork" visual impression that undermines trust -- particularly for B2G enterprise buyers who equate visual consistency with system reliability.
+| Status | Count |
+|--------|-------|
+| Confirmed (as-is) | 23 |
+| Severity Adjusted | 5 |
+| Removed (false positive) | 1 |
+| Added (new) | 6 |
+| **Total validated frontend debts** | **35** |
 
 ---
 
 ## Debitos Validados
 
-### 3.1 Arquitetura de Componentes
+All 30 FE-xxx items from the DRAFT v3.0 were reviewed against the codebase. Line counts, component counts, and claims were verified via grep/glob.
 
-| ID | Debito | Sev. Original | Sev. Ajustada | Horas | Prioridade | Impacto UX |
-|----|--------|---------------|---------------|-------|------------|------------|
-| FE-01 | Mega-componente SearchResults.tsx (1,581 linhas, ~55 props) | HIGH | **HIGH** | 14-18h | Tier 1 | **High** -- any bug fix in search results requires understanding 1,500+ lines |
-| FE-02 | Mega-componente conta/page.tsx (1,420 linhas) | HIGH | **MEDIUM** | 8-12h | Tier 1 | **Medium** -- account page is low-traffic, but MFA/password changes need isolation for security audit |
-| FE-03 | Mega-hook useSearch.ts (1,510 linhas) | HIGH | **HIGH** | 14-18h | Tier 1 | **High** -- core search logic; any regression here breaks the primary user flow |
-| FE-04 | buscar/page.tsx (1,019 linhas) | MEDIUM | **MEDIUM** | 6-8h | Tier 2 | **Medium** -- page orchestration is complex but functionally stable |
-| FE-05 | 3 diretorios de componentes sem convencao | MEDIUM | **MEDIUM** | 4-6h | Tier 2 | **Low** -- invisible to users but slows dev velocity |
-| FE-06 | Sem Button component compartilhado | MEDIUM | **HIGH** | 6-8h | Tier 1 | **High** -- visual inconsistency directly visible to users |
-| FE-07 | SVGs inline no Sidebar (75 linhas) | LOW | **LOW** | 2h | Tier 3 | **Low** -- functional, just uses Heroicons SVGs instead of lucide-react |
+### 4.1 Arquitetura e Estrutura (FE-001 through FE-007)
 
-### 3.2 State Management
+| ID | Debito | Original Sev | Adjusted Sev | Hours | UX Impact | Design Review? | Sprint |
+|----|--------|-------------|-------------|-------|-----------|---------------|--------|
+| FE-001 | Monolithic pages (conta 1420, alertas 1068, buscar 1057, dashboard 1037) | HIGH | **HIGH** | 20-28h | Performance + maintainability; re-renders on large pages degrade scroll/interaction responsiveness | Yes | Sprint 2 |
+| FE-002 | Zero `loading.tsx` streaming (44 pages) | HIGH | **HIGH** | 16h | Directly user-visible: blank screen on every route transition until JS hydrates. Core Web Vitals (FCP, LCP) impacted. | No | Sprint 1 |
+| FE-003 | No i18n framework (hardcoded PT) | HIGH | **LOW** | 40h | None for current users. Product is 100% BR, pre-revenue, no international plans. Domain terms (licitacao, edital, pregao) have no direct translations. Premature optimization. | No | Backlog |
+| FE-004 | 23/44 pages `"use client"` excessively | HIGH | **MEDIUM** | 24h | Indirect: inflated JS bundle increases TTI on slow connections. However, most CSR pages require client interactivity (forms, real-time data). Only 3-5 pages (planos, historico, ajuda) are candidates for partial SSR. | No | Sprint 2 |
+| FE-005 | 3 component directories without clear rule | HIGH | **MEDIUM** | 8h | Invisible to users but slows dev velocity. EmptyState duplication (FE-011) is a symptom. | No | Sprint 2 |
+| FE-006 | No global state management | HIGH | **HIGH** | 16h | Indirect but critical: prop drilling causes stale data display when auth/plan/quota changes propagate slowly. Users may see incorrect plan badges or quota counts. | No | Sprint 2 |
+| FE-007 | Inconsistent data fetching (SWR vs raw fetch vs fetchWithAuth) | HIGH | **HIGH** | 12h | Direct: no dedup means duplicate requests visible in slow network; no revalidation means stale data displayed; inconsistent error handling means some failures show nothing to user. | No | Sprint 2 |
 
-| ID | Debito | Sev. Original | Sev. Ajustada | Horas | Prioridade | Impacto UX |
-|----|--------|---------------|---------------|-------|------------|------------|
-| FE-08 | Sem data fetching library | HIGH | **HIGH** | 16-20h | Tier 1 | **High** -- no dedup, no cache, no revalidation = stale data shown to users |
-| FE-09 | 13+ localStorage keys sem abstracao | MEDIUM | **LOW** | 4-6h | Tier 3 | **Low** -- invisible to users unless storage quota exceeded |
-| FE-10 | Prop drilling SearchResults (55 props) | HIGH | **HIGH** | 6-8h | Tier 1 | **High** -- coupled to FE-01 decomposition; must resolve together |
-| FE-11 | Ref-based circular dependency workaround | MEDIUM | **LOW** | 2-3h | Tier 3 | **Low** -- code smell but functionally works |
+### 4.2 Qualidade de Codigo (FE-008 through FE-015)
 
-### 3.3 Acessibilidade
+| ID | Debito | Original Sev | Adjusted Sev | Hours | UX Impact | Design Review? | Sprint |
+|----|--------|-------------|-------------|-------|-----------|---------------|--------|
+| FE-008 | `any` types in 5+ production files | MEDIUM | **MEDIUM** | 2h | Indirect: type holes can lead to runtime errors visible to users. Verified 8 files with `: any` including pipeline, filters, analytics proxy. | No | Sprint 1 |
+| FE-009 | Console statements in production | MEDIUM | **MEDIUM** | 1h | Indirect: log noise can mask real errors in Railway logs, delaying incident response. Users dont see console.log but suffer from slower debugging. | No | Sprint 1 |
+| FE-010 | 28+ TODO/FIXME in blog content | MEDIUM | **LOW** | 8h | SEO impact only (internal linking incomplete). No UX impact for authenticated users. Blog is marketing, not core product. | No | Backlog |
+| FE-011 | EmptyState duplicated in 2 locations | MEDIUM | **MEDIUM** | 1h | Risk of visual inconsistency if one copy is updated and the other is not. | Yes | Sprint 1 |
+| FE-012 | Error boundary only in `/buscar` | MEDIUM | **HIGH** | 6h | Direct: dashboard, pipeline, historico, mensagens, alertas crash to root error page on any unhandled exception. Users lose all page context and must re-navigate. This is a resilience gap for the 5 most-used authenticated pages. | No | Sprint 1 |
+| FE-013 | SearchErrorBoundary uses hardcoded red | MEDIUM | **MEDIUM** | 1h | Inconsistent with "blue/yellow, never red" error guideline in error-messages.ts. Verified: 9 red class references in SearchErrorBoundary.tsx. Creates anxiety-inducing error display. | Yes | Sprint 1 |
+| FE-014 | No memoization in large pages | MEDIUM | **MEDIUM** | 4h | alertas has only 2 useMemo in 1068 lines; dashboard has 6 in 1037 lines. Complex filter/list UIs re-render unnecessarily causing jank on mid-range devices. | No | Sprint 2 |
+| FE-015 | `nul` file in app directory | MEDIUM | **LOW** | 0.5h | Zero UX impact. Codebase hygiene only. Confirmed file exists at `frontend/app/nul`. | No | Sprint 1 |
 
-| ID | Debito | Sev. Original | Sev. Ajustada | Horas | Prioridade | Impacto UX |
-|----|--------|---------------|---------------|-------|------------|------------|
-| FE-12 | Missing aria-labels em botoes icon-only | HIGH | **HIGH** | 1.5h | Tier 0 | **Critical** -- screen readers cannot navigate sidebar |
-| FE-13 | SVG icons sem aria-hidden (Sidebar) | MEDIUM | **MEDIUM** | 0.5h | Tier 0 | **Medium** -- screen readers announce meaningless SVG paths |
-| FE-14 | Viability scores usam cor sem alternativa textual | MEDIUM | **MEDIUM** | 2h | Tier 1 | **Medium** -- WCAG 1.4.1 violation |
-| FE-15 | Inputs com placeholder em vez de label | MEDIUM | **MEDIUM** | 2h | Tier 1 | **Medium** -- WCAG 1.3.1; affects form comprehension |
-| FE-16 | Sem hierarquia de headings auditada | LOW | **LOW** | 2h | Tier 3 | **Low** -- SEO impact minimal for authenticated pages |
-| FE-17 | Sem ARIA live regions para progresso de busca | MEDIUM | **MEDIUM** | 2h | Tier 2 | **Medium** -- search progress invisible to screen readers |
+### 4.3 Styling e Design System (FE-016 through FE-017)
 
-### 3.4 Performance
+| ID | Debito | Original Sev | Adjusted Sev | Hours | UX Impact | Design Review? | Sprint |
+|----|--------|-------------|-------------|-------|-----------|---------------|--------|
+| FE-016 | Mix CSS variables and raw Tailwind (~10 files) | MEDIUM | **MEDIUM** | 4h | Visual: some components use brand tokens, others use Tailwind defaults. Creates subtle color/spacing inconsistencies that undermine the "polished enterprise" feel needed for B2G buyers. | Yes | Sprint 2 |
+| FE-017 | global-error.tsx uses wrong brand colors | MEDIUM | **MEDIUM** | 0.5h | Verified: `#2563eb`/`#1e3a5f` (Tailwind blue-600/dark navy) instead of `#116dff`/`#0a1e3f` (SmartLic tokens). Users who hit a root error see off-brand colors. Low frequency but jarring. | Yes | Sprint 1 |
 
-| ID | Debito | Sev. Original | Sev. Ajustada | Horas | Prioridade | Impacto UX |
-|----|--------|---------------|---------------|-------|------------|------------|
-| FE-18 | Blog/SEO pages sao CSR | HIGH | **REMOVED** | 0h | N/A | **N/A** -- Verified: all blog/SEO pages are already Server Components (no `"use client"` found in `/blog/*`, `/licitacoes/*`, `/como-*`). Only `/planos` and `/features` are CSR, which is acceptable since they require client interactivity (Stripe, animations). |
-| FE-19 | Sem dynamic imports para Recharts, Shepherd, dnd-kit | MEDIUM | **MEDIUM** | 3-4h | Tier 2 | **Medium** -- affects initial load time on slow connections |
-| FE-20 | useIsMobile() hydration mismatch risk | LOW | **LOW** | 1h | Tier 3 | **Low** -- edge case, rarely visible |
-| FE-21 | Sem Lighthouse CI gated | MEDIUM | **MEDIUM** | 3h | Tier 2 | **Medium** -- performance regressions ship undetected |
+### 4.4 Performance (FE-018 through FE-020)
 
-### 3.5 Qualidade de Codigo
+| ID | Debito | Original Sev | Adjusted Sev | Hours | UX Impact | Design Review? | Sprint |
+|----|--------|-------------|-------------|-------|-----------|---------------|--------|
+| FE-018 | No `next/image` usage (only 4 files) | MEDIUM | **MEDIUM** | 8h | LCP impacted on image-heavy pages (landing, blog). Authenticated pages use mostly SVG icons (no impact). Prioritize landing page images for conversion. | No | Sprint 2 |
+| FE-019 | No code splitting for Recharts (~50KB), @dnd-kit (~15KB), Shepherd.js (~25KB) | MEDIUM | **MEDIUM** | 4h | Verified: only 2 files use `next/dynamic` (login, blog slug). Dashboard loads Recharts eagerly. Pipeline loads @dnd-kit eagerly. Every search page loads Shepherd.js even for returning users who dismissed the tour. | No | Sprint 2 |
+| FE-020 | 3 Google Fonts loaded globally | MEDIUM | **LOW** | 2h | DM Mono (data font) and Fahkwang (display font) used on few pages but loaded everywhere. Impact is ~50-100ms on slow 3G. Not a priority given target audience (enterprise, good connectivity). | No | Backlog |
 
-| ID | Debito | Sev. Original | Sev. Ajustada | Horas | Prioridade | Impacto UX |
-|----|--------|---------------|---------------|-------|------------|------------|
-| FE-22 | Hardcoded Portuguese strings (44 paginas) | HIGH | **LOW** | 24-40h | Tier 3 | **Low** -- product is 100% BR, pre-revenue, no international plans. i18n is premature optimization. |
-| FE-23 | eslint-disable react-hooks/exhaustive-deps | MEDIUM | **LOW** | 1h | Tier 3 | **Low** -- known exceptions, unlikely to cause bugs |
-| FE-24 | APP_NAME redeclarado em 5+ arquivos | LOW | **LOW** | 0.5h | Tier 3 | **Low** -- trivial |
-| FE-25 | Import patterns mistos para constantes | LOW | **LOW** | 1h | Tier 3 | **Low** -- dev convenience only |
-| FE-26 | Sem TypeScript paths | LOW | **LOW** | 1h | Tier 3 | **Low** -- dev convenience only |
+### 4.5 Acessibilidade (FE-021 through FE-024)
 
-### 3.6 Design System Ausente
+| ID | Debito | Original Sev | Adjusted Sev | Hours | UX Impact | Design Review? | Sprint |
+|----|--------|-------------|-------------|-------|-----------|---------------|--------|
+| FE-021 | No `aria-live` for search results | LOW | **MEDIUM** | 2h | WCAG 4.1.3 violation. Screen reader users cannot perceive when search results appear or update. Search is the primary user flow. Verified: `aria-live` exists in 15 non-test files but NOT in search results or search count areas. | No | Sprint 1 |
+| FE-022 | No focus trapping in modals | LOW | **MEDIUM** | 4h | WCAG 2.4.3 violation. Tab key escapes Dialog, DeepAnalysisModal, UpgradeModal, CancelSubscriptionModal. Verified: no `focus-trap` library installed, no custom focus trap implementation found. Keyboard-only users are blocked. | No | Sprint 1 |
+| FE-023 | Viability indicators color-only | LOW | **MEDIUM** | 2h | WCAG 1.4.1 violation. ViabilityBadge uses green/yellow/red without secondary indicators. ~8% of male users have some form of color vision deficiency. | Yes | Sprint 2 |
+| FE-024 | No keyboard shortcut documentation | LOW | **LOW** | 2h | Minor discoverability issue. `useKeyboardShortcuts` exists but no `?` help overlay. Low priority since shortcuts are convenience, not required. | No | Backlog |
 
-| ID | Debito | Sev. Original | Sev. Ajustada | Horas | Prioridade | Impacto UX |
-|----|--------|---------------|---------------|-------|------------|------------|
-| FE-27 | Sem Button component compartilhado | (from FE-06) | **HIGH** | 4-6h | Tier 1 | **High** -- most visible inconsistency |
-| FE-28 | Sem Input component compartilhado | - | **MEDIUM** | 3-4h | Tier 2 | **Medium** -- forms feel different across pages |
-| FE-29 | Sem Card component compartilhado | - | **MEDIUM** | 2-3h | Tier 2 | **Medium** -- visual rhythm varies |
-| FE-30 | Sem Badge component compartilhado | - | **MEDIUM** | 2-3h | Tier 2 | **Low** -- many badge variants are intentionally different |
-| FE-31 | Sem Storybook / documentacao visual | - | **LOW** | 8-12h | Tier 3 | **Low** -- useful for team scaling, not user-facing |
-| FE-32 | Design tokens parcialmente adotados | - | **MEDIUM** | 3-4h | Tier 2 | **Medium** -- mix of `var()`, Tailwind tokens, and raw hex undermines consistency |
+### 4.6 Testes e Features Faltantes (FE-025 through FE-030)
 
-### 3.7 UX Inconsistencies
-
-| ID | Debito | Sev. Original | Sev. Ajustada | Horas | Prioridade | Impacto UX |
-|----|--------|---------------|---------------|-------|------------|------------|
-| FE-33 | Search page header vs NavigationShell | MEDIUM | **MEDIUM** | 4-6h | Tier 2 | **Medium** -- user sees two different navigation paradigms |
-| FE-34 | 2 padroes empty state | LOW | **LOW** | 1h | Tier 3 | **Low** |
-| FE-35 | Toast vs inline banners sem criterio | LOW | **LOW** | 2h | Tier 3 | **Low** -- sonner toasts are more consistent than DRAFT implies |
-| FE-36 | Loading spinner size/style varia | LOW | **LOW** | 1h | Tier 3 | **Low** |
-| FE-37 | Date formatting inconsistente | LOW | **LOW** | 2h | Tier 3 | **Low** -- all show correct dates, just different APIs |
-| FE-38 | Currency formatting inconsistente | LOW | **LOW** | 1h | Tier 3 | **Low** -- formatCurrencyBR covers most cases |
+| ID | Debito | Original Sev | Adjusted Sev | Hours | UX Impact | Design Review? | Sprint |
+|----|--------|-------------|-------------|-------|-----------|---------------|--------|
+| FE-025 | No tests for navigation (NavigationShell, Sidebar, BottomNav, MobileDrawer) | LOW | **LOW** | 8h | Indirect: navigation renders on every authenticated page. Regression here is high-blast-radius but low-probability (rarely changed). | No | Backlog |
+| FE-026 | 14 quarantined tests (AuthProvider, ContaPage, LicitacaoCard) | LOW | **LOW** | 8h | Indirect: quarantined tests mean no regression protection for critical components. | No | Backlog |
+| FE-027 | No PWA/offline support | LOW | **LOW** | 8h | B2G users are office-based with reliable connectivity. PWA is a nice-to-have, not a need. useServiceWorker hook exists but is not wired up. | No | Backlog |
+| FE-028 | No structured form validation (no react-hook-form/zod) | LOW | **MEDIUM** | 16h | Direct: manual validation leads to inconsistent error messages, missing validation on edge cases, and no inline validation feedback. Affects signup, conta, onboarding, alertas forms. | Yes | Sprint 2 |
+| FE-029 | `react-simple-pull-to-refresh` installed but not used | LOW | **REMOVED** | 0h | **FALSE POSITIVE.** Verified: `PullToRefresh` is imported and actively used in `buscar/page.tsx` (line 6, rendered at line 695). The library wraps the entire search results area for mobile pull-to-refresh. This is NOT a dead dependency. | N/A | N/A |
+| FE-030 | No `<Suspense>` boundaries | LOW | **LOW** | 8h | Related to FE-002. Without Suspense, no streaming possible. However, Suspense without loading.tsx or async server components provides no benefit. Address as part of FE-002. | No | Sprint 2 |
 
 ---
 
 ## Debitos Adicionados
 
-| ID | Debito | Severidade | Horas | Impacto UX |
-|----|--------|-----------|-------|------------|
-| FE-39 | **Dashboard charts no mobile** -- Recharts Bar/Line/Pie have no mobile-specific layout (overflow, truncated labels, touch targets). Mentioned in frontend-spec.md responsive gaps but not in DRAFT. | MEDIUM | 4-6h | **Medium** -- dashboard is second most-visited page after search |
-| FE-40 | **Missing `next/dynamic` usage** -- Only `TotpVerificationScreen` and `BlogListClient` use dynamic imports across the entire app. Shepherd.js tour initialization on every search page load is unnecessary for returning users. | MEDIUM | 2h | **Medium** -- unnecessary JS parse time |
-| FE-41 | **No hook isolation tests** -- 19 custom hooks tested only indirectly through component tests. `useSearch` (1,510 lines) has zero isolated unit tests. Regression risk during decomposition. | MEDIUM | 8-12h | **Medium** -- indirect: decomposition of FE-03 without hook tests is high-risk |
-| FE-42 | **Alert creation form not mobile-optimized** -- Mentioned in frontend-spec responsive gaps (Section 7.6) but absent from DRAFT. Feature-gated behind SHIP flag, but will need fixing before ungating. | LOW | 3h | **Low** -- currently behind feature flag |
+These UX-relevant debts were identified during codebase validation but are absent from the DRAFT v3.0.
+
+| ID | Debito | Severidade | Hours | UX Impact | Design Review? | Sprint |
+|----|--------|-----------|-------|-----------|---------------|--------|
+| FE-031 | **Dashboard charts not mobile-optimized** -- Recharts Bar/Line/Pie have no mobile-specific layout. Labels overflow, touch targets are too small, charts lack horizontal scroll wrappers. Dashboard is the second most-visited authenticated page. | MEDIUM | 4-6h | Medium: mobile users see truncated/overlapping chart labels | Yes | Sprint 2 |
+| FE-032 | **No shared Button component** -- At least 15 distinct button styling patterns across the codebase (inline Tailwind classes). Primary, secondary, ghost, destructive, icon-only variants are all ad-hoc. Most visible inconsistency for users. | HIGH | 4-6h | High: every page has buttons; inconsistency undermines trust | Yes | Sprint 1 |
+| FE-033 | **No shared Input/Label component** -- Forms across signup, conta, onboarding, alertas use different input styling. Some use placeholder-as-label (WCAG 1.3.1 violation). | MEDIUM | 3-4h | Medium: forms feel different across pages | Yes | Sprint 2 |
+| FE-034 | **Missing icon-only button aria-labels** -- Some icon buttons (sidebar collapse, filter toggles, close buttons) lack aria-label. Screen readers announce only "button" with no context. | HIGH | 1.5h | High: accessibility blocker for screen reader users | No | Sprint 1 |
+| FE-035 | **No hook isolation tests for useSearch (1,510 lines)** -- Core search hook tested only indirectly through component tests. Decomposition (part of FE-001 resolution) without dedicated hook tests is high-risk for regressions. | MEDIUM | 8-12h | Medium: indirect, but regressions in search break the primary user flow | No | Sprint 2 |
+| FE-036 | **Design tokens partially adopted** -- Mix of CSS custom properties (`var(--brand-blue)`), Tailwind theme tokens, and raw hex values (`#116dff`) across the codebase. No enforcement mechanism. | MEDIUM | 3-4h | Medium: subtle color inconsistencies across pages | Yes | Sprint 2 |
+
+---
+
+## Severity Adjustments
+
+### FE-003 (i18n): HIGH -> LOW
+
+**Justification:** SmartLic is 100% Brazilian market, pre-revenue, with no international expansion plans. The Portuguese strings are heavily domain-specific (licitacao, edital, pregao, CNPJ, modalidade) -- terms that have no direct equivalents in other languages. Spending 40h on i18n infrastructure delivers zero value to current users. If international expansion becomes viable, string extraction can be done mechanically with `react-i18next` tooling. The 40h is better invested in design system primitives (FE-032, FE-033) which have immediate visual impact.
+
+### FE-012 (Error boundaries): MEDIUM -> HIGH
+
+**Justification:** Only `/buscar` has a component-level error boundary. The other 5 most-used authenticated pages (dashboard, pipeline, historico, mensagens, alertas) fall through to the root `error.tsx`. When an unhandled exception occurs on these pages, users lose all page context (scroll position, form state, filter selections) and must re-navigate. For a data-heavy B2G application where users configure complex filters and manage pipelines, this context loss is severe. Adding `error.tsx` files to each route group is low-effort (6h) and high-impact.
+
+### FE-021 (aria-live): LOW -> MEDIUM
+
+**Justification:** Search is the primary user flow. Screen reader users receive no announcement when results load, when the count changes, or when errors occur. This is a WCAG 4.1.3 (Status Messages) AA violation. Given that SmartLic targets government-adjacent enterprises (B2G), accessibility compliance may be contractually required by some buyers. The fix is 2h and non-breaking.
+
+### FE-022 (Focus trapping): LOW -> MEDIUM
+
+**Justification:** Same reasoning as FE-021. Focus escaping modals is a WCAG 2.4.3 violation that prevents keyboard-only users from completing critical flows (plan upgrade, subscription cancellation, deep analysis). The fix involves adding a focus trap library (e.g., `focus-trap-react`) and wrapping each modal. 4h, non-breaking.
+
+### FE-023 (Color-only indicators): LOW -> MEDIUM
+
+**Justification:** ViabilityBadge is rendered on every search result card. Color-only indicators (green = alta, yellow = media, red = baixa) exclude the ~8% of male users with color vision deficiency. Adding text labels or icons alongside color is a 2h fix with meaningful inclusivity improvement. WCAG 1.4.1 (Use of Color) AA violation.
 
 ---
 
 ## Respostas ao Architect
 
-### 1. FE-01/02/03: Decomposition Strategy
+### 1. Decomposicao de paginas (FE-001)
 
-**Recommended: Composition pattern + targeted Context for cross-cutting concerns.**
+`conta/page.tsx` at 1,420 lines should be decomposed into sub-routes rather than just sub-components:
 
-- **SearchResults.tsx (FE-01)**: Split into `ResultsToolbar` (sorting, export, counts), `ResultsList` (pagination + card iteration), `ResultCard` (single bid display), `ResultsLoadingState` (SSE progress, skeleton), `ResultsErrorState` (error display + retry). The ~55 props naturally group into 5-6 concerns. Each sub-component receives only its relevant props (5-10 each).
+```
+/conta              -> redirect to /conta/perfil
+/conta/perfil       -> Profile editing (CNAE, UFs, porte, contact)
+/conta/seguranca    -> Password change, MFA setup (already exists as separate page)
+/conta/plano        -> Plan info, billing, cancellation
+/conta/dados        -> GDPR export, account deletion
+```
 
-- **useSearch.ts (FE-03)**: Decompose into `useSearchExecution` (POST + response), `useSearchSSEIntegration` (SSE event routing), `useSearchRetry` (retry logic + countdown), `useSearchExport` (Excel + PDF + Google Sheets), `useSearchPersistence` (save/restore/partial cache). The orchestrating hook composes these and exposes a unified API.
+Use `conta/layout.tsx` for shared tab navigation. Each tab file stays under 400 lines.
 
-- **conta/page.tsx (FE-02)**: Convert to tab-based sub-routes: `/conta/perfil`, `/conta/seguranca`, `/conta/plano`, `/conta/notificacoes`. Each tab is a separate file. Use Next.js nested layouts (`conta/layout.tsx`) for shared header/navigation.
+For `buscar/page.tsx` (1,057 lines): this page is already well-decomposed into sub-components (39 components in `app/buscar/components/`). The remaining 1,057 lines are orchestration logic (state wiring, SSE handling, conditional rendering). Further decomposition should focus on extracting the orchestration into a custom hook (`useSearchOrchestration`) rather than creating more visual components.
 
-**Why not Context API for everything:** Context causes re-renders on any value change. For SearchResults, the data changes frequently (progress events, partial results). Composition with prop grouping is more performant. Use Context only for truly cross-cutting data (plan info, auth session, theme) that changes rarely.
+For `alertas/page.tsx` (1,068 lines): extract `AlertRuleEditor`, `AlertList`, `AlertPreview`, and `AlertPreferences` as separate components. The page should become a layout shell under 200 lines.
 
-**Why not Zustand:** Adds a dependency for a problem solvable with composition. Zustand is justified only if state needs to be shared across unrelated component trees (not the case here -- all consumers are within the search page tree).
+For `dashboard/page.tsx` (1,037 lines): extract each chart section (`SearchesOverTime`, `TopSectors`, `UfBreakdown`, `ValueDistribution`) into individual components. Use `React.lazy` for chart components since they import Recharts.
 
-### 2. FE-08: SWR vs TanStack Query
+**No wireframes exist.** Infer component boundaries from the existing UI: each visual "card" or "section" on the page is a natural component boundary. The current layout is functional and should be preserved during decomposition.
 
-**Recommended: SWR.**
+### 2. loading.tsx streaming (FE-002)
 
-Rationale:
-- SWR is lighter (~4KB vs ~13KB for TanStack Query) -- matters for a product already loading Framer Motion, Recharts, etc.
-- SWR's stale-while-revalidate model matches the existing backend cache pattern (the backend already implements SWR semantics)
-- SSE is orthogonal to data fetching -- the SSE hooks (`useSearchSSE`) manage real-time events, not data fetching. SWR would replace the `useState + useEffect + fetch` boilerplate in `usePlan`, `useAnalytics`, `usePipeline`, `useSearchFilters`, etc. -- none of which use SSE.
-- The core search `POST /buscar` is a mutation, not a query. SWR's `useSWRMutation` handles this cleanly.
-- TanStack Query's advanced features (infinite queries, structural sharing, query cancellation) are not needed here.
-- The team is small (1-2 devs). SWR's simpler API has lower learning curve.
+Priority order for `loading.tsx` files:
 
-**Migration path:** Start with read-only endpoints (`/v1/me`, `/v1/plans`, `/v1/analytics/*`, `/v1/pipeline`). These are pure GET requests with obvious cache keys. Then migrate `usePlan`, `useQuota`, `useAnalytics` hooks. Leave `useSearch` for last since it involves POST + SSE orchestration.
+1. **`/buscar`** (critical) -- Users wait the longest here (search takes 5-30s). A skeleton with search form + empty results grid gives immediate visual feedback.
+2. **`/dashboard`** (data-heavy) -- 4 chart sections + stats cards. Show skeleton cards with shimmer animation.
+3. **`/pipeline`** (interactive) -- Kanban columns skeleton. Users need to see the structure before drag targets.
+4. **`/(protected)/layout.tsx`** -- A shared loading state for the auth check (currently shows a centered spinner via inline code).
+5. **`/historico`** -- Simple list skeleton.
 
-### 3. FE-18: SSG Conversion
+Recommended skeleton approach: use the existing `shimmer` Tailwind animation (already defined in tailwind.config.ts) with `bg-gray-200 dark:bg-gray-700 animate-shimmer` blocks matching the page layout. This is 2-3h per page, mostly copy-paste with layout adjustments.
 
-**This question is now moot.** Verification confirmed all blog and SEO pages (`/blog/*`, `/licitacoes/*`, `/como-*`) are already Server Components. No `"use client"` directive found in any of these files. They use `Metadata` exports for SEO, `notFound()` for 404 handling, and import client sub-components where needed.
+### 3. Consolidacao de componentes (FE-005)
 
-The only remaining SSG opportunity is enabling `generateStaticParams` for programmatic pages that currently use dynamic rendering. This is a performance optimization (build-time generation vs request-time), not a CSR-to-SSR migration. Estimated effort: 2-3h. Priority: Tier 3 (low impact since pages already render server-side).
+Agreed with the proposed rule:
 
-### 4. FE-22: i18n Now vs Later
+- `components/` -- Shared/reusable primitives (Button, Input, Card, Badge, EmptyState, ErrorStateWithRetry, PageHeader). These have NO page-specific dependencies.
+- `app/components/` -- App-wide providers, layouts, and composed components that depend on auth/plan/routing context (AuthProvider, ThemeProvider, AppHeader, UpgradeModal, TrialBanner).
+- `app/buscar/components/` -- Search-feature-specific components (SearchForm, ResultCard, UfProgressGrid, FilterPanel). These depend on search types/hooks.
 
-**Recommended: Later. Do not invest in i18n now.**
+**Immediate action:** Delete `app/components/EmptyState.tsx` and keep `components/EmptyState.tsx` as canonical (it is the more general implementation). Update all imports.
 
-Justification:
-- Product is pre-revenue, 100% Brazilian market, no international expansion plans
-- 24-40h of effort for zero revenue impact
-- The Portuguese strings are domain-specific (licitacao, edital, pregao, CNPJ) -- even with i18n, these terms have no direct English/Spanish equivalents
-- If international expansion becomes viable, the i18n extraction can be done mechanically with tools like `react-i18next` + automated string extraction
-- **Better investment:** Spend those 24-40h on design system primitives (FE-27-32) which have direct UX impact
+### 4. Design tokens vs Tailwind raw (FE-016)
 
-**Downgrade severity from HIGH to LOW.**
+**Recommended: Extend Tailwind theme to map CSS custom properties.**
 
-### 5. FE-27-32: Design System Approach
+In `tailwind.config.ts`, add:
 
-**Recommended: Shadcn/ui.**
+```ts
+colors: {
+  brand: {
+    navy: 'var(--brand-navy)',
+    blue: 'var(--brand-blue)',
+  },
+  surface: {
+    0: 'var(--surface-0)',
+    1: 'var(--surface-1)',
+    2: 'var(--surface-2)',
+  },
+  ink: {
+    DEFAULT: 'var(--ink)',
+    secondary: 'var(--ink-secondary)',
+    muted: 'var(--ink-muted)',
+  },
+  // ... semantic colors
+}
+```
 
-Rationale:
-- **Shadcn/ui** copies components into your codebase (no dependency lock-in). This matches the project's pattern of owning all code.
-- Shadcn uses Radix primitives underneath for accessibility (aria, keyboard navigation, focus management) -- gets WCAG compliance for free.
-- Shadcn components use Tailwind CSS -- the project already uses Tailwind 3. CSS variable theming is already in place.
-- The project already has design tokens (`--brand-blue`, `--ink`, `--canvas`, etc.) -- Shadcn components can be styled to use these existing tokens.
-- Unlike building from scratch, Shadcn provides tested accessibility patterns (Button, Dialog, Select, Tooltip, etc.) out of the box.
+This gives developers Tailwind utility syntax (`bg-brand-blue`, `text-ink-secondary`) that resolves to CSS custom properties at runtime. Benefits:
+- Developers use familiar Tailwind syntax (no `bg-[var(--surface-1)]` awkwardness)
+- Dark mode switches automatically via CSS variable overrides
+- ESLint/IDE can validate class names
+- Single source of truth for all color values
+- Gradual migration: new code uses `bg-brand-blue`, old code keeps working
 
-**Implementation order:**
-1. `Button` (highest impact, used everywhere) -- 4-6h
-2. `Input` + `Label` (form consistency) -- 3-4h
-3. `Badge` (status, plan, viability, LLM indicators) -- 2-3h
-4. `Card` (result cards, dashboard cards, pipeline cards) -- 2-3h
-5. `Select` (replace custom selects) -- 2h
-6. `Dialog` (replace custom Dialog component) -- 2h
+This approach reduces inconsistency risk more than pure CSS variables (which require remembering exact variable names) while being less work than a full design system migration.
 
-**Why not Radix directly:** Radix is unstyled -- would require building all styling from scratch. Shadcn provides the Radix accessibility + Tailwind styling integration pre-built.
+### 5. Acessibilidade (FE-021/022/023) priority
 
-**Why not build from scratch:** The project already has 15+ button variants implemented inline. Building a design system from scratch would replicate this inconsistency problem. Shadcn provides a proven starting point.
+**Priority order for WCAG AA compliance:**
 
-### 6. FE-33: Unify Search Page Navigation
+1. **FE-022 Focus trapping in modals** (HIGH priority, 4h) -- This is a functional blocker. Keyboard-only users literally cannot complete flows that require modals (plan upgrade, subscription cancel, deep analysis). Install `focus-trap-react` and wrap Dialog, DeepAnalysisModal, UpgradeModal, CancelSubscriptionModal.
 
-**Recommended: Keep separate layout, but align visually.**
+2. **FE-034 (new) Missing aria-labels on icon-only buttons** (HIGH priority, 1.5h) -- Screen reader users cannot navigate the sidebar or interact with icon-only actions. Quick fix: add `aria-label` to all `<button>` elements that contain only an icon/SVG.
 
-The search page (`/buscar`) intentionally uses a full-width layout without the sidebar. This is correct UX for a data-intensive search interface:
-- Search results need maximum horizontal space (result cards, filter panels, progress grids)
-- The sidebar steals 240-280px that is better used for data display
-- Users spend 80%+ of their session on the search page -- it deserves an optimized layout
+3. **FE-021 aria-live for search results** (MEDIUM priority, 2h) -- Add `aria-live="polite"` to the results count area and `aria-live="assertive"` to error banners. Non-breaking change.
 
-**However**, the current implementation creates visual discontinuity:
-- The search page has its own header with logo, theme toggle, and user menu
-- Other pages use the sidebar with the same controls
-- Users navigating between search and dashboard experience a jarring layout shift
+4. **FE-023 Color-only viability indicators** (MEDIUM priority, 2h) -- Add text labels (Alta/Media/Baixa) alongside the color indicators. Already partially present in some views.
 
-**Solution:** Keep the full-width layout but add a thin top navigation bar that mirrors the sidebar's visual language (same colors, same user menu, same logo). Remove the custom header. This preserves horizontal space while maintaining visual continuity. The sidebar items (Dashboard, Pipeline, Historico, Conta) appear as horizontal links in the top bar.
+**None are hard blockers for launch**, but FE-022 (focus trapping) would be the most likely to be flagged in an accessibility audit. For B2G contracts, some government entities require WCAG AA compliance, making these fixes strategic rather than merely ethical.
 
-Estimated effort: 4-6h. Impact: Medium -- reduces cognitive load during navigation transitions.
+### 6. SWR vs fetch (FE-007)
 
-### 7. FE-10: Prop Drilling Solution
+**Recommended: Standardize on SWR.**
 
-**Recommended: Composition pattern (not Context, not Zustand).**
+SWR is already installed (v2.4.1) and used in 5 hooks. The migration path:
 
-The 55 props in SearchResults naturally cluster into 6 groups:
+**Phase 1 (immediate, 4h):** Migrate read-only endpoints that currently use raw `fetch()`:
+- `useQuota` -> `useSWR('/api/subscription-status')`
+- Analytics endpoints in dashboard -> `useSWR('/api/analytics?endpoint=...')`
+- Profile data -> `useSWR('/api/me')`
 
-1. **Loading state** (8 props): `loading`, `loadingStep`, `estimatedTime`, `stateCount`, `statesProcessed`, `onCancel`, `sseEvent`, `useRealProgress`
-2. **Error state** (4 props): `error`, `quotaError`, `retryCountdown`, `onRetryNow`
-3. **Results data** (6 props): `result`, `rawCount`, `ordenacao`, `onOrdenacaoChange`, `filterSummary`, `sourceStatuses`
-4. **Export actions** (6 props): `downloadLoading`, `downloadError`, `onDownload`, `onRegenerateExcel`, `onGeneratePdf`, `pdfLoading`
-5. **Plan/auth** (5 props): `planInfo`, `session`, `onShowUpgradeModal`, `isTrialExpired`, `trialPhase`
-6. **SSE/progress** (10 props): `ufStatuses`, `ufTotalFound`, `partialProgress`, `refreshAvailable`, etc.
+**Phase 2 (after FE-006 state management, 8h):** Migrate mutation-heavy endpoints:
+- Pipeline CRUD -> `useSWRMutation` for POST/PATCH/DELETE
+- Feedback submission -> `useSWRMutation`
+- Alert management -> `useSWRMutation`
 
-**Step 1:** Group props into typed objects (`LoadingState`, `ErrorState`, `ResultsData`, `ExportActions`, `PlanContext`, `ProgressState`). This reduces SearchResults from 55 props to 6-8 grouped props.
+**Leave alone:** The search POST + SSE flow. This is not a data fetching pattern -- it is a long-running operation with real-time progress updates. SSE hooks are purpose-built and should remain custom.
 
-**Step 2:** Pass grouped objects to sub-components after decomposition (FE-01). Each sub-component receives only its relevant group.
-
-**Step 3:** For truly cross-cutting data (plan info, auth session), use the existing `usePlan()` and `useAuth()` hooks inside sub-components rather than threading through props.
-
-This approach eliminates prop drilling without introducing new state management dependencies.
+**Why not TanStack Query:** SWR is 4KB vs TanStack Query 13KB. SWR's stale-while-revalidate model mirrors the backend cache semantics. The team is small (1-2 devs) and SWR's simpler API has lower cognitive overhead. TanStack Query's advanced features (infinite queries, structural sharing, query cancellation) are not needed.
 
 ---
 
 ## Recomendacoes de Design
 
-### 1. SearchResults Decomposition (FE-01 + FE-10)
+### Component Architecture Strategy
 
-The search results area should be split into a **compositional tree**:
+**Phase 1 -- Primitives (Sprint 1, 10-12h):**
+1. Install shadcn/ui CLI and initialize with existing Tailwind config + CSS custom properties
+2. Add `Button` component (6 variants: primary, secondary, ghost, destructive, outline, link; 3 sizes: sm, md, lg; states: loading, disabled, icon-only with required aria-label)
+3. Add `Input` + `Label` components (with proper label association, error state, disabled state)
+4. Consolidate EmptyState to single canonical version in `components/`
 
-```
-SearchResultsArea/
-  ResultsToolbar       -- sorting, count, export buttons
-  ResultsLoadingState  -- SSE progress, educational carousel, skeleton
-  ResultsErrorState    -- structured error, retry mechanism
-  ResultsList          -- pagination wrapper
-    ResultCard         -- single bid card (viability, feedback, actions)
-  ResultsEmptyState    -- zero results with suggestions
-  ResultsBanners       -- cache, degradation, truncation banners
-```
+**Phase 2 -- Compositions (Sprint 2, 12-16h):**
+1. Add `Card` component (with header, body, footer slots; hover state for clickable cards)
+2. Add `Badge` component (variants: status, plan, viability, source; standardize the 7+ inline badge implementations)
+3. Add `Dialog` component with built-in focus trapping (replaces current Dialog + adds WCAG compliance)
+4. Add `Select` component (replaces custom filter selects)
 
-Each component has 5-10 props maximum. The parent `SearchResultsArea` receives grouped prop objects and distributes to children.
+**Phase 3 -- Page-specific (Sprint 3, 8-12h):**
+1. `ResultCard` component using Card + Badge primitives
+2. `FormField` wrapper combining Input + Label + error message + helper text
+3. `DataTable` for admin pages
 
-### 2. Button Component (FE-27)
+### SSR Migration Plan
 
-Implement a `Button` component with these variants (observed from codebase audit):
+The blog/SEO pages are already Server Components (confirmed: no `"use client"` in `/blog/*`, `/licitacoes/*`, `/como-*`). The remaining SSR opportunity is limited:
 
-- **Primary**: Blue background (`--brand-blue`), white text. Used for CTAs.
-- **Secondary**: Transparent with border. Used for secondary actions.
-- **Ghost**: No background, no border. Used for toolbar actions.
-- **Destructive**: Red background. Used for delete/cancel.
-- **Sizes**: `sm` (32px height), `md` (40px), `lg` (48px).
-- **States**: Loading (spinner replaces text), disabled (opacity 50%).
-- **Icon-only**: Square button with `aria-label` required.
+1. **Quick win (2h):** Add `generateStaticParams` to programmatic blog pages (`/blog/licitacoes/[setor]/[uf]`, `/blog/panorama/[setor]`, `/blog/programmatic/[setor]/[uf]`) for build-time generation. These pages have a finite set of 15 sectors x 27 UFs.
 
-### 3. Account Page Sub-routes (FE-02)
+2. **Medium effort (8h):** Convert `/planos` to hybrid: server component for pricing table (data from Stripe), client component only for the toggle and checkout button. Reduces JS sent to client.
 
-Convert to tabbed navigation with sub-routes:
+3. **Not recommended now:** Converting `/historico`, `/alertas`, or `/dashboard` to server components. These pages have heavy client interactivity (filters, real-time updates, mutations) that would require significant refactoring for minimal bundle savings.
 
-```
-/conta              -> redirect to /conta/perfil
-/conta/perfil       -> Profile editing (CNAE, UFs, porte, atestados)
-/conta/seguranca    -> Password change, MFA setup
-/conta/plano        -> Plan info, billing, cancellation
-/conta/notificacoes -> Alert preferences (future)
-```
+### Design System Roadmap
 
-Use `conta/layout.tsx` for shared tab navigation. Each tab is <400 lines.
+| Week | Deliverable | Hours |
+|------|------------|-------|
+| Week 1 | shadcn/ui init + Button + Tailwind theme token mapping | 8h |
+| Week 2 | Input/Label + EmptyState consolidation + replace in 3 high-traffic pages | 6h |
+| Week 3 | Badge + Card + replace in search results | 6h |
+| Week 4 | Dialog with focus trap + replace all modals | 6h |
+| Week 5 | Select + FormField wrapper | 4h |
+| Week 6 | Audit and replace remaining raw Tailwind with design tokens | 4h |
 
----
+**Total: ~34h over 6 weeks.** This is not a big-bang rewrite -- each week produces a usable primitive that is immediately adopted in high-traffic pages.
 
-## Ordem de Resolucao Recomendada
+### Accessibility Remediation Plan
 
-From a UX perspective, ordered by user-visible impact per hour invested:
+**Tier 0 -- Legal Risk (Sprint 1, 5.5h):**
+- FE-034: Add aria-labels to all icon-only buttons (1.5h)
+- FE-022: Install focus-trap-react, wrap all 4+ modals (4h)
 
-### Phase 1: Quick Wins (1 sprint, ~12h)
+**Tier 1 -- WCAG AA Compliance (Sprint 1-2, 6h):**
+- FE-021: Add aria-live regions to search results area (2h)
+- FE-023: Add text labels alongside color indicators on ViabilityBadge (2h)
+- FE-033 (Input/Label): Ensure all form inputs have associated labels, not just placeholders (2h, combined with design system work)
 
-| # | ID | Horas | Justificativa |
-|---|-----|-------|--------------|
-| 1 | FE-12 + FE-13 | 2h | Accessibility compliance -- legal risk if reported |
-| 2 | FE-27 (Button) | 4-6h | Most visible inconsistency; foundation for all future work |
-| 3 | FE-07 | 2h | Replace inline SVGs with lucide-react + add aria-hidden |
-| 4 | FE-24 | 0.5h | APP_NAME consolidation (trivial) |
-| 5 | FE-14 | 2h | Viability scores need text alternatives |
+**Tier 2 -- Enhancement (Sprint 3+, 6h):**
+- Add aria-labels to SVG icons in sidebar (0.5h)
+- Audit heading hierarchy on authenticated pages (2h)
+- Add form validation announcements via aria-describedby (2h)
+- Document keyboard shortcuts via `?` help overlay (1.5h)
 
-### Phase 2: Structural (2 sprints, ~50-60h)
-
-| # | ID | Horas | Justificativa |
-|---|-----|-------|--------------|
-| 6 | FE-10 | 6-8h | Group props into typed objects (prerequisite for FE-01) |
-| 7 | FE-01 | 14-18h | Decompose SearchResults -- unblocks maintainability |
-| 8 | FE-03 | 14-18h | Decompose useSearch -- unblocks FE-08 |
-| 9 | FE-08 | 16-20h | Adopt SWR -- eliminates boilerplate, improves data freshness |
-
-### Phase 3: Polish (2-3 sprints, ~30-40h)
-
-| # | ID | Horas | Justificativa |
-|---|-----|-------|--------------|
-| 10 | FE-02 | 8-12h | Account page sub-routes |
-| 11 | FE-28-30 | 7-10h | Input, Card, Badge primitives |
-| 12 | FE-33 | 4-6h | Unify search page navigation |
-| 13 | FE-19 | 3-4h | Dynamic imports for heavy deps |
-| 14 | FE-17 | 2h | ARIA live regions for search progress |
-| 15 | FE-15 | 2h | Form labels on onboarding |
-| 16 | FE-32 | 3-4h | Consolidate design token usage |
-
-### Phase 4: Backlog (as capacity allows)
-
-FE-04, FE-05, FE-09, FE-11, FE-16, FE-20, FE-21, FE-22, FE-23, FE-25, FE-26, FE-31, FE-34-38, FE-39-42
+**Tier 3 -- Monitoring (ongoing):**
+- Enable Lighthouse CI accessibility audit in CI pipeline (part of existing `@lhci/cli` setup)
+- Add `@axe-core/playwright` checks to E2E tests (already in devDeps)
 
 ---
 
-## Quick Wins
+## Resolution Roadmap
 
-Items that take less than 2h but have measurable UX impact:
+### Sprint 1 (Week 1-2) -- Critical and Quick Wins
 
-| ID | Debito | Horas | Impact |
-|----|--------|-------|--------|
-| FE-12 + FE-13 | Add `aria-label` to icon-only buttons + `aria-hidden="true"` to sidebar SVGs | 1.5h | Screen reader users can navigate the app |
-| FE-24 | Consolidate APP_NAME to single import from `lib/constants` | 0.5h | Prevents branding inconsistency if name changes |
-| FE-07 | Replace sidebar `icons` object with lucide-react components | 1.5h | Consistency with rest of codebase + automatic aria-hidden |
-| FE-23 | Audit and document the 3 eslint-disable locations | 0.5h | Confirms intentionality, prevents future copy-paste |
+| # | ID | Debito | Hours | Justification |
+|---|-----|--------|-------|---------------|
+| 1 | FE-002 | Add `loading.tsx` to top 5 routes | 10-12h | Most impactful UX improvement: eliminates blank screen on navigation |
+| 2 | FE-012 | Add error boundaries to 5 authenticated pages | 6h | Prevents full context loss on unhandled exceptions |
+| 3 | FE-032 | Shared Button component (shadcn/ui) | 4-6h | Foundation for all future component work; most visible inconsistency |
+| 4 | FE-034 | Add aria-labels to icon-only buttons | 1.5h | Accessibility quick win; legal risk reduction |
+| 5 | FE-022 | Focus trapping in modals | 4h | WCAG 2.4.3 compliance; keyboard users unblocked |
+| 6 | FE-021 | aria-live for search results | 2h | WCAG 4.1.3 compliance; screen reader users |
+| 7 | FE-017 | Fix global-error.tsx brand colors | 0.5h | 5-minute fix with disproportionate brand impact |
+| 8 | FE-013 | Fix SearchErrorBoundary red -> blue/yellow | 1h | Aligns with error-messages.ts guidelines |
+| 9 | FE-015 | Delete `frontend/app/nul` | 0.5h | Trivial cleanup |
+| 10 | FE-009 | Remove console statements from production pages | 1h | Log hygiene |
+| 11 | FE-011 | Consolidate EmptyState (delete duplicate) | 1h | Remove confusion |
+
+**Sprint 1 total: ~32-36h**
+
+### Sprint 2 (Week 3-4) -- High Priority Structural
+
+| # | ID | Debito | Hours | Justification |
+|---|-----|--------|-------|---------------|
+| 12 | FE-001 | Decompose conta/page.tsx into sub-routes | 8-10h | Largest page; enables per-tab testing and loading |
+| 13 | FE-006 | Adopt SWR for read-only endpoints (Phase 1) | 8h | Eliminates stale data + duplicate requests |
+| 14 | FE-033 | Shared Input/Label component | 3-4h | Form consistency across pages |
+| 15 | FE-036 | Extend Tailwind theme with CSS custom properties | 3-4h | Enforcement mechanism for design tokens |
+| 16 | FE-023 | Add text labels to ViabilityBadge | 2h | WCAG 1.4.1 compliance |
+| 17 | FE-019 | Dynamic imports for Recharts, @dnd-kit, Shepherd.js | 4h | Bundle size reduction for initial load |
+| 18 | FE-014 | Add memoization to alertas and dashboard pages | 4h | Reduce re-render jank |
+| 19 | FE-031 | Mobile-optimize dashboard charts | 4-6h | Second most-visited page |
+| 20 | FE-028 | React-hook-form + zod for top 3 forms | 8h | Structured validation for signup, conta, onboarding |
+| 21 | FE-008 | Fix `any` types in 8 production files | 2h | Type safety |
+
+**Sprint 2 total: ~46-52h**
+
+### Backlog (Month 2+) -- Medium/Low Priority
+
+| ID | Debito | Hours | Notes |
+|----|--------|-------|-------|
+| FE-001 (remaining) | Decompose alertas, dashboard pages | 12-18h | After conta proves the pattern |
+| FE-004 | Reduce CSR on 3-5 candidate pages | 12-16h | Depends on FE-006 completion |
+| FE-005 | Enforce component directory conventions | 4h | Document rule + eslint import restriction |
+| FE-007 (Phase 2) | SWR for mutation endpoints | 8h | After Phase 1 SWR adoption |
+| FE-010 | Implement blog programmatic links | 8h | SEO value only |
+| FE-018 | Adopt next/image on landing/blog pages | 8h | LCP improvement for marketing pages |
+| FE-020 | Lazy-load Fahkwang and DM Mono fonts | 2h | Minor perf win |
+| FE-024 | Keyboard shortcut help overlay | 2h | Nice-to-have |
+| FE-025 | Navigation component tests | 8h | After component structure stabilizes |
+| FE-026 | Resolve 14 quarantined tests | 8h | Debug and re-enable or delete |
+| FE-027 | PWA/offline investigation | 8h | Only if user demand emerges |
+| FE-030 | Add Suspense boundaries (with FE-002) | 8h | After loading.tsx proves the pattern |
+| FE-003 | i18n framework | 40h | Only if international expansion is planned |
+| FE-035 | useSearch hook isolation tests | 8-12h | Before major search refactoring |
+
+**Backlog total: ~130-160h**
 
 ---
 
-## Adjusted Totals
+## Cross-Cutting Items Affecting UX
 
-| Metrica | DRAFT v2.0 | Adjusted |
-|---------|-----------|----------|
-| Total frontend debts | 38 | 37 (FE-18 removed) + 4 added = **41** |
-| FE-18 (Blog CSR) | 8-12h | **0h** (already fixed) |
-| FE-22 (i18n) severity | HIGH | **LOW** (pre-revenue, BR only) |
-| FE-02 severity | HIGH | **MEDIUM** (low-traffic page) |
-| Total frontend effort | ~155-205h | **~135-175h** (FE-18 removed, some estimates adjusted) |
+From Section 5 of the DRAFT, these cross-cutting debts have direct UX implications:
 
-**Note to @architect:** The dependency graph in Section 7 of the DRAFT is correct. FE-01 does require FE-10 first, and FE-03 should precede FE-08 adoption. I would add one dependency: FE-27 (Button) should precede FE-01 (SearchResults decomp) since the decomposed sub-components should use the shared Button from day one.
+| ID | Debito | UX Impact | Recommendation |
+|----|--------|-----------|---------------|
+| CROSS-002 | No API contract validation in CI | Frontend types can diverge from backend, causing silent breakage (undefined fields, wrong types). Users see broken pages with no error message. | HIGH priority. Add `openapi-diff` step to CI that fails on breaking changes. |
+| CROSS-004 | Naming inconsistency (BidIQ vs SmartLic) | If "BidIQ" leaks into user-visible text (unlikely but possible via error messages), it confuses users. | LOW priority but quick fix. |
+| SYS-008 | Frontend proxy route explosion (58 routes) | Indirect: each new backend endpoint requires a new proxy file, slowing feature delivery. No UX impact per se but increases time-to-user for new features. | MEDIUM priority. Create `createProxyRoute()` utility to reduce boilerplate. |
+| SYS-019 | No CDN for static assets | Direct: users in remote regions (Norte/Nordeste Brazil) experience slower page loads. Railway serves from a single region. | MEDIUM priority for conversion optimization. |
+
+---
+
+*End of UX Specialist Review v2.0*
+*Next step: Consolidation with @data-engineer and @qa reviews into FINAL technical debt assessment.*

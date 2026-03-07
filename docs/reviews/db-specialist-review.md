@@ -1,191 +1,321 @@
-# Database Specialist Review — v2.0
+# Database Specialist Review — v3.0
 
-**Reviewer:** @data-engineer (Dynamo)
-**Date:** 2026-03-04
-**Documents Reviewed:** technical-debt-DRAFT.md v2.0, DB-AUDIT.md, SCHEMA.md
-**Validation Method:** Cross-referenced against all 66 migration SQL files, SCHEMA.md table definitions, and `auth.role()` grep across entire migration codebase
-**Previous Review:** v1.0 (2026-02-25) -- this supersedes it entirely. All v1 Tier-1 blocking items (T1-01 through T1-04, MISSED-01/02) have been resolved in migrations 20260225100000 through 20260225150000.
+**Reviewer:** @data-engineer (Delta)
+**Date:** 2026-03-07
+**Scope:** Database debts from technical-debt-DRAFT.md v3.0 (DB-001 through DB-046)
+**Cross-references:** DB-AUDIT.md, all 76 migration files (66 Supabase + 10 backend), backend/oauth.py, backend/authorization.py
+**Supersedes:** v2.0 (2026-03-04, reviewed DRAFT v2.0 with old ID scheme C-01/H-01/etc.)
 
 ---
 
-## Review Summary
+## Validation Summary
 
-The DRAFT v2.0 accurately reflects the 23 database debts identified in DB-AUDIT.md. The consolidation is faithful to the original audit with correct severity assignments. However, my review uncovered **3 additional debts** missed during consolidation, and I recommend **2 severity adjustments**. The hour estimates in the DRAFT are broadly reasonable but some are underestimated given migration testing requirements in a production Supabase environment.
-
-**Key findings:**
-- The `auth.role() = 'service_role'` pattern is more widespread than documented (7 tables, not 4+1 as listed in H-04/05/06 + M-09)
-- `search_results_store` has the highest density of debt (4 overlapping issues in a single recent table created 2026-03-03)
-- The C-01 FK migration is safe to batch into a single migration file using the NOT VALID + VALIDATE pattern
-- `handle_new_user()` should remain as a trigger (not application layer) with an integration test guard
-- All v1 blocking items are resolved -- the current debt profile is structural/hardening, not blocking
+| Status | Count |
+|--------|-------|
+| Confirmed | 38 |
+| Severity Adjusted | 6 |
+| Removed (false positive) | 1 |
+| Added (new) | 4 |
 
 ---
 
 ## Debitos Validados
 
-| ID | Debito | Sev. Original | Sev. Ajustada | Horas | Prioridade DB | Notas |
-|----|--------|---------------|---------------|-------|---------------|-------|
-| C-01 | FK auth.users -> profiles (6 tabelas) | CRITICAL | CRITICAL | 6h | P1 | Confirmed via migration files. 6 tables verified: search_results_store (20260303100000), mfa_recovery_codes (20260228160000), mfa_recovery_attempts (20260228160000), organizations.owner_id (20260301100000), organization_members.user_id (20260301100000), partner_referrals.referred_user_id (20260301200000). All reference auth.users(id) directly. |
-| C-02 | health_checks + incidents: RLS enabled, zero policies | CRITICAL | **HIGH** | 2h | P2 | Migration 20260303200000 intentionally enabled RLS without policies. Migration comment: "Backend uses service_role which bypasses RLS -- no policies needed." Both tables are backend-only append logs with no user-identifiable data. Downgraded because: (1) service_role bypass is the intended and only access pattern, (2) no client-side status page is planned, (3) no PII exposure risk. |
-| H-01 | 3 duplicate updated_at trigger functions | HIGH | HIGH | 2h | P4 | Confirmed. `update_pipeline_updated_at()` (migration 025 line 57), `update_alert_preferences_updated_at()` (20260226100000 line 49), `update_alerts_updated_at()` (20260227100000 line 53) are identical copies. organizations table already correctly uses shared `update_updated_at()` (20260301100000 line 78). |
-| H-02 | search_results_store FK not standardized | HIGH | HIGH | 1h | P1 | Subsumed by C-01. Migration 20260303100000 line 6: `REFERENCES auth.users(id)` with no ON DELETE clause (defaults to NO ACTION). |
-| H-03 | No retention for search_results_store | HIGH | HIGH | 2h | P3 | Confirmed. `expires_at` column with default 24h exists but no pg_cron job. Existing pg_cron jobs (migration 022) only cover monthly_quota and stripe_webhook_events. |
-| H-04 | alert_preferences service_role policy uses auth.role() | HIGH | **MEDIUM** | 0.5h | P5 | Functionally equivalent. The `auth.role()` approach evaluates JWT role claim per-row, while `TO service_role` uses PostgreSQL native GRANT. Both work correctly in Supabase. Downgraded because: (1) all affected tables function correctly today, (2) the risk is theoretical (Supabase JWT structure change), (3) this is consistency debt, not security debt. |
-| H-05 | reconciliation_log service_role uses auth.role() | HIGH | MEDIUM | 0.5h | P5 | Same rationale as H-04. Migration 20260228140000 line 32. |
-| H-06 | organizations + org_members use auth.role() | HIGH | MEDIUM | 0.5h | P5 | Same rationale as H-04. Migration 20260301100000 lines 123, 193. |
-| M-01 | No updated_at on 11+ tables | MEDIUM | MEDIUM | 1.5h | P7 | Correct list in audit, but should only add to tables receiving UPDATEs: monthly_quota, mfa_recovery_codes (used_at UPDATE), partner_referrals (converted_at/churned_at). Skip append-only tables: search_state_transitions, stripe_webhook_events, trial_email_log, alert_sent_items, alert_runs, health_checks, incidents, mfa_recovery_attempts. Reduces from 11 to 3 tables. |
-| M-02 | No standalone index on search_state_transitions(created_at) | MEDIUM | MEDIUM | 0.5h | P6 | Correct. Current indexes are (search_id, created_at ASC) and (to_state, created_at). Neither efficiently serves `DELETE WHERE created_at < X`. |
-| M-03 | partner_referrals FK missing ON DELETE | MEDIUM | MEDIUM | 1h | P5 | Confirmed via migration 20260301200000 lines 31-32. Both `partner_id -> partners(id)` and `referred_user_id -> auth.users(id)` have no ON DELETE clause (NO ACTION default). |
-| M-04 | No retention for mfa_recovery_attempts | MEDIUM | MEDIUM | 1h | P6 | Confirmed. Append-only brute force tracking. Index `(user_id, attempted_at DESC)` exists for efficient cleanup. |
-| M-05 | No retention for alert_runs | MEDIUM | MEDIUM | 1h | P6 | Confirmed. Index `(run_at DESC)` exists for efficient cleanup. |
-| M-06 | No retention for alert_sent_items | MEDIUM | MEDIUM | 1h | P6 | Confirmed. Index `(sent_at)` exists. CASCADE from alerts handles orphans on alert deletion, but active alerts accumulate sent_items indefinitely. |
-| M-07 | handle_new_user() modified 7x -- regression risk | MEDIUM | MEDIUM | 3h | P7 | Confirmed 7 modifications: 001, 007, 016, 024, 027, 20260224000000, 20260225110000. Latest version (20260225110000) is correct and includes all 10 columns + ON CONFLICT. |
-| M-08 | Inconsistent CHECK constraint naming | MEDIUM | LOW | 1h | Backlog | Low practical impact. 4 naming patterns observed: `{table}_{column}_check`, `chk_{table}_{column}`, `{descriptive}_format`, `check_{descriptive}`. Only matters for future migrations. |
-| M-09 | classification_feedback admin policy uses auth.role() | MEDIUM | MEDIUM | 0.5h | P5 | Confirmed in backend/migrations/006_classification_feedback.sql line 48. |
-| L-01 | Redundant index alert_preferences.user_id | LOW | LOW | 0.5h | Backlog | UNIQUE constraint `alert_preferences_user_id_unique` creates implicit B-tree. Explicit `idx_alert_preferences_user_id` is redundant. Safe to drop. |
-| L-02 | Redundant index alert_sent_items.alert_id | LOW | LOW | 0.5h | Backlog | `idx_alert_sent_items_alert_id` (alert_id) is prefix of UNIQUE `idx_alert_sent_items_dedup` (alert_id, item_id). PostgreSQL uses leftmost columns. Safe to drop. |
-| L-03 | No COMMENT on newer tables | LOW | LOW | 1h | Backlog | Partially incorrect in audit. organizations and organization_members DO have table and column-level COMMENTs (migration 20260301100000 lines 33-56). health_checks and incidents have table-level COMMENTs but missing column-level ones. |
-| L-04 | plan_type CHECK rebuilt 6x | LOW | LOW | 2h | Backlog | See detailed answer below. |
-| L-05 | Stripe Price IDs hardcoded in migrations | LOW | LOW | 2h | Backlog | Confirmed in migrations 029, 20260226120000, 20260301300000. Blocks staging/dev environment setup but no production risk. |
-| L-06 | No composite index (user_id, expires_at) on search_results_store | LOW | LOW | 0.5h | Backlog | Separate indexes exist but composite benefits retention DELETE queries. |
+| ID | Debito | Original Sev | Adjusted Sev | Hours | Complexity | Sprint | Notes |
+|----|--------|-------------|-------------|-------|------------|--------|-------|
+| DB-001 | `classification_feedback` service_role policy uses `auth.role()` | CRITICAL | **HIGH** | 1 | simple | S1 | See Severity Adjustments. Confirmed in `backend/migrations/006_classification_feedback.sql` line 48. Migration `20260304200000` explicitly skipped this table (line 57: "Table does not exist yet"). |
+| DB-002 | `health_checks` and `incidents` no user-facing policies | HIGH | **MEDIUM** | 2 | simple | S2 | See Severity Adjustments. Both tables are backend-only (service_role access). No frontend reads these tables. Not a gap -- it is by-design. Add explicit `TO service_role` policies for self-documentation. |
+| DB-003 | OAuth tokens stored in plaintext | HIGH | **REMOVED** | 0 | n/a | n/a | **FALSE POSITIVE.** Verified: `backend/oauth.py` implements Fernet AES-256 encryption. Lines 84-131 define `encrypt_aes256()` and `decrypt_aes256()`. Lines 312-313 encrypt before storage. Lines 374-376 decrypt after retrieval. `ENCRYPTION_KEY` env var is required in production (lines 51-57). Tokens are NOT plaintext. |
+| DB-004 | `mfa_recovery_codes` no rate limiting in DB | HIGH | **MEDIUM** | 4 | medium | S2 | DB-level rate limiting is unusual. Application-layer rate limiting via `mfa_recovery_attempts` table is the standard pattern. The table exists and tracks attempts. Risk is only if service_role key is compromised (which has much bigger implications). |
+| DB-005 | `mfa_recovery_attempts` no SELECT for user | MEDIUM | MEDIUM | 1 | simple | Backlog | Intentional by design. Users should not see their own attempt history (information leakage risk). Document as accepted. |
+| DB-006 | `trial_email_log` no user-facing policies | MEDIUM | MEDIUM | 1 | simple | Backlog | Backend-only table. Correct by design. Document. |
+| DB-007 | `search_state_transitions` SELECT uses correlated subquery | MEDIUM | MEDIUM | 4 | medium | S2 | Confirmed. RLS policy joins to `search_sessions` via subquery. Index `idx_search_sessions_search_id` exists but per-row evaluation is still expensive at scale. Adding `user_id` column directly would be cleanest fix but requires backfill. |
+| DB-008 | Stripe Price IDs visible in `plans` (public read RLS) | MEDIUM | LOW | 0 | n/a | Backlog | Accepted risk. Price IDs are used client-side in Stripe Checkout by design. Not a secret. Document as accepted. |
+| DB-009 | `profiles.email` exposed via partner RLS cross-schema query | MEDIUM | MEDIUM | 2 | simple | S2 | Functionally correct. Could cache email in `partners.contact_email` comparison without cross-schema query. Low urgency. |
+| DB-010 | System cache warmer account with empty password | LOW | LOW | 1 | simple | S2 | Confirmed in migration `20260226110000`. Supabase Auth will not authenticate `encrypted_password = ''`. Add `banned_until = '2099-12-31'` for defense-in-depth. |
+| DB-011 | `handle_new_user()` trigger rewritten 7+ times | HIGH | MEDIUM | 4 | medium | S2 | Trigger has stabilized at version 20260225110000 (includes all 10 columns + ON CONFLICT DO NOTHING). The 7 rewrites were evolutionary, not indicative of ongoing instability. Fix is an integration test, not code changes. See Respostas Q7. |
+| DB-012 | `updated_at` functions inconsistent (`update_updated_at` vs `set_updated_at`) | HIGH | HIGH | 2 | simple | S1 | Confirmed. Two identical functions exist. Some triggers use one, some the other. Consolidate to `set_updated_at()` and drop `update_updated_at()`. Safe migration with zero data impact. |
+| DB-013 | `partner_referrals.referred_user_id` ON DELETE SET NULL vs NOT NULL | HIGH | HIGH | 1 | simple | S1 | Confirmed. Column is `NOT NULL` (migration 20260301200000 line 32) but FK is `ON DELETE SET NULL` (migration 20260304100000 line 77). DELETE of a profile WILL fail with constraint violation. Fix: `ALTER COLUMN referred_user_id DROP NOT NULL`. |
+| DB-014 | `plans.stripe_price_id` legacy column coexists with period-specific | MEDIUM | MEDIUM | 2 | simple | Backlog | Confirmed. Legacy column always set to monthly price. Low risk since all billing code uses period-specific columns. Deprecate after confirming zero references. |
+| DB-015 | `profiles.plan_type` vs `user_subscriptions.plan_id` duplication | MEDIUM | MEDIUM | 4 | medium | S2 | Intentional design decision (STORY-291 circuit breaker fail-open uses profiles.plan_type as fallback). Document as accepted. Add reconciliation cron job to detect drift. |
+| DB-016 | `search_sessions.status` no transition enforcement in DB | MEDIUM | MEDIUM | 4 | medium | Backlog | Application-layer enforcement via `search_state_manager.py` is working. DB triggers for state machines add complexity. Document valid transitions in a CHECK or COMMENT instead. |
+| DB-017 | Missing `NOT NULL` on several columns | LOW | LOW | 2 | simple | Backlog | Only 3 of the 5 listed columns receive UPDATEs. `google_sheets_exports.created_at` and `partners.created_at` should be `NOT NULL DEFAULT now()`. Others are append-only and less critical. |
+| DB-018 | `search_results_cache.priority` no CHECK constraint | LOW | LOW | 0.5 | simple | S2 | Quick win. `CHECK (priority IN ('hot', 'warm', 'cold'))`. |
+| DB-019 | `alert_runs.status` no CHECK constraint | LOW | LOW | 0.5 | simple | S2 | Quick win. Add CHECK with documented values including `'pending'`. |
+| DB-020 | Naming inconsistency in constraints | LOW | LOW | 1 | simple | Backlog | Cosmetic. Adopt `chk_{table}_{column}` convention for future migrations only. Not worth renaming existing constraints. |
+| DB-021 | `user_subscriptions.billing_period` constraint may conflict with legacy data | MEDIUM | LOW | 1 | simple | S2 | Migration 029 handles correctly with `DROP CONSTRAINT IF EXISTS` + `ADD CONSTRAINT`. Run validation query to confirm no orphan rows: `SELECT billing_period, count(*) FROM user_subscriptions GROUP BY 1`. |
+| DB-022 | `profiles.phone_whatsapp` CHECK doesn't validate Brazilian structure | MEDIUM | LOW | 1 | simple | Backlog | Application-level validation is more appropriate for phone numbers. DB CHECK for format (digits-only, length) is sufficient. Brazilian DDD validation changes over time. |
+| DB-023 | `search_results_cache` UNIQUE allows cross-user sharing with stale date range | LOW | LOW | 2 | medium | Backlog | `params_hash_global` is used for SWR warming. STORY-306 cache key includes dates in hash. Risk is theoretical and mitigated by TTL. |
+| DB-024 | `plan_billing_periods` no `updated_at` column | LOW | LOW | 1 | simple | Backlog | Confirmed. Add `updated_at TIMESTAMPTZ DEFAULT now()` + trigger. Low urgency since pricing changes are infrequent and tracked via git migrations. |
+| DB-025 | Dual migration directories (`supabase/` + `backend/`) | HIGH | HIGH | 8 | complex | S1 | Confirmed. 10 backend migrations exist outside Supabase CLI. Migration `20260305100000` explicitly acknowledges this caused missing RPCs. See Respostas Q1. |
+| DB-026 | Naming non-sequential (mix `001_` + timestamps + `027b_`) | HIGH | MEDIUM | 4 | medium | S1 | Ordering ambiguity exists but Supabase CLI sorts by filename prefix. `027b_` sorts after `027_`. Timestamps sort naturally. Risk is confusion for developers, not execution order failure. |
+| DB-027 | No down-migrations | MEDIUM | MEDIUM | 8 | complex | Backlog | Standard for Supabase projects. PITR (Point-in-Time Recovery) is the rollback mechanism. Down-migrations would be nice-to-have but not blocking. |
+| DB-028 | Some migrations not idempotent | MEDIUM | MEDIUM | 4 | medium | S2 | Confirmed. `008_add_billing_period.sql` would fail on re-run. Add `IF NOT EXISTS` guards. Low urgency since migrations run once. |
+| DB-029 | Hardcoded Stripe Price IDs in migrations | LOW | LOW | 2 | simple | Backlog | Blocks staging/dev environment setup but no production risk. |
+| DB-030 | `backend/migrations/` never applied via CLI | HIGH | HIGH | 4 | medium | S1 | Subsumed by DB-025. Same root cause, same fix. Consolidate. |
+| DB-031 | `search_results_cache.results` JSONB up to 2MB/row | HIGH | HIGH | 4 | medium | S2 | Confirmed. 2MB CHECK exists (migration 20260225150000). At 10 entries/user x 2MB = 20MB per user. Monitor with `pg_total_relation_size()`. |
+| DB-032 | `search_results_store.results` no retention enforcement | HIGH | HIGH | 4 | medium | S1 | Confirmed. `expires_at` default is 24h but no pg_cron cleanup job exists. Table accumulates dead data indefinitely. Direct cost impact on Supabase storage billing. |
+| DB-033 | `search_state_transitions` grows without limits | MEDIUM | MEDIUM | 2 | simple | S2 | Confirmed. 5-10 records per search. Add pg_cron: `DELETE WHERE created_at < NOW() - INTERVAL '30 days'`. |
+| DB-034 | `cleanup_search_cache_per_user()` trigger on every INSERT | MEDIUM | MEDIUM | 2 | simple | Backlog | Overhead is minimal at current scale. Add short-circuit check: `IF (SELECT count(*) FROM search_results_cache WHERE user_id = NEW.user_id) <= 10 THEN RETURN NEW; END IF;`. |
+| DB-035 | `get_conversations_with_unread_count()` correlated subquery | MEDIUM | MEDIUM | 2 | simple | Backlog | Rewrite as LEFT JOIN with GROUP BY for better performance. Low urgency -- messaging volume is low. |
+| DB-036 | No table partitioning for append-heavy tables | LOW | LOW | 8 | complex | Backlog | Not needed at POC/beta scale. Plan for `audit_events`, `search_state_transitions` when monthly row count exceeds 1M. |
+| DB-037 | `alert_sent_items` no retention cleanup | LOW | MEDIUM | 1 | simple | S2 | Upgraded because this table serves dedup. If rows accumulate without cleanup, dedup queries slow down. 180-day retention recommended. |
+| DB-038 | Migration `20260307100000` references non-existent tables | HIGH | HIGH | 2 | simple | S1 | Confirmed. `searches`, `pipeline`, `feedback` do not exist. Actual tables are `search_sessions`, `pipeline_items`, `classification_feedback`. Indexes were never created. |
+| DB-039 | `classification_feedback` no index on `user_id` | HIGH | HIGH | 1 | simple | S1 | Confirmed. Migration used wrong table name `feedback`. RLS `auth.uid() = user_id` causes full table scan. |
+| DB-040 | Redundant index on `alert_preferences` (plain + UNIQUE on user_id) | LOW | LOW | 0.5 | simple | S2 | Confirmed. UNIQUE creates implicit B-tree. Drop `idx_alert_preferences_user_id`. |
+| DB-041 | Redundant index on `trial_email_log` | LOW | LOW | 0.5 | simple | S2 | Composite unique `(user_id, email_number)` covers leading column queries. |
+| DB-042 | Missing composite index for admin inbox on `conversations` | LOW | LOW | 1 | simple | S2 | `(status, last_message_at DESC)` would benefit admin queries. Low volume currently. |
+| DB-043 | No documented disaster recovery procedure | HIGH | HIGH | 16 | complex | S1 | Confirmed. 76 migrations with no DR guide. Critical operational gap. See Respostas Q6. |
+| DB-044 | pg_cron jobs not in migrations (require superuser) | MEDIUM | MEDIUM | 4 | medium | Backlog | Correct -- pg_cron requires `CREATE EXTENSION` which needs superuser. Document manual setup steps. |
+| DB-045 | `stripe_webhook_events` idempotency depends on table | MEDIUM | MEDIUM | 2 | simple | S2 | 90-day retention (HARDEN-028) is appropriate. Events older than 90 days are unlikely to be retried by Stripe (72-hour max retry window). |
+| DB-046 | No audit trail DB-level for schema changes | LOW | LOW | 4 | medium | Backlog | Policy-based mitigation: "never modify schema via dashboard without migration." DDL event triggers are complex and not worth the overhead. |
 
 ---
 
 ## Debitos Adicionados
 
-### DA-01: partners and partner_referrals service_role policies use auth.role() (MEDIUM)
+### DB-NEW-01 (MEDIUM) — `search_results_store.results` JSONB has no size CHECK constraint
 
-**Missed in DRAFT consolidation.** Migration 20260301200000 lines 102-105 show both `partners_service_role` and `partner_referrals_service_role` policies use `USING (auth.role() = 'service_role')`. These were not included in the H-04/05/06 scope.
+Unlike `search_results_cache` which has a 2MB CHECK (migration 20260225150000), `search_results_store` stores the same JSONB payload structure with no size limit. A pathological multi-UF search could insert 5-10MB per row.
 
-**Complete auth.role() table list (7 tables, not 4+1 as documented):**
-1. alert_preferences (H-04)
-2. reconciliation_log (H-05)
-3. organizations (H-06)
-4. organization_members (H-06)
-5. classification_feedback (M-09)
-6. **partners** (MISSED)
-7. **partner_referrals** (MISSED)
+**Fix:**
+```sql
+ALTER TABLE search_results_store
+  ADD CONSTRAINT chk_store_results_max_size
+  CHECK (octet_length(results::text) <= 2097152);
+```
+**Hours:** 0.5 | **Complexity:** simple | **Sprint:** S1 (bundle with DB-032)
 
-Note: search_results_store also uses `auth.role()` but is covered separately in DA-02.
+### DB-NEW-02 (MEDIUM) — `partners` and `partner_referrals` service_role policies use `auth.role()`
 
-**Effort:** 0.5h (batch with H-04/05/06 migration)
-**Severity:** MEDIUM
-**Priority:** P5
+Migration 20260301200000 has `USING (auth.role() = 'service_role')` for both tables. These were not included in the `20260304200000` standardization migration and are not mentioned in any DB-xxx item.
 
-### DA-02: search_results_store service_role policy uses auth.role() (MEDIUM)
+**Hours:** 0.5 | **Complexity:** simple | **Sprint:** S2 (batch with DB-001 fix)
 
-Migration 20260303100000 line 26: `FOR ALL USING (auth.role() = 'service_role')`. This table was only flagged for C-01 (FK) and H-02 (missing CASCADE) in the DRAFT, not for the policy pattern inconsistency.
+### DB-NEW-03 (MEDIUM) — `health_checks` and `incidents` missing retention pg_cron job
 
-**Total auth.role() occurrences: 8 tables** (including search_results_store).
+Migration 20260228150000 table comment says "30-day retention" but no cleanup job was created. At 5-minute intervals, `health_checks` generates ~8,640 rows/month.
 
-**Effort:** Included in H-04/05/06 batch
-**Severity:** MEDIUM
+**Hours:** 1 | **Complexity:** simple | **Sprint:** S2
 
-### DA-03: health_checks and incidents missing retention pg_cron job (MEDIUM)
+### DB-NEW-04 (LOW) — No FK from `search_state_transitions.search_id` to `search_sessions.search_id`
 
-Migration 20260228150000 table comment says "30-day retention" but no pg_cron job was ever created. At health check frequency of every 5 minutes, this generates ~8,640 rows/month. The incidents table grows more slowly but has no cleanup either.
+Orphan transition records can exist for deleted sessions. However, `search_sessions.search_id` is nullable and has no UNIQUE constraint, making a proper FK impossible without schema changes. The RLS policy already filters orphans (they become invisible to users).
 
-**Effort:** 1h (batch with M-04/05/06)
-**Severity:** MEDIUM
-**Priority:** P6
+**Hours:** 4 (if adding UNIQUE + FK) | **Complexity:** medium | **Sprint:** Backlog
+
+---
+
+## Severity Adjustments
+
+### DB-001: CRITICAL -> HIGH
+
+**Justification:** The `auth.role() = 'service_role'` pattern is functionally equivalent to `TO service_role USING (true)` in all current Supabase PostgreSQL versions. Both work correctly. The difference is:
+- `auth.role()` evaluates the JWT `role` claim per-row (marginally slower)
+- `TO service_role` uses PostgreSQL's native GRANT-based role bypass (instant)
+
+This is a consistency and best-practice issue, not a security or data-loss risk. At the current table size (<10K rows), the performance difference is negligible. CRITICAL should be reserved for data loss or security breach scenarios.
+
+### DB-002: HIGH -> MEDIUM
+
+**Justification:** These tables are backend-only (service_role access). No frontend component reads them. The "absence of user-facing policies" is by design, not a gap. Service_role bypasses RLS entirely. Adding explicit `TO service_role` policies would improve self-documentation but is not urgent.
+
+### DB-003: HIGH -> REMOVED (false positive)
+
+**Justification:** Verified in `backend/oauth.py`: Fernet (AES-256 GCM) encryption is implemented and active. `encrypt_aes256()` is called before DB writes (line 312-313), `decrypt_aes256()` after reads (line 374). `ENCRYPTION_KEY` is required in production (raises RuntimeError if missing). Tokens are encrypted at rest.
+
+### DB-004: HIGH -> MEDIUM
+
+**Justification:** Database-level rate limiting is not an industry standard pattern. Application-layer rate limiting via the `mfa_recovery_attempts` table is the correct approach. The concern about "bypass via direct DB access" would require the service_role key to be compromised, which has far larger implications than MFA bypass.
+
+### DB-011: HIGH -> MEDIUM
+
+**Justification:** The trigger has stabilized at its current version (migration 20260225110000) for 10+ days with no further changes. The 7 historical rewrites represent evolutionary development, not ongoing instability. The fix is adding a test guard, not changing the trigger.
+
+### DB-026: HIGH -> MEDIUM
+
+**Justification:** Supabase CLI sorts migrations by filename prefix lexicographically. The mixed naming (`001_` through `033_` + timestamps) does sort correctly because: (1) numeric prefixes `001-033` sort before `20260220`, and (2) `027b_` sorts after `027_` correctly. The risk is developer confusion, not execution order failure.
+
+### DB-037: LOW -> MEDIUM
+
+**Justification:** `alert_sent_items` serves an active dedup function (preventing re-sending the same procurement item). Without cleanup, dedup queries scan an ever-growing table, degrading alert execution performance. 180-day retention is needed to balance dedup accuracy with performance.
 
 ---
 
 ## Respostas ao Architect
 
-### C-01: Can 6 FK migrations be done in one? Impact on existing data?
+### Q1: Estrategia de consolidacao de migracoes (DB-025/030)
 
-**Yes, a single migration file is feasible and recommended.** Use the NOT VALID + VALIDATE pattern established in migration 20260225120000.
+**Recommendation: Bridge migration with `CREATE OR REPLACE` / `IF NOT EXISTS` guards.**
 
-**Migration structure:**
+The 10 `backend/migrations/` files were applied to production via direct SQL execution (not Supabase CLI). The critical items have already been addressed:
+- `003_atomic_quota_increment.sql` -- restored by `20260305100000_restore_check_and_increment_quota.sql`
+- `006_classification_feedback.sql` -- table exists in production (confirmed by RLS policy functioning)
+- `007-010` -- `search_sessions` lifecycle columns exist (confirmed by search functionality working)
 
+**Consolidation approach:**
+
+1. **Verify production state first** (30 min):
 ```sql
--- Step 1: Drop old FK constraints (instant, metadata-only)
-ALTER TABLE search_results_store DROP CONSTRAINT IF EXISTS search_results_store_user_id_fkey;
-ALTER TABLE mfa_recovery_codes DROP CONSTRAINT IF EXISTS mfa_recovery_codes_user_id_fkey;
-ALTER TABLE mfa_recovery_attempts DROP CONSTRAINT IF EXISTS mfa_recovery_attempts_user_id_fkey;
--- organizations.owner_id, organization_members.user_id, partner_referrals.referred_user_id
+-- Run against production via Supabase SQL Editor or psql
+SELECT table_name FROM information_schema.tables
+WHERE table_schema = 'public'
+AND table_name IN ('classification_feedback', 'search_state_transitions');
 
--- Step 2: Add new FKs with NOT VALID (instant, no table scan)
-ALTER TABLE search_results_store
-  ADD CONSTRAINT search_results_store_user_id_fkey
-  FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE NOT VALID;
--- ... etc for all 6
-
--- Step 3: VALIDATE separately (concurrent reads OK, brief write lock)
-ALTER TABLE search_results_store VALIDATE CONSTRAINT search_results_store_user_id_fkey;
--- ... etc
+SELECT routine_name FROM information_schema.routines
+WHERE routine_schema = 'public'
+AND routine_name IN ('check_and_increment_quota_atomic', 'check_and_increment_quota');
 ```
 
-**Impact on existing data:**
-- **Pre-condition:** Every `user_id` in these 6 tables must exist in `profiles`. Since `handle_new_user()` creates a profiles row on every signup, this should hold true. Run validation query before migration:
-  ```sql
-  SELECT 'search_results_store' AS tbl, count(*) FROM search_results_store
-    WHERE user_id NOT IN (SELECT id FROM profiles)
-  UNION ALL
-  SELECT 'mfa_recovery_codes', count(*) FROM mfa_recovery_codes
-    WHERE user_id NOT IN (SELECT id FROM profiles)
-  -- ... repeat for all 6
-  ```
-- **Special cases:**
-  - `organizations.owner_id`: Currently ON DELETE RESTRICT. Keep RESTRICT but repoint to profiles(id). Semantic preserved: cannot delete user who owns an org.
-  - `partner_referrals.referred_user_id`: Currently NO ACTION. Recommend ON DELETE SET NULL to profiles(id) to preserve revenue share data when user is deleted.
-  - All others: ON DELETE CASCADE to profiles(id).
+2. **Create bridge migration** (2h): `20260308100000_consolidate_backend_migrations.sql`
+   - Wrap each backend migration's content in `IF NOT EXISTS` / `CREATE OR REPLACE`
+   - Add verification queries at the end
+   - Mark `backend/migrations/` as deprecated with a README
 
-**Downtime:** Zero. NOT VALID avoids full table scan. VALIDATE takes a brief ShareUpdateExclusive lock per table (allows reads, briefly blocks writes). All 6 tables are small (<1000 rows at current scale).
+3. **Do NOT move files** -- moving backend migrations into `supabase/migrations/` would create duplicate migration content (since the production state already has these objects). Instead, the bridge migration ensures a fresh `supabase db push` recreates everything.
 
-**Estimated time:** 4-6h (writing + staging test + verification queries + production deploy)
+4. **Add `backend/migrations/DEPRECATED.md`** explaining these were consolidated into Supabase migrations as of the bridge migration timestamp.
 
-### C-02: Are health_checks/incidents service_role only?
+**Hours:** 4h total (verification + bridge migration + testing + documentation)
 
-**Yes, confirmed.** Both tables are written and read exclusively by backend health monitoring code using the service_role Supabase client. Verified:
-- `health_checks`: Created by STORY-316 AC5 (migration 20260228150000). Used by `health.py` for periodic monitoring results.
-- `incidents`: Created by STORY-316 AC9 (migration 20260228150001). Used for automated incident tracking.
+### Q2: Validacao de indices em producao (DB-038/039)
 
-No frontend component reads these tables directly. No public status page feature exists or is planned.
+**Yes, run the production query.** The migration `20260307100000` used wrong table names, so those indexes were never created.
 
-**Recommendation:** Add explicit `FOR ALL TO service_role USING (true) WITH CHECK (true)` policies for defense-in-depth. This makes the access pattern self-documenting and immune to Supabase configuration changes. Do NOT add user-facing policies unless a public status page feature is built.
+**Validation query:**
+```sql
+-- Check which RLS-supporting indexes actually exist
+SELECT schemaname, tablename, indexname
+FROM pg_indexes
+WHERE schemaname = 'public'
+AND tablename IN (
+  'classification_feedback', 'search_sessions', 'pipeline_items',
+  'search_results_store', 'search_results_cache'
+)
+AND indexname LIKE '%user_id%'
+ORDER BY tablename, indexname;
+```
 
-### H-03: Volume of search_results_store? Retention period?
+**Expected findings:**
+- `search_sessions`: `idx_search_sessions_user_id` exists (from migration 016)
+- `pipeline_items`: `idx_pipeline_items_user_id` exists (from migration 025)
+- `search_results_store`: `idx_search_results_user` exists (from 20260303100000)
+- `classification_feedback`: **MISSING** -- needs `CREATE INDEX idx_classification_feedback_user_id ON classification_feedback(user_id);`
+
+**Corrective migration:**
+```sql
+-- Fix DB-038/039: Create indexes with correct table names
+DROP INDEX IF EXISTS idx_searches_user_id;    -- from wrong table name
+DROP INDEX IF EXISTS idx_pipeline_user_id;    -- from wrong table name
+DROP INDEX IF EXISTS idx_feedback_user_id;    -- from wrong table name
+
+CREATE INDEX IF NOT EXISTS idx_classification_feedback_user_id
+  ON classification_feedback(user_id);
+
+-- search_sessions and pipeline_items already have user_id indexes
+-- search_results_store already has idx_search_results_user
+```
+
+**Hours:** 1h (query + corrective migration + deploy)
+
+### Q3: Retention policies (DB-033/037)
+
+| Table | Recommended Retention | Schedule | Rationale |
+|-------|----------------------|----------|-----------|
+| `search_state_transitions` | **30 days** | Daily 4:00 AM UTC | Debugging only needs recent window. 5-10 rows/search x ~50 searches/day = 15K rows/month. 30 days = ~15K rows max. |
+| `alert_sent_items` | **180 days** | Weekly Sunday 5:00 AM UTC | Serves active dedup function. Procurement items older than 6 months are typically closed. Deleting too early causes re-sending. |
+| `mfa_recovery_attempts` | **30 days** | Daily 4:30 AM UTC | Brute force detection window. Only recent attempts matter for rate limiting. |
+| `alert_runs` | **90 days** | Daily 4:45 AM UTC | Execution history for debugging. Quarterly review cycle. ~100 rows/day at current scale. |
+| `health_checks` | **30 days** | Daily 3:00 AM UTC | Monitoring data. 8,640 rows/month at 5-min intervals. |
+| `incidents` | **90 days** | Daily 3:15 AM UTC | Incident history for post-mortems. Longer than health_checks because incidents are rarer and more valuable. |
+
+**Analytics use case:** None of these tables are used for analytics dashboards currently. If analytics needs arise, archive to a separate analytics schema or export to a data warehouse before purging.
+
+**Implementation:** Single migration with staggered cron times to avoid concurrent cleanup load:
+```sql
+SELECT cron.schedule('cleanup-state-transitions', '0 4 * * *',
+  $$DELETE FROM search_state_transitions WHERE created_at < NOW() - INTERVAL '30 days'$$);
+SELECT cron.schedule('cleanup-mfa-attempts', '30 4 * * *',
+  $$DELETE FROM mfa_recovery_attempts WHERE attempted_at < NOW() - INTERVAL '30 days'$$);
+SELECT cron.schedule('cleanup-alert-runs', '45 4 * * *',
+  $$DELETE FROM alert_runs WHERE run_at < NOW() - INTERVAL '90 days'$$);
+SELECT cron.schedule('cleanup-alert-sent-items', '0 5 * * 0',
+  $$DELETE FROM alert_sent_items WHERE sent_at < NOW() - INTERVAL '180 days'$$);
+SELECT cron.schedule('cleanup-health-checks', '0 3 * * *',
+  $$DELETE FROM health_checks WHERE checked_at < NOW() - INTERVAL '30 days'$$);
+SELECT cron.schedule('cleanup-incidents', '15 3 * * *',
+  $$DELETE FROM incidents WHERE created_at < NOW() - INTERVAL '90 days'$$);
+```
+
+### Q4: OAuth token encryption (DB-003)
+
+**CONFIRMED: Tokens ARE encrypted.** This is a false positive in the DRAFT.
+
+Evidence from `backend/oauth.py`:
+- Lines 45-77: Fernet cipher initialized from `ENCRYPTION_KEY` env var (base64-encoded 32-byte key)
+- Lines 84-109: `encrypt_aes256()` encrypts plaintext using Fernet (AES-256 GCM with HMAC authentication)
+- Lines 113-131: `decrypt_aes256()` decrypts ciphertext
+- Lines 312-313: `encrypted_access = encrypt_aes256(access_token)` before DB insert
+- Lines 374-376: `access_token = decrypt_aes256(token_record["access_token"])` after DB read
+- Lines 51-57: Production startup raises `RuntimeError` if `ENCRYPTION_KEY` is not set
+
+The DB-AUDIT.md correctly noted "encryption happens at the application layer (not database)" but the DRAFT incorrectly characterized this as "plaintext." The tokens in the database ARE ciphertext (Fernet tokens are base64-encoded authenticated ciphertext).
+
+**Priority: None needed.** Remove DB-003 from the debt list entirely.
+
+### Q5: JSONB size monitoring (DB-031/032)
+
+**Current table sizes** should be checked with:
+```sql
+SELECT
+  'search_results_cache' AS table_name,
+  pg_size_pretty(pg_total_relation_size('search_results_cache')) AS total_size,
+  (SELECT count(*) FROM search_results_cache) AS row_count,
+  pg_size_pretty((SELECT avg(octet_length(results::text)) FROM search_results_cache)) AS avg_row_size
+UNION ALL
+SELECT
+  'search_results_store',
+  pg_size_pretty(pg_total_relation_size('search_results_store')),
+  (SELECT count(*) FROM search_results_store),
+  pg_size_pretty((SELECT avg(octet_length(results::text)) FROM search_results_store));
+```
+
+**Prometheus monitoring:** Yes, add a gauge metric. The cleanest approach is a pg_cron job that writes sizes to a monitoring table, which the backend reads via RPC and exposes as Prometheus gauge:
+
+```python
+# In metrics.py
+smartlic_db_table_size_bytes = Gauge(
+    'smartlic_db_table_size_bytes',
+    'Database table total size in bytes',
+    ['table_name']
+)
+```
+
+Update via the existing health check cron (no additional cron needed). This avoids giving the backend direct access to `pg_total_relation_size()`.
+
+### Q6: Disaster Recovery (DB-043)
 
 **Current state:**
-- Table created 2026-03-03 (1 day old). Production volume is negligible.
-- Each row stores a full JSONB search result payload (estimated 100KB-1.5MB based on search_results_cache data from migration 20260225150000 pre-check: avg=617KB, max=1.59MB).
-- Default `expires_at` = `now() + 24 hours`.
-- **No pg_cron cleanup exists.** Existing cron jobs (migration 022) only handle monthly_quota and stripe_webhook_events. Migration 20260225150000 added cleanup for search_results_cache cold entries but not for search_results_store.
+- **Supabase PITR:** Available on Pro plan. RPO depends on WAL archiving frequency (typically seconds). RTO is ~30 minutes for full restore.
+- **Migration-based recreation:** Never tested. Would require running all 76 migrations in order. Several would fail due to non-idempotent operations (DB-028).
+- **No documented procedure exists.**
 
-**Volume projections:**
+**Immediate actions (S1):**
 
-| Scale | Searches/Day | Rows/Day | Storage/Day (avg 500KB) | Monthly Accumulation |
-|-------|-------------|----------|------------------------|---------------------|
-| Current (50 beta users) | ~50 | ~50 | ~25 MB | ~750 MB |
-| Target (500 users) | ~500 | ~500 | ~250 MB | ~7.5 GB |
-| Growth (2000 users) | ~2000 | ~2000 | ~1 GB | ~30 GB |
+1. **Create `supabase/docs/DISASTER-RECOVERY.md`** documenting:
+   - Supabase PITR restoration steps
+   - Migration order dependencies
+   - Post-migration verification queries
+   - Manual pg_cron setup steps (since extensions require superuser)
+   - Known non-idempotent migrations to skip or patch
 
-**Recommended retention: 7 days** (not the 24h default).
+2. **Test migration-based recreation** on a fresh Supabase project (can use `supabase start` locally). Document failures.
 
-Rationale:
-- This is L3 persistent storage, designed to prevent "Busca nao encontrada ou expirada" after L1/L2 TTL expiry
-- Users commonly revisit search results 2-3 days later (Monday search reviewed Wednesday)
-- 7 days covers a full business week cycle
-- At current scale: 50 rows/day x 7 days x 500KB = ~175 MB -- easily manageable
-- At target scale: 500 x 7 x 500KB = ~1.75 GB -- still reasonable for Supabase Pro
+3. **Add backup verification cron** -- weekly `pg_dump` of schema-only to git for diff detection against migration state.
 
-**Implementation:**
-```sql
--- 1. Change default expires_at to 7 days
-ALTER TABLE search_results_store
-  ALTER COLUMN expires_at SET DEFAULT now() + INTERVAL '7 days';
+**Hours:** 16h is correct for the documentation + testing + verification setup.
 
--- 2. Add pg_cron cleanup
-SELECT cron.schedule(
-  'cleanup-search-results-store',
-  '0 4 * * *',  -- daily at 4am UTC
-  $$DELETE FROM search_results_store WHERE expires_at < NOW()$$
-);
-```
-
-### M-07: Migrate handle_new_user() to application layer?
+### Q7: `handle_new_user()` trigger (DB-011) -- migrate to application layer?
 
 **Recommendation: Keep as trigger. Add integration test guard.**
 
@@ -195,204 +325,91 @@ SELECT cron.schedule(
 
 2. **Multi-entry-point coverage** -- Supabase Auth handles email/password signup, Google OAuth, magic links, and phone OTP. All flow through the same `auth.users` INSERT trigger. Application-layer would need to handle each entry point separately.
 
-3. **Battle-tested pattern** -- The current trigger (migration 20260225110000) is correct, includes all 10 columns, and has `ON CONFLICT (id) DO NOTHING`. The 7 historical modifications were a learning curve, not inherent trigger fragility.
+3. **Stability** -- The current trigger (migration 20260225110000) is correct, includes all 10 columns, and has `ON CONFLICT (id) DO NOTHING`. The 7 historical modifications were evolutionary development, not inherent trigger fragility. The trigger has been stable for 10+ days.
 
-**Mitigation for regression risk (3h total):**
-
-1. **Backend integration test** (2h): Create `test_handle_new_user_trigger.py` that:
-   - Inserts a row into auth.users with full raw_user_meta_data
-   - Verifies all 10 profile columns are populated
-   - Verifies ON CONFLICT behavior (double insert does not error)
-   - Verifies phone normalization edge cases
-
-2. **CI guard** (0.5h): Add a GitHub Actions step that greps new migration files for `handle_new_user` and flags for mandatory review.
-
-3. **Canonical comment** (0.5h): Add a block comment in the function listing all expected columns and referencing this review document.
-
-### L-04: CHECK constraint vs reference table for plan_types?
-
-**Recommendation: Keep CHECK constraint now. Evaluate reference table when active plans exceed 10.**
-
-**Current state:** 7 valid values (free_trial, consultor_agil, maquina, sala_guerra, master, smartlic_pro, consultoria). 3 legacy plans are inactive in the `plans` table.
-
-**Analysis:**
-
-| Factor | CHECK Constraint | Reference Table (plan_types) |
-|--------|-----------------|------------------------------|
-| Migration effort for new plan | 2-line migration (DROP + ADD) | 1-line INSERT |
-| Schema clarity | Values hidden in constraint DDL | Self-documenting table |
-| Query complexity | No JOIN needed | FK validation via JOIN |
-| Application coupling | Constraint must match app code | App reads valid values from DB |
-| Frequency of change | 6 times in 3 months (2/month) | Would be 0 DDL changes |
-
-**Long-term path:** The `plans` table already functions as a partial reference table (its `id` column values match `plan_type` CHECK values). The cleanest future solution is:
-```sql
-ALTER TABLE profiles DROP CONSTRAINT profiles_plan_type_check;
-ALTER TABLE profiles ADD CONSTRAINT profiles_plan_type_fk
-  FOREIGN KEY (plan_type) REFERENCES plans(id);
-```
-This unifies validation with the existing catalog. Prerequisite: verify all `plan_type` values in profiles exist in `plans.id` (including legacy plans).
-
-**Trigger for migration:** When the 4th active plan is added, or when plan metadata beyond `plans` table is needed.
-
-### M-04/05/06: Appropriate retention periods?
-
-| Table | Retention | Schedule | Rationale |
-|-------|----------|----------|-----------|
-| mfa_recovery_attempts | **30 days** | Daily 4:30 AM UTC | Brute force detection only needs recent window. 30 days covers security investigation needs. Worst case: 100 attempts/user/day x 100 users = 300K rows/month -- manageable but pointless to keep. |
-| alert_runs | **90 days** | Daily 4:45 AM UTC | Execution debugging history. 90 days covers quarterly review. ~200 bytes/row x 100 alerts x 1 run/day = 9K rows/90d. |
-| alert_sent_items | **180 days** | Weekly Sunday 5:00 AM UTC | Dedup tracking serves an active purpose. If deleted too early, same procurement item could be re-sent to user. 180 days is safe because procurement items older than 6 months are typically closed/expired anyway. |
-
-**Implementation:** Single migration with 3 pg_cron jobs at staggered times to avoid concurrent cleanup load.
-
-### Performance: search_results_store.results size constraint needed?
-
-**Yes, absolutely.** This is a concrete gap.
-
-**Evidence:** `search_results_cache.results` has a 2MB CHECK constraint (migration 20260225150000). `search_results_store.results` stores the same JSONB payload structure but with no size limit. Without constraint, a pathological multi-UF search could insert 5-10MB of JSONB per row.
-
-**Recommendation:**
-```sql
-ALTER TABLE search_results_store
-  ADD CONSTRAINT chk_store_results_max_size
-  CHECK (octet_length(results::text) <= 2097152);
-```
-
-Match the 2MB limit from search_results_cache. The application-level truncation in `search_cache.py` should also be applied before writing to search_results_store.
-
-**Pre-check required:** Run `SELECT max(octet_length(results::text)) FROM search_results_store` before applying. Table is 1 day old so unlikely to have violations.
-
-**Effort:** 0.5h (bundle with H-03 retention migration)
+**Mitigation (3h):**
+1. Backend integration test: `test_handle_new_user_trigger.py` that validates all 10 columns are populated after auth.users INSERT
+2. CI guard: GitHub Actions step that greps new migration files for `handle_new_user` and flags for mandatory review
+3. Canonical comment block in the function listing all expected columns
 
 ---
 
-## Dependencias Tecnicas
+## Resolution Roadmap
 
-```
-C-01 (FK standardization) ────────────────────────────────────────
-  |-- H-02 (search_results_store FK)      -- subsumed, fix together
-  |-- M-03 (partner_referrals ON DELETE)  -- subsumed, fix together
-  |-- DA-02 (search_results_store policy) -- can batch same migration
+### Sprint 1 (Week 1-2) -- Critical & Quick Wins
 
-H-03 (search_results_store retention) ────────────────────────────
-  |-- L-06 (composite index)   -- create index BEFORE retention job
-  |-- Q7 (2MB CHECK)           -- add in same migration
+| # | IDs | Description | Hours | Dependencies |
+|---|-----|-------------|-------|-------------|
+| 1 | DB-038, DB-039 | Fix RLS indexes (correct table names + classification_feedback index) | 2 | None |
+| 2 | DB-013 | Fix partner_referrals NOT NULL vs SET NULL conflict | 1 | None |
+| 3 | DB-012 | Consolidate updated_at trigger functions | 2 | None |
+| 4 | DB-032, DB-NEW-01 | search_results_store retention pg_cron + 2MB CHECK + 7-day default | 4 | None |
+| 5 | DB-025, DB-030 | Bridge migration to consolidate backend/migrations/ | 4 | Q1 verification queries |
+| 6 | DB-043 | Write DISASTER-RECOVERY.md + test migration recreation | 16 | DB-025 first |
+| **Total S1** | | | **29h** | |
 
-H-04/05/06 + M-09 + DA-01 + DA-02 (auth.role() standardization) ─
-  |-- All 8 tables in a single migration (independent of C-01)
+### Sprint 2 (Week 3-4) -- High Priority
 
-M-04/05/06 + DA-03 (retention pg_cron jobs) ──────────────────────
-  |-- M-02 (created_at index) -- add before retention job
-  |-- All 4+ jobs in one migration
+| # | IDs | Description | Hours | Dependencies |
+|---|-----|-------------|-------|-------------|
+| 7 | DB-001, DB-NEW-02 | Standardize auth.role() policies (classification_feedback + partners + partner_referrals) | 2 | None |
+| 8 | DB-033, DB-037, DB-NEW-03 | Retention pg_cron jobs (state_transitions 30d, alert_sent_items 180d, health_checks 30d, incidents 90d, mfa_attempts 30d, alert_runs 90d) | 4 | None |
+| 9 | DB-007 | Evaluate search_state_transitions RLS subquery optimization | 4 | None |
+| 10 | DB-011 | Integration test for handle_new_user() + CI guard | 4 | None |
+| 11 | DB-015 | Document plan_type duplication as accepted + add reconciliation cron | 4 | None |
+| 12 | DB-002 | Add explicit service_role policies to health_checks/incidents | 1 | None |
+| 13 | DB-010 | Ban system cache warmer account (`banned_until`) | 1 | None |
+| 14 | DB-040, DB-041 | Drop redundant indexes (alert_preferences, trial_email_log) | 1 | None |
+| 15 | DB-018, DB-019 | Add CHECK constraints (cache priority, alert_runs status) | 1 | None |
+| 16 | DB-028 | Add IF NOT EXISTS guards to non-idempotent migrations | 4 | None |
+| 17 | DB-042 | Add composite index for admin inbox conversations | 1 | None |
+| 18 | DB-045 | Document stripe_webhook_events retention implications | 1 | None |
+| 19 | DB-021 | Validate billing_period constraint vs legacy data | 1 | None |
+| 20 | DB-031 | Add Prometheus gauge for JSONB table sizes | 2 | None |
+| **Total S2** | | | **31h** | |
 
-H-01 (consolidate trigger functions) ─────────────────────────────
-  |-- Independent. No data migration. Safe anytime.
+### Backlog (Month 2+)
 
-M-07 (handle_new_user guard) ─────────────────────────────────────
-  |-- Independent. Backend test + CI check, no DB migration needed.
-```
-
-**Cross-area dependencies:**
-- TD-A01 (legacy route removal): No DB dependency
-- TD-SEC02 (service_role key concern): Mitigated by proper RLS policies (C-02, auth.role() fixes)
-- TD-S05 (time.sleep in quota.py): Already verified as fixed in v1 review -- `asyncio.sleep(0.3)` used everywhere
-- Frontend debt has zero dependency on DB debt resolution
+| IDs | Description | Hours |
+|-----|-------------|-------|
+| DB-005, DB-006, DB-008 | Document accepted design decisions (mfa_recovery_attempts, trial_email_log, Stripe Price IDs) | 2 |
+| DB-009 | Optimize partner RLS cross-schema query | 2 |
+| DB-014 | Deprecate legacy stripe_price_id column | 2 |
+| DB-016 | Document valid status transitions (CHECK or COMMENT) | 2 |
+| DB-017 | Add NOT NULL to created_at columns | 2 |
+| DB-020 | Adopt constraint naming convention | 1 |
+| DB-022 | Evaluate phone validation enhancement | 1 |
+| DB-023 | Review cache UNIQUE constraint implications | 2 |
+| DB-024 | Add updated_at to plan_billing_periods | 1 |
+| DB-026 | Document migration naming convention for future | 1 |
+| DB-027 | Evaluate down-migration strategy | 8 |
+| DB-029 | Move Stripe Price IDs to env-driven seeding | 2 |
+| DB-034 | Optimize cleanup_search_cache_per_user trigger | 2 |
+| DB-035 | Rewrite get_conversations_with_unread_count as JOIN | 2 |
+| DB-036 | Plan table partitioning for append-heavy tables | 8 |
+| DB-044 | Document pg_cron manual setup steps | 4 |
+| DB-046 | Establish "no dashboard schema changes" policy | 1 |
+| DB-NEW-04 | Evaluate FK for search_state_transitions | 4 |
+| **Total Backlog** | | **~47h** |
 
 ---
 
 ## Recomendacoes
 
-### Recommended Resolution Order (5 migrations + 1 backend task)
+### Top 5 Recommendations for Database Health
 
-**Migration 1 -- FK Standardization (Priority: Immediate, 6h)**
-- C-01: Re-point 6 FKs from auth.users to profiles(id) using NOT VALID + VALIDATE
-- H-02: ON DELETE CASCADE for search_results_store (part of C-01)
-- M-03: ON DELETE CASCADE for partner_referrals.partner_id, ON DELETE SET NULL for referred_user_id
-- Pre-migration: Run orphan detection query on all 6 tables
+1. **Fix DB-038/039 immediately (RLS indexes).** These are the highest-impact quick wins. Every query from authenticated users against `classification_feedback` triggers a full table scan. The corrective migration takes 15 minutes to write and deploy. This should be done today.
 
-**Migration 2 -- search_results_store Hardening (Priority: Immediate, 3h)**
-- H-03: pg_cron retention job (daily 4am, DELETE WHERE expires_at < NOW())
-- L-06: Composite index (user_id, expires_at) -- before retention job for DELETE perf
-- Q7: 2MB CHECK constraint on results JSONB
-- Change expires_at default from 24h to 7 days
+2. **Add retention jobs before user growth (DB-032/033/037/NEW-03).** Six tables grow unbounded. At 50 beta users this is invisible, but at 500 users it becomes the largest line item on Supabase billing. The `search_results_store` is the most urgent because each row stores 100KB-1.5MB of JSONB with no cleanup.
 
-**Migration 3 -- RLS Policy Standardization (Priority: Next sprint, 2h)**
-- H-04/05/06 + M-09 + DA-01 + DA-02: Standardize all 8 tables from `auth.role() = 'service_role'` to `FOR ALL TO service_role USING (true) WITH CHECK (true)`
-- C-02: Add explicit service_role policies to health_checks and incidents (currently zero policies)
+3. **Consolidate backend/migrations/ now (DB-025/030).** The dual-directory problem has already caused one production incident (missing `check_and_increment_quota` RPC). Every day this remains unfixed increases the risk that a fresh database deployment fails. The bridge migration approach is safe and non-destructive.
 
-**Migration 4 -- Retention Jobs (Priority: Next sprint, 3h)**
-- M-04: mfa_recovery_attempts 30-day retention
-- M-05: alert_runs 90-day retention
-- M-06: alert_sent_items 180-day retention
-- DA-03: health_checks 30-day retention, incidents 90-day retention
-- M-02: Standalone (created_at) index on search_state_transitions
+4. **Document disaster recovery (DB-043).** With 76 migrations and no DR guide, a database failure would require senior engineering intervention to recover. This is an unacceptable operational risk for a production system with paying users (even beta). The PITR procedure should be documented and tested quarterly.
 
-**Migration 5 -- Trigger Consolidation + Index Cleanup (Priority: Next sprint, 2h)**
-- H-01: Drop update_pipeline_updated_at(), update_alert_preferences_updated_at(), update_alerts_updated_at(); update 3 triggers to use shared update_updated_at()
-- L-01: Drop redundant idx_alert_preferences_user_id
-- L-02: Drop redundant idx_alert_sent_items_alert_id
-
-**Backend Task (no migration, 3h):**
-- M-07: Integration test for handle_new_user() + CI migration guard
-- M-01: Add updated_at to 3 tables with UPDATE operations (monthly_quota, mfa_recovery_codes, partner_referrals)
-
-### Summary
-
-| Phase | Migrations | Hours | Sprint |
-|-------|-----------|-------|--------|
-| Immediate | Migration 1 + 2 | 9h | Current |
-| Next Sprint | Migration 3 + 4 + 5 + Backend | 10h | Next |
-| **Total Active** | | **19h** | |
-| Backlog | L-03, L-04, L-05, M-08 | ~6h | When convenient |
-| **Grand Total** | | **~25h** | |
-
-### Backlog (do when convenient)
-- L-03: Add column-level COMMENTs to health_checks, incidents (partially done)
-- L-04: Evaluate plan_type FK to plans table when adding new active plans
-- L-05: Move Stripe Price IDs to env-driven seeding
-- M-08: Adopt `chk_{table}_{column}` naming for future migrations only
+5. **Remove DB-003 from the debt list.** OAuth token encryption IS implemented and working. Keeping a false positive on the debt list erodes trust in the assessment and could misdirect engineering effort.
 
 ---
 
-## Risk Assessment
-
-### If C-01 is NOT fixed (FK to auth.users instead of profiles)
-
-**Risk: HIGH -- Data integrity failure in disaster recovery or user deletion**
-- If a user is deleted from auth.users directly (Supabase dashboard GDPR action), CASCADE flows through profiles for 26 properly-linked tables but creates orphan rows in the 6 non-standardized tables
-- The `handle_new_user()` trigger creates profiles from auth.users, so under normal operations all user_ids exist in both tables -- but this is coincidental, not enforced by constraint
-- In partial restore or cross-environment migration, the assumption breaks
-- organizations.owner_id with NO ACTION means deleting a user who owns an org silently fails (no error, no cleanup)
-
-### If H-03 is NOT fixed (no search_results_store retention)
-
-**Risk: HIGH -- Unbounded storage growth with direct cost impact**
-- Table accumulates JSONB payloads (100KB-1.5MB each) with no cleanup
-- `expires_at` column is purely decorative without a cleanup job
-- At 500 users: ~7.5 GB/month uncleaned storage growth
-- Supabase Pro pricing is based on database size -- this becomes the single largest cost driver
-- Query performance degrades as table grows (JSONB decompression on sequential scans)
-
-### If auth.role() policies are NOT standardized (H-04/05/06, DA-01/02)
-
-**Risk: LOW -- Functional but inconsistent**
-- Both `auth.role()` and `TO service_role` work correctly in current Supabase PostgreSQL 17
-- `TO service_role` is the PostgreSQL-native approach (GRANT-based role check)
-- `auth.role()` parses JWT claim per-row -- marginally more expensive but negligible at current scale
-- If Supabase changes JWT structure, `auth.role()` could theoretically break
-- Practical risk is minimal in the short to medium term
-
-### If retention jobs are NOT added (M-04/05/06, DA-03)
-
-**Risk: MEDIUM -- Gradual storage growth, accelerating under attack**
-- mfa_recovery_attempts: Low volume today but a brute force attack generates thousands of rows/hour with no cleanup
-- alert_runs: Linear growth (~3K rows/month at 100 alerts). Manageable for 1-2 years without cleanup.
-- alert_sent_items: Unbounded per active alert. A daily alert matching 10 items/day = 3,650 dedup rows/year/alert. At 100 alerts: 365K rows/year.
-- health_checks: ~8,640 rows/month at 5-minute intervals. Most predictable.
-- None are urgent at beta scale. All become problems at 500+ users with 100+ active alerts.
-
----
-
-*Review completed 2026-03-04 by @data-engineer (Dynamo).*
-*Methodology: Code-level verification of every DRAFT claim against actual migration SQL files, SCHEMA.md, and ripgrep across codebase.*
-*Ready for architect consolidation into FINAL v3.0.*
+*Review completed 2026-03-07 by @data-engineer (Delta).*
+*Methodology: Code-level verification of every DRAFT claim against actual migration SQL files, DB-AUDIT.md findings, and ripgrep across the codebase. All severity adjustments include evidence-based justification.*
+*Ready for architect consolidation into FINAL.*

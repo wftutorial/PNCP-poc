@@ -49,6 +49,7 @@ import { checkHasLastSearch, getLastSearch } from "../../lib/lastSearchCache";
 import type { BuscaResult } from "../types";
 import { APP_NAME } from "../../lib/config";
 import { safeSetItem } from "../../lib/storage";
+import { useBroadcastChannel } from "../../hooks/useBroadcastChannel";
 
 // ============================================================================
 // GTM-004: Onboarding Auto-Search Banners (AC11-13)
@@ -438,6 +439,27 @@ function HomePageContent() {
   const filters = useSearchFilters(() => clearResultRef.current());
   const search = useSearch(filters);
   clearResultRef.current = () => search.setResult(null);
+
+  // HARDEN-027: BroadcastChannel cross-tab sync
+  const { broadcastSearchComplete } = useBroadcastChannel({
+    onSearchComplete: useCallback((result: BuscaResult) => {
+      // AC3: Inactive tab updates results without re-fetch
+      if (!search.loading) {
+        search.setResult(result);
+        toast.info("Resultados atualizados de outra aba.");
+      }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [search.loading]),
+  });
+
+  // HARDEN-027 AC2: Broadcast search_complete when search finishes with results
+  const prevLoadingRef = useRef(false);
+  useEffect(() => {
+    if (prevLoadingRef.current && !search.loading && search.result) {
+      broadcastSearchComplete(search.result, search.searchId);
+    }
+    prevLoadingRef.current = search.loading;
+  }, [search.loading, search.result, search.searchId, broadcastSearchComplete]);
 
   // STORY-265 AC13: Show TrialConversionScreen when API returns 403 trial_expired
   useEffect(() => {

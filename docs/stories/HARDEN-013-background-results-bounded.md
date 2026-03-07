@@ -11,10 +11,10 @@
 
 ## Critérios de Aceitação
 
-- [ ] AC1: `_MAX_BACKGROUND_RESULTS = 200` aplicado no `store_background_results()`
-- [ ] AC2: Eviction do mais antigo quando excede max
-- [ ] AC3: Integrado com cleanup periódico (HARDEN-004)
-- [ ] AC4: Teste unitário valida eviction
+- [x] AC1: `_MAX_BACKGROUND_RESULTS = 200` aplicado no `store_background_results()`
+- [x] AC2: Eviction do mais antigo quando excede max
+- [x] AC3: Integrado com cleanup periódico (HARDEN-004)
+- [x] AC4: Teste unitário valida eviction
 
 ## Arquivos Afetados
 

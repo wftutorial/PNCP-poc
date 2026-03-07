@@ -767,7 +767,10 @@ _TRACKER_CLEANUP_INTERVAL = 120  # HARDEN-004 AC1: seconds between periodic clea
 
 
 async def _periodic_tracker_cleanup() -> None:
-    """HARDEN-004 AC1: Periodic cleanup of stale trackers every 120s."""
+    """HARDEN-004 AC1: Periodic cleanup of stale trackers every 120s.
+
+    HARDEN-013 AC3: Also cleans up stale background results.
+    """
     while True:
         await asyncio.sleep(_TRACKER_CLEANUP_INTERVAL)
         try:
@@ -775,6 +778,12 @@ async def _periodic_tracker_cleanup() -> None:
             if cleaned > 0:
                 from metrics import TRACKER_CLEANUP_COUNT
                 TRACKER_CLEANUP_COUNT.inc(cleaned)
+            # HARDEN-013 AC3: piggyback results cleanup on tracker cleanup cycle
+            try:
+                from routes.search import _cleanup_stale_results
+                _cleanup_stale_results()
+            except Exception as e:
+                logger.warning(f"HARDEN-013: Background results cleanup error: {e}")
         except Exception as e:
             logger.warning(f"HARDEN-004: Tracker cleanup error: {e}")
 

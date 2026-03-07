@@ -159,6 +159,7 @@ _background_results: Dict[str, Dict[str, Any]] = {}
 _RESULTS_TTL = 3600  # 1 hour (in-memory) — STORY-362 AC1
 _active_background_tasks: Dict[str, asyncio.Task] = {}
 _MAX_BACKGROUND_TASKS = 5  # Budget: max concurrent background fetches
+_MAX_BACKGROUND_RESULTS = 200  # HARDEN-013 AC1: cap in-memory results dict
 
 # STORY-294 AC2: Redis key prefix and TTL for cross-worker result sharing
 _RESULTS_REDIS_PREFIX = "smartlic:results:"
@@ -178,7 +179,14 @@ def _cleanup_stale_results() -> None:
 
 
 def store_background_results(search_id: str, response: BuscaResponse) -> None:
-    """Store results in in-memory L1 cache."""
+    """Store results in in-memory L1 cache.
+
+    HARDEN-013: Evicts oldest entries when dict exceeds _MAX_BACKGROUND_RESULTS.
+    """
+    # HARDEN-013 AC2: evict oldest entries when at capacity
+    if len(_background_results) >= _MAX_BACKGROUND_RESULTS and search_id not in _background_results:
+        oldest_id = min(_background_results, key=lambda k: _background_results[k].get("stored_at", 0))
+        _background_results.pop(oldest_id, None)
     _background_results[search_id] = {
         "response": response,
         "stored_at": sync_time.time(),

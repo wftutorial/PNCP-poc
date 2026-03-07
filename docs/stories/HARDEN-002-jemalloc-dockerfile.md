@@ -18,9 +18,9 @@ Async FastAPI com glibc/musl sofre crescimento linear de RSS (não é leak real 
 
 ## Critérios de Aceitação
 
-- [ ] AC1: Dockerfile instala `libjemalloc2` (ou `libmimalloc2.0`)
-- [ ] AC2: `LD_PRELOAD` configurado no Dockerfile
-- [ ] AC3: RSS monitorado via Prometheus gauge `process_resident_memory_bytes`
+- [x] AC1: Dockerfile instala `libjemalloc2` (ou `libmimalloc2.0`)
+- [x] AC2: `LD_PRELOAD` configurado no Dockerfile
+- [x] AC3: RSS monitorado via Prometheus gauge `process_resident_memory_bytes`
 - [ ] AC4: Deploy bem-sucedido no Railway com jemalloc ativo
 
 ## Solução

@@ -15,10 +15,15 @@ ARG CACHEBUST=20260228v1
 WORKDIR /app
 
 # Install system dependencies (invalidated by ARG above)
+# HARDEN-002: jemalloc reduces RSS fragmentation in async FastAPI
 RUN echo "Build: ${CACHEBUST}" && apt-get update && apt-get install -y \
     --no-install-recommends \
     gcc \
+    libjemalloc2 \
     && rm -rf /var/lib/apt/lists/*
+
+# HARDEN-002: Preload jemalloc to replace glibc malloc — prevents RSS creep
+ENV LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2
 
 # Copy requirements first
 COPY requirements.txt .

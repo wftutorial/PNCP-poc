@@ -661,9 +661,13 @@ CACHE_WARMING_POST_DEPLOY_TOP_N: int = int(os.getenv("CACHE_WARMING_POST_DEPLOY_
 CACHE_WARMING_POST_DEPLOY_DELAY_S: int = int(os.getenv("CACHE_WARMING_POST_DEPLOY_DELAY_S", "30"))
 
 # ============================================
-# STORY-292: Async Search via asyncio.create_task (no ARQ dependency)
+# CRIT-072: Async-first 202 pattern (default mode)
+# ASYNC_SEARCH_DEFAULT=True makes POST /buscar return 202 by default.
+# Set to False to fall back to synchronous blocking mode.
+# SEARCH_ASYNC_ENABLED kept as alias for backward compatibility.
 # ============================================
-SEARCH_ASYNC_ENABLED: bool = str_to_bool(os.getenv("SEARCH_ASYNC_ENABLED", "false"))
+ASYNC_SEARCH_DEFAULT: bool = str_to_bool(os.getenv("ASYNC_SEARCH_DEFAULT", "true"))
+SEARCH_ASYNC_ENABLED: bool = str_to_bool(os.getenv("SEARCH_ASYNC_ENABLED", str(ASYNC_SEARCH_DEFAULT).lower()))
 
 # STORY-363: Async search pipeline via ARQ Worker
 SEARCH_JOB_TIMEOUT: int = int(os.getenv("SEARCH_JOB_TIMEOUT", "300"))  # AC5: max pipeline duration in worker

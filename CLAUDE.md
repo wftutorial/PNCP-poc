@@ -195,8 +195,9 @@ npm run test:e2e:headed             # Debug mode
 - 3 data sources with per-source circuit breakers
 - Priority-based dedup (PNCP=1 wins over PCP=2)
 - Fallback cascade: Live -> Partial -> Stale cache -> Empty
-- Timeout chain (CRIT-060): Railway(300s) > Gunicorn(180s) > Proxy POST(180s) > Pipeline(110s) > Consolidation(100s) > PerSource(80s) > PerUF(30s)
-- SSE chain: bodyTimeout(0) + heartbeat(15s) > Railway idle(60s)
+- Async-first (CRIT-072): POST /buscar → 202 in <2s, results via SSE + polling
+- Timeout chain: ARQ Job(300s) > Pipeline(110s) > Consolidation(100s) > PerSource(80s) > PerUF(30s)
+- SSE chain: bodyTimeout(0) + heartbeat(15s) > Railway idle(60s) | SSE inactivity timeout(120s)
 
 ### Two-Level Cache (SWR)
 - L1: InMemoryCache (4h, proactive) — hot/warm/cold priority

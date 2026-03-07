@@ -665,18 +665,33 @@ async def search_job(
 
     from search_pipeline import executar_busca_completa
     from progress import get_tracker, remove_tracker
-    from metrics import SEARCH_JOB_DURATION
+    from metrics import SEARCH_JOB_DURATION, SEARCH_QUEUE_TIME, SEARCH_TOTAL_TIME
     from datetime import datetime, timezone
 
     started_at = datetime.now(timezone.utc)
     start_mono = time.monotonic()
 
+    # CRIT-072 AC9: Record queue time (time between enqueue and job start)
+    queued_at_str = kwargs.get("_queued_at")
+    if queued_at_str:
+        try:
+            queued_at = datetime.fromisoformat(queued_at_str)
+            queue_time_s = (started_at - queued_at).total_seconds()
+            SEARCH_QUEUE_TIME.observe(max(0, queue_time_s))
+        except (ValueError, TypeError):
+            pass
+
+    # CRIT-072 AC8: Deadline propagation — pipeline stages can check this
+    from config import SEARCH_JOB_TIMEOUT
+    deadline_ts = time.monotonic() + SEARCH_JOB_TIMEOUT
+
     logger.info(json.dumps({
         "event": "search_job_started",
         "search_id": search_id,
-        "queued_at": kwargs.get("_queued_at"),
+        "queued_at": queued_at_str,
         "started_at": started_at.isoformat(),
         "ufs": request_data.get("ufs", []),
+        "deadline_s": SEARCH_JOB_TIMEOUT,
     }))
 
     # STORY-363 AC13: Validate that user_id corresponds to a valid user
@@ -701,6 +716,7 @@ async def search_job(
             user_data=user_data,
             tracker=tracker,
             quota_pre_consumed=True,  # AC8: Quota consumed in POST before enqueue
+            deadline_ts=deadline_ts,  # CRIT-072 AC8: Deadline propagation
         )
 
         # STORY-281 AC2: Check cancel flag after pipeline completes
@@ -778,6 +794,13 @@ async def search_job(
         duration_s = time.monotonic() - start_mono
         duration_ms = int(duration_s * 1000)
         SEARCH_JOB_DURATION.observe(duration_s)
+        # CRIT-072 AC9: Total time includes queue wait + execution
+        if queued_at_str:
+            try:
+                total_s = (datetime.now(timezone.utc) - datetime.fromisoformat(queued_at_str)).total_seconds()
+                SEARCH_TOTAL_TIME.observe(max(0, total_s))
+            except (ValueError, TypeError):
+                pass
         completed_at = datetime.now(timezone.utc)
         logger.info(json.dumps({
             "event": "search_job_finished",

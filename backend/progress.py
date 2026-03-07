@@ -483,12 +483,11 @@ class ProgressTracker:
         )
         await self._emit_event(event)
 
-    async def emit_search_complete(self, search_id: str, total_results: int) -> None:
-        """GTM-ARCH-001 AC3: Signal async search completed — results available via /buscar-results.
+    async def emit_search_complete(self, search_id: str, total_results: int, is_partial: bool = False) -> None:
+        """GTM-ARCH-001 AC3 + CRIT-072 AC4: Signal async search completed.
 
-        Emits stage="search_complete" so frontend can fetch full results.
+        Emits stage="search_complete" with results_url so frontend can fetch full results.
         Terminal event — SSE stream closes after this.
-        Maintains existing event contract (AC16).
         """
         self._is_complete = True
         event = ProgressEvent(
@@ -498,7 +497,10 @@ class ProgressTracker:
             detail={
                 "search_id": search_id,
                 "total_results": total_results,
-                "has_results": True,
+                "has_results": total_results > 0,
+                "results_ready": True,
+                "results_url": f"/v1/search/{search_id}/results",
+                "is_partial": is_partial,
             },
         )
         await self._emit_event(event)

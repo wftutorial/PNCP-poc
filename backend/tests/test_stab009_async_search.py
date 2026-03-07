@@ -197,8 +197,9 @@ class TestAsyncDisabledReturns200:
     """T2: SEARCH_ASYNC_ENABLED=false → standard sync 200 response."""
 
     def test_async_disabled_returns_200(self, client, mock_quota):
-        """AC6: When flag is off, sync pipeline runs and returns 200."""
+        """AC6: When both flags are off, sync pipeline runs and returns 200."""
         with patch("config.get_feature_flag", return_value=False), \
+             patch("config.ASYNC_SEARCH_DEFAULT", False), \
              patch("routes.search.create_tracker", new_callable=AsyncMock, return_value=_make_mock_tracker()), \
              patch("routes.search.create_state_machine", new_callable=AsyncMock, return_value=_make_mock_state_machine()), \
              patch("routes.search.remove_tracker", new_callable=AsyncMock), \

@@ -32,6 +32,8 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 export const SSE_RECONNECT_BACKOFF_MS = [1000, 2000, 4000];
 export const SSE_MAX_RETRIES = 3;
 export const SSE_POLLING_INTERVAL_MS = 5000;
+// CRIT-072 AC7: SSE inactivity timeout — if no event for 120s, trigger error
+export const SSE_INACTIVITY_TIMEOUT_MS = 120_000;
 
 // Terminal SSE stages that signal search is done — no reconnect after these
 const TERMINAL_STAGES = new Set([
@@ -85,10 +87,13 @@ export interface SearchProgressEvent {
     download_url?: string;
     /** F-01 AC20: Excel status from background job */
     excel_status?: string;
-    /** GTM-ARCH-001 AC3: Async search completion metadata */
+    /** GTM-ARCH-001 AC3 + CRIT-072 AC4: Async search completion metadata */
     search_id?: string;
     total_results?: number;
     has_results?: boolean;
+    results_ready?: boolean;
+    results_url?: string;
+    is_partial?: boolean;
     /** GTM-ARCH-001: Error code from async search worker */
     error_code?: string;
     /** STORY-329 AC4: Long-running filter indicator (>30s filtering) */
@@ -222,6 +227,8 @@ interface UseSearchSSEReturn {
   pendingReviewUpdate: PendingReviewUpdate | null;
   /** CRIT-059 AC5: Zero-match background classification progress */
   zeroMatchProgress: ZeroMatchProgress | null;
+  /** CRIT-072 AC7: True when no SSE event received for 120s */
+  sseInactivityTimeout: boolean;
 }
 
 export function useSearchSSE({
@@ -275,6 +282,9 @@ export function useSearchSSE({
   // STORY-367: Timer refs for cleanup
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // CRIT-072 AC7: SSE inactivity timeout
+  const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [sseInactivityTimeout, setSseInactivityTimeout] = useState(false);
 
   // Serialize selectedUfs for stable dependency comparison
   const selectedUfsKey = selectedUfs.join(',');
@@ -293,6 +303,24 @@ export function useSearchSSE({
     }
   }, []);
 
+  const cleanupInactivity = useCallback(() => {
+    if (inactivityTimerRef.current) {
+      clearTimeout(inactivityTimerRef.current);
+      inactivityTimerRef.current = null;
+    }
+  }, []);
+
+  const resetInactivityTimer = useCallback(() => {
+    cleanupInactivity();
+    // CRIT-072 AC7: Don't start inactivity timer if search is terminal
+    if (isTerminalRef.current) return;
+    inactivityTimerRef.current = setTimeout(() => {
+      console.warn('[CRIT-072] SSE inactivity timeout — no event received for 120s');
+      setSseInactivityTimeout(true);
+      onErrorRef.current?.();
+    }, SSE_INACTIVITY_TIMEOUT_MS);
+  }, [cleanupInactivity]);
+
   const cleanup = useCallback(() => {
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
@@ -303,8 +331,9 @@ export function useSearchSSE({
       reconnectTimerRef.current = null;
     }
     cleanupPolling();
+    cleanupInactivity();
     setIsConnected(false);
-  }, [cleanupPolling]);
+  }, [cleanupPolling, cleanupInactivity]);
 
   // Initialize UF statuses when search starts
   useEffect(() => {
@@ -461,6 +490,8 @@ export function useSearchSSE({
       // STORY-367 AC3: Mark terminal events to prevent reconnect
       if (TERMINAL_STAGES.has(event.stage)) {
         isTerminalRef.current = true;
+        // CRIT-072 AC7: Stop inactivity timer on terminal event
+        cleanupInactivity();
       }
 
       // Handle terminal and special events
@@ -550,6 +581,8 @@ export function useSearchSSE({
       setIsConnected(true);
       setSseAvailable(true);
       setIsReconnecting(false);
+      // CRIT-072 AC7: Start inactivity timer on connect
+      resetInactivityTimer();
     };
 
     eventSource.onmessage = (e) => {
@@ -557,6 +590,8 @@ export function useSearchSSE({
       if (e.lastEventId) {
         lastEventIdRef.current = e.lastEventId;
       }
+      // CRIT-072 AC7: Reset inactivity timer on each message
+      resetInactivityTimer();
       handleMessage(e.data);
     };
 
@@ -609,6 +644,8 @@ export function useSearchSSE({
     setSseDisconnected(false);
     setIsReconnecting(false);
     setSseAvailable(true);
+    // CRIT-072 AC7: Reset inactivity timeout for new search
+    setSseInactivityTimeout(false);
     retryAttemptRef.current = 0;
     lastEventIdRef.current = '';
     // STORY-367 AC3: Reset terminal guard for new search
@@ -709,7 +746,7 @@ export function useSearchSSE({
       isTerminalRef.current = false;
       cleanup();
     };
-  }, [searchId, enabled, authToken, cleanup, connectSSE, startPollingFallback]);
+  }, [searchId, enabled, authToken, cleanup, connectSSE, startPollingFallback, resetInactivityTimer]);
 
   // Compute derived UF values
   const ufTotalFound = Array.from(ufStatuses.values())
@@ -727,5 +764,6 @@ export function useSearchSSE({
     isDegraded, degradedDetail, partialProgress, refreshAvailable,
     ufStatuses, ufTotalFound, ufAllComplete, batchProgress,
     sourceStatuses, filterSummary, pendingReviewUpdate, zeroMatchProgress,
+    sseInactivityTimeout,
   };
 }

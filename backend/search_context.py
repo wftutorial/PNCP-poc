@@ -27,8 +27,9 @@ class SearchContext:
     start_time: float = field(default_factory=time.time)
     tracker: Any = None  # progress.ProgressTracker
 
-    # === GTM-ARCH-001: Async search flags ===
+    # === GTM-ARCH-001 + CRIT-072: Async search flags ===
     quota_pre_consumed: bool = False  # AC8: True when quota consumed in POST before enqueue
+    deadline_ts: Optional[float] = None  # CRIT-072 AC8: Monotonic deadline timestamp
 
     # === Stage 1: ValidateRequest outputs ===
     is_admin: bool = False
@@ -122,3 +123,15 @@ class SearchContext:
     # === Stage 7: Persist outputs ===
     session_id: Optional[str] = None
     response: Any = None  # schemas.BuscaResponse
+
+    def deadline_remaining(self) -> float | None:
+        """CRIT-072 AC8: Seconds until deadline, or None if no deadline set."""
+        if self.deadline_ts is None:
+            return None
+        return max(0, self.deadline_ts - time.monotonic())
+
+    def is_deadline_expired(self) -> bool:
+        """CRIT-072 AC8: True if deadline has passed."""
+        if self.deadline_ts is None:
+            return False
+        return time.monotonic() >= self.deadline_ts

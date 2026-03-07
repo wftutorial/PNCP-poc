@@ -183,7 +183,7 @@ export async function mockAsyncSearchFlow(
 ): Promise<string> {
   const searchId = options.searchId || 'smoke-test-' + Date.now();
 
-  // 1. Mock POST /api/buscar → 202 Accepted
+  // 1. Mock POST /api/buscar → 202 Accepted (CRIT-072 AC1)
   await page.route('**/api/buscar', async (route: Route) => {
     if (route.request().method() === 'POST') {
       await route.fulfill({
@@ -192,6 +192,10 @@ export async function mockAsyncSearchFlow(
         body: JSON.stringify({
           search_id: searchId,
           status: 'queued',
+          status_url: `/v1/search/${searchId}/status`,
+          results_url: `/v1/search/${searchId}/results`,
+          progress_url: `/buscar-progress/${searchId}`,
+          estimated_duration_s: 30,
         }),
       });
     } else {
@@ -228,7 +232,7 @@ export async function mockAsyncSearchFlow(
       { stage: 'filtering', progress: 65, message: 'Filtrando resultados...', detail: {} },
       { stage: 'llm', progress: 80, message: 'Gerando resumo executivo...', detail: {} },
       { stage: 'excel', progress: 95, message: 'Preparando Excel...', detail: {} },
-      { stage: 'search_complete', progress: 100, message: 'Busca concluida', detail: { has_results: true, search_id: searchId, total_results: 15 } },
+      { stage: 'search_complete', progress: 100, message: 'Busca concluida', detail: { has_results: true, search_id: searchId, total_results: 15, results_ready: true, results_url: `/v1/search/${searchId}/results`, is_partial: false } },
     ];
 
     const sseBody = events

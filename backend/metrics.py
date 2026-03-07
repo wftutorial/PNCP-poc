@@ -275,6 +275,25 @@ SEARCH_JOB_DURATION = _create_histogram(
     buckets=[5, 10, 15, 30, 60, 120, 300],
 )
 
+# CRIT-072 AC9: Async search queue + total time metrics
+SEARCH_QUEUE_TIME = _create_histogram(
+    "smartlic_search_queue_time_seconds",
+    "Time spent in ARQ queue before worker picks up the job",
+    buckets=[0.1, 0.5, 1, 2, 5, 10, 30, 60],
+)
+
+SEARCH_TOTAL_TIME = _create_histogram(
+    "smartlic_search_total_time_seconds",
+    "Total search time including queue wait + pipeline execution",
+    buckets=[5, 10, 15, 30, 60, 120, 180, 300],
+)
+
+SEARCH_MODE_TOTAL = _create_counter(
+    "smartlic_search_mode_total",
+    "Total searches by mode (async vs sync)",
+    labelnames=["mode"],
+)
+
 # STORY-267 AC16: Term search quality metrics
 TERM_SEARCH_LLM_ACCEPTS = _create_counter(
     "smartlic_term_search_llm_accepts_total",

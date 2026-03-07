@@ -10862,6 +10862,98 @@
           ]
         }
       },
+      "/v1/search/{search_id}/cancel": {
+        "post": {
+          "description": "CRIT-006 AC16-17: Cancel an in-progress search.",
+          "operationId": "cancel_search_v1_search__search_id__cancel_post",
+          "parameters": [
+            {
+              "in": "path",
+              "name": "search_id",
+              "required": true,
+              "schema": {
+                "title": "Search Id",
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              },
+              "description": "Successful Response"
+            },
+            "422": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              },
+              "description": "Validation Error"
+            }
+          },
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "summary": "Cancel Search",
+          "tags": [
+            "search"
+          ]
+        }
+      },
+      "/v1/search/{search_id}/regenerate-excel": {
+        "post": {
+          "description": "STORY-364 AC7-AC8: Regenerate Excel from stored results without re-running search.\n\n- 202: Excel generation job enqueued\n- 404: Results not found or expired",
+          "operationId": "regenerate_excel_endpoint_v1_search__search_id__regenerate_excel_post",
+          "parameters": [
+            {
+              "in": "path",
+              "name": "search_id",
+              "required": true,
+              "schema": {
+                "title": "Search Id",
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              },
+              "description": "Successful Response"
+            },
+            "422": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              },
+              "description": "Validation Error"
+            }
+          },
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "summary": "Regenerate Excel Endpoint",
+          "tags": [
+            "search"
+          ]
+        }
+      },
       "/v1/search/{search_id}/results": {
         "get": {
           "description": "GTM-STAB-009 AC4: Return results of async search.\n\n- 200 with BuscaResponse when results are ready\n- 202 with status when still processing\n- 404 when search_id not found or expired",
@@ -10903,6 +10995,146 @@
             }
           ],
           "summary": "Get Search Results V1",
+          "tags": [
+            "search"
+          ]
+        }
+      },
+      "/v1/search/{search_id}/retry": {
+        "post": {
+          "description": "CRIT-006 AC4-5: Retry search with only missing/failed UFs.",
+          "operationId": "retry_search_v1_search__search_id__retry_post",
+          "parameters": [
+            {
+              "in": "path",
+              "name": "search_id",
+              "required": true,
+              "schema": {
+                "title": "Search Id",
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              },
+              "description": "Successful Response"
+            },
+            "422": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              },
+              "description": "Validation Error"
+            }
+          },
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "summary": "Retry Search",
+          "tags": [
+            "search"
+          ]
+        }
+      },
+      "/v1/search/{search_id}/status": {
+        "get": {
+          "description": "GTM-STAB-009 AC3: Enriched status response for polling.\n\nLIGHTWEIGHT (<50ms): Reads from in-memory progress tracker + state machine.\nFalls back to DB-based get_search_status only if in-memory state is unavailable.\n\nCalled by frontend when SSE disconnects (AC12) or for async polling.",
+          "operationId": "search_status_endpoint_v1_search__search_id__status_get",
+          "parameters": [
+            {
+              "in": "path",
+              "name": "search_id",
+              "required": true,
+              "schema": {
+                "title": "Search Id",
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/SearchStatusResponse"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            },
+            "422": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              },
+              "description": "Validation Error"
+            }
+          },
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "summary": "Search Status Endpoint",
+          "tags": [
+            "search"
+          ]
+        }
+      },
+      "/v1/search/{search_id}/timeline": {
+        "get": {
+          "description": "AC7: Return all state transitions for audit trail.",
+          "operationId": "search_timeline_endpoint_v1_search__search_id__timeline_get",
+          "parameters": [
+            {
+              "in": "path",
+              "name": "search_id",
+              "required": true,
+              "schema": {
+                "title": "Search Id",
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              },
+              "description": "Successful Response"
+            },
+            "422": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              },
+              "description": "Validation Error"
+            }
+          },
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "summary": "Search Timeline Endpoint",
           "tags": [
             "search"
           ]
@@ -11287,238 +11519,6 @@
           "summary": "Get Trial Status",
           "tags": [
             "user"
-          ]
-        }
-      },
-      "/v1/v1/search/{search_id}/cancel": {
-        "post": {
-          "description": "CRIT-006 AC16-17: Cancel an in-progress search.",
-          "operationId": "cancel_search_v1_v1_search__search_id__cancel_post",
-          "parameters": [
-            {
-              "in": "path",
-              "name": "search_id",
-              "required": true,
-              "schema": {
-                "title": "Search Id",
-                "type": "string"
-              }
-            }
-          ],
-          "responses": {
-            "200": {
-              "content": {
-                "application/json": {
-                  "schema": {}
-                }
-              },
-              "description": "Successful Response"
-            },
-            "422": {
-              "content": {
-                "application/json": {
-                  "schema": {
-                    "$ref": "#/components/schemas/HTTPValidationError"
-                  }
-                }
-              },
-              "description": "Validation Error"
-            }
-          },
-          "security": [
-            {
-              "HTTPBearer": []
-            }
-          ],
-          "summary": "Cancel Search",
-          "tags": [
-            "search"
-          ]
-        }
-      },
-      "/v1/v1/search/{search_id}/regenerate-excel": {
-        "post": {
-          "description": "STORY-364 AC7-AC8: Regenerate Excel from stored results without re-running search.\n\n- 202: Excel generation job enqueued\n- 404: Results not found or expired",
-          "operationId": "regenerate_excel_endpoint_v1_v1_search__search_id__regenerate_excel_post",
-          "parameters": [
-            {
-              "in": "path",
-              "name": "search_id",
-              "required": true,
-              "schema": {
-                "title": "Search Id",
-                "type": "string"
-              }
-            }
-          ],
-          "responses": {
-            "200": {
-              "content": {
-                "application/json": {
-                  "schema": {}
-                }
-              },
-              "description": "Successful Response"
-            },
-            "422": {
-              "content": {
-                "application/json": {
-                  "schema": {
-                    "$ref": "#/components/schemas/HTTPValidationError"
-                  }
-                }
-              },
-              "description": "Validation Error"
-            }
-          },
-          "security": [
-            {
-              "HTTPBearer": []
-            }
-          ],
-          "summary": "Regenerate Excel Endpoint",
-          "tags": [
-            "search"
-          ]
-        }
-      },
-      "/v1/v1/search/{search_id}/retry": {
-        "post": {
-          "description": "CRIT-006 AC4-5: Retry search with only missing/failed UFs.",
-          "operationId": "retry_search_v1_v1_search__search_id__retry_post",
-          "parameters": [
-            {
-              "in": "path",
-              "name": "search_id",
-              "required": true,
-              "schema": {
-                "title": "Search Id",
-                "type": "string"
-              }
-            }
-          ],
-          "responses": {
-            "200": {
-              "content": {
-                "application/json": {
-                  "schema": {}
-                }
-              },
-              "description": "Successful Response"
-            },
-            "422": {
-              "content": {
-                "application/json": {
-                  "schema": {
-                    "$ref": "#/components/schemas/HTTPValidationError"
-                  }
-                }
-              },
-              "description": "Validation Error"
-            }
-          },
-          "security": [
-            {
-              "HTTPBearer": []
-            }
-          ],
-          "summary": "Retry Search",
-          "tags": [
-            "search"
-          ]
-        }
-      },
-      "/v1/v1/search/{search_id}/status": {
-        "get": {
-          "description": "GTM-STAB-009 AC3: Enriched status response for polling.\n\nLIGHTWEIGHT (<50ms): Reads from in-memory progress tracker + state machine.\nFalls back to DB-based get_search_status only if in-memory state is unavailable.\n\nCalled by frontend when SSE disconnects (AC12) or for async polling.",
-          "operationId": "search_status_endpoint_v1_v1_search__search_id__status_get",
-          "parameters": [
-            {
-              "in": "path",
-              "name": "search_id",
-              "required": true,
-              "schema": {
-                "title": "Search Id",
-                "type": "string"
-              }
-            }
-          ],
-          "responses": {
-            "200": {
-              "content": {
-                "application/json": {
-                  "schema": {
-                    "$ref": "#/components/schemas/SearchStatusResponse"
-                  }
-                }
-              },
-              "description": "Successful Response"
-            },
-            "422": {
-              "content": {
-                "application/json": {
-                  "schema": {
-                    "$ref": "#/components/schemas/HTTPValidationError"
-                  }
-                }
-              },
-              "description": "Validation Error"
-            }
-          },
-          "security": [
-            {
-              "HTTPBearer": []
-            }
-          ],
-          "summary": "Search Status Endpoint",
-          "tags": [
-            "search"
-          ]
-        }
-      },
-      "/v1/v1/search/{search_id}/timeline": {
-        "get": {
-          "description": "AC7: Return all state transitions for audit trail.",
-          "operationId": "search_timeline_endpoint_v1_v1_search__search_id__timeline_get",
-          "parameters": [
-            {
-              "in": "path",
-              "name": "search_id",
-              "required": true,
-              "schema": {
-                "title": "Search Id",
-                "type": "string"
-              }
-            }
-          ],
-          "responses": {
-            "200": {
-              "content": {
-                "application/json": {
-                  "schema": {}
-                }
-              },
-              "description": "Successful Response"
-            },
-            "422": {
-              "content": {
-                "application/json": {
-                  "schema": {
-                    "$ref": "#/components/schemas/HTTPValidationError"
-                  }
-                }
-              },
-              "description": "Validation Error"
-            }
-          },
-          "security": [
-            {
-              "HTTPBearer": []
-            }
-          ],
-          "summary": "Search Timeline Endpoint",
-          "tags": [
-            "search"
           ]
         }
       },

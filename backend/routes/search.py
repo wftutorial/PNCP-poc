@@ -774,7 +774,7 @@ async def buscar_progress_stream(
 # CRIT-003 AC11: Search status polling endpoint
 # ---------------------------------------------------------------------------
 
-@router.get("/v1/search/{search_id}/status", response_model=SearchStatusResponse)
+@router.get("/search/{search_id}/status", response_model=SearchStatusResponse)
 async def search_status_endpoint(
     search_id: str,
     user: dict = Depends(require_auth),
@@ -917,7 +917,7 @@ async def search_status_endpoint(
 # CRIT-003 AC7: Search timeline endpoint
 # ---------------------------------------------------------------------------
 
-@router.get("/v1/search/{search_id}/timeline")
+@router.get("/search/{search_id}/timeline")
 async def search_timeline_endpoint(
     search_id: str,
     user: dict = Depends(require_auth),
@@ -1032,7 +1032,7 @@ async def get_zero_match_results_endpoint(
 # STORY-364 AC7-AC8: Regenerate Excel from stored results
 # ---------------------------------------------------------------------------
 
-@router.post("/v1/search/{search_id}/regenerate-excel")
+@router.post("/search/{search_id}/regenerate-excel")
 async def regenerate_excel_endpoint(
     search_id: str,
     user: dict = Depends(require_auth),
@@ -1508,8 +1508,12 @@ async def buscar_licitacoes(
         or raw_request.query_params.get("sync", "").lower() == "true"
     )
 
-    if get_feature_flag("SEARCH_ASYNC_ENABLED") and not force_sync:
-        logger.info(f"STORY-363: Async mode — dispatching to ARQ Worker for {request.search_id}")
+    # CRIT-072: ASYNC_SEARCH_DEFAULT=True makes 202 the default mode.
+    # Falls back to sync via X-Sync header, ?sync=true, or ASYNC_SEARCH_DEFAULT=False.
+    from config import ASYNC_SEARCH_DEFAULT
+    _async_enabled = ASYNC_SEARCH_DEFAULT or get_feature_flag("SEARCH_ASYNC_ENABLED")
+    if _async_enabled and not force_sync:
+        logger.info(f"CRIT-072: Async mode — dispatching to ARQ Worker for {request.search_id}")
 
         # Consume quota in POST before dispatching (prevents wasted work)
         # PHASE-0: 15s timeout prevents Supabase latency from blocking POST response
@@ -1617,16 +1621,20 @@ async def buscar_licitacoes(
                 )
                 _active_background_tasks[request.search_id] = task
 
-            # AC1+AC5: Return 202 Accepted in <3s with Location header
+            # CRIT-072 AC1+AC9: Return 202 Accepted in <2s with Location header
+            from metrics import SEARCH_MODE_TOTAL
+            SEARCH_MODE_TOTAL.labels(mode="async").inc()
             num_ufs = len(request.ufs) if request.ufs else 1
             status_url = f"/v1/search/{request.search_id}/status"
-            logger.info(f"STORY-363: Returning 202 for {request.search_id} (arq={_arq_dispatched})")
+            results_url = f"/v1/search/{request.search_id}/results"
+            logger.info(f"CRIT-072: Returning 202 for {request.search_id} (arq={_arq_dispatched})")
             return StarletteJSONResponse(
                 status_code=202,
                 content={
                     "search_id": request.search_id,
                     "status": "queued",
                     "status_url": status_url,
+                    "results_url": results_url,
                     "progress_url": f"/buscar-progress/{request.search_id}",
                     "estimated_duration_s": min(15 + num_ufs * 8, 120),
                 },
@@ -1740,7 +1748,10 @@ async def buscar_licitacoes(
 
     # -----------------------------------------------------------------------
     # AC10: No cache — synchronous pipeline (unchanged flow)
+    # CRIT-072 AC9: Count sync mode searches
     # -----------------------------------------------------------------------
+    from metrics import SEARCH_MODE_TOTAL
+    SEARCH_MODE_TOTAL.labels(mode="sync").inc()
     pipeline = SearchPipeline(deps)
     ctx = SearchContext(
         request=request,
@@ -2002,7 +2013,7 @@ async def buscar_licitacoes(
 # CRIT-006 AC4-5: Retry search with only missing/failed UFs
 # ---------------------------------------------------------------------------
 
-@router.post("/v1/search/{search_id}/retry")
+@router.post("/search/{search_id}/retry")
 async def retry_search(
     search_id: str,
     user: dict = Depends(require_auth),
@@ -2043,7 +2054,7 @@ async def retry_search(
 # CRIT-006 AC16-17: Cancel an in-progress search
 # ---------------------------------------------------------------------------
 
-@router.post("/v1/search/{search_id}/cancel")
+@router.post("/search/{search_id}/cancel")
 async def cancel_search(
     search_id: str,
     user: dict = Depends(require_auth),

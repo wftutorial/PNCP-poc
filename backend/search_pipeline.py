@@ -160,9 +160,10 @@ class SearchPipeline:
             await sm.transition_to(SearchState.FILTERING, stage="filter")
         await self._traced_stage(ctx, "pipeline.filter", self.stage_filter)
 
-        # GTM-STAB-003 AC4: Time budget guard — skip expensive stages if over budget
+        # GTM-STAB-003 AC4 + CRIT-072 AC8: Time budget / deadline guard
         _elapsed_after_filter = sync_time_module.time() - ctx.start_time
-        if _elapsed_after_filter > 90:
+        _deadline_expired = ctx.is_deadline_expired()
+        if _elapsed_after_filter > 90 or _deadline_expired:
             logger.warning(
                 f"[STAB-003] Time budget exceeded after filter ({_elapsed_after_filter:.1f}s > 90s) — "
                 f"skipping LLM and viability, marking is_simplified=True"
@@ -2823,18 +2824,21 @@ async def executar_busca_completa(
     user_data: dict,
     tracker=None,
     quota_pre_consumed: bool = False,
+    deadline_ts: float | None = None,
 ) -> "BuscaResponse":
-    """GTM-ARCH-001 AC2: Execute full search pipeline — designed for ARQ Worker.
+    """GTM-ARCH-001 AC2 + CRIT-072 AC8: Execute full search pipeline.
 
-    Reconstructs the BuscaRequest and SearchContext from serializable dicts,
-    builds default deps, and runs the full 7-stage pipeline.
+    Designed for ARQ Worker. Reconstructs BuscaRequest and SearchContext
+    from serializable dicts, builds default deps, and runs the 7-stage pipeline.
 
     Args:
         search_id: UUID for SSE correlation and result persistence.
         request_data: Serialized BuscaRequest dict (from model_dump()).
         user_data: User dict with id, plan, roles, etc.
         tracker: Optional ProgressTracker (if None, creates one from Redis).
-        quota_pre_consumed: AC8 — True when quota consumed in POST before enqueue.
+        quota_pre_consumed: True when quota consumed in POST before enqueue.
+        deadline_ts: CRIT-072 AC8 — monotonic timestamp of deadline expiry.
+            Pipeline stages check this and skip gracefully if expired.
 
     Returns:
         BuscaResponse with full search results.
@@ -2862,5 +2866,7 @@ async def executar_busca_completa(
         start_time=_time.time(),
         quota_pre_consumed=quota_pre_consumed,
     )
+    # CRIT-072 AC8: Attach deadline for stage-level checks
+    ctx.deadline_ts = deadline_ts
 
     return await pipeline.run(ctx)

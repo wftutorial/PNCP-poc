@@ -169,16 +169,19 @@ def _enable_feature_gated_routes(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _force_sync_search(monkeypatch):
-    """STORY-292: Default tests to sync search mode.
+    """STORY-292 + CRIT-072: Default tests to sync search mode.
 
-    SEARCH_ASYNC_ENABLED is true in production (STORY-292), but existing tests
+    ASYNC_SEARCH_DEFAULT is true in production (CRIT-072), but existing tests
     expect synchronous 200 responses from POST /buscar. This fixture forces
     sync mode by default. Tests that explicitly test async behavior should
-    override with: monkeypatch.setenv("SEARCH_ASYNC_ENABLED", "true")
+    override with: monkeypatch.setattr(config, "ASYNC_SEARCH_DEFAULT", True)
     """
     import config
+    # CRIT-072: Patch both flags to ensure sync mode
+    monkeypatch.setattr(config, "ASYNC_SEARCH_DEFAULT", False)
     monkeypatch.setattr(config, "SEARCH_ASYNC_ENABLED", False)
     monkeypatch.setenv("SEARCH_ASYNC_ENABLED", "false")
+    monkeypatch.setenv("ASYNC_SEARCH_DEFAULT", "false")
     # Clear the feature flag cache so get_feature_flag() re-reads
     if hasattr(config, "_feature_flag_cache"):
         config._feature_flag_cache.pop("SEARCH_ASYNC_ENABLED", None)

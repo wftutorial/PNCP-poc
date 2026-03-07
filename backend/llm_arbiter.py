@@ -29,6 +29,10 @@ from metrics import LLM_CALLS, LLM_DURATION, EVIDENCE_PREFIX_STRIPPED
 # Configure logging
 logger = logging.getLogger(__name__)
 
+# HARDEN-001: OpenAI client timeout (default 600s → 15s)
+# GPT-4.1-nano p99 ≈ 3s; 15s = 5× p99. Prevents thread starvation on LLM hangs.
+_LLM_TIMEOUT = float(os.getenv("LLM_TIMEOUT_S", "15"))
+
 # OpenAI client (initialized lazily to avoid import-time errors in tests)
 _client: Optional[OpenAI] = None
 
@@ -37,7 +41,11 @@ def _get_client() -> OpenAI:
     """Get or initialize OpenAI client (lazy initialization)."""
     global _client
     if _client is None:
-        _client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        _client = OpenAI(
+            api_key=os.getenv("OPENAI_API_KEY"),
+            timeout=_LLM_TIMEOUT,
+            max_retries=1,
+        )
     return _client
 
 

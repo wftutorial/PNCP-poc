@@ -18,11 +18,11 @@ O `OpenAI()` client em `llm_arbiter.py:40` é inicializado sem parâmetro `timeo
 
 ## Critérios de Aceitação
 
-- [ ] AC1: `OpenAI()` inicializado com `timeout=15` (5× p99)
-- [ ] AC2: `max_retries=1` (reduzir de 2 para 1)
-- [ ] AC3: Timeout configurável via env var `LLM_TIMEOUT_S`
-- [ ] AC4: Teste unitário valida que client usa timeout correto
-- [ ] AC5: Zero regressions nos testes existentes
+- [x] AC1: `OpenAI()` inicializado com `timeout=15` (5× p99)
+- [x] AC2: `max_retries=1` (reduzir de 2 para 1)
+- [x] AC3: Timeout configurável via env var `LLM_TIMEOUT_S`
+- [x] AC4: Teste unitário valida que client usa timeout correto
+- [x] AC5: Zero regressions nos testes existentes
 
 ## Solução
 

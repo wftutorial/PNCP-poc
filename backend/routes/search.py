@@ -507,6 +507,12 @@ async def buscar_progress_stream(
             # Moved inside generator so heartbeats flow before first real event
             tracker = None
             for i in range(60):  # 60 * 0.5s = 30s
+                # HARDEN-012 AC1: Check if client disconnected
+                if await request.is_disconnected():
+                    from metrics import SSE_DISCONNECTS_TOTAL
+                    SSE_DISCONNECTS_TOTAL.inc()
+                    logger.debug(f"HARDEN-012: Client disconnected during wait phase for {search_id}")
+                    return
                 tracker = await get_tracker(search_id)
                 if tracker:
                     break
@@ -590,6 +596,13 @@ async def buscar_progress_stream(
                 logger.debug(f"SSE using Redis Streams (polled) for {search_id}")
 
                 while True:
+                    # HARDEN-012 AC1: Check if client disconnected
+                    if await request.is_disconnected():
+                        from metrics import SSE_DISCONNECTS_TOTAL
+                        SSE_DISCONNECTS_TOTAL.inc()
+                        logger.debug(f"HARDEN-012: Client disconnected during Redis streaming for {search_id}")
+                        return
+
                     try:
                         # Non-blocking XREAD — returns immediately with data or empty
                         result = await _redis.xread(
@@ -704,6 +717,13 @@ async def buscar_progress_stream(
                 _last_polled_state = None
                 _max_polls = 60  # 60 * 5s = 5 minutes max
                 for _poll_idx in range(_max_polls):
+                    # HARDEN-012 AC1: Check if client disconnected
+                    if await request.is_disconnected():
+                        from metrics import SSE_DISCONNECTS_TOTAL
+                        SSE_DISCONNECTS_TOTAL.inc()
+                        logger.debug(f"HARDEN-012: Client disconnected during Supabase fallback for {search_id}")
+                        return
+
                     try:
                         _sb_status = await get_search_status(search_id)
                         if _sb_status:
@@ -745,6 +765,13 @@ async def buscar_progress_stream(
                 # Also entered when CRIT-026-ROOT circuit breaker opens mid-stream.
                 logger.debug(f"SSE using in-memory queue for {search_id}")
                 while True:
+                    # HARDEN-012 AC1: Check if client disconnected
+                    if await request.is_disconnected():
+                        from metrics import SSE_DISCONNECTS_TOTAL
+                        SSE_DISCONNECTS_TOTAL.inc()
+                        logger.debug(f"HARDEN-012: Client disconnected during in-memory streaming for {search_id}")
+                        break
+
                     try:
                         # CRIT-012 AC2: Heartbeat interval as timeout
                         event = await _asyncio.wait_for(

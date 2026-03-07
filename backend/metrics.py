@@ -242,6 +242,12 @@ SSE_CONNECTION_ERRORS = _create_counter(
     labelnames=["error_type", "phase"],
 )
 
+# HARDEN-012 AC4: SSE client disconnects detected via request.is_disconnected()
+SSE_DISCONNECTS_TOTAL = _create_counter(
+    "smartlic_sse_disconnects_total",
+    "SSE client disconnects detected server-side",
+)
+
 # STORY-359 AC4: Frontend SSE fallback to simulated progress
 SSE_FALLBACK_SIMULATED_TOTAL = _create_counter(
     "smartlic_sse_fallback_simulated_total",

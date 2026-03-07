@@ -11,12 +11,14 @@ Loop de polling XREAD em `routes/search.py` roda a cada 1s sem verificar se clie
 
 ## Critérios de Aceitação
 
-- [ ] AC1: `request.is_disconnected()` verificado a cada iteração do event_generator
-- [ ] AC2: Log debug no disconnect detectado
-- [ ] AC3: `release_sse_connection()` chamado no disconnect
-- [ ] AC4: Metric `smartlic_sse_disconnects_total` incrementada
-- [ ] AC5: Teste valida cleanup no disconnect
+- [x] AC1: `request.is_disconnected()` verificado a cada iteração do event_generator
+- [x] AC2: Log debug no disconnect detectado
+- [x] AC3: `release_sse_connection()` chamado no disconnect
+- [x] AC4: Metric `smartlic_sse_disconnects_total` incrementada
+- [x] AC5: Teste valida cleanup no disconnect
 
 ## Arquivos Afetados
 
-- `backend/routes/search.py` — event_generator()
+- `backend/routes/search.py` — event_generator() — 4 disconnect checks (wait, Redis, Supabase, in-memory)
+- `backend/metrics.py` — SSE_DISCONNECTS_TOTAL counter
+- `backend/tests/test_harden012_sse_disconnect.py` — 5 tests (wait, Redis, in-memory, Supabase, negative)

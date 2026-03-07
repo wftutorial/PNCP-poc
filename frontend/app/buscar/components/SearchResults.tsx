@@ -27,6 +27,7 @@ import { SearchStateManager } from "./SearchStateManager";
 import { deriveSearchPhase } from "../types/searchPhase";
 import { TrialUpsellCTA } from "../../../components/billing/TrialUpsellCTA";
 import { EmptyState } from "../../components/EmptyState";
+import { EmptyResults } from "./EmptyResults";
 
 // TD-007: Decomposed sub-components
 import { ResultsHeader } from "./search-results/ResultsHeader";
@@ -161,7 +162,7 @@ export default function SearchResults(props: SearchResultsProps) {
           </div>
         </div>
       )}
-      {!loading && result && !result.is_partial && result.response_state !== "empty_failure" && result.resumo.total_oportunidades === 0 && (!result.sources_degraded || result.sources_degraded.length === 0) && <ZeroResultsSuggestions sectorName={sectorName} ufCount={ufsSelecionadas.size} ufNames={Array.from(ufsSelecionadas)} dayRange={30} onAdjustPeriod={props.onAdjustPeriod} onAddNeighborStates={props.onAddNeighborStates} onChangeSector={() => window.scrollTo({ top: 0, behavior: "smooth" })} nearbyResultsCount={props.nearbyResultsCount} onViewNearbyResults={props.onViewNearbyResults} totalFromSources={result.total_raw} filterStats={result.filter_stats} />}
+      {!loading && result && !result.is_partial && result.response_state !== "empty_failure" && result.resumo.total_oportunidades === 0 && (!result.sources_degraded || result.sources_degraded.length === 0) && (result.total_filtrado === 0 && (result.total_raw || 0) > 0 ? <EmptyResults totalRaw={result.total_raw} sectorName={sectorName} ufCount={ufsSelecionadas.size} onScrollToTop={() => window.scrollTo({ top: 0, behavior: "smooth" })} /> : <ZeroResultsSuggestions sectorName={sectorName} ufCount={ufsSelecionadas.size} ufNames={Array.from(ufsSelecionadas)} dayRange={30} onAdjustPeriod={props.onAdjustPeriod} onAddNeighborStates={props.onAddNeighborStates} onChangeSector={() => window.scrollTo({ top: 0, behavior: "smooth" })} nearbyResultsCount={props.nearbyResultsCount} onViewNearbyResults={props.onViewNearbyResults} totalFromSources={result.total_raw} filterStats={result.filter_stats} />)}
       {!loading && result && result.filter_relaxed && result.resumo.total_oportunidades > 0 && <FilterRelaxedBanner relaxationLevel={result.hidden_by_min_match != null && result.hidden_by_min_match > 0 ? "min_match_lowered" : undefined} originalCount={0} relaxedCount={result.resumo.total_oportunidades} />}
       {!loading && refreshAvailable && props.onRefreshResults && <div className="mt-4"><RefreshBanner refreshInfo={refreshAvailable} onRefresh={props.onRefreshResults} /></div>}
       {!loading && liveFetchInProgress && !refreshAvailable && result && (

@@ -280,8 +280,8 @@ describe("CRIT-030 AC3: Empty state guard conditions", () => {
       />
     );
 
-    // Zero results renders ZeroResultsSuggestions (data-testid="zero-results-suggestions")
-    expect(screen.getByTestId("zero-results-suggestions")).toBeInTheDocument();
+    // HARDEN-025: When total_raw > 0 && total_filtrado === 0, EmptyResults is shown instead of ZeroResultsSuggestions
+    expect(screen.getByTestId("empty-results")).toBeInTheDocument();
   });
 
   it("does NOT show empty state when loading=true", () => {
@@ -412,8 +412,8 @@ describe("CRIT-030 AC6: Stale content cleanup", () => {
       />
     );
 
-    // Verify zero-results-suggestions is visible first (renders for !is_partial && total === 0)
-    expect(screen.getByTestId("zero-results-suggestions")).toBeInTheDocument();
+    // HARDEN-025: When total_raw > 0 && total_filtrado === 0, EmptyResults is shown
+    expect(screen.getByTestId("empty-results")).toBeInTheDocument();
 
     // Simulate new search: result=null, loading=true
     rerender(
@@ -425,7 +425,8 @@ describe("CRIT-030 AC6: Stale content cleanup", () => {
       />
     );
 
-    // Zero results suggestions gone
+    // Empty results gone
+    expect(screen.queryByTestId("empty-results")).not.toBeInTheDocument();
     expect(screen.queryByTestId("zero-results-suggestions")).not.toBeInTheDocument();
     expect(screen.queryByTestId("empty-state")).not.toBeInTheDocument();
   });

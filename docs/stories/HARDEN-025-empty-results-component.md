@@ -11,10 +11,10 @@ Quando search retorna 0 resultados, não há orientação ao usuário. Filter su
 
 ## Critérios de Aceitação
 
-- [ ] AC1: Componente `EmptyResults` com ícone e mensagem amigável
-- [ ] AC2: Sugestões contextuais: "ampliar período", "remover filtros de UF", "usar termos genéricos"
-- [ ] AC3: Exibido quando `total_filtrado === 0`
-- [ ] AC4: Teste de renderização
+- [x] AC1: Componente `EmptyResults` com ícone e mensagem amigável
+- [x] AC2: Sugestões contextuais: "ampliar período", "remover filtros de UF", "usar termos genéricos"
+- [x] AC3: Exibido quando `total_filtrado === 0`
+- [x] AC4: Teste de renderização
 
 ## Arquivos Afetados
 

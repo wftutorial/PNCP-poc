@@ -221,6 +221,13 @@ TRACKER_CLEANUP_COUNT = _create_counter(
     "HARDEN-004: Number of stale trackers removed by periodic cleanup",
 )
 
+# HARDEN-005 AC3: Persist failures after retry exhaustion
+PERSIST_FAILURES = _create_counter(
+    "smartlic_persist_failures_total",
+    "HARDEN-005: Persist results failures after retry exhaustion",
+    labelnames=["store"],
+)
+
 # CRIT-012 AC8: SSE connection errors
 SSE_CONNECTION_ERRORS = _create_counter(
     "smartlic_sse_connection_errors_total",

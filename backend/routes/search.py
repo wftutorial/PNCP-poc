@@ -274,6 +274,39 @@ async def _persist_results_to_supabase(
         logger.warning(f"STORY-362: Failed to persist results to Supabase L3: {e}")
 
 
+async def _safe_persist_results(search_id: str, user_id: str, response: Any) -> None:
+    """HARDEN-005 AC1/AC2/AC3: Retry wrapper for _persist_results_to_supabase.
+
+    Retries up to 3 times with exponential backoff. On final failure,
+    captures exception to Sentry and increments persist_failures metric.
+    """
+    from metrics import PERSIST_FAILURES
+
+    for attempt in range(3):
+        try:
+            await _persist_results_to_supabase(search_id, user_id, response)
+            return
+        except Exception as e:
+            if attempt == 2:
+                sentry_sdk.capture_exception(e)
+                PERSIST_FAILURES.labels(store="supabase").inc()
+                logger.error(
+                    f"HARDEN-005: Persist failed after 3 attempts for {search_id}: {e}"
+                )
+            else:
+                await asyncio.sleep(2 ** attempt)
+
+
+def _persist_done_callback(task: asyncio.Task) -> None:
+    """HARDEN-005 AC4: Capture unhandled exceptions from fire-and-forget tasks."""
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        sentry_sdk.capture_exception(exc)
+        logger.error(f"HARDEN-005: Unhandled exception in persist task: {exc}")
+
+
 async def _get_results_from_supabase(search_id: str) -> Optional[Dict[str, Any]]:
     """STORY-362 AC6: Read results from Supabase L3 (long-term persistence)."""
     from datetime import datetime, timezone
@@ -1161,8 +1194,9 @@ async def _execute_background_fetch(
         # Store results for /buscar-results/{search_id}
         store_background_results(search_id, response)
         await _persist_results_to_redis(search_id, response)
-        # STORY-362 AC5: Fire-and-forget L3 persist
-        asyncio.create_task(_persist_results_to_supabase(search_id, user.get("id", ""), response))
+        # HARDEN-005: Retry-wrapped L3 persist with done_callback
+        _persist_task = asyncio.create_task(_safe_persist_results(search_id, user.get("id", ""), response))
+        _persist_task.add_done_callback(_persist_done_callback)
 
         # Calculate diff summary for refresh_available event
         cached_ids = set()
@@ -1311,8 +1345,9 @@ async def _run_async_search(
         # Persist results: L1 (memory) + L2 (Redis) + L3 (Supabase)
         store_background_results(search_id, response)
         await _persist_results_to_redis(search_id, response)
-        # STORY-362 AC5: Fire-and-forget L3 persist
-        asyncio.create_task(_persist_results_to_supabase(search_id, user.get("id", ""), response))
+        # HARDEN-005: Retry-wrapped L3 persist with done_callback
+        _persist_task = asyncio.create_task(_safe_persist_results(search_id, user.get("id", ""), response))
+        _persist_task.add_done_callback(_persist_done_callback)
         asyncio.create_task(_update_session_on_complete(search_id, user.get("id"), response))
 
         # Emit terminal SSE event

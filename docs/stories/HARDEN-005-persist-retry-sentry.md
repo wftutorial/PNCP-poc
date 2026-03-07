@@ -17,12 +17,12 @@
 
 ## Critérios de Aceitação
 
-- [ ] AC1: Wrapper `_safe_persist_results()` com retry 3× (backoff exponencial)
-- [ ] AC2: `sentry_sdk.capture_exception()` na falha final
-- [ ] AC3: Metric `smartlic_persist_failures_total` com label `store`
-- [ ] AC4: `task.add_done_callback()` para capturar exceções não tratadas
-- [ ] AC5: Teste unitário valida retry e métrica de falha
-- [ ] AC6: Zero regressions
+- [x] AC1: Wrapper `_safe_persist_results()` com retry 3× (backoff exponencial)
+- [x] AC2: `sentry_sdk.capture_exception()` na falha final
+- [x] AC3: Metric `smartlic_persist_failures_total` com label `store`
+- [x] AC4: `task.add_done_callback()` para capturar exceções não tratadas
+- [x] AC5: Teste unitário valida retry e métrica de falha
+- [x] AC6: Zero regressions
 
 ## Solução
 

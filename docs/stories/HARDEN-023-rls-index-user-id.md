@@ -11,10 +11,10 @@ Supabase docs documentam melhorias de 100×+ quando colunas usadas em RLS polici
 
 ## Critérios de Aceitação
 
-- [ ] AC1: Migration cria índices em `user_id` para tabelas principais
-- [ ] AC2: Tabelas: searches, pipeline, feedback, search_results_store, search_sessions
-- [ ] AC3: `CREATE INDEX IF NOT EXISTS` (idempotente)
-- [ ] AC4: Migration aplicada sem erro
+- [x] AC1: Migration cria índices em `user_id` para tabelas principais
+- [x] AC2: Tabelas: searches, pipeline, feedback, search_results_store, search_sessions
+- [x] AC3: `CREATE INDEX IF NOT EXISTS` (idempotente)
+- [x] AC4: Migration aplicada sem erro
 
 ## Solução
 
@@ -28,4 +28,4 @@ CREATE INDEX IF NOT EXISTS idx_search_sessions_user_id ON search_sessions(user_i
 
 ## Arquivos Afetados
 
-- `supabase/migrations/` — nova migration
+- `supabase/migrations/20260307100000_rls_index_user_id.sql` — nova migration

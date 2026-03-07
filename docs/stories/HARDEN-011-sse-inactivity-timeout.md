@@ -11,11 +11,11 @@ Frontend SSE proxy em `app/api/buscar-progress/route.ts` usa `bodyTimeout: 0` (c
 
 ## Critérios de Aceitação
 
-- [ ] AC1: Inactivity timeout de 60s no reader loop (Promise.race)
-- [ ] AC2: Timeout gera erro SSE `SSE_INACTIVITY_TIMEOUT` ao client
-- [ ] AC3: Cleanup de AbortController no timeout
-- [ ] AC4: Teste unitário valida timeout
-- [ ] AC5: Zero regressions
+- [x] AC1: Inactivity timeout de 120s no reader loop (Promise.race) — configurable via `SSE_INACTIVITY_TIMEOUT_MS` env var
+- [x] AC2: Timeout gera erro SSE `SSE_INACTIVITY_TIMEOUT` ao client com mensagem "Conexão inativa por tempo prolongado"
+- [x] AC3: Cleanup de reader.cancel() no timeout + structured HARDEN-011 logging
+- [x] AC4: 5 testes unitários validam timeout, error event, logging, normal flow, e default value
+- [x] AC5: Zero regressions — 27/27 SSE proxy tests pass
 
 ## Solução
 

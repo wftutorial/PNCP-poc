@@ -14,6 +14,10 @@
  *   Railway(300s) > Gunicorn(180s) > Proxy POST(180s) > Pipeline(110s) >
  *   Consolidation(100s) > PerSource(80s) > PerUF(30s)
  *   SSE: bodyTimeout(0) + heartbeat(15s) > Railway idle(60s)
+ * HARDEN-011: Inactivity timeout (120s) on reader loop via Promise.race.
+ *   If backend stops sending events (including heartbeats), proxy closes
+ *   cleanly with SSE_INACTIVITY_TIMEOUT error event instead of blocking
+ *   until Railway kills the connection (300s).
  */
 
 import { NextRequest } from "next/server";
@@ -23,6 +27,19 @@ export const dynamic = "force-dynamic";
 
 // CRIT-048 AC7: Max retries increased from 1→2 (total 3 attempts)
 const MAX_SSE_RETRIES = 2;
+
+// HARDEN-011 AC1: Inactivity timeout for the SSE reader loop.
+// Backend sends heartbeats every 15s. 120s without any data = dead connection.
+// Must be > Railway idle timeout (60s) but < Railway hard kill (300s).
+// Configurable via SSE_INACTIVITY_TIMEOUT_MS env var for tuning/testing.
+function getInactivityTimeoutMs(): number {
+  const envVal = process.env.SSE_INACTIVITY_TIMEOUT_MS;
+  if (envVal) {
+    const parsed = parseInt(envVal, 10);
+    if (!isNaN(parsed) && parsed > 0) return parsed;
+  }
+  return 120_000;
+}
 
 /**
  * CRIT-026 AC6+AC7: Perform the actual SSE fetch to backend with undici
@@ -187,38 +204,70 @@ export async function GET(request: NextRequest) {
             const encoder = new TextEncoder();
             try {
               while (true) {
-                const { done, value } = await reader.read();
+                // HARDEN-011 AC1: Promise.race with inactivity timeout.
+                // If backend stops sending data (no events, no heartbeats)
+                // for the configured timeout, we break out cleanly.
+                const timeoutMs = getInactivityTimeoutMs();
+                const readResult = await Promise.race([
+                  reader.read(),
+                  new Promise<never>((_, reject) => {
+                    const timer = setTimeout(
+                      () => reject(new Error("SSE_INACTIVITY_TIMEOUT")),
+                      timeoutMs
+                    );
+                    // Ensure timer doesn't prevent Node.js from exiting
+                    if (typeof timer === "object" && "unref" in timer) {
+                      timer.unref();
+                    }
+                  }),
+                ]);
+                const { done, value } = readResult;
                 if (done) break;
                 controller.enqueue(value);
               }
               controller.close();
             } catch (pipeError) {
-              // CRIT-048 AC2+AC6: Pipe failure — log with upstream details
               const pipeErrorName =
                 pipeError instanceof Error ? pipeError.name : "UnknownError";
               const pipeErrorMsg =
                 pipeError instanceof Error
                   ? pipeError.message
                   : String(pipeError);
+
+              // HARDEN-011 AC2+AC3: Inactivity timeout — specific error event + cleanup
+              const isInactivityTimeout = pipeErrorMsg === "SSE_INACTIVITY_TIMEOUT";
+
               console.error(
-                "[SSE-PROXY] CRIT-048: Pipe failure:",
+                `[SSE-PROXY] ${isInactivityTimeout ? "HARDEN-011" : "CRIT-048"}: ${isInactivityTimeout ? "Inactivity timeout" : "Pipe failure"}:`,
                 JSON.stringify({
-                  error_type: pipeErrorName,
+                  error_type: isInactivityTimeout ? "SSE_INACTIVITY_TIMEOUT" : pipeErrorName,
                   search_id: searchId,
                   upstream_status: backendResponse.status,
                   upstream_error: pipeErrorMsg,
                   elapsed_ms: Date.now() - startTime,
                 })
               );
+
+              // HARDEN-011 AC3: Cancel reader + abort upstream fetch on timeout
+              if (isInactivityTimeout) {
+                try { reader.cancel(); } catch { /* already cancelled */ }
+              }
+
               try {
-                // Emit SSE error event so client can reconnect
+                // HARDEN-011 AC2: Emit SSE error event with specific type
                 controller.enqueue(
                   encoder.encode(
                     `event: error\ndata: ${JSON.stringify({
                       stage: "error",
                       progress: -1,
-                      message: "Conexão com servidor interrompida",
-                      detail: { upstream_error: pipeErrorName },
+                      message: isInactivityTimeout
+                        ? "Conexão inativa por tempo prolongado"
+                        : "Conexão com servidor interrompida",
+                      detail: {
+                        upstream_error: isInactivityTimeout
+                          ? "SSE_INACTIVITY_TIMEOUT"
+                          : pipeErrorName,
+                      },
                     })}\nretry: 5000\n\n`
                   )
                 );

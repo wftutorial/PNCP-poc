@@ -55,6 +55,8 @@ LOCAL_CACHE_DIR = Path(
     else os.getenv("SMARTLIC_CACHE_DIR", os.path.join(os.environ.get("TEMP", "C:\\Temp"), "smartlic_cache"))
 )
 LOCAL_CACHE_TTL_HOURS = 24  # Max age for local cache files
+LOCAL_CACHE_MAX_SIZE_MB = 200  # HARDEN-018: max dir size before eviction
+LOCAL_CACHE_TARGET_SIZE_MB = 100  # HARDEN-018: evict until below this
 REDIS_CACHE_TTL_SECONDS = 14400  # 4 hours
 
 
@@ -476,9 +478,62 @@ def _get_from_redis(cache_key: str) -> Optional[dict]:
 # ============================================================================
 
 
+def _check_cache_dir_size() -> int:
+    """HARDEN-018 AC1/AC2: Check local cache dir size, evict oldest files if > 200MB.
+
+    Deletes oldest files (by mtime) until total size is below 100MB.
+    Returns the number of files deleted.
+    """
+    if not LOCAL_CACHE_DIR.exists():
+        return 0
+
+    files = list(LOCAL_CACHE_DIR.glob("*.json"))
+    if not files:
+        return 0
+
+    # AC1: Calculate total size
+    file_stats = []
+    total_size = 0
+    for f in files:
+        try:
+            st = f.stat()
+            file_stats.append((f, st.st_mtime, st.st_size))
+            total_size += st.st_size
+        except OSError:
+            continue
+
+    max_bytes = LOCAL_CACHE_MAX_SIZE_MB * 1024 * 1024
+    if total_size <= max_bytes:
+        return 0
+
+    # AC2: Sort by mtime ascending (oldest first), delete until < 100MB
+    target_bytes = LOCAL_CACHE_TARGET_SIZE_MB * 1024 * 1024
+    file_stats.sort(key=lambda x: x[1])  # oldest first
+
+    deleted = 0
+    for file_path, _mtime, size in file_stats:
+        if total_size <= target_bytes:
+            break
+        try:
+            file_path.unlink()
+            total_size -= size
+            deleted += 1
+        except OSError as e:
+            logger.warning(f"HARDEN-018: Failed to evict cache file {file_path}: {e}")
+
+    if deleted > 0:
+        logger.info(
+            f"HARDEN-018: Evicted {deleted} oldest cache files, "
+            f"dir now ~{total_size / (1024 * 1024):.1f}MB"
+        )
+
+    return deleted
+
+
 def _save_to_local(cache_key: str, results: list, sources: list[str]) -> None:
     """Save to local JSON file (Level 3)."""
     LOCAL_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    _check_cache_dir_size()  # HARDEN-018 AC3: enforce size limit before write
 
     cache_data = {
         "results": results,
@@ -1400,6 +1455,9 @@ def cleanup_local_cache() -> int:
 
     if deleted_count > 0:
         logger.info(f"Cache cleanup: deleted {deleted_count} expired local files")
+
+    # HARDEN-018 AC3: also enforce size limit after TTL cleanup
+    _check_cache_dir_size()
 
     return deleted_count
 

@@ -11,10 +11,10 @@
 
 ## Critérios de Aceitação
 
-- [ ] AC1: `_check_cache_dir_size()` helper que verifica tamanho total do diretório
-- [ ] AC2: Se > 200MB, deleta arquivos mais antigos até < 100MB
-- [ ] AC3: Chamado antes de cada write + no cleanup periódico
-- [ ] AC4: Teste unitário
+- [x] AC1: `_check_cache_dir_size()` helper que verifica tamanho total do diretório
+- [x] AC2: Se > 200MB, deleta arquivos mais antigos até < 100MB
+- [x] AC3: Chamado antes de cada write + no cleanup periódico
+- [x] AC4: Teste unitário
 
 ## Arquivos Afetados
 

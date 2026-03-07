@@ -16,7 +16,7 @@ from clients.base import SourceAdapter, SourceStatus, UnifiedProcurement, Source
 from source_config.sources import source_health_registry
 from metrics import FETCH_DURATION, API_ERRORS, SOURCES_BIDS_FETCHED, DEDUP_FIELDS_MERGED
 from telemetry import get_tracer, optional_span
-from bulkhead import SourceBulkhead, get_bulkhead
+from bulkhead import BulkheadAcquireTimeoutError, SourceBulkhead, get_bulkhead
 
 logger = logging.getLogger(__name__)
 
@@ -668,6 +668,19 @@ class ConsolidationService:
                 "status": "success",
                 "records": partial_records,
                 "duration_ms": duration,
+            }
+        except BulkheadAcquireTimeoutError as bae:
+            duration = int((time.time() - start) * 1000)
+            FETCH_DURATION.labels(source=code).observe(duration / 1000.0)
+            logger.warning(
+                f"[CONSOLIDATION] {code}: bulkhead acquire timeout after {duration}ms — skipped"
+            )
+            return {
+                "code": code,
+                "status": "skipped",
+                "records": [],
+                "duration_ms": duration,
+                "error": str(bae),
             }
         except asyncio.TimeoutError:
             duration = int((time.time() - start) * 1000)

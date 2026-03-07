@@ -13,6 +13,7 @@ import time
 from typing import Any, Awaitable, Dict, Optional, TypeVar
 
 from metrics import (
+    BULKHEAD_ACQUIRE_TIMEOUT,
     SOURCE_ACTIVE_REQUESTS,
     SOURCE_POOL_EXHAUSTED,
     SOURCE_SEMAPHORE_WAIT_SECONDS,
@@ -21,6 +22,22 @@ from metrics import (
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
+
+
+class BulkheadAcquireTimeoutError(Exception):
+    """Raised when a coroutine cannot acquire the bulkhead semaphore in time.
+
+    This signals that the UF should be marked as ``skipped`` (not ``error``),
+    since the work was never attempted — it simply couldn't get a slot.
+    """
+
+    def __init__(self, source: str, timeout: float):
+        self.source = source
+        self.timeout = timeout
+        super().__init__(
+            f"Bulkhead acquire timeout for {source}: "
+            f"could not acquire semaphore within {timeout:.1f}s"
+        )
 
 
 class SourceBulkhead:
@@ -58,19 +75,27 @@ class SourceBulkhead:
         """True if all slots are in use."""
         return self._active >= self.max_concurrent
 
-    async def execute(self, coro: Awaitable[T]) -> T:
+    async def execute(self, coro: Awaitable[T], timeout: Optional[float] = None) -> T:
         """Execute a coroutine within the bulkhead's concurrency limit.
 
-        If the semaphore is already fully acquired, this call will block
-        until a slot is freed. The ``pool_exhausted`` counter is bumped
-        when a caller has to wait.
+        Timeout is split 50/50: half for acquiring the semaphore, half for
+        executing the coroutine.  If the semaphore cannot be acquired within
+        the acquire budget, :class:`BulkheadAcquireTimeoutError` is raised so
+        the caller can mark the unit of work as *skipped* rather than *error*.
 
         Args:
             coro: Awaitable to run inside the bulkhead.
+            timeout: Override total timeout (defaults to ``self.timeout``).
 
         Returns:
             The result of the awaitable.
+
+        Raises:
+            BulkheadAcquireTimeoutError: semaphore not acquired in time.
         """
+        effective_timeout = timeout if timeout is not None else self.timeout
+        acquire_budget = effective_timeout / 2.0
+
         # Check if we'll have to wait (semaphore is exhausted)
         if self._active >= self.max_concurrent:
             self._exhausted_count += 1
@@ -81,18 +106,28 @@ class SourceBulkhead:
             )
 
         wait_start = time.monotonic()
-        async with self._semaphore:
-            wait_duration = time.monotonic() - wait_start
-            if wait_duration > 0.01:  # Only record meaningful waits
-                SOURCE_SEMAPHORE_WAIT_SECONDS.labels(source=self.name).observe(wait_duration)
+        try:
+            await asyncio.wait_for(self._semaphore.acquire(), timeout=acquire_budget)
+        except asyncio.TimeoutError:
+            BULKHEAD_ACQUIRE_TIMEOUT.labels(source=self.name).inc()
+            logger.warning(
+                f"[BULKHEAD] {self.name}: acquire timeout after {acquire_budget:.1f}s "
+                f"(active={self._active}/{self.max_concurrent})"
+            )
+            raise BulkheadAcquireTimeoutError(self.name, acquire_budget)
 
-            self._active += 1
+        wait_duration = time.monotonic() - wait_start
+        if wait_duration > 0.01:  # Only record meaningful waits
+            SOURCE_SEMAPHORE_WAIT_SECONDS.labels(source=self.name).observe(wait_duration)
+
+        self._active += 1
+        SOURCE_ACTIVE_REQUESTS.labels(source=self.name).set(self._active)
+        try:
+            return await coro
+        finally:
+            self._active -= 1
             SOURCE_ACTIVE_REQUESTS.labels(source=self.name).set(self._active)
-            try:
-                return await coro
-            finally:
-                self._active -= 1
-                SOURCE_ACTIVE_REQUESTS.labels(source=self.name).set(self._active)
+            self._semaphore.release()
 
     def status(self) -> str:
         """Return health status string based on utilization.

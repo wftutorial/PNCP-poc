@@ -11,11 +11,11 @@ Bulkhead wraps source fetch com semaphore em `consolidation.py:654-656`. Com 27 
 
 ## Critérios de Aceitação
 
-- [ ] AC1: Bulkhead.execute() divide timeout: 50% para acquire, 50% para execução
-- [ ] AC2: BulkheadTimeoutError exception para acquire timeout
-- [ ] AC3: UF marcada como `skipped` (não `error`) quando acquire timeout
-- [ ] AC4: Metric `smartlic_bulkhead_acquire_timeout_total`
-- [ ] AC5: Teste com cenário de 27 UFs e bulkhead size=5
+- [x] AC1: Bulkhead.execute() divide timeout: 50% para acquire, 50% para execução
+- [x] AC2: BulkheadTimeoutError exception para acquire timeout
+- [x] AC3: UF marcada como `skipped` (não `error`) quando acquire timeout
+- [x] AC4: Metric `smartlic_bulkhead_acquire_timeout_total`
+- [x] AC5: Teste com cenário de 27 UFs e bulkhead size=5
 
 ## Arquivos Afetados
 

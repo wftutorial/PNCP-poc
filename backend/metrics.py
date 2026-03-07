@@ -380,6 +380,12 @@ SOURCE_SEMAPHORE_WAIT_SECONDS = _create_histogram(
     buckets=[0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10],
 )
 
+BULKHEAD_ACQUIRE_TIMEOUT = _create_counter(
+    "smartlic_bulkhead_acquire_timeout_total",
+    "Times a bulkhead semaphore acquire timed out (UF skipped)",
+    labelnames=["source"],
+)
+
 # ============================================================================
 # Gauges
 # ============================================================================

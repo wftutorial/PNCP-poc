@@ -1,4 +1,4 @@
-"""STORY-296: Tests for per-source bulkhead pattern.
+"""STORY-296 + HARDEN-015: Tests for per-source bulkhead pattern.
 
 Tests cover:
 - AC1: Per-source semaphore concurrency limits
@@ -8,6 +8,13 @@ Tests cover:
 - AC5: Prometheus metrics per source
 - AC6: Health endpoint per-source bulkhead status
 - AC7: Existing tests continue passing (validated by CI)
+
+HARDEN-015 additions:
+- AC1: Bulkhead.execute() divides timeout 50% acquire / 50% execution
+- AC2: BulkheadAcquireTimeoutError for acquire timeout
+- AC3: UF marked as skipped (not error) when acquire timeout
+- AC4: Metric smartlic_bulkhead_acquire_timeout_total
+- AC5: 27 UFs with bulkhead size=5 scenario
 """
 
 import asyncio
@@ -16,6 +23,7 @@ from unittest.mock import patch, MagicMock, AsyncMock
 import pytest
 
 from bulkhead import (
+    BulkheadAcquireTimeoutError,
     SourceBulkhead,
     get_bulkhead,
     register_bulkhead,
@@ -621,3 +629,270 @@ class TestHealthEndpointBulkheadStatus:
             d = bh.to_dict()
             assert d["status"] == "healthy"
             assert d["active"] == 0
+
+
+# ============================================================================
+# HARDEN-015: Bulkhead Semaphore Acquire Timeout
+# ============================================================================
+
+
+class TestBulkheadAcquireTimeout:
+    """HARDEN-015: Bulkhead acquire timeout splits timeout 50/50."""
+
+    @pytest.mark.asyncio
+    async def test_ac1_timeout_split_50_50(self):
+        """AC1: 50% of timeout goes to acquire, 50% to execution."""
+        bh = SourceBulkhead("TEST", max_concurrent=1, timeout=2.0)
+        barrier = asyncio.Event()
+
+        async def hold():
+            await barrier.wait()
+
+        # Fill the single slot
+        t1 = asyncio.create_task(bh.execute(hold()))
+        await asyncio.sleep(0.02)
+
+        # Second task should fail to acquire within 1.0s (50% of 2.0)
+        start = asyncio.get_event_loop().time()
+        with pytest.raises(BulkheadAcquireTimeoutError):
+            await bh.execute(asyncio.sleep(0))
+        elapsed = asyncio.get_event_loop().time() - start
+        # Should have waited ~1.0s (50% of 2.0), not 2.0s
+        assert 0.8 <= elapsed <= 1.5, f"Expected ~1.0s acquire budget, got {elapsed:.2f}s"
+
+        barrier.set()
+        await t1
+
+    @pytest.mark.asyncio
+    async def test_ac2_bulkhead_acquire_timeout_error(self):
+        """AC2: BulkheadAcquireTimeoutError raised when acquire times out."""
+        bh = SourceBulkhead("PNCP", max_concurrent=1, timeout=0.2)
+        barrier = asyncio.Event()
+
+        async def hold():
+            await barrier.wait()
+
+        t1 = asyncio.create_task(bh.execute(hold()))
+        await asyncio.sleep(0.02)
+
+        with pytest.raises(BulkheadAcquireTimeoutError) as exc_info:
+            await bh.execute(asyncio.sleep(0))
+
+        assert exc_info.value.source == "PNCP"
+        assert exc_info.value.timeout == 0.1  # 50% of 0.2
+        assert "PNCP" in str(exc_info.value)
+
+        barrier.set()
+        await t1
+
+    @pytest.mark.asyncio
+    async def test_ac2_semaphore_not_leaked_on_acquire_timeout(self):
+        """AC2: After acquire timeout, semaphore is not corrupted."""
+        bh = SourceBulkhead("TEST", max_concurrent=1, timeout=0.1)
+        barrier = asyncio.Event()
+
+        async def hold():
+            await barrier.wait()
+
+        t1 = asyncio.create_task(bh.execute(hold()))
+        await asyncio.sleep(0.02)
+
+        # This should timeout on acquire
+        with pytest.raises(BulkheadAcquireTimeoutError):
+            await bh.execute(asyncio.sleep(0))
+
+        # Release the slot
+        barrier.set()
+        await t1
+
+        # Bulkhead should be usable again
+        async def quick():
+            return "ok"
+
+        result = await bh.execute(quick())
+        assert result == "ok"
+
+    @pytest.mark.asyncio
+    async def test_ac3_consolidation_skipped_status(self):
+        """AC3: UF marked as 'skipped' (not 'error') on acquire timeout."""
+        from consolidation import ConsolidationService, AllSourcesFailedError
+
+        mock_adapter = MagicMock()
+        mock_adapter.code = "PNCP"
+        mock_adapter.metadata = MagicMock()
+        mock_adapter.metadata.priority = 1
+        mock_adapter.health_check = AsyncMock()
+        mock_adapter.close = AsyncMock()
+
+        async def mock_fetch(*args, **kwargs):
+            return
+            yield
+
+        mock_adapter.fetch = mock_fetch
+
+        # Create a bulkhead with tiny timeout that will fail on acquire
+        bulkhead = SourceBulkhead("PNCP", max_concurrent=1, timeout=0.1)
+        barrier = asyncio.Event()
+
+        async def hold():
+            await barrier.wait()
+
+        # Fill the single slot
+        t1 = asyncio.create_task(bulkhead.execute(hold()))
+        await asyncio.sleep(0.02)
+
+        svc = ConsolidationService(
+            adapters={"PNCP": mock_adapter},
+            timeout_per_source=10,
+            timeout_global=30,
+            bulkheads={"PNCP": bulkhead},
+        )
+
+        # When all sources are skipped (no data), AllSourcesFailedError is raised
+        # but the source_errors should contain the acquire timeout message
+        with pytest.raises(AllSourcesFailedError) as exc_info:
+            await svc.fetch_all("2026-01-01", "2026-01-10")
+
+        # Verify the error mentions acquire timeout (not generic error)
+        assert "acquire timeout" in str(exc_info.value).lower()
+
+        barrier.set()
+        await t1
+
+    @pytest.mark.asyncio
+    async def test_ac3_skipped_status_in_wrap_source(self):
+        """AC3: _wrap_source_inner returns status='skipped' on acquire timeout."""
+        from consolidation import ConsolidationService
+
+        mock_adapter = MagicMock()
+        mock_adapter.code = "PNCP"
+        mock_adapter.metadata = MagicMock()
+        mock_adapter.metadata.priority = 1
+        mock_adapter.health_check = AsyncMock()
+        mock_adapter.close = AsyncMock()
+
+        async def mock_fetch(*args, **kwargs):
+            return
+            yield
+
+        mock_adapter.fetch = mock_fetch
+
+        bulkhead = SourceBulkhead("PNCP", max_concurrent=1, timeout=0.1)
+        barrier = asyncio.Event()
+
+        async def hold():
+            await barrier.wait()
+
+        t1 = asyncio.create_task(bulkhead.execute(hold()))
+        await asyncio.sleep(0.02)
+
+        svc = ConsolidationService(
+            adapters={"PNCP": mock_adapter},
+            timeout_per_source=10,
+            timeout_global=30,
+            bulkheads={"PNCP": bulkhead},
+        )
+
+        import time
+        result = await svc._wrap_source_inner(
+            "PNCP", mock_adapter, "2026-01-01", "2026-01-10", None,
+            10.0, time.time(), [], MagicMock(),
+        )
+
+        assert result["status"] == "skipped"
+        assert result["code"] == "PNCP"
+        assert "acquire timeout" in result["error"].lower()
+        assert result["records"] == []
+
+        barrier.set()
+        await t1
+
+    @pytest.mark.asyncio
+    async def test_ac4_metric_incremented(self):
+        """AC4: smartlic_bulkhead_acquire_timeout_total incremented on acquire timeout."""
+        bh = SourceBulkhead("PNCP", max_concurrent=1, timeout=0.1)
+        barrier = asyncio.Event()
+
+        async def hold():
+            await barrier.wait()
+
+        t1 = asyncio.create_task(bh.execute(hold()))
+        await asyncio.sleep(0.02)
+
+        with patch("bulkhead.BULKHEAD_ACQUIRE_TIMEOUT") as mock_counter:
+            mock_labeled = MagicMock()
+            mock_counter.labels.return_value = mock_labeled
+
+            with pytest.raises(BulkheadAcquireTimeoutError):
+                await bh.execute(asyncio.sleep(0))
+
+            mock_counter.labels.assert_called_with(source="PNCP")
+            mock_labeled.inc.assert_called_once()
+
+        barrier.set()
+        await t1
+
+    @pytest.mark.asyncio
+    async def test_ac5_27_ufs_bulkhead_size_5(self):
+        """AC5: 27 UFs competing for bulkhead size=5 — some skip, some succeed."""
+        bh = SourceBulkhead("PNCP", max_concurrent=5, timeout=0.5)
+        results = {"completed": 0, "skipped": 0}
+
+        async def uf_work(uf_name):
+            """Simulate UF fetch that takes 0.3s."""
+            await asyncio.sleep(0.3)
+            return uf_name
+
+        async def try_uf(uf_name):
+            try:
+                result = await bh.execute(uf_work(uf_name))
+                results["completed"] += 1
+                return ("success", result)
+            except BulkheadAcquireTimeoutError:
+                results["skipped"] += 1
+                return ("skipped", uf_name)
+
+        ufs = [f"UF-{i:02d}" for i in range(27)]
+        tasks = [asyncio.create_task(try_uf(uf)) for uf in ufs]
+        outcomes = await asyncio.gather(*tasks)
+
+        # With 5 slots, 0.5s total timeout (0.25s acquire budget), 0.3s work:
+        # First 5 start immediately, next batch waits ~0.3s for slots.
+        # Some later UFs will timeout on acquire.
+        assert results["completed"] > 0, "Some UFs should complete"
+        assert results["skipped"] > 0, "Some UFs should be skipped due to acquire timeout"
+        assert results["completed"] + results["skipped"] == 27
+
+        # Verify bulkhead is clean after all tasks complete
+        assert bh.active == 0
+
+    @pytest.mark.asyncio
+    async def test_timeout_override_parameter(self):
+        """execute() accepts optional timeout override."""
+        bh = SourceBulkhead("TEST", max_concurrent=1, timeout=10.0)
+        barrier = asyncio.Event()
+
+        async def hold():
+            await barrier.wait()
+
+        t1 = asyncio.create_task(bh.execute(hold()))
+        await asyncio.sleep(0.02)
+
+        # Override with tiny timeout — should fail fast
+        with pytest.raises(BulkheadAcquireTimeoutError):
+            await bh.execute(asyncio.sleep(0), timeout=0.1)
+
+        barrier.set()
+        await t1
+
+    @pytest.mark.asyncio
+    async def test_successful_acquire_no_error(self):
+        """When slot is available, no acquire timeout even with short timeout."""
+        bh = SourceBulkhead("TEST", max_concurrent=5, timeout=0.5)
+
+        async def quick():
+            return "ok"
+
+        # Slot is available — should succeed immediately
+        result = await bh.execute(quick())
+        assert result == "ok"

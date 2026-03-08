@@ -60,10 +60,10 @@ export default function HistoricoError({
           </button>
 
           <Link
-            href="/buscar"
+            href="/dashboard"
             className="block w-full text-sm text-ink-muted hover:text-brand-blue transition-colors py-2"
           >
-            Voltar para a busca
+            Voltar ao dashboard
           </Link>
         </div>
       </div>

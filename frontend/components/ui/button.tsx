@@ -35,12 +35,31 @@ const buttonVariants = cva(
   }
 );
 
-export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {
+/**
+ * Base props shared by all button variants.
+ */
+interface BaseButtonProps
+  extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "aria-label">,
+    Omit<VariantProps<typeof buttonVariants>, "size"> {
   asChild?: boolean;
   loading?: boolean;
 }
+
+/**
+ * Icon-only buttons MUST provide an aria-label for accessibility (AC3).
+ * TypeScript will error at compile time if aria-label is missing when size="icon".
+ */
+type IconButtonProps = BaseButtonProps & {
+  size: "icon";
+  "aria-label": string;
+};
+
+type StandardButtonProps = BaseButtonProps & {
+  size?: "sm" | "default" | "lg" | null;
+  "aria-label"?: string;
+};
+
+export type ButtonProps = IconButtonProps | StandardButtonProps;
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, loading = false, disabled, children, ...props }, ref) => {

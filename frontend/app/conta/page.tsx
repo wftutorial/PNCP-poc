@@ -9,6 +9,7 @@ import { getPlanDisplayName } from "../../lib/plans";
 import Link from "next/link";
 import { toast } from "sonner";
 import { CancelSubscriptionModal } from "../../components/account/CancelSubscriptionModal";
+import { Button } from "../../components/ui/button";
 
 // ─── Certifications catalog (mirrors backend ATESTADOS_DISPONIVEIS) ───────────
 const ATESTADOS_CATALOG: Array<{ id: string; label: string }> = [
@@ -637,15 +638,16 @@ export default function ContaPage() {
               </div>
             </div>
 
-            <button
+            <Button
               type="submit"
               disabled={loading}
-              className="w-full py-3 bg-[var(--brand-navy)] text-white rounded-button
-                         font-semibold hover:bg-[var(--brand-blue)] transition-colors
-                         disabled:opacity-50 disabled:cursor-not-allowed"
+              loading={loading}
+              variant="primary"
+              size="lg"
+              className="w-full"
             >
               {loading ? "Alterando..." : "Alterar senha"}
-            </button>
+            </Button>
           </form>
         </div>
 
@@ -1315,34 +1317,32 @@ export default function ContaPage() {
 
           <div className="space-y-3">
             {/* Export Data Button */}
-            <button
+            <Button
               onClick={handleExportData}
               disabled={exporting}
-              className="w-full py-3 px-4 rounded-button border border-[var(--border)]
-                         bg-[var(--surface-0)] text-[var(--ink)]
-                         hover:bg-[var(--surface-1)] transition-colors
-                         disabled:opacity-50 disabled:cursor-not-allowed
-                         flex items-center justify-center gap-2"
+              loading={exporting}
+              variant="outline"
+              size="lg"
+              className="w-full"
             >
               <svg role="img" aria-label="Exportar" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
               </svg>
               {exporting ? "Exportando..." : "Exportar Meus Dados"}
-            </button>
+            </Button>
 
             {/* Delete Account Button */}
-            <button
+            <Button
               onClick={() => setShowDeleteModal(true)}
-              className="w-full py-3 px-4 rounded-button border border-[var(--error,#dc2626)]
-                         text-[var(--error,#dc2626)] bg-transparent
-                         hover:bg-[var(--error-subtle,#fef2f2)] transition-colors
-                         flex items-center justify-center gap-2"
+              variant="destructive"
+              size="lg"
+              className="w-full bg-transparent text-error border border-error hover:bg-error-subtle"
             >
               <svg role="img" aria-label="Excluir" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
               </svg>
               Excluir Minha Conta
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -1390,27 +1390,26 @@ export default function ContaPage() {
             )}
 
             <div className="flex gap-3 justify-end">
-              <button
+              <Button
                 onClick={() => {
                   setShowDeleteModal(false);
                   setDeleteError(null);
                 }}
                 disabled={deleting}
-                className="px-4 py-2 rounded-button border border-[var(--border)]
-                           text-[var(--ink)] bg-[var(--surface-0)]
-                           hover:bg-[var(--surface-1)] transition-colors"
+                variant="outline"
+                size="default"
               >
                 Cancelar
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={handleDeleteAccount}
                 disabled={deleting}
-                className="px-4 py-2 rounded-button bg-[var(--error,#dc2626)] text-white
-                           hover:opacity-90 transition-opacity
-                           disabled:opacity-50 disabled:cursor-not-allowed"
+                loading={deleting}
+                variant="destructive"
+                size="default"
               >
                 {deleting ? "Excluindo..." : "Excluir Permanentemente"}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

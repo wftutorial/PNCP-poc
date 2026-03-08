@@ -29,6 +29,7 @@ import { TrialUpsellCTA } from "../../../components/billing/TrialUpsellCTA";
 import { SearchEmptyState } from "./SearchEmptyState";
 import { EmptyResults } from "./EmptyResults";
 import { safeSetItem } from "../../../lib/storage";
+import { Button } from "../../../components/ui/button";
 
 // TD-007: Decomposed sub-components
 import { ResultsHeader } from "./search-results/ResultsHeader";
@@ -61,10 +62,10 @@ export function TourInviteBanner({ isCompleted, onStartTour }: { isCompleted?: (
     <div className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/50 text-sm text-blue-800 dark:text-blue-200 animate-fade-in-up" data-testid="tour-invite-banner" role="status">
       <span>Primeira vez vendo resultados? Clique aqui para um tour rápido.</span>
       <div className="flex items-center gap-2 flex-shrink-0">
-        <button onClick={handleStart} className="px-3 py-1 text-xs font-medium bg-blue-600 text-white rounded-button hover:bg-blue-700 transition-colors" data-testid="tour-invite-start">Iniciar tour</button>
-        <button onClick={handleClose} className="p-1 rounded hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors" aria-label="Fechar" data-testid="tour-invite-close">
+        <Button onClick={handleStart} variant="primary" size="sm" data-testid="tour-invite-start">Iniciar tour</Button>
+        <Button onClick={handleClose} variant="ghost" size="icon" aria-label="Fechar" data-testid="tour-invite-close">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -159,7 +160,7 @@ export default function SearchResults(props: SearchResultsProps) {
             <svg className="mx-auto h-12 w-12 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
             <p className="mt-3 text-base font-medium text-ink">A fonte principal de dados (PNCP) esta temporariamente indisponivel.</p>
             <p className="mt-1 text-sm text-ink-secondary">Tente novamente em alguns minutos para resultados completos.</p>
-            <button onClick={onRetryForceFresh || onSearch} className="mt-4 px-5 py-2 bg-amber-600 text-white rounded-button text-sm font-medium hover:bg-amber-700 transition-colors" data-testid="degraded-retry-button">Tentar Novamente</button>
+            <Button onClick={onRetryForceFresh || onSearch} variant="primary" size="default" className="mt-4" data-testid="degraded-retry-button">Tentar Novamente</Button>
           </div>
         </div>
       )}

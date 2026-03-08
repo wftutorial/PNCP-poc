@@ -1,6 +1,6 @@
 "use client";
 
-import type { FilterStats } from "../types";
+import type { FilterStats } from "../../types";
 
 interface SearchEmptyStateProps {
   onAdjustSearch?: () => void;

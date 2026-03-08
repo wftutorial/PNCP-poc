@@ -15,6 +15,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import type { SearchError } from "../hooks/useSearch";
 import type { SearchPhase } from "../types/searchPhase";
 import { ErrorDetail } from "./ErrorDetail";
+import { Button } from "../../../components/ui/button";
 import { toast } from "sonner";
 import { useEffect, useRef } from "react";
 
@@ -131,21 +132,25 @@ export function SearchStateManager({
             Tentando em {retryCountdown}s...
           </p>
           <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-            <button
+            <Button
               onClick={onRetryNow}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors w-full sm:w-auto"
+              variant="primary"
+              size="default"
+              className="w-full sm:w-auto"
               type="button"
               data-testid="retry-now-button"
             >
               Tentar agora
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={onCancelRetry}
-              className="px-4 py-2 bg-transparent text-blue-600 dark:text-blue-300 border border-blue-300 dark:border-blue-700 rounded-lg text-sm font-medium hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors w-full sm:w-auto"
+              variant="outline"
+              size="default"
+              className="w-full sm:w-auto"
               type="button"
             >
               Cancelar
-            </button>
+            </Button>
           </div>
         </motion.div>
       )}
@@ -168,29 +173,31 @@ export function SearchStateManager({
             Análise indisponível no momento.
           </p>
           <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-            <button
+            <Button
               onClick={onRetryNow}
               disabled={loading}
-              className="px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700 transition-colors disabled:opacity-50"
+              variant="primary"
+              size="default"
               type="button"
               data-testid="retry-manual-button"
             >
               Tentar novamente
-            </button>
+            </Button>
             {hasPartialResults && (
-              <button
+              <Button
                 onClick={() => {
                   const resultsEl = document.querySelector(
                     '[data-testid="results-header"]',
                   );
                   resultsEl?.scrollIntoView({ behavior: "smooth" });
                 }}
-                className="px-4 py-2 bg-transparent text-amber-600 dark:text-amber-300 border border-amber-300 dark:border-amber-700 rounded-lg text-sm font-medium hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
+                variant="outline"
+                size="default"
                 type="button"
                 data-testid="view-partial-results-button"
               >
                 Ver resultados parciais
-              </button>
+              </Button>
             )}
           </div>
         </motion.div>
@@ -214,41 +221,18 @@ export function SearchStateManager({
             {error.message}
           </p>
           <ErrorDetail error={error} />
-          <button
+          <Button
             onClick={onRetry}
             disabled={loading}
-            className="mt-3 px-4 py-2 bg-error text-white rounded-lg text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-2"
+            loading={loading}
+            variant="destructive"
+            size="default"
+            className="mt-3"
             type="button"
             data-testid="failed-retry-button"
           >
-            {loading ? (
-              <>
-                <svg
-                  className="animate-spin h-4 w-4"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                    fill="none"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  />
-                </svg>
-                Tentando...
-              </>
-            ) : (
-              "Tentar novamente"
-            )}
-          </button>
+            {loading ? "Tentando..." : "Tentar novamente"}
+          </Button>
         </motion.div>
       )}
 

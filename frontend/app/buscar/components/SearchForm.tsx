@@ -15,6 +15,7 @@ import type { OrdenacaoOption } from "../../components/OrdenacaoSelect";
 import FilterPanel from "./FilterPanel";
 import { UFS, UF_NAMES } from "../../../lib/constants/uf-names";
 import { dateDiffInDays } from "../../../lib/utils/dateDiffInDays";
+import { Button } from "../../../components/ui/button";
 
 export interface SearchFormProps {
   // Sectors
@@ -417,44 +418,42 @@ export default function SearchForm({
           <p className="text-sm text-blue-700 dark:text-blue-300 flex-1">
             <strong>Dica:</strong> selecione seu setor e clique Buscar. Personalize depois se quiser.
           </p>
-          <button
+          <Button
             type="button"
             onClick={onDismissFirstUseTip}
-            className="text-blue-400 hover:text-blue-600 dark:hover:text-blue-200 transition-colors flex-shrink-0"
+            variant="ghost"
+            size="icon"
             aria-label="Fechar dica"
+            className="h-6 w-6 text-blue-400 hover:text-blue-600 dark:hover:text-blue-200 flex-shrink-0"
             data-testid="dismiss-first-use-tip"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
-          </button>
+          </Button>
         </div>
       )}
 
       {/* Search Buttons - AC5: moved up, right after sector selection */}
       <div className="mb-6 space-y-3 sm:relative sticky bottom-4 sm:bottom-auto z-20 bg-[var(--canvas)] sm:bg-transparent pt-2 sm:pt-0 -mx-4 px-4 sm:mx-0 sm:px-0 pb-2 sm:pb-0 animate-fade-in-up stagger-2">
-        <button
+        <Button
           ref={searchButtonRef}
           onClick={buscar}
           disabled={loading || !canSearch || isTrialExpired || isGracePeriod}
+          loading={loading}
           type="button"
           aria-busy={loading}
           data-tour="search-button"
           title={isGracePeriod ? "Análises suspensas ate regularizacao do pagamento." : isTrialExpired ? "Seu trial expirou. Ative um plano para continuar buscando." : undefined}
-          className="w-full bg-brand-navy text-white py-3.5 sm:py-4 rounded-button text-base sm:text-lg font-semibold
-                     hover:bg-brand-blue-hover active:bg-brand-blue
-                     disabled:bg-ink-faint disabled:text-ink-muted disabled:cursor-not-allowed
-                     transition-all duration-200 min-h-[48px] sm:min-h-[52px]
-                     flex items-center justify-center gap-2"
+          variant="primary"
+          size="lg"
+          className="w-full py-3.5 sm:py-4 text-base sm:text-lg font-semibold
+                     active:bg-brand-blue
+                     disabled:bg-ink-faint disabled:text-ink-muted
+                     min-h-[48px] sm:min-h-[52px]"
         >
           {loading ? (
-            <>
-              <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-              Consultando múltiplas fontes e aplicando filtros inteligentes...
-            </>
+            "Consultando múltiplas fontes e aplicando filtros inteligentes..."
           ) : searchMode === "termos" && termValidation ? (
             termValidation.valid.length === 0
               ? "Adicione termos válidos para buscar"
@@ -462,17 +461,17 @@ export default function SearchForm({
           ) : (
             `Buscar ${searchLabel}`
           )}
-        </button>
+        </Button>
 
         {result && result.resumo.total_oportunidades > 0 && (
-          <button
+          <Button
             onClick={handleSaveSearch}
             disabled={isMaxCapacity}
             type="button"
-            className="w-full bg-surface-0 text-brand-navy py-2.5 sm:py-3 rounded-button text-sm sm:text-base font-medium
-                       border border-brand-navy hover:bg-brand-blue-subtle
-                       disabled:bg-surface-0 disabled:text-ink-muted disabled:border-ink-faint disabled:cursor-not-allowed
-                       transition-all duration-200 flex items-center justify-center gap-2"
+            variant="outline"
+            size="lg"
+            className="w-full text-brand-navy border-brand-navy hover:bg-brand-blue-subtle
+                       disabled:text-ink-muted disabled:border-ink-faint"
             title={isMaxCapacity ? "Máximo de 10 análises salvas atingido" : "Salvar esta análise"}
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
@@ -480,7 +479,7 @@ export default function SearchForm({
                     d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
             </svg>
             {isMaxCapacity ? "Limite de análises atingido" : "Salvar Análise"}
-          </button>
+          </Button>
         )}
       </div>
 

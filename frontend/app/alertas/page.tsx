@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { SECTOR_DISPLAY_NAMES } from "../../lib/constants/sector-names";
 import { UFS, UF_NAMES } from "../../lib/constants/uf-names";
 import { CurrencyInput } from "../../components/ui/CurrencyInput";
+import { Button } from "../../components/ui/button";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -229,19 +230,23 @@ function AlertCard({
           {showConfirm ? (
             <div className="flex items-center gap-1.5 ml-auto">
               <span className="text-xs text-[var(--error)]">Excluir?</span>
-              <button
+              <Button
                 onClick={handleDelete}
                 disabled={deleting}
-                className="px-2 py-1 rounded text-xs font-medium bg-[var(--error)] text-white hover:opacity-90 transition-opacity disabled:opacity-50"
+                variant="destructive"
+                size="sm"
+                className="h-6 px-2 text-xs"
               >
                 {deleting ? "..." : "Sim"}
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={() => setShowConfirm(false)}
-                className="px-2 py-1 rounded text-xs font-medium text-[var(--ink-secondary)] hover:bg-[var(--surface-1)] transition-colors"
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-xs"
               >
                 Nao
-              </button>
+              </Button>
             </div>
           ) : (
             <button
@@ -710,27 +715,24 @@ function AlertFormModal({
 
           {/* Action buttons */}
           <div className="flex items-center justify-end gap-3 pt-3 border-t border-[var(--border)]">
-            <button
+            <Button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-lg text-sm font-medium text-[var(--ink-secondary)] hover:bg-[var(--surface-1)] transition-colors"
+              variant="ghost"
+              size="default"
             >
               Cancelar
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
               disabled={!isValid || saving}
-              className="px-5 py-2 rounded-lg text-sm font-medium bg-[var(--brand-navy)] text-white hover:bg-[var(--brand-blue)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              loading={saving}
+              variant="primary"
+              size="default"
               data-testid="alert-save-button"
             >
-              {saving && (
-                <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" aria-hidden="true">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-              )}
               {editingAlert ? "Salvar alterações" : "Criar alerta"}
-            </button>
+            </Button>
           </div>
         </form>
       </div>
@@ -777,16 +779,17 @@ function AlertsEmptyState({ onCreate }: { onCreate: () => void }) {
           </li>
         ))}
       </ol>
-      <button
+      <Button
         onClick={onCreate}
-        className="inline-flex items-center gap-2 px-6 py-3 bg-[var(--brand-navy)] text-white rounded-button hover:bg-[var(--brand-blue)] transition-colors font-medium"
+        variant="primary"
+        size="lg"
         data-testid="alerts-create-first"
       >
         Criar primeiro alerta
         <svg aria-hidden="true" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.5v15m7.5-7.5h-15" />
         </svg>
-      </button>
+      </Button>
     </div>
   );
 }
@@ -986,19 +989,20 @@ export default function AlertasPage() {
             </p>
           </div>
           {alerts.length > 0 && (
-            <button
+            <Button
               onClick={() => {
                 setEditingAlert(null);
                 setShowForm(true);
               }}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-[var(--brand-navy)] text-white hover:bg-[var(--brand-blue)] transition-colors"
+              variant="primary"
+              size="default"
               data-testid="alerts-create-button"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
               </svg>
               <span className="hidden sm:inline">Criar alerta</span>
-            </button>
+            </Button>
           )}
         </div>
 

@@ -3,9 +3,14 @@
 Provides common mocks for authentication, Supabase, and external APIs.
 """
 
+import asyncio
+import sys
+
 import pytest
 from unittest.mock import Mock, AsyncMock
 from datetime import datetime, timezone, timedelta
+
+_SENTINEL = object()  # Used by _isolate_arq_module to detect missing keys
 
 
 @pytest.fixture
@@ -231,3 +236,48 @@ def _reset_bulkhead_registry():
     reset_registry()
     yield
     reset_registry()
+
+
+@pytest.fixture(autouse=True)
+def _cleanup_pending_async_tasks():
+    """Cancel lingering asyncio tasks after each test.
+
+    Fire-and-forget tasks (asyncio.create_task) in search pipeline and SSE
+    handlers are never awaited by sync TestClient. Without cleanup, these
+    tasks accumulate and can deadlock the event loop on full-suite runs.
+    """
+    yield
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_closed():
+            return
+        pending = [t for t in asyncio.all_tasks(loop) if not t.done()]
+        for task in pending:
+            task.cancel()
+        if pending:
+            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+    except RuntimeError:
+        # No running event loop or loop already closed — nothing to clean
+        pass
+
+
+@pytest.fixture(autouse=True)
+def _isolate_arq_module():
+    """Ensure sys.modules['arq'] state doesn't leak between test files.
+
+    Multiple test files inject different MagicMock shapes into sys.modules['arq'].
+    Without cleanup, the FIRST file's mock persists and later files get a
+    contaminated module, causing attribute errors or silent wrong behavior.
+    """
+    original_arq = sys.modules.get("arq", _SENTINEL)
+    original_arq_conn = sys.modules.get("arq.connections", _SENTINEL)
+    yield
+    # Restore original state
+    if original_arq is _SENTINEL:
+        sys.modules.pop("arq", None)
+    else:
+        sys.modules["arq"] = original_arq
+    if original_arq_conn is _SENTINEL:
+        sys.modules.pop("arq.connections", None)
+    else:
+        sys.modules["arq.connections"] = original_arq_conn

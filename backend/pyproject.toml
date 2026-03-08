@@ -36,6 +36,12 @@ markers = [
 # pytest-asyncio configuration
 asyncio_mode = "auto"
 
+# pytest-timeout: safety net against hanging tests
+# CI (Linux) uses "signal" (reliable, kills C-level hangs); Windows uses "thread" (best-effort)
+# Override per-OS via CLI: pytest --timeout-method=signal (Linux) or --timeout-method=thread (Windows)
+timeout = 30
+timeout_method = "thread"
+
 # Logging
 log_cli = false
 log_cli_level = "INFO"

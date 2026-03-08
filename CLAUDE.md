@@ -148,10 +148,13 @@ python -m venv venv && source venv/bin/activate  # Windows: venv\Scripts\activat
 pip install -r requirements.txt
 uvicorn main:app --reload --port 8000            # Dev server
 
-# Tests
-pytest                              # Run all (must pass 100%)
+# Tests (IMPORTANT: see Anti-Hang Rules in Testing Strategy)
+pytest -k "test_name"               # Specific test (fast, preferred)
+pytest tests/test_foo.py            # Single file (safe)
+python scripts/run_tests_safe.py    # Full suite — Windows safe (subprocess isolation per file)
+python scripts/run_tests_safe.py --parallel 4  # Full suite parallel (4 workers)
+pytest --timeout=30                 # Full suite direct (Linux CI — use signal method)
 pytest --cov                        # Coverage (threshold: 70%)
-pytest -k "test_name"               # Specific test
 pytest tests/integration/           # Integration only
 ruff check . && mypy .              # Linting
 ```
@@ -302,7 +305,16 @@ For detailed module tables and route maps, see `.claude/rules/architecture-detai
 - Config: Use `@patch("config.FLAG_NAME", False)` not `os.environ`
 - LLM: Mock at `@patch("llm_arbiter._get_client")` level
 - Quota: Tests mocking `/buscar` MUST also mock `check_and_increment_quota_atomic`
-- ARQ: Mock with `sys.modules["arq"]` (not installed locally)
+- ARQ: Mock with `sys.modules["arq"]` (not installed locally). Conftest autouse fixture `_isolate_arq_module` handles cleanup automatically — do NOT do raw `sys.modules["arq"] = ...` without cleanup
+
+**Anti-Hang Rules (CRITICAL — violations cause full-suite freezes):**
+- **pytest-timeout**: Every test has a 30s timeout (`pyproject.toml`). Override with `@pytest.mark.timeout(60)` for slow integration tests
+- **NEVER use `asyncio.get_event_loop().run_until_complete()`** in tests — use `async def` + `@pytest.mark.asyncio` instead
+- **NEVER use `sys.modules["arq"] = MagicMock()`** without cleanup — the conftest fixture handles isolation automatically
+- **Fire-and-forget tasks**: Conftest `_cleanup_pending_async_tasks` cancels lingering `asyncio.create_task()` after each test
+- **subprocess in tests**: Always use `timeout` parameter in `Popen.communicate()` and clean up with `proc.kill()`
+- **Full-suite validation**: Run `pytest --timeout=30 -q` periodically to catch hanging tests early
+- **timeout_method = "thread"**: Required for Windows compatibility (signal method is Unix-only)
 
 ### Frontend (frontend/__tests__/)
 

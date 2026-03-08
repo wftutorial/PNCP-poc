@@ -59,7 +59,7 @@ class TestHarden014BatchFutureTimeout:
             if call_count == 1:
                 return [{"is_primary": True, "confidence": 65, "evidence": ["ok"]}] * len(items)
             else:
-                cancel_event.wait(timeout=60)
+                cancel_event.wait(timeout=1)
                 return [{"is_primary": False}] * len(items)
 
         with patch("llm_arbiter._classify_zero_match_batch", classify_batch_with_hang), \
@@ -134,7 +134,7 @@ class TestHarden014IndividualFutureTimeout:
             if call_count <= 2:
                 return {"is_primary": True, "confidence": 65, "evidence": ["ok"]}
             else:
-                cancel_event.wait(timeout=60)
+                cancel_event.wait(timeout=1)
                 return {"is_primary": False}
 
         with patch("llm_arbiter.classify_contract_primary_match", classify_one_with_hang), \
@@ -195,7 +195,7 @@ class TestHarden014ArbiterFutureTimeout:
             if call_count <= 1:
                 return {"is_primary": True, "confidence": 70, "evidence": ["ok"]}
             else:
-                cancel_event.wait(timeout=60)
+                cancel_event.wait(timeout=1)
                 return {"is_primary": False}
 
         with patch("llm_arbiter.classify_contract_primary_match", classify_with_hang), \

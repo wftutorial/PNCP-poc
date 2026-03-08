@@ -120,8 +120,9 @@ class TestAalExtraction:
     def test_user_data_aal2(self, mock_user_aal2):
         assert mock_user_aal2["aal"] == "aal2"
 
+    @pytest.mark.asyncio
     @patch("auth._get_jwt_key_and_algorithms")
-    def test_get_current_user_extracts_aal(self, mock_key):
+    async def test_get_current_user_extracts_aal(self, mock_key):
         """Verify that get_current_user includes aal from JWT payload."""
         import jwt as pyjwt
 
@@ -135,21 +136,21 @@ class TestAalExtraction:
             algorithm="HS256",
         )
 
-        import asyncio
         from auth import get_current_user, _token_cache
         _token_cache.clear()
 
         creds = MagicMock()
         creds.credentials = token
 
-        user = asyncio.get_event_loop().run_until_complete(get_current_user(creds))
+        user = await get_current_user(creds)
         assert user is not None
         assert user["aal"] == "aal2"
 
         _token_cache.clear()
 
+    @pytest.mark.asyncio
     @patch("auth._get_jwt_key_and_algorithms")
-    def test_get_current_user_defaults_aal1(self, mock_key):
+    async def test_get_current_user_defaults_aal1(self, mock_key):
         """Verify aal defaults to aal1 when not in JWT."""
         import jwt as pyjwt
 
@@ -163,14 +164,13 @@ class TestAalExtraction:
             algorithm="HS256",
         )
 
-        import asyncio
         from auth import get_current_user, _token_cache
         _token_cache.clear()
 
         creds = MagicMock()
         creds.credentials = token
 
-        user = asyncio.get_event_loop().run_until_complete(get_current_user(creds))
+        user = await get_current_user(creds)
         assert user is not None
         assert user["aal"] == "aal1"
 

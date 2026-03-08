@@ -28,6 +28,21 @@ if "arq" not in sys.modules:
     sys.modules["arq.cron"] = _arq_mock
 
 
+@pytest.fixture(autouse=True)
+def _fast_asyncio_sleep():
+    """Skip real asyncio.sleep in warmup tests to prevent 60s+ hangs.
+
+    warmup_specific_combinations calls asyncio.sleep(0.5) per UF×sector pair
+    (135 calls for 27 UFs × 5 sectors = 67.5s real wait). This fixture
+    replaces sleep with an instant no-op for all tests in this file.
+    """
+    async def _instant_sleep(seconds):
+        pass
+
+    with patch("asyncio.sleep", side_effect=_instant_sleep):
+        yield
+
+
 # ===========================================================================
 # T1: Warmup iterates 27 UFs x 5 sectors
 # ===========================================================================

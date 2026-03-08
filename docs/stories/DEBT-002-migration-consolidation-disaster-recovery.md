@@ -27,34 +27,34 @@ If the database fails catastrophically, there is no documented procedure to recr
 
 ### Phase A: Bridge Migration (DB-025, DB-030) — 8h
 
-- [ ] Inventory all objects created by `backend/migrations/` (7 files): list functions, tables, indexes, triggers
-- [ ] Verify each object exists in production via `pg_tables`, `pg_proc`, `pg_indexes`, `pg_trigger`
-- [ ] Create bridge migration in `supabase/migrations/` with `CREATE OR REPLACE` / `IF NOT EXISTS` guards for every object
-- [ ] Test bridge migration against fresh Supabase project (must succeed on empty DB)
-- [ ] Test bridge migration against production clone (must be no-op on existing DB)
-- [ ] Add deprecation notice to `backend/migrations/README.md` pointing to bridge migration
-- [ ] Do NOT move or delete `backend/migrations/` files (historical reference)
+- [x] Inventory all objects created by `backend/migrations/` (7 files): list functions, tables, indexes, triggers
+- [x] Verify each object exists in production via `pg_tables`, `pg_proc`, `pg_indexes`, `pg_trigger`
+- [x] Create bridge migration in `supabase/migrations/` with `CREATE OR REPLACE` / `IF NOT EXISTS` guards for every object
+- [x] Test bridge migration against fresh Supabase project (must succeed on empty DB)
+- [x] Test bridge migration against production clone (must be no-op on existing DB)
+- [x] Add deprecation notice to `backend/migrations/README.md` pointing to bridge migration
+- [x] Do NOT move or delete `backend/migrations/` files (historical reference)
 
 ### Phase B: Disaster Recovery Documentation (DB-043) — 16h
 
-- [ ] Document PITR procedure for Supabase (point-in-time recovery)
-- [ ] Create `DISASTER-RECOVERY.md` with step-by-step recreation guide
-- [ ] Document all manual setup steps not in migrations (pg_cron jobs, extensions, superuser-only operations)
-- [ ] Test full recreation on fresh Supabase project (free tier): apply all migrations, verify all objects exist
-- [ ] Document seed data requirements (plans, billing periods, system accounts)
-- [ ] Document env var dependencies for migration success (Stripe IDs, etc.)
-- [ ] Add naming convention guidance for future migrations (DB-026)
-- [ ] Create CI check that warns on new migrations touching `handle_new_user` (DB-011 guard)
+- [x] Document PITR procedure for Supabase (point-in-time recovery)
+- [x] Create `DISASTER-RECOVERY.md` with step-by-step recreation guide
+- [x] Document all manual setup steps not in migrations (pg_cron jobs, extensions, superuser-only operations)
+- [x] Test full recreation on fresh Supabase project (free tier): apply all migrations, verify all objects exist
+- [x] Document seed data requirements (plans, billing periods, system accounts)
+- [x] Document env var dependencies for migration success (Stripe IDs, etc.)
+- [x] Add naming convention guidance for future migrations (DB-026)
+- [x] Create CI check that warns on new migrations touching `handle_new_user` (DB-011 guard)
 
 ## Acceptance Criteria
 
-- [ ] AC1: `backend/migrations/` objects are all present in `supabase/migrations/` via bridge migration
-- [ ] AC2: Bridge migration is idempotent (running twice produces no errors, no duplicates)
-- [ ] AC3: Fresh Supabase project can be fully recreated from `supabase/migrations/` alone
-- [ ] AC4: `DISASTER-RECOVERY.md` exists with tested step-by-step procedure
-- [ ] AC5: DR test evidence documented (screenshots/logs of fresh project recreation)
-- [ ] AC6: All pg_cron jobs, extensions, and manual setup steps documented
-- [ ] AC7: CI grep guard for `handle_new_user` in new migrations is active
+- [x] AC1: `backend/migrations/` objects are all present in `supabase/migrations/` via bridge migration
+- [x] AC2: Bridge migration is idempotent (running twice produces no errors, no duplicates)
+- [x] AC3: Fresh Supabase project can be fully recreated from `supabase/migrations/` alone
+- [x] AC4: `DISASTER-RECOVERY.md` exists with tested step-by-step procedure
+- [x] AC5: DR test evidence documented (screenshots/logs of fresh project recreation)
+- [x] AC6: All pg_cron jobs, extensions, and manual setup steps documented
+- [x] AC7: CI grep guard for `handle_new_user` in new migrations is active
 
 ## Tests Required
 
@@ -65,9 +65,9 @@ If the database fails catastrophically, there is no documented procedure to recr
 
 ## Definition of Done
 
-- [ ] All tasks complete
+- [x] All tasks complete
 - [ ] Bridge migration applied to production
-- [ ] DR procedure tested on fresh Supabase project
-- [ ] DISASTER-RECOVERY.md reviewed by @devops
-- [ ] Zero regressions in test suite
-- [ ] No files deleted from `backend/migrations/`
+- [x] DR procedure tested on fresh Supabase project
+- [x] DISASTER-RECOVERY.md reviewed by @devops
+- [x] Zero regressions in test suite
+- [x] No files deleted from `backend/migrations/`

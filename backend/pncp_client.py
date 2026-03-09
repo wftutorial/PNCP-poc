@@ -96,6 +96,9 @@ PNCP_TIMEOUT_PER_UF_DEGRADED: float = float(
 PNCP_BATCH_SIZE: int = int(os.environ.get("PNCP_BATCH_SIZE", "5"))
 PNCP_BATCH_DELAY_S: float = float(os.environ.get("PNCP_BATCH_DELAY_S", "2.0"))
 
+# DEBT-102 AC6: PNCP API max page size (reduced from 500 to 50 by PNCP ~Feb 2026)
+PNCP_MAX_PAGE_SIZE: int = 50
+
 # B-06: Redis-backed circuit breaker toggle (rollback: set to "false")
 USE_REDIS_CIRCUIT_BREAKER: bool = os.environ.get(
     "USE_REDIS_CIRCUIT_BREAKER", "true"
@@ -877,6 +880,13 @@ class PNCPClient:
                 "Sending a request without it will return HTTP 400."
             )
 
+        # DEBT-102 AC6: Server-side validation — reject tamanhoPagina > PNCP_MAX_PAGE_SIZE
+        if tamanho > PNCP_MAX_PAGE_SIZE:
+            raise ValueError(
+                f"tamanhoPagina={tamanho} exceeds PNCP API maximum of {PNCP_MAX_PAGE_SIZE}. "
+                f"PNCP silently returns HTTP 400 for values > {PNCP_MAX_PAGE_SIZE} (changed Feb 2026)."
+            )
+
         self._rate_limit()
 
         # GTM-FIX-032 AC2: Pre-flight date validation + formatting
@@ -1655,6 +1665,13 @@ class AsyncPNCPClient:
             raise ValueError(
                 "codigoModalidadeContratacao is required by PNCP API. "
                 "Sending a request without it will return HTTP 400."
+            )
+
+        # DEBT-102 AC6: Server-side validation — reject tamanhoPagina > PNCP_MAX_PAGE_SIZE
+        if tamanho > PNCP_MAX_PAGE_SIZE:
+            raise ValueError(
+                f"tamanhoPagina={tamanho} exceeds PNCP API maximum of {PNCP_MAX_PAGE_SIZE}. "
+                f"PNCP silently returns HTTP 400 for values > {PNCP_MAX_PAGE_SIZE} (changed Feb 2026)."
             )
 
         if self._client is None:

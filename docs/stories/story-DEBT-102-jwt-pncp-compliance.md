@@ -22,14 +22,14 @@ Como arquiteto de seguranca, quero modernizar a autenticacao JWT de HS256 para E
 
 ## Acceptance Criteria
 
-- [ ] AC1: Novos tokens JWT assinados com ES256 (asymmetric)
-- [ ] AC2: JWKS endpoint disponivel para verificacao de tokens
-- [ ] AC3: Tokens HS256 existentes continuam sendo aceitos (backward compat por periodo de transicao)
-- [ ] AC4: Rotation de keys suportada (2 keys ativas simultaneamente no JWKS)
-- [ ] AC5: PNCP client envia `tamanhoPagina=50` (nunca >50)
-- [ ] AC6: Validacao server-side rejeita `tamanhoPagina>50` com erro explicito
-- [ ] AC7: Health canary testa com `tamanhoPagina=50` (atualmente usa 10)
-- [ ] AC8: Paginacao correta quando ha >50 resultados (multiple pages)
+- [x] AC1: Novos tokens JWT assinados com ES256 (asymmetric)
+- [x] AC2: JWKS endpoint disponivel para verificacao de tokens
+- [x] AC3: Tokens HS256 existentes continuam sendo aceitos (backward compat por periodo de transicao)
+- [x] AC4: Rotation de keys suportada (2 keys ativas simultaneamente no JWKS)
+- [x] AC5: PNCP client envia `tamanhoPagina=50` (nunca >50)
+- [x] AC6: Validacao server-side rejeita `tamanhoPagina>50` com erro explicito
+- [x] AC7: Health canary testa com `tamanhoPagina=50` (atualmente usa 10)
+- [x] AC8: Paginacao correta quando ha >50 resultados (multiple pages)
 
 ## Testes Requeridos
 
@@ -66,9 +66,9 @@ Como arquiteto de seguranca, quero modernizar a autenticacao JWT de HS256 para E
 
 ## Definition of Done
 
-- [ ] Codigo implementado
-- [ ] Testes unitarios + integration passando
+- [x] Codigo implementado
+- [x] Testes unitarios + integration passando
 - [ ] Deploy em staging com verificacao de backward compat
 - [ ] PNCP integration test com API real passando
 - [ ] Code review aprovado
-- [ ] Documentacao atualizada
+- [x] Documentacao atualizada

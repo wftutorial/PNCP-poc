@@ -198,12 +198,13 @@ class TestFetchPageSuccess:
         mock_get.return_value = mock_response
 
         client = PNCPClient()
-        client.fetch_page("2024-01-01", "2024-01-30", modalidade=DEFAULT_MODALIDADE, pagina=3, tamanho=100)
+        # DEBT-102 AC6: max tamanhoPagina is 50 (PNCP limit since Feb 2026)
+        client.fetch_page("2024-01-01", "2024-01-30", modalidade=DEFAULT_MODALIDADE, pagina=3, tamanho=50)
 
         call_args = mock_get.call_args
         params = call_args[1]["params"]
         assert params["pagina"] == 3
-        assert params["tamanhoPagina"] == 100
+        assert params["tamanhoPagina"] == 50
 
 
 class TestFetchPageRetry:

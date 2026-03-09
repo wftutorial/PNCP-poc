@@ -1,598 +1,641 @@
 # Technical Debt Assessment - FINAL
 
-**Projeto:** SmartLic v0.5
-**Data:** 2026-03-07
-**Versao:** FINAL v1.0
-**Validado por:** @architect (Atlas), @data-engineer (Delta), @ux-design-expert (Uma), @qa (Quinn)
-**Fontes:** system-architecture.md v5.0 (Phase 1), DB-AUDIT.md (Phase 2), frontend-spec.md (Phase 3)
-**Metodologia:** Three-source consolidation with specialist review rounds. All claims independently verified against live codebase.
-**Supersedes:** FINAL v3.0 (2026-03-04), DRAFT v3.0 (2026-03-07)
+**Projeto:** SmartLic (smartlic.tech)
+**Data:** 2026-03-09
+**Versao:** 1.0 (FINAL -- prevalece sobre todas as analises anteriores)
+**Autores:** @architect (lead), @data-engineer, @ux-design-expert, @qa
+
+> **NOTA:** Este documento e a unica fonte de verdade para debito tecnico do SmartLic. Substitui completamente `technical-debt-DRAFT.md` (Phase 4), `technical-debt-assessment.md` (2026-03-07), e todas as auditorias parciais anteriores. Todos os itens foram validados cruzando as revisoes dos especialistas (Phases 5-7) contra o codebase no commit `3c71ce93`.
 
 ---
 
-## 1. Executive Summary
+## Executive Summary
 
-| Metrica | Valor |
-|---------|-------|
-| **Total de debitos** | 107 |
-| **CRITICAL** | 1 |
-| **HIGH** | 24 |
-| **MEDIUM** | 48 |
-| **LOW** | 34 |
-| **Areas cobertas** | Sistema (36), Database (42), Frontend (35), Cross-Cutting (7) |
-| **Esforco estimado (codigo)** | ~660-840h |
-| **Esforco estimado (testes)** | ~60h |
-| **Esforco total estimado** | **~720-900h** |
+SmartLic is a production-grade B2G SaaS platform with 65+ backend modules, 22 frontend pages, 27 database tables, and comprehensive test suites (5131+ backend tests, 2681+ frontend tests, 21 E2E specs). Three phases of systematic brownfield discovery surfaced 93 candidate debt items. After specialist validation by @data-engineer (Phase 5), @ux-design-expert (Phase 6), and @qa (Phase 7):
 
-**Alteracoes desde DRAFT v3.0:**
-- **Removidos (3):** SYS-009 (ja corrigido -- `await asyncio.sleep(0.3)` em authorization.py:100), DB-003 (falso positivo -- OAuth usa Fernet AES-256 em oauth.py:84-131), FE-029 (falso positivo -- PullToRefresh ativamente usado em buscar/page.tsx:6,695)
-- **Adicionados (8):** DB-047, DB-048, DB-049, DB-050, FE-031 through FE-036, CROSS-007
-- **Severidade ajustada (19):** Ver secao 9 (Validation Log) para detalhes
+- **10 DB items confirmed resolved** by recent DEBT migrations (2026-03-04 to 2026-03-09)
+- **3 FE items confirmed resolved** by recent accessibility/animation fixes
+- **4 new DB items identified** during specialist cross-reference
+- **4 new FE items identified** during UX codebase validation
+- **5 new QA items identified** during cross-cutting gap analysis
+- **5 severity adjustments** applied based on specialist evidence
 
-**Breakdown por Severidade e Area:**
+**Totals ativos:**
 
-| Area | CRITICAL | HIGH | MEDIUM | LOW | Subtotal | Esforco Est. |
-|------|----------|------|--------|-----|----------|--------------|
-| Sistema (SYS) | 0 | 7 | 13 | 16 | 36 | ~215-275h |
-| Database (DB) | 0 | 9 | 17 | 16 | 42 | ~105-135h |
-| Frontend (FE) | 0 | 6 | 16 | 13 | 35 | ~260-340h |
-| Cross-Cutting (CROSS) | 1 | 2 | 2 | 2 | 7 | ~55-65h |
-| **Total** | **1** | **24** | **48** | **47** | **120** | **~660-840h** |
+| Severidade | Backend/SYS | Database | Frontend/UX | QA | Total |
+|:---:|:---:|:---:|:---:|:---:|:---:|
+| CRITICAL | 5 | 0 | 0 | 0 | **5** |
+| HIGH | 10 | 2 | 5 | 2 | **19** |
+| MEDIUM | 17 | 7 | 14 | 3 | **41** |
+| LOW | 5 | 9 | 9 | 1 | **24** |
+| INFO | 0 | 3 | 0 | 0 | **3** |
+| **Subtotal** | **37** | **21** | **28** | **6** | **92** |
 
-> Nota: 120 itens brutos com parcial sobreposicao em CROSS-cutting = 107 debitos unicos.
+- **Debitos ativos:** 80 (excluindo 3 INFO e 9 items resolvidos nao contabilizados acima)
+- **Esforco total estimado:** ~340 horas (~42.5 dias de engenharia)
+- **Itens ja resolvidos por migracoes recentes:** 16 (13 DB + 3 FE)
 
 ---
 
-## 2. Inventario Completo de Debitos
+## Inventario Completo de Debitos
 
-### 2.1 Sistema (validado por @architect + @qa)
+### Sistema/Backend (validado por @architect)
 
-#### 2.1.1 Arquitetura
+| ID | Debito | Severidade | Horas | Prioridade | Status |
+|----|--------|:---:|:---:|:---:|:---:|
+| **SYS-001** | faulthandler enabled + uvicorn WITHOUT `[standard]` extra -- uvloop crashes on Railway Linux containers (CRIT-SIGSEGV) | CRITICAL | 4h | P0 | Ativo |
+| **SYS-002** | LLM_STRUCTURED_MAX_TOKENS=300 causes JSON truncation in 20-30% of LLM calls (CRIT-038) | CRITICAL | 4h | P0 | Ativo |
+| **SYS-003** | PNCP API reduced max tamanhoPagina 500->50 (Feb 2026); >50 causes silent HTTP 400 | CRITICAL | 8h | P1 | Ativo |
+| **SYS-004** | Token hash uses partial payload instead of FULL SHA256 -- token identity collision risk (CVSS 9.1) | CRITICAL | 4h | P0 | Ativo |
+| **SYS-005** | ES256/JWKS JWT signing support + HS256 backward compat needed for algorithm rotation | CRITICAL | 8h | P1 | Ativo |
+| **SYS-006** | Monolith main.py decomposition -- extracted Sentry, lifespan, state to 3 modules but incomplete | HIGH | 16h | P2 | Ativo |
+| **SYS-007** | DB long-term optimization -- 18 items including index bloat and N+1 queries (DEBT-017) | HIGH | 24h | P2 | Ativo |
+| **SYS-008** | `requests` library still needed for sync PNCPClient fallback; should fully migrate to httpx | HIGH | 16h | P2 | Ativo |
+| **SYS-009** | Frontend advanced refactoring -- 8 items outstanding (DEBT-016) | HIGH | 16h | P2 | Ativo |
+| **SYS-010** | OpenAI client timeout=15s (5x p99) -- risk of thread starvation on LLM hangs | HIGH | 4h | P1 | Ativo |
+| **SYS-011** | Merge-enrichment from lower-priority duplicates not implemented | HIGH | 8h | P2 | Ativo |
+| **SYS-012** | LRU cache unbounded -- 5000 entry limit needed to prevent memory growth | HIGH | 4h | P1 | Ativo |
+| **SYS-013** | Per-future timeout counter for LLM batch classification missing | HIGH | 4h | P2 | Ativo |
+| **SYS-014** | Per-UF timeout (30s) + degraded mode (15s) for timeout cascade prevention | HIGH | 4h | P2 | Ativo |
+| **SYS-015** | Phased UF batching (size=5, delay=2s) to reduce PNCP API pressure | HIGH | 4h | P2 | Ativo |
+| **SYS-016** | Feature flag caching with lazy import -- circular dependency prevention | MEDIUM | 8h | P3 | Ativo |
+| **SYS-017** | Lazy-load filter stats tracker to prevent circular imports | MEDIUM | 4h | P3 | Ativo |
+| **SYS-018** | Circuit breaker pattern tuning (15 failures -> 60s cooldown) | MEDIUM | 8h | P3 | Ativo |
+| **SYS-019** | CB integration -- when Supabase CB open, skip retries | MEDIUM | 4h | P3 | Ativo |
+| **SYS-020** | Cache fallback banner + stale banner logic complexity | MEDIUM | 8h | P3 | Ativo |
+| **SYS-021** | Redis L2 cache for cross-worker LLM sharing to reduce redundant calls | MEDIUM | 4h | P3 | Ativo |
+| **SYS-022** | cryptography pin >=46.0.5,<47.0.0 -- fork-safe with Gunicorn preload | MEDIUM | 8h | P3 | Ativo |
+| **SYS-023** | Health canary every 5 min for source health tracking | MEDIUM | 4h | P3 | Ativo |
+| **SYS-024** | MFA (aal2) requirement + TOTP + recovery codes | MEDIUM | 16h | P3 | Ativo |
+| **SYS-025** | Legacy route tracking -- non-/v1/ deprecated endpoints still accessible | MEDIUM | 4h | P3 | Ativo |
+| **SYS-026** | Font preload optimization -- skip display fonts to avoid blocking critical path | MEDIUM | 4h | P3 | Ativo |
+| **SYS-027** | chardet<6 pin (requests<=2.32.5 incompatible with chardet 6.0.0) | MEDIUM | 4h | P3 | Ativo |
+| **SYS-028** | pytest timeout_method="thread" required for Windows dev compatibility | MEDIUM | 4h | P3 | Ativo |
+| **SYS-029** | Three-layer migration defense could fail silently on edge cases | MEDIUM | 8h | P3 | Ativo |
+| **SYS-030** | filter.py is 177KB monolithic file, hard to test | MEDIUM | 16h | P3 | Ativo |
+| **SYS-031** | N+1 patterns in analytics queries | MEDIUM | 8h | P3 | Ativo |
+| **SYS-032** | LLM cost optimization -- could use cheaper models for low-stakes classifications | MEDIUM | 8h | P3 | Ativo |
+| **SYS-033** | Backward-compatible aliases for quota functions -- old imports still work | LOW | 4h | P4 | Ativo |
+| **SYS-034** | Trial reminder emails -- legacy dead code, replaced by STORY-310 sequence | LOW | 4h | P4 | Ativo |
+| **SYS-035** | Per-user Supabase tokens for user-scoped operations -- should verify all routes | LOW | 8h | P4 | Ativo |
+| **SYS-036** | OpenAPI docs protected by DOCS_ACCESS_TOKEN in production | LOW | 4h | P4 | Ativo |
+| **SYS-037** | Terms NEVER in both valid AND ignored -- critical invariant with assert | LOW | 4h | P4 | Ativo |
 
-| ID | Debito | Severidade | Horas | Sprint |
-|----|--------|------------|-------|--------|
-| SYS-001 | **Rotas montadas em duplicata** (versioned `/v1/` + legacy root) -- 33 `include_router` statements montam rotas em ambos prefixos versioned e legacy, totalizando ~61 route mounts efetivos. Sunset 2026-06-01 sem plano de migracao. | HIGH | 16 | S2 |
-| SYS-002 | **`search_pipeline.py` god module** (800+ linhas) -- Cada stage 50-100+ linhas com try/catch aninhado. Absorveu toda logica de busca apos decomposicao do main.py. | HIGH | 24 | Backlog |
-| SYS-003 | **Progress tracker in-memory nao escala horizontalmente** -- `_active_trackers` usa asyncio.Queue local. Redis Streams existe como fallback mas in-memory e primario. | HIGH | 16 | S2 |
-| SYS-004 | **Dual HTTP client sync+async para PNCP** (1500+ linhas duplicadas) -- PNCPClient (sync/requests) e async httpx duplicam retry, CB, error handling. Sync usado apenas via `asyncio.to_thread()`. | HIGH | 24 | Backlog |
-| SYS-005 | **`main.py` ainda 820+ linhas** apos decomposicao -- Sentry init (100+), exception handlers (80+), middleware config, router registration (60+), lifespan (200+). | HIGH | 12 | S2 |
-| SYS-006 | **10+ background tasks em lifespan sem lifecycle manager** -- Cada task com create/cancel/await manual; 3+ locais para adicionar/remover. | MEDIUM | 8 | S2 |
-| SYS-007 | **Lead prospecting modules desconectados** -- 5 modulos aparentemente dead code de feature exploration. | LOW | 2 | Backlog |
-| SYS-008 | **Frontend proxy route explosion** -- 58 rotas proxy em `frontend/app/api/`, cada backend endpoint requer novo arquivo. Sem `createProxyRoute()` generico. | LOW | 12 | Backlog |
+### Database (validado por @data-engineer)
 
-#### 2.1.2 Qualidade de Codigo
+| ID | Debito | Severidade | Horas | Prioridade | Status |
+|----|--------|:---:|:---:|:---:|:---:|
+| **DB-001** | FK Target Inconsistency -- 4 tabelas restantes referenciam `auth.users` em vez de `profiles` (`monthly_quota`, `user_oauth_tokens`, `google_sheets_exports`, `search_results_cache`) | HIGH | 6h | P1 | Ativo (70% resolvido) |
+| **DB-005** | `search_state_transitions.search_id` no FK -- retention ja implementado (30d), falta apenas doc update | LOW | 0.5h | P4 | Ativo (parcial) |
+| **DB-011** | Redundant indexes em 3 tabelas (`search_results_store`, `search_sessions`, `partners`) | MEDIUM | 1h | P3 | Ativo (1 de 4 resolvido) |
+| **DB-013** | `plans.stripe_price_id` legacy column still used as fallback in billing.py | MEDIUM | 4h | P3 | Ativo |
+| **DB-015** | `monthly_quota.user_id` references `auth.users` not `profiles` (parte de DB-001) | MEDIUM | 1h | P2 | Ativo |
+| **DB-016** | Missing `updated_at` on mutable tables: `incidents` e `partners` | MEDIUM | 1h | P3 | Ativo |
+| **DB-017** | `search_results_cache` duplicate size constraints | LOW | 0.5h | P4 | Ativo |
+| **DB-018** | `partner_referrals.partner_id` missing ON DELETE CASCADE | MEDIUM | 0.5h | P2 | Ativo |
+| **DB-019** | Trigger naming convention inconsistencies (4 padroes coexistem) | LOW | 2h | P4 | Ativo |
+| **DB-020** | `google_sheets_exports.last_updated_at` naming (unica tabela com naming diferente, sem trigger) | LOW | 0.5h | P4 | Ativo |
+| **DB-021** | `organizations.plan_type` no CHECK constraint -- aceita qualquer texto | MEDIUM | 0.5h | P2 | Ativo |
+| **DB-023** | `user_oauth_tokens.provider` CHECK allows google/microsoft/dropbox but only Google implemented | LOW | 0.5h | P4 | Ativo |
+| **DB-025** | `search_results_cache` 8 indexes -- write amplification (requer pg_stat analysis) | LOW | 2h | P3 | Ativo |
+| **DB-026** | `search_sessions` accumulating without retention | LOW | 0.5h | P3 | Ativo |
+| **DB-027** | `classification_feedback` accumulating without retention (24 meses recomendado -- valor ML) | LOW | 0.5h | P4 | Ativo |
+| **DB-028** | `conversations`/`messages` no retention policy (24+ meses recomendado -- suporte) | LOW | 0.5h | P4 | Ativo |
+| **DB-031** | `pipeline_items` missing `search_id` reference -- cannot trace search origin | LOW | 1h | P4 | Ativo |
+| **DB-NEW-01** | `search_results_store` FK `NOT VALID` pode nao estar validada em producao | HIGH | 1h | P0 | Ativo (verificar) |
+| **DB-NEW-02** | `search_results_store` index duplicado: `idx_search_results_user` e `idx_search_results_store_user_id` | MEDIUM | 0.5h | P3 | Ativo |
+| **DB-NEW-03** | `search_results_store` sem retention -- `expires_at` coluna existe mas nenhum pg_cron limpa registros | HIGH | 1h | P1 | Ativo |
+| **DB-NEW-04** | `search_results_cache` FK estado incerto -- multiplas migracoes tocaram esta FK | MEDIUM | 1h | P0 | Ativo (verificar) |
+| **DB-INFO-01** | Consolidate backend migrations directory (bridge migration ja criada) | INFO | 1h | P4 | Info |
+| **DB-INFO-03** | Backup strategy not documented (Supabase Pro: daily + PITR 7d) | INFO | 1h | P3 | Info |
+| **DB-INFO-04** | Connection pooling -- backend usa REST (httpx), pgbouncer irrelevante para app layer | INFO | 0.5h | P4 | Info |
 
-| ID | Debito | Severidade | Horas | Sprint |
-|----|--------|------------|-------|--------|
-| SYS-010 | **Singletons globais mutaveis sem cleanup** -- `auth.py:_token_cache`, `llm_arbiter.py:_arbiter_cache`, `filter.py:_filter_stats_tracker`. LLM arbiter tem LRU(5000), auth cache nao. | MEDIUM | 6 | S2 |
-| SYS-011 | **Padroes inconsistentes de error handling** -- Rotas misturam `JSONResponse` direto + `HTTPException`. Sem schema de erro unificado. | MEDIUM | 8 | Backlog |
-| SYS-012 | **`config.py` 500+ linhas com concerns misturados** -- PNCP modality codes, retry config, CORS, logging, feature flags, validation juntos. | MEDIUM | 6 | Backlog |
-| SYS-013 | **User-Agent hardcoded "BidIQ"** em pncp_client.py | LOW | 1 | S1 |
-| SYS-014 | **Arquivos de teste na raiz do backend** (fora de `tests/`) | LOW | 1 | Backlog |
-| SYS-015 | **`pyproject.toml` referencia "bidiq-uniformes-backend"** | LOW | 0.5 | S1 |
+### Frontend/UX (validado por @ux-design-expert)
 
-#### 2.1.3 Escalabilidade
+| ID | Debito | Severidade | Horas | Prioridade | Status |
+|----|--------|:---:|:---:|:---:|:---:|
+| **FE-001** | `/buscar/page.tsx` monolithic 983 LOC -- extrair `useSearchOrchestration` hook + `BuscarModals` | HIGH | 16-20h | P2 | Ativo |
+| **FE-002** | `next/dynamic` parcialmente implementado; gaps restantes: Shepherd.js, framer-motion (~95KB) | MEDIUM | 4-6h | P2 | Ativo (parcial) |
+| **FE-003** | SSE proxy complexity -- multiplos fallback paths (SSE -> polling -> simulation), hard to maintain | HIGH | 20-24h | P3 | Ativo |
+| **FE-004** | Test coverage thresholds 50-55% (target 60%, ideal 80%) | HIGH | Ongoing | P3 | Ativo |
+| **FE-006** | Dual component directories -- falta convencao documentada + 5-10 file moves | HIGH | 6-8h | P2 | Ativo |
+| **FE-008** | localStorage reads inconsistentes -- writes use safeSetItem mas reads sao raw | MEDIUM | 6h | P3 | Ativo |
+| **FE-009** | Inline SVGs coexistem com lucide-react; domain-specific SVGs nao centralizados | MEDIUM | 8h | P3 | Ativo |
+| **FE-010** | `unsafe-inline`/`unsafe-eval` in CSP script-src -- security concern real | HIGH | 12-16h | P2 | Ativo |
+| **FE-011** | No page-level tests para dashboard, pipeline, historico, onboarding, conta | MEDIUM | 16-20h | P3 | Ativo |
+| **FE-012** | `eslint-disable exhaustive-deps` 3 vezes em buscar/page.tsx | MEDIUM | 3h | P3 | Ativo |
+| **FE-013** | Hardcoded pricing fallback deve manter sync com Stripe | MEDIUM | Ongoing | P3 | Ativo |
+| **FE-014** | Feature-gated dead code (ORGS_ENABLED, alertas, mensagens) shipped em bundles | MEDIUM | 6h | P3 | Ativo |
+| **FE-015** | No bundle size monitoring/budget in CI | MEDIUM | 3h | P3 | Ativo |
+| **FE-016** | Duplicate footer -- buscar inline + NavigationShell (cria duplicate landmarks) | LOW | 2h | P3 | Ativo |
+| **FE-017** | Theme init via dangerouslySetInnerHTML (padrao correto para dark mode, low priority) | LOW | 1h | P4 | Ativo |
+| **FE-018** | Raw `var(--*)` CSS alongside Tailwind tokens -- enforcement issue | MEDIUM | Ongoing | P3 | Ativo |
+| **FE-019** | `@types/uuid` in dependencies (should be devDependencies) | LOW | 0.5h | P4 | Ativo |
+| **FE-020** | `__tests__/e2e/` alongside `e2e-tests/` (two E2E locations) | LOW | 2h | P4 | Ativo |
+| **FE-021** | No Storybook -- overkill para escala atual; Ladle quando team 3+ devs | LOW | 20-32h | Backlog | Ativo |
+| **FE-022** | `Button.examples.tsx` sem visual regression testing | LOW | 8-12h | Backlog | Ativo |
+| **FE-A11Y-01** | Loading spinners sem `role="status"` / `aria-busy` (parcialmente mitigado) | LOW | 2h | P3 | Ativo (parcial) |
+| **FE-A11Y-02** | SearchErrorBoundary crash UI nao anunciado a assistive technology | MEDIUM | 1h | P2 | Ativo |
+| **FE-A11Y-03** | Inline SVGs em pricing page sem `aria-hidden="true"` (spot audit) | LOW | 0.5h | P4 | Ativo |
+| **FE-A11Y-05** | Duplicate `<footer role="contentinfo">` confunde landmark navigation | MEDIUM | 2h | P3 | Ativo |
+| **FE-A11Y-07** | Escape key inconsistency em modals (parcialmente mitigado por focus-trap-react) | LOW | 1h | P4 | Ativo |
+| **FE-NEW-01** | ProfileCompletionPrompt (651 LOC) importa framer-motion eagerly (~70KB) + zero testes | MEDIUM | 6h | P2 | Ativo |
+| **FE-NEW-02** | No error boundaries em dashboard, pipeline, historico, conta -- crash perde contexto | HIGH | 4h | P1 | Ativo |
+| **FE-NEW-03** | Direct localStorage reads em buscar/page.tsx sem SSR guard -- hydration mismatch risk | LOW | 2h | P3 | Ativo |
+| **FE-NEW-04** | Tour step HTML injetado via raw string (Shepherd.js) -- bypassa React XSS protections | LOW | 3h | P4 | Ativo |
 
-| ID | Debito | Severidade | Horas | Sprint |
-|----|--------|------------|-------|--------|
-| SYS-016 | **Railway 1GB memoria com 2 workers** -- Cada Gunicorn worker mantem caches in-memory proprios. OOM kills historicos. | HIGH | 8 | S1 |
-| SYS-017 | **PNCP page size reduzido para 50** (era 500) -- 10x mais API calls. Health canary usa `tamanhoPagina=10` e nao detecta mudanca. | HIGH | 4 | S1 |
-| SYS-018 | **Auth token cache in-memory nao compartilhado** entre Gunicorn workers | MEDIUM | 4 | S2 |
-| SYS-019 | **Sem CDN para assets estaticos** -- Frontend servido direto do Railway sem edge caching | MEDIUM | 8 | Backlog |
-| SYS-020 | **Singleton Supabase client** -- 2 workers x 50 pool = 100 conexoes potenciais contra Supabase | MEDIUM | 4 | S2 |
-| SYS-021 | **Cache key nao inclui todos parametros de filtro** | LOW | 4 | Backlog |
+### QA/Testing (adicionado por @qa)
 
-#### 2.1.4 Seguranca
-
-| ID | Debito | Severidade | Horas | Sprint |
-|----|--------|------------|-------|--------|
-| SYS-022 | **`unsafe-inline`/`unsafe-eval` no CSP frontend** -- Confirmado em `middleware.ts` linha 30. Requerido por Next.js + Stripe.js. | MEDIUM | 8 | S2 |
-| SYS-023 | **Service role key para TODAS operacoes DB backend** -- Bypass total de RLS; qualquer vuln expoe todos os dados | MEDIUM | 16 | S2 |
-| SYS-024 | **Sem timeout em webhook handler do Stripe** -- Operacoes DB longas bloqueiam indefinidamente | MEDIUM | 4 | S1 |
-| SYS-025 | **Excel temp files no proxy frontend** nao limpos em crash | LOW | 2 | Backlog |
-| SYS-026 | **Rate limiter in-memory store** com cleanup infrequente (cada 200 requests) | LOW | 2 | Backlog |
-| SYS-027 | **`STRIPE_WEBHOOK_SECRET` not-set apenas logado** -- Deveria falhar no startup (confirmado: `logger.error()` linha 55) | LOW | 1 | S1 |
-
-#### 2.1.5 Dependencias
-
-| ID | Debito | Severidade | Horas | Sprint |
-|----|--------|------------|-------|--------|
-| SYS-028 | **`cryptography` pinned a 46.0.5** por fork-safety | MEDIUM | 4 | Backlog |
-| SYS-029 | **`requests` lib apenas para sync PNCP fallback** | MEDIUM | 4 | Backlog |
-| SYS-030 | **`redis_client.py` deprecated mas ainda importavel** -- Shim para `redis_pool` | LOW | 1 | Backlog |
-| SYS-031 | **`arq` nao instalado localmente** (mocked via `sys.modules` em testes) | LOW | 2 | S1 |
-
-#### 2.1.6 Testes e Documentacao
-
-| ID | Debito | Severidade | Horas | Sprint |
-|----|--------|------------|-------|--------|
-| SYS-032 | **Sem testes de integracao contra APIs reais** -- Mudancas de contrato detectadas so em producao | MEDIUM | 16 | Backlog |
-| SYS-033 | **E2E tests usam credenciais de producao** | LOW | 8 | Backlog |
-| SYS-034 | **Sem pre-commit hooks** | LOW | 2 | S1 |
-| SYS-035 | **Backend linting (`ruff`, `mypy`) nao enforced no CI** | LOW | 2 | S1 |
-| SYS-036 | **Sem documentacao de API** alem do OpenAPI auto-gerado (desabilitado em prod) | LOW | 8 | Backlog |
-| SYS-037 | **`.env.example` potencialmente stale** -- 25+ flags sem check automatizado | LOW | 2 | Backlog |
-| SYS-038 | **Sem runbook para resposta a incidentes** -- Conhecimento apenas em CLAUDE.md/MEMORY.md | LOW | 8 | Backlog |
-
----
-
-### 2.2 Database (validado por @data-engineer)
-
-#### 2.2.1 RLS e Seguranca
-
-| ID | Debito | Severidade | Horas | Sprint | Notas |
-|----|--------|------------|-------|--------|-------|
-| DB-001 | **`classification_feedback` service_role policy usa `auth.role()`** -- Per-row evaluation mais lenta; inconsistente com padrao `TO service_role USING (true)`. | HIGH | 1 | S2 | Downgraded de CRITICAL: `auth.role()` e funcionalmente correto, apenas subotimo. Performance negligivel com <10K rows. Confirmado em `backend/migrations/006_classification_feedback.sql` linha 48. |
-| DB-002 | **`health_checks` e `incidents` sem policies user-facing** -- Apenas service_role. | MEDIUM | 2 | S2 | Downgraded de HIGH: backend-only by-design. Add explicit `TO service_role` para auto-documentacao. |
-| DB-004 | **`mfa_recovery_codes` sem rate limiting no DB** | MEDIUM | 4 | S2 | Downgraded de HIGH: app-layer rate limiting via `mfa_recovery_attempts` e padrao correto. Risco so se service_role key comprometida. |
-| DB-005 | **`mfa_recovery_attempts` sem policy SELECT para usuario** | MEDIUM | 1 | Backlog | Intencional: usuarios nao devem ver historico de tentativas (information leakage). |
-| DB-006 | **`trial_email_log` sem policies user-facing** | MEDIUM | 1 | Backlog | Backend-only. Documentar como aceito. |
-| DB-007 | **`search_state_transitions` SELECT policy usa subquery** (correlated) | MEDIUM | 4 | S2 | Per-row evaluation caro em escala. Index `idx_search_sessions_search_id` existe mas fix ideal e adicionar coluna `user_id` com backfill. |
-| DB-008 | **Stripe Price IDs visiveis na tabela `plans`** (RLS public read) | LOW | 0 | Backlog | Downgraded de MEDIUM: risco aceito. Price IDs usados client-side por design. |
-| DB-009 | **`profiles.email` exposto via partner RLS policy** (cross-schema query) | MEDIUM | 2 | S2 | Funcional mas otimizavel via `partners.contact_email`. |
-| DB-010 | **Sistema cache warmer account** com password vazio | LOW | 1 | S2 | Supabase Auth nao autentica `encrypted_password = ''`. Add `banned_until = '2099-12-31'` para defense-in-depth. |
-
-#### 2.2.2 Schema e Integridade
-
-| ID | Debito | Severidade | Horas | Sprint | Notas |
-|----|--------|------------|-------|--------|-------|
-| DB-011 | **`handle_new_user()` trigger reescrito 7+ vezes** | MEDIUM | 4 | S2 | Downgraded de HIGH: trigger estabilizou em 20260225110000. 7 rewrites foram evolutivos. Fix = integration test guard + CI grep para novas migracoes que toquem `handle_new_user`. |
-| DB-012 | **Funcoes `updated_at` inconsistentes** (`update_updated_at` vs `set_updated_at`) | HIGH | 2 | S1 | Funcoes identicas. Consolidar para `set_updated_at()` e DROP a outra. Zero impacto em dados. |
-| DB-013 | **`partner_referrals.referred_user_id` ON DELETE SET NULL vs NOT NULL** | HIGH | 1 | S1 | Coluna e `NOT NULL` (migracao 20260301200000 linha 32) mas FK e `ON DELETE SET NULL` (migracao 20260304100000 linha 77). DELETE de profile falha. Fix: `ALTER COLUMN DROP NOT NULL`. |
-| DB-014 | **`plans.stripe_price_id` coluna legada** coexiste com period-specific | MEDIUM | 2 | Backlog | Baixo risco; billing code usa colunas period-specific. Deprecar apos confirmar zero referencias. |
-| DB-015 | **`profiles.plan_type` vs `user_subscriptions.plan_id` duplicacao** | MEDIUM | 4 | S2 | Decisao intencional (STORY-291 CB fail-open). Documentar + add reconciliation cron para detectar drift. |
-| DB-016 | **`search_sessions.status` sem enforcement de transicoes** no DB | MEDIUM | 4 | Backlog | App-layer enforcement via `search_state_manager.py` funciona. Documentar transicoes validas via CHECK/COMMENT. |
-| DB-017 | **Missing `NOT NULL` em varias colunas** | LOW | 2 | Backlog | 3 de 5 colunas recebem UPDATEs. `google_sheets_exports.created_at` e `partners.created_at` devem ser `NOT NULL DEFAULT now()`. |
-| DB-018 | **`search_results_cache.priority` sem CHECK constraint** | LOW | 0.5 | S2 | Quick win: `CHECK (priority IN ('hot', 'warm', 'cold'))`. |
-| DB-019 | **`alert_runs.status` sem CHECK constraint** | LOW | 0.5 | S2 | Quick win: add CHECK com valores documentados incluindo `'pending'`. |
-| DB-020 | **Naming inconsistente em constraints** | LOW | 1 | Backlog | Cosmetico. Adotar `chk_{table}_{column}` para futuras migracoes. |
-| DB-021 | **`user_subscriptions.billing_period` constraint pode conflitar** | LOW | 1 | S2 | Downgraded de MEDIUM: migracao 029 lida com DROP/ADD. Validar com `SELECT billing_period, count(*) GROUP BY 1`. |
-| DB-022 | **`profiles.phone_whatsapp` CHECK nao valida estrutura brasileira** | LOW | 1 | Backlog | Downgraded de MEDIUM: validacao app-layer mais apropriada para telefones. DDDs brasileiros mudam ao longo do tempo. |
-| DB-023 | **`search_results_cache` UNIQUE permite sharing cross-user com date range stale** | LOW | 2 | Backlog | `params_hash_global` usado para SWR warming. Mitigado por TTL. Risco teorico. |
-| DB-024 | **`plan_billing_periods` sem coluna `updated_at`** | LOW | 1 | Backlog | Mudancas de pricing infrequentes e rastreadas via git. |
-
-#### 2.2.3 Migracoes
-
-| ID | Debito | Severidade | Horas | Sprint | Notas |
-|----|--------|------------|-------|--------|-------|
-| DB-025 | **Dual migration directories** (`supabase/migrations/` + `backend/migrations/`) | HIGH | 8 | S1 | 10 backend migrations fora do Supabase CLI. Bridge migration com `CREATE OR REPLACE` / `IF NOT EXISTS` guards. Ja causou incidente em producao (missing `check_and_increment_quota` RPC). |
-| DB-026 | **Naming nao-sequencial** -- Mix `001_` a `033_` + timestamps + `027b_` | MEDIUM | 4 | S1 | Downgraded de HIGH: Supabase CLI ordena corretamente por prefixo. Risco e confusao de devs, nao falha de execucao. |
-| DB-027 | **Sem down-migrations** -- Apenas 1 migration tem rollback comment | MEDIUM | 8 | Backlog | Standard para Supabase. PITR e o mecanismo de rollback. |
-| DB-028 | **Algumas migracoes nao idempotentes** -- `008_add_billing_period.sql` sem `IF NOT EXISTS` | MEDIUM | 4 | S2 | Urgencia baixa (migracoes rodam uma vez) mas importante para DR. |
-| DB-029 | **Hardcoded Stripe Price IDs em migracoes** (015, 029, etc.) | LOW | 2 | Backlog | Bloqueia setup staging/dev. |
-| DB-030 | **`backend/migrations/` nunca aplicadas via CLI** | HIGH | 4 | S1 | Subsumed por DB-025. Mesma causa raiz, mesmo fix. Consolidar. |
-
-#### 2.2.4 Performance
-
-| ID | Debito | Severidade | Horas | Sprint | Notas |
-|----|--------|------------|-------|--------|-------|
-| DB-031 | **`search_results_cache.results` JSONB ate 2MB/row** | HIGH | 4 | S2 | CHECK de 2MB existe (migracao 20260225150000). 10 entries/user x 2MB = 20MB per user. Monitorar com `pg_total_relation_size()`. |
-| DB-032 | **`search_results_store.results` sem retention enforcement** | HIGH | 4 | S1 | `expires_at` default 24h mas sem pg_cron cleanup. Tabela acumula dead data indefinidamente. Custo direto de storage Supabase. |
-| DB-033 | **`search_state_transitions` cresce sem limites** | MEDIUM | 2 | S2 | 5-10 registros por busca. ~15K rows/mes. pg_cron: `DELETE WHERE created_at < NOW() - INTERVAL '30 days'`. |
-| DB-034 | **`cleanup_search_cache_per_user()` trigger em cada INSERT** | MEDIUM | 2 | Backlog | Overhead minimo na escala atual. Add short-circuit: `IF count(*) <= 10 THEN RETURN NEW`. |
-| DB-035 | **`get_conversations_with_unread_count()` usa correlated subquery** | MEDIUM | 2 | Backlog | Rewrite como LEFT JOIN + GROUP BY. Volume de mensagens baixo. |
-| DB-036 | **Sem table partitioning** para append-heavy tables | LOW | 8 | Backlog | Nao necessario no POC. Planejar para `audit_events`, `search_state_transitions` quando row count mensal > 1M. |
-| DB-037 | **`alert_sent_items` sem retention cleanup** | MEDIUM | 1 | S2 | Upgraded de LOW: tabela serve dedup ativo. Sem cleanup, queries de dedup ficam lentas. 180 dias recomendado. |
-
-#### 2.2.5 Indices
-
-| ID | Debito | Severidade | Horas | Sprint | Notas |
-|----|--------|------------|-------|--------|-------|
-| DB-038 | **Migracao `20260307100000` referencia tabelas inexistentes** (`searches`, `pipeline`, `feedback`) | HIGH | 2 | S1 | Tabelas reais: `search_sessions`, `pipeline_items`, `classification_feedback`. Indices nunca criados. Corrective migration necessaria. |
-| DB-039 | **`classification_feedback` sem indice user_id** | HIGH | 1 | S1 | Migracao usou nome errado `feedback`. RLS `auth.uid() = user_id` causa full table scan. |
-| DB-040 | **Indice redundante em `alert_preferences`** (plain + UNIQUE no mesmo user_id) | LOW | 0.5 | S2 | UNIQUE cria B-tree implicito. DROP `idx_alert_preferences_user_id`. |
-| DB-041 | **Indice parcialmente redundante em `trial_email_log`** | LOW | 0.5 | S2 | Composite unique `(user_id, email_number)` cobre leading column. |
-| DB-042 | **Composite index faltando para admin inbox** em `conversations` | LOW | 1 | S2 | `(status, last_message_at DESC)` beneficiaria queries admin. Volume baixo atualmente. |
-
-#### 2.2.6 Backup e Recovery
-
-| ID | Debito | Severidade | Horas | Sprint | Notas |
-|----|--------|------------|-------|--------|-------|
-| DB-043 | **Sem procedimento documentado de disaster recovery** -- 76 migracoes sem guia | HIGH | 16 | S1 | Risco operacional critico. PITR procedure + DR doc + teste de recreacao em projeto fresh. |
-| DB-044 | **pg_cron jobs nao em migracoes** (requerem superuser) | MEDIUM | 4 | Backlog | Documentar manual setup steps. pg_cron requer `CREATE EXTENSION` com superuser. |
-| DB-045 | **`stripe_webhook_events` idempotency depende da tabela** | MEDIUM | 2 | S2 | 90-day retention (HARDEN-028) e apropriado. Stripe retry window max e 72h. |
-| DB-046 | **Sem audit trail DB-level para schema changes** | LOW | 4 | Backlog | Policy: "nunca modificar schema via dashboard sem migracao." DDL event triggers sao complexos demais. |
-
-#### 2.2.7 Novos (identificados por @data-engineer)
-
-| ID | Debito | Severidade | Horas | Sprint | Notas |
-|----|--------|------------|-------|--------|-------|
-| DB-047 | **`search_results_store.results` JSONB sem CHECK de tamanho** -- Diferente de `search_results_cache` que tem CHECK de 2MB, store aceita payloads ilimitados. Query multi-UF pode inserir 5-10MB por row. | MEDIUM | 0.5 | S1 | Bundle com DB-032. `ADD CONSTRAINT chk_store_results_max_size CHECK (octet_length(results::text) <= 2097152)`. |
-| DB-048 | **`partners` e `partner_referrals` service_role policies usam `auth.role()`** -- Nao incluidas na standardizacao migracao 20260304200000. | MEDIUM | 0.5 | S2 | Batch com DB-001 fix. |
-| DB-049 | **`health_checks` e `incidents` sem retention pg_cron job** -- Table comments dizem "30-day retention" mas nenhum job existe. ~8,640 rows/mes a 5-min intervals. | MEDIUM | 1 | S2 | |
-| DB-050 | **Sem FK de `search_state_transitions.search_id` para `search_sessions`** -- Orphan records possiveis. FK impossivel sem UNIQUE constraint em `search_sessions.search_id`. | LOW | 4 | Backlog | RLS policy ja filtra orphans (invisíveis a usuarios). |
+| ID | Debito | Severidade | Horas | Prioridade | Status |
+|----|--------|:---:|:---:|:---:|:---:|
+| **QA-NEW-01** | Integration conftest.py lacks `_cleanup_pending_async_tasks` e `_isolate_arq_module` -- usa warning suppression em vez de fix | MEDIUM | 4h | P2 | Ativo |
+| **QA-NEW-02** | `@axe-core/playwright` instalado mas ZERO specs usam -- zero automated a11y assertions em E2E | HIGH | 8h | P2 | Ativo |
+| **QA-NEW-03** | No enforced OpenAPI schema snapshot test -- `openapi_schema.diff.json` com drift ativo | MEDIUM | 4h | P2 | Ativo |
+| **QA-NEW-04** | Backend coverage sem per-module minimum thresholds para auth, billing, search_pipeline | MEDIUM | 4h | P3 | Ativo |
+| **QA-NEW-05** | Frontend jest.config.js triple-reset (`clearMocks` + `resetMocks` + `restoreMocks`) -- pode causar intermittent failures | LOW | 2h | P4 | Ativo |
+| **QA-GAP-01** | Zero E2E para billing/checkout flow, pipeline kanban, SSE failure modes, mobile viewport, dashboard, historico | HIGH | 40h | P3 | Ativo |
 
 ---
 
-### 2.3 Frontend/UX (validado por @ux-design-expert)
+## Items Resolvidos (para referencia)
 
-#### 2.3.1 Arquitetura e Estrutura
+Os seguintes itens foram confirmados como resolvidos por migracoes recentes (2026-03-04 a 2026-03-09):
 
-| ID | Debito | Severidade | Horas | Sprint | Notas |
-|----|--------|------------|-------|--------|-------|
-| FE-001 | **Paginas monoliticas** -- 4 pages > 1000 linhas: `conta` (1420), `alertas` (1068), `buscar` (1057), `dashboard` (1037). Re-renders desnecessarios. | HIGH | 20-28 | S2 | Prerequisito: FE-026 (quarantine resolution) e FE-006 (global state). Decomposicao de `conta` em sub-routes primeiro. |
-| FE-002 | **Zero `loading.tsx` streaming** em 44 paginas -- Blank screen ate JS hidratar | HIGH | 16 | S1 | Prioridade UX: buscar, dashboard, pipeline, protected layout, historico. Usar shimmer animation existente no tailwind.config.ts. |
-| FE-003 | **Sem framework i18n** -- Strings hardcoded PT em 100+ arquivos | LOW | 40 | Backlog | Downgraded de HIGH: 100% BR, pre-revenue. Termos de dominio (licitacao, edital, pregao, CNPJ) sem traducao direta. |
-| FE-004 | **23 de 44 paginas `"use client"` excessivamente** | MEDIUM | 24 | S2 | Downgraded de HIGH: maioria requer interatividade client. Apenas 3-5 paginas (planos, historico, ajuda) sao candidatas para partial SSR. |
-| FE-005 | **3 diretorios de componentes sem regra clara** -- `components/`, `app/components/`, `app/buscar/components/` com sobreposicao | MEDIUM | 8 | S2 | Downgraded de HIGH: invisivel ao usuario. Regra: `components/` shared, `app/components/` providers/layouts, `app/buscar/components/` feature-specific. |
-| FE-006 | **Sem gerenciamento de estado global** -- Auth+plan+quota+search via prop drilling | HIGH | 16 | S2 | Prerequisito para FE-001 e FE-007. Prop drilling causa stale data display quando auth/plan/quota mudam. |
-| FE-007 | **Data fetching inconsistente** -- 5 hooks SWR, maioria raw `fetch()`, alguns `fetchWithAuth()` | HIGH | 12 | S2 | Standardizar em SWR. Phase 1: read-only endpoints. Phase 2: mutations. Deixar SSE hooks custom. |
+| ID | Debito | Resolvido em | Confirmado por |
+|----|--------|-------------|----------------|
+| **DB-002** | `search_results_store` missing ON DELETE CASCADE | `20260304100000` (FK reaponta profiles + CASCADE) | @data-engineer |
+| **DB-003** | `classification_feedback` missing ON DELETE CASCADE | `20260225120000` (FK para profiles + CASCADE) | @data-engineer |
+| **DB-004** | Duplicate `updated_at` trigger functions (3 tables) | `20260304120000_rls_policies_trigger_consolidation.sql` | @data-engineer |
+| **DB-006** | `alert_preferences` auth.role() pattern | `20260304200000_rls_standardize_service_role.sql` | @data-engineer |
+| **DB-007** | `organizations`/`org_members` auth.role() pattern | `20260304200000` | @data-engineer |
+| **DB-008** | `partners`/`partner_referrals` auth.role() pattern | `20260304200000` | @data-engineer |
+| **DB-009** | `search_results_store` auth.role() pattern | `20260304200000` | @data-engineer |
+| **DB-010** | `health_checks`/`incidents` missing retention jobs | `20260308310000_debt009_retention_pgcron_jobs.sql` | @data-engineer |
+| **DB-012** | `conversations` missing composite index admin inbox | `20260308400000_debt010_schema_guards.sql` | @data-engineer |
+| **DB-022** | `pipeline_items` service role overly permissive | Migration 027 + verified in `20260304200000` | @data-engineer |
+| **DB-029** | `alert_sent_items` missing retention | `20260308310000` (180 days) | @data-engineer |
+| **DB-030** | `stripe_webhook_events` no automated retention | `022_retention_cleanup.sql` (90 days) | @data-engineer |
+| **FE-005** | No `prefers-reduced-motion` for 8 custom animations | `globals.css:331-337` comprehensive rule | @ux-design-expert |
+| **FE-007** | `aria-live` missing on dynamic content updates | 15+ components now have aria-live | @ux-design-expert |
+| **FE-A11Y-04** | Focus trap inconsistency across modals | `focus-trap-react` v12 in 6 modal components | @ux-design-expert |
+| **FE-A11Y-06** | Color-only indicators on badges | All badges now have text + icon + color | @ux-design-expert |
 
-#### 2.3.2 Qualidade de Codigo
+**Items rejeitados por especialistas:**
 
-| ID | Debito | Severidade | Horas | Sprint | Notas |
-|----|--------|------------|-------|--------|-------|
-| FE-008 | **`any` types em 8 arquivos de producao** | MEDIUM | 2 | S2 | Verificado: pipeline, filters, analytics proxy + 5 outros. |
-| FE-009 | **Console statements em producao** | MEDIUM | 1 | S1 | 1 `console.error` em buscar/page.tsx (GTM-010 trial), auth/callback, AuthProvider. |
-| FE-010 | **28+ TODO/FIXME em blog content** | LOW | 8 | Backlog | SEO impact apenas. Sem UX impact para usuarios autenticados. |
-| FE-011 | **EmptyState duplicado em 2 locais** | MEDIUM | 1 | S1 | Delete `app/components/EmptyState.tsx`, manter `components/EmptyState.tsx` como canonico. |
-| FE-012 | **Error boundary apenas em `/buscar`** -- 5+ paginas sem boundaries sub-page | HIGH | 6 | S1 | Upgraded de MEDIUM: crash em dashboard/pipeline/historico/mensagens/alertas causa perda total de contexto (scroll, form state, filtros). Add `error.tsx` a cada route group. |
-| FE-013 | **SearchErrorBoundary usa vermelho hardcoded** -- Viola guideline "nunca vermelho" | MEDIUM | 1 | S1 | 9 red class references verificadas. Inconsistente com error-messages.ts. |
-| FE-014 | **Sem memoization em paginas grandes** | MEDIUM | 4 | S2 | alertas: 2 useMemo em 1068 linhas. dashboard: 6 em 1037 linhas. Jank em mid-range devices. |
-| FE-015 | **Arquivo `nul` no diretorio app** -- Artefato Windows (0 bytes confirmado) | LOW | 0.5 | S1 | `rm frontend/app/nul`. |
-
-#### 2.3.3 Styling e Design System
-
-| ID | Debito | Severidade | Horas | Sprint | Notas |
-|----|--------|------------|-------|--------|-------|
-| FE-016 | **Mix de CSS variables e raw Tailwind** (~10 arquivos) | MEDIUM | 4 | S2 | Solucao: extender Tailwind theme com CSS custom properties (`bg-brand-blue` resolve para `var(--brand-blue)`). |
-| FE-017 | **`global-error.tsx` cores brand erradas** -- `#2563eb`/`#1e3a5f` vs `#116dff`/`#0a1e3f` | MEDIUM | 0.5 | S1 | Quick win. Tailwind defaults ao inves de SmartLic tokens. |
-
-#### 2.3.4 Performance
-
-| ID | Debito | Severidade | Horas | Sprint | Notas |
-|----|--------|------------|-------|--------|-------|
-| FE-018 | **Sem uso de `next/image`** (apenas 4 arquivos) | MEDIUM | 8 | S2 | LCP impactado em landing/blog. Paginas autenticadas usam SVG (sem impacto). Priorizar landing para conversao. |
-| FE-019 | **Sem code splitting** para Recharts (~50KB), @dnd-kit (~15KB), Shepherd.js (~25KB) | MEDIUM | 4 | S2 | Apenas 2 arquivos usam `next/dynamic`. Dashboard carrega Recharts eagerly. |
-| FE-020 | **3 Google Fonts carregadas globalmente** | LOW | 2 | Backlog | DM Mono e Fahkwang usadas em poucas paginas. Impact ~50-100ms em 3G lento. Publico enterprise. |
-
-#### 2.3.5 Acessibilidade
-
-| ID | Debito | Severidade | Horas | Sprint | Notas |
-|----|--------|------------|-------|--------|-------|
-| FE-021 | **Sem `aria-live` para resultados de busca** | MEDIUM | 2 | S1 | Upgraded de LOW: WCAG 4.1.3 violation (Status Messages). Search e fluxo primario. `aria-live` existe em 15 arquivos mas NAO em search results/count. Risco contratual B2G. |
-| FE-022 | **Sem focus trapping em modais** (Dialog, DeepAnalysis, Upgrade, Cancel) | MEDIUM | 4 | S1 | Upgraded de LOW: WCAG 2.4.3 violation. Sem `focus-trap` lib instalada, sem implementacao custom. Keyboard-only users bloqueados. Fix: instalar `focus-trap-react`. |
-| FE-023 | **Indicadores de viabilidade apenas por cor** | MEDIUM | 2 | S2 | Upgraded de LOW: WCAG 1.4.1 violation. ~8% usuarios masculinos com deficiencia de visao de cor. Add text labels (Alta/Media/Baixa) alongside color. |
-| FE-024 | **Sem documentacao de atalhos de teclado** | LOW | 2 | Backlog | `useKeyboardShortcuts` sem `?` help overlay. Minor discoverability. |
-
-#### 2.3.6 Testes e Features Faltantes
-
-| ID | Debito | Severidade | Horas | Sprint | Notas |
-|----|--------|------------|-------|--------|-------|
-| FE-025 | **Sem testes para navegacao** -- NavigationShell, Sidebar, BottomNav, MobileDrawer | LOW | 8 | Backlog | Alto blast radius (renderizado em toda pagina) mas baixa probabilidade de mudanca. |
-| FE-026 | **22 testes em quarentena** -- AuthProvider, ContaPage, DashboardPage, MensagensPage, useSearch, useSearchFilters, 4 free-user flow tests, GoogleSheetsExportButton, download-route, oauth-callback, + 10 outros. | LOW | 8 | S1 | **Corrigido de 14 para 22.** Prerequisito para decomposicao FE-001. Quarantine provavelmente por jsdom limitations, nao bugs reais. |
-| FE-027 | **Sem PWA/offline support** -- useServiceWorker hook existe mas nao registrado | LOW | 8 | Backlog | Usuarios B2G office-based com conectividade confiavel. |
-| FE-028 | **Sem validacao estruturada de formularios** -- Sem react-hook-form/zod | MEDIUM | 16 | S2 | Upgraded de LOW: validacao manual leva a mensagens inconsistentes, gaps de validacao, e sem inline feedback. Afeta signup, conta, onboarding, alertas. |
-| FE-030 | **Sem `<Suspense>` boundaries** em nenhuma pagina | LOW | 8 | S2 | Relacionado a FE-002. Sem beneficio sem loading.tsx ou async server components. |
-
-#### 2.3.7 Novos (identificados por @ux-design-expert)
-
-| ID | Debito | Severidade | Horas | Sprint | Notas |
-|----|--------|------------|-------|--------|-------|
-| FE-031 | **Dashboard charts nao mobile-optimized** -- Labels overflow, touch targets pequenos, charts sem horizontal scroll wrappers. Segunda pagina mais visitada. | MEDIUM | 4-6 | S2 | |
-| FE-032 | **Sem shared Button component** -- 15+ padroes de estilo distintos. Inconsistencia mais visivel ao usuario. | HIGH | 4-6 | S1 | Fundacao para todo design system. Shadcn/ui recomendado: 6 variants (primary, secondary, ghost, destructive, outline, link), 3 sizes, loading/disabled/icon-only states. |
-| FE-033 | **Sem shared Input/Label component** -- Forms com styling diferente. Placeholder-as-label em alguns (WCAG 1.3.1 violation). | MEDIUM | 3-4 | S2 | |
-| FE-034 | **Missing icon-only button aria-labels** -- Screen readers anunciam apenas "button" sem contexto. Sidebar collapse, filter toggles, close buttons afetados. | HIGH | 1.5 | S1 | Quick win de acessibilidade. |
-| FE-035 | **Sem testes de isolacao para useSearch (1,510 linhas)** -- Testado apenas indiretamente via component tests. Decomposicao sem dedicated hook tests e alto risco. | MEDIUM | 8-12 | S2 | |
-| FE-036 | **Design tokens parcialmente adotados** -- Mix de CSS custom properties (`var(--brand-blue)`), Tailwind theme tokens, e hex values raw (`#116dff`). Sem enforcement. | MEDIUM | 3-4 | S2 | |
+| ID | Debito | Motivo | Decidido por |
+|----|--------|--------|-------------|
+| **DB-INFO-02** | Schema version table independente | Redundante -- Supabase ja rastreia via `supabase_migrations.schema_migrations` | @data-engineer |
+| **DB-INFO-06** | JSONB columns lack DB-level validation | Pydantic no app layer e suficiente; CHECK em JSONB e fragil e lento | @data-engineer |
+| **DB-024** | `audit_events` no index on JSONB | Nenhuma query atual; premature optimization. Downgraded to INFO | @data-engineer |
 
 ---
 
-### 2.4 Cross-Cutting (validado por todos)
+## Matriz de Priorizacao Final
 
-| ID | Debito | Areas | Severidade | Horas | Sprint | Notas |
-|----|--------|-------|------------|-------|--------|-------|
-| CROSS-001 | **Migracoes DB nao-idempotentes + dual directories + sem DR docs** -- Impossivel recriar DB de forma confiavel. Combina DB-025, DB-027, DB-028, DB-043. | DB + SYS | CRITICAL | 24 | S1 | Risco operacional: sem rollback, sem recreacao, funcoes criticas potencialmente faltando. |
-| CROSS-002 | **Sem validacao de contrato API no CI** -- Frontend TypeScript types podem divergir do backend OpenAPI schema. `openapi_schema.diff.json` existe mas NAO enforced (atualmente com diff uncommitted no git status). | SYS + FE | HIGH | 8 | S1 | Enforce snapshot + add `openapi-diff` para semantic comparison em PRs. |
-| CROSS-003 | **Feature flags sem UI de runtime** -- 25+ flags em env vars. Requer restart de container para toggle. | SYS + FE | MEDIUM | 16 | Backlog | Sem rollback rapido de features. |
-| CROSS-004 | **Naming inconsistente entre camadas** -- Backend "BidIQ" em User-Agent/pyproject; Frontend "SmartLic" | SYS + FE | MEDIUM | 2 | S1 | Quick fix. |
-| CROSS-005 | **Test pollution patterns** -- `sys.modules["arq"]` mock leaks, Supabase CB singleton leak, `importlib.reload()` state corruption entre testes | SYS + DB | LOW | 4 | S1 | Fix: instalar `arq` como dev dep (puro Python, seguro); remover `sys.modules` hacks; autouse fixture para CB reset. |
-| CROSS-006 | **Sem ambiente de staging** -- E2E usa producao; sem testes de integracao contra APIs reais | SYS + FE | LOW | 16 | Backlog | Supabase staging project (free tier) + Railway staging service. Nao bloqueia E2E expansion. |
-| CROSS-007 | **Sem vulnerability scanning de dependencias no CI** -- Nenhum `pip-audit`, `npm audit`, ou Snyk em qualquer workflow. 50+ deps Python + 40+ deps npm, incluindo `cryptography==46.0.5` pinned. | SYS + FE | MEDIUM | 4 | S1 | Novo (identificado por @qa). Add `pip-audit` e `npm audit` como CI steps. |
+### P0 -- Imediato (Sprint 1, primeira semana)
 
----
+Items de seguranca, producao, e verificacao que devem ser resolvidos antes de qualquer outro trabalho.
 
-## 3. Matriz de Priorizacao Final
+| # | ID | Debito | Area | Horas | Risco |
+|---|-----|--------|------|:---:|-------|
+| 1 | **SYS-004** | Token hash parcial -- CVSS 9.1 collision risk | Security | 4h | Thundering herd on cache invalidation |
+| 2 | **SYS-001** | faulthandler + uvicorn SIGSEGV em Railway | Reliability | 4h | Baixo risco de regressao |
+| 3 | **SYS-002** | LLM JSON truncation 20-30% das chamadas | AI/Quality | 4h | Mudanca no comportamento de classificacao |
+| 4 | **DB-NEW-01** | FK NOT VALID pode nao estar enforced em producao | Data Integrity | 1h | Zero risco (query de verificacao) |
+| 5 | **DB-NEW-04** | search_results_cache FK estado incerto | Data Integrity | 1h | Zero risco (query de verificacao) |
 
-**Formula:** `Priority Score = (Severity x 3 + Impact x 2) / Effort`
+**Esforco P0: ~14 horas**
 
-Onde: Severity: CRITICAL=4, HIGH=3, MEDIUM=2, LOW=1. Impact: 1=cosmetic, 2=degraded experience, 3=functionality affected, 4=data loss/security/outage risk. Effort: 1=<2h, 2=2-8h, 3=8-24h, 4=>24h.
+### P1 -- Curto Prazo (Sprint 1-2)
 
-| Rank | ID | Debito | Area | Sev | Impact | Effort | Score |
-|------|----|--------|------|-----|--------|--------|-------|
-| 1 | DB-013 | ON DELETE SET NULL vs NOT NULL (DELETE impossivel) | DB | 3 | 4 | 1 | **17.0** |
-| 2 | DB-038 | Migracao referencia tabelas inexistentes (indices nunca criados) | DB | 3 | 4 | 1 | **17.0** |
-| 3 | DB-039 | classification_feedback sem indice user_id (full table scan RLS) | DB | 3 | 3 | 1 | **15.0** |
-| 4 | SYS-017 | PNCP page size 50, health canary blind | SYS | 3 | 3 | 1 | **15.0** |
-| 5 | FE-034 | Missing icon-only button aria-labels (a11y blocker) | FE | 3 | 3 | 1 | **15.0** |
-| 6 | DB-012 | Funcoes updated_at duplicadas | DB | 3 | 2 | 1 | **13.0** |
-| 7 | SYS-016 | Railway 1GB + 2 workers, OOM historico | SYS | 3 | 4 | 2 | **12.5** |
-| 8 | CROSS-001 | Migracoes/DR critico (impossivel recriar DB) | CROSS | 4 | 4 | 3 | **12.0** |
-| 9 | FE-012 | Error boundaries em 5 paginas (crash = contexto perdido) | FE | 3 | 3 | 2 | **10.0** |
-| 10 | DB-032 | search_results_store sem retention (dead data acumula) | DB | 3 | 3 | 2 | **10.0** |
-| 11 | CROSS-002 | API contract validation CI (drift ativo) | CROSS | 3 | 3 | 2 | **10.0** |
-| 12 | FE-032 | Sem shared Button (15+ padroes inconsistentes) | FE | 3 | 3 | 2 | **10.0** |
-| 13 | DB-031 | JSONB cache ate 2MB/row (20MB/user potencial) | DB | 3 | 3 | 2 | **10.0** |
-| 14 | FE-017 | global-error.tsx cores brand erradas | FE | 2 | 2 | 1 | **10.0** |
-| 15 | FE-013 | SearchErrorBoundary usa vermelho hardcoded | FE | 2 | 2 | 1 | **10.0** |
-| 16 | SYS-027 | STRIPE_WEBHOOK_SECRET deveria fail-at-startup | SYS | 1 | 3 | 1 | **9.0** |
-| 17 | FE-009 | Console statements em producao | FE | 2 | 1 | 1 | **8.0** |
-| 18 | FE-011 | EmptyState duplicado | FE | 2 | 1 | 1 | **8.0** |
-| 19 | DB-047 | search_results_store sem CHECK de tamanho | DB | 2 | 3 | 1 | **12.0** |
-| 20 | FE-015 | Arquivo `nul` no app dir (artefato Windows) | FE | 1 | 1 | 1 | **5.0** |
+Items de alta prioridade com impacto direto em producao, performance, ou receita.
 
----
+| # | ID | Debito | Area | Horas | Dependencia |
+|---|-----|--------|------|:---:|-------------|
+| 1 | **SYS-005** | ES256/JWKS JWT algorithm rotation | Security | 8h | Apos SYS-004 |
+| 2 | **SYS-003** | PNCP API silent 400 on >50 page size | Integration | 8h | Nenhuma |
+| 3 | **SYS-010** | OpenAI client timeout thread starvation | Performance | 4h | Nenhuma |
+| 4 | **SYS-012** | LRU cache unbounded memory growth | Performance | 4h | Nenhuma |
+| 5 | **DB-001** | FK padronizacao (4 tabelas restantes) | Data Integrity | 6h | Apos DB-NEW-01/DB-NEW-04 |
+| 6 | **DB-NEW-03** | search_results_store retention (expires_at cleanup) | Storage | 1h | Nenhuma |
+| 7 | **FE-NEW-02** | Error boundaries em dashboard, pipeline, historico, conta | UX/Reliability | 4h | Nenhuma |
 
-## 4. Quick Wins (Alto Impacto, Baixo Esforco)
+**Esforco P1: ~35 horas**
 
-Top 10 items corrigiveis em um dia focado (~11h).
+### P2 -- Medio Prazo (Sprint 2-4)
 
-| # | ID | Debito | Esforco | Acao |
-|---|----|--------|---------|------|
-| 1 | **DB-013** | ON DELETE SET NULL vs NOT NULL | 1h | `ALTER COLUMN referred_user_id DROP NOT NULL` |
-| 2 | **DB-038+039** | Indices RLS errados + indice faltando | 2h | DROP indices com nomes errados; `CREATE INDEX idx_classification_feedback_user_id ON classification_feedback(user_id)` |
-| 3 | **DB-012** | Duas funcoes updated_at identicas | 2h | Consolidar triggers para `set_updated_at()`; `DROP FUNCTION update_updated_at()` |
-| 4 | **FE-034** | Missing aria-labels em icon-only buttons | 1.5h | Add `aria-label` a todos `<button>` com apenas icone/SVG |
-| 5 | **DB-047** | search_results_store JSONB sem CHECK | 0.5h | `ADD CONSTRAINT chk_store_results_max_size CHECK (octet_length(results::text) <= 2097152)` |
-| 6 | **FE-015** | Arquivo `nul` no app dir | 0.5h | `rm frontend/app/nul` |
-| 7 | **FE-017** | global-error.tsx cores brand erradas | 0.5h | Trocar `#2563eb`/`#1e3a5f` por `#116dff`/`#0a1e3f` |
-| 8 | **FE-009** | Console statements em producao | 1h | Remover console.log/warn de buscar, auth/callback, AuthProvider |
-| 9 | **SYS-027** | STRIPE_WEBHOOK_SECRET fail-at-startup | 1h | Check no lifespan; raise se None |
-| 10 | **FE-011** | EmptyState duplicado | 1h | Delete `app/components/EmptyState.tsx`, update imports |
+Items de media prioridade que melhoram maintainability, performance, e seguranca.
 
-**Esforco total Quick Wins: ~11h**
+| # | ID | Debito | Area | Horas |
+|---|-----|--------|------|:---:|
+| 1 | **FE-010** | CSP nonce implementation (unsafe-inline/eval removal) | Security | 12-16h |
+| 2 | **FE-001** | buscar page orchestration extraction (useSearchOrchestration) | Maintainability | 16-20h |
+| 3 | **FE-002** | next/dynamic para Shepherd.js + framer-motion restantes | Performance | 4-6h |
+| 4 | **FE-006** | Component directory consolidation + convencao documentada | Architecture | 6-8h |
+| 5 | **FE-A11Y-02** | SearchErrorBoundary role="alert" | Accessibility | 1h |
+| 6 | **FE-NEW-01** | ProfileCompletionPrompt: next/dynamic + testes | Performance | 6h |
+| 7 | **DB-015** | monthly_quota FK para profiles(id) | Data Integrity | 1h |
+| 8 | **DB-018** | partner_referrals ON DELETE CASCADE | Data Integrity | 0.5h |
+| 9 | **DB-021** | organizations.plan_type CHECK constraint | Data Integrity | 0.5h |
+| 10 | **QA-NEW-01** | Integration conftest.py proper async cleanup | Test Reliability | 4h |
+| 11 | **QA-NEW-02** | Enable @axe-core/playwright em 5 core E2E flows | Accessibility | 8h |
+| 12 | **QA-NEW-03** | Enforce OpenAPI schema snapshot em CI | API Contract | 4h |
+| 13 | **SYS-006** | main.py monolith decomposition | Maintainability | 16h |
+| 14 | **SYS-011** | Merge-enrichment from lower-priority duplicates | Correctness | 8h |
+| 15 | **SYS-013** | Per-future timeout counter for LLM batch | Observability | 4h |
+| 16 | **SYS-014** | Per-UF timeout + degraded mode | Performance | 4h |
+| 17 | **SYS-015** | Phased UF batching | Performance | 4h |
+| 18 | **SYS-008** | requests library -> httpx full migration | Maintainability | 16h |
+| 19 | **SYS-009** | Frontend advanced refactoring (DEBT-016 outstanding) | Maintainability | 16h |
 
-**Impacto combinado:** Integridade de dados (DELETE impossivel), performance de query (full table scans RLS), acessibilidade (screen readers), brand consistency, seguranca (startup validation), hygiene do codebase.
+**Esforco P2: ~132-142 horas**
 
----
+### P3 -- Backlog Planejado (Sprint 5+)
 
-## 5. Plano de Resolucao
+Items de media/baixa prioridade para melhoria continua.
 
-### Sprint 1 (Semanas 1-2): Critical + Quick Wins + Fundacao
+| # | ID | Debito | Area | Horas |
+|---|-----|--------|------|:---:|
+| 1 | FE-003 | SSE proxy complexity simplification | Maintainability | 20-24h |
+| 2 | FE-004 | Test coverage 50-55% -> 60% target | Quality | Ongoing |
+| 3 | FE-008 | localStorage centralization | Maintainability | 6h |
+| 4 | FE-009 | Inline SVGs -> lucide-react migration | Maintainability | 8h |
+| 5 | FE-011 | Page-level tests (5 pages) | Quality | 16-20h |
+| 6 | FE-012 | Fix eslint-disable exhaustive-deps | Code Quality | 3h |
+| 7 | FE-013 | Pricing fallback sync process | Ongoing | Ongoing |
+| 8 | FE-014 | Feature-gated dead code tree-shaking | Performance | 6h |
+| 9 | FE-015 | Bundle size budget in CI | Quality | 3h |
+| 10 | FE-016 | Duplicate footer -> NavigationShell unification | UX/A11Y | 2h |
+| 11 | FE-018 | Tailwind token enforcement (lint rule) | Consistency | Ongoing |
+| 12 | FE-A11Y-01 | Loading spinners role="status" / aria-busy | A11Y | 2h |
+| 13 | FE-A11Y-05 | Duplicate footer landmarks fix | A11Y | 2h |
+| 14 | FE-NEW-03 | localStorage SSR guard in buscar | Correctness | 2h |
+| 15 | SYS-016 | Feature flag caching circular deps | Maintainability | 8h |
+| 16 | SYS-017 | Lazy-load filter stats tracker | Correctness | 4h |
+| 17 | SYS-018 | Circuit breaker tuning | Reliability | 8h |
+| 18 | SYS-019 | CB integration -- skip retries when open | Reliability | 4h |
+| 19 | SYS-020 | Cache fallback/stale banner logic | Maintainability | 8h |
+| 20 | SYS-021 | Redis L2 cache for LLM sharing | Performance | 4h |
+| 21 | SYS-022 | cryptography pin fork-safety | Reliability | 8h |
+| 22 | SYS-023 | Health canary 5-min schedule | Observability | 4h |
+| 23 | SYS-024 | MFA completion | Security | 16h |
+| 24 | SYS-025 | Legacy route deprecation tracking | Maintainability | 4h |
+| 25 | SYS-026 | Font preload optimization | Performance | 4h |
+| 26 | SYS-027 | chardet pin removal (needs SYS-008) | Reliability | 4h |
+| 27 | SYS-028 | pytest timeout_method="thread" | Reliability | 4h |
+| 28 | SYS-029 | Migration defense edge cases | Reliability | 8h |
+| 29 | SYS-030 | filter.py 177KB decomposition | Maintainability | 16h |
+| 30 | SYS-031 | Analytics N+1 queries | Performance | 8h |
+| 31 | SYS-032 | LLM cost optimization | Cost | 8h |
+| 32 | DB-011 | Redundant indexes (3 restantes) | Performance | 1h |
+| 33 | DB-013 | plans.stripe_price_id legacy migration | Billing | 4h |
+| 34 | DB-016 | Missing updated_at on incidents/partners | Observability | 1h |
+| 35 | DB-025 | search_results_cache index optimization | Performance | 2h |
+| 36 | DB-026 | search_sessions retention (12 meses) | Storage | 0.5h |
+| 37 | DB-INFO-03 | Backup strategy documentation | Ops | 1h |
+| 38 | QA-NEW-04 | Per-module coverage thresholds | Quality | 4h |
+| 39 | QA-GAP-01 | E2E gaps (billing, pipeline, SSE, mobile, dashboard) | Quality | 40h |
 
-**Estimativa: ~93-101h (incluindo ~15h testes)**
+### P4 -- Backlog Oportunistico
 
-#### Database (~29h)
-
-| # | IDs | Descricao | Horas | Dependencias |
-|---|-----|-----------|-------|-------------|
-| 1 | DB-038, DB-039 | Fix RLS indexes (nomes corretos + classification_feedback index) | 2 | Nenhuma |
-| 2 | DB-013 | Fix partner_referrals NOT NULL vs SET NULL | 1 | Nenhuma |
-| 3 | DB-012 | Consolidar funcoes updated_at trigger | 2 | Nenhuma |
-| 4 | DB-032, DB-047 | search_results_store retention pg_cron + 2MB CHECK | 4 | Nenhuma |
-| 5 | DB-025, DB-030 | Bridge migration para consolidar backend/migrations/ | 4 | Verificacao de producao primeiro (Q1) |
-| 6 | DB-043 | DISASTER-RECOVERY.md + teste de recreacao em projeto fresh | 16 | DB-025 primeiro |
-
-#### Frontend (~32-36h)
-
-| # | IDs | Descricao | Horas | Dependencias |
-|---|-----|-----------|-------|-------------|
-| 7 | FE-002 | Add `loading.tsx` a top 5 rotas (buscar, dashboard, pipeline, layout, historico) | 10-12 | Nenhuma |
-| 8 | FE-012 | Add error boundaries a 5 paginas autenticadas | 6 | Nenhuma |
-| 9 | FE-032 | Shared Button component (shadcn/ui init + 6 variants) | 4-6 | Nenhuma |
-| 10 | FE-034 | Add aria-labels a icon-only buttons | 1.5 | Nenhuma |
-| 11 | FE-022 | Focus trapping em modais (instalar focus-trap-react) | 4 | Nenhuma |
-| 12 | FE-021 | aria-live para search results e error banners | 2 | Nenhuma |
-| 13 | FE-017 | Fix global-error.tsx brand colors | 0.5 | Nenhuma |
-| 14 | FE-013 | Fix SearchErrorBoundary vermelho -> azul/amarelo | 1 | Nenhuma |
-| 15 | FE-015 | Delete `frontend/app/nul` | 0.5 | Nenhuma |
-| 16 | FE-009 | Remover console statements | 1 | Nenhuma |
-| 17 | FE-011 | Consolidar EmptyState (delete duplicate) | 1 | Nenhuma |
-| 18 | FE-026 | Resolver 22 testes em quarentena | 8 | Nenhuma |
-
-#### Sistema e Cross-Cutting (~32-35h)
-
-| # | IDs | Descricao | Horas | Dependencias |
-|---|-----|-----------|-------|-------------|
-| 19 | CROSS-002 | Enforce openapi_schema.diff.json no CI | 4 | Nenhuma |
-| 20 | CROSS-007 | Adicionar pip-audit + npm audit ao CI | 4 | Nenhuma |
-| 21 | CROSS-005, SYS-031 | Instalar `arq` como dev dep, remover sys.modules hacks | 2 | Nenhuma |
-| 22 | CROSS-004, SYS-013, SYS-015 | Fix naming BidIQ -> SmartLic (User-Agent, pyproject.toml) | 1.5 | Nenhuma |
-| 23 | SYS-016 | Memory profiling + otimizacao workers | 8 | Nenhuma |
-| 24 | SYS-017 | Health canary com page size detection | 4 | Nenhuma |
-| 25 | SYS-024 | Timeout em Stripe webhook handler | 4 | Nenhuma |
-| 26 | SYS-027 | STRIPE_WEBHOOK_SECRET fail-at-startup | 1 | Nenhuma |
-| 27 | SYS-034 | Pre-commit hooks | 2 | Nenhuma |
-| 28 | SYS-035 | Backend linting no CI (non-blocking primeiro) | 2 | Nenhuma |
-
-### Sprint 2 (Semanas 3-4): High Priority Estrutural
-
-**Estimativa: ~108-120h (incluindo ~20h testes)**
-
-#### Database (~31h)
-
-| # | IDs | Descricao | Horas | Dependencias |
-|---|-----|-----------|-------|-------------|
-| 1 | DB-001, DB-048 | Standardize auth.role() policies (classification_feedback + partners + partner_referrals) | 2 | Nenhuma |
-| 2 | DB-033, DB-037, DB-049 | Retention pg_cron jobs (state_transitions 30d, alert_sent_items 180d, health_checks 30d, incidents 90d, mfa_attempts 30d, alert_runs 90d) | 4 | Nenhuma |
-| 3 | DB-007 | Otimizar search_state_transitions RLS subquery | 4 | Nenhuma |
-| 4 | DB-011 | Integration test para handle_new_user() + CI guard | 4 | Nenhuma |
-| 5 | DB-015 | Documentar plan_type duplication + add reconciliation cron | 4 | Nenhuma |
-| 6 | DB-002 | Explicit service_role policies health_checks/incidents | 1 | Nenhuma |
-| 7 | DB-010 | Ban system cache warmer account | 1 | Nenhuma |
-| 8 | DB-040, DB-041 | Drop indices redundantes | 1 | Nenhuma |
-| 9 | DB-018, DB-019 | Add CHECK constraints (cache priority, alert_runs status) | 1 | Nenhuma |
-| 10 | DB-028 | Add IF NOT EXISTS guards a migracoes nao-idempotentes | 4 | Nenhuma |
-| 11 | DB-042 | Composite index para admin inbox conversations | 1 | Nenhuma |
-| 12 | DB-045 | Documentar stripe_webhook_events retention | 1 | Nenhuma |
-| 13 | DB-021 | Validar billing_period constraint vs dados legados | 1 | Nenhuma |
-| 14 | DB-031 | Prometheus gauge para JSONB table sizes | 2 | Nenhuma |
-
-#### Frontend (~46-52h)
-
-| # | IDs | Descricao | Horas | Dependencias |
-|---|-----|-----------|-------|-------------|
-| 15 | FE-001 (parcial) | Decompose conta/page.tsx em sub-routes (/perfil, /seguranca, /plano, /dados) | 8-10 | FE-026 (S1) |
-| 16 | FE-006 | Adopt SWR para read-only endpoints (Phase 1: /me, /plans, /analytics) | 8 | Nenhuma |
-| 17 | FE-033 | Shared Input/Label component | 3-4 | FE-032 (S1) |
-| 18 | FE-036 | Extend Tailwind theme com CSS custom properties | 3-4 | Nenhuma |
-| 19 | FE-023 | Add text labels a ViabilityBadge (Alta/Media/Baixa) | 2 | Nenhuma |
-| 20 | FE-019 | Dynamic imports para Recharts, @dnd-kit, Shepherd.js | 4 | Nenhuma |
-| 21 | FE-014 | Memoization em alertas e dashboard | 4 | Nenhuma |
-| 22 | FE-031 | Mobile-optimize dashboard charts | 4-6 | Nenhuma |
-| 23 | FE-028 | React-hook-form + zod para top 3 forms (signup, conta, onboarding) | 8 | FE-033 |
-| 24 | FE-008 | Fix `any` types em 8 arquivos | 2 | Nenhuma |
-
-#### Sistema (~20h)
-
-| # | IDs | Descricao | Horas | Dependencias |
-|---|-----|-----------|-------|-------------|
-| 25 | SYS-001 | Add deprecation counter metric + plan legacy route sunset | 4 | Nenhuma (remocao efetiva so apos 2 semanas de dados) |
-| 26 | SYS-022 | Investigar nonce-based CSP com Stripe.js | 4 | Testar em staging |
-| 27 | SYS-006 | TaskRegistry para background tasks em lifespan | 4 | Nenhuma |
-| 28 | SYS-010 | Bounded caches com TTL (auth, LLM arbiter) | 3 | Nenhuma |
-| 29 | SYS-018 | Auth token cache compartilhado (Redis) | 4 | Nenhuma |
-
-### Backlog (Mes 2+): Medium/Low
-
-**Estimativa: ~230-290h (incluindo ~25h testes)**
-
-#### Database (~47h)
-DB-005/006/008 (documentar decisoes aceitas, 2h), DB-009 (otimizar partner RLS, 2h), DB-014 (deprecar stripe_price_id legado, 2h), DB-016 (documentar transicoes de status, 4h), DB-017 (NOT NULL em created_at, 2h), DB-020 (naming convention, 1h), DB-022 (phone validation, 1h), DB-023 (cache UNIQUE review, 2h), DB-024 (updated_at plan_billing_periods, 1h), DB-026 (doc naming convention, 1h), DB-027 (down-migration strategy, 8h), DB-029 (Stripe IDs env-driven, 2h), DB-034 (otimizar cleanup trigger, 2h), DB-035 (rewrite conversations query, 2h), DB-036 (planejar partitioning, 8h), DB-044 (doc pg_cron manual setup, 4h), DB-046 (policy "no dashboard changes", 1h), DB-050 (FK search_state_transitions, 4h).
-
-#### Frontend (~130-160h)
-FE-001 restante (alertas, dashboard decomposition, 12-18h), FE-004 (reduzir CSR em 3-5 paginas, 12-16h), FE-005 (enforce component directory + eslint restriction, 4h), FE-007 Phase 2 (SWR mutations, 8h), FE-010 (blog programmatic links, 8h), FE-018 (next/image em landing/blog, 8h), FE-020 (lazy-load fonts, 2h), FE-024 (keyboard shortcut help overlay, 2h), FE-025 (navigation component tests, 8h), FE-027 (PWA investigation, 8h), FE-030 (Suspense boundaries, 8h), FE-003 (i18n framework, 40h -- apenas se expansao internacional), FE-035 (useSearch hook isolation tests, 8-12h).
-
-#### Sistema (~53-83h)
-SYS-002 (decompose search_pipeline, 24h), SYS-003 (Redis Streams progress tracker, 16h), SYS-004 (unify PNCP HTTP clients, 24h), SYS-005 (decompose main.py, 12h), SYS-007 (audit dead code, 2h), SYS-008 (createProxyRoute utility, 12h), SYS-011 (unified error schema, 8h), SYS-012 (split config.py, 6h), SYS-014 (move test files, 1h), SYS-019 (CDN, 8h), SYS-020 (connection pool sizing, 4h), SYS-023 (per-user tokens, 16h), SYS-025/026 (temp files + rate limiter, 4h), SYS-028/029 (dep upgrades, 8h), SYS-030 (remove redis_client shim, 1h), SYS-032/033 (integration tests + staging, 24h), SYS-036 (API docs, 8h), SYS-037 (.env validation, 2h), SYS-038 (runbook, 8h), CROSS-003 (feature flags UI, 16h), CROSS-006 (staging environment, 16h).
+| # | IDs | Tema | Horas |
+|---|-----|------|:---:|
+| 1 | DB-005, DB-017, DB-019, DB-020, DB-023, DB-027, DB-028, DB-031 | DB cosmetic/naming/retention (baixo volume) | ~6h |
+| 2 | FE-017, FE-019, FE-020, FE-A11Y-03, FE-A11Y-07, FE-NEW-04 | FE minor cleanup | ~9.5h |
+| 3 | SYS-033, SYS-034, SYS-035, SYS-036, SYS-037 | Backend cleanup/aliases/dead code | ~24h |
+| 4 | QA-NEW-05 | Jest triple-reset investigation | 2h |
+| 5 | FE-021, FE-022 | Storybook/visual regression (future) | 28-44h |
+| 6 | DB-INFO-01, DB-INFO-04 | DB docs | 1.5h |
 
 ---
 
-## 6. Riscos e Mitigacoes
+## Plano de Resolucao
 
-| # | Risco | Areas | Severidade | Mitigacao |
-|---|-------|-------|------------|-----------|
-| R-01 | **CROSS-001 migration consolidation breaks production DB** -- Bridge migration pode re-aplicar DDL se `IF NOT EXISTS` guards faltarem em alguma statement | DB + SYS + Prod | CRITICAL | Verificar cada objeto via `pg_tables`, `pg_proc`, `pg_indexes` ANTES de criar bridge migration. Nunca mover arquivos -- criar bridge que wraps content. |
-| R-02 | **SYS-023 service role compound exposure** -- Service role key bypass RLS + qualquer vuln backend (SSRF, injection) expoe todos os dados de todos usuarios | DB + SYS + Sec | HIGH | Resolver como epic de seguranca coordenado. Per-user tokens para ops user-scoped; service role restrito a admin ops. |
-| R-03 | **FE-001 + FE-006 decomposition cascade** -- Splitting 4 paginas + estado global muda rendering model de toda pagina autenticada simultaneamente | Frontend + E2E | HIGH | Sequencia obrigatoria: FE-026 (quarantine) -> FE-006 (state) -> FE-001 (pages, uma por vez comecando por conta). Nunca em paralelo. |
-| R-04 | **SYS-001 legacy route removal breaks unknown consumers** -- 33 statements montam ~61 routes; remocao assume nenhum consumidor externo usa paths legados | Backend + External | MEDIUM | Add deprecation counter metric (`smartlic_legacy_route_hits_total`). Monitorar 2+ semanas. Remover apenas rotas com zero hits. |
-| R-05 | **SYS-003 + SYS-016 horizontal scaling blocked** -- In-memory progress tracker previne multiplas instancias Railway; 1GB limita scaling vertical | SYS + Infra | HIGH | Resolver SYS-003 (Redis Streams) antes de scaling horizontal. SYS-016 (memory optimization) e alternativa vertical com ceiling menor. |
-| R-06 | **CROSS-002 API contract drift during frontend refactoring** -- FE-007 toca 30+ arquivos sem safety net; diff ativo no git status demonstra drift ja em curso | Frontend + Backend | MEDIUM | Implementar CROSS-002 (API contract CI) ANTES de iniciar FE-007 refactoring. |
-| R-07 | **SYS-022 CSP tightening breaks Stripe checkout** -- Remover unsafe-inline/unsafe-eval pode quebrar Stripe.js checkout flow | Frontend + Billing | MEDIUM | Testar nonce-based CSP com Stripe.js em staging. Stripe tem guidance especifica para CSP que deve ser seguida. |
+### Batch A: Quick Wins (< 2h cada)
+
+Items que podem ser resolvidos rapidamente com alto impacto relativo.
+
+| # | ID | Acao | Horas | Impacto |
+|---|-----|------|:---:|---------|
+| 1 | **DB-NEW-01** | Executar query de verificacao FK validation em producao | 0.5h | Confirma estado de DB-001 |
+| 2 | **DB-NEW-04** | Executar query FK target em search_results_cache | 0.5h | Confirma estado de DB-001 |
+| 3 | **DB-NEW-03** | Criar pg_cron: `DELETE FROM search_results_store WHERE expires_at < now()` | 0.5h | Previne growth ilimitado; billing |
+| 4 | **DB-021** | ALTER TABLE organizations ADD CONSTRAINT chk_org_plan_type | 0.5h | Data integrity |
+| 5 | **DB-018** | ALTER TABLE partner_referrals ON DELETE CASCADE | 0.5h | Data integrity |
+| 6 | **DB-015** | Migrar monthly_quota FK para profiles(id) | 1h | FK consistency |
+| 7 | **DB-NEW-02** | DROP INDEX idx_search_results_store_user_id (duplicata) | 0.5h | Write performance |
+| 8 | **DB-026** | Criar pg_cron para search_sessions (12 meses) | 0.5h | Storage growth |
+| 9 | **FE-A11Y-02** | Add role="alert" to SearchErrorBoundary fallback | 0.5h | A11Y compliance |
+| 10 | **FE-019** | Move @types/uuid to devDependencies | 0.5h | Dependency hygiene |
+| 11 | **FE-NEW-01** (parcial) | Wrap ProfileCompletionPrompt with next/dynamic | 0.5h | -70KB dashboard bundle |
+| 12 | **DB-016** | Adicionar updated_at em incidents e partners + trigger | 1h | Change tracking |
+
+**Total Batch A: ~7h para resolver 12 items.**
+
+### Batch B: Foundation (requer planejamento, 1-2 sprints)
+
+Correcoes estruturais que fundamentam melhorias futuras.
+
+| # | IDs | Tema | Horas | Pre-requisitos |
+|---|-----|------|:---:|----------------|
+| 1 | **SYS-004** | Token hash full SHA256 | 4h | Deploy em low-traffic window; dual-hash transition |
+| 2 | **SYS-001** | uvicorn[standard] + faulthandler fix | 4h | Railway staging test |
+| 3 | **SYS-002** | LLM MAX_TOKENS increase | 4h | Golden samples baseline antes |
+| 4 | **SYS-005** | ES256/JWKS + HS256 backward compat | 8h | Apos SYS-004 |
+| 5 | **SYS-003** | PNCP page size enforcement | 8h | Health canary test |
+| 6 | **DB-001** | FK standardization (4 tabelas) | 6h | Apos Batch A queries |
+| 7 | **SYS-010 + SYS-012** | LLM resilience (timeout + cache bounds) | 8h | Concurrent |
+| 8 | **FE-NEW-02** | Error boundaries em 4 pages | 4h | Nenhuma |
+
+**Total Batch B: ~46h**
+
+### Batch C: Optimization (sprints 3-4)
+
+Performance, UX, e security improvements.
+
+| # | IDs | Tema | Horas | Pre-requisitos |
+|---|-----|------|:---:|----------------|
+| 1 | **FE-010** | CSP nonce implementation | 12-16h | Feature flag; test all 3rd-party scripts |
+| 2 | **FE-001** | buscar page extraction | 16-20h | Incremental (1 hook per PR) |
+| 3 | **FE-006** | Component directory consolidation | 6-8h | Document convention first |
+| 4 | **FE-002** | Remaining next/dynamic (Shepherd, framer-motion) | 4-6h | Nenhuma |
+| 5 | **QA-NEW-02** | Enable axe-core in 5 E2E specs | 8h | Nenhuma |
+| 6 | **QA-NEW-03** | OpenAPI snapshot CI enforcement | 4h | Nenhuma |
+| 7 | **SYS-006** | main.py decomposition | 16h | Nenhuma |
+| 8 | **SYS-008** | requests -> httpx migration | 16h | Enables SYS-027 |
+| 9 | **SYS-011** | Merge-enrichment from duplicates | 8h | Nenhuma |
+| 10 | **SYS-013 + SYS-014 + SYS-015** | LLM observability + UF timeout + batching | 12h | Nenhuma |
+| 11 | **SYS-009** | Frontend advanced refactoring (DEBT-016) | 16h | Nenhuma |
+| 12 | **QA-NEW-01** | Integration conftest.py async cleanup | 4h | Nenhuma |
+
+**Total Batch C: ~122-142h**
+
+### Batch D: Long-term (sprints 5+)
+
+Architecture, design system, e comprehensive quality.
+
+| # | Tema | IDs | Horas |
+|---|------|-----|:---:|
+| 1 | SSE proxy simplification | FE-003 | 20-24h |
+| 2 | filter.py decomposition | SYS-030 | 16h |
+| 3 | Frontend test coverage -> 60% | FE-004, FE-011 | 36-40h |
+| 4 | E2E gap coverage | QA-GAP-01 | 40h |
+| 5 | Billing legacy migration | DB-013 | 4h |
+| 6 | Circuit breaker + CB tuning | SYS-018, SYS-019 | 12h |
+| 7 | MFA completion | SYS-024 | 16h |
+| 8 | Remaining P3/P4 items | Various | ~80h |
+
+**Total Batch D: ~224+ horas**
 
 ---
 
-## 7. Dependency Map
+## Dependencias entre Batches
 
 ```
-CROSS-001 (Migracoes/DR) --> DB-025 (Dual dirs) --> DB-030 (backend/ nunca aplicadas)
-                         --> DB-027 (Sem down-migrations)
-                         --> DB-043 (Sem DR docs)
-
-SYS-001 (Dual routes) --> SYS-005 (main.py 820+ lines)
-                       --> SYS-008 (58 proxy routes)
-                       --> CROSS-002 (API contract validation)
-                       PREREQUISITO: Deprecation metrics (2 semanas de dados)
-
-SYS-002 (God module) --> SYS-006 (Sem task lifecycle)
-                     --> SYS-012 (config.py mixed concerns)
-
-SYS-003 (In-memory progress) --> SYS-016 (Railway 1GB + 2 workers)
-                              --> SYS-018 (Auth cache per-worker)
-                              PREREQUISITO para horizontal scaling
-
-FE-026 (Quarantine 22 tests) --> FE-001 (Monolithic pages)
-FE-006 (Global state) --> FE-001 (Monolithic pages)
-                       --> FE-007 (Data fetching)
-CROSS-002 (API contract CI) --> FE-007 (Data fetching refactor)
-
-FE-001 (Monolithic pages) --> FE-014 (Sem memoization)
-                          --> FE-004 (Excessive CSR)
-                          --> FE-002 (Sem loading.tsx)
-
-DB-001 (RLS auth.role()) --> DB-038 (Indices tabelas erradas)
-                         --> DB-039 (classification_feedback sem indice)
-                         --> DB-048 (partners/partner_referrals auth.role())
-
-DB-011 (Trigger churn) --> DB-012 (updated_at inconsistente)
-                       --> DB-025 (Dual migration dirs)
+Batch A (Quick Wins, ~7h)
+  |
+  |-- DB-NEW-01/DB-NEW-04 results ──> inform scope of DB-001 in Batch B
+  |-- DB-NEW-03 (retention) ──> independent, can run immediately
+  |-- All DB items can be a single migration
+  |
+  v
+Batch B (Foundation, ~46h)
+  |
+  |-- SYS-004 ──must precede──> SYS-005 (token hash before JWT rotation)
+  |-- SYS-002 golden samples ──must precede──> SYS-002 fix deployment
+  |-- DB-001 completion ──blocked by──> Batch A query results
+  |-- FE-NEW-02 (error boundaries) ──independent of──> all other Batch B items
+  |
+  v
+Batch C (Optimization, ~132h)
+  |
+  |-- FE-001 extraction ──enables──> FE-012 (fix exhaustive-deps, P3)
+  |                      ──enables──> FE-016 (footer dedup, P3)
+  |-- FE-006 consolidation ──enables──> FE-009 (centralized icons, P3)
+  |-- SYS-008 (httpx) ──enables──> SYS-027 (chardet pin removal, P3)
+  |-- FE-010 (CSP) ──must be──> behind feature flag, independent sprint
+  |-- QA items (QA-NEW-01/02/03) ──parallelizable with──> all FE/SYS items
+  |
+  v
+Batch D (Long-term, ~224h)
+  |
+  |-- FE-003 (SSE) ──should follow──> FE-001 (cleaner codebase)
+  |-- DB-013 (billing) ──requires──> 1 week monitoring after billing.py change
+  |-- QA-GAP-01 (E2E) ──independent but benefits from──> Batch C stability
 ```
 
-**Cadeia de resolucao critica (ordem obrigatoria):**
+**Critical path:** Batch A (7h) -> Batch B P0 items (12h) -> Batch B P1 items (34h) -> Batch C
 
-1. **DB-025 + DB-030** -- Consolidar migracoes (prerequisito para tudo DB)
-2. **DB-043** -- Documentar DR (seguranca operacional basica)
-3. **CROSS-001** -- Idempotencia de migracoes (depende de #1)
-4. **DB-013 + DB-038/039 + DB-012** -- RLS + indices + integridade (quick fixes independentes)
-5. **CROSS-002** -- API contract CI (safety net antes de refatoracao FE)
-6. **FE-026** -- Resolver quarantine (prerequisito para decomposicao FE)
-7. **FE-006** -- Estado global (prerequisito para FE-001 e FE-007)
-8. **FE-001** -- Decomposicao de paginas (uma por vez, comecando por `conta`)
-9. **Deprecation metrics 2+ semanas** -- Dados para SYS-001 (legacy route removal)
+**Parallelizable:** DB items in Batch A can all be done in a single migration. FE quick wins are independent of DB work. QA items (QA-NEW-02, QA-NEW-03) can start during Batch B without blocking.
 
 ---
 
-## 8. Criterios de Sucesso
+## Riscos e Mitigacoes
 
-| Metrica | Baseline Atual | Meta Sprint 1 | Meta Sprint 2 | Meta Backlog |
-|---------|---------------|---------------|---------------|--------------|
-| Backend tests | 5774 pass / 0 fail | 5774+ / 0 fail | 5800+ / 0 fail | 5900+ / 0 fail |
-| Frontend tests | 2681 pass / 0 fail | 2700+ / 0 fail (quarantine resolved) | 2750+ / 0 fail | 2800+ / 0 fail |
-| E2E tests | 60 pass | 60 pass | 65+ pass | 75+ pass |
-| Quarantined tests | 22 | 0 | 0 | 0 |
-| `loading.tsx` coverage | 0/44 pages | 5/44 pages | 10/44 pages | 15+/44 pages |
-| Error boundaries | 1 page (/buscar) | 6 pages | 6 pages | all authenticated |
-| RLS full table scans | 3+ (classification_feedback, broken indexes) | 0 | 0 | 0 |
-| Tables without retention | 6+ | 1 (store fixed) | 0 | 0 |
-| Dep vulnerabilities | unknown (not scanned) | scanned, 0 critical | scanned, 0 high+ | scanned, 0 medium+ |
-| WCAG AA violations | 4+ (FE-021/022/023/034) | 1 (FE-023 in S2) | 0 | 0 |
-| Design system primitives | 0 | 1 (Button) | 4 (Button, Input, Label, Badge) | 6+ |
-| DR procedure | undocumented | documented + tested | quarterly test | quarterly test |
-| API contract CI | not enforced | enforced (snapshot) | enforced (semantic diff) | enforced |
-| Legacy route hits | untracked | tracked (metric) | data analyzed | removed if zero |
+### Riscos de Alta Severidade (da analise cruzada @qa)
 
----
+| Risco | Areas | Prob. | Impacto | Mitigacao |
+|-------|-------|:---:|:---:|-----------|
+| **SYS-004 token hash fix invalida cached sessions** | Auth + All routes | Alta | HIGH | Deploy em 2-4 AM BRT; dual-hash lookup (old + new) por 1h de transicao; monitorar p99 latency |
+| **FE-010 CSP nonce breaks third-party scripts** | Frontend + Stripe + Sentry + Mixpanel + Clarity | Alta | CRITICAL | Deploy behind feature flag; testar cada 3rd-party individualmente; rollback = revert single middleware line |
+| **DB-001 FK migration breaks auth flow** | Database + Auth + Registration | Media | CRITICAL | NOT VALID + VALIDATE pattern; orphan detection query PRE-migration; rollback migration ready |
+| **FE-001 buscar refactor state bugs** | Search + SSE + Filters | Media | HIGH | Extract incrementally (1 hook per PR); full E2E pass before AND after; A/B test staging |
+| **SYS-002 LLM token fix changes classification behavior** | LLM + Result Quality | Media | HIGH | Golden samples test before/after; compare acceptance rates; gradual rollout |
+| **Retention jobs delete debugging evidence** | DB + Observability | Baixa | MEDIUM | Retention jobs check for open incidents before purging |
 
-## 9. Validation Log
+### Areas Nao Cobertas (identificadas por @qa)
 
-| Phase | Agent | Status | Key Changes |
-|-------|-------|--------|-------------|
-| Phase 1-3 | @architect (Atlas) | COMPLETE | System architecture, DB audit, frontend spec analyzed. 102 debts identified. Unified ID scheme (SYS/DB/FE/CROSS). Priority scoring formula applied. |
-| Phase 4 | @data-engineer (Delta) | APPROVED | 38 confirmed, 6 severity-adjusted, 1 removed (DB-003: OAuth uses Fernet AES-256 -- false positive), 4 added (DB-047/048/049/050). DB-001 CRITICAL->HIGH. Roadmap: S1 29h, S2 31h, Backlog 47h. |
-| Phase 5 | @ux-design-expert (Uma) | APPROVED | 23 confirmed, 5 severity-adjusted, 1 removed (FE-029: PullToRefresh actively used -- false positive), 6 added (FE-031-036). FE-003 HIGH->LOW, FE-012 MEDIUM->HIGH, FE-021/022/023 LOW->MEDIUM. Roadmap: S1 32-36h, S2 46-52h, Backlog 130-160h. |
-| Phase 7 | @qa (Quinn) | APPROVED WITH CONDITIONS | 5 conditions all applied: (1) SYS-009 removed (already fixed -- `await asyncio.sleep(0.3)` at authorization.py:100), (2) FE-026 count corrected 14->22, (3) CROSS-007 added (dep vulnerability scanning), (4) SYS-001 clarified (33 statements, ~61 mounts), (5) Testing effort ~60h added to total. 7 cross-cutting risks documented. 6 gaps identified. |
-| Phase 8 | @architect (Atlas) | **FINAL** | All specialist changes incorporated. 3 false positives removed. 8 new debts added. 19 severity adjustments applied. Totals recalculated: 107 unique debts, 720-900h total effort. Document is self-contained. |
+Estas areas foram identificadas como gaps no assessment e devem ser consideradas para auditorias futuras:
 
-### Severity Adjustments Applied (19 total)
-
-| ID | From | To | Justification |
-|----|------|----|---------------|
-| DB-001 | CRITICAL | HIGH | `auth.role()` funcionalmente correto; performance negligivel <10K rows (@data-engineer) |
-| DB-002 | HIGH | MEDIUM | Backend-only by-design; nao e gap (@data-engineer) |
-| DB-004 | HIGH | MEDIUM | App-layer rate limiting e padrao correto (@data-engineer) |
-| DB-008 | MEDIUM | LOW | Risco aceito; Price IDs usados client-side by design (@data-engineer) |
-| DB-011 | HIGH | MEDIUM | Trigger estabilizou; rewrites foram evolutivos (@data-engineer) |
-| DB-021 | MEDIUM | LOW | Migracao 029 lida corretamente (@data-engineer) |
-| DB-022 | MEDIUM | LOW | App-layer validation mais apropriada (@data-engineer) |
-| DB-026 | HIGH | MEDIUM | CLI ordena corretamente; risco e confusao, nao falha (@data-engineer) |
-| DB-037 | LOW | MEDIUM | Serve dedup ativo; queries degradam sem cleanup (@data-engineer) |
-| FE-003 | HIGH | LOW | 100% BR, pre-revenue, termos sem traducao (@ux-design-expert) |
-| FE-004 | HIGH | MEDIUM | Maioria requer interatividade; poucos candidatos SSR (@ux-design-expert) |
-| FE-005 | HIGH | MEDIUM | Invisivel ao usuario; slows dev velocity only (@ux-design-expert) |
-| FE-010 | MEDIUM | LOW | SEO only; sem UX impact para usuarios autenticados (@ux-design-expert) |
-| FE-012 | MEDIUM | HIGH | Crash em 5 paginas = perda total de contexto (@ux-design-expert) |
-| FE-015 | MEDIUM | LOW | Zero UX impact; codebase hygiene only (@ux-design-expert) |
-| FE-021 | LOW | MEDIUM | WCAG 4.1.3 violation; search e fluxo primario; risco B2G (@ux-design-expert) |
-| FE-022 | LOW | MEDIUM | WCAG 2.4.3 violation; keyboard users bloqueados (@ux-design-expert) |
-| FE-023 | LOW | MEDIUM | WCAG 1.4.1 violation; ~8% daltonismo masculino (@ux-design-expert) |
-| FE-028 | LOW | MEDIUM | Validacao manual = mensagens inconsistentes, gaps (@ux-design-expert) |
+| Area | Descricao | Severidade |
+|------|-----------|:---:|
+| Billing/Stripe end-to-end | Falta integration test para checkout -> webhook -> plan_type sync | HIGH |
+| Cron job reliability | Error handling, retry logic, overlap protection em cron_jobs.py | MEDIUM |
+| Redis failure modes | Comportamento quando Redis totalmente indisponivel no startup | MEDIUM |
+| Email delivery reliability | Failed delivery em Resend downtime (trial reminders, password resets) | LOW |
+| Worker process isolation | Memory leaks, ThreadPoolExecutor exhaustion em ARQ worker | MEDIUM |
+| API versioning debt | Catalogo de rotas deprecated vs ativas, sem deprecation telemetry | LOW |
 
 ---
 
-## Anexos
+## Condicoes do QA Gate
 
-- `docs/architecture/system-architecture.md` -- Arquitetura completa (Phase 1)
-- `supabase/docs/SCHEMA.md` -- Schema de 32 tabelas (Phase 2)
-- `supabase/docs/DB-AUDIT.md` -- Audit de database (Phase 2)
-- `docs/frontend/frontend-spec.md` -- Especificacao frontend (Phase 3)
-- `docs/prd/technical-debt-DRAFT.md` -- DRAFT consolidado (Phase 4)
-- `docs/reviews/db-specialist-review.md` -- Revisao @data-engineer (Phase 4)
-- `docs/reviews/ux-specialist-review.md` -- Revisao @ux-design-expert (Phase 5)
-- `docs/reviews/qa-review.md` -- QA review com 5 condicoes (Phase 7)
+O QA Gate foi **APPROVED com 5 condicoes**. Status e plano de cada:
+
+### Condicao 1 (MUST): Executar SQL diagnostics em producao
+
+**Status:** Pendente
+**Acao:** Executar as 5 queries SQL do `db-specialist-review.md` Section "Validacao Pendente em Producao":
+
+```sql
+-- 1. Estado final das FKs (DB-001, DB-NEW-01, DB-NEW-04)
+SELECT tc.table_name, tc.constraint_name,
+       ccu.table_name AS references_table,
+       rc.delete_rule,
+       pc.convalidated
+FROM information_schema.table_constraints tc
+JOIN information_schema.constraint_column_usage ccu
+  ON tc.constraint_name = ccu.constraint_name
+JOIN information_schema.referential_constraints rc
+  ON tc.constraint_name = rc.constraint_name
+LEFT JOIN pg_constraint pc
+  ON pc.conname = tc.constraint_name
+WHERE tc.constraint_type = 'FOREIGN KEY'
+  AND tc.table_schema = 'public'
+ORDER BY tc.table_name;
+
+-- 2. auth.role() residual (deve retornar 0 rows)
+SELECT schemaname, tablename, policyname, qual
+FROM pg_policies
+WHERE schemaname = 'public' AND qual LIKE '%auth.role()%';
+
+-- 3. pg_cron jobs ativos (deve retornar 8+ jobs)
+SELECT jobname, schedule FROM cron.job ORDER BY jobname;
+
+-- 4. Indexes redundantes -- scan frequency
+SELECT indexrelname, idx_scan, idx_tup_read, pg_size_pretty(pg_relation_size(indexrelid))
+FROM pg_stat_user_indexes
+WHERE relname IN ('search_results_cache', 'search_results_store', 'search_sessions', 'partners')
+ORDER BY relname, idx_scan ASC;
+
+-- 5. search_results_store growth (DB-NEW-03)
+SELECT count(*) AS total_rows,
+       count(*) FILTER (WHERE expires_at < now()) AS expired_rows,
+       pg_size_pretty(pg_total_relation_size('search_results_store')) AS total_size
+FROM search_results_store;
+```
+
+**Prazo:** Antes de iniciar Batch B.
+**Responsavel:** @data-engineer ou @devops via Supabase CLI.
+
+### Condicao 2 (MUST): Estabelecer baselines de testes
+
+**Status:** Pendente
+**Acao:**
+1. `python scripts/run_tests_safe.py` -- record pass/fail/skip counts
+2. `npm test` -- record pass/fail/skip counts
+3. `npm run test:e2e` -- record results + identify flaky tests
+4. `pytest --cov` -- per-module coverage breakdown
+5. `npm run test:coverage` -- per-page/hook coverage breakdown
+6. `npx next build` -- chunk sizes baseline for FE-001/FE-002
+7. `pytest -k test_golden_samples` -- LLM classification baseline for SYS-002
+
+**Prazo:** Antes de iniciar qualquer fix de P0/P1.
+**Responsavel:** @qa.
+
+### Condicao 3 (MUST): Mover FE-010 de P1 para P2
+
+**Status:** Aplicado neste documento.
+**Justificativa:** Regression risk alto demais para sprint com P0 security fixes. CSP nonce com 5+ third-party scripts (Stripe.js, Sentry, Mixpanel, Clarity, Cloudflare) precisa de esforco dedicado. `unsafe-inline`/`unsafe-eval` e defense-in-depth, nao barreira primaria de auth.
+
+### Condicao 4 (SHOULD): Adicionar DB-NEW-03 ao Batch de Retention
+
+**Status:** Aplicado neste documento.
+**Justificativa:** Quick win de 0.5h com impacto direto em storage billing. Incluido no Batch A como item #3.
+
+### Condicao 5 (SHOULD): Criar regression test plan para items P0
+
+**Status:** Documentado na secao "Testes de Validacao por Batch" abaixo.
+**Plano:** Cada item P0 tem rollback plan + testes especificos identificados.
 
 ---
 
-*Technical Debt Assessment FINAL v1.0*
-*SmartLic v0.5 -- 2026-03-07*
-*Validated by: @architect (Atlas), @data-engineer (Delta), @ux-design-expert (Uma), @qa (Quinn)*
-*Pronto para: Sprint Planning e execucao.*
+## Criterios de Sucesso
+
+### Metricas
+
+| Metrica | Baseline Atual | Target Pos-Batch A/B | Target Pos-Batch C/D | Prazo |
+|---------|:---:|:---:|:---:|:---:|
+| Backend test pass rate | 5131+ (a verificar) | 5131+ (0 failures) | 5500+ | Continuous |
+| Backend coverage (global) | 70% threshold | 70% | 80% | P3 |
+| Backend coverage (critical modules) | Desconhecido | 60% min (auth, billing, search_pipeline) | 70% min | P3 |
+| Frontend test pass rate | 2681+ (a verificar) | 2681+ (0 failures) | 3000+ | Continuous |
+| Frontend coverage (branches) | 50% | 55% | 60% | P3 |
+| Frontend coverage (lines) | 55% | 60% | 65% | P3 |
+| E2E pass rate | Unknown (21 specs) | >95% | >98% | Continuous |
+| E2E a11y audits (axe-core) | 0 specs | 5 core flows | 10+ flows | P2 |
+| Bundle size (JS first load) | Unknown | Measure baseline | <250KB gzipped | P2 |
+| LLM JSON parse success rate | ~70-80% | >99% | >99.5% | P0 |
+| Zero CRITICAL debts | 5 ativos | 0 | 0 | Batch B |
+| Zero HIGH debts | 19 ativos | <10 | 0 | Batch C |
+| DB FK consistency | ~70% on profiles | 100% | 100% | Batch B |
+
+### Testes de Validacao por Batch
+
+**Batch A (Quick Wins):**
+- Execute 5 production SQL queries from Condicao 1 -- record results
+- Verify pg_cron jobs created: `SELECT jobname, schedule FROM cron.job`
+- Verify FK state after DB-015 migration
+- Run `npm run build` to confirm no bundle regressions from FE-NEW-01 dynamic import
+
+**Batch B (Foundation):**
+
+| ID | Testes Necessarios | Rollback Plan |
+|----|-------------------|---------------|
+| SYS-004 | Run `test_security_story210.py` + test two concurrent requests with different tokens must not cross-pollinate | Revert to partial hash (single line in auth.py) |
+| SYS-001 | Deploy to Railway staging, verify no SIGSEGV for 1h. Test faulthandler disabled. | Remove `[standard]` extra from requirements.txt |
+| SYS-002 | Run golden_samples test before/after. Compare classification acceptance rates. Verify JSON parse success >99% with new MAX_TOKENS. | Revert MAX_TOKENS to 300 (single config line) |
+| SYS-005 | Verify HS256 backward compat + ES256 new tokens work simultaneously. Test JWKS rotation with 2 active keys. | Disable ES256 in config; HS256 continues working |
+| SYS-003 | Test tamanhoPagina=50 (success) and tamanhoPagina=51 (graceful fail). Add canary test with real API. | Revert page size constant |
+| DB-001 | Run FK diagnostic query post-migration. Test user deletion cascade through all dependent tables. Run orphan detection pre-migration. | Pre-written rollback migration reverting FK targets |
+| SYS-010/012 | Test 16s delay timeout at 15s. Test LRU eviction at 5000 entries. | Revert timeout/cache config |
+| FE-NEW-02 | Error in child component caught by boundary. Fallback UI renders with recovery action. | Remove error boundary wrappers (harmless) |
+
+**Batch C (Optimization):**
+- FE-010: Test Stripe.js, Sentry, Mixpanel, Clarity, Cloudflare all load with nonce-based CSP. Rollback: revert single CSP header line in middleware.
+- FE-001: Full E2E search flow pass (search-flow.spec.ts). All 35 sub-components render. Bundle size equal or smaller.
+- FE-006: ESLint import restriction rule passes on CI. No broken imports.
+- QA-NEW-02: 5 E2E specs run axe audits with 0 critical violations.
+- QA-NEW-03: CI fails on OpenAPI schema drift.
+
+**Batch D (Long-term):**
+- FE-003: SSE fallback cascade still works end-to-end (SSE -> polling -> simulation).
+- SYS-030: filter.py split into modules; all 170+ filter tests pass.
+- FE-004/FE-011: Coverage thresholds hit 60% branches, 65% lines.
+- QA-GAP-01: E2E exists for billing checkout, pipeline drag-and-drop, SSE failure modes, mobile viewport, dashboard rendering.
+
+---
+
+## Apendice: Metodologia
+
+### Processo de Brownfield Discovery (10 fases)
+
+Este assessment foi produzido atraves do processo AIOS Brownfield Discovery de 10 fases:
+
+| Fase | Agente | Entregavel | Status |
+|:---:|--------|-----------|:---:|
+| 1 | @architect | `system-architecture.md` -- Backend architecture audit | Completo |
+| 2 | @data-engineer | `DB-AUDIT.md` -- Database schema audit (76 migrations) | Completo |
+| 3 | @ux-design-expert | `frontend-spec.md` -- Frontend/UX audit | Completo |
+| 4 | @architect | `technical-debt-DRAFT.md` -- Initial consolidation (93 items) | Completo |
+| 5 | @data-engineer | `db-specialist-review.md` -- DB specialist review (10 resolved, 4 new, 4 adjusted) | Completo |
+| 6 | @ux-design-expert | `ux-specialist-review.md` -- UX specialist review (3 resolved, 4 new, 5 adjusted) | Completo |
+| 7 | @qa | `qa-review.md` -- QA cross-cutting review (6 new, 5 conditions, 6 risks) | Completo |
+| 8 | @architect | **Este documento** -- Final consolidated assessment | Completo |
+| 9 | -- | Execucao de Condicoes 1-2 do QA Gate (SQL queries + test baselines) | Pendente |
+| 10 | -- | Inicio da execucao (Batch A -> B -> C -> D) | Pendente |
+
+### Criterios de Avaliacao
+
+- **Severidade:** Baseada em impacto em producao (CRITICAL = downtime/security/data loss, HIGH = performance/reliability/correctness, MEDIUM = maintainability/conventions, LOW = cleanup/cosmetic, INFO = documentation/future-proofing)
+- **Esforco:** Estimado em horas por especialista da area (DB items por @data-engineer, FE items por @ux-design-expert, SYS items por @architect, QA items por @qa)
+- **Prioridade:** Calculada como (Severity weight x Impact) / Effort, ajustada por dependencias e risco de regressao. P0 = imediato, P1 = sprint atual, P2 = sprints 2-4, P3 = backlog planejado, P4 = oportunistico
+- **Status:** Validado cruzando codigo-fonte no commit `3c71ce93`, 76 arquivos de migracao, e 631+ arquivos de teste
+
+### Fontes Primarias
+
+| Documento | Localizacao |
+|-----------|------------|
+| System Architecture Audit | `docs/reviews/system-architecture.md` |
+| Database Audit | `docs/reviews/DB-AUDIT.md` |
+| Frontend Specification | `docs/frontend/frontend-spec.md` |
+| Technical Debt DRAFT | `docs/prd/technical-debt-DRAFT.md` |
+| DB Specialist Review | `docs/reviews/db-specialist-review.md` |
+| UX Specialist Review | `docs/reviews/ux-specialist-review.md` |
+| QA Review | `docs/reviews/qa-review.md` |
+
+---
+
+*Generated by @architect during Brownfield Discovery Phase 8 -- Final Assessment*
+*Consolidates inputs from @data-engineer (Phase 5), @ux-design-expert (Phase 6), @qa (Phase 7)*
+*This document is the SINGLE SOURCE OF TRUTH for SmartLic technical debt as of 2026-03-09.*

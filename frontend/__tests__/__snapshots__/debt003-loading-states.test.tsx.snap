@@ -625,8 +625,11 @@ exports[`DEBT-003: buscar/loading.tsx matches snapshot 1`] = `
 
 exports[`DEBT-003: dashboard/loading.tsx matches snapshot 1`] = `
 <div
+  aria-busy="true"
+  aria-label="Carregando dashboard"
   class="max-w-7xl mx-auto px-4 sm:px-6 py-6 animate-fade-in"
   data-testid="dashboard-loading"
+  role="status"
 >
   <div
     class="relative overflow-hidden bg-[var(--surface-1)] h-8 w-40 rounded-button mb-6"
@@ -1497,8 +1500,11 @@ exports[`DEBT-003: historico/loading.tsx matches snapshot 1`] = `
 
 exports[`DEBT-003: pipeline/loading.tsx matches snapshot 1`] = `
 <div
+  aria-busy="true"
+  aria-label="Carregando pipeline"
   class="max-w-7xl mx-auto px-4 sm:px-6 py-6 animate-fade-in"
   data-testid="pipeline-loading"
+  role="status"
 >
   <div
     class="flex items-center justify-between mb-6"

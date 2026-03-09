@@ -9,6 +9,9 @@ export default function PipelineLoading() {
     <div
       className="max-w-7xl mx-auto px-4 sm:px-6 py-6 animate-fade-in"
       data-testid="pipeline-loading"
+      role="status"
+      aria-busy="true"
+      aria-label="Carregando pipeline"
     >
       {/* Page header */}
       <div className="flex items-center justify-between mb-6">

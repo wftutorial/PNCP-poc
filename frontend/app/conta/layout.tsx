@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { Suspense } from "react";
 import { PageHeader } from "../../components/PageHeader";
+import { ErrorBoundary } from "../../components/ErrorBoundary";
 
 /**
  * DEBT-011 FE-001 AC3: Shared sidebar layout for /conta sub-routes.
@@ -113,11 +114,13 @@ export default function ContaLayout({ children }: { children: React.ReactNode })
             </div>
           </nav>
 
-          {/* Content area — DEBT-011 FE-030: Suspense boundary */}
+          {/* Content area — DEBT-011 FE-030: Suspense boundary + DEBT-105 AC4: Error boundary */}
           <main className="flex-1 min-w-0">
-            <Suspense fallback={<div className="space-y-4 animate-pulse"><div className="h-48 bg-[var(--surface-1)] rounded-card" /><div className="h-32 bg-[var(--surface-1)] rounded-card" /></div>}>
-              {children}
-            </Suspense>
+            <ErrorBoundary pageName="conta">
+              <Suspense fallback={<div className="space-y-4 animate-pulse"><div className="h-48 bg-[var(--surface-1)] rounded-card" /><div className="h-32 bg-[var(--surface-1)] rounded-card" /></div>}>
+                {children}
+              </Suspense>
+            </ErrorBoundary>
           </main>
         </div>
       </div>

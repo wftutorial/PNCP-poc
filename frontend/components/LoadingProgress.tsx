@@ -18,7 +18,7 @@ export function LoadingProgress({
   stateCount,
 }: LoadingProgressProps) {
   return (
-    <div className="mt-6 sm:mt-8 p-4 sm:p-6 bg-surface-0 border border-strong rounded-card animate-fade-in-up">
+    <div role="status" aria-busy="true" aria-label="Analisando oportunidades" className="mt-6 sm:mt-8 p-4 sm:p-6 bg-surface-0 border border-strong rounded-card animate-fade-in-up">
       <div className="flex items-center justify-center gap-3 mb-4">
         <svg className="animate-spin h-6 w-6 text-brand-blue" viewBox="0 0 24 24">
           <circle

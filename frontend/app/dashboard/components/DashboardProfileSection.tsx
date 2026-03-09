@@ -1,7 +1,13 @@
 "use client";
 
 import type { Session } from "@supabase/supabase-js";
-import ProfileCompletionPrompt from "../../../components/ProfileCompletionPrompt";
+import dynamic from "next/dynamic";
+
+// DEBT-105 AC6: Lazy-load ProfileCompletionPrompt to reduce dashboard bundle (~70KB framer-motion)
+const ProfileCompletionPrompt = dynamic(
+  () => import("../../../components/ProfileCompletionPrompt"),
+  { ssr: false }
+);
 import ProfileProgressBar from "../../../components/ProfileProgressBar";
 import ProfileCongratulations from "../../../components/ProfileCongratulations";
 

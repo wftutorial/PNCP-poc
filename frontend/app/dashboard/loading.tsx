@@ -7,6 +7,9 @@ export default function DashboardLoading() {
     <div
       className="max-w-7xl mx-auto px-4 sm:px-6 py-6 animate-fade-in"
       data-testid="dashboard-loading"
+      role="status"
+      aria-busy="true"
+      aria-label="Carregando dashboard"
     >
       {/* Page title */}
       <Shimmer className="h-8 w-40 rounded-button mb-6" />

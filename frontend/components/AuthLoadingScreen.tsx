@@ -11,6 +11,9 @@ export function AuthLoadingScreen() {
     <div
       className="min-h-screen bg-[var(--canvas)] flex flex-col animate-fade-in"
       data-testid="auth-loading-screen"
+      role="status"
+      aria-busy="true"
+      aria-label="Verificando autenticacao"
     >
       {/* Header skeleton matching PageHeader */}
       <div className="h-14 border-b border-[var(--border)] bg-[var(--surface-0)] flex items-center px-4">

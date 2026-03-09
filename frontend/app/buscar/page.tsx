@@ -880,7 +880,8 @@ function HomePageContent() {
       </Dialog>
 
       {/* GTM-POLISH-001 AC8: Footer always visible (not hidden without results) */}
-      <footer className="bg-surface-1 text-ink border-t border-[var(--border)] mt-12" role="contentinfo">
+      {/* DEBT-105 AC8: Removed role="contentinfo" — NavigationShell provides the page-level landmark */}
+      <footer className="bg-surface-1 text-ink border-t border-[var(--border)] mt-12" aria-label="Links uteis da busca">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <div className="grid md:grid-cols-4 gap-8 mb-8">
             <div>

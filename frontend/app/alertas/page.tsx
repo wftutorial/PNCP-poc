@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo, memo } from "react";
 import { useAuth } from "../components/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { AuthLoadingScreen } from "../../components/AuthLoadingScreen";
@@ -85,7 +85,7 @@ function formatCurrency(value: number | null): string {
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function AlertCard({
+const AlertCard = memo(function AlertCard({
   alert,
   onToggle,
   onEdit,
@@ -264,7 +264,7 @@ function AlertCard({
       </div>
     </div>
   );
-}
+});
 
 // ---------------------------------------------------------------------------
 // Keywords tag input
@@ -351,7 +351,7 @@ function UFMultiSelect({
   selected: string[];
   onChange: (ufs: string[]) => void;
 }) {
-  const selectedSet = new Set(selected);
+  const selectedSet = useMemo(() => new Set(selected), [selected]);
 
   const toggleUf = (uf: string) => {
     const newSet = new Set(selectedSet);

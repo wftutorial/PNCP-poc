@@ -1,25 +1,11 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
+import dynamic from "next/dynamic";
 import { Button } from "../../components/ui/button";
-import {
-  DndContext,
-  DragOverlay,
-  closestCorners,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragStartEvent,
-  type DragEndEvent,
-  type DragOverEvent,
-} from "@dnd-kit/core";
-import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { usePipeline } from "../../hooks/usePipeline";
 import { usePlan } from "../../hooks/usePlan";
-import { STAGES_ORDER, STAGE_CONFIG, type PipelineItem, type PipelineStage } from "./types";
-import { PipelineColumn } from "./PipelineColumn";
-import { PipelineCard } from "./PipelineCard";
+import { STAGES_ORDER } from "./types";
 import { PipelineMobileTabs } from "./PipelineMobileTabs";
 import { PageHeader } from "../../components/PageHeader";
 import { EmptyState } from "../../components/EmptyState";
@@ -27,14 +13,30 @@ import { ErrorStateWithRetry } from "../../components/ErrorStateWithRetry";
 import { AuthLoadingScreen } from "../../components/AuthLoadingScreen";
 import { useAuth } from "../components/AuthProvider";
 import { useIsMobile } from "../../hooks/useIsMobile";
-import { getUserFriendlyError } from "../../lib/error-messages";
-import { toast } from "sonner";
 import { TrialUpsellCTA } from "../../components/billing/TrialUpsellCTA";
 import { useShepherdTour, type TourStep } from "../../hooks/useShepherdTour";
 import { OnboardingTourButton } from "../../components/OnboardingTourButton";
 import { useAnalytics } from "../../hooks/useAnalytics";
 import { useTrialPhase } from "../../hooks/useTrialPhase";
-import { useRef } from "react";
+
+// @dnd-kit is code-split into PipelineKanban to reduce initial bundle size
+const _KanbanSkeleton = (
+  <div className="flex gap-4 overflow-x-auto pb-4" data-testid="pipeline-skeleton">
+    {[1, 2, 3, 4, 5].map((i) => (
+      <div key={i} className="flex-shrink-0 w-72 h-96 rounded-xl bg-[var(--surface-1)] animate-pulse" />
+    ))}
+  </div>
+);
+
+const PipelineKanban = dynamic(
+  () => import("./PipelineKanban").then((mod) => mod.PipelineKanban),
+  { ssr: false, loading: () => _KanbanSkeleton }
+);
+
+const ReadOnlyKanban = dynamic(
+  () => import("./PipelineKanban").then((mod) => mod.ReadOnlyKanban),
+  { ssr: false, loading: () => _KanbanSkeleton }
+);
 
 // STORY-313 AC9: Pipeline tour steps
 const PIPELINE_TOUR_STEPS: TourStep[] = [
@@ -89,13 +91,8 @@ export default function PipelinePage() {
     }
     setPrevItemCount(items.length);
   }, [items.length, prevItemCount, isPipelineLimited]);
-  const [activeItem, setActiveItem] = useState<PipelineItem | null>(null);
-  const [optimisticItems, setOptimisticItems] = useState<PipelineItem[]>([]);
-  const [initialLoadFailed, setInitialLoadFailed] = useState(false);
 
-  useEffect(() => {
-    setOptimisticItems(items);
-  }, [items]);
+  const [initialLoadFailed, setInitialLoadFailed] = useState(false);
 
   // STORY-313 AC9-10: Pipeline tour
   const reportTourEvent = useCallback(async (tourId: string, event: string, stepsSeen: number) => {
@@ -164,77 +161,11 @@ export default function PipelinePage() {
     }
   }, [session?.access_token, wrappedFetchItems]);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
-
-  const getItemsByStage = useCallback(
-    (stage: PipelineStage) => optimisticItems.filter((item) => item.stage === stage),
-    [optimisticItems]
-  );
-
-  const handleDragStart = (event: DragStartEvent) => {
-    const item = optimisticItems.find((i) => i.id === event.active.id);
-    if (item) setActiveItem(item);
-  };
-
-  const handleDragOver = (event: DragOverEvent) => {
-    const { active, over } = event;
-    if (!over) return;
-
-    const activeId = active.id as string;
-    const overId = over.id as string;
-
-    const activeItemData = optimisticItems.find((i) => i.id === activeId);
-    if (!activeItemData) return;
-
-    // Check if dragging over a column
-    const targetStage = STAGES_ORDER.includes(overId as PipelineStage)
-      ? (overId as PipelineStage)
-      : optimisticItems.find((i) => i.id === overId)?.stage;
-
-    if (targetStage && targetStage !== activeItemData.stage) {
-      setOptimisticItems((prev) =>
-        prev.map((i) => (i.id === activeId ? { ...i, stage: targetStage } : i))
-      );
-    }
-  };
-
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
-    setActiveItem(null);
-
-    if (!over) return;
-
-    const activeId = active.id as string;
-    const item = optimisticItems.find((i) => i.id === activeId);
-    const originalItem = items.find((i) => i.id === activeId);
-
-    if (!item || !originalItem) return;
-
-    if (item.stage !== originalItem.stage) {
-      try {
-        await updateItem(activeId, { stage: item.stage, version: originalItem.version });
-      } catch (err: unknown) {
-        setOptimisticItems(items);
-        // STORY-307 AC11: On 409 conflict, show specific toast and reload
-        const isConflict = err !== null && typeof err === 'object' && 'isConflict' in err && (err as { isConflict: boolean }).isConflict;
-        if (isConflict) {
-          toast.error("Item foi atualizado por outra operação. Recarregando...");
-          fetchItems();
-        } else {
-          toast.error(getUserFriendlyError(err));
-        }
-      }
-    }
-  };
-
   // Determine if we are in read-only error mode (stale data visible but API errored)
-  const isReadOnlyError = Boolean(error) && optimisticItems.length > 0;
+  const isReadOnlyError = Boolean(error) && items.length > 0;
 
   // STORY-265 AC15: Trial expired = read-only mode (no drag, no add, no delete)
-  const isTrialReadOnly = isTrialExpired && optimisticItems.length > 0;
+  const isTrialReadOnly = isTrialExpired && items.length > 0;
 
   // GTM-POLISH-001 AC1-AC3: Unified auth loading
   if (authLoading) {
@@ -265,7 +196,7 @@ export default function PipelinePage() {
             </p>
           </div>
           <div className="text-sm text-[var(--text-secondary)]">
-            {optimisticItems.length} {optimisticItems.length === 1 ? "item" : "itens"} no pipeline
+            {items.length} {items.length === 1 ? "item" : "itens"} no pipeline
           </div>
         </div>
 
@@ -294,12 +225,12 @@ export default function PipelinePage() {
         )}
 
         {/* AC8+AC14: Error state with retry when initial load fails (no data at all) */}
-        {initialLoadFailed && !loading && optimisticItems.length === 0 ? (
+        {initialLoadFailed && !loading && items.length === 0 ? (
           <ErrorStateWithRetry
             message="Não foi possível carregar seu pipeline."
             onRetry={wrappedFetchItems}
           />
-        ) : loading && optimisticItems.length === 0 ? (
+        ) : loading && items.length === 0 ? (
           /* GTM-POLISH-001 AC4: Skeleton cards in kanban columns during loading */
           <div className="flex gap-4 overflow-x-auto pb-4" data-testid="pipeline-skeleton">
             {STAGES_ORDER.map((stage) => (
@@ -318,7 +249,7 @@ export default function PipelinePage() {
               </div>
             ))}
           </div>
-        ) : !loading && optimisticItems.length === 0 && !error ? (
+        ) : !loading && items.length === 0 && !error ? (
           /* GTM-POLISH-001 AC10: Pipeline empty state with visual drag hint */
           <EmptyState
             icon={
@@ -355,24 +286,12 @@ export default function PipelinePage() {
                 Ver planos
               </a>
             </div>
-            <DndContext>
-              <div className="flex gap-4 overflow-x-auto pb-4 min-h-[calc(100vh-200px)]">
-                {STAGES_ORDER.map((stage) => (
-                  <PipelineColumn
-                    key={stage}
-                    stage={stage}
-                    items={getItemsByStage(stage)}
-                    onRemove={() => {}}
-                    onUpdateNotes={() => {}}
-                  />
-                ))}
-              </div>
-            </DndContext>
+            <ReadOnlyKanban items={items} />
           </>
         ) : isReadOnlyError ? (
           /* AC9: Read-only mode when error occurs but stale data exists.
-             DndContext with no sensors disables drag-and-drop while still
-             providing context for useDroppable inside PipelineColumn. */
+             ReadOnlyKanban uses DndContext with no sensors — disables drag-and-drop
+             while still providing context for useDroppable inside PipelineColumn. */
           <>
             <div className="mb-4 p-3 bg-[var(--error-subtle)] border border-[var(--error)]/20 rounded-card flex items-center justify-between" role="alert">
               <p className="text-sm text-[var(--error)]">
@@ -385,52 +304,24 @@ export default function PipelinePage() {
                 Tentar novamente
               </button>
             </div>
-            <DndContext>
-              <div className="flex gap-4 overflow-x-auto pb-4 min-h-[calc(100vh-200px)]">
-                {STAGES_ORDER.map((stage) => (
-                  <PipelineColumn
-                    key={stage}
-                    stage={stage}
-                    items={getItemsByStage(stage)}
-                    onRemove={() => {}}
-                    onUpdateNotes={() => {}}
-                  />
-                ))}
-              </div>
-            </DndContext>
+            <ReadOnlyKanban items={items} />
           </>
         ) : (
           /* GTM-POLISH-002 AC5-AC8: Mobile tabs, Desktop kanban */
           isMobile ? (
             <PipelineMobileTabs
-              items={optimisticItems}
+              items={items}
               onUpdateItem={updateItem}
               onRemoveItem={removeItem}
             />
           ) : (
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCorners}
-            onDragStart={handleDragStart}
-            onDragOver={handleDragOver}
-            onDragEnd={handleDragEnd}
-          >
-            <div className="flex gap-4 overflow-x-auto pb-4 min-h-[calc(100vh-200px)]" data-tour="kanban-columns">
-              {STAGES_ORDER.map((stage) => (
-                <PipelineColumn
-                  key={stage}
-                  stage={stage}
-                  items={getItemsByStage(stage)}
-                  onRemove={removeItem}
-                  onUpdateNotes={(id, notes) => updateItem(id, { notes })}
-                />
-              ))}
-            </div>
-
-            <DragOverlay>
-              {activeItem ? <PipelineCard item={activeItem} isDragging /> : null}
-            </DragOverlay>
-          </DndContext>
+            <PipelineKanban
+              items={items}
+              sourceItems={items}
+              onUpdateItem={updateItem}
+              onRemoveItem={removeItem}
+              onFetchItems={fetchItems}
+            />
           )
         )}
       </main>

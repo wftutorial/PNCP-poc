@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, memo } from "react";
 import { useAuth } from "../components/AuthProvider";
 import { useAnalytics } from "../../hooks/useAnalytics";
 import { useBackendStatusContext } from "../../components/BackendStatusIndicator";
@@ -12,24 +12,29 @@ import ProfileCompletionPrompt from "../../components/ProfileCompletionPrompt";
 import ProfileProgressBar from "../../components/ProfileProgressBar";
 import ProfileCongratulations from "../../components/ProfileCongratulations";
 import Link from "next/link";
-import {
-  BarChart,
-  Bar,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-} from "recharts";
+import dynamic from "next/dynamic";
 import { TrialUpsellCTA } from "../../components/billing/TrialUpsellCTA";
 import { usePlan } from "../../hooks/usePlan";
+import { useIsMobile } from "../../hooks/useIsMobile";
 import { formatCurrencyBR } from "../../lib/format-currency";
 import { APP_NAME } from "../../lib/config";
+
+// DEBT-013 FE-019: Dynamic imports for Recharts (code splitting — ~50KB saved from initial bundle)
+const ChartSkeleton = () => (
+  <div className="h-64 bg-[var(--surface-1)] rounded-card animate-pulse" />
+);
+const TimeSeriesChart = dynamic(
+  () => import("./DashboardCharts").then((mod) => mod.TimeSeriesChart),
+  { ssr: false, loading: ChartSkeleton }
+);
+const UfPieChart = dynamic(
+  () => import("./DashboardCharts").then((mod) => mod.UfPieChart),
+  { ssr: false, loading: ChartSkeleton }
+);
+const SectorBarChart = dynamic(
+  () => import("./DashboardCharts").then((mod) => mod.SectorBarChart),
+  { ssr: false, loading: ChartSkeleton }
+);
 
 // UX-406: Feature flag — organizations/teams not yet implemented in backend
 const ORGS_ENABLED = process.env.NEXT_PUBLIC_ORGS_ENABLED === "true";
@@ -100,10 +105,10 @@ function formatDate(iso: string): string {
 }
 
 // ============================================================================
-// Stat Card Component
+// Stat Card Component (DEBT-013 FE-014: React.memo to prevent unnecessary re-renders)
 // ============================================================================
 
-function StatCard({
+const StatCard = memo(function StatCard({
   icon,
   label,
   value,
@@ -137,7 +142,7 @@ function StatCard({
       )}
     </div>
   );
-}
+});
 
 // ============================================================================
 // Quota Gauge Component
@@ -177,30 +182,6 @@ function QuotaRing({ used, total }: { used: number; total: number }) {
 }
 
 // ============================================================================
-// Custom Tooltip for Charts
-// ============================================================================
-
-interface ChartTooltipProps {
-  active?: boolean;
-  payload?: Array<{ name: string; value: number; color: string }>;
-  label?: string;
-}
-
-function ChartTooltip({ active, payload, label }: ChartTooltipProps) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="bg-[var(--surface-elevated)] border border-[var(--border)] rounded-card p-3 shadow-lg text-sm">
-      <p className="font-medium text-[var(--ink)] mb-1">{label}</p>
-      {payload.map((entry, i: number) => (
-        <p key={i} style={{ color: entry.color }} className="text-xs">
-          {entry.name}: {entry.name === "value" ? formatCurrency(entry.value) : formatNumber(entry.value)}
-        </p>
-      ))}
-    </div>
-  );
-}
-
-// ============================================================================
 // Main Dashboard Page
 // ============================================================================
 
@@ -223,6 +204,7 @@ export default function DashboardPage() {
   const { status: backendStatus } = useBackendStatusContext();
   const { planInfo } = usePlan();
 
+  const isMobile = useIsMobile();
   const [period, setPeriod] = useState<Period>("week");
   const [profilePct, setProfilePct] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<"personal" | "team">("personal");
@@ -839,37 +821,7 @@ export default function DashboardPage() {
             </div>
 
             {timeSeries.length > 0 ? (
-              <ResponsiveContainer width="100%" height={280}>
-                <LineChart data={timeSeries}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis
-                    dataKey="label"
-                    tick={{ fill: "var(--ink-muted)", fontSize: 12 }}
-                    axisLine={{ stroke: "var(--border)" }}
-                  />
-                  <YAxis
-                    tick={{ fill: "var(--ink-muted)", fontSize: 12 }}
-                    axisLine={{ stroke: "var(--border)" }}
-                  />
-                  <Tooltip content={<ChartTooltip />} />
-                  <Line
-                    type="monotone"
-                    dataKey="searches"
-                    stroke="#116dff"
-                    strokeWidth={2}
-                    dot={{ fill: "#116dff", r: 4 }}
-                    name="Análises"
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="opportunities"
-                    stroke="#16a34a"
-                    strokeWidth={2}
-                    dot={{ fill: "#16a34a", r: 4 }}
-                    name="Oportunidades"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+              <TimeSeriesChart data={timeSeries} isMobile={isMobile} />
             ) : (
               <div className="h-64 flex items-center justify-center text-[var(--ink-muted)]">
                 {`Sem dados para o período selecionado`}
@@ -912,24 +864,7 @@ export default function DashboardPage() {
               {dimensions && dimensions.top_ufs.length > 0 ? (
                 <div className="flex gap-6">
                   <div className="flex-1">
-                    <ResponsiveContainer width="100%" height={200}>
-                      <PieChart>
-                        <Pie
-                          data={ufPieData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={40}
-                          outerRadius={80}
-                          dataKey="value"
-                          stroke="none"
-                        >
-                          {ufPieData.map((entry, i) => (
-                            <Cell key={i} fill={entry.fill} />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
+                    <UfPieChart data={ufPieData} />
                   </div>
                   <div className="flex-1 space-y-2">
                     {dimensions.top_ufs.map((uf, i) => (
@@ -966,25 +901,7 @@ export default function DashboardPage() {
                 Setores mais analisados
               </h2>
               {sectorChartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={200}>
-                  <BarChart
-                    data={sectorChartData}
-                    layout="vertical"
-                    margin={{ left: 10, right: 20 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
-                    <XAxis type="number" tick={{ fill: "var(--ink-muted)", fontSize: 11 }} />
-                    <YAxis
-                      type="category"
-                      dataKey="name"
-                      width={160}
-                      tick={{ fill: "var(--ink-secondary)", fontSize: 11 }}
-                      tickFormatter={(v: string) => v.length > 22 ? v.slice(0, 20) + "\u2026" : v}
-                    />
-                    <Tooltip content={<ChartTooltip />} />
-                    <Bar dataKey="count" fill="#116dff" radius={[0, 4, 4, 0]} name="Análises" />
-                  </BarChart>
-                </ResponsiveContainer>
+                <SectorBarChart data={sectorChartData} isMobile={isMobile} />
               ) : (
                 <p className="text-[var(--ink-muted)] text-sm">Sem dados ainda</p>
               )}

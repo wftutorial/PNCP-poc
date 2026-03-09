@@ -142,6 +142,29 @@ jest.mock("@dnd-kit/utilities", () => ({
   CSS: { Transform: { toString: () => null } },
 }));
 
+// next/dynamic: resolve dynamic imports synchronously (prevents loading fallback
+// being rendered in jsdom — PipelineKanban/_KanbanSkeleton would otherwise appear
+// as the loading state even when loading=false and items exist).
+jest.mock("next/dynamic", () => ({
+  __esModule: true,
+  default: (loader: () => Promise<{ default: React.ComponentType } | React.ComponentType>) => {
+    // Return the mock that jest.mock("../../app/pipeline/PipelineKanban") provides
+    // We resolve via the already-registered module mock synchronously.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const mod = require("../../app/pipeline/PipelineKanban");
+    // dynamic() is called twice: once for PipelineKanban, once for ReadOnlyKanban.
+    // The loader receives the module — we can't distinguish at mock time which export
+    // is requested, so we return the full mock module and let Next.js pick.
+    // Since page.tsx does .then(mod => mod.PipelineKanban) / .then(mod => mod.ReadOnlyKanban),
+    // we return a component that wraps both named exports gracefully.
+    const Stub = ({ children }: { children?: React.ReactNode }) => (
+      <div data-testid="pipeline-kanban-stub">{children}</div>
+    );
+    Stub.displayName = "DynamicStub";
+    return Stub;
+  },
+}));
+
 // Mock sub-components used by PipelinePage to keep tests focused
 jest.mock("../../components/PageHeader", () => ({
   PageHeader: ({ title }: { title: string }) => (
@@ -180,6 +203,38 @@ jest.mock("../../app/pipeline/PipelineMobileTabs", () => ({
 
 jest.mock("../../hooks/useIsMobile", () => ({
   useIsMobile: () => false,
+}));
+
+jest.mock("../../hooks/usePlan", () => ({
+  usePlan: () => ({
+    planInfo: { plan_id: "smartlic_pro", subscription_status: "active" },
+    planType: "smartlic_pro",
+    isLoading: false,
+  }),
+}));
+
+jest.mock("../../hooks/useAnalytics", () => ({
+  useAnalytics: () => ({ trackEvent: jest.fn() }),
+}));
+
+jest.mock("../../hooks/useTrialPhase", () => ({
+  useTrialPhase: () => ({ phase: "active" }),
+}));
+
+jest.mock("../../hooks/useShepherdTour", () => ({
+  useShepherdTour: () => ({
+    isCompleted: () => true,
+    startTour: jest.fn(),
+    restartTour: jest.fn(),
+  }),
+}));
+
+jest.mock("../../components/billing/TrialUpsellCTA", () => ({
+  TrialUpsellCTA: () => <div data-testid="trial-upsell-cta" />,
+}));
+
+jest.mock("../../components/OnboardingTourButton", () => ({
+  OnboardingTourButton: () => <div data-testid="onboarding-tour-button" />,
 }));
 
 // Controlled mock for usePipeline

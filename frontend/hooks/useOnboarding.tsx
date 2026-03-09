@@ -11,7 +11,6 @@
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import Shepherd from 'shepherd.js';
 import 'shepherd.js/dist/css/shepherd.css';
 import { safeSetItem } from '../lib/storage';
 
@@ -83,22 +82,25 @@ export function useOnboarding(options: OnboardingOptions = {}) {
   useEffect(() => {
     if (tourRef.current) return; // Already initialized
 
-    const tour = new Shepherd.Tour({
-      useModalOverlay: true,
-      defaultStepOptions: {
-        classes: 'shepherd-theme-custom',
-        scrollTo: { behavior: 'smooth', block: 'center' },
-        cancelIcon: {
-          enabled: true,
-        },
-      },
-    });
+    import('shepherd.js').then(({ default: Shepherd }) => {
+      if (tourRef.current) return; // double-check in case of race
 
-    // Step 1: Welcome & Value Proposition
-    tour.addStep({
-      id: 'welcome',
-      title: '👋 Bem-vindo ao SmartLic!',
-      text: `
+      const tour = new Shepherd.Tour({
+        useModalOverlay: true,
+        defaultStepOptions: {
+          classes: 'shepherd-theme-custom',
+          scrollTo: { behavior: 'smooth', block: 'center' },
+          cancelIcon: {
+            enabled: true,
+          },
+        },
+      });
+
+      // Step 1: Welcome & Value Proposition
+      tour.addStep({
+        id: 'welcome',
+        title: '👋 Bem-vindo ao SmartLic!',
+        text: `
         <p class="mb-3">
           Descubra oportunidades de licitação de forma <strong>inteligente e automatizada</strong>.
         </p>
@@ -108,24 +110,24 @@ export function useOnboarding(options: OnboardingOptions = {}) {
           <li>📊 Relatórios Excel prontos para análise</li>
         </ul>
       `,
-      buttons: [
-        {
-          text: 'Pular Tutorial',
-          action: tour.cancel,
-          secondary: true,
-        },
-        {
-          text: 'Começar',
-          action: tour.next,
-        },
-      ],
-    });
+        buttons: [
+          {
+            text: 'Pular Tutorial',
+            action: tour.cancel,
+            secondary: true,
+          },
+          {
+            text: 'Começar',
+            action: tour.next,
+          },
+        ],
+      });
 
-    // Step 2: Interactive Demo (Real Search)
-    tour.addStep({
-      id: 'demo-search',
-      title: '🎯 Vamos fazer uma busca de demonstração',
-      text: `
+      // Step 2: Interactive Demo (Real Search)
+      tour.addStep({
+        id: 'demo-search',
+        title: '🎯 Vamos fazer uma busca de demonstração',
+        text: `
         <p class="mb-2">
           Selecionamos <strong>SC, PR e RS</strong> (região Sul) para mostrar como funciona.
         </p>
@@ -133,36 +135,36 @@ export function useOnboarding(options: OnboardingOptions = {}) {
           Clique em "Buscar" para ver os resultados em ação!
         </p>
       `,
-      attachTo: {
-        element: 'button[type="button"][aria-busy]', // Main search button
-        on: 'bottom',
-      },
-      buttons: [
-        {
-          text: 'Voltar',
-          action: tour.back,
-          secondary: true,
+        attachTo: {
+          element: 'button[type="button"][aria-busy]', // Main search button
+          on: 'bottom',
         },
-        {
-          text: 'Fazer Busca Demo',
-          action: function() {
-            // Trigger demo search (handled by callback)
-            tour.next();
+        buttons: [
+          {
+            text: 'Voltar',
+            action: tour.back,
+            secondary: true,
+          },
+          {
+            text: 'Fazer Busca Demo',
+            action: function() {
+              // Trigger demo search (handled by callback)
+              tour.next();
+            },
+          },
+        ],
+        when: {
+          show() {
+            // Pre-populate demo search parameters (handled by parent component)
           },
         },
-      ],
-      when: {
-        show() {
-          // Pre-populate demo search parameters (handled by parent component)
-        },
-      },
-    });
+      });
 
-    // Step 3: Your Turn (First Personalized Search)
-    tour.addStep({
-      id: 'your-turn',
-      title: '🚀 Agora é sua vez!',
-      text: `
+      // Step 3: Your Turn (First Personalized Search)
+      tour.addStep({
+        id: 'your-turn',
+        title: '🚀 Agora é sua vez!',
+        text: `
         <p class="mb-3">
           Personalize sua busca:
         </p>
@@ -176,52 +178,55 @@ export function useOnboarding(options: OnboardingOptions = {}) {
           💡 Dica: Quanto mais estados, maior o tempo de busca (~6s por estado)
         </p>
       `,
-      attachTo: {
-        element: '.min-h-screen', // Center of screen
-        on: 'top',
-      },
-      buttons: [
-        {
-          text: 'Voltar',
-          action: tour.back,
-          secondary: true,
+        attachTo: {
+          element: '.min-h-screen', // Center of screen
+          on: 'top',
         },
-        {
-          text: 'Entendi, vamos lá!',
-          action: function() {
-            tour.complete();
+        buttons: [
+          {
+            text: 'Voltar',
+            action: tour.back,
+            secondary: true,
           },
-        },
-      ],
-    });
+          {
+            text: 'Entendi, vamos lá!',
+            action: function() {
+              tour.complete();
+            },
+          },
+        ],
+      });
 
-    // Event listeners
-    tour.on('complete', () => {
-      safeSetItem(ONBOARDING_STORAGE_KEY, 'true');
-      setHasCompleted(true);
-      setIsActive(false);
-      onComplete?.();
-    });
+      // Event listeners
+      tour.on('complete', () => {
+        safeSetItem(ONBOARDING_STORAGE_KEY, 'true');
+        setHasCompleted(true);
+        setIsActive(false);
+        onComplete?.();
+      });
 
-    tour.on('cancel', () => {
-      safeSetItem(ONBOARDING_DISMISSED_KEY, 'true');
-      setHasDismissed(true);
-      setIsActive(false);
-      onDismiss?.();
-    });
+      tour.on('cancel', () => {
+        safeSetItem(ONBOARDING_DISMISSED_KEY, 'true');
+        setHasDismissed(true);
+        setIsActive(false);
+        onDismiss?.();
+      });
 
-    tour.on('show', (event: { step: ShepherdStep }) => {
-      const step = event.step;
-      const stepId = step.id || '';
-      const stepIndex = tour.steps.indexOf(step);
-      setCurrentStep(stepIndex);
-      onStepChange?.(stepId, stepIndex);
-    });
+      tour.on('show', (event: { step: ShepherdStep }) => {
+        const step = event.step;
+        const stepId = step.id || '';
+        const stepIndex = tour.steps.indexOf(step);
+        setCurrentStep(stepIndex);
+        onStepChange?.(stepId, stepIndex);
+      });
 
-    tourRef.current = tour;
+      tourRef.current = tour;
+    });
 
     return () => {
-      tour.complete();
+      if (tourRef.current) {
+        tourRef.current.complete();
+      }
     };
   }, [onComplete, onDismiss, onStepChange]);
 

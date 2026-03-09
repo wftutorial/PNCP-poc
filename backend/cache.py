@@ -97,6 +97,3 @@ class RedisCacheClient:
 
 # Global singleton instance
 redis_cache = RedisCacheClient()
-
-# Backward compatibility alias (deprecated)
-redis_client = redis_cache

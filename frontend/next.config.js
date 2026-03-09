@@ -27,6 +27,30 @@ const nextConfig = {
   // STORY-311 AC5: Security headers unified in middleware.ts (removed duplication).
   // Middleware covers all non-static routes. Static assets (_next/static, images)
   // don't need CSP/X-Frame-Options. HSTS is enforced at Railway edge proxy level.
+
+  // SYS-019: Cache headers for static assets (CDN-ready)
+  async headers() {
+    return [
+      {
+        source: '/_next/static/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=2592000, immutable' },
+        ],
+      },
+      {
+        source: '/images/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=604800' },
+        ],
+      },
+      {
+        source: '/fonts/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+        ],
+      },
+    ];
+  },
 }
 
 // STORY-211: Wrap with Sentry for error tracking and source map upload (AC8)

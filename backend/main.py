@@ -9,6 +9,9 @@ DEBT-015 SYS-005: Decomposed to <300 lines. Extracted to:
   - startup/lifespan.py (startup/shutdown orchestration)
   - startup/state.py (shared process state)
   - routes/health_core.py (health/live, health/ready, health, sources/health)
+
+SYS-036: OpenAPI docs enabled in production, protected by DOCS_ACCESS_TOKEN.
+CROSS-003: Feature flags admin API at /v1/admin/feature-flags.
 """
 
 import logging
@@ -63,6 +66,7 @@ from routes.sectors_public import router as sectors_public_router
 from routes.reports import router as reports_router
 from routes.blog_stats import router as blog_stats_router
 from routes.metrics_api import router as metrics_api_router
+from routes.feature_flags import router as feature_flags_router
 
 # Configure logging
 setup_logging(level=os.getenv("LOG_LEVEL", "INFO"))
@@ -84,15 +88,39 @@ _init_tracing()
 # Lifespan
 from startup.lifespan import lifespan
 
-# Create app
+# SYS-036: DOCS_ACCESS_TOKEN — when set, protects /docs and /redoc in production
+DOCS_ACCESS_TOKEN = os.getenv("DOCS_ACCESS_TOKEN", "")
+
+# SYS-036: Always expose OpenAPI endpoints (protected by middleware in production)
 app = FastAPI(
     title="SmartLic API",
-    description="API para busca e análise de licitações em fontes oficiais.",
+    description=(
+        "API para busca e analise de licitacoes em fontes oficiais brasileiras.\n\n"
+        "## Data Sources\n"
+        "- **PNCP** (Portal Nacional de Contratacoes Publicas) - primary\n"
+        "- **PCP v2** (Portal de Compras Publicas) - secondary\n"
+        "- **ComprasGov v3** (Dados Abertos de Compras Governamentais) - tertiary\n\n"
+        "## Authentication\n"
+        "All endpoints require a Supabase JWT Bearer token unless noted otherwise.\n\n"
+        "## Contact\n"
+        "CONFENGE Avaliacoes e Inteligencia Artificial LTDA\n"
+        "- Website: https://smartlic.tech\n"
+        "- Email: suporte@smartlic.tech"
+    ),
     version=APP_VERSION,
-    docs_url=None if _is_production else "/docs",
-    redoc_url=None if _is_production else "/redoc",
-    openapi_url=None if _is_production else "/openapi.json",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
     lifespan=lifespan,
+    openapi_tags=[
+        {"name": "search", "description": "Multi-source procurement search with AI classification"},
+        {"name": "pipeline", "description": "Opportunity pipeline (kanban board)"},
+        {"name": "billing", "description": "Stripe billing, subscriptions, and plan management"},
+        {"name": "admin", "description": "Admin-only user management and system operations"},
+        {"name": "feature-flags", "description": "Runtime feature flag management (admin only)"},
+        {"name": "analytics", "description": "Usage analytics and dashboards"},
+        {"name": "health", "description": "Health checks and readiness probes"},
+    ],
 )
 
 # CORS
@@ -109,6 +137,34 @@ app.add_middleware(CorrelationIDMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(DeprecationMiddleware)
 app.add_middleware(RateLimitMiddleware)
+
+
+# ============================================================================
+# SYS-036: Protect /docs and /redoc with DOCS_ACCESS_TOKEN in production
+# ============================================================================
+# /openapi.json is also gated because Swagger UI fetches it automatically.
+# If DOCS_ACCESS_TOKEN is not set, docs are open (development default).
+_DOCS_PATHS = frozenset({"/docs", "/docs/oauth2-redirect", "/redoc", "/openapi.json"})
+
+
+@app.middleware("http")
+async def docs_access_guard(request: Request, call_next):
+    """SYS-036: Gate OpenAPI docs behind DOCS_ACCESS_TOKEN bearer in production."""
+    path = request.url.path
+    if path in _DOCS_PATHS and DOCS_ACCESS_TOKEN:
+        # Allow access via Bearer token in Authorization header
+        auth_header = request.headers.get("Authorization", "")
+        # Also allow via ?token= query param (convenient for browser access)
+        query_token = request.query_params.get("token", "")
+
+        if auth_header == f"Bearer {DOCS_ACCESS_TOKEN}" or query_token == DOCS_ACCESS_TOKEN:
+            return await call_next(request)
+
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "API docs access requires DOCS_ACCESS_TOKEN. Use Authorization: Bearer <token> header or ?token=<token> query param."},
+        )
+    return await call_next(request)
 
 
 # HTTP response counter middleware
@@ -146,6 +202,7 @@ _v1_routers = [
     cache_health_router, feedback_router, auth_check_router, bid_analysis_router,
     alerts_router, trial_emails_router, mfa_router, org_router, partners_router,
     sectors_public_router, reports_router, blog_stats_router, metrics_api_router,
+    feature_flags_router,
 ]
 for r in _v1_routers:
     app.include_router(r, prefix="/v1")
@@ -243,7 +300,11 @@ if _metrics_app:
     app.mount("/metrics", _metrics_app)
     logger.info("Prometheus /metrics endpoint mounted (auth=%s)", "enabled" if METRICS_TOKEN else "open")
 
-logger.info("FastAPI application initialized — PORT=%s", os.getenv("PORT", "8000"))
+logger.info(
+    "FastAPI application initialized — PORT=%s, docs=%s",
+    os.getenv("PORT", "8000"),
+    "protected" if DOCS_ACCESS_TOKEN else "open",
+)
 
 @app.get("/", response_model=RootResponse)
 async def root():

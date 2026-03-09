@@ -1,0 +1,22 @@
+{
+  "fields": [
+    "currentPage",
+    "limit",
+    "nextPage",
+    "offset",
+    "pageCount",
+    "previousPage",
+    "result",
+    "total"
+  ],
+  "field_types": {
+    "currentPage": "int",
+    "limit": "int",
+    "nextPage": "int",
+    "offset": "int",
+    "pageCount": "int",
+    "previousPage": "NoneType",
+    "total": "int"
+  },
+  "captured_at": "2026-03-09T18:31:51.990198+00:00"
+}

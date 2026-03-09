@@ -1,0 +1,273 @@
+"""Tests for CROSS-003: Feature Flags Runtime Admin API.
+
+Tests the /admin/feature-flags endpoints for listing, updating,
+and reloading feature flags at runtime.
+
+Uses standalone FastAPI app (not main.app) to avoid lifespan signal issues.
+"""
+
+import pytest
+from unittest.mock import patch, AsyncMock
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+ADMIN_UUID = "550e8400-e29b-41d4-a716-446655440000"
+ADMIN_USER = {"id": ADMIN_UUID, "email": "admin@test.com", "role": "authenticated"}
+
+
+@pytest.fixture
+def client():
+    """Create test client with admin auth override using standalone app."""
+    from routes.feature_flags import router
+    from admin import require_admin
+
+    app = FastAPI()
+    app.include_router(router)
+
+    async def mock_require_admin():
+        return ADMIN_USER
+
+    app.dependency_overrides[require_admin] = mock_require_admin
+
+    return TestClient(app)
+
+
+@pytest.fixture
+def unauth_client():
+    """Create test client without auth overrides."""
+    from routes.feature_flags import router
+
+    app = FastAPI()
+    app.include_router(router)
+    return TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def clear_overrides():
+    """Clear runtime overrides before each test."""
+    from routes.feature_flags import _runtime_overrides
+    _runtime_overrides.clear()
+    yield
+    _runtime_overrides.clear()
+
+
+class TestListFeatureFlags:
+    """GET /admin/feature-flags"""
+
+    @patch("redis_pool.is_redis_available", new_callable=AsyncMock, return_value=False)
+    @patch("routes.feature_flags._redis_get_override", new_callable=AsyncMock, return_value=None)
+    def test_list_returns_all_flags(self, mock_redis_override, mock_redis, client):
+        """Should return all registered feature flags."""
+        resp = client.get("/admin/feature-flags")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "flags" in data
+        assert "total" in data
+        assert data["total"] > 0
+        assert data["redis_available"] is False
+
+        # Verify structure of each flag
+        for flag in data["flags"]:
+            assert "name" in flag
+            assert "value" in flag
+            assert "source" in flag
+            assert "description" in flag
+            assert "env_var" in flag
+            assert "default" in flag
+            assert flag["source"] in ("redis", "memory", "env", "default")
+
+    @patch("redis_pool.is_redis_available", new_callable=AsyncMock, return_value=False)
+    @patch("routes.feature_flags._redis_get_override", new_callable=AsyncMock, return_value=None)
+    def test_list_contains_known_flags(self, mock_redis_override, mock_redis, client):
+        """Should include well-known flags like LLM_ARBITER_ENABLED."""
+        resp = client.get("/admin/feature-flags")
+        assert resp.status_code == 200
+        flag_names = [f["name"] for f in resp.json()["flags"]]
+        assert "LLM_ARBITER_ENABLED" in flag_names
+        assert "VIABILITY_ASSESSMENT_ENABLED" in flag_names
+        assert "TRIAL_PAYWALL_ENABLED" in flag_names
+
+    @patch("redis_pool.is_redis_available", new_callable=AsyncMock, return_value=False)
+    @patch("routes.feature_flags._redis_get_override", new_callable=AsyncMock, return_value=None)
+    def test_list_flags_sorted(self, mock_redis_override, mock_redis, client):
+        """Flags should be returned in alphabetical order."""
+        resp = client.get("/admin/feature-flags")
+        assert resp.status_code == 200
+        names = [f["name"] for f in resp.json()["flags"]]
+        assert names == sorted(names)
+
+    @patch("redis_pool.is_redis_available", new_callable=AsyncMock, return_value=False)
+    @patch("routes.feature_flags._redis_get_override", new_callable=AsyncMock, return_value=None)
+    def test_list_flags_have_descriptions(self, mock_redis_override, mock_redis, client):
+        """Most flags should have non-empty descriptions."""
+        resp = client.get("/admin/feature-flags")
+        assert resp.status_code == 200
+        flags_with_desc = [f for f in resp.json()["flags"] if f["description"]]
+        # At least 80% of flags should have descriptions
+        assert len(flags_with_desc) > resp.json()["total"] * 0.8
+
+
+class TestUpdateFeatureFlag:
+    """PATCH /admin/feature-flags/{flag_name}"""
+
+    @patch("routes.feature_flags._redis_set_override", new_callable=AsyncMock, return_value=True)
+    @patch("routes.feature_flags._redis_get_override", new_callable=AsyncMock, return_value=None)
+    def test_update_flag_success(self, mock_get, mock_set, client):
+        """Should update a flag and return previous/new values."""
+        resp = client.patch(
+            "/admin/feature-flags/LLM_ARBITER_ENABLED",
+            json={"value": False},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["name"] == "LLM_ARBITER_ENABLED"
+        assert data["value"] is False
+        assert data["source"] == "redis"
+        assert "previous_value" in data
+        assert "previous_source" in data
+
+    @patch("routes.feature_flags._redis_set_override", new_callable=AsyncMock, return_value=False)
+    @patch("routes.feature_flags._redis_get_override", new_callable=AsyncMock, return_value=None)
+    def test_update_flag_redis_unavailable_falls_back_to_memory(self, mock_get, mock_set, client):
+        """When Redis is unavailable, should fall back to in-memory storage."""
+        resp = client.patch(
+            "/admin/feature-flags/FILTER_DEBUG_MODE",
+            json={"value": True},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["source"] == "memory"
+        assert data["value"] is True
+
+    def test_update_nonexistent_flag_returns_404(self, client):
+        """Should return 404 for unknown flag names."""
+        resp = client.patch(
+            "/admin/feature-flags/TOTALLY_FAKE_FLAG",
+            json={"value": True},
+        )
+        assert resp.status_code == 404
+        assert "not found in registry" in resp.json()["detail"]
+
+    def test_update_flag_invalid_body(self, client):
+        """Should return 422 for missing value field."""
+        resp = client.patch(
+            "/admin/feature-flags/LLM_ARBITER_ENABLED",
+            json={},
+        )
+        assert resp.status_code == 422
+
+    @patch("routes.feature_flags._redis_set_override", new_callable=AsyncMock, return_value=True)
+    @patch("routes.feature_flags._redis_get_override", new_callable=AsyncMock, return_value=None)
+    def test_update_flag_clears_ttl_cache(self, mock_get, mock_set, client):
+        """Should clear the feature flag TTL cache entry after update."""
+        from config.features import _feature_flag_cache
+        import time
+
+        # Seed the cache
+        _feature_flag_cache["LLM_ARBITER_ENABLED"] = (True, time.time())
+
+        resp = client.patch(
+            "/admin/feature-flags/LLM_ARBITER_ENABLED",
+            json={"value": False},
+        )
+        assert resp.status_code == 200
+        assert "LLM_ARBITER_ENABLED" not in _feature_flag_cache
+
+    @patch("routes.feature_flags._redis_set_override", new_callable=AsyncMock, return_value=True)
+    @patch("routes.feature_flags._redis_get_override", new_callable=AsyncMock, return_value=None)
+    def test_update_flag_stores_in_memory(self, mock_get, mock_set, client):
+        """After update, in-memory override should be set."""
+        from routes.feature_flags import _runtime_overrides
+
+        resp = client.patch(
+            "/admin/feature-flags/FILTER_DEBUG_MODE",
+            json={"value": True},
+        )
+        assert resp.status_code == 200
+        assert _runtime_overrides.get("FILTER_DEBUG_MODE") is True
+
+    @patch("routes.feature_flags._redis_set_override", new_callable=AsyncMock, return_value=True)
+    @patch("routes.feature_flags._redis_get_override", new_callable=AsyncMock, return_value=None)
+    def test_update_flag_toggle_off_and_on(self, mock_get, mock_set, client):
+        """Should be able to toggle a flag off then on."""
+        # Toggle off
+        resp = client.patch(
+            "/admin/feature-flags/LLM_ARBITER_ENABLED",
+            json={"value": False},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["value"] is False
+
+        # Toggle on
+        resp = client.patch(
+            "/admin/feature-flags/LLM_ARBITER_ENABLED",
+            json={"value": True},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["value"] is True
+
+
+class TestReloadFeatureFlags:
+    """POST /admin/feature-flags/reload"""
+
+    @patch("routes.feature_flags._redis_clear_all_overrides", new_callable=AsyncMock, return_value=3)
+    def test_reload_clears_overrides(self, mock_clear, client):
+        """Should clear all overrides and return current values."""
+        from routes.feature_flags import _runtime_overrides
+        _runtime_overrides["LLM_ARBITER_ENABLED"] = False
+        _runtime_overrides["FILTER_DEBUG_MODE"] = True
+
+        resp = client.post("/admin/feature-flags/reload")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is True
+        assert data["overrides_cleared"] == 5  # 3 from Redis + 2 from memory
+        assert "flags" in data
+        assert isinstance(data["flags"], dict)
+        assert len(data["flags"]) > 0
+
+        # Memory overrides should be cleared
+        assert len(_runtime_overrides) == 0
+
+    @patch("routes.feature_flags._redis_clear_all_overrides", new_callable=AsyncMock, return_value=0)
+    def test_reload_with_no_overrides(self, mock_clear, client):
+        """Should succeed even when no overrides exist."""
+        resp = client.post("/admin/feature-flags/reload")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is True
+        assert data["overrides_cleared"] == 0
+
+    @patch("routes.feature_flags._redis_clear_all_overrides", new_callable=AsyncMock, return_value=0)
+    def test_reload_returns_all_registry_flags(self, mock_clear, client):
+        """Should return all flags from the registry after reload."""
+        from config.features import _FEATURE_FLAG_REGISTRY
+
+        resp = client.post("/admin/feature-flags/reload")
+        assert resp.status_code == 200
+        data = resp.json()
+        # All registry flags should be in the response
+        for flag_name in _FEATURE_FLAG_REGISTRY:
+            assert flag_name in data["flags"]
+
+
+class TestFeatureFlagsSecurity:
+    """Test admin-only access control."""
+
+    def test_list_requires_admin(self, unauth_client):
+        """Should return 401 without authentication."""
+        resp = unauth_client.get("/admin/feature-flags")
+        assert resp.status_code in (401, 403)
+
+    def test_update_requires_admin(self, unauth_client):
+        """Should return 401 without authentication."""
+        resp = unauth_client.patch(
+            "/admin/feature-flags/LLM_ARBITER_ENABLED",
+            json={"value": False},
+        )
+        assert resp.status_code in (401, 403)
+
+    def test_reload_requires_admin(self, unauth_client):
+        """Should return 401 without authentication."""
+        resp = unauth_client.post("/admin/feature-flags/reload")
+        assert resp.status_code in (401, 403)

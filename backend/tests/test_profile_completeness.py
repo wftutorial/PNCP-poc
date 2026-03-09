@@ -7,6 +7,9 @@ Covers:
 - Atestados validation
 - Edge cases: all None, partial fill
 - DB mock via app.dependency_overrides pattern
+
+SYS-023: Profile context endpoints now use get_user_db (user-scoped client).
+Tests override get_user_db with mock_db to maintain the same testing pattern.
 """
 
 import pytest
@@ -15,7 +18,7 @@ from unittest.mock import MagicMock
 
 from main import app
 from auth import require_auth
-from database import get_db
+from database import get_db, get_user_db
 
 
 TEST_USER = {"id": "test-user-id", "email": "test@example.com"}
@@ -34,8 +37,11 @@ def mock_db():
     """Provide a mock DB and inject it via dependency override."""
     db = MagicMock()
     app.dependency_overrides[get_db] = lambda: db
+    # SYS-023: Profile context/completeness endpoints now use get_user_db
+    app.dependency_overrides[get_user_db] = lambda: db
     yield db
     app.dependency_overrides.pop(get_db, None)
+    app.dependency_overrides.pop(get_user_db, None)
 
 
 @pytest.fixture
@@ -60,7 +66,7 @@ class TestProfileCompletenessEndpoint:
     """Tests for GET /v1/profile/completeness."""
 
     def test_empty_profile_returns_zero_percent(self, client, mock_db):
-        """Empty context_data → 0% completeness."""
+        """Empty context_data -> 0% completeness."""
         mock_chain = _make_db_result({})
         mock_db.table.return_value.select.return_value.eq.return_value = mock_chain
 
@@ -73,7 +79,7 @@ class TestProfileCompletenessEndpoint:
         assert data["is_complete"] is False
 
     def test_full_profile_returns_100_percent(self, client, mock_db):
-        """All tracked fields present → 100% completeness."""
+        """All tracked fields present -> 100% completeness."""
         full_context = {
             "ufs_atuacao": ["SP", "RJ"],
             "porte_empresa": "ME",
@@ -109,7 +115,7 @@ class TestProfileCompletenessEndpoint:
 
         assert response.status_code == 200
         data = response.json()
-        # 2 filled out of 7 → 28.57% → rounds to 29%
+        # 2 filled out of 7 -> 28.57% -> rounds to 29%
         assert data["filled_fields"] == 2
         assert data["total_fields"] == 7
         assert data["completeness_pct"] == 29
@@ -131,7 +137,7 @@ class TestProfileCompletenessEndpoint:
 
     def test_next_question_skips_filled_priority_fields(self, client, mock_db):
         """next_question skips already-filled priority fields."""
-        # porte_empresa filled, experiencia_licitacoes missing → next is experiencia_licitacoes
+        # porte_empresa filled, experiencia_licitacoes missing -> next is experiencia_licitacoes
         context = {
             "ufs_atuacao": ["SP"],
             "porte_empresa": "ME",
@@ -198,7 +204,7 @@ class TestProfileCompletenessEndpoint:
         assert response.status_code == 500
 
     def test_none_context_data_treated_as_empty(self, client, mock_db):
-        """Null context_data in DB is treated as empty dict → 0%."""
+        """Null context_data in DB is treated as empty dict -> 0%."""
         result = MagicMock()
         result.data = {"context_data": None}
         mock_chain = MagicMock()

@@ -16,6 +16,8 @@ python-multipart>=0.0.22           # CVE-2026-24486: Path Traversal fix (STORY-2
 
 # HTTP client
 httpx==0.28.1
+# DEBT-018 SYS-029: requests still needed for sync PNCPClient fallback (pncp_client.py).
+# Remove after fully migrating PNCPClient to AsyncPNCPClient (httpx-based).
 requests==2.32.3
 urllib3==2.6.3
 # chardet 6.0.0 (Feb 2026) breaks requests<=2.32.5 runtime check_compatibility()
@@ -53,7 +55,9 @@ google-auth-httplib2==0.3.0        # HTTP transport for Google APIs
 # with Gunicorn --preload. Any upgrade MUST be tested with:
 #   gunicorn main:app -k uvicorn.workers.UvicornWorker -w 2 --preload --timeout 30
 # If workers SIGSEGV, the new version is not fork-safe. Keep --preload disabled (start.sh).
-cryptography==46.0.5               # CVE-2026-26007 HIGH: EC Subgroup Attack fix (STORY-279)
+# DEBT-018 SYS-028: Upgrade path evaluated. Pin >=46.0.5 to allow patch updates
+# while keeping fork-safety guarantee. Major upgrades require manual testing.
+cryptography>=46.0.5,<47.0.0       # CVE-2026-26007 fix + allow patch updates
 
 # Transactional email (STORY-225)
 resend>=2.0.0,<3.0.0

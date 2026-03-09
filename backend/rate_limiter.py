@@ -36,10 +36,13 @@ class RateLimiter:
     """Token bucket rate limiter using shared Redis pool + in-memory fallback.
 
     STORY-217: No longer creates its own Redis connection.
+    DEBT-018 SYS-026: Proactive time-based cleanup every 60s (was only on-access).
     """
 
     def __init__(self):
         self._memory_store: dict[str, tuple[int, float]] = {}
+        self._last_cleanup: float = 0.0
+        self._cleanup_interval: float = 60.0  # seconds
 
     async def check_rate_limit(self, user_id: str, max_requests_per_min: int) -> tuple[bool, int]:
         """Check if user is within rate limit.
@@ -77,21 +80,21 @@ class RateLimiter:
         """Check rate limit using in-memory dict (fallback)."""
         now = datetime.now(timezone.utc).timestamp()
 
-        cleaned_store = {
-            k: (count, ts)
-            for k, (count, ts) in self._memory_store.items()
-            if now - ts < 60
-        }
-
-        if len(cleaned_store) > MAX_MEMORY_STORE_SIZE:
-            sorted_items = sorted(cleaned_store.items(), key=lambda item: item[1][1])
-            cleaned_store = dict(sorted_items[-MAX_MEMORY_STORE_SIZE:])
-            logger.warning(
-                f"In-memory rate limiter exceeded {MAX_MEMORY_STORE_SIZE} entries. "
-                f"Evicted oldest entries (LRU)."
-            )
-
-        self._memory_store = cleaned_store
+        # SYS-026: Time-based cleanup every 60s instead of only on-access
+        if now - self._last_cleanup >= self._cleanup_interval:
+            self._memory_store = {
+                k: (count, ts)
+                for k, (count, ts) in self._memory_store.items()
+                if now - ts < 60
+            }
+            if len(self._memory_store) > MAX_MEMORY_STORE_SIZE:
+                sorted_items = sorted(self._memory_store.items(), key=lambda item: item[1][1])
+                self._memory_store = dict(sorted_items[-MAX_MEMORY_STORE_SIZE:])
+                logger.warning(
+                    f"In-memory rate limiter exceeded {MAX_MEMORY_STORE_SIZE} entries. "
+                    f"Evicted oldest entries (LRU)."
+                )
+            self._last_cleanup = now
 
         if key in self._memory_store:
             count, timestamp = self._memory_store[key]
@@ -259,10 +262,13 @@ class FlexibleRateLimiter:
 
     Redis: INCR + EXPIRE (atomic, distributed).
     InMemory: dict with LRU eviction (single-process fallback).
+    DEBT-018 SYS-026: Proactive time-based cleanup every 60s.
     """
 
     def __init__(self):
         self._memory_store: dict[str, tuple[int, float]] = {}
+        self._last_cleanup: float = 0.0
+        self._cleanup_interval: float = 60.0
 
     async def check_rate_limit(
         self, key: str, max_requests: int, window_seconds: int
@@ -310,16 +316,17 @@ class FlexibleRateLimiter:
         """Check rate limit using in-memory dict (fallback)."""
         now = _time.time()
 
-        # Clean expired entries
-        self._memory_store = {
-            k: (count, ts)
-            for k, (count, ts) in self._memory_store.items()
-            if now - ts < window_seconds * 2  # Keep for 2x window to handle edge cases
-        }
-
-        if len(self._memory_store) > MAX_MEMORY_STORE_SIZE:
-            sorted_items = sorted(self._memory_store.items(), key=lambda x: x[1][1])
-            self._memory_store = dict(sorted_items[-MAX_MEMORY_STORE_SIZE:])
+        # SYS-026: Time-based cleanup every 60s
+        if now - self._last_cleanup >= self._cleanup_interval:
+            self._memory_store = {
+                k: (count, ts)
+                for k, (count, ts) in self._memory_store.items()
+                if now - ts < window_seconds * 2
+            }
+            if len(self._memory_store) > MAX_MEMORY_STORE_SIZE:
+                sorted_items = sorted(self._memory_store.items(), key=lambda x: x[1][1])
+                self._memory_store = dict(sorted_items[-MAX_MEMORY_STORE_SIZE:])
+            self._last_cleanup = now
 
         if key in self._memory_store:
             count, timestamp = self._memory_store[key]

@@ -1,56 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
-import { sanitizeProxyError, sanitizeNetworkError } from "../../../lib/proxy-error-handler";
+/**
+ * First analysis proxy — requires auth, POST only.
+ */
+import { createProxyRoute } from "../../../lib/create-proxy-route";
 
-const getBackendUrl = () => process.env.BACKEND_URL;
-
-export async function POST(request: NextRequest) {
-  const backendUrl = getBackendUrl();
-  if (!backendUrl) {
-    return NextResponse.json({ message: "Servidor nao configurado" }, { status: 503 });
-  }
-
-  const authHeader = request.headers.get("authorization");
-  if (!authHeader) {
-    return NextResponse.json({ message: "Autenticacao necessaria" }, { status: 401 });
-  }
-
-  // CRIT-004 AC4: Forward X-Correlation-ID for distributed tracing
-  const correlationId = request.headers.get("X-Correlation-ID");
-  const headers: Record<string, string> = {
-    Authorization: authHeader,
-    "Content-Type": "application/json",
-  };
-  if (correlationId) {
-    headers["X-Correlation-ID"] = correlationId;
-  }
-
-  try {
-    const body = await request.json();
-    const response = await fetch(`${backendUrl}/v1/first-analysis`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-      const responseBody = await response.text();
-      const sanitized = sanitizeProxyError(response.status, responseBody, response.headers.get("content-type"));
-      if (sanitized) return sanitized;
-      try {
-        const data = JSON.parse(responseBody);
-        return NextResponse.json(
-          { message: data.detail || "Erro ao iniciar analise" },
-          { status: response.status },
-        );
-      } catch {
-        return NextResponse.json({ message: "Erro temporário de comunicação" }, { status: response.status });
-      }
-    }
-
-    const data = await response.json();
-    return NextResponse.json(data);
-  } catch (error) {
-    console.error("Error starting first analysis:", error instanceof Error ? error.message : error);
-    return sanitizeNetworkError(error);
-  }
-}
+export const { POST } = createProxyRoute({
+  backendPath: "/v1/first-analysis",
+  methods: ["POST"],
+  requireAuth: true,
+  errorMessage: "Erro ao iniciar analise",
+});

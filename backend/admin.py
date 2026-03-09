@@ -636,28 +636,9 @@ async def update_user_credits(
         }
 
 
-@router.post("/feature-flags/reload")
-async def reload_feature_flags_endpoint(
-    admin: dict = Depends(require_admin),
-):
-    """Reload all feature flags from environment variables (admin only).
-
-    STORY-226 AC16: Clears the feature flag cache, forcing re-read from
-    environment on next access. Returns current values after reload.
-    """
-    from config import reload_feature_flags
-
-    current_values = reload_feature_flags()
-
-    log_admin_action(
-        logger,
-        admin_id=admin['id'],
-        action="reload-feature-flags",
-        target_user_id=admin['id'],
-        details={"flags": current_values},
-    )
-
-    return {"success": True, "flags": current_values}
+# CROSS-003: Feature flag reload endpoint moved to routes/feature_flags.py
+# The old POST /feature-flags/reload is now at routes/feature_flags.py
+# with additional GET (list) and PATCH (update) endpoints.
 
 
 @router.get("/admin/filter-stats")

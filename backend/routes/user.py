@@ -2,6 +2,7 @@
 
 Extracted from main.py as part of STORY-202 monolith decomposition.
 STORY-213: Added DELETE /me (account deletion) and GET /me/export (data portability).
+SYS-023: Profile context endpoints migrated to user-scoped Supabase client.
 """
 
 import asyncio
@@ -18,7 +19,7 @@ from auth import require_auth
 from authorization import check_user_roles, get_admin_ids, get_master_quota_info
 from supabase_client import sb_execute
 from config import ENABLE_NEW_PRICING
-from database import get_db
+from database import get_db, get_user_db
 from schemas import (
     UserProfileResponse, SuccessResponse, DeleteAccountResponse,
     PerfilContexto, PerfilContextoResponse, ProfileCompletenessResponse, validate_password,
@@ -80,7 +81,7 @@ def _check_change_password_rate_limit(user_id: str) -> None:
 async def change_password(
     request: Request,
     user: dict = Depends(require_auth),
-    db=Depends(get_db),
+    db=Depends(get_db),  # Admin client — uses db.auth.admin
 ):
     """Change current user's password."""
     # STORY-210 AC12: Rate limit — 5 attempts per 15 minutes
@@ -108,6 +109,9 @@ async def change_password(
 async def get_profile(user: dict = Depends(require_auth), db=Depends(get_db)):
     """
     Get current user profile with plan capabilities and quota status.
+
+    Uses admin client (get_db) because it needs db.auth.admin.get_user_by_id()
+    to fetch the user's email from auth.users — an admin-only operation.
     """
     from quota import check_quota, create_fallback_quota_info, create_legacy_quota_info
 
@@ -234,14 +238,20 @@ async def get_trial_status(user: dict = Depends(require_auth), db=Depends(get_db
     )
 
 
+# ============================================================================
+# SYS-023: Profile context — uses user-scoped client (RLS-enforced)
+# ============================================================================
+
 @router.put("/profile/context", response_model=PerfilContextoResponse)
 async def save_profile_context(
     context: PerfilContexto,
     user: dict = Depends(require_auth),
-    db=Depends(get_db),
+    user_db=Depends(get_user_db),  # SYS-023: User-scoped client (respects RLS)
 ):
     """Save business context from onboarding wizard (STORY-247 AC2).
 
+    SYS-023: Uses user-scoped Supabase client. RLS policy on profiles
+    ensures users can only update their own profile row.
     Stores context_data as JSONB in profiles table.
     """
     user_id = user["id"]
@@ -249,7 +259,7 @@ async def save_profile_context(
     try:
         context_dict = context.model_dump(exclude_none=True)
         await sb_execute(
-            db.table("profiles").update({
+            user_db.table("profiles").update({
                 "context_data": context_dict,
             }).eq("id", user_id)
         )
@@ -267,14 +277,18 @@ async def save_profile_context(
 @router.get("/profile/context", response_model=PerfilContextoResponse)
 async def get_profile_context(
     user: dict = Depends(require_auth),
-    db=Depends(get_db),
+    user_db=Depends(get_user_db),  # SYS-023: User-scoped client (respects RLS)
 ):
-    """Get business context from profile (STORY-247 AC3)."""
+    """Get business context from profile (STORY-247 AC3).
+
+    SYS-023: Uses user-scoped Supabase client. RLS policy on profiles
+    ensures users can only read their own profile row.
+    """
     user_id = user["id"]
 
     try:
         result = await sb_execute(
-            db.table("profiles").select("context_data").eq("id", user_id).single()
+            user_db.table("profiles").select("context_data").eq("id", user_id).single()
         )
         context_data = (result.data or {}).get("context_data") or {}
 
@@ -317,14 +331,18 @@ _QUESTION_PRIORITY = [
 @router.get("/profile/completeness", response_model=ProfileCompletenessResponse)
 async def get_profile_completeness(
     user: dict = Depends(require_auth),
-    db=Depends(get_db),
+    user_db=Depends(get_user_db),  # SYS-023: User-scoped client (respects RLS)
 ):
-    """STORY-260 AC3: Calculate profile completeness and suggest next question."""
+    """STORY-260 AC3: Calculate profile completeness and suggest next question.
+
+    SYS-023: Uses user-scoped Supabase client. RLS ensures user can only
+    read their own profile.
+    """
     user_id = user["id"]
 
     try:
         result = await sb_execute(
-            db.table("profiles").select("context_data").eq("id", user_id).single()
+            user_db.table("profiles").select("context_data").eq("id", user_id).single()
         )
         context_data = (result.data or {}).get("context_data") or {}
     except Exception as e:
@@ -367,7 +385,7 @@ async def get_profile_completeness(
 
 
 # ============================================================================
-# STORY-278: Alert Preferences
+# STORY-278: Alert Preferences — uses user-scoped client (SYS-023)
 # ============================================================================
 
 class AlertPreferencesRequest(BaseModel):
@@ -384,14 +402,18 @@ class AlertPreferencesResponse(BaseModel):
 @router.get("/profile/alert-preferences", response_model=AlertPreferencesResponse)
 async def get_alert_preferences(
     user: dict = Depends(require_auth),
-    db=Depends(get_db),
+    user_db=Depends(get_user_db),  # SYS-023: User-scoped client (respects RLS)
 ):
-    """Get user's alert preferences (STORY-278 AC6)."""
+    """Get user's alert preferences (STORY-278 AC6).
+
+    SYS-023: Uses user-scoped Supabase client. RLS on alert_preferences
+    ensures users can only read their own preferences.
+    """
     user_id = user["id"]
 
     try:
         result = await sb_execute(
-            db.table("alert_preferences").select(
+            user_db.table("alert_preferences").select(
                 "frequency, enabled, last_digest_sent_at"
             ).eq("user_id", user_id).single()
         )
@@ -417,9 +439,13 @@ async def get_alert_preferences(
 async def update_alert_preferences(
     prefs: AlertPreferencesRequest,
     user: dict = Depends(require_auth),
-    db=Depends(get_db),
+    user_db=Depends(get_user_db),  # SYS-023: User-scoped client (respects RLS)
 ):
-    """Update user's alert preferences (STORY-278 AC6)."""
+    """Update user's alert preferences (STORY-278 AC6).
+
+    SYS-023: Uses user-scoped Supabase client. RLS on alert_preferences
+    ensures users can only modify their own preferences.
+    """
     user_id = user["id"]
 
     valid_frequencies = ("daily", "twice_weekly", "weekly", "off")
@@ -432,7 +458,7 @@ async def update_alert_preferences(
     try:
         # Upsert: insert or update
         result = await sb_execute(
-            db.table("alert_preferences").upsert({
+            user_db.table("alert_preferences").upsert({
                 "user_id": user_id,
                 "frequency": prefs.frequency,
                 "enabled": prefs.enabled,
@@ -452,9 +478,16 @@ async def update_alert_preferences(
         raise HTTPException(status_code=500, detail="Erro ao salvar preferencias de alerta")
 
 
+# ============================================================================
+# Account management — uses admin client (get_db) for auth.admin operations
+# ============================================================================
+
 @router.delete("/me", response_model=DeleteAccountResponse)
 async def delete_account(user: dict = Depends(require_auth), db=Depends(get_db)):
     """Delete entire user account and all associated data (LGPD Art. 18 VI).
+
+    Uses admin client (get_db) because it needs db.auth.admin.delete_user()
+    and must delete across multiple tables regardless of RLS.
 
     Cascade order:
     1. Cancel active Stripe subscription (if any)
@@ -542,6 +575,9 @@ async def delete_account(user: dict = Depends(require_auth), db=Depends(get_db))
 @router.get("/me/export")
 async def export_user_data(user: dict = Depends(require_auth), db=Depends(get_db)):
     """Export all user data as JSON file (LGPD Art. 18 V — data portability).
+
+    Uses admin client (get_db) because it queries across multiple tables
+    and needs unrestricted access to gather all user data for export.
 
     Returns a downloadable JSON file containing:
     - Profile information

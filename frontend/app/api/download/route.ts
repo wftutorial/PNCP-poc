@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readFile } from "fs/promises";
+import { readFile, unlink, readdir, stat } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
 import { APP_NAME } from "../../../lib/config";
@@ -97,6 +97,11 @@ export async function GET(request: NextRequest) {
     // Convert Buffer to Uint8Array for Next.js Response
     const uint8Array = new Uint8Array(buffer);
 
+    // SYS-025: Clean up temp file after serving
+    unlink(filePath).catch((err) =>
+      console.warn(`[download] Failed to cleanup temp file ${id}: ${err.message}`)
+    );
+
     return new NextResponse(uint8Array, {
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -111,3 +116,39 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
+// SYS-025: Periodic cleanup of stale Excel temp files (older than 1 hour)
+const STALE_THRESHOLD_MS = 60 * 60 * 1000; // 1 hour
+
+async function cleanupStaleTempFiles(): Promise<void> {
+  try {
+    const tmp = tmpdir();
+    const files = await readdir(tmp);
+    const now = Date.now();
+    let cleaned = 0;
+
+    for (const file of files) {
+      if (!file.startsWith("smartlic_") || !file.endsWith(".xlsx")) continue;
+      try {
+        const filePath = join(tmp, file);
+        const fileStat = await stat(filePath);
+        if (now - fileStat.mtimeMs > STALE_THRESHOLD_MS) {
+          await unlink(filePath);
+          cleaned++;
+        }
+      } catch {
+        // File may have been deleted by another process
+      }
+    }
+
+    if (cleaned > 0) {
+      console.log(`[download] Cleaned up ${cleaned} stale Excel temp files`);
+    }
+  } catch (err) {
+    console.warn(`[download] Temp file cleanup failed:`, err);
+  }
+}
+
+// Run cleanup on module load and every 30 minutes
+cleanupStaleTempFiles();
+setInterval(cleanupStaleTempFiles, 30 * 60 * 1000);

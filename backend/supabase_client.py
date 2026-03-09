@@ -1,4 +1,16 @@
-"""Supabase client singleton for backend operations.
+"""Supabase client management for backend operations.
+
+SYS-023: Per-user Supabase tokens for user-scoped operations.
+
+Client types:
+    - get_supabase() — ADMIN client (service_role key, bypasses RLS).
+      Use for: admin endpoints, cron jobs, system health, user management,
+      background workers (ARQ), cross-user aggregations.
+
+    - get_user_supabase(access_token) — USER-SCOPED client (anon key + user JWT).
+      Use for: user-facing reads/writes where RLS should enforce row ownership.
+      Examples: profile reads, search history, pipeline CRUD, messages.
+      RLS policies on the table will automatically filter to the user's rows.
 
 STORY-291: Circuit breaker pattern for Supabase calls.
 CRIT-046: Connection pool exhaustion fix — enlarged httpx pool,
@@ -21,12 +33,15 @@ T = TypeVar("T")
 _supabase_client = None
 
 # ============================================================================
-# CRIT-046: Connection pool configuration
+# CRIT-046 + DEBT-018 SYS-020: Connection pool configuration
+# SYS-020: Pool limits are per-worker to prevent connection exhaustion.
+# With 2 Gunicorn workers, total = 2 x per-worker limit.
+# Default: 25 per worker (50 total), down from 50 per worker (100 total).
 # ============================================================================
 
-_POOL_MAX_CONNECTIONS = 50
-_POOL_MAX_KEEPALIVE = 20
-_POOL_TIMEOUT = 30.0
+_POOL_MAX_CONNECTIONS = int(os.getenv("SUPABASE_POOL_MAX_CONNECTIONS", "25"))
+_POOL_MAX_KEEPALIVE = int(os.getenv("SUPABASE_POOL_MAX_KEEPALIVE", "10"))
+_POOL_TIMEOUT = float(os.getenv("SUPABASE_POOL_TIMEOUT", "30.0"))
 _POOL_CONNECT_TIMEOUT = 10.0
 _POOL_HIGH_WATER_RATIO = 0.8  # Log warning when pool > 80% utilization
 _RETRY_DELAY_S = 1.0  # AC5: delay between retries
@@ -50,6 +65,16 @@ def _get_config():
 
 def get_supabase():
     """Get or create Supabase admin client (uses service role key).
+
+    BYPASSES RLS. Use only for:
+        - Admin endpoints (/admin/*)
+        - Background jobs (ARQ workers, cron)
+        - System health checks and monitoring
+        - User management (auth.admin.*)
+        - Cross-user aggregations and analytics
+        - Operations where the caller is NOT acting on behalf of a specific user
+
+    For user-scoped operations, prefer get_user_supabase(access_token) instead.
 
     Returns:
         supabase.Client: Authenticated Supabase client with admin privileges.
@@ -117,6 +142,81 @@ def get_supabase_url() -> str:
 def get_supabase_anon_key() -> str:
     """Get Supabase anon key (for frontend JWT verification)."""
     return os.getenv("SUPABASE_ANON_KEY", "")
+
+
+# ============================================================================
+# SYS-023: Per-user Supabase client (user-scoped, respects RLS)
+# ============================================================================
+
+def get_user_supabase(access_token: str):
+    """Create a Supabase client scoped to a specific user's JWT.
+
+    This client uses the anon key + the user's access token as the
+    Authorization header. Supabase PostgREST will apply RLS policies
+    based on the authenticated user's identity (auth.uid()).
+
+    IMPORTANT: These clients are NOT cached/pooled — each call creates
+    a new client. This is intentional because:
+      1. User tokens expire and rotate frequently
+      2. Each request may have a different user
+      3. The supabase-py client is lightweight (no heavy init)
+
+    Use for all user-facing operations where RLS should enforce access:
+        - Profile reads/updates (own profile only)
+        - Pipeline CRUD (own items only)
+        - Search history (own sessions only)
+        - Messages (own conversations only)
+        - Alert preferences (own settings only)
+
+    Args:
+        access_token: The user's JWT access token (from Authorization header).
+
+    Returns:
+        supabase.Client: User-scoped Supabase client that respects RLS.
+
+    Raises:
+        RuntimeError: If SUPABASE_URL or SUPABASE_ANON_KEY not set.
+
+    Example:
+        from supabase_client import get_user_supabase
+
+        @router.get("/my-data")
+        async def get_my_data(user: dict = Depends(require_auth), request: Request):
+            token = request.headers.get("Authorization", "").replace("Bearer ", "")
+            user_db = get_user_supabase(token)
+            # RLS automatically filters to user's rows
+            result = await sb_execute(user_db.table("profiles").select("*"))
+            return result.data
+    """
+    url = os.getenv("SUPABASE_URL")
+    anon_key = os.getenv("SUPABASE_ANON_KEY")
+
+    if not url or not anon_key:
+        raise RuntimeError(
+            "SUPABASE_URL and SUPABASE_ANON_KEY must be set for user-scoped clients. "
+            "SUPABASE_ANON_KEY is the public anon key from your Supabase project settings."
+        )
+
+    from supabase import create_client
+
+    # Create client with anon key (public, RLS-enforced)
+    client = create_client(url, anon_key)
+
+    # Override the Authorization header on the PostgREST session
+    # to use the user's JWT instead of the anon key's default token.
+    # This makes PostgREST evaluate RLS policies as the authenticated user.
+    try:
+        postgrest = client.postgrest
+        session = postgrest.session
+        # Update the Authorization header to use the user's Bearer token
+        session.headers["Authorization"] = f"Bearer {access_token}"
+        # Also set the apikey header (required by Supabase gateway)
+        session.headers["apikey"] = anon_key
+    except Exception as e:
+        logger.warning("SYS-023: Failed to set user auth header on client: %s", e)
+
+    logger.debug("SYS-023: Created user-scoped Supabase client")
+    return client
 
 
 # ============================================================================
@@ -329,6 +429,9 @@ async def sb_execute(query):
     raises CircuitBreakerOpenError — callers must handle fallback.
 
     CRIT-046: Pool utilization metrics (AC1/AC2) + ConnectionError retry (AC5).
+
+    SYS-023: Works with both admin and user-scoped clients. The circuit
+    breaker and metrics apply regardless of which client type is used.
 
     Usage:
         # Before (blocks event loop):

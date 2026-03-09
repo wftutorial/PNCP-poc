@@ -1,4 +1,8 @@
-"""Tests for profile context endpoints (STORY-247 AC5)."""
+"""Tests for profile context endpoints (STORY-247 AC5).
+
+SYS-023: Profile context endpoints now use get_user_db (user-scoped client).
+Tests override get_user_db with mock_db to maintain the same testing pattern.
+"""
 
 import pytest
 from unittest.mock import MagicMock
@@ -20,10 +24,12 @@ def mock_db():
 def client(mock_user, mock_db):
     from main import app
     from auth import require_auth
-    from database import get_db
+    from database import get_db, get_user_db
 
     app.dependency_overrides[require_auth] = lambda: mock_user
     app.dependency_overrides[get_db] = lambda: mock_db
+    # SYS-023: Profile context endpoints now use get_user_db
+    app.dependency_overrides[get_user_db] = lambda: mock_db
     c = TestClient(app)
     yield c
     app.dependency_overrides.clear()

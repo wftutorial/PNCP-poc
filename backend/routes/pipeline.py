@@ -1,7 +1,12 @@
 """Pipeline management routes for STORY-250.
 
 Provides CRUD endpoints for tracking procurement opportunities
-through pipeline stages: descoberta → analise → preparando → enviada → resultado.
+through pipeline stages: descoberta -> analise -> preparando -> enviada -> resultado.
+
+SYS-023: GET /pipeline migrated to user-scoped Supabase client as example.
+Other endpoints use get_supabase() (admin) because they call internal helpers
+(_check_pipeline_write_access, _check_pipeline_limit) that use service-role queries.
+Future migration: move remaining endpoints to user-scoped client incrementally.
 """
 
 import asyncio
@@ -12,6 +17,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from auth import require_auth
 from supabase_client import get_supabase, sb_execute
+from database import get_user_db
 from log_sanitizer import mask_user_id
 from schemas import (
     PipelineItemCreate,
@@ -135,7 +141,7 @@ async def _check_pipeline_limit(user: dict) -> None:
 
     limit = TRIAL_PAYWALL_MAX_PIPELINE
 
-    # Count current items
+    # Count current items (uses admin client for count query)
     sb = get_supabase()
     result = await sb_execute(
         sb.table("pipeline_items")
@@ -214,8 +220,12 @@ async def list_pipeline_items(
     limit: int = Query(50, ge=1, le=200, description="Items per page"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
     user: dict = Depends(require_auth),
+    user_db=Depends(get_user_db),  # SYS-023: User-scoped client (respects RLS)
 ):
     """List pipeline items for the authenticated user (AC3).
+
+    SYS-023: Uses user-scoped Supabase client. RLS policy on pipeline_items
+    ensures users can only see their own items (WHERE user_id = auth.uid()).
 
     STORY-265 AC3: Trial expired can VIEW pipeline (read-only).
     Supports filtering by stage and pagination via limit/offset.
@@ -223,7 +233,6 @@ async def list_pipeline_items(
     await _check_pipeline_read_access(user)
 
     user_id = user["id"]
-    sb = get_supabase()
 
     # Validate stage if provided
     if stage and stage not in VALID_STAGES:
@@ -234,7 +243,7 @@ async def list_pipeline_items(
 
     try:
         query = (
-            sb.table("pipeline_items")
+            user_db.table("pipeline_items")
             .select("*", count="exact")
             .eq("user_id", user_id)
             .order("updated_at", desc=True)
@@ -307,7 +316,7 @@ async def update_pipeline_item(
             )
             result = await sb_execute(query)
 
-            # AC10: If 0 rows affected, version mismatch → 409 Conflict
+            # AC10: If 0 rows affected, version mismatch -> 409 Conflict
             if not result.data or len(result.data) == 0:
                 # Check if item exists at all (404 vs 409)
                 exists = await sb_execute(

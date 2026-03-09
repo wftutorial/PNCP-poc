@@ -1,6 +1,9 @@
 """Tests for STORY-278 AC6: Alert Preferences endpoint.
 
 Tests GET/PUT /v1/profile/alert-preferences in routes/user.py.
+
+SYS-023: Alert preferences endpoints now use get_user_db (user-scoped client).
+Tests override get_user_db with mock_db to maintain the same testing pattern.
 """
 
 import pytest
@@ -9,7 +12,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from routes.user import router
 from auth import require_auth
-from database import get_db
+from database import get_db, get_user_db
 
 
 # ============================================================================
@@ -36,6 +39,13 @@ def client(app):
     app.dependency_overrides.clear()
 
 
+def _override_db(app, mock_db):
+    """Helper to override both get_db and get_user_db with the same mock."""
+    app.dependency_overrides[get_db] = lambda: mock_db
+    # SYS-023: Alert preferences endpoints now use get_user_db
+    app.dependency_overrides[get_user_db] = lambda: mock_db
+
+
 # ============================================================================
 # GET /v1/profile/alert-preferences
 # ============================================================================
@@ -52,7 +62,7 @@ class TestGetAlertPreferences:
             "last_digest_sent_at": "2026-02-25T10:00:00+00:00",
         }
         mock_db.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = result
-        app.dependency_overrides[get_db] = lambda: mock_db
+        _override_db(app, mock_db)
 
         response = client.get("/v1/profile/alert-preferences")
 
@@ -67,7 +77,7 @@ class TestGetAlertPreferences:
         result = MagicMock()
         result.data = None
         mock_db.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = result
-        app.dependency_overrides[get_db] = lambda: mock_db
+        _override_db(app, mock_db)
 
         response = client.get("/v1/profile/alert-preferences")
 
@@ -80,7 +90,7 @@ class TestGetAlertPreferences:
     def test_returns_defaults_on_db_error(self, app, client):
         mock_db = MagicMock()
         mock_db.table.return_value.select.return_value.eq.return_value.single.return_value.execute.side_effect = Exception("DB error")
-        app.dependency_overrides[get_db] = lambda: mock_db
+        _override_db(app, mock_db)
 
         response = client.get("/v1/profile/alert-preferences")
 
@@ -114,7 +124,7 @@ class TestUpdateAlertPreferences:
             "last_digest_sent_at": None,
         }]
         mock_db.table.return_value.upsert.return_value.execute.return_value = result
-        app.dependency_overrides[get_db] = lambda: mock_db
+        _override_db(app, mock_db)
 
         response = client.put("/v1/profile/alert-preferences", json={
             "frequency": "weekly",
@@ -128,7 +138,7 @@ class TestUpdateAlertPreferences:
 
     def test_rejects_invalid_frequency(self, app, client):
         mock_db = MagicMock()
-        app.dependency_overrides[get_db] = lambda: mock_db
+        _override_db(app, mock_db)
 
         response = client.put("/v1/profile/alert-preferences", json={
             "frequency": "hourly",
@@ -148,7 +158,7 @@ class TestUpdateAlertPreferences:
             "last_digest_sent_at": None,
         }]
         mock_db.table.return_value.upsert.return_value.execute.return_value = result
-        app.dependency_overrides[get_db] = lambda: mock_db
+        _override_db(app, mock_db)
 
         response = client.put("/v1/profile/alert-preferences", json={
             "frequency": "off",
@@ -163,7 +173,7 @@ class TestUpdateAlertPreferences:
     def test_handles_db_error(self, app, client):
         mock_db = MagicMock()
         mock_db.table.return_value.upsert.return_value.execute.side_effect = Exception("DB error")
-        app.dependency_overrides[get_db] = lambda: mock_db
+        _override_db(app, mock_db)
 
         response = client.put("/v1/profile/alert-preferences", json={
             "frequency": "daily",
@@ -181,7 +191,7 @@ class TestUpdateAlertPreferences:
             "last_digest_sent_at": None,
         }]
         mock_db.table.return_value.upsert.return_value.execute.return_value = result
-        app.dependency_overrides[get_db] = lambda: mock_db
+        _override_db(app, mock_db)
 
         response = client.put("/v1/profile/alert-preferences", json={
             "frequency": "twice_weekly",
@@ -200,7 +210,7 @@ class TestUpdateAlertPreferences:
             "last_digest_sent_at": None,
         }]
         mock_db.table.return_value.upsert.return_value.execute.return_value = result
-        app.dependency_overrides[get_db] = lambda: mock_db
+        _override_db(app, mock_db)
 
         response = client.put("/v1/profile/alert-preferences", json={
             "frequency": "daily",

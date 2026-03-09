@@ -1,85 +1,26 @@
-import { NextRequest, NextResponse } from "next/server";
-import { sanitizeProxyError, sanitizeNetworkError } from "../../../lib/proxy-error-handler";
+/**
+ * Organizations proxy — GET fetches user's org, POST creates new org.
+ * Note: GET maps to /v1/organizations/me, POST maps to /v1/organizations.
+ */
 
-const getBackendUrl = () => process.env.BACKEND_URL;
+import type { NextRequest } from "next/server";
+import { createProxyRoute } from "../../../lib/create-proxy-route";
 
-export async function GET(request: NextRequest) {
-  const backendUrl = getBackendUrl();
-  if (!backendUrl) {
-    return NextResponse.json({ message: "Servidor nao configurado" }, { status: 503 });
-  }
+// GET /api/organizations → GET /v1/organizations/me
+const getHandlers = createProxyRoute({
+  backendPath: "/v1/organizations/me",
+  methods: ["GET"],
+  requireAuth: true,
+  errorMessage: "Erro ao obter organizacao",
+});
 
-  const authHeader = request.headers.get("authorization");
-  if (!authHeader) {
-    return NextResponse.json({ message: "Autenticacao necessaria" }, { status: 401 });
-  }
+// POST /api/organizations → POST /v1/organizations
+const postHandlers = createProxyRoute({
+  backendPath: "/v1/organizations",
+  methods: ["POST"],
+  requireAuth: true,
+  errorMessage: "Erro ao criar organizacao",
+});
 
-  try {
-    const response = await fetch(`${backendUrl}/v1/organizations/me`, {
-      headers: { Authorization: authHeader, "Content-Type": "application/json" },
-    });
-
-    if (!response.ok) {
-      const body = await response.text();
-      const sanitized = sanitizeProxyError(response.status, body, response.headers.get("content-type"));
-      if (sanitized) return sanitized;
-      try {
-        const data = JSON.parse(body);
-        return NextResponse.json(
-          { message: data.detail || "Erro ao obter organizacao" },
-          { status: response.status },
-        );
-      } catch {
-        return NextResponse.json({ message: "Erro temporario" }, { status: response.status });
-      }
-    }
-
-    const data = await response.json();
-    return NextResponse.json(data);
-  } catch (error) {
-    console.error("Error fetching organization:", error instanceof Error ? error.message : error);
-    return sanitizeNetworkError(error);
-  }
-}
-
-export async function POST(request: NextRequest) {
-  const backendUrl = getBackendUrl();
-  if (!backendUrl) {
-    return NextResponse.json({ message: "Servidor nao configurado" }, { status: 503 });
-  }
-
-  const authHeader = request.headers.get("authorization");
-  if (!authHeader) {
-    return NextResponse.json({ message: "Autenticacao necessaria" }, { status: 401 });
-  }
-
-  try {
-    const body = await request.json();
-    const response = await fetch(`${backendUrl}/v1/organizations`, {
-      method: "POST",
-      headers: { Authorization: authHeader, "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-      const responseBody = await response.text();
-      const sanitized = sanitizeProxyError(response.status, responseBody, response.headers.get("content-type"));
-      if (sanitized) return sanitized;
-      try {
-        const data = JSON.parse(responseBody);
-        return NextResponse.json(
-          { message: data.detail || "Erro ao criar organizacao" },
-          { status: response.status },
-        );
-      } catch {
-        return NextResponse.json({ message: "Erro temporario" }, { status: response.status });
-      }
-    }
-
-    const data = await response.json();
-    return NextResponse.json(data, { status: 201 });
-  } catch (error) {
-    console.error("Error creating organization:", error instanceof Error ? error.message : error);
-    return sanitizeNetworkError(error);
-  }
-}
+export const GET = getHandlers.GET;
+export const POST = postHandlers.POST;

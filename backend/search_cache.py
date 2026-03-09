@@ -146,6 +146,9 @@ def compute_search_hash(params: dict) -> str:
     Now includes date_from/date_to so that different date ranges produce different
     cache keys. For legacy fallback (thundering herd mitigation), use
     compute_search_hash_without_dates().
+
+    DEBT-018 SYS-021: Added termos_busca, valor_minimo, valor_maximo, esferas,
+    municipios, exclusion_terms, show_all_matches — these all affect filtered results.
     """
     normalized = {
         "setor_id": params.get("setor_id"),
@@ -156,6 +159,14 @@ def compute_search_hash(params: dict) -> str:
         # STORY-306 AC1/AC2: Include dates, normalized to YYYY-MM-DD
         "date_from": _normalize_date(params.get("date_from") or params.get("data_inicio") or params.get("data_inicial")),
         "date_to": _normalize_date(params.get("date_to") or params.get("data_fim") or params.get("data_final")),
+        # SYS-021: Additional filter parameters that affect results
+        "termos_busca": params.get("termos_busca") or None,
+        "valor_minimo": params.get("valor_minimo"),
+        "valor_maximo": params.get("valor_maximo"),
+        "esferas": sorted(params.get("esferas") or []) or None,
+        "municipios": sorted(params.get("municipios") or []) or None,
+        "exclusion_terms": sorted(params.get("exclusion_terms") or []) or None,
+        "show_all_matches": params.get("show_all_matches") or False,
     }
     params_json = json.dumps(normalized, sort_keys=True)
     return hashlib.sha256(params_json.encode()).hexdigest()
@@ -185,6 +196,8 @@ def compute_search_hash_per_uf(params: dict, uf: str) -> str:
     Same as compute_search_hash but always uses ufs=[single_uf].
     This allows warmup (which caches per-UF) and multi-UF searches
     (which compose from per-UF entries) to share the same cache keys.
+
+    DEBT-018 SYS-021: Includes all filter parameters for cache key correctness.
     """
     normalized = {
         "setor_id": params.get("setor_id"),
@@ -194,6 +207,14 @@ def compute_search_hash_per_uf(params: dict, uf: str) -> str:
         "modo_busca": params.get("modo_busca"),
         "date_from": _normalize_date(params.get("date_from") or params.get("data_inicio") or params.get("data_inicial")),
         "date_to": _normalize_date(params.get("date_to") or params.get("data_fim") or params.get("data_final")),
+        # SYS-021: Additional filter parameters
+        "termos_busca": params.get("termos_busca") or None,
+        "valor_minimo": params.get("valor_minimo"),
+        "valor_maximo": params.get("valor_maximo"),
+        "esferas": sorted(params.get("esferas") or []) or None,
+        "municipios": sorted(params.get("municipios") or []) or None,
+        "exclusion_terms": sorted(params.get("exclusion_terms") or []) or None,
+        "show_all_matches": params.get("show_all_matches") or False,
     }
     params_json = json.dumps(normalized, sort_keys=True)
     return hashlib.sha256(params_json.encode()).hexdigest()

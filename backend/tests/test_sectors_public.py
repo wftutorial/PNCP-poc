@@ -216,19 +216,42 @@ class TestSectorStatsEndpoint:
 # ---------------------------------------------------------------------------
 
 class TestStatsGeneration:
+    @staticmethod
+    def _make_async_mock(items=None, side_effect=None):
+        """Create mock AsyncPNCPClient as async context manager."""
+        from dataclasses import dataclass, field as dc_field
+        from typing import List, Dict, Any, Optional
+
+        @dataclass
+        class _Result:
+            items: List[Dict[str, Any]] = dc_field(default_factory=list)
+            succeeded_ufs: List[str] = dc_field(default_factory=list)
+            failed_ufs: List[str] = dc_field(default_factory=list)
+            truncated_ufs: List[str] = dc_field(default_factory=list)
+            canary_result: Optional[Dict[str, Any]] = None
+
+        mock_client = MagicMock()
+        if side_effect:
+            mock_client.buscar_todas_ufs_paralelo = AsyncMock(side_effect=side_effect)
+        else:
+            mock_client.buscar_todas_ufs_paralelo = AsyncMock(
+                return_value=_Result(items=items or [])
+            )
+        mock_cls = MagicMock()
+        mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+        return mock_cls
+
     @pytest.mark.asyncio
-    @patch("pncp_client.PNCPClient")
-    async def test_generate_returns_correct_structure(self, mock_client_cls):
+    async def test_generate_returns_correct_structure(self):
         """Test _generate_sector_stats returns all required fields."""
         from routes.sectors_public import _generate_sector_stats
         from sectors import SECTORS
 
-        mock_client = MagicMock()
-        mock_client.buscar = AsyncMock(return_value=[])
-        mock_client_cls.return_value = mock_client
-
-        sector = SECTORS["saude"]
-        result = await _generate_sector_stats("saude", sector)
+        mock_cls = self._make_async_mock(items=[])
+        with patch("pncp_client.AsyncPNCPClient", mock_cls):
+            sector = SECTORS["saude"]
+            result = await _generate_sector_stats("saude", sector)
 
         assert result["sector_id"] == "saude"
         assert result["sector_name"] == "Saúde"
@@ -238,58 +261,49 @@ class TestStatsGeneration:
         assert isinstance(result["sample_items"], list)
 
     @pytest.mark.asyncio
-    @patch("pncp_client.PNCPClient")
-    async def test_generate_handles_pncp_failure(self, mock_client_cls):
+    async def test_generate_handles_pncp_failure(self):
         """Should return empty stats on PNCP failure, not crash."""
         from routes.sectors_public import _generate_sector_stats
         from sectors import SECTORS
 
-        mock_client = MagicMock()
-        mock_client.buscar = AsyncMock(side_effect=Exception("PNCP down"))
-        mock_client_cls.return_value = mock_client
-
-        sector = SECTORS["saude"]
-        result = await _generate_sector_stats("saude", sector)
+        mock_cls = self._make_async_mock(side_effect=Exception("PNCP down"))
+        with patch("pncp_client.AsyncPNCPClient", mock_cls):
+            sector = SECTORS["saude"]
+            result = await _generate_sector_stats("saude", sector)
 
         assert result["total_open"] == 0
         assert result["total_value"] == 0.0
 
     @pytest.mark.asyncio
-    @patch("pncp_client.PNCPClient")
-    async def test_generate_filters_by_keywords(self, mock_client_cls):
+    async def test_generate_filters_by_keywords(self):
         """Should only count results matching sector keywords."""
         from routes.sectors_public import _generate_sector_stats
         from sectors import SECTORS
 
-        mock_client = MagicMock()
-        mock_client.buscar = AsyncMock(return_value=[
+        mock_cls = self._make_async_mock(items=[
             {"objetoCompra": "Aquisição de medicamentos hospitalares", "uf": "SP", "valorTotalEstimado": 100000},
             {"objetoCompra": "Compra de material de escritório", "uf": "RJ", "valorTotalEstimado": 50000},
         ])
-        mock_client_cls.return_value = mock_client
-
-        sector = SECTORS["saude"]
-        result = await _generate_sector_stats("saude", sector)
+        with patch("pncp_client.AsyncPNCPClient", mock_cls):
+            sector = SECTORS["saude"]
+            result = await _generate_sector_stats("saude", sector)
 
         # "medicamentos" matches saude keywords, "material de escritório" does not
         assert result["total_open"] >= 1
 
     @pytest.mark.asyncio
-    @patch("pncp_client.PNCPClient")
-    async def test_sample_items_truncated(self, mock_client_cls):
+    async def test_sample_items_truncated(self):
         """Titles longer than 120 chars should be truncated."""
         from routes.sectors_public import _generate_sector_stats
         from sectors import SECTORS
 
         long_title = "Medicamento " * 20  # 240 chars
-        mock_client = MagicMock()
-        mock_client.buscar = AsyncMock(return_value=[
+        mock_cls = self._make_async_mock(items=[
             {"objetoCompra": long_title, "uf": "SP", "valorTotalEstimado": 100000},
         ])
-        mock_client_cls.return_value = mock_client
-
-        sector = SECTORS["saude"]
-        result = await _generate_sector_stats("saude", sector)
+        with patch("pncp_client.AsyncPNCPClient", mock_cls):
+            sector = SECTORS["saude"]
+            result = await _generate_sector_stats("saude", sector)
 
         if result["sample_items"]:
             assert len(result["sample_items"][0]["titulo"]) <= 120

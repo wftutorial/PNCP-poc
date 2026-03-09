@@ -1,689 +1,103 @@
 # CRIT-SIGSEGV: Enable faulthandler BEFORE any imports.
-# Prints Python-level traceback to stderr on SIGSEGV/SIGFPE/SIGABRT,
-# giving visibility into which C extension is crashing.
 import faulthandler
 faulthandler.enable()
 
-"""
-SmartLic - Backend API
+"""SmartLic - Backend API
 
-FastAPI application for searching and analyzing procurement bids
-from Brazil's official sources (PNCP, PCP, ComprasGov).
-
-This API provides endpoints for:
-- Searching procurement opportunities by state and date range
-- Filtering results by keywords and value thresholds
-- Generating Excel reports with formatted data
-- Creating AI-powered executive summaries (GPT-4.1-nano)
-
-STORY-202: Monolith decomposition — routes extracted to:
-  - routes/search.py (buscar + progress SSE)
-  - routes/user.py (profile, change-password)
-  - routes/billing.py (plans, checkout)
-  - routes/sessions.py (search history)
-  - authorization.py (admin/master role helpers)
+DEBT-015 SYS-005: Decomposed to <300 lines. Extracted to:
+  - startup/sentry.py (PII scrubbing, noise filtering, init)
+  - startup/lifespan.py (startup/shutdown orchestration)
+  - startup/state.py (shared process state)
+  - routes/health_core.py (health/live, health/ready, health, sources/health)
 """
 
-import asyncio
 import logging
 import os
-import signal
-import time
-from contextlib import asynccontextmanager
+
 from dotenv import load_dotenv
 
-import httpx  # GTM-RESILIENCE-E02: for transient error fingerprinting
-
-# STORY-211: Sentry error tracking
-import sentry_sdk
-from sentry_sdk.integrations.fastapi import FastApiIntegration
-from sentry_sdk.integrations.starlette import StarletteIntegration
-from log_sanitizer import mask_email, mask_token, mask_user_id, mask_ip_address, sanitize_dict, sanitize_string
-
-# Load environment variables from .env file
 load_dotenv()
 
-from fastapi import FastAPI, Depends, Request, Response
+from fastapi import FastAPI, Depends, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from config import setup_logging, ENABLE_NEW_PRICING, get_cors_origins, log_feature_flags, validate_env_vars, METRICS_TOKEN
+from config import setup_logging, ENABLE_NEW_PRICING, get_cors_origins, log_feature_flags, METRICS_TOKEN
 from pncp_client import PNCPClient
 from sectors import list_sectors
-from schemas import (
-    RootResponse, HealthResponse, SourcesHealthResponse, SetoresResponse, DebugPNCPResponse,
-)
-from middleware import CorrelationIDMiddleware, SecurityHeadersMiddleware, DeprecationMiddleware, RateLimitMiddleware  # STORY-202 SYS-M01, STORY-210 AC10, STORY-226 AC14, STORY-311 AC10
-from redis_pool import startup_redis, shutdown_redis  # STORY-217: Redis pool lifecycle
+from schemas import RootResponse, SetoresResponse, DebugPNCPResponse
+from middleware import CorrelationIDMiddleware, SecurityHeadersMiddleware, DeprecationMiddleware, RateLimitMiddleware
+import startup.state as _state
 
-# Existing routers
+# Routers
 from admin import router as admin_router
 from routes.subscriptions import router as subscriptions_router
 from routes.features import router as features_router
 from routes.messages import router as messages_router
 from routes.analytics import router as analytics_router
-from routes.auth_oauth import router as oauth_router  # STORY-180: Google OAuth
-from routes.export_sheets import router as export_sheets_router  # STORY-180: Google Sheets Export
+from routes.auth_oauth import router as oauth_router
+from routes.export_sheets import router as export_sheets_router
 from webhooks.stripe import router as stripe_webhook_router
-
-# STORY-202: Decomposed routers
 from routes.search import router as search_router
 from routes.user import router as user_router
 from routes.billing import router as billing_router
 from routes.sessions import router as sessions_router
-from routes.plans import router as plans_router  # STORY-203 CROSS-M01
-from routes.emails import router as emails_router  # STORY-225: Transactional emails
-from routes.pipeline import router as pipeline_router  # STORY-250: Pipeline de Oportunidades
-from routes.onboarding import router as onboarding_router  # GTM-004: First analysis after onboarding
-from routes.auth_email import router as auth_email_router  # GTM-FIX-009: Email confirmation recovery
-from routes.health import router as cache_health_router  # UX-303: Cache health endpoint
-from routes.feedback import router as feedback_router  # GTM-RESILIENCE-D05: User feedback loop
-from routes.admin_trace import router as admin_trace_router  # CRIT-004 AC21: Search trace endpoint
-from routes.auth_check import router as auth_check_router  # STORY-258: Email/phone pre-signup checks
-from routes.bid_analysis import router as bid_analysis_router  # STORY-259: Deep bid analysis
-from routes.slo import router as slo_router  # STORY-299: SLO dashboard
-from routes.alerts import router as alerts_router  # STORY-301: Email Alert System
-from routes.trial_emails import router as trial_emails_router  # STORY-310: Trial email sequence
-from routes.mfa import router as mfa_router  # STORY-317: MFA TOTP + recovery codes
-from routes.organizations import router as org_router  # STORY-322: Organizations
-from routes.partners import router as partners_router  # STORY-323: Revenue Share
-from routes.sectors_public import router as sectors_public_router  # STORY-324: SEO Landing Pages
-from routes.reports import router as reports_router  # STORY-325: PDF Diagnostico
-from routes.blog_stats import router as blog_stats_router  # MKT-002: Blog stats for programmatic SEO
-from routes.metrics_api import router as metrics_api_router  # STORY-351: Discard rate endpoint
+from routes.plans import router as plans_router
+from routes.emails import router as emails_router
+from routes.pipeline import router as pipeline_router
+from routes.onboarding import router as onboarding_router
+from routes.auth_email import router as auth_email_router
+from routes.health import router as cache_health_router
+from routes.health_core import router as health_core_router
+from routes.feedback import router as feedback_router
+from routes.admin_trace import router as admin_trace_router
+from routes.auth_check import router as auth_check_router
+from routes.bid_analysis import router as bid_analysis_router
+from routes.slo import router as slo_router
+from routes.alerts import router as alerts_router
+from routes.trial_emails import router as trial_emails_router
+from routes.mfa import router as mfa_router
+from routes.organizations import router as org_router
+from routes.partners import router as partners_router
+from routes.sectors_public import router as sectors_public_router
+from routes.reports import router as reports_router
+from routes.blog_stats import router as blog_stats_router
+from routes.metrics_api import router as metrics_api_router
 
-# Configure structured logging
+# Configure logging
 setup_logging(level=os.getenv("LOG_LEVEL", "INFO"))
 logger = logging.getLogger(__name__)
-
-# STORY-220 AC6: Log feature flags AFTER setup_logging() (not at import time)
 log_feature_flags()
 
-# CRIT-010 AC5: Startup readiness tracking
-# SLA-002: _process_start_time is set immediately (for liveness), _startup_time after full init
-_process_start_time: float = time.monotonic()
-_startup_time: float | None = None  # Set when lifespan startup completes
-
-# STORY-210 AC8: Disable API docs in production to prevent reconnaissance
+# Sentry initialization
 _env = os.getenv("ENVIRONMENT", os.getenv("ENV", "development")).lower()
 _is_production = _env in ("production", "prod")
-
-# STORY-211: Sentry Error Tracking — must init BEFORE app creation (AC2)
-# GTM-GO-003 AC4: Read version from env var (injected by CI/CD), default "dev" for local
 APP_VERSION = os.getenv("APP_VERSION", "dev")
 
+from startup.sentry import init_sentry
+init_sentry(env=_env, version=APP_VERSION)
 
-def scrub_pii(event, hint):
-    """Sentry before_send callback to strip PII from error events (AC3).
-
-    Leverages log_sanitizer.py patterns for consistent masking.
-    Strips: email addresses, JWT tokens, user IDs, API keys.
-    """
-    # Scrub request headers (Authorization, cookies, API keys)
-    if "request" in event:
-        request = event["request"]
-        if "headers" in request:
-            request["headers"] = {
-                k: (mask_token(v) if k.lower() in ("authorization", "cookie", "x-api-key") else v)
-                for k, v in request["headers"].items()
-            }
-        if "data" in request and isinstance(request["data"], dict):
-            request["data"] = sanitize_dict(request["data"])
-
-    # Scrub user context
-    if "user" in event:
-        user = event["user"]
-        if "email" in user:
-            user["email"] = mask_email(user["email"])
-        if "id" in user:
-            user["id"] = mask_user_id(str(user["id"]))
-        if "ip_address" in user:
-            user["ip_address"] = mask_ip_address(user["ip_address"])
-
-    # Scrub breadcrumb messages
-    if "breadcrumbs" in event:
-        for crumb in event.get("breadcrumbs", {}).get("values", []):
-            if "message" in crumb:
-                crumb["message"] = sanitize_string(crumb["message"])
-            if "data" in crumb and isinstance(crumb["data"], dict):
-                crumb["data"] = sanitize_dict(crumb["data"])
-
-    # Scrub exception values
-    if "exception" in event:
-        for exc in event.get("exception", {}).get("values", []):
-            if "value" in exc:
-                exc["value"] = sanitize_string(exc["value"])
-
-    return event
-
-
-def _fingerprint_transients(event, hint):
-    """Fingerprint transient errors to avoid Sentry issue flood (GTM-RESILIENCE-E02 AC4).
-
-    Groups httpx timeouts and PNCP transients under custom fingerprints
-    and downgrades their level to 'warning' so they don't trigger alerts.
-    """
-    exc_info = hint.get("exc_info")
-    if exc_info and exc_info[1] is not None:
-        exc = exc_info[1]
-        if isinstance(exc, (httpx.TimeoutException, httpx.ConnectTimeout, httpx.ReadTimeout)):
-            event["fingerprint"] = ["transient-timeout", type(exc).__name__]
-            event["level"] = "warning"
-        elif type(exc).__name__ in ("PNCPRateLimitError", "PNCPDegradedError"):
-            event["fingerprint"] = [f"transient-{type(exc).__name__}"]
-            event["level"] = "warning"
-    return event
-
-
-def _before_send(event, hint):
-    """Combined before_send: PII scrubbing + transient fingerprinting + noise filtering.
-
-    GTM-RESILIENCE-E02: PII scrubbing + transient fingerprinting.
-    CRIT-040 AC5: Drop CircuitBreakerOpenError and PGRST205 schema errors.
-    CRIT-043 AC5: Drop PNCP 400 on page>1 (expected noise, not real errors).
-    """
-    # CRIT-040 AC5: Drop CB open errors (already tracked via Prometheus)
-    exc_info = hint.get("exc_info")
-    if exc_info and exc_info[1] is not None:
-        exc = exc_info[1]
-        if type(exc).__name__ == "CircuitBreakerOpenError":
-            return None  # Drop — tracked via smartlic_supabase_cb_state metric
-    # CRIT-040 AC5: Drop PGRST205 schema cache errors (not runtime errors)
-    message = event.get("message", "")
-    exc_values = event.get("exception", {}).get("values", [])
-    for ev in exc_values:
-        ev_value = ev.get("value", "")
-        if "PGRST205" in ev_value:
-            return None
-        # CRIT-043 AC5: Drop PNCP 400 on page>1 (expected end-of-pagination noise)
-        if "status 400" in ev_value or "status=400" in ev_value:
-            if any(marker in ev_value for marker in ("pagina': 5", "pagina': 4", "pagina': 3", "pagina': 2", "page ")):
-                return None
-    if "PGRST205" in message:
-        return None
-    # CRIT-043 AC5: Also check message-level for PNCP 400 noise
-    if ("status 400" in message or "status=400" in message) and "pagina" in message:
-        import re
-        pagina_match = re.search(r"pagina['\"]?\s*[:=]\s*(\d+)", message)
-        if pagina_match and int(pagina_match.group(1)) > 1:
-            return None
-
-    # PNCP operational noise: timeouts and connection errors are expected
-    # when the government API is slow/unstable — not actionable bugs.
-    for ev in exc_values:
-        ev_value = ev.get("value", "")
-        if any(marker in ev_value for marker in (
-            "ReadTimeoutError", "ConnectTimeoutError", "Max retries exceeded",
-            "pncp.gov.br", "timed out", "PNCPAPIError",
-        )):
-            return None
-    if exc_info and exc_info[1] is not None:
-        exc_type_name = type(exc_info[1]).__name__
-        if exc_type_name in ("PNCPAPIError", "TimeoutError", "ReadTimeout"):
-            return None
-
-    event = scrub_pii(event, hint)
-    if event is None:
-        return None
-    return _fingerprint_transients(event, hint)
-
-
-def _traces_sampler(sampling_context):
-    """Exclude health checks from Sentry traces (GTM-RESILIENCE-E02 AC5)."""
-    path = sampling_context.get("asgi_scope", {}).get("path", "")
-    if path in ("/health", "/health/live", "/health/ready", "/v1/health", "/v1/health/cache"):
-        return 0.0  # Never trace health checks
-    return 0.1  # 10% for everything else
-
-
-_sentry_dsn = os.getenv("SENTRY_DSN")
-if _sentry_dsn:
-    from supabase_client import CircuitBreakerOpenError  # CRIT-040 AC6
-
-    sentry_sdk.init(
-        dsn=_sentry_dsn,
-        integrations=[FastApiIntegration(), StarletteIntegration()],
-        traces_sampler=_traces_sampler,
-        environment=_env,
-        release=APP_VERSION,
-        before_send=_before_send,
-        ignore_errors=[CircuitBreakerOpenError],  # CRIT-040 AC6: fallback filter
-    )
-    logger.info("Sentry initialized for error tracking")
-else:
-    logger.info("Sentry DSN not configured — error tracking disabled")
-
-
-# ============================================================================
-# STORY-221: Lifespan Context Manager (replaces deprecated @app.on_event)
-# ============================================================================
-
-async def _check_cache_schema() -> None:
-    """CRIT-001 AC4: Validate search_results_cache schema on startup.
-
-    Compares actual DB columns against SearchResultsCacheRow model.
-    Logs CRITICAL for missing columns, WARNING for extras, INFO on success.
-    Never crashes — graceful degradation if DB is unavailable.
-    """
-    try:
-        from models.cache import SearchResultsCacheRow
-        from supabase_client import get_supabase
-
-        db = get_supabase()
-        # Use PostgREST RPC to query information_schema
-        # This avoids needing direct DB access — works with Supabase client
-        try:
-            result = db.rpc(
-                "get_table_columns_simple",
-                {"p_table_name": "search_results_cache"},
-            ).execute()
-            actual_columns = {row["column_name"] for row in result.data} if result.data else set()
-        except Exception as rpc_err:
-            logger.warning(f"CRIT-004: RPC get_table_columns_simple failed ({rpc_err}) — trying direct query")
-            try:
-                result = db.table("search_results_cache").select("*").limit(0).execute()
-                logger.info("CRIT-004: Table search_results_cache exists (column validation skipped)")
-                return
-            except Exception as fallback_err:
-                logger.warning(
-                    f"CRIT-004: Schema validation FAILED — RPC: {rpc_err}, Fallback: {fallback_err}"
-                )
-                return
-
-        expected_columns = SearchResultsCacheRow.expected_columns()
-
-        missing = expected_columns - actual_columns
-        extra = actual_columns - expected_columns
-
-        if missing:
-            logger.critical(
-                f"CRIT-001: search_results_cache MISSING columns: {sorted(missing)}. "
-                f"Run migration 033_fix_missing_cache_columns.sql"
-            )
-        if extra:
-            logger.warning(
-                f"CRIT-001: search_results_cache has EXTRA columns not in model: {sorted(extra)}"
-            )
-        if not missing and not extra:
-            logger.info(
-                f"CRIT-001: Schema validation passed for search_results_cache "
-                f"({len(expected_columns)} columns)"
-            )
-    except Exception as e:
-        # Never crash on health check failure
-        logger.warning(f"CRIT-001: Schema health check failed (non-fatal): {type(e).__name__}: {e}")
-
-
-def _log_registered_routes(app_instance: FastAPI) -> None:
-    """Diagnostic logging for route registration (HOTFIX STORY-183).
-
-    Logs all registered routes for debugging route 404 issues.
-    """
-    logger.info("=" * 60)
-    logger.info("REGISTERED ROUTES:")
-    logger.info("=" * 60)
-    for route in app_instance.routes:
-        if hasattr(route, 'methods') and hasattr(route, 'path'):
-            methods = ','.join(route.methods) if route.methods else 'N/A'
-            logger.info(f"  {methods:8s} {route.path}")
-    logger.info("=" * 60)
-
-    # Specifically check for export route
-    export_routes = [r for r in app_instance.routes if hasattr(r, 'path') and '/export' in r.path]
-    if export_routes:
-        logger.info(f"Export routes found: {len(export_routes)}")
-        for r in export_routes:
-            methods = ','.join(r.methods) if hasattr(r, 'methods') and r.methods else 'N/A'
-            logger.info(f"   {methods:8s} {r.path}")
-    else:
-        logger.error("NO EXPORT ROUTES FOUND - /api/export/google-sheets will return 404!")
-    logger.info("=" * 60)
-
-
-async def _mark_inflight_sessions_timed_out() -> None:
-    """CRIT-002 AC15: Mark in-flight sessions as timed_out on server shutdown.
-
-    Called during SIGTERM/shutdown. Updates any sessions with status 'created'
-    or 'processing' to 'timed_out' so users see what happened in their history.
-    Timeout: 5s max to avoid blocking shutdown.
-    """
-    import asyncio
-    try:
-        from supabase_client import get_supabase
-        sb = get_supabase()
-
-        async def _do_update():
-            from datetime import datetime, timezone
-            result = (
-                sb.table("search_sessions")
-                .update({
-                    "status": "timed_out",
-                    "error_message": "O servidor foi reiniciado. Tente novamente.",
-                    "error_code": "timeout",
-                    "completed_at": datetime.now(timezone.utc).isoformat(),
-                })
-                .in_("status", ["created", "processing"])
-                .execute()
-            )
-            n = len(result.data) if result.data else 0
-            if n > 0:
-                logger.critical(
-                    f"CRIT-002 AC15: Marked {n} in-flight sessions as timed_out due to shutdown"
-                )
-            else:
-                logger.info("CRIT-002 AC15: No in-flight sessions to mark on shutdown")
-
-        await asyncio.wait_for(_do_update(), timeout=5.0)
-    except asyncio.TimeoutError:
-        logger.error("CRIT-002 AC15: Timeout marking in-flight sessions (5s limit)")
-    except Exception as e:
-        logger.error(f"CRIT-002 AC15: Failed to mark in-flight sessions: {e}")
-
-
-_SATURATION_INTERVAL = 30  # seconds
-
-
-async def _periodic_saturation_metrics() -> None:
-    """HARDEN-024 AC6: Report pool/queue saturation metrics every 30s."""
-    from metrics import (
-        REDIS_POOL_CONNECTIONS_USED, REDIS_POOL_CONNECTIONS_MAX,
-        HTTPX_POOL_CONNECTIONS_USED, TRACKER_ACTIVE_COUNT,
-        BACKGROUND_RESULTS_COUNT,
-    )
-    from redis_pool import get_pool_stats
-    from progress import get_active_tracker_count
-    from routes.search import get_background_results_count
-    from config import (
-        PNCP_BULKHEAD_CONCURRENCY, PCP_BULKHEAD_CONCURRENCY,
-        COMPRASGOV_BULKHEAD_CONCURRENCY,
-    )
-
-    while True:
-        try:
-            await asyncio.sleep(_SATURATION_INTERVAL)
-
-            # AC1/AC2: Redis pool
-            stats = get_pool_stats()
-            REDIS_POOL_CONNECTIONS_USED.set(stats["used"])
-            REDIS_POOL_CONNECTIONS_MAX.set(stats["max"])
-
-            # AC3: httpx pool max connections per source (configured limits)
-            HTTPX_POOL_CONNECTIONS_USED.labels(source="pncp").set(PNCP_BULKHEAD_CONCURRENCY + 2)
-            HTTPX_POOL_CONNECTIONS_USED.labels(source="pcp").set(PCP_BULKHEAD_CONCURRENCY + 2)
-            HTTPX_POOL_CONNECTIONS_USED.labels(source="comprasgov").set(COMPRASGOV_BULKHEAD_CONCURRENCY + 2)
-
-            # AC4: Active trackers
-            TRACKER_ACTIVE_COUNT.set(get_active_tracker_count())
-
-            # AC5: Background results in memory
-            BACKGROUND_RESULTS_COUNT.set(get_background_results_count())
-
-        except asyncio.CancelledError:
-            break
-        except Exception as e:
-            logger.warning("HARDEN-024: Saturation metrics error: %s", e)
-
-
-@asynccontextmanager
-async def lifespan(app_instance: FastAPI):
-    """Application lifespan context manager.
-
-    Handles startup and shutdown events for the FastAPI application.
-    Replaces deprecated @app.on_event("startup") and @app.on_event("shutdown").
-
-    Startup:
-        - Validate environment variables (AC12-AC14)
-        - Initialize Redis pool (STORY-217)
-        - Log registered routes for diagnostics
-
-    Shutdown:
-        - Close Redis pool gracefully
-    """
-    # === STARTUP ===
-    # GTM-RESILIENCE-F02: OpenTelemetry tracing (init moved before app creation, CRIT-023)
-    from telemetry import shutdown_tracing
-
-    # AC12-AC14: Validate environment variables
-    validate_env_vars()
-
-    # DEBT-008 SYS-016: Log memory usage at startup for OOM baseline
-    from health import get_memory_usage, update_memory_metrics
-    mem = get_memory_usage()
-    logger.info(
-        "DEBT-008: Startup memory — RSS=%.1fMB, VMS=%.1fMB, Peak=%.1fMB",
-        mem["rss_mb"], mem["vms_mb"], mem["peak_rss_mb"],
-    )
-    update_memory_metrics()
-
-    # STORY-290-patch: Configure thread pool for asyncio.to_thread() calls
-    # Default pool = min(32, cpu+4) ≈ 5-6 on Railway 1-2 vCPU.
-    # Each search uses ~5-8 to_thread calls (auth, quota, cache, excel, upload).
-    # 20 workers supports ~3 concurrent searches without thread starvation.
-    import concurrent.futures
-    _thread_pool = concurrent.futures.ThreadPoolExecutor(
-        max_workers=20,
-        thread_name_prefix="smartlic-io-",
-    )
-    asyncio.get_event_loop().set_default_executor(_thread_pool)
-    logger.info("STORY-290-patch: thread pool executor configured (max_workers=20)")
-
-    # STORY-217: Initialize Redis pool
-    await startup_redis()
-
-    # STORY-296: Initialize per-source bulkheads
-    from bulkhead import initialize_bulkheads
-    initialize_bulkheads()
-
-    # GTM-RESILIENCE-F01: Initialize ARQ job queue pool
-    from job_queue import get_arq_pool
-    await get_arq_pool()
-
-    # DEBT-014 SYS-006: Register all background tasks with TaskRegistry
-    from task_registry import task_registry
-    from cron_jobs import (
-        start_cache_cleanup_task, start_session_cleanup_task,
-        start_cache_refresh_task, warmup_top_params, start_warmup_task,
-        start_trial_sequence_task, start_reconciliation_task,
-        start_health_canary_task, start_revenue_share_task,
-        start_sector_stats_task, start_support_sla_task,
-        start_daily_volume_task, start_results_cleanup_task,
-        start_stripe_events_purge_task, start_plan_reconciliation_task,
-    )
-    from progress import _periodic_tracker_cleanup
-
-    task_registry.register("cache_cleanup", start_cache_cleanup_task)
-    task_registry.register("session_cleanup", start_session_cleanup_task)
-    task_registry.register("cache_refresh", start_cache_refresh_task)
-    task_registry.register("trial_sequence", start_trial_sequence_task)
-    task_registry.register("reconciliation", start_reconciliation_task)
-    task_registry.register("health_canary", start_health_canary_task)
-    task_registry.register("revenue_share", start_revenue_share_task)
-    task_registry.register("sector_stats", start_sector_stats_task)
-    task_registry.register("support_sla", start_support_sla_task)
-    task_registry.register("daily_volume", start_daily_volume_task)
-    task_registry.register("results_cleanup", start_results_cleanup_task)
-    task_registry.register("stripe_purge", start_stripe_events_purge_task)
-    task_registry.register("plan_reconciliation", start_plan_reconciliation_task)
-    task_registry.register("tracker_cleanup", _periodic_tracker_cleanup, is_coroutine=True)
-    task_registry.register("saturation_metrics", _periodic_saturation_metrics, is_coroutine=True)
-    task_registry.register("warmup", start_warmup_task)
-
-    await task_registry.start_all()
-
-    # Update registry metrics
-    try:
-        from metrics import TASK_REGISTRY_TOTAL, TASK_REGISTRY_HEALTHY
-        health = task_registry.get_health()
-        TASK_REGISTRY_TOTAL.set(health["total"])
-        TASK_REGISTRY_HEALTHY.set(health["healthy"])
-    except Exception:
-        pass
-
-    # CRIT-001 AC4: Schema health check for search_results_cache
-    await _check_cache_schema()
-
-    # GTM-CRIT-005 AC5: Initialize circuit breakers from Redis
-    from pncp_client import get_circuit_breaker
-    pncp_cb = get_circuit_breaker("pncp")
-    pcp_cb = get_circuit_breaker("pcp")
-    comprasgov_cb = get_circuit_breaker("comprasgov")
-    await pncp_cb.initialize()
-    await pcp_cb.initialize()
-    await comprasgov_cb.initialize()
-    logger.info("GTM-CRIT-005: Circuit breakers initialized from Redis (pncp, pcp, comprasgov)")
-
-    # CRIT-004: Validate schema contract for critical tables
-    # SLA-002: NEVER crash on schema validation — degraded service > no service
-    from schema_contract import validate_schema_contract
-    try:
-        from supabase_client import get_supabase
-        db = get_supabase()
-        passed, missing = validate_schema_contract(db)
-        if not passed:
-            logger.critical(
-                f"SCHEMA CONTRACT VIOLATED: missing {missing}. "
-                f"Run migrations before deploying. SERVICE DEGRADED but staying alive."
-            )
-            # SLA-002: Do NOT raise SystemExit — a degraded service that responds
-            # is infinitely better than a crashed service showing Railway 404.
-        else:
-            logger.info("CRIT-004: Schema contract validated — 0 missing columns")
-    except Exception as e:
-        logger.warning(f"CRIT-004: Schema validation could not run ({e}) — proceeding with caution")
-
-    # CRIT-003 AC16-AC18: Recover stale searches from previous server instance
-    from search_state_manager import recover_stale_searches
-    await recover_stale_searches(max_age_minutes=10)
-
-    # HOTFIX STORY-183: Diagnostic route logging
-    _log_registered_routes(app_instance)
-
-    # CRIT-001 AC4: Probe Supabase connectivity before accepting traffic
-    # SLA-002: NEVER crash on transient Supabase issues — log and continue
-    try:
-        from supabase_client import get_supabase
-        db = get_supabase()
-        db.table("profiles").select("id").limit(1).execute()
-        logger.info("STARTUP GATE: Supabase connectivity confirmed")
-    except Exception as e:
-        # SLA-002: Supabase being temporarily down during deploy/restart is NORMAL.
-        # Crashing here causes Railway to cycle containers, making the outage WORSE.
-        # The service will retry Supabase on each actual request.
-        logger.critical(
-            f"STARTUP GATE: Supabase unreachable — {e}. "
-            f"SERVICE DEGRADED but staying alive. Will retry on requests."
-        )
-
-    # CRIT-001 AC5: Redis connectivity check (non-blocking)
-    if os.getenv("REDIS_URL"):
-        from redis_pool import is_redis_available
-        if await is_redis_available():
-            logger.info("STARTUP GATE: Redis connectivity confirmed")
-        else:
-            logger.warning("STARTUP GATE: Redis configured but unavailable — proceeding without Redis")
-
-    # SLA-002: Log startup gate summary (Supabase may have failed but we continue)
-    _redis_status = "not configured"
-    if os.getenv("REDIS_URL"):
-        _redis_status = "OK" if await is_redis_available() else "unavailable"
-    logger.info("STARTUP GATE: Redis %s — setting ready=true", _redis_status)
-
-    # CRIT-010 AC4+AC5: Mark application as ready for traffic
-    global _startup_time
-    _startup_time = time.monotonic()
-    # GTM-ARCH-002 AC7: Post-deploy warmup — enqueue top 10 popular params
-    try:
-        warmup_result = await warmup_top_params()
-        logger.info(f"GTM-ARCH-002: Post-deploy warmup complete: {warmup_result}")
-    except Exception as e:
-        logger.warning(f"GTM-ARCH-002: Post-deploy warmup failed (non-fatal): {e}")
-
-    logger.info("APPLICATION READY — all routes registered, accepting traffic")
-
-    # CRIT-010 AC7: SIGTERM handler for graceful shutdown logging
-    def _sigterm_handler(signum, frame):
-        logger.info("SIGTERM received — starting graceful shutdown")
-
-    signal.signal(signal.SIGTERM, _sigterm_handler)
-
-    yield
-
-    # === SHUTDOWN ===
-    # HARDEN-022: Graceful shutdown with task drain
-    logger.info("HARDEN-022: Graceful shutdown initiated")
-
-    # CRIT-002 AC15: Mark in-flight sessions as timed_out on shutdown
-    await _mark_inflight_sessions_timed_out()
-
-    # HARDEN-022 AC2+AC3: Cancel and drain active background search tasks
-    from routes.search import _active_background_tasks
-    if _active_background_tasks:
-        bg_count = len(_active_background_tasks)
-        logger.info("HARDEN-022: Cancelling %d active background tasks", bg_count)
-        for sid, task in _active_background_tasks.items():
-            if not task.done():
-                task.cancel()
-        # AC3: Gather with 10s timeout — don't block shutdown indefinitely
-        try:
-            await asyncio.wait_for(
-                asyncio.gather(*_active_background_tasks.values(), return_exceptions=True),
-                timeout=10.0,
-            )
-            logger.info("HARDEN-022: All %d background tasks drained", bg_count)
-        except asyncio.TimeoutError:
-            logger.warning("HARDEN-022: Background task drain timed out after 10s")
-        _active_background_tasks.clear()
-    else:
-        logger.info("HARDEN-022: No active background tasks to drain")
-
-    # DEBT-014 SYS-006: Stop all registered tasks via TaskRegistry
-    # Replaces ad-hoc _cron_tasks list — now includes stripe_purge + plan_reconciliation
-    from task_registry import task_registry
-    stop_results = await task_registry.stop_all(timeout=10.0)
-    logger.info("HARDEN-022: TaskRegistry stopped %d tasks: %s",
-                len(stop_results), {k: v for k, v in stop_results.items() if v != "cancelled"})
-
-    # GTM-RESILIENCE-F01: Close ARQ pool
-    from job_queue import close_arq_pool
-    await close_arq_pool()
-
-    # GTM-RESILIENCE-F02: Flush and shut down tracing
-    shutdown_tracing()
-
-    # STORY-290-patch: Shutdown thread pool executor
-    _thread_pool.shutdown(wait=False)
-    logger.info("STORY-290-patch: thread pool executor shut down")
-
-    # HARDEN-022 AC4: Close all Redis pools (main + SSE + sync)
-    await shutdown_redis()
-
-    logger.info("HARDEN-022: Graceful shutdown complete")
-
-
-# CRIT-023: Initialize TracerProvider + httpx instrumentation before app creation.
-# FastAPI instrumentation is done AFTER middleware registration (see below).
+# OTel tracing — before app creation
 from telemetry import init_tracing as _init_tracing
 _init_tracing()
 
-# Initialize FastAPI application
+# Lifespan
+from startup.lifespan import lifespan
+
+# Create app
 app = FastAPI(
     title="SmartLic API",
-    description=(
-        "API para busca e análise de licitações em fontes oficiais. "
-        "Permite filtrar oportunidades por estado, valor e setor, "
-        "gerando relatórios Excel e avaliação estratégica via IA."
-    ),
+    description="API para busca e análise de licitações em fontes oficiais.",
     version=APP_VERSION,
     docs_url=None if _is_production else "/docs",
     redoc_url=None if _is_production else "/redoc",
     openapi_url=None if _is_production else "/openapi.json",
-    lifespan=lifespan,  # STORY-221: Lifespan context manager for startup/shutdown
+    lifespan=lifespan,
 )
 
-# CORS Configuration
+# CORS
 cors_origins = get_cors_origins()
 logger.info(f"CORS configured for origins: {cors_origins}")
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
@@ -691,97 +105,65 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With", "X-Request-ID"],
 )
-
-# STORY-202 SYS-M01: Add correlation ID middleware for distributed tracing
 app.add_middleware(CorrelationIDMiddleware)
-
-# STORY-210 AC10: Add security headers to all responses
 app.add_middleware(SecurityHeadersMiddleware)
-
-# STORY-226 AC14: Add deprecation headers to legacy (non-versioned) routes
 app.add_middleware(DeprecationMiddleware)
-
-# STORY-311 AC10: Rate limiting on public endpoints (/health, /plans)
 app.add_middleware(RateLimitMiddleware)
 
-# STORY-299 AC2: Track HTTP responses for API availability SLI
+
+# HTTP response counter middleware
 @app.middleware("http")
 async def http_response_counter(request, call_next):
-    """Count HTTP responses by status class for SLO API availability metric."""
+    """STORY-299 AC2: Track HTTP responses for SLO availability metric."""
     response = await call_next(request)
-    # Skip /metrics and /health to avoid inflating counts
     path = request.url.path
     if not path.startswith("/metrics") and not path.startswith("/health"):
         try:
             from metrics import HTTP_RESPONSES_TOTAL
             status_class = f"{response.status_code // 100}xx"
-            HTTP_RESPONSES_TOTAL.labels(
-                status_class=status_class,
-                method=request.method,
-            ).inc()
+            HTTP_RESPONSES_TOTAL.labels(status_class=status_class, method=request.method).inc()
         except Exception:
             pass
     return response
 
-# CRIT-023: Instrument FastAPI AFTER all add_middleware() calls.
-# Starlette middleware stack is LIFO — last added = outermost.
-# This makes OTel ASGI middleware the outermost, so the span context
-# is active for all inner middleware (including CorrelationIDMiddleware logs).
+
+# OTel instrumentation — after all middleware
 from telemetry import instrument_fastapi_app
 instrument_fastapi_app(app)
 
 # ============================================================================
-# SYS-M08: API Versioning with /v1/ prefix
+# Router registration
 # ============================================================================
+# Health core at root (not /v1/) for container probes
+app.include_router(health_core_router)
 
-# Mount all routers under /v1/ prefix for versioning
-app.include_router(admin_router, prefix="/v1")
-app.include_router(subscriptions_router, prefix="/v1")
-app.include_router(features_router, prefix="/v1")
-app.include_router(messages_router, prefix="/v1")
-app.include_router(analytics_router, prefix="/v1")
-app.include_router(oauth_router, prefix="/v1")  # STORY-180: Google OAuth routes
-app.include_router(export_sheets_router, prefix="/v1")  # STORY-180: Google Sheets Export routes
-app.include_router(stripe_webhook_router, prefix="/v1")
-# STORY-202: Decomposed routers
-app.include_router(search_router, prefix="/v1")
-app.include_router(user_router, prefix="/v1")
-app.include_router(billing_router, prefix="/v1")
-app.include_router(sessions_router, prefix="/v1")
-app.include_router(plans_router, prefix="/v1")  # STORY-203 CROSS-M01
-app.include_router(emails_router, prefix="/v1")  # STORY-225
-app.include_router(pipeline_router, prefix="/v1")  # STORY-250: Pipeline
-app.include_router(onboarding_router, prefix="/v1")  # GTM-004: First analysis
-app.include_router(auth_email_router, prefix="/v1")  # GTM-FIX-009: Email confirmation recovery
-app.include_router(cache_health_router, prefix="/v1")  # UX-303: Cache health
-app.include_router(feedback_router, prefix="/v1")  # GTM-RESILIENCE-D05: User feedback loop
-app.include_router(admin_trace_router)  # CRIT-004 AC21: Search trace (already has /v1/admin prefix)
-app.include_router(auth_check_router, prefix="/v1")  # STORY-258: Email/phone check
-app.include_router(bid_analysis_router, prefix="/v1")  # STORY-259: Deep bid analysis
-app.include_router(slo_router)  # STORY-299: SLO dashboard (already has /v1/admin prefix)
-app.include_router(alerts_router, prefix="/v1")  # STORY-301: Email Alert System
-app.include_router(trial_emails_router, prefix="/v1")  # STORY-310: Trial email sequence
-app.include_router(mfa_router, prefix="/v1")  # STORY-317: MFA TOTP + recovery codes
-app.include_router(org_router, prefix="/v1")  # STORY-322: Organizations
-app.include_router(partners_router, prefix="/v1")  # STORY-323: Revenue Share
-app.include_router(sectors_public_router, prefix="/v1")  # STORY-324: SEO Landing Pages
-app.include_router(reports_router, prefix="/v1")  # STORY-325: PDF Diagnostico
-app.include_router(blog_stats_router, prefix="/v1")  # MKT-002: Blog stats for programmatic SEO
-app.include_router(metrics_api_router, prefix="/v1")  # STORY-351: Discard rate
+# All API routers at /v1/
+_v1_routers = [
+    admin_router, subscriptions_router, features_router, messages_router,
+    analytics_router, oauth_router, export_sheets_router, stripe_webhook_router,
+    search_router, user_router, billing_router, sessions_router, plans_router,
+    emails_router, pipeline_router, onboarding_router, auth_email_router,
+    cache_health_router, feedback_router, auth_check_router, bid_analysis_router,
+    alerts_router, trial_emails_router, mfa_router, org_router, partners_router,
+    sectors_public_router, reports_router, blog_stats_router, metrics_api_router,
+]
+for r in _v1_routers:
+    app.include_router(r, prefix="/v1")
 
-# ============================================================================
-# TD-004: Legacy routes REMOVED — only /v1/ prefix remains.
-# Exceptions: /health, /health/live, /health/ready, /docs, /redoc, /metrics, webhooks
-# ============================================================================
-# Stripe webhook stays at root (Stripe callback URL already configured)
+# Self-prefixed routers
+app.include_router(admin_trace_router)
+app.include_router(slo_router)
+
+# Stripe webhook at root (callback URL already configured)
 app.include_router(stripe_webhook_router)
 
-# TD-004 AC4: Deprecation metric — tracks calls to removed legacy paths
+# TD-004: Legacy route tracking
 _ALLOWED_ROOT_PATHS = frozenset({
     "/", "/health", "/health/live", "/health/ready", "/sources/health",
     "/docs", "/redoc", "/openapi.json", "/metrics",
     "/debug/pncp-test", "/v1/setores",
 })
+
 
 @app.middleware("http")
 async def track_legacy_routes(request: Request, call_next):
@@ -795,7 +177,6 @@ async def track_legacy_routes(request: Request, call_next):
     ):
         try:
             from metrics import LEGACY_ROUTE_CALLS
-            # Truncate path to first 2 segments to limit cardinality
             segments = path.strip("/").split("/")[:2]
             truncated = "/" + "/".join(segments)
             LEGACY_ROUTE_CALLS.labels(method=request.method, path=truncated).inc()
@@ -803,67 +184,45 @@ async def track_legacy_routes(request: Request, call_next):
             pass
     return await call_next(request)
 
+
 # ============================================================================
-# GTM-PROXY-001 AC9-AC11: Global exception handlers for error sanitization
+# Exception handlers
 # ============================================================================
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    """AC9: Return validation errors in Portuguese instead of raw Pydantic English."""
+    """AC9: Validation errors in Portuguese."""
     logger.warning(f"Validation error on {request.url.path}: {exc.errors()}")
-    return JSONResponse(
-        status_code=422,
-        content={"detail": "Dados inválidos. Verifique os campos e tente novamente."},
-    )
+    return JSONResponse(status_code=422, content={"detail": "Dados inválidos. Verifique os campos e tente novamente."})
 
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    """STORY-300 AC5-AC7: Catch-all that NEVER returns stack traces in production.
-
-    AC5: Generic error message for all unhandled exceptions
-    AC6: correlation_id included for support tracing
-    AC7: Sentry captures the full exception with stack trace
-    """
+    """STORY-300 AC5-AC7: Catch-all — NEVER returns stack traces."""
+    import sentry_sdk
     from middleware import correlation_id_var, request_id_var
 
     error_msg = str(exc).lower()
     corr_id = correlation_id_var.get("-")
     req_id = request_id_var.get("-")
 
-    # AC11 (GTM-PROXY-001): Supabase RLS policy errors
     if "rls" in error_msg or "row-level security" in error_msg or ("policy" in error_msg and "permission" in error_msg):
         logger.error(f"RLS error on {request.url.path}: {exc}")
         sentry_sdk.capture_exception(exc)
-        return JSONResponse(
-            status_code=403,
-            content={"detail": "Erro de permissão. Faça login novamente.", "correlation_id": corr_id},
-        )
+        return JSONResponse(status_code=403, content={"detail": "Erro de permissão. Faça login novamente.", "correlation_id": corr_id})
 
-    # AC10 (GTM-PROXY-001): Stripe errors
     if "stripe" in error_msg or "stripeerror" in type(exc).__name__.lower():
         logger.error(f"Unhandled Stripe error on {request.url.path}: {exc}")
         sentry_sdk.capture_exception(exc)
-        return JSONResponse(
-            status_code=500,
-            content={"detail": "Erro ao processar pagamento. Tente novamente.", "correlation_id": corr_id},
-        )
+        return JSONResponse(status_code=500, content={"detail": "Erro ao processar pagamento. Tente novamente.", "correlation_id": corr_id})
 
-    # AC5: NEVER return stack traces — log + Sentry get the full exception
     logger.exception(f"Unhandled error on {request.url.path}")
-    sentry_sdk.capture_exception(exc)  # AC7: Sentry gets full stack trace + context
-    return JSONResponse(
-        status_code=500,
-        content={
-            "detail": "Erro interno do servidor. Tente novamente.",
-            "correlation_id": corr_id,
-            "request_id": req_id,
-        },
-    )
+    sentry_sdk.capture_exception(exc)
+    return JSONResponse(status_code=500, content={"detail": "Erro interno do servidor. Tente novamente.", "correlation_id": corr_id, "request_id": req_id})
 
 
 # ============================================================================
-# GTM-RESILIENCE-E03: Prometheus /metrics endpoint
+# Prometheus metrics endpoint
 # ============================================================================
 from metrics import get_metrics_app
 
@@ -873,448 +232,27 @@ if _metrics_app:
 
     @app.middleware("http")
     async def metrics_auth(request, call_next):
-        """Protect /metrics endpoint with Bearer token authentication."""
+        """Protect /metrics with Bearer token."""
         if request.url.path == "/metrics" or request.url.path.startswith("/metrics/"):
             if METRICS_TOKEN:
                 token = request.headers.get("Authorization", "")
-                expected = f"Bearer {METRICS_TOKEN}"
-                if token != expected:
-                    return StarletteJSONResponse(
-                        status_code=401, content={"detail": "Unauthorized"}
-                    )
+                if token != f"Bearer {METRICS_TOKEN}":
+                    return StarletteJSONResponse(status_code=401, content={"detail": "Unauthorized"})
         return await call_next(request)
 
     app.mount("/metrics", _metrics_app)
     logger.info("Prometheus /metrics endpoint mounted (auth=%s)", "enabled" if METRICS_TOKEN else "open")
-else:
-    logger.info("Prometheus metrics disabled or prometheus_client not installed")
 
-logger.info(
-    "FastAPI application initialized — PORT=%s",
-    os.getenv("PORT", "8000"),
-)
-
-# Log feature flag states
-logger.info(
-    "Feature Flags — ENABLE_NEW_PRICING=%s",
-    ENABLE_NEW_PRICING,
-)
-
-
-# ============================================================================
-# Core utility endpoints (stay in main.py)
-# ============================================================================
+logger.info("FastAPI application initialized — PORT=%s", os.getenv("PORT", "8000"))
 
 @app.get("/", response_model=RootResponse)
 async def root():
-    """
-    API root endpoint - provides navigation to documentation.
-
-    SYS-M08: Informs clients about API versioning.
-    """
-    return {
-        "name": "SmartLic API",
-        "version": APP_VERSION,
-        "api_version": "v1",  # SYS-M08: Current API version
-        "description": "API para busca e análise de licitações em fontes oficiais",
-        "endpoints": {
-            "docs": "/docs",
-            "redoc": "/redoc",
-            "health": "/health",
-            "openapi": "/openapi.json",
-            "v1_api": "/v1",  # SYS-M08: Versioned API endpoint
-        },
-        "versioning": {  # SYS-M08: API versioning information
-            "current": "v1",
-            "supported": ["v1"],
-            "deprecated": [],
-            "note": "All endpoints at /v1/<endpoint>. Legacy root paths removed (TD-004).",
-        },
-        "status": "operational",
-    }
-
-
-@app.get("/health/live")
-async def health_live():
-    """HARDEN-016 AC1: Pure liveness probe — process is alive, no dependency checks.
-
-    ALWAYS returns 200. Use this for container liveness checks where you only
-    need to know the process is running (not whether dependencies are reachable).
-    """
-    is_ready = _startup_time is not None
-    uptime = round(time.monotonic() - _startup_time, 3) if is_ready else 0.0
-    process_uptime = round(time.monotonic() - _process_start_time, 3)
-    return {
-        "live": True,
-        "ready": is_ready,
-        "uptime_seconds": uptime,
-        "process_uptime_seconds": process_uptime,
-    }
-
-
-# HARDEN-016 AC3: Individual dependency timeouts
-_READINESS_REDIS_TIMEOUT_S = 2.0
-_READINESS_SUPABASE_TIMEOUT_S = 3.0
-
-
-@app.get("/health/ready")
-async def health_ready(response: Response):
-    """HARDEN-016 AC2: Readiness probe — checks Redis + Supabase dependencies.
-
-    Returns 200 if ALL dependencies are reachable, 503 if ANY dependency is down.
-    AC3: Each check has an individual timeout (Redis 2s, Supabase 3s).
-    AC4: Response body includes per-check details (status, latency_ms, error).
-    AC6: Railway healthcheckPath points here.
-    """
-    checks: dict[str, dict] = {}
-    all_ok = True
-
-    # Redis check (AC3: 2s timeout)
-    redis_start = time.monotonic()
-    try:
-        from redis_pool import get_redis_pool
-        redis = await asyncio.wait_for(
-            get_redis_pool(),
-            timeout=_READINESS_REDIS_TIMEOUT_S,
-        )
-        if redis:
-            await asyncio.wait_for(
-                redis.ping(),
-                timeout=_READINESS_REDIS_TIMEOUT_S,
-            )
-            checks["redis"] = {
-                "status": "up",
-                "latency_ms": round((time.monotonic() - redis_start) * 1000),
-            }
-        else:
-            checks["redis"] = {"status": "down", "error": "pool unavailable"}
-            all_ok = False
-    except asyncio.TimeoutError:
-        checks["redis"] = {
-            "status": "down",
-            "error": "timeout",
-            "latency_ms": round((time.monotonic() - redis_start) * 1000),
-        }
-        all_ok = False
-    except Exception as e:
-        checks["redis"] = {
-            "status": "down",
-            "error": str(e)[:100],
-            "latency_ms": round((time.monotonic() - redis_start) * 1000),
-        }
-        all_ok = False
-
-    # Supabase check (AC3: 3s timeout)
-    sb_start = time.monotonic()
-    try:
-        from supabase_client import get_supabase, sb_execute
-        sb = get_supabase()
-        await asyncio.wait_for(
-            sb_execute(sb.table("profiles").select("id").limit(1)),
-            timeout=_READINESS_SUPABASE_TIMEOUT_S,
-        )
-        checks["supabase"] = {
-            "status": "up",
-            "latency_ms": round((time.monotonic() - sb_start) * 1000),
-        }
-    except asyncio.TimeoutError:
-        checks["supabase"] = {
-            "status": "down",
-            "error": "timeout",
-            "latency_ms": round((time.monotonic() - sb_start) * 1000),
-        }
-        all_ok = False
-    except Exception as e:
-        checks["supabase"] = {
-            "status": "down",
-            "error": str(e)[:100],
-            "latency_ms": round((time.monotonic() - sb_start) * 1000),
-        }
-        all_ok = False
-
-    is_ready = _startup_time is not None and all_ok
-    uptime = round(time.monotonic() - _startup_time, 3) if _startup_time else 0.0
-
-    if not is_ready:
-        response.status_code = 503
-
-    return {
-        "ready": is_ready,
-        "checks": checks,
-        "uptime_seconds": uptime,
-    }
-
-
-@app.get("/health", response_model=HealthResponse)
-async def health():
-    """
-    Health check endpoint for monitoring and load balancers.
-
-    Provides lightweight service health verification including dependency
-    checks for Supabase, OpenAI, and Redis connectivity.
-    """
-    from datetime import datetime, timezone
-
-    dependencies = {
-        "supabase": "unconfigured",
-        "openai": "unconfigured",
-        "redis": "unconfigured",
-    }
-
-    # Check Supabase configuration
-    supabase_url = os.getenv("SUPABASE_URL")
-    supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-    if supabase_url and supabase_key:
-        try:
-            from supabase_client import get_supabase
-            get_supabase()
-            dependencies["supabase"] = "healthy"
-        except Exception as e:
-            dependencies["supabase"] = f"error: {str(e)[:50]}"
-    else:
-        dependencies["supabase"] = "missing_env_vars"
-
-    # Check OpenAI configuration
-    if os.getenv("OPENAI_API_KEY"):
-        dependencies["openai"] = "configured"
-    else:
-        dependencies["openai"] = "missing_api_key"
-
-    # Check Redis connectivity (optional dependency)
-    # SYS-L06: Add Redis health check to health endpoint
-    # B-04 AC8: Add redis_connected, redis_latency_ms, redis_memory_used_mb
-    redis_url = os.getenv("REDIS_URL")
-    redis_metrics = None
-    if redis_url:
-        try:
-            from redis_pool import get_redis_pool, is_redis_available
-            import time as _time
-            redis_available = await is_redis_available()
-            dependencies["redis"] = "healthy" if redis_available else "unavailable"
-
-            if redis_available:
-                pool = await get_redis_pool()
-                # Measure ping latency
-                t0 = _time.monotonic()
-                await pool.ping()
-                latency_ms = round((_time.monotonic() - t0) * 1000, 2)
-                # Get memory usage
-                memory_mb = None
-                try:
-                    info = await pool.info("memory")
-                    used_bytes = info.get("used_memory", 0)
-                    memory_mb = round(used_bytes / (1024 * 1024), 2)
-                except Exception:
-                    pass
-                redis_metrics = {
-                    "connected": True,
-                    "latency_ms": latency_ms,
-                    "memory_used_mb": memory_mb,
-                }
-            else:
-                redis_metrics = {"connected": False, "latency_ms": None, "memory_used_mb": None}
-        except Exception as e:
-            dependencies["redis"] = f"error: {str(e)[:50]}"
-            redis_metrics = {"connected": False, "latency_ms": None, "memory_used_mb": None}
-    else:
-        # Redis is optional - not configured is not an error
-        dependencies["redis"] = "not_configured"
-
-    # AC27: Add per-source health status from SourceHealthRegistry
-    from source_config.sources import source_health_registry
-    from pncp_client import get_circuit_breaker
-
-    sources = {}
-    source_names = ["PNCP", "Portal Transparência", "Licitar Digital", "ComprasGov", "BLL", "BNC"]
-    for source_name in source_names:
-        sources[source_name] = source_health_registry.get_status(source_name)
-
-    # B-06 AC9: Circuit breaker shared state (replaces simple string status)
-    # STORY-305 AC11: Include ComprasGov CB in health endpoint
-    pncp_cb = get_circuit_breaker("pncp")
-    pcp_cb = get_circuit_breaker("pcp")
-    comprasgov_cb = get_circuit_breaker("comprasgov")
-    if hasattr(pncp_cb, "get_state"):
-        sources["PNCP_circuit_breaker"] = await pncp_cb.get_state()
-        sources["PCP_circuit_breaker"] = await pcp_cb.get_state()
-        sources["COMPRASGOV_circuit_breaker"] = await comprasgov_cb.get_state()
-    else:
-        sources["PNCP_circuit_breaker"] = {
-            "status": "degraded" if pncp_cb.is_degraded else "healthy",
-            "failures": pncp_cb.consecutive_failures,
-            "degraded": pncp_cb.is_degraded,
-            "backend": "local",
-        }
-        sources["PCP_circuit_breaker"] = {
-            "status": "degraded" if pcp_cb.is_degraded else "healthy",
-            "failures": pcp_cb.consecutive_failures,
-            "degraded": pcp_cb.is_degraded,
-            "backend": "local",
-        }
-        sources["COMPRASGOV_circuit_breaker"] = {
-            "status": "degraded" if comprasgov_cb.is_degraded else "healthy",
-            "failures": comprasgov_cb.consecutive_failures,
-            "degraded": comprasgov_cb.is_degraded,
-            "backend": "local",
-        }
-
-    # B-06 AC10: Rate limiter metrics
-    from rate_limiter import pncp_rate_limiter, pcp_rate_limiter
-    sources["rate_limiter"] = {
-        "pncp": await pncp_rate_limiter.get_stats(),
-        "pcp": await pcp_rate_limiter.get_stats(),
-    }
-
-    # Determine overall health status
-    # Supabase is critical, Redis is optional
-    supabase_ok = not dependencies["supabase"].startswith("error")
-    redis_degraded = dependencies["redis"].startswith("error") or dependencies["redis"] == "unavailable"
-
-    if not supabase_ok:
-        status = "unhealthy"
-    elif redis_degraded and redis_url:  # Only degrade if Redis is configured but failing
-        status = "degraded"
-    else:
-        status = "healthy"
-
-    # B-04 AC8: Include redis_metrics in dependencies
-    if redis_metrics:
-        dependencies["redis_metrics"] = redis_metrics
-
-    # GTM-RESILIENCE-F01 AC4: ARQ job queue health
-    try:
-        from job_queue import get_queue_health
-        dependencies["queue"] = await get_queue_health()
-    except Exception:
-        dependencies["queue"] = "unavailable"
-
-    # F-02 AC21: Report tracing status
-    from telemetry import is_tracing_enabled
-    dependencies["tracing"] = "enabled" if is_tracing_enabled() else "disabled"
-
-    # CRIT-010 AC5: Startup readiness signal
-    is_ready = _startup_time is not None
-    uptime = round(time.monotonic() - _startup_time, 3) if is_ready else 0.0
-
-    # STORY-296 AC6: Per-source bulkhead status
-    from bulkhead import get_all_bulkheads
-    bulkhead_status = {}
-    for bh_name, bh in get_all_bulkheads().items():
-        bulkhead_status[bh_name] = bh.to_dict()
-
-    response_data = {
-        "status": status,
-        "ready": is_ready,
-        "uptime_seconds": uptime,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "version": app.version,
-        "dependencies": dependencies,
-        "sources": sources,
-        "bulkheads": bulkhead_status,
-    }
-
-    # Always return 200 for Railway health checks — report status in body
-    # Returning 503 prevents Railway from starting the container entirely,
-    # which is worse than running with degraded dependencies.
-    return response_data
-
-
-@app.get("/sources/health", response_model=SourcesHealthResponse)
-async def sources_health():
-    """
-    Health check for all configured procurement data sources.
-
-    Returns status, response time, and priority for each source.
-    """
-    from datetime import datetime, timezone
-
-    enable_multi_source = os.getenv("ENABLE_MULTI_SOURCE", "false").lower() == "true"
-    from source_config.sources import get_source_config
-    source_config = get_source_config()
-
-    sources_info = []
-
-    if source_config.pncp.enabled:
-        sources_info.append({
-            "code": "PNCP",
-            "name": source_config.pncp.name,
-            "enabled": True,
-            "priority": source_config.pncp.priority,
-        })
-
-    if source_config.compras_gov.enabled:
-        from config import COMPRASGOV_ENABLED as _cg_enabled
-        sources_info.append({
-            "code": "COMPRAS_GOV",
-            "name": source_config.compras_gov.name,
-            "enabled": _cg_enabled,
-            "priority": source_config.compras_gov.priority,
-        })
-
-    if source_config.portal.enabled:
-        sources_info.append({
-            "code": "PORTAL_COMPRAS",
-            "name": source_config.portal.name,
-            "enabled": True,
-            "priority": source_config.portal.priority,
-        })
-
-    if enable_multi_source:
-        from consolidation import ConsolidationService
-        from clients.compras_gov_client import ComprasGovAdapter
-        from clients.portal_compras_client import PortalComprasAdapter
-
-        adapters = {}
-        if source_config.compras_gov.enabled:
-            from config import COMPRASGOV_ENABLED as _cg_on
-            if _cg_on:
-                adapters["COMPRAS_GOV"] = ComprasGovAdapter(timeout=source_config.compras_gov.timeout)
-        # GTM-FIX-024 T2: PCP v2 API is public — no API key required
-        # CRIT-047 AC8: Check health registry before including PCP
-        if source_config.portal.enabled:
-            from source_config.sources import source_health_registry as _hr
-            if _hr.is_available("PORTAL_COMPRAS"):
-                adapters["PORTAL_COMPRAS"] = PortalComprasAdapter(
-                    timeout=source_config.portal.timeout,
-                )
-            else:
-                logger.info("[HEALTH] PCP v2 source is DOWN — excluded from health check")
-
-        if adapters:
-            svc = ConsolidationService(adapters=adapters)
-            health_results = await svc.health_check_all()
-            await svc.close()
-
-            for info in sources_info:
-                code = info["code"]
-                if code in health_results:
-                    info["status"] = health_results[code]["status"]
-                    info["response_ms"] = health_results[code]["response_ms"]
-                elif code == "PNCP":
-                    info["status"] = "available"
-                    info["response_ms"] = 0
-                else:
-                    info["status"] = "unknown"
-                    info["response_ms"] = 0
-        else:
-            for info in sources_info:
-                info["status"] = "available" if info["code"] == "PNCP" else "unknown"
-                info["response_ms"] = 0
-    else:
-        for info in sources_info:
-            info["status"] = "available" if info["code"] == "PNCP" else "disabled"
-            info["response_ms"] = 0
-
-    total_enabled = len([s for s in sources_info if s["enabled"]])
-    total_available = len([s for s in sources_info if s.get("status") == "available"])
-
-    return {
-        "sources": sources_info,
-        "multi_source_enabled": enable_multi_source,
-        "total_enabled": total_enabled,
-        "total_available": total_available,
-        "checked_at": datetime.now(timezone.utc).isoformat(),
-    }
+    """API root — navigation and version info."""
+    return {"name": "SmartLic API", "version": APP_VERSION, "api_version": "v1",
+            "description": "API para busca e análise de licitações em fontes oficiais",
+            "endpoints": {"docs": "/docs", "redoc": "/redoc", "health": "/health", "openapi": "/openapi.json", "v1_api": "/v1"},
+            "versioning": {"current": "v1", "supported": ["v1"], "deprecated": [], "note": "All endpoints at /v1/<endpoint>. Legacy root paths removed (TD-004)."},
+            "status": "operational"}
 
 
 @app.get("/v1/setores", response_model=SetoresResponse)
@@ -1323,40 +261,38 @@ async def listar_setores():
     return {"setores": list_sectors()}
 
 
-# STORY-210 AC9: Protect debug endpoint with admin auth
+# Backward-compatible re-exports for test imports (DEBT-015)
+from startup.sentry import _before_send, scrub_pii, _fingerprint_transients, _traces_sampler  # noqa: F401
+from startup.lifespan import (  # noqa: F401
+    _check_cache_schema, _log_registered_routes, _mark_inflight_sessions_timed_out,
+    _periodic_saturation_metrics, _SATURATION_INTERVAL,
+)
+from startup.state import startup_time as _startup_time, process_start_time as _process_start_time  # noqa: F401
+from routes.health_core import _READINESS_REDIS_TIMEOUT_S, _READINESS_SUPABASE_TIMEOUT_S  # noqa: F401
+
 from admin import require_admin as _require_admin
 
 
 @app.get("/debug/pncp-test", response_model=DebugPNCPResponse)
 async def debug_pncp_test(admin: dict = Depends(_require_admin)):
-    """Diagnostic: test if PNCP API is reachable from this server. Admin only."""
+    """Diagnostic: test if PNCP API is reachable. Admin only."""
     import time as t
     from datetime import date, timedelta
 
     start = t.time()
     try:
+        import asyncio as _asyncio
         client = PNCPClient()
         hoje = date.today()
         tres_dias = hoje - timedelta(days=3)
-        response = client.fetch_page(
+        response = await _asyncio.to_thread(
+            client.fetch_page,
             data_inicial=tres_dias.strftime("%Y-%m-%d"),
             data_final=hoje.strftime("%Y-%m-%d"),
-            modalidade=6,
-            pagina=1,
-            tamanho=10,
+            modalidade=6, pagina=1, tamanho=10,
         )
         elapsed = int((t.time() - start) * 1000)
-        return {
-            "success": True,
-            "total_registros": response.get("totalRegistros", 0),
-            "items_returned": len(response.get("data", [])),
-            "elapsed_ms": elapsed,
-        }
+        return {"success": True, "total_registros": response.get("totalRegistros", 0), "items_returned": len(response.get("data", [])), "elapsed_ms": elapsed}
     except Exception as e:
         elapsed = int((t.time() - start) * 1000)
-        return {
-            "success": False,
-            "error": str(e),
-            "error_type": type(e).__name__,
-            "elapsed_ms": elapsed,
-        }
+        return {"success": False, "error": str(e), "error_type": type(e).__name__, "elapsed_ms": elapsed}

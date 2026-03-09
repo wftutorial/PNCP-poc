@@ -221,7 +221,7 @@ class TestPeriodicSaturationMetrics:
              patch.object(m.REDIS_POOL_CONNECTIONS_MAX, "set", side_effect=track_redis_max), \
              patch.object(m.TRACKER_ACTIVE_COUNT, "set", side_effect=track_tracker), \
              patch.object(m.BACKGROUND_RESULTS_COUNT, "set", side_effect=track_bg), \
-             patch("main._SATURATION_INTERVAL", 0.01), \
+             patch("startup.lifespan._SATURATION_INTERVAL", 0.01), \
              patch("redis_pool.get_pool_stats", return_value={"used": 3, "max": 50}), \
              patch("progress.get_active_tracker_count", return_value=2), \
              patch("routes.search.get_background_results_count", return_value=5):
@@ -244,7 +244,7 @@ class TestPeriodicSaturationMetrics:
         """AC6: Task continues on errors (doesn't crash)."""
         from main import _periodic_saturation_metrics
 
-        with patch("main._SATURATION_INTERVAL", 0.01), \
+        with patch("startup.lifespan._SATURATION_INTERVAL", 0.01), \
              patch("redis_pool.get_pool_stats", side_effect=RuntimeError("test")):
 
             task = asyncio.create_task(_periodic_saturation_metrics())
@@ -261,7 +261,7 @@ class TestPeriodicSaturationMetrics:
         """AC6: Task exits cleanly on cancellation."""
         from main import _periodic_saturation_metrics
 
-        with patch("main._SATURATION_INTERVAL", 0.01), \
+        with patch("startup.lifespan._SATURATION_INTERVAL", 0.01), \
              patch("redis_pool.get_pool_stats", return_value={"used": 0, "max": 0}), \
              patch("progress.get_active_tracker_count", return_value=0), \
              patch("routes.search.get_background_results_count", return_value=0):

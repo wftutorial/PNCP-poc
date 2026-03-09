@@ -15,7 +15,7 @@ class TestHealthLive:
     """AC1: /health/live returns 200 if process alive (no dependency checks)."""
 
     def test_live_returns_200_when_startup_complete(self):
-        with patch("main._startup_time", time.monotonic()):
+        with patch("startup.state.startup_time", time.monotonic()):
             from main import app
             client = TestClient(app, raise_server_exceptions=False)
             response = client.get("/health/live")
@@ -28,7 +28,7 @@ class TestHealthLive:
 
     def test_live_returns_200_before_startup(self):
         """Always 200 even if startup not complete."""
-        with patch("main._startup_time", None):
+        with patch("startup.state.startup_time", None):
             from main import app
             client = TestClient(app, raise_server_exceptions=False)
             response = client.get("/health/live")
@@ -40,7 +40,7 @@ class TestHealthLive:
 
     def test_live_responds_fast(self):
         """No I/O — should respond in <50ms."""
-        with patch("main._startup_time", time.monotonic()):
+        with patch("startup.state.startup_time", time.monotonic()):
             from main import app
             client = TestClient(app, raise_server_exceptions=False)
             start = time.monotonic()
@@ -100,7 +100,7 @@ class TestHealthReady:
     def test_ready_200_when_all_deps_ok(self):
         """AC2: Returns 200 when Redis + Supabase are both up."""
         with (
-            patch("main._startup_time", time.monotonic()),
+            patch("startup.state.startup_time", time.monotonic()),
             self._mock_redis_ok(),
         ):
             sb_exec_patch, sb_get_patch = self._mock_supabase_ok()
@@ -119,7 +119,7 @@ class TestHealthReady:
     def test_ready_503_when_redis_down(self):
         """AC2/AC7: Returns 503 when Redis is down."""
         with (
-            patch("main._startup_time", time.monotonic()),
+            patch("startup.state.startup_time", time.monotonic()),
             self._mock_redis_down(),
         ):
             sb_exec_patch, sb_get_patch = self._mock_supabase_ok()
@@ -138,7 +138,7 @@ class TestHealthReady:
     def test_ready_503_when_supabase_down(self):
         """AC2/AC7: Returns 503 when Supabase is down."""
         with (
-            patch("main._startup_time", time.monotonic()),
+            patch("startup.state.startup_time", time.monotonic()),
             self._mock_redis_ok(),
         ):
             sb_exec_patch, sb_get_patch = self._mock_supabase_down()
@@ -157,7 +157,7 @@ class TestHealthReady:
     def test_ready_503_when_both_deps_down(self):
         """AC7: Returns 503 when both Redis and Supabase are down."""
         with (
-            patch("main._startup_time", time.monotonic()),
+            patch("startup.state.startup_time", time.monotonic()),
             self._mock_redis_down(),
         ):
             sb_exec_patch, sb_get_patch = self._mock_supabase_down()
@@ -174,7 +174,7 @@ class TestHealthReady:
     def test_ready_503_before_startup(self):
         """AC7: Returns 503 when startup not complete (even if deps ok)."""
         with (
-            patch("main._startup_time", None),
+            patch("startup.state.startup_time", None),
             self._mock_redis_ok(),
         ):
             sb_exec_patch, sb_get_patch = self._mock_supabase_ok()
@@ -189,7 +189,7 @@ class TestHealthReady:
     def test_ready_503_when_redis_pool_none(self):
         """AC7: Returns 503 when Redis pool returns None."""
         with (
-            patch("main._startup_time", time.monotonic()),
+            patch("startup.state.startup_time", time.monotonic()),
             self._mock_redis_none(),
         ):
             sb_exec_patch, sb_get_patch = self._mock_supabase_ok()
@@ -213,12 +213,12 @@ class TestHealthReadyTimeouts:
 
     def test_redis_timeout_constant(self):
         """AC3: Redis timeout is 2s."""
-        from main import _READINESS_REDIS_TIMEOUT_S
+        from routes.health_core import _READINESS_REDIS_TIMEOUT_S
         assert _READINESS_REDIS_TIMEOUT_S == 2.0
 
     def test_supabase_timeout_constant(self):
         """AC3: Supabase timeout is 3s."""
-        from main import _READINESS_SUPABASE_TIMEOUT_S
+        from routes.health_core import _READINESS_SUPABASE_TIMEOUT_S
         assert _READINESS_SUPABASE_TIMEOUT_S == 3.0
 
     def test_ready_503_on_redis_timeout(self):
@@ -227,8 +227,8 @@ class TestHealthReadyTimeouts:
             await asyncio.sleep(10)
 
         with (
-            patch("main._startup_time", time.monotonic()),
-            patch("main._READINESS_REDIS_TIMEOUT_S", 0.01),
+            patch("startup.state.startup_time", time.monotonic()),
+            patch("routes.health_core._READINESS_REDIS_TIMEOUT_S", 0.01),
             patch("redis_pool.get_redis_pool", new_callable=AsyncMock, side_effect=slow_redis),
         ):
             mock_sb = MagicMock()
@@ -258,8 +258,8 @@ class TestHealthReadyTimeouts:
         mock_sb.table.return_value.select.return_value.limit.return_value = MagicMock()
 
         with (
-            patch("main._startup_time", time.monotonic()),
-            patch("main._READINESS_SUPABASE_TIMEOUT_S", 0.01),
+            patch("startup.state.startup_time", time.monotonic()),
+            patch("routes.health_core._READINESS_SUPABASE_TIMEOUT_S", 0.01),
             patch("redis_pool.get_redis_pool", new_callable=AsyncMock, return_value=mock_redis),
             patch("supabase_client.sb_execute", new_callable=AsyncMock, side_effect=slow_supabase),
             patch("supabase_client.get_supabase", return_value=mock_sb),
@@ -290,7 +290,7 @@ class TestHealthReadyResponseBody:
         mock_resp.data = [{"id": "x"}]
 
         with (
-            patch("main._startup_time", time.monotonic()),
+            patch("startup.state.startup_time", time.monotonic()),
             patch("redis_pool.get_redis_pool", new_callable=AsyncMock, return_value=mock_redis),
             patch("supabase_client.sb_execute", new_callable=AsyncMock, return_value=mock_resp),
             patch("supabase_client.get_supabase", return_value=mock_sb),

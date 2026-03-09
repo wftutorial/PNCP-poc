@@ -28,6 +28,16 @@ from pipeline.cache_manager import (
     set_empty_failure,
 )
 
+from pipeline.stages import (
+    stage_validate,
+    stage_prepare,
+    stage_execute,
+    stage_filter,
+    stage_enrich,
+    stage_generate,
+    stage_persist,
+)
+
 __all__ = [
     # helpers
     "_build_pncp_link",
@@ -48,4 +58,12 @@ __all__ = [
     "_build_degraded_detail",
     "apply_stale_cache",
     "set_empty_failure",
+    # stages
+    "stage_validate",
+    "stage_prepare",
+    "stage_execute",
+    "stage_filter",
+    "stage_enrich",
+    "stage_generate",
+    "stage_persist",
 ]

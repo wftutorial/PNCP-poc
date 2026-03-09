@@ -243,19 +243,10 @@ ERROR_CODES = {
 }
 
 
-class SearchErrorCode(str, Enum):
-    """CRIT-009 AC2: Standardized error codes for search endpoint.
-
-    Semantic error codes — orthogonal to HTTP status codes.
-    Used in structured error responses from POST /buscar.
-    """
-    SOURCE_UNAVAILABLE = "SOURCE_UNAVAILABLE"
-    ALL_SOURCES_FAILED = "ALL_SOURCES_FAILED"
-    TIMEOUT = "TIMEOUT"
-    RATE_LIMIT = "RATE_LIMIT"
-    QUOTA_EXCEEDED = "QUOTA_EXCEEDED"
-    VALIDATION_ERROR = "VALIDATION_ERROR"
-    INTERNAL_ERROR = "INTERNAL_ERROR"
+# SYS-011 / DEBT-015: SearchErrorCode is now an alias for the project-wide
+# ErrorCode enum defined in error_response.py.  All existing code that imports
+# SearchErrorCode from this module continues to work unchanged.
+from error_response import ErrorCode as SearchErrorCode  # noqa: F401, E402
 
 
 class SearchQueuedResponse(BaseModel):

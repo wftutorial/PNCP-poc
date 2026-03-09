@@ -10,6 +10,8 @@ Tests all 4 public endpoints:
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from fastapi.testclient import TestClient
+from dataclasses import dataclass, field
+from typing import List, Dict, Any, Optional
 
 
 @pytest.fixture(autouse=True)
@@ -65,9 +67,50 @@ MOCK_PNCP_RESULTS = [
 ]
 
 
-def _mock_pncp_buscar(uf, **kwargs):
-    """Return filtered mock results by UF."""
-    return [r for r in MOCK_PNCP_RESULTS if r["uf"] == uf]
+@dataclass
+class MockParallelFetchResult:
+    """Mock for pncp_client.ParallelFetchResult."""
+    items: List[Dict[str, Any]] = field(default_factory=list)
+    succeeded_ufs: List[str] = field(default_factory=list)
+    failed_ufs: List[str] = field(default_factory=list)
+    truncated_ufs: List[str] = field(default_factory=list)
+    canary_result: Optional[Dict[str, Any]] = None
+
+
+def _make_async_pncp_mock(buscar_return=None, buscar_side_effect=None):
+    """Create a mock AsyncPNCPClient usable as async context manager.
+
+    Args:
+        buscar_return: Static return value for buscar_todas_ufs_paralelo
+        buscar_side_effect: Side effect function for buscar_todas_ufs_paralelo
+    """
+    mock_client = MagicMock()
+
+    if buscar_side_effect:
+        mock_client.buscar_todas_ufs_paralelo = AsyncMock(side_effect=buscar_side_effect)
+    elif buscar_return is not None:
+        mock_client.buscar_todas_ufs_paralelo = AsyncMock(return_value=buscar_return)
+    else:
+        mock_client.buscar_todas_ufs_paralelo = AsyncMock(
+            return_value=MockParallelFetchResult(items=[])
+        )
+
+    mock_cls = MagicMock()
+    mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+    return mock_cls, mock_client
+
+
+def _mock_pncp_buscar(**kwargs):
+    """Return all mock results wrapped in ParallelFetchResult."""
+    return MockParallelFetchResult(
+        items=MOCK_PNCP_RESULTS,
+        succeeded_ufs=["SP", "RJ"],
+    )
+
+
+def _mock_pncp_buscar_empty(**kwargs):
+    return MockParallelFetchResult(items=[])
 
 
 # ---------------------------------------------------------------------------
@@ -76,11 +119,10 @@ def _mock_pncp_buscar(uf, **kwargs):
 
 class TestSectorBlogStats:
     def test_sector_stats_success(self, client):
-        with patch("pncp_client.PNCPClient") as mock_cls:
-            mock_instance = MagicMock()
-            mock_instance.buscar = AsyncMock(side_effect=_mock_pncp_buscar)
-            mock_cls.return_value = mock_instance
-
+        mock_cls, _ = _make_async_pncp_mock(
+            buscar_side_effect=lambda **kw: _mock_pncp_buscar(**kw)
+        )
+        with patch("pncp_client.AsyncPNCPClient", mock_cls):
             res = client.get("/v1/blog/stats/setor/vestuario")
             assert res.status_code == 200
 
@@ -98,11 +140,10 @@ class TestSectorBlogStats:
 
     def test_sector_stats_cached(self, client):
         """Second call should hit cache (no PNCP query)."""
-        with patch("pncp_client.PNCPClient") as mock_cls:
-            mock_instance = MagicMock()
-            mock_instance.buscar = AsyncMock(return_value=[])
-            mock_cls.return_value = mock_instance
-
+        mock_cls, mock_client = _make_async_pncp_mock(
+            buscar_side_effect=lambda **kw: _mock_pncp_buscar_empty(**kw)
+        )
+        with patch("pncp_client.AsyncPNCPClient", mock_cls):
             res1 = client.get("/v1/blog/stats/setor/vestuario")
             assert res1.status_code == 200
 
@@ -110,7 +151,7 @@ class TestSectorBlogStats:
             assert res2.status_code == 200
             assert res2.json() == res1.json()
 
-            # PNCPClient should only be instantiated once
+            # AsyncPNCPClient should only be instantiated once
             assert mock_cls.call_count == 1
 
     def test_sector_stats_not_found(self, client):
@@ -119,31 +160,22 @@ class TestSectorBlogStats:
 
     def test_sector_stats_slug_format(self, client):
         """Accept slug with hyphens (e.g., manutencao-predial)."""
-        with patch("pncp_client.PNCPClient") as mock_cls:
-            mock_instance = MagicMock()
-            mock_instance.buscar = AsyncMock(return_value=[])
-            mock_cls.return_value = mock_instance
-
+        mock_cls, _ = _make_async_pncp_mock()
+        with patch("pncp_client.AsyncPNCPClient", mock_cls):
             res = client.get("/v1/blog/stats/setor/manutencao-predial")
             assert res.status_code == 200
             assert res.json()["sector_id"] == "manutencao_predial"
 
     def test_sector_stats_no_auth_required(self, client):
         """Endpoint should be public (no auth header needed)."""
-        with patch("pncp_client.PNCPClient") as mock_cls:
-            mock_instance = MagicMock()
-            mock_instance.buscar = AsyncMock(return_value=[])
-            mock_cls.return_value = mock_instance
-
+        mock_cls, _ = _make_async_pncp_mock()
+        with patch("pncp_client.AsyncPNCPClient", mock_cls):
             res = client.get("/v1/blog/stats/setor/alimentos")
             assert res.status_code == 200
 
     def test_sector_stats_trend_structure(self, client):
-        with patch("pncp_client.PNCPClient") as mock_cls:
-            mock_instance = MagicMock()
-            mock_instance.buscar = AsyncMock(return_value=[])
-            mock_cls.return_value = mock_instance
-
+        mock_cls, _ = _make_async_pncp_mock()
+        with patch("pncp_client.AsyncPNCPClient", mock_cls):
             res = client.get("/v1/blog/stats/setor/informatica")
             data = res.json()
             assert len(data["trend_90d"]) == 3
@@ -159,11 +191,10 @@ class TestSectorBlogStats:
 
 class TestSectorUfStats:
     def test_sector_uf_stats_success(self, client):
-        with patch("pncp_client.PNCPClient") as mock_cls:
-            mock_instance = MagicMock()
-            mock_instance.buscar = AsyncMock(side_effect=_mock_pncp_buscar)
-            mock_cls.return_value = mock_instance
-
+        mock_cls, _ = _make_async_pncp_mock(
+            buscar_side_effect=lambda **kw: _mock_pncp_buscar(**kw)
+        )
+        with patch("pncp_client.AsyncPNCPClient", mock_cls):
             res = client.get("/v1/blog/stats/setor/vestuario/uf/SP")
             assert res.status_code == 200
 
@@ -176,11 +207,8 @@ class TestSectorUfStats:
 
     def test_sector_uf_stats_lowercase(self, client):
         """Accept lowercase UF."""
-        with patch("pncp_client.PNCPClient") as mock_cls:
-            mock_instance = MagicMock()
-            mock_instance.buscar = AsyncMock(return_value=[])
-            mock_cls.return_value = mock_instance
-
+        mock_cls, _ = _make_async_pncp_mock()
+        with patch("pncp_client.AsyncPNCPClient", mock_cls):
             res = client.get("/v1/blog/stats/setor/vestuario/uf/sp")
             assert res.status_code == 200
             assert res.json()["uf"] == "SP"
@@ -194,11 +222,10 @@ class TestSectorUfStats:
         assert res.status_code == 404
 
     def test_sector_uf_top_oportunidades(self, client):
-        with patch("pncp_client.PNCPClient") as mock_cls:
-            mock_instance = MagicMock()
-            mock_instance.buscar = AsyncMock(side_effect=_mock_pncp_buscar)
-            mock_cls.return_value = mock_instance
-
+        mock_cls, _ = _make_async_pncp_mock(
+            buscar_side_effect=lambda **kw: _mock_pncp_buscar(**kw)
+        )
+        with patch("pncp_client.AsyncPNCPClient", mock_cls):
             res = client.get("/v1/blog/stats/setor/vestuario/uf/SP")
             data = res.json()
             for item in data["top_oportunidades"]:
@@ -214,11 +241,12 @@ class TestSectorUfStats:
 
 class TestCidadeStats:
     def test_cidade_stats_success(self, client):
-        with patch("pncp_client.PNCPClient") as mock_cls:
-            mock_instance = MagicMock()
-            mock_instance.buscar = AsyncMock(return_value=MOCK_PNCP_RESULTS[:2])
-            mock_cls.return_value = mock_instance
-
+        mock_cls, _ = _make_async_pncp_mock(
+            buscar_side_effect=lambda **kw: MockParallelFetchResult(
+                items=MOCK_PNCP_RESULTS[:2], succeeded_ufs=["SP"]
+            )
+        )
+        with patch("pncp_client.AsyncPNCPClient", mock_cls):
             res = client.get("/v1/blog/stats/cidade/são-paulo")
             assert res.status_code == 200
 
@@ -233,11 +261,8 @@ class TestCidadeStats:
         assert res.status_code == 404
 
     def test_cidade_stats_cached(self, client):
-        with patch("pncp_client.PNCPClient") as mock_cls:
-            mock_instance = MagicMock()
-            mock_instance.buscar = AsyncMock(return_value=[])
-            mock_cls.return_value = mock_instance
-
+        mock_cls, _ = _make_async_pncp_mock()
+        with patch("pncp_client.AsyncPNCPClient", mock_cls):
             res1 = client.get("/v1/blog/stats/cidade/curitiba")
             res2 = client.get("/v1/blog/stats/cidade/curitiba")
             assert res1.status_code == 200
@@ -251,11 +276,10 @@ class TestCidadeStats:
 
 class TestPanoramaStats:
     def test_panorama_stats_success(self, client):
-        with patch("pncp_client.PNCPClient") as mock_cls:
-            mock_instance = MagicMock()
-            mock_instance.buscar = AsyncMock(side_effect=_mock_pncp_buscar)
-            mock_cls.return_value = mock_instance
-
+        mock_cls, _ = _make_async_pncp_mock(
+            buscar_side_effect=lambda **kw: _mock_pncp_buscar(**kw)
+        )
+        with patch("pncp_client.AsyncPNCPClient", mock_cls):
             res = client.get("/v1/blog/stats/panorama/vestuario")
             assert res.status_code == 200
 
@@ -273,11 +297,8 @@ class TestPanoramaStats:
         assert res.status_code == 404
 
     def test_panorama_stats_sazonalidade_structure(self, client):
-        with patch("pncp_client.PNCPClient") as mock_cls:
-            mock_instance = MagicMock()
-            mock_instance.buscar = AsyncMock(return_value=[])
-            mock_cls.return_value = mock_instance
-
+        mock_cls, _ = _make_async_pncp_mock()
+        with patch("pncp_client.AsyncPNCPClient", mock_cls):
             res = client.get("/v1/blog/stats/panorama/software")
             data = res.json()
             for month in data["sazonalidade"]:
@@ -287,11 +308,8 @@ class TestPanoramaStats:
 
     def test_panorama_stats_no_auth(self, client):
         """Public endpoint — no auth required."""
-        with patch("pncp_client.PNCPClient") as mock_cls:
-            mock_instance = MagicMock()
-            mock_instance.buscar = AsyncMock(return_value=[])
-            mock_cls.return_value = mock_instance
-
+        mock_cls, _ = _make_async_pncp_mock()
+        with patch("pncp_client.AsyncPNCPClient", mock_cls):
             res = client.get("/v1/blog/stats/panorama/saude")
             assert res.status_code == 200
 
@@ -304,11 +322,8 @@ class TestCacheInvalidation:
     def test_invalidate_blog_cache(self, client):
         from routes.blog_stats import invalidate_blog_cache, _blog_cache
 
-        with patch("pncp_client.PNCPClient") as mock_cls:
-            mock_instance = MagicMock()
-            mock_instance.buscar = AsyncMock(return_value=[])
-            mock_cls.return_value = mock_instance
-
+        mock_cls, _ = _make_async_pncp_mock()
+        with patch("pncp_client.AsyncPNCPClient", mock_cls):
             client.get("/v1/blog/stats/setor/vestuario")
             assert len(_blog_cache) > 0
 
@@ -347,11 +362,9 @@ MOCK_PNCP_UF_SP = [
 ]
 
 
-def _mock_sp_only(uf, **kwargs):
-    """Return SP items only; empty for other UFs."""
-    if uf == "SP":
-        return MOCK_PNCP_UF_SP
-    return []
+def _mock_sp_fetch(**kwargs):
+    """Return SP items wrapped in ParallelFetchResult."""
+    return MockParallelFetchResult(items=MOCK_PNCP_UF_SP, succeeded_ufs=["SP"])
 
 
 class TestSectorUfStatsEnhanced:
@@ -359,11 +372,8 @@ class TestSectorUfStatsEnhanced:
 
     def test_sector_uf_stats_enhanced_fields(self, client):
         """Response includes value_range_min, value_range_max, top_modalidades, trend_90d with correct types."""
-        with patch("pncp_client.PNCPClient") as mock_cls:
-            mock_instance = MagicMock()
-            mock_instance.buscar = AsyncMock(side_effect=_mock_sp_only)
-            mock_cls.return_value = mock_instance
-
+        mock_cls, _ = _make_async_pncp_mock(buscar_side_effect=lambda **kw: _mock_sp_fetch(**kw))
+        with patch("pncp_client.AsyncPNCPClient", mock_cls):
             res = client.get("/v1/blog/stats/setor/vestuario/uf/SP")
             assert res.status_code == 200
 
@@ -383,11 +393,8 @@ class TestSectorUfStatsEnhanced:
 
     def test_sector_uf_stats_value_range(self, client):
         """With 2 items of different values, min < max (or equal if 1 item)."""
-        with patch("pncp_client.PNCPClient") as mock_cls:
-            mock_instance = MagicMock()
-            mock_instance.buscar = AsyncMock(side_effect=_mock_sp_only)
-            mock_cls.return_value = mock_instance
-
+        mock_cls, _ = _make_async_pncp_mock(buscar_side_effect=lambda **kw: _mock_sp_fetch(**kw))
+        with patch("pncp_client.AsyncPNCPClient", mock_cls):
             res = client.get("/v1/blog/stats/setor/vestuario/uf/SP")
             assert res.status_code == 200
 
@@ -402,11 +409,10 @@ class TestSectorUfStatsEnhanced:
         """With exactly 1 valued item, min == max."""
         single_item = [MOCK_PNCP_UF_SP[0].copy()]  # only 150_000 item
 
-        with patch("pncp_client.PNCPClient") as mock_cls:
-            mock_instance = MagicMock()
-            mock_instance.buscar = AsyncMock(return_value=single_item)
-            mock_cls.return_value = mock_instance
-
+        mock_cls, _ = _make_async_pncp_mock(
+            buscar_side_effect=lambda **kw: MockParallelFetchResult(items=single_item, succeeded_ufs=["SP"])
+        )
+        with patch("pncp_client.AsyncPNCPClient", mock_cls):
             res = client.get("/v1/blog/stats/setor/vestuario/uf/SP")
             assert res.status_code == 200
 
@@ -416,11 +422,8 @@ class TestSectorUfStatsEnhanced:
 
     def test_sector_uf_stats_modalities(self, client):
         """top_modalidades has entries with name (str) and count (int) structure."""
-        with patch("pncp_client.PNCPClient") as mock_cls:
-            mock_instance = MagicMock()
-            mock_instance.buscar = AsyncMock(side_effect=_mock_sp_only)
-            mock_cls.return_value = mock_instance
-
+        mock_cls, _ = _make_async_pncp_mock(buscar_side_effect=lambda **kw: _mock_sp_fetch(**kw))
+        with patch("pncp_client.AsyncPNCPClient", mock_cls):
             res = client.get("/v1/blog/stats/setor/vestuario/uf/SP")
             assert res.status_code == 200
 
@@ -443,11 +446,8 @@ class TestSectorUfStatsEnhanced:
 
     def test_sector_uf_stats_trend(self, client):
         """trend_90d has exactly 3 entries, each with period, count, avg_value."""
-        with patch("pncp_client.PNCPClient") as mock_cls:
-            mock_instance = MagicMock()
-            mock_instance.buscar = AsyncMock(side_effect=_mock_sp_only)
-            mock_cls.return_value = mock_instance
-
+        mock_cls, _ = _make_async_pncp_mock(buscar_side_effect=lambda **kw: _mock_sp_fetch(**kw))
+        with patch("pncp_client.AsyncPNCPClient", mock_cls):
             res = client.get("/v1/blog/stats/setor/vestuario/uf/SP")
             assert res.status_code == 200
 
@@ -471,11 +471,8 @@ class TestSectorUfStatsEnhanced:
 
     def test_sector_uf_stats_empty_results(self, client):
         """When PNCP returns no results: value_range_min=0, top_modalidades=[], trend counts >= 1."""
-        with patch("pncp_client.PNCPClient") as mock_cls:
-            mock_instance = MagicMock()
-            mock_instance.buscar = AsyncMock(return_value=[])
-            mock_cls.return_value = mock_instance
-
+        mock_cls, _ = _make_async_pncp_mock()
+        with patch("pncp_client.AsyncPNCPClient", mock_cls):
             res = client.get("/v1/blog/stats/setor/vestuario/uf/SP")
             assert res.status_code == 200
 

@@ -187,34 +187,33 @@ async def _query_pncp_for_sector(
     days: int = 10,
 ) -> list[dict]:
     """Query PNCP for sector-relevant results across given UFs."""
-    from pncp_client import PNCPClient
+    from pncp_client import AsyncPNCPClient
 
     now = datetime.now(timezone.utc)
-    data_final = now.strftime("%Y%m%d")
-    data_inicial = (now - timedelta(days=days)).strftime("%Y%m%d")
+    data_final = now.strftime("%Y-%m-%d")
+    data_inicial = (now - timedelta(days=days)).strftime("%Y-%m-%d")
 
     all_results: list[dict] = []
     try:
-        client = PNCPClient()
-        for uf in ufs:
-            try:
-                raw = await client.buscar(
-                    uf=uf,
-                    data_inicial=data_inicial,
-                    data_final=data_final,
-                    pagina=1,
-                    tam_pagina=50,
-                )
-                items = raw if isinstance(raw, list) else raw.get("data", [])
-                # Tag each item with UF for downstream use
-                for item in items:
-                    if "uf" not in item:
-                        item["uf"] = uf
-                all_results.extend(items)
-            except Exception as e:
-                logger.debug("PNCP query failed UF=%s sector=%s: %s", uf, sector.id, e)
+        async with AsyncPNCPClient(max_concurrent=5) as client:
+            result = await client.buscar_todas_ufs_paralelo(
+                ufs=ufs,
+                data_inicial=data_inicial,
+                data_final=data_final,
+                max_pages_per_uf=1,
+            )
+            # Tag each item with UF if missing
+            for item in result.items:
+                if "uf" not in item:
+                    uf_val = (
+                        item.get("unidadeFederativa")
+                        or item.get("ufSigla")
+                        or ""
+                    )
+                    item["uf"] = uf_val
+            all_results.extend(result.items)
     except Exception as e:
-        logger.warning("Failed to create PNCPClient for blog stats: %s", e)
+        logger.warning("Failed to query PNCP for blog stats sector=%s: %s", sector.id, e)
 
     # Filter by sector keywords
     keywords_lower = {kw.lower() for kw in sector.keywords}
@@ -461,24 +460,22 @@ async def get_cidade_stats(cidade: str):
         raise HTTPException(status_code=404, detail=f"Cidade '{cidade}' não encontrada")
 
     # Query PNCP for this UF without sector filter
-    from pncp_client import PNCPClient
+    from pncp_client import AsyncPNCPClient
 
     now = datetime.now(timezone.utc)
-    data_final = now.strftime("%Y%m%d")
-    data_inicial = (now - timedelta(days=10)).strftime("%Y%m%d")
+    data_final = now.strftime("%Y-%m-%d")
+    data_inicial = (now - timedelta(days=10)).strftime("%Y-%m-%d")
 
     all_results: list[dict] = []
     try:
-        client = PNCPClient()
-        raw = await client.buscar(
-            uf=uf,
-            data_inicial=data_inicial,
-            data_final=data_final,
-            pagina=1,
-            tam_pagina=50,
-        )
-        items = raw if isinstance(raw, list) else raw.get("data", [])
-        all_results.extend(items)
+        async with AsyncPNCPClient(max_concurrent=2) as client:
+            result = await client.buscar_todas_ufs_paralelo(
+                ufs=[uf],
+                data_inicial=data_inicial,
+                data_final=data_final,
+                max_pages_per_uf=1,
+            )
+            all_results.extend(result.items)
     except Exception as e:
         logger.debug("PNCP query failed for cidade=%s uf=%s: %s", cidade, uf, e)
 

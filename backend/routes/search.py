@@ -97,25 +97,9 @@ def get_correlation_id() -> str | None:
         return None
 
 
-def _build_error_detail(
-    message: str,
-    error_code: SearchErrorCode,
-    search_id: str | None = None,
-    correlation_id: str | None = None,
-) -> dict:
-    """CRIT-009 AC1: Build structured error response body for /buscar errors.
-
-    Returns a dict suitable for HTTPException detail parameter.
-    Never exposes stack traces or internal information.
-    """
-    from datetime import datetime, timezone
-    return {
-        "detail": message,
-        "error_code": error_code.value,
-        "search_id": search_id,
-        "correlation_id": correlation_id,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-    }
+# SYS-011 / DEBT-015: delegate to the project-wide helper; keep local name for
+# backward compatibility with tests that patch "routes.search._build_error_detail".
+from error_response import build_error_detail as _build_error_detail  # noqa: E402
 
 
 async def _update_session_on_error(

@@ -166,34 +166,27 @@ async def _generate_sector_stats(sector_id: str, sector: SectorConfig) -> dict:
     Queries top 5 UFs (SP, RJ, MG, DF, PR) for last 10 days,
     filters by sector keywords, and aggregates stats.
     """
-    from pncp_client import PNCPClient
+    from pncp_client import AsyncPNCPClient
 
     now = datetime.now(timezone.utc)
-    data_final = now.strftime("%Y%m%d")
-    data_inicial = (now - timedelta(days=10)).strftime("%Y%m%d")
+    data_final = now.strftime("%Y-%m-%d")
+    data_inicial = (now - timedelta(days=10)).strftime("%Y-%m-%d")
 
     # Top 5 UFs by procurement volume
     target_ufs = ["SP", "RJ", "MG", "DF", "PR"]
     all_results: list[dict] = []
 
     try:
-        client = PNCPClient()
-        for uf in target_ufs:
-            try:
-                raw = await client.buscar(
-                    uf=uf,
-                    data_inicial=data_inicial,
-                    data_final=data_final,
-                    pagina=1,
-                    tam_pagina=50,
-                )
-                items = raw if isinstance(raw, list) else raw.get("data", [])
-                all_results.extend(items)
-            except Exception as e:
-                logger.debug("PNCP query failed for UF=%s sector=%s: %s", uf, sector_id, e)
-                continue
+        async with AsyncPNCPClient(max_concurrent=5) as client:
+            result = await client.buscar_todas_ufs_paralelo(
+                ufs=target_ufs,
+                data_inicial=data_inicial,
+                data_final=data_final,
+                max_pages_per_uf=1,
+            )
+            all_results.extend(result.items)
     except Exception as e:
-        logger.warning("Failed to create PNCPClient for sector %s: %s", sector_id, e)
+        logger.warning("Failed to query PNCP for sector %s: %s", sector_id, e)
 
     # Filter by sector keywords (lightweight — substring match on title/description)
     keywords_lower = {kw.lower() for kw in sector.keywords}

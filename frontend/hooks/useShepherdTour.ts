@@ -1,8 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useCallback, useState } from 'react';
-import 'shepherd.js/dist/css/shepherd.css';
-import '../styles/shepherd-theme.css';
 import { safeSetItem } from '../lib/storage';
 
 export interface TourStep {
@@ -50,7 +48,11 @@ export function useShepherdTour({ tourId, steps, onComplete, onSkip }: UseShephe
     if (typeof window === 'undefined') return;
     let cancelled = false;
 
-    import('shepherd.js').then(({ default: Shepherd }) => {
+    Promise.all([
+      import('shepherd.js'),
+      import('shepherd.js/dist/css/shepherd.css'),
+      import('../styles/shepherd-theme.css'),
+    ]).then(([{ default: Shepherd }]) => {
       if (cancelled) return;
 
       const tour = new Shepherd.Tour({

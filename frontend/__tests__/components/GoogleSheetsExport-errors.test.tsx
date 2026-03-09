@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import GoogleSheetsExportButton from '@/components/GoogleSheetsExportButton';
+import GoogleSheetsExportButton from '@/app/buscar/components/GoogleSheetsExportButton';
 
 // Mock sonner toast — must use jest.fn() inside factory to avoid hoisting issues
 jest.mock('sonner', () => ({

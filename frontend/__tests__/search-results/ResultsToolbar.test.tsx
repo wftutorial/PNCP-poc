@@ -37,7 +37,7 @@ jest.mock("../../app/components/OrdenacaoSelect", () => ({
   },
 }));
 
-jest.mock("../../components/GoogleSheetsExportButton", () => {
+jest.mock("../../app/buscar/components/GoogleSheetsExportButton", () => {
   return function Mock({ disabled }: any) {
     return (
       <button data-testid="google-sheets-button" disabled={disabled}>

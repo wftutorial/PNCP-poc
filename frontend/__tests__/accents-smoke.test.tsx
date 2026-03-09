@@ -6,8 +6,8 @@
  */
 
 import { render, screen } from "@testing-library/react";
-import { ModalidadeFilter, MODALIDADES } from "@/components/ModalidadeFilter";
-import { StatusFilter } from "@/components/StatusFilter";
+import { ModalidadeFilter, MODALIDADES } from "@/app/buscar/components/ModalidadeFilter";
+import { StatusFilter } from "@/app/buscar/components/StatusFilter";
 import { getUserFriendlyError } from "@/lib/error-messages";
 import * as fs from "fs";
 

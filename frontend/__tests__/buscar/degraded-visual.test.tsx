@@ -6,7 +6,7 @@
 
 import React from 'react';
 import { render, screen } from '@testing-library/react';
-import { EnhancedLoadingProgress } from '../../components/EnhancedLoadingProgress';
+import { EnhancedLoadingProgress } from '../../app/buscar/components/EnhancedLoadingProgress';
 
 describe('EnhancedLoadingProgress - GTM-RESILIENCE-A02 Degraded Visuals', () => {
   const defaultProps = {

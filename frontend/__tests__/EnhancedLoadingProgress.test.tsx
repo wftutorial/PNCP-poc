@@ -6,7 +6,7 @@
 import React from 'react';
 import { render, screen, waitFor, act, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { EnhancedLoadingProgress } from '../components/EnhancedLoadingProgress';
+import { EnhancedLoadingProgress } from '../app/buscar/components/EnhancedLoadingProgress';
 
 describe('EnhancedLoadingProgress Component', () => {
   const mockOnStageChange = jest.fn();

@@ -23,7 +23,7 @@ jest.mock('../../app/buscar/components/RefreshBanner', () => {
   return function MockRefreshBanner() { return null; };
 });
 
-jest.mock('../../components/EnhancedLoadingProgress', () => ({
+jest.mock('../../app/buscar/components/EnhancedLoadingProgress', () => ({
   EnhancedLoadingProgress: function Mock() { return null; },
 }));
 
@@ -71,7 +71,7 @@ jest.mock('../../app/components/OrdenacaoSelect', () => ({
   OrdenacaoSelect: function Mock() { return <div data-testid="ordenacao-select" />; },
 }));
 
-jest.mock('../../components/GoogleSheetsExportButton', () => {
+jest.mock('../../app/buscar/components/GoogleSheetsExportButton', () => {
   return function Mock() { return null; };
 });
 

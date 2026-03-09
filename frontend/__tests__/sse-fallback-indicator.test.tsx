@@ -10,7 +10,7 @@
 import React from "react";
 import { render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import { EnhancedLoadingProgress } from "../components/EnhancedLoadingProgress";
+import { EnhancedLoadingProgress } from "../app/buscar/components/EnhancedLoadingProgress";
 
 describe("STORY-359: SSE Fallback Indicator", () => {
   beforeEach(() => {

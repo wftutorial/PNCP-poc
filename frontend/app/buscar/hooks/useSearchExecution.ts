@@ -24,7 +24,7 @@ interface UseSearchExecutionFilters {
   modoBusca: "abertas" | "publicacao";
   setorId: string;
   termosArray: string[];
-  status: import("../../../components/StatusFilter").StatusLicitacao;
+  status: import("../components/StatusFilter").StatusLicitacao;
   modalidades: number[];
   valorMin: number | null;
   valorMax: number | null;

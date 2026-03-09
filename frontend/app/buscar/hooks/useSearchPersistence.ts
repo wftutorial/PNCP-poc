@@ -17,7 +17,7 @@ interface UseSearchPersistenceFilters {
   dataInicial: string;
   dataFinal: string;
   setorId: string;
-  status: import("../../../components/StatusFilter").StatusLicitacao;
+  status: import("../components/StatusFilter").StatusLicitacao;
   modalidades: number[];
   valorMin: number | null;
   valorMax: number | null;
@@ -31,7 +31,7 @@ interface UseSearchPersistenceFilters {
   setSearchMode: (m: "setor" | "termos") => void;
   setSetorId: (id: string) => void;
   setTermosArray: (t: string[]) => void;
-  setStatus: (s: import("../../../components/StatusFilter").StatusLicitacao) => void;
+  setStatus: (s: import("../components/StatusFilter").StatusLicitacao) => void;
   setModalidades: (m: number[]) => void;
   setValorMin: (v: number | null) => void;
   setValorMax: (v: number | null) => void;

@@ -18,7 +18,7 @@
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import type { LicitacaoItem } from '../app/types';
+import type { LicitacaoItem } from '../../types';
 
 /**
  * Google Sheets Brand Icon Component

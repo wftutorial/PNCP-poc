@@ -40,7 +40,7 @@ jest.mock("../hooks/useSearchSSE", () => ({
   }),
 }));
 
-jest.mock("../components/EnhancedLoadingProgress", () => ({
+jest.mock("../app/buscar/components/EnhancedLoadingProgress", () => ({
   EnhancedLoadingProgress: () => null,
 }));
 jest.mock("../app/components/LoadingResultsSkeleton", () => ({
@@ -85,7 +85,7 @@ jest.mock("../app/buscar/components/RefreshBanner", () => ({
   __esModule: true,
   default: () => null,
 }));
-jest.mock("../components/GoogleSheetsExportButton", () => ({
+jest.mock("../app/buscar/components/GoogleSheetsExportButton", () => ({
   __esModule: true,
   default: () => null,
 }));

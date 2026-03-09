@@ -12,7 +12,7 @@
  */
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import type { SearchProgressEvent } from '../hooks/useSearchSSE';
+import type { SearchProgressEvent } from '../../../hooks/useSearchSSE';
 
 export interface EnhancedLoadingProgressProps {
   currentStep: number;

@@ -68,27 +68,27 @@ function makeBid(overrides: Partial<LicitacaoItem> = {}): LicitacaoItem {
 // ---------------------------------------------------------------------------
 
 // Suppress noisy sub-component imports by mocking heavy dependencies
-jest.mock("../app/buscar/components/ViabilityBadge", () => {
+jest.mock("../components/ViabilityBadge", () => {
   const Mock = () => null;
   Mock.displayName = "ViabilityBadge";
   return Mock;
 });
-jest.mock("../app/buscar/components/FeedbackButtons", () => {
+jest.mock("../components/FeedbackButtons", () => {
   const Mock = () => null;
   Mock.displayName = "FeedbackButtons";
   return Mock;
 });
-jest.mock("../app/buscar/components/CompatibilityBadge", () => {
+jest.mock("../components/CompatibilityBadge", () => {
   const Mock = () => null;
   Mock.displayName = "CompatibilityBadge";
   return Mock;
 });
-jest.mock("../app/buscar/components/ActionLabel", () => {
+jest.mock("../components/ActionLabel", () => {
   const Mock = () => null;
   Mock.displayName = "ActionLabel";
   return Mock;
 });
-jest.mock("../app/buscar/components/DeepAnalysisModal", () => {
+jest.mock("../components/DeepAnalysisModal", () => {
   const Mock = () => null;
   Mock.displayName = "DeepAnalysisModal";
   return Mock;

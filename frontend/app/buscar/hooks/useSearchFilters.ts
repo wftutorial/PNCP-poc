@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import type { Setor, ValidationErrors } from "../../types";
 import { useAnalytics } from "../../../hooks/useAnalytics";
-import type { StatusLicitacao } from "../../../components/StatusFilter";
+import type { StatusLicitacao } from "../components/StatusFilter";
 import type { Esfera } from "../../components/EsferaFilter";
 import type { Municipio } from "../../components/MunicipioFilter";
 import type { OrdenacaoOption } from "../../components/OrdenacaoSelect";

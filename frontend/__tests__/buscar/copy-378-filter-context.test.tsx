@@ -64,7 +64,7 @@ jest.mock("../../lib/error-messages", () => ({
   ERROR_CODE_MESSAGES: {},
 }));
 
-jest.mock("../../components/EnhancedLoadingProgress", () => ({
+jest.mock("../../app/buscar/components/EnhancedLoadingProgress", () => ({
   EnhancedLoadingProgress: () => null,
 }));
 
@@ -113,7 +113,7 @@ jest.mock("../../app/components/OrdenacaoSelect", () => ({
   OrdenacaoSelect: () => null,
 }));
 
-jest.mock("../../components/GoogleSheetsExportButton", () => ({
+jest.mock("../../app/buscar/components/GoogleSheetsExportButton", () => ({
   __esModule: true,
   default: () => null,
 }));

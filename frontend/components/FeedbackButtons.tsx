@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { safeSetItem } from "../../../lib/storage";
+import { safeSetItem } from "../lib/storage";
 
 /**
  * GTM-RESILIENCE-D05 AC4: Feedback buttons for search result cards.

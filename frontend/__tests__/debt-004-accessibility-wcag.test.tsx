@@ -48,7 +48,7 @@ import { DowngradeModal } from "../components/subscriptions/DowngradeModal";
 import { InviteMemberModal } from "../components/org/InviteMemberModal";
 import { PaymentRecoveryModal } from "../components/billing/PaymentRecoveryModal";
 import { MobileDrawer } from "../components/MobileDrawer";
-import DeepAnalysisModal from "../app/buscar/components/DeepAnalysisModal";
+import DeepAnalysisModal from "../components/DeepAnalysisModal";
 import { ResultsHeader } from "../app/buscar/components/search-results/ResultsHeader";
 import { EmptyResults } from "../app/buscar/components/EmptyResults";
 import { SearchStateManager } from "../app/buscar/components/SearchStateManager";

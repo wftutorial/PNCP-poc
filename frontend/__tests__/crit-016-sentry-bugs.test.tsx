@@ -11,7 +11,7 @@
 import React from "react";
 import { render } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import ViabilityBadge from "../app/buscar/components/ViabilityBadge";
+import ViabilityBadge from "../components/ViabilityBadge";
 import { UfProgressGrid } from "../app/buscar/components/UfProgressGrid";
 
 describe("CRIT-016 Bug 4: Defensive Rendering", () => {

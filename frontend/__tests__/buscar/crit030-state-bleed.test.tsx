@@ -17,7 +17,7 @@ import type { SearchResultsProps } from "../../app/buscar/components/SearchResul
 import type { BuscaResult } from "../../app/types";
 
 // Mock all imported components that aren't under test
-jest.mock("../../components/EnhancedLoadingProgress", () => ({
+jest.mock("../../app/buscar/components/EnhancedLoadingProgress", () => ({
   EnhancedLoadingProgress: ({ currentStep }: any) => (
     <div data-testid="loading-progress">Loading step {currentStep}</div>
   ),
@@ -86,7 +86,7 @@ jest.mock("../../app/components/OrdenacaoSelect", () => ({
   OrdenacaoSelect: () => <div data-testid="ordenacao-select">Sort</div>,
 }));
 
-jest.mock("../../components/GoogleSheetsExportButton", () => ({
+jest.mock("../../app/buscar/components/GoogleSheetsExportButton", () => ({
   __esModule: true,
   default: () => <div data-testid="gsheets">GSheets</div>,
 }));

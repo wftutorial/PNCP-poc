@@ -3,11 +3,11 @@
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import type { LicitacaoItem, BidAnalysisItem } from "../types";
-import ViabilityBadge from "../buscar/components/ViabilityBadge";
-import FeedbackButtons from "../buscar/components/FeedbackButtons";
-import CompatibilityBadge from "../buscar/components/CompatibilityBadge";
-import ActionLabel from "../buscar/components/ActionLabel";
-import DeepAnalysisModal from "../buscar/components/DeepAnalysisModal";
+import ViabilityBadge from "../../components/ViabilityBadge";
+import FeedbackButtons from "../../components/FeedbackButtons";
+import CompatibilityBadge from "../../components/CompatibilityBadge";
+import ActionLabel from "../../components/ActionLabel";
+import DeepAnalysisModal from "../../components/DeepAnalysisModal";
 import { AddToPipelineButton } from "./AddToPipelineButton";
 import { formatCurrencyBR } from "../../lib/format-currency";
 

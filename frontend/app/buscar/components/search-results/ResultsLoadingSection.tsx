@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { SearchProgressEvent, SourceStatus, PartialProgress, FilterSummary, UfStatus } from "../../../../hooks/useSearchSSE";
-import { EnhancedLoadingProgress } from "../../../../components/EnhancedLoadingProgress";
+import { EnhancedLoadingProgress } from "../EnhancedLoadingProgress";
 import { LoadingResultsSkeleton } from "../../../components/LoadingResultsSkeleton";
 import { PartialResultsPrompt } from "../PartialResultsPrompt";
 import SourceStatusGrid from "../SourceStatusGrid";

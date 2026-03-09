@@ -7,8 +7,8 @@
 
 import React from "react";
 import { render, screen } from "@testing-library/react";
-import ViabilityBadge from "../app/buscar/components/ViabilityBadge";
-import type { ViabilityFactors } from "../app/buscar/components/ViabilityBadge";
+import ViabilityBadge from "../components/ViabilityBadge";
+import type { ViabilityFactors } from "../components/ViabilityBadge";
 
 const mockFactors: ViabilityFactors = {
   modalidade: 100,

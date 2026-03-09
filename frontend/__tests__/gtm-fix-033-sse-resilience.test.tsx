@@ -264,7 +264,7 @@ describe('GTM-FIX-033: SSE Resilience', () => {
     test('EnhancedLoadingProgress shows "Finalizando análise..." on sseDisconnected', () => {
       const React = require('react');
       const { render, screen } = require('@testing-library/react');
-      const { EnhancedLoadingProgress } = require('../components/EnhancedLoadingProgress');
+      const { EnhancedLoadingProgress } = require('../app/buscar/components/EnhancedLoadingProgress');
 
       // Render with sseDisconnected=true
       render(
@@ -284,7 +284,7 @@ describe('GTM-FIX-033: SSE Resilience', () => {
     test('EnhancedLoadingProgress does not show disconnect message when connected', () => {
       const React = require('react');
       const { render, screen } = require('@testing-library/react');
-      const { EnhancedLoadingProgress } = require('../components/EnhancedLoadingProgress');
+      const { EnhancedLoadingProgress } = require('../app/buscar/components/EnhancedLoadingProgress');
 
       render(
         React.createElement(EnhancedLoadingProgress, {

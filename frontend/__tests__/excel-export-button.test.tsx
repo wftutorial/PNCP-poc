@@ -35,7 +35,7 @@ jest.mock("../hooks/useSearchSSE", () => ({
 }));
 
 // Mock child components that aren't relevant to Excel button tests
-jest.mock("../components/EnhancedLoadingProgress", () => ({
+jest.mock("../app/buscar/components/EnhancedLoadingProgress", () => ({
   EnhancedLoadingProgress: () => null,
 }));
 jest.mock("../app/components/LoadingResultsSkeleton", () => ({
@@ -80,7 +80,7 @@ jest.mock("../app/buscar/components/RefreshBanner", () => ({
   __esModule: true,
   default: () => null,
 }));
-jest.mock("../components/GoogleSheetsExportButton", () => ({
+jest.mock("../app/buscar/components/GoogleSheetsExportButton", () => ({
   __esModule: true,
   default: () => <button data-testid="google-sheets-button">Google Sheets</button>,
 }));

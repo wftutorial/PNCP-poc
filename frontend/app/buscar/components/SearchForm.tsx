@@ -8,7 +8,7 @@ import { CustomDateInput } from "../../components/CustomDateInput";
 import { Tooltip } from "../../components/ui/Tooltip";
 import type { TermValidation } from "../hooks/useSearchFilters";
 import { DEFAULT_SEARCH_DAYS } from "../hooks/useSearchFilters";
-import type { StatusLicitacao } from "../../../components/StatusFilter";
+import type { StatusLicitacao } from "./StatusFilter";
 import type { Esfera } from "../../components/EsferaFilter";
 import type { Municipio } from "../../components/MunicipioFilter";
 import type { OrdenacaoOption } from "../../components/OrdenacaoSelect";

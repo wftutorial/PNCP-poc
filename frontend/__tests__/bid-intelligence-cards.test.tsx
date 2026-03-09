@@ -24,9 +24,9 @@ afterEach(() => {
 });
 
 // ─── Import components ────────────────────────────────────────────────────────
-import CompatibilityBadge from "../app/buscar/components/CompatibilityBadge";
-import ActionLabel from "../app/buscar/components/ActionLabel";
-import DeepAnalysisModal from "../app/buscar/components/DeepAnalysisModal";
+import CompatibilityBadge from "../components/CompatibilityBadge";
+import ActionLabel from "../components/ActionLabel";
+import DeepAnalysisModal from "../components/DeepAnalysisModal";
 
 // ─── CompatibilityBadge ───────────────────────────────────────────────────────
 describe("CompatibilityBadge (STORY-259 AC23)", () => {

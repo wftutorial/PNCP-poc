@@ -23,7 +23,12 @@ import type {
 } from "../types/search-results";
 import { FilterRelaxedBanner } from "./FilterRelaxedBanner";
 import { ExpiredCacheBanner } from "./ExpiredCacheBanner";
-import { SearchStateManager } from "./SearchStateManager";
+import dynamic from "next/dynamic";
+
+const SearchStateManager = dynamic(
+  () => import("./SearchStateManager").then((mod) => mod.SearchStateManager),
+  { ssr: false }
+);
 import { deriveSearchPhase } from "../types/searchPhase";
 import { TrialUpsellCTA } from "../../../components/billing/TrialUpsellCTA";
 import { SearchEmptyState } from "./SearchEmptyState";

@@ -11,7 +11,6 @@
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import 'shepherd.js/dist/css/shepherd.css';
 import { safeSetItem } from '../lib/storage';
 
 // Type definitions for Shepherd.js (using any temporarily until @types available)
@@ -82,7 +81,10 @@ export function useOnboarding(options: OnboardingOptions = {}) {
   useEffect(() => {
     if (tourRef.current) return; // Already initialized
 
-    import('shepherd.js').then(({ default: Shepherd }) => {
+    Promise.all([
+      import('shepherd.js'),
+      import('shepherd.js/dist/css/shepherd.css'),
+    ]).then(([{ default: Shepherd }]) => {
       if (tourRef.current) return; // double-check in case of race
 
       const tour = new Shepherd.Tour({

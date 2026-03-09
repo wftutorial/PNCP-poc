@@ -1,8 +1,8 @@
 "use client";
 
-import { StatusFilter, type StatusLicitacao } from "../../../components/StatusFilter";
-import { ModalidadeFilter } from "../../../components/ModalidadeFilter";
-import { ValorFilter } from "../../../components/ValorFilter";
+import { StatusFilter, type StatusLicitacao } from "./StatusFilter";
+import { ModalidadeFilter } from "./ModalidadeFilter";
+import { ValorFilter } from "./ValorFilter";
 import { EsferaFilter, type Esfera } from "../../components/EsferaFilter";
 import { MunicipioFilter, type Municipio } from "../../components/MunicipioFilter";
 

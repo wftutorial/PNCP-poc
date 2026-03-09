@@ -10,7 +10,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import GoogleSheetsExportButton from '../components/GoogleSheetsExportButton';
+import GoogleSheetsExportButton from '../app/buscar/components/GoogleSheetsExportButton';
 import { toast } from 'sonner';
 
 // Mock toast notifications

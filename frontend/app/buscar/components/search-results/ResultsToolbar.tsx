@@ -3,7 +3,7 @@
 import Link from "next/link";
 import type { BuscaResult } from "../../../types";
 import { OrdenacaoSelect, type OrdenacaoOption } from "../../../components/OrdenacaoSelect";
-import GoogleSheetsExportButton from "../../../../components/GoogleSheetsExportButton";
+import GoogleSheetsExportButton from "../GoogleSheetsExportButton";
 
 interface ResultsToolbarProps {
   result: BuscaResult;

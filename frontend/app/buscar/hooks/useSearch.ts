@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import type { BuscaResult } from "../../types";
-import type { StatusLicitacao } from "../../../components/StatusFilter";
+import type { StatusLicitacao } from "../components/StatusFilter";
 import type { Esfera } from "../../components/EsferaFilter";
 import type { Municipio } from "../../components/MunicipioFilter";
 import type { OrdenacaoOption } from "../../components/OrdenacaoSelect";

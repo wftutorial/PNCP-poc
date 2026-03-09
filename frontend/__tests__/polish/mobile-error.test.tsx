@@ -42,7 +42,7 @@ jest.mock("../../app/buscar/components/RefreshBanner", () => ({
   default: () => null,
 }));
 
-jest.mock("../../components/EnhancedLoadingProgress", () => ({
+jest.mock("../../app/buscar/components/EnhancedLoadingProgress", () => ({
   EnhancedLoadingProgress: () => null,
 }));
 
@@ -57,6 +57,28 @@ jest.mock("../../app/buscar/components/SearchEmptyState", () => ({
 jest.mock("../../app/buscar/components/UfProgressGrid", () => ({
   UfProgressGrid: () => null,
 }));
+
+// DEBT-106: next/dynamic — resolve dynamic imports synchronously in tests
+jest.mock("next/dynamic", () => {
+  return (loader: () => Promise<any>, _opts?: any) => {
+    let Component: any = null;
+    const promise = loader();
+    promise.then((mod: any) => {
+      Component = mod.default || mod;
+    });
+    // Force synchronous resolution for tests
+    return function DynamicWrapper(props: any) {
+      if (!Component) {
+        // Attempt to get the module from require cache
+        try {
+          const mod = require("../../app/buscar/components/SearchStateManager");
+          Component = mod.SearchStateManager || mod.default || mod;
+        } catch { return null; }
+      }
+      return Component ? <Component {...props} /> : null;
+    };
+  };
+});
 
 jest.mock("../../app/buscar/components/PartialResultsPrompt", () => ({
   PartialResultsPrompt: () => null,
@@ -82,7 +104,7 @@ jest.mock("../../app/components/OrdenacaoSelect", () => ({
   OrdenacaoSelect: () => null,
 }));
 
-jest.mock("../../components/GoogleSheetsExportButton", () => ({
+jest.mock("../../app/buscar/components/GoogleSheetsExportButton", () => ({
   __esModule: true,
   default: () => null,
 }));

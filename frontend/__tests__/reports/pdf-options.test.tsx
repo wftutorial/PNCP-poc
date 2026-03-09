@@ -96,7 +96,7 @@ jest.mock("../../app/buscar/components/SourceStatusGrid", () => ({
 jest.mock("../../app/buscar/components/UfProgressGrid", () => ({
   UfProgressGrid: () => null,
 }));
-jest.mock("../../components/EnhancedLoadingProgress", () => ({
+jest.mock("../../app/buscar/components/EnhancedLoadingProgress", () => ({
   EnhancedLoadingProgress: () => null,
 }));
 jest.mock("../../app/components/LoadingResultsSkeleton", () => ({
@@ -116,7 +116,7 @@ jest.mock("../../app/components/OrdenacaoSelect", () => ({
 jest.mock("../../app/components/QuotaCounter", () => ({
   QuotaCounter: () => null,
 }));
-jest.mock("../../components/GoogleSheetsExportButton", () => ({
+jest.mock("../../app/buscar/components/GoogleSheetsExportButton", () => ({
   __esModule: true,
   default: () => null,
 }));

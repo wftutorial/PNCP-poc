@@ -8,7 +8,7 @@
  */
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { ModalidadeFilter, MODALIDADES } from "../components/ModalidadeFilter";
+import { ModalidadeFilter, MODALIDADES } from "../app/buscar/components/ModalidadeFilter";
 
 describe("ModalidadeFilter — STORY-241", () => {
   const mockOnChange = jest.fn();

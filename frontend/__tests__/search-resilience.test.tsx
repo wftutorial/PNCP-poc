@@ -11,6 +11,23 @@ import "@testing-library/jest-dom";
 
 // ---- Module mocks (hoisted by Jest) ----
 
+// DEBT-106: next/dynamic — resolve dynamic imports synchronously in tests
+jest.mock("next/dynamic", () => {
+  return (loader: () => Promise<any>, _opts?: any) => {
+    let Comp: any = null;
+    loader().then((mod: any) => { Comp = mod.default || mod; });
+    return function DynamicWrapper(props: any) {
+      if (!Comp) {
+        try {
+          const m = require("../app/buscar/components/SearchStateManager");
+          Comp = m.SearchStateManager || m.default || m;
+        } catch { return null; }
+      }
+      return Comp ? <Comp {...props} /> : null;
+    };
+  };
+});
+
 jest.mock("sonner", () => ({
   toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() },
 }));

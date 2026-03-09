@@ -11,11 +11,11 @@ Se usuário abre search em duas tabs, ambas fazem POST /buscar independentemente
 
 ## Critérios de Aceitação
 
-- [ ] AC1: `BroadcastChannel('smartlic-search')` para comunicação cross-tab
-- [ ] AC2: Evento `search_complete` notifica outras tabs
-- [ ] AC3: Tab inativa pode atualizar resultados sem re-fetch
-- [ ] AC4: Graceful degradation se BroadcastChannel não suportado
-- [ ] AC5: Teste unitário
+- [x] AC1: `BroadcastChannel('smartlic-search')` para comunicação cross-tab
+- [x] AC2: Evento `search_complete` notifica outras tabs
+- [x] AC3: Tab inativa pode atualizar resultados sem re-fetch
+- [x] AC4: Graceful degradation se BroadcastChannel não suportado
+- [x] AC5: Teste unitário
 
 ## Arquivos Afetados
 

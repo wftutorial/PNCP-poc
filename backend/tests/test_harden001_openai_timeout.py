@@ -1,4 +1,4 @@
-"""HARDEN-001: Verify OpenAI client uses timeout=15s and max_retries=1."""
+"""HARDEN-001 / DEBT-103 AC1: Verify OpenAI client uses timeout=5s and max_retries=1."""
 
 from unittest.mock import patch, MagicMock
 
@@ -19,13 +19,13 @@ class TestOpenAIClientTimeout:
     """AC1-AC4: Verify timeout, max_retries, and env-var configurability."""
 
     @patch("llm_arbiter.OpenAI")
-    def test_default_timeout_15s(self, mock_openai_cls):
-        """AC1: OpenAI() initialized with timeout=15."""
+    def test_default_timeout_5s(self, mock_openai_cls):
+        """DEBT-103 AC1: OpenAI() initialized with timeout=5 (was 15)."""
         import llm_arbiter
         llm_arbiter._get_client()
         mock_openai_cls.assert_called_once()
         kwargs = mock_openai_cls.call_args[1]
-        assert kwargs["timeout"] == 15.0
+        assert kwargs["timeout"] == 5.0
 
     @patch("llm_arbiter.OpenAI")
     def test_max_retries_1(self, mock_openai_cls):

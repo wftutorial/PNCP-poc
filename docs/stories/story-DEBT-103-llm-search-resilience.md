@@ -26,15 +26,15 @@ Como engenheiro de confiabilidade, quero implementar protecoes contra thread sta
 
 ## Acceptance Criteria
 
-- [ ] AC1: OpenAI client timeout reduzido para 3-5s (alinhado com p99 observado)
-- [ ] AC2: Thread starvation test — 50 concurrent LLM calls nao bloqueiam event loop
-- [ ] AC3: LRU cache com limite de 5000 entries; eviction funciona corretamente
-- [ ] AC4: Metricas de cache hit/miss/eviction expostas via Prometheus
-- [ ] AC5: Dedup merge-enrichment: campos nao-vazios de fonte lower-priority enriquecem resultado
-- [ ] AC6: Per-future timeout counter: metricas por future individual (nao so batch total)
-- [ ] AC7: Per-UF timeout de 30s normal, 15s em modo degradado; cascata prevenida
-- [ ] AC8: UF batching: max 5 UFs simultaneas com 2s delay entre batches
-- [ ] AC9: Config variaveis para todos os valores: `OPENAI_TIMEOUT_S`, `LRU_MAX_SIZE`, `PNCP_BATCH_SIZE`, `PNCP_BATCH_DELAY_S`
+- [x] AC1: OpenAI client timeout reduzido para 3-5s (alinhado com p99 observado)
+- [x] AC2: Thread starvation test — 50 concurrent LLM calls nao bloqueiam event loop
+- [x] AC3: LRU cache com limite de 5000 entries; eviction funciona corretamente
+- [x] AC4: Metricas de cache hit/miss/eviction expostas via Prometheus
+- [x] AC5: Dedup merge-enrichment: campos nao-vazios de fonte lower-priority enriquecem resultado
+- [x] AC6: Per-future timeout counter: metricas por future individual (nao so batch total)
+- [x] AC7: Per-UF timeout de 30s normal, 15s em modo degradado; cascata prevenida
+- [x] AC8: UF batching: max 5 UFs simultaneas com 2s delay entre batches
+- [x] AC9: Config variaveis para todos os valores: `OPENAI_TIMEOUT_S`, `LRU_MAX_SIZE`, `PNCP_BATCH_SIZE`, `PNCP_BATCH_DELAY_S`
 
 ## Testes Requeridos
 
@@ -62,10 +62,10 @@ Como engenheiro de confiabilidade, quero implementar protecoes contra thread sta
 
 ## Definition of Done
 
-- [ ] Codigo implementado (6 items)
-- [ ] Testes unitarios para cada item passando
-- [ ] Metricas Prometheus expostas (cache, timeouts)
-- [ ] Config variaveis documentadas em `.env.example`
+- [x] Codigo implementado (6 items)
+- [x] Testes unitarios para cada item passando (36 tests in test_debt103_llm_search_resilience.py)
+- [x] Metricas Prometheus expostas (cache, timeouts)
+- [x] Config variaveis documentadas em `.env.example`
 - [ ] Code review aprovado
 - [ ] Deploy em staging com monitoramento
-- [ ] Documentacao atualizada
+- [x] Documentacao atualizada

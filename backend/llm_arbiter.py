@@ -25,14 +25,18 @@ from typing import Any, Literal, Optional
 from pydantic import BaseModel, Field, field_validator
 
 from openai import OpenAI
-from metrics import LLM_CALLS, LLM_DURATION, EVIDENCE_PREFIX_STRIPPED, ARBITER_CACHE_SIZE
+from metrics import (
+    LLM_CALLS, LLM_DURATION, EVIDENCE_PREFIX_STRIPPED, ARBITER_CACHE_SIZE,
+    ARBITER_CACHE_HITS, ARBITER_CACHE_MISSES, ARBITER_CACHE_EVICTIONS,
+)
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
-# HARDEN-001: OpenAI client timeout (default 600s → 15s)
-# GPT-4.1-nano p99 ≈ 3s; 15s = 5× p99. Prevents thread starvation on LLM hangs.
-_LLM_TIMEOUT = float(os.getenv("LLM_TIMEOUT_S", "15"))
+# HARDEN-001 / DEBT-103 AC1: OpenAI client timeout (default 600s → 15s → 5s)
+# GPT-4.1-nano p99 ≈ 1s; 5s = 5× p99. Prevents thread starvation on LLM hangs.
+# Configurable via OPENAI_TIMEOUT_S (preferred) or LLM_TIMEOUT_S (legacy alias).
+_LLM_TIMEOUT = float(os.getenv("OPENAI_TIMEOUT_S", os.getenv("LLM_TIMEOUT_S", "5")))
 
 # OpenAI client (initialized lazily to avoid import-time errors in tests)
 _client: Optional[OpenAI] = None
@@ -71,18 +75,19 @@ _USD_TO_BRL = 5.0  # approximate
 # In-memory L1 cache for LLM decisions (key = MD5 hash of input)
 # D-02 AC8: Cache value is now dict (structured) or bool (legacy), keyed with prompt version
 # STORY-294 AC3: L2 cache in Redis hash with 1h TTL for cross-worker sharing
-# HARDEN-009: LRU eviction with size limit to prevent unbounded memory growth
-_ARBITER_CACHE_MAX = 5000
+# HARDEN-009 / DEBT-103 AC3: LRU eviction with configurable size limit
+_ARBITER_CACHE_MAX = int(os.getenv("LRU_MAX_SIZE", "5000"))
 _arbiter_cache: OrderedDict[str, Any] = OrderedDict()
 _ARBITER_REDIS_PREFIX = "smartlic:arbiter:"
 
 
 def _arbiter_cache_set(key: str, value: Any) -> None:
-    """HARDEN-009: Set cache entry with LRU eviction."""
+    """HARDEN-009 / DEBT-103 AC4: Set cache entry with LRU eviction + metrics."""
     _arbiter_cache[key] = value
     _arbiter_cache.move_to_end(key)
     while len(_arbiter_cache) > _ARBITER_CACHE_MAX:
         _arbiter_cache.popitem(last=False)
+        ARBITER_CACHE_EVICTIONS.inc()
     ARBITER_CACHE_SIZE.set(len(_arbiter_cache))
 
 
@@ -704,9 +709,10 @@ Os termos buscados descrevem o OBJETO PRINCIPAL deste contrato (não itens secun
         f"{prompt_version}:{mode}:{context}:{valor}:{objeto_truncated}:{prompt_level}:{setor_id or ''}".encode()
     ).hexdigest()
 
-    # STORY-294: L1 (in-memory) → L2 (Redis) cache lookup
+    # STORY-294 / DEBT-103 AC4: L1 (in-memory) → L2 (Redis) cache lookup with metrics
     if cache_key in _arbiter_cache:
         _arbiter_cache.move_to_end(cache_key)
+        ARBITER_CACHE_HITS.labels(level="l1").inc()
         logger.debug(
             f"LLM arbiter cache L1 HIT: mode={mode} "
             f"context={context[:50]}... valor={valor}"
@@ -715,7 +721,10 @@ Os termos buscados descrevem o OBJETO PRINCIPAL deste contrato (não itens secun
 
     redis_cached = _arbiter_cache_get_redis(cache_key)
     if redis_cached is not None:
+        ARBITER_CACHE_HITS.labels(level="l2").inc()
         return redis_cached
+
+    ARBITER_CACHE_MISSES.inc()
 
     # Call LLM
     try:

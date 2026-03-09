@@ -151,6 +151,23 @@ CACHE_MISSES = _create_counter(
     labelnames=["level"],
 )
 
+# DEBT-103 AC4: Arbiter LRU cache hit/miss/eviction counters
+ARBITER_CACHE_HITS = _create_counter(
+    "smartlic_arbiter_cache_hits_total",
+    "Arbiter LRU cache hit count",
+    labelnames=["level"],  # "l1" (in-memory), "l2" (redis)
+)
+
+ARBITER_CACHE_MISSES = _create_counter(
+    "smartlic_arbiter_cache_misses_total",
+    "Arbiter LRU cache miss count",
+)
+
+ARBITER_CACHE_EVICTIONS = _create_counter(
+    "smartlic_arbiter_cache_evictions_total",
+    "Arbiter LRU cache evictions when max size exceeded",
+)
+
 API_ERRORS = _create_counter(
     "smartlic_api_errors_total",
     "API error count by source and type",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useUser } from "../../../contexts/UserContext";
@@ -11,14 +11,15 @@ import { ATESTADOS_CATALOG, PORTE_OPTIONS, EXPERIENCIA_OPTIONS, ALL_UFS } from "
 import { ProfileField, SelectField, NumberField } from "../conta-fields";
 import { Label } from "../../../components/ui/Label";
 import { profileSchema, type ProfileFormData } from "../../../lib/schemas/forms";
+import { useProfileContext } from "../../../hooks/useProfileContext";
 
 /** DEBT-011 FE-001: /conta/perfil — Profile editing + Licitante profile. */
 export default function PerfilPage() {
   const { user, session, authLoading } = useUser();
 
-  // Profile de Licitante state
-  const [profileCtx, setProfileCtx] = useState<ProfileContext | null>(null);
-  const [profileLoading, setProfileLoading] = useState(false);
+  // SWR-based profile context (FE-007)
+  const { profileCtx, isLoading: profileLoading, updateCache } = useProfileContext();
+
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileEdit, setProfileEdit] = useState(false);
 
@@ -51,28 +52,6 @@ export default function PerfilPage() {
   const watchedValorMax = watch("faixa_valor_max");
   const watchedFuncionarios = watch("capacidade_funcionarios");
   const watchedFaturamento = watch("faturamento_anual");
-
-  const fetchProfileCtx = useCallback(async () => {
-    if (!session?.access_token) return;
-    setProfileLoading(true);
-    try {
-      const res = await fetch("/api/profile-context", {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setProfileCtx(data.context_data ?? {});
-      }
-    } catch {
-      // silent
-    } finally {
-      setProfileLoading(false);
-    }
-  }, [session?.access_token]);
-
-  useEffect(() => {
-    fetchProfileCtx();
-  }, [fetchProfileCtx]);
 
   const startEdit = () => {
     if (!profileCtx) return;
@@ -114,7 +93,7 @@ export default function PerfilPage() {
       });
       if (res.ok) {
         const resData = await res.json();
-        setProfileCtx(resData.context_data ?? payload);
+        updateCache(resData.context_data ?? payload);
         setProfileEdit(false);
         toast.success("Perfil de licitante atualizado!");
       } else {

@@ -6,6 +6,7 @@ import { PageHeader } from "../../components/PageHeader";
 import { ErrorStateWithRetry } from "../../components/ErrorStateWithRetry";
 import { AuthLoadingScreen } from "../../components/AuthLoadingScreen";
 import { getUserFriendlyError } from "../../lib/error-messages";
+import { useConversations } from "../../hooks/useConversations";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type {
@@ -58,13 +59,19 @@ export default function MensagensPage() {
   const router = useRouter();
 
   // State
-  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [selectedConv, setSelectedConv] = useState<ConversationDetail | null>(null);
   const [statusFilter, setStatusFilter] = useState("");
-  const [loading, setLoading] = useState(true);
   const [loadingThread, setLoadingThread] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [fetchError, setFetchError] = useState(false);
+
+  // SWR-based conversations list (FE-007)
+  const {
+    conversations,
+    isLoading: loading,
+    error: conversationsError,
+    mutate: mutateConversations,
+  } = useConversations({ statusFilter });
+  const fetchError = !!conversationsError;
 
   // New conversation form
   const [showNew, setShowNew] = useState(false);
@@ -91,34 +98,6 @@ export default function MensagensPage() {
     if (!authLoading && !user) router.push("/login");
   }, [authLoading, user, router]);
 
-  // Fetch conversations
-  const fetchConversations = useCallback(async () => {
-    if (!authHeader) return;
-    setLoading(true);
-    setError(null);
-    setFetchError(false);
-    try {
-      const params = new URLSearchParams();
-      if (statusFilter) params.set("status", statusFilter);
-      const qs = params.toString();
-      const res = await fetch(
-        `/api/messages/conversations${qs ? `?${qs}` : ""}`,
-        { headers: { ...authHeader, "Content-Type": "application/json" } },
-      );
-      if (!res.ok) throw new Error("Erro ao carregar conversas");
-      const data = await res.json();
-      setConversations(data.conversations || []);
-    } catch (err) {
-      setError(getUserFriendlyError(err));
-      setFetchError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [authHeader, statusFilter]);
-
-  useEffect(() => {
-    if (session?.access_token) fetchConversations();
-  }, [session?.access_token, statusFilter]);
 
   // Fetch single conversation thread
   const fetchThread = useCallback(
@@ -167,7 +146,7 @@ export default function MensagensPage() {
       setNewSubject("");
       setNewBody("");
       setShowNew(false);
-      await fetchConversations();
+      await mutateConversations();
       // Open the newly created conversation
       fetchThread(data.id);
     } catch {
@@ -194,7 +173,7 @@ export default function MensagensPage() {
       if (!res.ok) throw new Error("Erro ao enviar resposta");
       setReplyBody("");
       await fetchThread(selectedConv.id);
-      fetchConversations(); // refresh list for status change
+      mutateConversations(); // refresh list for status change
     } catch {
       setError("Erro ao enviar resposta");
     } finally {
@@ -216,7 +195,7 @@ export default function MensagensPage() {
       );
       if (!res.ok) throw new Error("Erro ao atualizar status");
       await fetchThread(selectedConv.id);
-      fetchConversations();
+      mutateConversations(); // refresh list for status change
     } catch {
       setError("Erro ao atualizar status");
     }
@@ -366,7 +345,7 @@ export default function MensagensPage() {
             ) : fetchError ? (
               <ErrorStateWithRetry
                 message="Nao foi possivel carregar suas conversas."
-                onRetry={fetchConversations}
+                onRetry={() => { mutateConversations(); }}
                 compact
               />
             ) : conversations.length === 0 ? (

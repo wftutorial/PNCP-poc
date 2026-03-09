@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useInView } from '@/app/hooks/useInView';
+import { useDiscardRate } from '@/hooks/usePublicMetrics';
 
 interface StatsSectionProps {
   className?: string;
@@ -17,29 +18,10 @@ interface StatsSectionProps {
 export default function StatsSection({ className = '' }: StatsSectionProps) {
   const { ref, isInView } = useInView({ threshold: 0.2 });
   const [counts, setCounts] = useState({ sectors: 0, rules: 0, states: 0, filtered: 0 });
-  const [discardRate, setDiscardRate] = useState<number | null>(null);
-  const [discardLoading, setDiscardLoading] = useState(true);
   const hasAnimated = useRef(false);
 
-  // STORY-351 AC4: Fetch discard rate from backend
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch('/api/metrics/discard-rate');
-        if (!res.ok) throw new Error('fetch failed');
-        const data = await res.json();
-        if (!cancelled && data.sample_size > 0 && data.discard_rate_pct > 0) {
-          setDiscardRate(Math.round(data.discard_rate_pct));
-        }
-      } catch {
-        // Fallback handled in render
-      } finally {
-        if (!cancelled) setDiscardLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
+  // STORY-351 AC4: Fetch discard rate from backend (FE-007: SWR)
+  const { discardRate, isLoading: discardLoading } = useDiscardRate();
 
   useEffect(() => {
     if (!isInView || hasAnimated.current || discardLoading) return;

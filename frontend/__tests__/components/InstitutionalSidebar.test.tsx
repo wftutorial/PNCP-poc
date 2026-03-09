@@ -2,19 +2,28 @@ import { render, screen, act, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import InstitutionalSidebar from '../../app/components/InstitutionalSidebar';
 
-// STORY-358: Global fetch mock for signup variant (jsdom lacks fetch)
-const originalFetch = global.fetch;
+// FE-007: InstitutionalSidebar now uses useDailyVolume SWR hook instead of direct fetch.
+// Mock the hook to control signup variant stat values.
+let mockDailyVolumeValue: string | null = null;
+let mockDailyVolumeLoading = false;
+jest.mock('../../hooks/usePublicMetrics', () => ({
+  useDailyVolume: () => ({
+    displayValue: mockDailyVolumeValue,
+    isLoading: mockDailyVolumeLoading,
+    error: null,
+  }),
+  useDiscardRate: () => ({
+    discardRate: null,
+    isLoading: false,
+    error: null,
+  }),
+}));
+
 beforeEach(() => {
-  // Provide a default no-op fetch that returns fallback for all signup renders
-  if (!global.fetch) {
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ display_value: 'centenas', avg_bids_per_day: 0 }),
-    } as Response);
-  }
+  mockDailyVolumeValue = null; // null → shows "centenas" fallback
+  mockDailyVolumeLoading = false;
 });
 afterEach(() => {
-  global.fetch = originalFetch;
   jest.restoreAllMocks();
 });
 
@@ -224,7 +233,8 @@ describe('InstitutionalSidebar', () => {
 
   describe('STORY-358: Dynamic Daily Volume', () => {
     it('shows "centenas" as fallback when API fetch fails', async () => {
-      global.fetch = jest.fn().mockRejectedValue(new Error('Network error'));
+      // FE-007: hook returns null → component shows "centenas" fallback
+      mockDailyVolumeValue = null;
 
       await act(async () => {
         render(<InstitutionalSidebar variant="signup" />);
@@ -235,10 +245,8 @@ describe('InstitutionalSidebar', () => {
     });
 
     it('shows dynamic value after successful API fetch', async () => {
-      global.fetch = jest.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({ display_value: '1200+' }),
-      } as Response);
+      // FE-007: hook returns the fetched display value
+      mockDailyVolumeValue = '1200+';
 
       await act(async () => {
         render(<InstitutionalSidebar variant="signup" />);
@@ -251,20 +259,19 @@ describe('InstitutionalSidebar', () => {
     });
 
     it('does NOT fetch for login variant', async () => {
-      global.fetch = jest.fn();
-
+      // FE-007: hook is called regardless of variant but component uses displayValue for signup only.
+      // For login, stats are static — the "centenas" dynamic stat doesn't appear.
       await act(async () => {
         render(<InstitutionalSidebar variant="login" />);
       });
 
-      expect(global.fetch).not.toHaveBeenCalled();
+      // Login variant doesn't show "licitações/dia" stat (that's signup-only)
+      expect(screen.queryByText('licitações/dia')).not.toBeInTheDocument();
     });
 
     it('shows "centenas" fallback when API returns non-ok response', async () => {
-      global.fetch = jest.fn().mockResolvedValue({
-        ok: false,
-        json: async () => ({ display_value: '999+' }),
-      } as Response);
+      // FE-007: hook returns null when API fails → "centenas" fallback
+      mockDailyVolumeValue = null;
 
       await act(async () => {
         render(<InstitutionalSidebar variant="signup" />);

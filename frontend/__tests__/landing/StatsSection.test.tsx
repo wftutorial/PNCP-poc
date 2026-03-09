@@ -5,25 +5,40 @@ jest.mock('../../app/hooks/useInView', () => ({
   useInView: () => ({ ref: { current: null }, isInView: true }),
 }));
 
-// STORY-351 AC7: Mock fetch for discard-rate endpoint
-const mockFetch = jest.fn();
+// STORY-351 AC7 / FE-007: Mock useDiscardRate SWR hook
+// StatsSection now uses useDiscardRate from usePublicMetrics (SWR-based)
+// instead of a direct global.fetch call.
+let mockDiscardRate: number | null = null;
+let mockDiscardLoading = false;
+jest.mock('@/hooks/usePublicMetrics', () => ({
+  useDiscardRate: () => ({
+    discardRate: mockDiscardRate,
+    isLoading: mockDiscardLoading,
+    error: null,
+  }),
+  useDailyVolume: () => ({
+    displayValue: null,
+    isLoading: false,
+    error: null,
+  }),
+}));
+
 beforeEach(() => {
-  mockFetch.mockReset();
-  global.fetch = mockFetch;
+  mockDiscardRate = null;
+  mockDiscardLoading = false;
 });
 
 import StatsSection from '@/app/components/landing/StatsSection';
 
 describe('StatsSection', () => {
   it('renders section title', () => {
-    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ discard_rate_pct: 0, sample_size: 0 }) });
+    // mockDiscardRate = null → fallback
     render(<StatsSection />);
 
     expect(screen.getByText(/Impacto real no mercado de licitações/i)).toBeInTheDocument();
   });
 
   it('renders hero stat — 15 setores (with counter animation)', async () => {
-    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ discard_rate_pct: 0, sample_size: 0 }) });
     render(<StatsSection />);
 
     // Wait for counter animation to complete (1200ms)
@@ -34,13 +49,10 @@ describe('StatsSection', () => {
   });
 
   it('renders dynamic discard rate from API (STORY-351 AC4/AC6)', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ discard_rate_pct: 91.2, sample_size: 150 }),
-    });
+    mockDiscardRate = 91; // hook already applies Math.round
     render(<StatsSection />);
 
-    // Wait for API fetch + counter animation
+    // Wait for counter animation to complete
     await waitFor(() => {
       expect(screen.getByText('91%')).toBeInTheDocument();
     }, { timeout: 3000 });
@@ -48,10 +60,7 @@ describe('StatsSection', () => {
   });
 
   it('shows fallback "A maioria" when API returns no data (STORY-351 AC4)', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ discard_rate_pct: 0, sample_size: 0 }),
-    });
+    mockDiscardRate = null; // null → show "A maioria" fallback
     render(<StatsSection />);
 
     await waitFor(() => {
@@ -61,7 +70,7 @@ describe('StatsSection', () => {
   });
 
   it('shows fallback "A maioria" when API fails (STORY-351 AC4)', async () => {
-    mockFetch.mockRejectedValue(new Error('Network error'));
+    mockDiscardRate = null; // error → hook returns null → fallback
     render(<StatsSection />);
 
     await waitFor(() => {
@@ -70,8 +79,7 @@ describe('StatsSection', () => {
   });
 
   it('shows loading state before API responds (STORY-351 AC6)', () => {
-    // Never resolve the fetch
-    mockFetch.mockReturnValue(new Promise(() => {}));
+    mockDiscardLoading = true; // Hook is loading
     render(<StatsSection />);
 
     // Loading pulse element should be present
@@ -80,10 +88,7 @@ describe('StatsSection', () => {
   });
 
   it('renders 3 supporting stats with counter animation (SAB-006 AC2/AC6)', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ discard_rate_pct: 87.5, sample_size: 100 }),
-    });
+    mockDiscardRate = 88; // hook applies Math.round(87.5) = 88
     render(<StatsSection />);
 
     // Wait for counter animation to complete
@@ -101,7 +106,7 @@ describe('StatsSection', () => {
   });
 
   it('starts counters at 0 before animation (SAB-006 AC6 — FOUC fix)', () => {
-    mockFetch.mockReturnValue(new Promise(() => {}));
+    mockDiscardLoading = true; // simulate loading to keep counters at 0
     render(<StatsSection />);
 
     // Initial render: counters start at 0 but section has opacity: 0 → no FOUC
@@ -110,7 +115,6 @@ describe('StatsSection', () => {
   });
 
   it('uses hero number layout', () => {
-    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ discard_rate_pct: 0, sample_size: 0 }) });
     const { container } = render(<StatsSection />);
 
     const heroNumber = container.querySelector('.text-5xl, .text-6xl, .text-7xl, .lg\\:text-7xl');
@@ -118,7 +122,6 @@ describe('StatsSection', () => {
   });
 
   it('uses design system tokens', () => {
-    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ discard_rate_pct: 0, sample_size: 0 }) });
     const { container } = render(<StatsSection />);
 
     expect(container.querySelector('.text-brand-navy')).toBeInTheDocument();
@@ -127,7 +130,6 @@ describe('StatsSection', () => {
   });
 
   it('uses tabular-nums for numerical data', () => {
-    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ discard_rate_pct: 0, sample_size: 0 }) });
     const { container } = render(<StatsSection />);
 
     const tabularNums = container.querySelectorAll('.tabular-nums');
@@ -135,13 +137,10 @@ describe('StatsSection', () => {
   });
 
   it('has accessible aria-labels for all stats', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ discard_rate_pct: 0, sample_size: 0 }),
-    });
+    mockDiscardRate = null; // null → "A maioria" fallback
     render(<StatsSection />);
 
-    // Wait for fetch to settle
+    // Wait for animation to settle
     await waitFor(() => {
       expect(screen.getByText('A maioria')).toBeInTheDocument();
     }, { timeout: 3000 });
@@ -153,10 +152,7 @@ describe('StatsSection', () => {
   });
 
   it('has dynamic aria-label when API returns data (STORY-351)', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ discard_rate_pct: 92.0, sample_size: 50 }),
-    });
+    mockDiscardRate = 92;
     render(<StatsSection />);
 
     await waitFor(() => {

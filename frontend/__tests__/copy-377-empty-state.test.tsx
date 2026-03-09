@@ -16,7 +16,7 @@ describe("COPY-377: OnboardingEmptyState copy rewrite", () => {
   beforeAll(() => {
     const filePath = path.resolve(
       __dirname,
-      "../app/buscar/page.tsx"
+      "../app/buscar/components/OnboardingEmptyState.tsx"
     );
     source = fs.readFileSync(filePath, "utf-8");
   });

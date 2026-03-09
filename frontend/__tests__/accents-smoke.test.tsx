@@ -190,7 +190,7 @@ describe("GTM-FIX-034: Portuguese accents smoke test", () => {
 
     it("alertas subtitle should use 'notificações automáticas'", () => {
       const src = fs.readFileSync(
-        require.resolve("../app/alertas/page.tsx"),
+        require.resolve("../app/alertas/components/AlertsPageHeader.tsx"),
         "utf-8"
       );
       expect(src).toContain("notificações automáticas sobre novas licitações");

@@ -28,6 +28,9 @@ const fahkwang = Fahkwang({
   subsets: ["latin"],
   variable: "--font-display",
   display: "swap",
+  // FE-020: Fahkwang is used in headings/display text only; skip preload to
+  // avoid blocking the critical path. DM Sans is the primary body font.
+  preload: false,
 });
 
 const dmMono = DM_Mono({
@@ -35,6 +38,9 @@ const dmMono = DM_Mono({
   subsets: ["latin"],
   variable: "--font-data",
   display: "swap",
+  // FE-020: DM Mono is used in data/code displays; skip preload since it is
+  // not needed for initial rendering of any above-the-fold content.
+  preload: false,
 });
 
 import { APP_NAME } from "../lib/config";

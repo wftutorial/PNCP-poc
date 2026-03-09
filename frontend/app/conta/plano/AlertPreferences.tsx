@@ -1,11 +1,14 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
+import { useAlerts } from "../../../hooks/useAlerts";
+import { useAlertPreferences } from "../../../hooks/useAlertPreferences";
 
 /**
  * DEBT-011: Alert preferences + user alerts list (extracted from plano page).
+ * FE-007: Converted to SWR hooks.
  */
 
 interface AlertPreferencesProps {
@@ -13,31 +16,17 @@ interface AlertPreferencesProps {
 }
 
 export function AlertPreferences({ accessToken }: AlertPreferencesProps) {
-  const [alertEnabled, setAlertEnabled] = useState(true);
-  const [alertFrequency, setAlertFrequency] = useState("daily");
-  const [alertLoading, setAlertLoading] = useState(false);
   const [alertSaving, setAlertSaving] = useState(false);
   const [digestMode, setDigestMode] = useState<"individual" | "consolidated">("individual");
-  const [userAlerts, setUserAlerts] = useState<Array<{ id: string; name: string; active: boolean }>>([]);
-  const [userAlertsLoading, setUserAlertsLoading] = useState(false);
 
-  const fetchAlertPrefs = useCallback(async () => {
-    setAlertLoading(true);
-    try {
-      const res = await fetch("/api/alert-preferences", { headers: { Authorization: `Bearer ${accessToken}` } });
-      if (res.ok) { const data = await res.json(); setAlertEnabled(data.enabled ?? true); setAlertFrequency(data.frequency ?? "daily"); }
-    } catch { /* silent */ } finally { setAlertLoading(false); }
-  }, [accessToken]);
+  // SWR-based data (FE-007)
+  const { preferences, isLoading: alertLoading, mutate: mutatePrefs } = useAlertPreferences();
+  const { alerts: userAlerts, isLoading: userAlertsLoading } = useAlerts();
 
-  const fetchUserAlerts = useCallback(async () => {
-    setUserAlertsLoading(true);
-    try {
-      const res = await fetch("/api/alerts", { headers: { Authorization: `Bearer ${accessToken}` } });
-      if (res.ok) { const data = await res.json(); setUserAlerts(Array.isArray(data) ? data : data.alerts || []); }
-    } catch { /* silent */ } finally { setUserAlertsLoading(false); }
-  }, [accessToken]);
+  const alertEnabled = preferences?.enabled ?? true;
+  const alertFrequency = preferences?.frequency ?? "daily";
 
-  const handleSave = useCallback(async (enabled: boolean, frequency: string) => {
+  const handleSave = async (enabled: boolean, frequency: string) => {
     setAlertSaving(true);
     try {
       const res = await fetch("/api/alert-preferences", {
@@ -45,12 +34,15 @@ export function AlertPreferences({ accessToken }: AlertPreferencesProps) {
         headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
         body: JSON.stringify({ enabled, frequency }),
       });
-      if (res.ok) { const data = await res.json(); setAlertEnabled(data.enabled); setAlertFrequency(data.frequency); toast.success("Preferências de alerta atualizadas"); }
-      else toast.error("Erro ao salvar preferências");
+      if (res.ok) {
+        const data = await res.json();
+        await mutatePrefs(data, { revalidate: false });
+        toast.success("Preferências de alerta atualizadas");
+      } else {
+        toast.error("Erro ao salvar preferências");
+      }
     } catch { toast.error("Erro de conexão"); } finally { setAlertSaving(false); }
-  }, [accessToken]);
-
-  useEffect(() => { fetchAlertPrefs(); fetchUserAlerts(); }, [fetchAlertPrefs, fetchUserAlerts]);
+  };
 
   return (
     <>
@@ -66,7 +58,7 @@ export function AlertPreferences({ accessToken }: AlertPreferencesProps) {
             <div className="flex items-center justify-between">
               <span className="text-sm text-[var(--ink)]">Receber alerta por email</span>
               <button type="button" role="switch" aria-checked={alertEnabled} disabled={alertSaving} data-testid="alert-toggle"
-                onClick={() => { const v = !alertEnabled; setAlertEnabled(v); handleSave(v, alertFrequency); }}
+                onClick={() => { const v = !alertEnabled; handleSave(v, alertFrequency); }}
                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--brand-blue)] ${alertEnabled ? "bg-[var(--brand-navy)]" : "bg-[var(--surface-2)]"} ${alertSaving ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}>
                 <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${alertEnabled ? "translate-x-6" : "translate-x-1"}`} />
               </button>
@@ -79,7 +71,7 @@ export function AlertPreferences({ accessToken }: AlertPreferencesProps) {
                   <div className="flex flex-wrap gap-2">
                     {[{ value: "daily", label: "Diário" }, { value: "twice_weekly", label: "2x por semana" }, { value: "weekly", label: "Semanal" }].map((opt) => (
                       <button key={opt.value} type="button" disabled={alertSaving} data-testid={`alert-freq-${opt.value}`}
-                        onClick={() => { setAlertFrequency(opt.value); handleSave(alertEnabled, opt.value); }}
+                        onClick={() => { handleSave(alertEnabled, opt.value); }}
                         className={`px-4 py-2 rounded-button text-sm font-medium transition-colors ${alertFrequency === opt.value ? "bg-[var(--brand-navy)] text-white" : "border border-[var(--border)] bg-[var(--surface-0)] text-[var(--ink)] hover:bg-[var(--surface-1)]"} ${alertSaving ? "opacity-50 cursor-not-allowed" : ""}`}>
                         {opt.label}
                       </button>

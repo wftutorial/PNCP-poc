@@ -93,6 +93,19 @@ jest.mock('next/link', () => {
   };
 });
 
+// Mock useProfileContext (FE-007 SWR migration)
+// PerfilPage now calls useProfileContext which internally uses useAuth from AuthProvider.
+// Mocking at module level prevents the AuthProvider dependency.
+jest.mock('@/hooks/useProfileContext', () => ({
+  useProfileContext: () => ({
+    profileCtx: {},
+    isLoading: false,
+    error: null,
+    updateCache: jest.fn(),
+    mutate: jest.fn(),
+  }),
+}));
+
 // Mock fetch
 global.fetch = jest.fn();
 

@@ -1,0 +1,25 @@
+{
+  "extends": ["next/core-web-vitals"],
+  "rules": {
+    "no-restricted-imports": [
+      "warn",
+      {
+        "patterns": [
+          {
+            "group": ["*/app/buscar/components/*"],
+            "importNames": [],
+            "message": "Do not import feature-specific buscar components outside the buscar feature. Promote to components/ if reuse is needed."
+          },
+          {
+            "group": ["*/app/alertas/components/*"],
+            "message": "Do not import feature-specific alertas components outside the alertas feature. Promote to components/ if reuse is needed."
+          },
+          {
+            "group": ["*/app/dashboard/components/*"],
+            "message": "Do not import feature-specific dashboard components outside the dashboard feature. Promote to components/ if reuse is needed."
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -46,6 +46,22 @@ jest.mock("sonner", () => ({
   toast: { success: jest.fn(), error: jest.fn() },
 }));
 
+// ─── Mock useProfileContext (FE-007 SWR migration) ───────────────────────────
+// PerfilPage now calls useProfileContext which internally uses useAuth from AuthProvider.
+// We mock the hook at module level to avoid AuthProvider dependency.
+let mockProfileCtxData: Record<string, unknown> = {};
+let mockProfileCtxLoading = false;
+const mockUpdateCache = jest.fn();
+jest.mock("../hooks/useProfileContext", () => ({
+  useProfileContext: () => ({
+    profileCtx: mockProfileCtxData,
+    isLoading: mockProfileCtxLoading,
+    error: null,
+    updateCache: mockUpdateCache,
+    mutate: jest.fn(),
+  }),
+}));
+
 jest.mock("next/link", () => ({
   __esModule: true,
   default: ({ children, href, ...rest }: { children: React.ReactNode; href: string; [k: string]: unknown }) => (
@@ -95,6 +111,10 @@ const FULL_PROFILE = {
 };
 
 function mockFetchResponses(profileData: Record<string, unknown> = EMPTY_PROFILE) {
+  // Set up the SWR hook mock data (context_data extracted from profileData)
+  mockProfileCtxData = (profileData.context_data as Record<string, unknown>) ?? {};
+  mockProfileCtxLoading = false;
+  // Also keep global.fetch for any other calls (e.g. save operations)
   global.fetch = jest.fn().mockImplementation((url: string) => {
     if (url.includes("/api/profile-context")) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve(profileData) });

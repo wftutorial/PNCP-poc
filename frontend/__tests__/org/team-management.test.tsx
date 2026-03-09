@@ -487,11 +487,28 @@ jest.mock("../../hooks/usePlan", () => ({
   usePlan: () => mockUsePlan(),
 }));
 
+// ─── useOrganization ──────────────────────────────────────────────────────────
+// EquipePage now uses useOrganization SWR hook instead of two direct fetch calls.
+// Mock the hook so tests control org data without SWR caching issues.
+
+const mockUseOrganization = jest.fn();
+jest.mock("../../hooks/useOrganization", () => ({
+  useOrganization: () => mockUseOrganization(),
+}));
+
 import EquipePage from "../../app/conta/equipe/page";
 
 describe("EquipePage — /conta/equipe", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Default: no org loaded (tests override as needed)
+    mockUseOrganization.mockReturnValue({
+      org: null,
+      isLoading: false,
+      error: null,
+      mutate: jest.fn(),
+      refresh: jest.fn(),
+    });
   });
 
   // ── Upgrade prompt for non-consultoria plans ───────────────────────────────
@@ -618,19 +635,14 @@ describe("EquipePage — /conta/equipe", () => {
         },
       });
 
-      // Step 1: GET /api/organizations → OrgRef
-      // Step 2: GET /api/organizations/org-123 → full org
-      mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          status: 200,
-          json: async () => ({ id: "org-123", name: "Consultoria XYZ", role: "owner" }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          status: 200,
-          json: async () => mockOrg,
-        });
+      // useOrganization hook returns org data directly (replaces two-step fetch)
+      mockUseOrganization.mockReturnValue({
+        org: mockOrg,
+        isLoading: false,
+        error: null,
+        mutate: jest.fn(),
+        refresh: jest.fn(),
+      });
     });
 
     it("renders accepted member names in the list", async () => {
@@ -707,6 +719,14 @@ describe("EquipePage — /conta/equipe", () => {
           user: { email: "user0@org.com" },
         },
       });
+      // Default: no org loaded (overridden per test)
+      mockUseOrganization.mockReturnValue({
+        org: null,
+        isLoading: false,
+        error: null,
+        mutate: jest.fn(),
+        refresh: jest.fn(),
+      });
     });
 
     const buildOrg = (accepted: number, pending: number, maxSeats: number) => ({
@@ -740,15 +760,13 @@ describe("EquipePage — /conta/equipe", () => {
 
     it("shows correct accepted count and max seats in X/Y membros", async () => {
       const org = buildOrg(3, 1, 5);
-      mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ id: "org-123", name: "Org Teste", role: "owner" }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => org,
-        });
+      mockUseOrganization.mockReturnValue({
+        org,
+        isLoading: false,
+        error: null,
+        mutate: jest.fn(),
+        refresh: jest.fn(),
+      });
 
       render(<EquipePage />);
 
@@ -762,15 +780,13 @@ describe("EquipePage — /conta/equipe", () => {
 
     it("shows pending badge count when there are pending invites", async () => {
       const org = buildOrg(2, 2, 5);
-      mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ id: "org-123", name: "Org Teste", role: "owner" }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => org,
-        });
+      mockUseOrganization.mockReturnValue({
+        org,
+        isLoading: false,
+        error: null,
+        mutate: jest.fn(),
+        refresh: jest.fn(),
+      });
 
       render(<EquipePage />);
 
@@ -780,7 +796,14 @@ describe("EquipePage — /conta/equipe", () => {
     });
 
     it("shows no-org state when /api/organizations returns 404", async () => {
-      mockFetch.mockResolvedValueOnce({ ok: false, status: 404, json: async () => ({}) });
+      // Hook returns null org (as when org is not found)
+      mockUseOrganization.mockReturnValue({
+        org: null,
+        isLoading: false,
+        error: null,
+        mutate: jest.fn(),
+        refresh: jest.fn(),
+      });
 
       render(<EquipePage />);
 
@@ -791,15 +814,13 @@ describe("EquipePage — /conta/equipe", () => {
 
     it("shows empty message when org has no members", async () => {
       const org = buildOrg(0, 0, 5);
-      mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ id: "org-123", name: "Org Teste", role: "owner" }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => org,
-        });
+      mockUseOrganization.mockReturnValue({
+        org,
+        isLoading: false,
+        error: null,
+        mutate: jest.fn(),
+        refresh: jest.fn(),
+      });
 
       render(<EquipePage />);
 
@@ -809,16 +830,13 @@ describe("EquipePage — /conta/equipe", () => {
     });
 
     it("shows error state when org API call fails", async () => {
-      mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ id: "org-123", name: "Org Teste", role: "owner" }),
-        })
-        .mockResolvedValueOnce({
-          ok: false,
-          status: 500,
-          json: async () => ({ message: "Servidor indisponível" }),
-        });
+      mockUseOrganization.mockReturnValue({
+        org: null,
+        isLoading: false,
+        error: "Servidor indisponível",
+        mutate: jest.fn(),
+        refresh: jest.fn(),
+      });
 
       render(<EquipePage />);
 

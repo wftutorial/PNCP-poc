@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { useAuth } from "../../components/AuthProvider";
 import { usePlan } from "../../../hooks/usePlan";
+import { useOrganization } from "../../../hooks/useOrganization";
 import { PageHeader } from "../../../components/PageHeader";
 import { InviteMemberModal } from "../../../components/org/InviteMemberModal";
 import Link from "next/link";
@@ -67,64 +68,13 @@ export default function EquipePage() {
   const { planInfo, loading: planLoading } = usePlan();
   const accessToken = session?.access_token ?? "";
 
-  const [org, setOrg] = useState<Organization | null>(null);
-  const [loadingOrg, setLoadingOrg] = useState(true);
-  const [orgError, setOrgError] = useState<string | null>(null);
+  // SWR-based org fetching (FE-007)
+  const { org, isLoading: loadingOrg, error: orgError, mutate: mutateOrg } = useOrganization();
 
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
-
-  // ─── Fetch org ─────────────────────────────────────────────────────────────
-
-  const fetchOrg = useCallback(async () => {
-    if (!accessToken) return;
-    setLoadingOrg(true);
-    setOrgError(null);
-
-    try {
-      // Step 1: get org reference (id + role) for the current user
-      const refRes = await fetch("/api/organizations", {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-
-      if (refRes.status === 404) {
-        // User has no org yet
-        setOrg(null);
-        setLoadingOrg(false);
-        return;
-      }
-
-      if (!refRes.ok) {
-        const data = await refRes.json().catch(() => ({}));
-        throw new Error(data.message || "Erro ao carregar organização");
-      }
-
-      const ref: OrgRef = await refRes.json();
-
-      // Step 2: fetch full org details including members
-      const detailRes = await fetch(`/api/organizations/${ref.id}`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-
-      if (!detailRes.ok) {
-        const data = await detailRes.json().catch(() => ({}));
-        throw new Error(data.message || "Erro ao carregar detalhes da organização");
-      }
-
-      const detail: Organization = await detailRes.json();
-      setOrg(detail);
-    } catch (err) {
-      setOrgError(err instanceof Error ? err.message : "Erro ao carregar equipe");
-    } finally {
-      setLoadingOrg(false);
-    }
-  }, [accessToken]);
-
-  useEffect(() => {
-    fetchOrg();
-  }, [fetchOrg]);
 
   // ─── Remove member ─────────────────────────────────────────────────────────
 
@@ -144,11 +94,13 @@ export default function EquipePage() {
         throw new Error(data.message || "Erro ao remover membro");
       }
 
-      // Optimistic update
-      setOrg((prev) =>
-        prev
-          ? { ...prev, members: prev.members.filter((m) => m.id !== memberId) }
-          : prev,
+      // Optimistic update via SWR mutate
+      await mutateOrg(
+        (prev) =>
+          prev
+            ? { ...prev, members: prev.members.filter((m) => m.id !== memberId) }
+            : prev,
+        { revalidate: false }
       );
       setConfirmRemoveId(null);
     } catch (err) {
@@ -232,7 +184,7 @@ export default function EquipePage() {
             {orgError}
           </div>
           <button
-            onClick={fetchOrg}
+            onClick={() => mutateOrg()}
             className="mt-4 px-4 py-2 rounded-button border border-[var(--border)]
                        text-[var(--ink)] text-sm hover:bg-[var(--surface-1)] transition-colors"
           >
@@ -499,7 +451,7 @@ export default function EquipePage() {
       <InviteMemberModal
         isOpen={showInviteModal}
         onClose={() => setShowInviteModal(false)}
-        onInviteSent={fetchOrg}
+        onInviteSent={() => mutateOrg()}
         accessToken={accessToken}
         orgId={org.id}
       />

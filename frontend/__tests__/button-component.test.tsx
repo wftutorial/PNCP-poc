@@ -288,7 +288,7 @@ describe("DEBT-006 AC4: Shared Button adoption across pages", () => {
     { name: "pipeline/page.tsx", path: "app/pipeline/page.tsx" },
     { name: "conta/seguranca/page.tsx", path: "app/conta/seguranca/page.tsx" },
     { name: "conta/dados/page.tsx", path: "app/conta/dados/page.tsx" },
-    { name: "alertas/page.tsx", path: "app/alertas/page.tsx" },
+    { name: "alertas/page.tsx", path: "app/alertas/components/AlertCard.tsx" },
     { name: "SearchForm.tsx", path: "app/buscar/components/SearchForm.tsx" },
     { name: "SearchStateManager.tsx", path: "app/buscar/components/SearchStateManager.tsx" },
     { name: "SearchResults.tsx", path: "app/buscar/components/SearchResults.tsx" },

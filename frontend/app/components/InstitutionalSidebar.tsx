@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { useDailyVolume } from '../../hooks/usePublicMetrics';
 
 // ============================================================================
 // TypeScript Interfaces
@@ -28,11 +29,6 @@ type SidebarContentMap = {
   login: SidebarContent;
   signup: SidebarContent;
 };
-
-interface DailyVolumeData {
-  display_value: string;
-  avg_bids_per_day: number;
-}
 
 interface InstitutionalSidebarProps {
   variant: 'login' | 'signup';
@@ -182,25 +178,9 @@ const SIDEBAR_CONTENT: SidebarContentMap = {
 export default function InstitutionalSidebar({ variant, className = "", scrollTargetId }: InstitutionalSidebarProps) {
   const content = SIDEBAR_CONTENT[variant];
   const [showChevron, setShowChevron] = useState(!!scrollTargetId);
-  const [dailyVolume, setDailyVolume] = useState<string | null>(null);
-  const fetchedRef = useRef(false);
 
-  // STORY-358 AC4: Fetch dynamic daily volume for signup variant
-  useEffect(() => {
-    if (variant !== 'signup' || fetchedRef.current) return;
-    fetchedRef.current = true;
-
-    fetch('/api/metrics/daily-volume')
-      .then(res => res.ok ? res.json() : null)
-      .then((data: DailyVolumeData | null) => {
-        if (data?.display_value) {
-          setDailyVolume(data.display_value);
-        }
-      })
-      .catch(() => {
-        // Fallback handled by default state (null → uses "centenas")
-      });
-  }, [variant]);
+  // STORY-358 AC4: Fetch dynamic daily volume for signup variant (FE-007: SWR)
+  const { displayValue: dailyVolume } = useDailyVolume();
 
   // Build stats with dynamic daily volume for signup variant
   const stats = variant === 'signup'

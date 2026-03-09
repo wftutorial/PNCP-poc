@@ -82,6 +82,28 @@ jest.mock("../components/ErrorStateWithRetry", () => ({
 }));
 
 // ---------------------------------------------------------------------------
+// useAlerts SWR hook mock — controlled via mockAlertsHookState
+// ---------------------------------------------------------------------------
+
+interface MockAlertsState {
+  alerts: unknown[];
+  isLoading: boolean;
+  error: string | null;
+  mutate: jest.Mock;
+}
+
+let mockAlertsHookState: MockAlertsState = {
+  alerts: [],
+  isLoading: false,
+  error: null,
+  mutate: jest.fn(),
+};
+
+jest.mock("../hooks/useAlerts", () => ({
+  useAlerts: () => mockAlertsHookState,
+}));
+
+// ---------------------------------------------------------------------------
 // Test data
 // ---------------------------------------------------------------------------
 
@@ -119,6 +141,10 @@ const MOCK_ALERT_2 = {
 // Helpers
 // ---------------------------------------------------------------------------
 
+function setAlertsState(partial: Partial<MockAlertsState>) {
+  mockAlertsHookState = { ...mockAlertsHookState, ...partial };
+}
+
 function mockFetchSuccess(data: unknown, status = 200) {
   (global.fetch as jest.Mock).mockResolvedValueOnce({
     ok: status >= 200 && status < 300,
@@ -155,6 +181,13 @@ describe("AlertasPage", () => {
       user: { id: "test-user", email: "test@example.com" },
       loading: false,
     };
+    // Reset SWR hook state to sensible defaults
+    mockAlertsHookState = {
+      alerts: [],
+      isLoading: false,
+      error: null,
+      mutate: jest.fn(),
+    };
   });
 
   afterEach(() => {
@@ -185,7 +218,7 @@ describe("AlertasPage", () => {
 
   // ---- 3. Empty state ----
   it("renders empty state when no alerts exist", async () => {
-    mockFetchSuccess({ alerts: [] });
+    setAlertsState({ alerts: [], isLoading: false, error: null });
     render(<AlertasPage />);
 
     await waitFor(() => {
@@ -197,7 +230,7 @@ describe("AlertasPage", () => {
 
   // ---- 4. Renders alert list ----
   it("renders alert cards with name and filter summary", async () => {
-    mockFetchSuccess({ alerts: [MOCK_ALERT_1, MOCK_ALERT_2] });
+    setAlertsState({ alerts: [MOCK_ALERT_1, MOCK_ALERT_2], isLoading: false, error: null });
     render(<AlertasPage />);
 
     await waitFor(() => {
@@ -219,7 +252,7 @@ describe("AlertasPage", () => {
 
   // ---- 5. Alert list shows UF summary ----
   it("shows UF count when more than 3 UFs selected", async () => {
-    mockFetchSuccess({ alerts: [MOCK_ALERT_2] });
+    setAlertsState({ alerts: [MOCK_ALERT_2], isLoading: false, error: null });
     render(<AlertasPage />);
 
     await waitFor(() => {
@@ -232,7 +265,7 @@ describe("AlertasPage", () => {
 
   // ---- 6. Alert list shows keywords summary ----
   it("shows keyword count when more than 1 keyword", async () => {
-    mockFetchSuccess({ alerts: [MOCK_ALERT_2] });
+    setAlertsState({ alerts: [MOCK_ALERT_2], isLoading: false, error: null });
     render(<AlertasPage />);
 
     await waitFor(() => {
@@ -245,7 +278,7 @@ describe("AlertasPage", () => {
 
   // ---- 7. Shows stats bar ----
   it("shows alert count and active count in stats bar", async () => {
-    mockFetchSuccess({ alerts: [MOCK_ALERT_1, MOCK_ALERT_2] });
+    setAlertsState({ alerts: [MOCK_ALERT_1, MOCK_ALERT_2], isLoading: false, error: null });
     render(<AlertasPage />);
 
     await waitFor(() => {
@@ -258,7 +291,7 @@ describe("AlertasPage", () => {
 
   // ---- 8. Create alert — opens form modal ----
   it("opens form modal when 'Criar alerta' button is clicked", async () => {
-    mockFetchSuccess({ alerts: [MOCK_ALERT_1] });
+    setAlertsState({ alerts: [MOCK_ALERT_1], isLoading: false, error: null });
     render(<AlertasPage />);
 
     await waitFor(() => {
@@ -276,8 +309,8 @@ describe("AlertasPage", () => {
 
   // ---- 9. Create alert — submit form ----
   it("submits create form and calls POST /api/alerts", async () => {
-    // Initial fetch returns empty
-    mockFetchSuccess({ alerts: [] });
+    // Start with empty alerts
+    setAlertsState({ alerts: [], isLoading: false, error: null });
     render(<AlertasPage />);
 
     await waitFor(() => {
@@ -295,9 +328,8 @@ describe("AlertasPage", () => {
     const nameInput = screen.getByLabelText(/Nome do alerta/);
     fireEvent.change(nameInput, { target: { value: "Novo Alerta Teste" } });
 
-    // Mock the POST response and the subsequent refresh GET
+    // Mock the POST response
     mockFetchSuccess({ id: "new-alert", name: "Novo Alerta Teste" }, 201);
-    mockFetchSuccess({ alerts: [] });
 
     // Submit form
     fireEvent.click(screen.getByTestId("alert-save-button"));
@@ -320,7 +352,8 @@ describe("AlertasPage", () => {
 
   // ---- 10. Toggle alert — calls PATCH ----
   it("calls PATCH when toggle button is clicked", async () => {
-    mockFetchSuccess({ alerts: [MOCK_ALERT_1] });
+    const mutate = jest.fn().mockResolvedValue(undefined);
+    setAlertsState({ alerts: [MOCK_ALERT_1], isLoading: false, error: null, mutate });
     render(<AlertasPage />);
 
     await waitFor(() => {
@@ -348,7 +381,8 @@ describe("AlertasPage", () => {
 
   // ---- 11. Delete alert — confirm and DELETE ----
   it("deletes alert after confirmation", async () => {
-    mockFetchSuccess({ alerts: [MOCK_ALERT_1] });
+    const mutate = jest.fn().mockResolvedValue(undefined);
+    setAlertsState({ alerts: [MOCK_ALERT_1], isLoading: false, error: null, mutate });
     render(<AlertasPage />);
 
     await waitFor(() => {
@@ -391,7 +425,7 @@ describe("AlertasPage", () => {
 
   // ---- 12. Delete cancel — clicking "Nao" hides confirmation ----
   it("hides delete confirmation when 'Nao' is clicked", async () => {
-    mockFetchSuccess({ alerts: [MOCK_ALERT_1] });
+    setAlertsState({ alerts: [MOCK_ALERT_1], isLoading: false, error: null });
     render(<AlertasPage />);
 
     await waitFor(() => {
@@ -409,7 +443,7 @@ describe("AlertasPage", () => {
 
   // ---- 13. Error state ----
   it("shows error state when API fails", async () => {
-    mockFetchError(500, "Erro interno do servidor");
+    setAlertsState({ alerts: [], isLoading: false, error: "Erro interno do servidor" });
     render(<AlertasPage />);
 
     await waitFor(() => {
@@ -420,18 +454,33 @@ describe("AlertasPage", () => {
 
   // ---- 14. Error state retry ----
   it("retries fetching alerts when retry button is clicked", async () => {
-    // First call fails
-    mockFetchError(500, "Erro interno");
-    render(<AlertasPage />);
+    const mutate = jest.fn().mockImplementation(async () => {
+      // Simulate retry success: update hook state
+      mockAlertsHookState = {
+        alerts: [MOCK_ALERT_1],
+        isLoading: false,
+        error: null,
+        mutate,
+      };
+    });
+
+    setAlertsState({ alerts: [], isLoading: false, error: "Erro interno", mutate });
+    const { rerender } = render(<AlertasPage />);
 
     await waitFor(() => {
       expect(screen.getByTestId("error-state")).toBeInTheDocument();
     });
 
-    // Second call succeeds
-    mockFetchSuccess({ alerts: [MOCK_ALERT_1] });
-
     fireEvent.click(screen.getByText("Tentar novamente"));
+
+    // After mutate is called, rerender with updated state
+    await waitFor(() => {
+      expect(mutate).toHaveBeenCalled();
+    });
+
+    // Rerender with success state
+    setAlertsState({ alerts: [MOCK_ALERT_1], isLoading: false, error: null, mutate });
+    rerender(<AlertasPage />);
 
     await waitFor(() => {
       expect(screen.getByTestId("alerts-list")).toBeInTheDocument();
@@ -441,8 +490,7 @@ describe("AlertasPage", () => {
 
   // ---- 15. Loading skeleton ----
   it("shows skeleton loading state while fetching alerts", async () => {
-    // Return a promise that never resolves to keep loading state visible
-    (global.fetch as jest.Mock).mockReturnValueOnce(new Promise(() => {}));
+    setAlertsState({ alerts: [], isLoading: true, error: null });
     render(<AlertasPage />);
 
     expect(screen.getByTestId("alerts-skeleton")).toBeInTheDocument();
@@ -450,7 +498,8 @@ describe("AlertasPage", () => {
 
   // ---- 16. Handles array response (no wrapper object) ----
   it("handles API response that returns plain array", async () => {
-    mockFetchSuccess([MOCK_ALERT_1]);
+    // useAlerts already normalizes this — just verify it renders fine with data
+    setAlertsState({ alerts: [MOCK_ALERT_1], isLoading: false, error: null });
     render(<AlertasPage />);
 
     await waitFor(() => {
@@ -460,7 +509,8 @@ describe("AlertasPage", () => {
 
   // ---- 17. Toggle failure reverts optimistic update ----
   it("reverts optimistic update when toggle PATCH fails", async () => {
-    mockFetchSuccess({ alerts: [MOCK_ALERT_1] });
+    const mutate = jest.fn().mockResolvedValue(undefined);
+    setAlertsState({ alerts: [MOCK_ALERT_1], isLoading: false, error: null, mutate });
     render(<AlertasPage />);
 
     await waitFor(() => {
@@ -481,7 +531,7 @@ describe("AlertasPage", () => {
 
   // ---- 18. Edit alert opens modal with pre-filled data ----
   it("opens edit modal with alert data pre-filled", async () => {
-    mockFetchSuccess({ alerts: [MOCK_ALERT_1] });
+    setAlertsState({ alerts: [MOCK_ALERT_1], isLoading: false, error: null });
     render(<AlertasPage />);
 
     await waitFor(() => {
@@ -501,7 +551,7 @@ describe("AlertasPage", () => {
 
   // ---- 19. PageHeader renders with correct title ----
   it("renders PageHeader with 'Alertas' title", async () => {
-    mockFetchSuccess({ alerts: [] });
+    setAlertsState({ alerts: [], isLoading: false, error: null });
     render(<AlertasPage />);
 
     expect(screen.getByTestId("page-header")).toBeInTheDocument();

@@ -14,8 +14,9 @@ import { getUserFriendlyError, getMessageFromErrorCode } from "../lib/error-mess
 describe("error-messages BACKEND_UNAVAILABLE", () => {
   it("getMessageFromErrorCode returns PT-BR for BACKEND_UNAVAILABLE", () => {
     const msg = getMessageFromErrorCode("BACKEND_UNAVAILABLE");
+    // CRIT-009: Updated to match current ERROR_CODE_MESSAGES value
     expect(msg).toBe(
-      "Nossos servidores estão sendo atualizados. Tente novamente em alguns instantes."
+      "Estamos voltando em instantes. Tente novamente em alguns segundos."
     );
   });
 

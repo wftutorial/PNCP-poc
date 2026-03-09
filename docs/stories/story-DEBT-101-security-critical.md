@@ -23,14 +23,14 @@ Como responsavel pela seguranca da plataforma, quero corrigir os 3 debitos CRITI
 
 ## Acceptance Criteria
 
-- [ ] AC1: Token hash usa SHA256 do payload COMPLETO (nao parcial); collision probability < 2^-128
-- [ ] AC2: Dual-hash lookup implementado para transicao (aceita hash antigo + novo por 1h apos deploy)
-- [ ] AC3: `uvicorn[standard]` no requirements.txt; faulthandler desabilitado em producao
+- [x] AC1: Token hash usa SHA256 do payload COMPLETO (nao parcial); collision probability < 2^-128
+- [x] AC2: Dual-hash lookup implementado para transicao (aceita hash antigo + novo por 1h apos deploy)
+- [x] AC3: `uvicorn[standard]` no requirements.txt; faulthandler desabilitado em producao
 - [ ] AC4: Railway staging deploy sem SIGSEGV por 1h de monitoramento
-- [ ] AC5: LLM_STRUCTURED_MAX_TOKENS aumentado para valor que elimina truncation (>= 800)
-- [ ] AC6: JSON parse success rate > 99% (medido com golden samples test)
-- [ ] AC7: Golden samples baseline executado ANTES da mudanca de MAX_TOKENS (Condicao 2 do QA Gate)
-- [ ] AC8: Classificacao por acceptance rate nao diverge mais que 5% do baseline
+- [x] AC5: LLM_STRUCTURED_MAX_TOKENS aumentado para valor que elimina truncation (>= 800)
+- [x] AC6: JSON parse success rate > 99% (medido com golden samples test)
+- [x] AC7: Golden samples baseline executado ANTES da mudanca de MAX_TOKENS (Condicao 2 do QA Gate)
+- [x] AC8: Classificacao por acceptance rate nao diverge mais que 5% do baseline
 
 ## Testes Requeridos
 
@@ -64,10 +64,10 @@ Como responsavel pela seguranca da plataforma, quero corrigir os 3 debitos CRITI
 
 ## Definition of Done
 
-- [ ] Codigo implementado
+- [x] Codigo implementado
 - [ ] Deploy em staging com monitoramento de 1h sem SIGSEGV
-- [ ] Golden samples test antes/depois com <5% divergencia
-- [ ] JSON parse success > 99% confirmado
-- [ ] Testes passando (backend full suite)
+- [x] Golden samples test antes/depois com <5% divergencia
+- [x] JSON parse success > 99% confirmado
+- [x] Testes passando (backend full suite)
 - [ ] Deploy em producao em low-traffic window (2-4 AM BRT)
-- [ ] Documentacao atualizada (CLAUDE.md se necessario)
+- [x] Documentacao atualizada (CLAUDE.md se necessario)

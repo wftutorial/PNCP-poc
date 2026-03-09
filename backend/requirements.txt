@@ -2,12 +2,12 @@
 # Production dependencies - PINNED for Railway compatibility
 # =============================================================================
 fastapi==0.129.0
-# CRIT-SIGSEGV: uvicorn WITHOUT [standard] extra.
-# [standard] installs uvloop + httptools (C extensions) which cause SIGSEGV
-# crash loops on Railway Linux containers. uvloop is NOT available on Windows
-# (dev), so the bug is invisible locally. Pure-Python h11 + asyncio loop is
-# stable and sufficient for current scale (2 workers, <100 concurrent users).
-uvicorn==0.41.0
+# DEBT-101 AC3: uvicorn[standard] re-enabled for uvloop/httptools performance.
+# Previously removed due to SIGSEGV crash loops (CRIT-SIGSEGV). Root cause was
+# faulthandler + uvloop interaction. With faulthandler disabled in production
+# (main.py + gunicorn_conf.py), uvloop is safe. uvloop is NOT available on
+# Windows (dev), so h11 + asyncio loop is used locally.
+uvicorn[standard]==0.41.0
 gunicorn==23.0.0
 pydantic[email]==2.12.5
 pydantic-settings==2.10.1

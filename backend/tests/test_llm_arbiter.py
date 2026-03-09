@@ -289,7 +289,7 @@ class TestStructuredOutput:
             )
 
         call_args = mock_openai_client.chat.completions.create.call_args
-        assert call_args.kwargs["max_tokens"] == 300  # CRIT-038: increased for JSON+evidence
+        assert call_args.kwargs["max_tokens"] == 800  # DEBT-101 AC5: increased 300→800 to eliminate truncation
         assert call_args.kwargs["response_format"] == {"type": "json_object"}
 
     def test_error_returns_reject_dict(self, mock_openai_client):

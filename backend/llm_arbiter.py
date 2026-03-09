@@ -58,10 +58,10 @@ LLM_TEMPERATURE = float(os.getenv("LLM_ARBITER_TEMPERATURE", "0"))
 LLM_ENABLED = os.getenv("LLM_ARBITER_ENABLED", "true").lower() == "true"
 
 # D-02: Structured output max tokens (accommodates JSON + evidence)
-# CRIT-038: Increased from 150 → 300. 150 was insufficient for JSON responses
-# with 3 evidence items, causing truncation → D-02 AC3 JSON parse failures (20-30%
-# of calls). Cost impact negligible: +150 tokens × $0.40/M = +R$0.0003/call.
-LLM_STRUCTURED_MAX_TOKENS = 300
+# DEBT-101 AC5: Increased 300 → 800. 300 still caused JSON truncation in 20-30%
+# of calls (CRIT-038/SYS-002). 800 tokens accommodates worst-case JSON responses
+# with 3 evidence items + motivo_exclusao. Cost: +500 tokens × $0.40/M = +R$0.001/call.
+LLM_STRUCTURED_MAX_TOKENS = int(os.getenv("LLM_STRUCTURED_MAX_TOKENS", "800"))
 
 # D-02 AC9: gpt-4.1-nano pricing (per million tokens)
 _PRICING_INPUT_PER_M = 0.10   # USD per 1M input tokens

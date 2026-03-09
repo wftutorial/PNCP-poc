@@ -1,6 +1,12 @@
-# CRIT-SIGSEGV: Enable faulthandler BEFORE any imports.
-import faulthandler
-faulthandler.enable()
+# DEBT-101 AC3: faulthandler disabled in production to allow uvloop (uvicorn[standard]).
+# faulthandler + uvloop caused SIGSEGV crash loops on Railway Linux (CRIT-SIGSEGV).
+# In production, Sentry + gunicorn worker_exit hooks provide equivalent crash diagnostics.
+# In development/test, faulthandler remains enabled for local debugging.
+import os as _os_early
+_env_early = _os_early.getenv("ENVIRONMENT", _os_early.getenv("ENV", "development")).lower()
+if _env_early not in ("production", "prod"):
+    import faulthandler
+    faulthandler.enable()
 
 """SmartLic - Backend API
 

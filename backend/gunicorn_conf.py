@@ -122,14 +122,16 @@ def post_worker_init(worker):
     Called by gunicorn after a worker process has been initialized.
     Runs in the WORKER process context (not the arbiter).
     """
-    # CRIT-041: Enable faulthandler in EACH worker process.
-    # main.py enables it at import time, but without --preload the master
-    # doesn't import main.py — so faulthandler may not be active in workers
-    # that crash before importing main. This guarantees it's always on.
-    import faulthandler
-    if not faulthandler.is_enabled():
-        faulthandler.enable()
-        logger.info(f"CRIT-041: faulthandler enabled in worker pid={worker.pid}")
+    # DEBT-101 AC3: faulthandler disabled in production to allow uvloop.
+    # faulthandler + uvloop caused SIGSEGV crash loops (CRIT-SIGSEGV).
+    # In production, Sentry + worker_exit hooks provide crash diagnostics.
+    if not _is_production:
+        import faulthandler
+        if not faulthandler.is_enabled():
+            faulthandler.enable()
+            logger.info(f"faulthandler enabled in worker pid={worker.pid} (non-production)")
+    else:
+        logger.info(f"DEBT-101: faulthandler DISABLED in production worker pid={worker.pid}")
 
     try:
         from worker_lifecycle import install_timeout_handler

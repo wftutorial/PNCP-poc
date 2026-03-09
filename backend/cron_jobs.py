@@ -1756,6 +1756,207 @@ async def _results_cleanup_loop() -> None:
 
 
 # ============================================================================
+# DEBT-010 DB-015: Plan reconciliation (profiles.plan_type vs user_subscriptions)
+# DEBT-010 DB-031: JSONB table size monitoring (Prometheus gauge)
+# ============================================================================
+
+PLAN_RECONCILIATION_LOCK_KEY = "smartlic:plan_reconciliation:lock"
+PLAN_RECONCILIATION_LOCK_TTL = 10 * 60  # 10 minutes
+PLAN_RECONCILIATION_INTERVAL = 12 * 60 * 60  # 12 hours
+
+# Tables to monitor for size (JSONB-heavy)
+_MONITORED_TABLES = [
+    "search_results_cache",
+    "search_results_store",
+    "search_sessions",
+    "stripe_webhook_events",
+    "profiles",
+    "user_subscriptions",
+    "conversations",
+    "messages",
+    "alert_runs",
+    "classification_feedback",
+]
+
+
+async def start_plan_reconciliation_task() -> asyncio.Task:
+    """DEBT-010 DB-015: Start periodic plan reconciliation + table size monitoring."""
+    task = asyncio.create_task(
+        _plan_reconciliation_loop(), name="plan_reconciliation"
+    )
+    logger.info("DEBT-010: Plan reconciliation task started (interval: 12h)")
+    return task
+
+
+async def run_plan_reconciliation() -> dict:
+    """DEBT-010 DB-015: Compare profiles.plan_type vs user_subscriptions.plan_id.
+
+    Detects drift but does NOT auto-fix — logs for manual review.
+    Returns dict with drift details.
+    """
+    from supabase_client import get_supabase, sb_execute
+    from metrics import PLAN_RECONCILIATION_RUNS, PLAN_RECONCILIATION_DRIFT
+
+    PLAN_RECONCILIATION_RUNS.inc()
+
+    lock_acquired = False
+    try:
+        from redis_pool import get_redis_pool
+        redis = await get_redis_pool()
+        if redis:
+            lock_acquired = await redis.set(
+                PLAN_RECONCILIATION_LOCK_KEY,
+                datetime.now(timezone.utc).isoformat(),
+                nx=True,
+                ex=PLAN_RECONCILIATION_LOCK_TTL,
+            )
+            if not lock_acquired:
+                logger.info("DEBT-010: Plan reconciliation skipped — lock held")
+                return {"status": "skipped", "reason": "lock_held"}
+    except Exception as e:
+        logger.warning(f"DEBT-010: Redis lock failed (proceeding): {e}")
+        lock_acquired = True
+
+    drift_details = []
+    try:
+        sb = get_supabase()
+
+        # Fetch profiles with plan_type
+        profiles_result = await sb_execute(
+            sb.table("profiles").select("id, plan_type")
+        )
+        profiles = {p["id"]: p["plan_type"] for p in (profiles_result.data or [])}
+
+        # Fetch active subscriptions with plan_id
+        subs_result = await sb_execute(
+            sb.table("user_subscriptions")
+            .select("user_id, plan_id")
+            .eq("is_active", True)
+        )
+        subs = {s["user_id"]: s["plan_id"] for s in (subs_result.data or [])}
+
+        # Detect drift
+        for user_id, plan_type in profiles.items():
+            sub_plan = subs.get(user_id)
+            if sub_plan is None:
+                # No active subscription — ok if free_trial or cancelled
+                if plan_type not in ("free_trial", "cancelled", None, ""):
+                    drift_details.append({
+                        "user_id": user_id[:8] + "...",
+                        "profile_plan": plan_type,
+                        "sub_plan": None,
+                        "direction": "orphan_profile",
+                    })
+                    PLAN_RECONCILIATION_DRIFT.labels(direction="orphan_profile").inc()
+            elif plan_type != sub_plan:
+                drift_details.append({
+                    "user_id": user_id[:8] + "...",
+                    "profile_plan": plan_type,
+                    "sub_plan": sub_plan,
+                    "direction": "profiles_stale",
+                })
+                PLAN_RECONCILIATION_DRIFT.labels(direction="profiles_stale").inc()
+
+        result = {
+            "status": "completed",
+            "total_profiles": len(profiles),
+            "total_active_subs": len(subs),
+            "drift_count": len(drift_details),
+            "drift_details": drift_details[:20],  # Cap log size
+            "checked_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+        if drift_details:
+            logger.warning(
+                "DEBT-010: Plan reconciliation found %d drifts: %s",
+                len(drift_details), drift_details[:5],
+            )
+        else:
+            logger.info(
+                "DEBT-010: Plan reconciliation clean — %d profiles, %d active subs",
+                len(profiles), len(subs),
+            )
+        return result
+
+    except Exception as e:
+        if _is_cb_or_connection_error(e):
+            logger.warning("DEBT-010: Plan reconciliation skipped (Supabase unavailable): %s", e)
+        else:
+            logger.error("DEBT-010: Plan reconciliation error: %s", e, exc_info=True)
+        return {"status": "error", "error": str(e)}
+    finally:
+        if lock_acquired:
+            try:
+                from redis_pool import get_redis_pool
+                redis = await get_redis_pool()
+                if redis:
+                    await redis.delete(PLAN_RECONCILIATION_LOCK_KEY)
+            except Exception:
+                pass
+
+
+async def update_table_size_metrics() -> dict:
+    """DEBT-010 DB-031: Update Prometheus gauge with JSONB-heavy table sizes.
+
+    Uses pg_total_relation_size() via Supabase RPC for each monitored table.
+    Falls back gracefully if RPC function not available.
+    """
+    from supabase_client import get_supabase, sb_execute_direct
+    from metrics import DB_TABLE_SIZE_BYTES
+
+    sizes = {}
+    try:
+        sb = get_supabase()
+        for table_name in _MONITORED_TABLES:
+            try:
+                result = await sb_execute_direct(
+                    sb.rpc("pg_total_relation_size_safe", {"tbl": table_name})
+                )
+                if result and result.data is not None:
+                    size_bytes = int(result.data) if not isinstance(result.data, list) else int(result.data[0]) if result.data else 0
+                    DB_TABLE_SIZE_BYTES.labels(table_name=table_name).set(size_bytes)
+                    sizes[table_name] = size_bytes
+            except Exception as e:
+                logger.debug("DEBT-010: Table size query failed for %s: %s", table_name, e)
+                sizes[table_name] = -1
+
+        logger.info("DEBT-010: Table sizes updated — %d tables", len(sizes))
+        return {"status": "ok", "sizes": sizes}
+    except Exception as e:
+        if _is_cb_or_connection_error(e):
+            logger.warning("DEBT-010: Table size metrics skipped (Supabase unavailable): %s", e)
+        else:
+            logger.error("DEBT-010: Table size metrics error: %s", e, exc_info=True)
+        return {"status": "error", "error": str(e)}
+
+
+async def _plan_reconciliation_loop() -> None:
+    """DEBT-010: Plan reconciliation + table sizes — runs every 12h."""
+    # Initial delay: 5 minutes after startup
+    await asyncio.sleep(300)
+
+    table_size_counter = 0
+    while True:
+        try:
+            await run_plan_reconciliation()
+
+            # Table sizes on every cycle
+            table_size_counter += 1
+            await update_table_size_metrics()
+
+            await asyncio.sleep(PLAN_RECONCILIATION_INTERVAL)
+        except asyncio.CancelledError:
+            logger.info("DEBT-010: Plan reconciliation task cancelled")
+            break
+        except Exception as e:
+            if _is_cb_or_connection_error(e):
+                logger.warning("DEBT-010: Reconciliation loop skipped: %s", e)
+            else:
+                logger.error("DEBT-010: Reconciliation loop error: %s", e, exc_info=True)
+            await asyncio.sleep(300)
+
+
+# ============================================================================
 # HARDEN-028: Stripe webhook events purge (> 90 days)
 # ============================================================================
 

@@ -27,30 +27,30 @@ Multiple schema-level improvements strengthen data integrity and monitoring. The
 
 ## Tasks
 
-- [ ] Add CI grep guard: fail/warn if new migration touches `handle_new_user` (DB-011)
-- [ ] Create integration test verifying `handle_new_user()` output matches expected profile schema (DB-011)
-- [ ] Create reconciliation cron: compare `profiles.plan_type` vs `user_subscriptions.plan_id`, log drift (DB-015)
-- [ ] Add `IF NOT EXISTS` / `CREATE OR REPLACE` guards to non-idempotent migrations (DB-028)
-- [ ] Add CHECK: `search_results_cache.priority IN ('hot', 'warm', 'cold')` (DB-018)
-- [ ] Add CHECK: `alert_runs.status IN ('pending', 'running', 'completed', 'failed')` (DB-019)
-- [ ] DROP redundant `idx_alert_preferences_user_id` (UNIQUE already creates B-tree) (DB-040)
-- [ ] DROP redundant `idx_trial_email_log_user_id` (composite unique covers leading column) (DB-041)
-- [ ] CREATE INDEX `idx_conversations_status_last_msg` ON `conversations(status, last_message_at DESC)` (DB-042)
-- [ ] Validate `billing_period` constraint vs existing data: `SELECT billing_period, count(*) GROUP BY 1` (DB-021)
-- [ ] Document `stripe_webhook_events` 90-day retention as appropriate (Stripe retry window = 72h max) (DB-045)
-- [ ] Add Prometheus gauge `smartlic_table_size_bytes` for JSONB-heavy tables (DB-031)
+- [x] Add CI grep guard: fail/warn if new migration touches `handle_new_user` (DB-011)
+- [x] Create integration test verifying `handle_new_user()` output matches expected profile schema (DB-011)
+- [x] Create reconciliation cron: compare `profiles.plan_type` vs `user_subscriptions.plan_id`, log drift (DB-015)
+- [x] Add `IF NOT EXISTS` / `CREATE OR REPLACE` guards to non-idempotent migrations (DB-028)
+- [x] Add CHECK: `search_results_cache.priority IN ('hot', 'warm', 'cold')` (DB-018)
+- [x] Add CHECK: `alert_runs.status IN ('pending', 'running', 'completed', 'failed')` (DB-019)
+- [x] DROP redundant `idx_alert_preferences_user_id` (UNIQUE already creates B-tree) (DB-040)
+- [x] DROP redundant `idx_trial_email_log_user_id` (composite unique covers leading column) (DB-041)
+- [x] CREATE INDEX `idx_conversations_status_last_msg` ON `conversations(status, last_message_at DESC)` (DB-042)
+- [x] Validate `billing_period` constraint vs existing data: `SELECT billing_period, count(*) GROUP BY 1` (DB-021)
+- [x] Document `stripe_webhook_events` 90-day retention as appropriate (Stripe retry window = 72h max) (DB-045)
+- [x] Add Prometheus gauge `smartlic_table_size_bytes` for JSONB-heavy tables (DB-031)
 
 ## Acceptance Criteria
 
-- [ ] AC1: CI warns on PRs touching `handle_new_user` trigger
-- [ ] AC2: Integration test for `handle_new_user()` exists and passes
-- [ ] AC3: Plan reconciliation cron detects drift between `profiles.plan_type` and `user_subscriptions`
-- [ ] AC4: Non-idempotent migrations have `IF NOT EXISTS` guards
-- [ ] AC5: CHECK constraints exist on `search_results_cache.priority` and `alert_runs.status`
-- [ ] AC6: Zero redundant indexes (DB-040, DB-041 dropped)
-- [ ] AC7: Admin inbox query uses composite index (EXPLAIN verification)
-- [ ] AC8: Prometheus gauge tracks JSONB table sizes
-- [ ] AC9: Zero regressions
+- [x] AC1: CI warns on PRs touching `handle_new_user` trigger
+- [x] AC2: Integration test for `handle_new_user()` exists and passes
+- [x] AC3: Plan reconciliation cron detects drift between `profiles.plan_type` and `user_subscriptions`
+- [x] AC4: Non-idempotent migrations have `IF NOT EXISTS` guards
+- [x] AC5: CHECK constraints exist on `search_results_cache.priority` and `alert_runs.status`
+- [x] AC6: Zero redundant indexes (DB-040, DB-041 dropped)
+- [x] AC7: Admin inbox query uses composite index (EXPLAIN verification)
+- [x] AC8: Prometheus gauge tracks JSONB table sizes
+- [x] AC9: Zero regressions
 
 ## Tests Required
 
@@ -59,10 +59,32 @@ Multiple schema-level improvements strengthen data integrity and monitoring. The
 - CHECK constraint violation tests (insert invalid priority/status)
 - EXPLAIN ANALYZE on conversations admin query
 
+## DB-045: stripe_webhook_events Retention Documentation
+
+**Current retention policy:** 90 days (HARDEN-028, implemented in `cron_jobs.py`)
+
+**Why 90 days is appropriate:**
+- Stripe webhook retry window: max 72 hours (3 days)
+- Stripe dispute window: max 75 days (chargeback period)
+- 90-day retention provides 15-day buffer beyond dispute window
+- Daily purge via `purge_old_stripe_events()` cron job (HARDEN-028 AC1-AC3)
+
+**Implementation details:**
+- `STRIPE_EVENTS_RETENTION_DAYS = 90` in `cron_jobs.py`
+- Purge runs daily via `_stripe_events_purge_loop()`
+- Deletes from `stripe_webhook_events` WHERE `processed_at < (now - 90 days)`
+- Redis lock prevents concurrent purge execution
+- Logs count of deleted events per cycle
+
+**When to increase retention:**
+- If regulatory requirements mandate longer audit trails (e.g., SOX compliance: 7 years)
+- If implementing reconciliation that needs historical webhook data beyond 90 days
+- Current Stripe reconciliation (STORY-314) uses live Stripe API, not webhook history
+
 ## Definition of Done
 
-- [ ] All tasks complete
+- [x] All tasks complete
 - [ ] Migrations applied to production
-- [ ] Tests passing (backend 5774+ / 0 fail)
-- [ ] No regressions
+- [x] Tests passing (37 new tests, 0 regressions)
+- [x] No regressions
 - [ ] Code reviewed

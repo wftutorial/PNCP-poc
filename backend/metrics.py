@@ -890,6 +890,29 @@ PROCESS_MEMORY_PEAK_RSS_BYTES = _create_gauge(
 
 
 # ============================================================================
+# DEBT-010 DB-031: Database table size monitoring
+# ============================================================================
+
+DB_TABLE_SIZE_BYTES = _create_gauge(
+    "smartlic_table_size_bytes",
+    "Table total size in bytes (pg_total_relation_size)",
+    labelnames=["table_name"],
+)
+
+# DEBT-010 DB-015: Plan reconciliation metrics
+PLAN_RECONCILIATION_RUNS = _create_counter(
+    "smartlic_plan_reconciliation_runs_total",
+    "Plan reconciliation job executions",
+)
+
+PLAN_RECONCILIATION_DRIFT = _create_counter(
+    "smartlic_plan_reconciliation_drift_total",
+    "Users with plan_type drift between profiles and user_subscriptions",
+    labelnames=["direction"],
+)
+
+
+# ============================================================================
 # ASGI app factory for /metrics endpoint
 # ============================================================================
 

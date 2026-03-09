@@ -1580,7 +1580,8 @@ async def buscar_licitacoes(
         await remove_tracker(request.search_id)
         raise
     # CRIT-003 AC2: Create state machine for deterministic lifecycle tracking
-    state_machine = await create_state_machine(request.search_id)
+    # DEBT-009 DB-007: Pass user_id for direct column in search_state_transitions
+    state_machine = await create_state_machine(request.search_id, user_id=user.get("id"))
 
     # Build deps namespace from module-level imports (preserves test mock paths)
     deps = SimpleNamespace(

@@ -33,8 +33,9 @@ class SearchStateMachine:
     Thread-safe within a single asyncio event loop (one per search).
     """
 
-    def __init__(self, search_id: str):
+    def __init__(self, search_id: str, user_id: Optional[str] = None):
         self.search_id = search_id
+        self.user_id = user_id  # DEBT-009 DB-007
         self._current_state: Optional[SearchState] = None
         self._last_transition_time: float = time.time()
         self._transitions: List[StateTransition] = []
@@ -74,6 +75,7 @@ class SearchStateMachine:
             details=details or {},
             timestamp=now,
             duration_since_previous=duration_ms if self._current_state else None,
+            user_id=self.user_id,
         )
 
         self._transitions.append(transition)
@@ -167,6 +169,8 @@ async def _persist_transition(transition: StateTransition) -> None:
                 else None
             ),
         }
+        if transition.user_id:
+            row["user_id"] = transition.user_id
 
         await sb_execute(sb.table("search_state_transitions").insert(row))
     except Exception as e:
@@ -503,9 +507,9 @@ async def recover_stale_searches(max_age_minutes: int = 10) -> int:
 _active_machines: Dict[str, SearchStateMachine] = {}
 
 
-async def create_state_machine(search_id: str) -> SearchStateMachine:
+async def create_state_machine(search_id: str, user_id: Optional[str] = None) -> SearchStateMachine:
     """Create and register a state machine for a search."""
-    machine = SearchStateMachine(search_id)
+    machine = SearchStateMachine(search_id, user_id=user_id)
     await machine.transition_to(SearchState.CREATED, stage="init")
     _active_machines[search_id] = machine
     return machine

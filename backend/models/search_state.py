@@ -87,6 +87,7 @@ class StateTransition:
     details: Dict[str, Any] = field(default_factory=dict)
     timestamp: float = field(default_factory=time.time)
     duration_since_previous: Optional[float] = None
+    user_id: Optional[str] = None  # DEBT-009 DB-007: Direct user_id for RLS optimization
 
 
 def validate_transition(

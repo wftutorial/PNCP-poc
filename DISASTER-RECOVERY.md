@@ -65,7 +65,7 @@ npx supabase --version
 
 # Have the repo cloned with all migrations
 cd D:/pncp-poc
-ls supabase/migrations/ | wc -l   # Should show 80 files
+ls supabase/migrations/ | wc -l   # Should show 84 files
 ```
 
 ### Step 1: Create New Supabase Project
@@ -117,15 +117,21 @@ FROM cron.job
 ORDER BY jobname;
 ```
 
-**Expected 5 jobs:**
+**Expected 11 jobs:**
 
-| Job Name | Schedule | Source Migration |
-|----------|----------|-----------------|
-| `cleanup-monthly-quota` | `0 2 1 * *` | 022 |
-| `cleanup-webhook-events` | `0 3 * * *` | 022 |
-| `cleanup-audit-events` | `0 4 1 * *` | 023 |
-| `cleanup-cold-cache-entries` | `0 5 * * *` | 20260225150000 |
-| `cleanup-expired-search-results` | `0 4 * * *` | 20260304110000 |
+| Job Name | Schedule | Retention | Source Migration |
+|----------|----------|-----------|-----------------|
+| `cleanup-monthly-quota` | `0 2 1 * *` | 24 months | 022 |
+| `cleanup-webhook-events` | `0 3 * * *` | 90 days | 022 |
+| `cleanup-audit-events` | `0 4 1 * *` | 12 months | 023 |
+| `cleanup-cold-cache-entries` | `0 5 * * *` | 7 days (cold) | 20260225150000 |
+| `cleanup-expired-search-results` | `0 4 * * *` | 7+7 days | 20260304110000 |
+| `cleanup-search-state-transitions` | `0 4 * * *` | 30 days | 20260308310000 (DEBT-009) |
+| `cleanup-alert-sent-items` | `5 4 * * *` | 180 days | 20260308310000 (DEBT-009) |
+| `cleanup-health-checks` | `10 4 * * *` | 30 days | 20260308310000 (DEBT-009) |
+| `cleanup-incidents` | `15 4 * * *` | 90 days | 20260308310000 (DEBT-009) |
+| `cleanup-mfa-recovery-attempts` | `20 4 * * *` | 30 days | 20260308310000 (DEBT-009) |
+| `cleanup-alert-runs` | `25 4 * * *` | 90 days (completed) | 20260308310000 (DEBT-009) |
 
 If any jobs are missing, re-run the `cron.schedule()` statements from the corresponding migration file manually in the SQL Editor.
 
@@ -208,7 +214,7 @@ These items are configured via the Supabase Dashboard and are NOT captured in mi
 
 | Item | Where to Configure | Notes |
 |------|--------------------|-------|
-| **pg_cron extension** | Database > Extensions | MUST be enabled BEFORE migrations 022, 023, 20260225150000, 20260304110000 |
+| **pg_cron extension** | Database > Extensions | MUST be enabled BEFORE migrations 022, 023, 20260225150000, 20260304110000, 20260308310000 |
 | **Auth email templates** | Auth > Email Templates | Confirmation, magic link, password reset templates |
 | **Auth redirect URLs** | Auth > URL Configuration | `https://smartlic.tech/auth/callback`, `http://localhost:3000/auth/callback` |
 | **Google OAuth** | Auth > Providers > Google | Client ID + secret from Google Cloud Console |
@@ -288,8 +294,8 @@ Run through this checklist after any recovery operation:
 
 ### Database
 
-- [ ] All 80 migrations applied without errors (`npx supabase db push --include-all`)
-- [ ] pg_cron extension enabled and 5 jobs scheduled (query `cron.job`)
+- [ ] All 84 migrations applied without errors (`npx supabase db push --include-all`)
+- [ ] pg_cron extension enabled and 11 jobs scheduled (query `cron.job`)
 - [ ] pg_trgm extension enabled (query `pg_extension`)
 - [ ] `handle_new_user` trigger exists on `auth.users`
 - [ ] `check_and_increment_quota` RPC function exists

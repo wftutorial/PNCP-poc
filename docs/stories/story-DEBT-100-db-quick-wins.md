@@ -32,19 +32,19 @@ Como engenheiro de plataforma, quero resolver 12 items de banco de dados de baix
 
 ## Acceptance Criteria
 
-- [ ] AC1: Query de verificacao FK executada em producao para DB-NEW-01 — resultado documentado (validada ou action item)
-- [ ] AC2: Query de verificacao FK executada em producao para DB-NEW-04 — resultado documentado
-- [ ] AC3: pg_cron job criado: `DELETE FROM search_results_store WHERE expires_at < now()` (daily schedule)
-- [ ] AC4: pg_cron job criado para search_sessions (registros > 12 meses)
-- [ ] AC5: `organizations.plan_type` tem CHECK constraint (`free_trial`, `pro`, `consultoria`, ou valores validos)
-- [ ] AC6: `partner_referrals.partner_id` tem ON DELETE CASCADE
-- [ ] AC7: `monthly_quota.user_id` aponta para `profiles(id)` com ON DELETE CASCADE
-- [ ] AC8: Index duplicado `idx_search_results_store_user_id` removido
-- [ ] AC9: `incidents` e `partners` tem coluna `updated_at` com trigger automatico
-- [ ] AC10: Indexes redundantes em search_sessions e partners removidos (apos verificar idx_scan=0)
-- [ ] AC11: SearchErrorBoundary fallback tem `role="alert"` e `aria-live="assertive"`
-- [ ] AC12: `@types/uuid` movido para devDependencies no `package.json`
-- [ ] AC13: Todos items implementados em uma unica migration SQL (exceto FE items)
+- [x] AC1: Query de verificacao FK executada em producao para DB-NEW-01 — resultado documentado (validada ou action item)
+- [x] AC2: Query de verificacao FK executada em producao para DB-NEW-04 — resultado documentado
+- [x] AC3: pg_cron job criado: `DELETE FROM search_results_store WHERE expires_at < now()` (daily schedule)
+- [x] AC4: pg_cron job criado para search_sessions (registros > 12 meses)
+- [x] AC5: `organizations.plan_type` tem CHECK constraint (`free_trial`, `pro`, `consultoria`, ou valores validos)
+- [x] AC6: `partner_referrals.partner_id` tem ON DELETE CASCADE
+- [x] AC7: `monthly_quota.user_id` aponta para `profiles(id)` com ON DELETE CASCADE
+- [x] AC8: Index duplicado `idx_search_results_store_user_id` removido
+- [x] AC9: `incidents` e `partners` tem coluna `updated_at` com trigger automatico
+- [x] AC10: Indexes redundantes em search_sessions e partners removidos (apos verificar idx_scan=0)
+- [x] AC11: SearchErrorBoundary fallback tem `role="alert"` e `aria-live="assertive"`
+- [x] AC12: `@types/uuid` movido para devDependencies no `package.json`
+- [x] AC13: Todos items implementados em uma unica migration SQL (exceto FE items)
 
 ## Testes Requeridos
 
@@ -70,8 +70,8 @@ Como engenheiro de plataforma, quero resolver 12 items de banco de dados de baix
 
 ## Definition of Done
 
-- [ ] Codigo implementado (migration SQL + 2 FE fixes)
+- [x] Codigo implementado (migration SQL + 2 FE fixes)
 - [ ] Migration aplicada em producao via `supabase db push`
 - [ ] pg_cron jobs ativos verificados
-- [ ] Testes passando (backend + frontend)
-- [ ] Resultados das queries de verificacao documentados
+- [x] Testes passando (backend + frontend)
+- [x] Resultados das queries de verificacao documentados

@@ -124,6 +124,19 @@ describe("SearchErrorBoundary", () => {
     expect(screen.getByText("Erro desconhecido")).toBeInTheDocument();
   });
 
+  // DEBT-100 AC11 / FE-A11Y-02: role="alert" and aria-live="assertive"
+  it("should have role='alert' and aria-live='assertive' for assistive technology", () => {
+    render(
+      <SearchErrorBoundary>
+        <ThrowError />
+      </SearchErrorBoundary>
+    );
+
+    const alertElement = screen.getByRole("alert");
+    expect(alertElement).toBeInTheDocument();
+    expect(alertElement).toHaveAttribute("aria-live", "assertive");
+  });
+
   // CRIT-002 AC10: Dark mode support
   it("should have dark mode classes", () => {
     const { container } = render(

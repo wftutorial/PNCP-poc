@@ -385,7 +385,7 @@ export interface paths {
          *                     "search_params": {"ufs": ["SP"], "setor": "Uniformes"},
          *                     "total_rows": 142,
          *                     "created_at": "2026-02-09T15:30:00Z",
-         *                     "last_updated_at": "2026-02-09T15:30:00Z"
+         *                     "updated_at": "2026-02-09T15:30:00Z"
          *                 }
          *             ],
          *             "total": 1
@@ -1231,7 +1231,7 @@ export interface paths {
          *                     "search_params": {"ufs": ["SP"], "setor": "Uniformes"},
          *                     "total_rows": 142,
          *                     "created_at": "2026-02-09T15:30:00Z",
-         *                     "last_updated_at": "2026-02-09T15:30:00Z"
+         *                     "updated_at": "2026-02-09T15:30:00Z"
          *                 }
          *             ],
          *             "total": 1
@@ -2378,7 +2378,7 @@ export interface components {
              * Last Updated At
              * @description Last update timestamp (ISO 8601)
              */
-            last_updated_at: string;
+            updated_at: string;
             /**
              * Search Params
              * @description Search parameters snapshot

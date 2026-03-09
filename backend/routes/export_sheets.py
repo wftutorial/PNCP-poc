@@ -166,7 +166,7 @@ async def get_export_history(
                     "search_params": {"ufs": ["SP"], "setor": "Uniformes"},
                     "total_rows": 142,
                     "created_at": "2026-02-09T15:30:00Z",
-                    "last_updated_at": "2026-02-09T15:30:00Z"
+                    "updated_at": "2026-02-09T15:30:00Z"
                 }
             ],
             "total": 1
@@ -200,7 +200,7 @@ async def get_export_history(
                 search_params=export["search_params"],
                 total_rows=export["total_rows"],
                 created_at=export["created_at"],
-                last_updated_at=export["last_updated_at"]
+                updated_at=export["updated_at"]
             )
             for export in result.data
         ]
@@ -254,7 +254,7 @@ async def _save_export_history(
             "search_params": search_params,
             "total_rows": total_rows,
             "created_at": datetime.now(timezone.utc).isoformat(),
-            "last_updated_at": datetime.now(timezone.utc).isoformat()
+            "updated_at": datetime.now(timezone.utc).isoformat()
         }))
 
         logger.debug(f"Saved export history for spreadsheet {spreadsheet_id}")

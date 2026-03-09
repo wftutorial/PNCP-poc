@@ -284,7 +284,7 @@ class TestGetExportHistory:
                 "search_params": {"ufs": ["SP"], "setor": "Uniformes"},
                 "total_rows": 142,
                 "created_at": "2026-02-09T15:30:00Z",
-                "last_updated_at": "2026-02-09T15:30:00Z"
+                "updated_at": "2026-02-09T15:30:00Z"
             },
             {
                 "id": "export-2",
@@ -293,7 +293,7 @@ class TestGetExportHistory:
                 "search_params": {"ufs": ["RJ"], "setor": "EPIs"},
                 "total_rows": 89,
                 "created_at": "2026-02-08T10:15:00Z",
-                "last_updated_at": "2026-02-08T10:15:00Z"
+                "updated_at": "2026-02-08T10:15:00Z"
             }
         ]
 

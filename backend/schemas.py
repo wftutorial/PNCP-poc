@@ -1885,7 +1885,7 @@ class GoogleSheetsExportHistory(BaseModel):
     search_params: Dict[str, Any] = Field(..., description="Search parameters snapshot")
     total_rows: int = Field(..., description="Number of rows exported")
     created_at: str = Field(..., description="Creation timestamp (ISO 8601)")
-    last_updated_at: str = Field(..., description="Last update timestamp (ISO 8601)")
+    updated_at: str = Field(..., description="Last update timestamp (ISO 8601)")
 
 
 class GoogleSheetsExportHistoryResponse(BaseModel):

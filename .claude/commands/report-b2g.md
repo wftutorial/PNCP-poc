@@ -104,12 +104,63 @@ Para CADA edital encontrado, o agente deve analisar e gerar:
    - "Esse órgão paga em dia?"
    - "Existe alguma restrição que me impeça de participar?"
 
+### Phase 3b: Inteligência Competitiva por Edital (@data-engineer + @analyst)
+
+Para CADA edital com recomendação PARTICIPAR ou AVALIAR COM CAUTELA, mapear o cenário competitivo:
+
+**3b.1. Identificar incumbentes do órgão comprador**
+```bash
+# Buscar contratos anteriores do mesmo órgão no PNCP (últimos 24 meses)
+curl -s "https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao\
+  ?dataInicial={24_meses_atras_YYYYMMDD}\
+  &dataFinal={hoje_YYYYMMDD}\
+  &codigoUnidadeAdministrativa={codigo_orgao}\
+  &pagina=1&tamanhoPagina=50"
+```
+- Extrair CNPJs vencedores de contratos anteriores do MESMO órgão
+- Filtrar por objeto similar (mesmo setor/keywords)
+- Identificar: quem ganhou, quantas vezes, valores praticados
+
+**3b.2. Enriquecer perfil dos concorrentes**
+```bash
+# Para cada CNPJ concorrente (top 5 por frequência)
+curl -s "https://api.opencnpj.org/${CNPJ_CONCORRENTE}"
+```
+- Extrair: razão social, porte, capital social, cidade sede, CNAEs
+- Calcular: faturamento gov mensal estimado (baseado em contratos PNCP)
+
+**3b.3. Análise competitiva por edital**
+
+Para cada edital, gerar:
+
+| Campo | Fonte | Descrição |
+|-------|-------|-----------|
+| Concorrentes prováveis | PNCP histórico do órgão | Top 3-5 empresas que já forneceram para este órgão |
+| Incumbente principal | PNCP | Empresa com mais contratos recentes neste órgão/objeto |
+| Preço médio praticado | PNCP contratos anteriores | Média dos valores de contratos similares |
+| Desconto médio | Valor estimado vs valor contratado | % de desconto típico neste órgão |
+| Porte dos concorrentes | OpenCNPJ | Micro/Pequeno/Médio/Grande |
+| Vantagem competitiva do cliente | Análise cruzada | Onde o cliente é mais forte que os concorrentes |
+| Vulnerabilidade | Análise cruzada | Onde o cliente é mais fraco |
+| Estratégia sugerida | Síntese | Preço agressivo / Diferenciação técnica / Evitar |
+
+**3b.4. Mapa de calor competitivo (consolidado)**
+- Tabela resumo: para cada edital, nível de competição (Baixa/Média/Alta/Muito Alta)
+- Critérios:
+  - **Baixa:** <3 fornecedores históricos, sem incumbente dominante
+  - **Média:** 3-5 fornecedores, incumbente com <40% dos contratos
+  - **Alta:** 5-10 fornecedores, incumbente com 40-60% dos contratos
+  - **Muito Alta:** >10 fornecedores OU incumbente com >60% dos contratos
+- Recomendação ajustada: editais com competição Baixa/Média sobem na priorização
+
 ### Phase 4: Inteligência de Mercado (@analyst)
 
 1. **Panorama setorial** — Quantos editais abertos no setor, valor total em jogo, concentração por UF
 2. **Tendências** — Modalidades mais comuns, valores médios, órgãos mais ativos
 3. **Vantagens competitivas da empresa** — Baseado no perfil (porte, localização, CNAEs, histórico)
-4. **Recomendação geral** — Priorização dos editais por potencial de retorno vs esforço
+4. **Ranking competitivo** — Posição do cliente vs concorrentes no setor (por volume de contratos, valor, diversificação geográfica)
+5. **Oportunidades de nicho** — Órgãos/UFs onde poucos concorrentes atuam mas há demanda
+6. **Recomendação geral** — Priorização dos editais por potencial de retorno vs esforço vs competição
 
 ### Phase 5: Geração do PDF (@dev)
 
@@ -127,10 +178,11 @@ O JSON de input deve ser criado pelo agente com toda a informação coletada nas
 3. **Resumo Executivo** — Métricas chave, destaques, recomendação geral
 4. **Panorama de Oportunidades** — Tabela resumo, distribuição por UF/modalidade/valor
 5. **Análise Detalhada por Edital** — Uma seção por edital com todos os itens da Phase 3
-6. **Inteligência de Mercado** — Tendências, competitividade, vantagens
-7. **Menções em Diários Oficiais** — Resultados do Querido Diário (se houver)
-8. **Próximos Passos** — Ações recomendadas com prioridade e prazo
-9. **Rodapé em todas as páginas:** "Tiago Sasaki - Consultor de Licitações (48)9 8834-4559"
+6. **Mapa Competitivo** — Para cada edital recomendado: incumbentes, concorrentes prováveis, preços praticados, nível de competição, estratégia sugerida. Inclui mapa de calor consolidado (Baixa/Média/Alta/Muito Alta competição por edital)
+7. **Inteligência de Mercado** — Tendências, ranking competitivo do cliente vs concorrentes, oportunidades de nicho, vantagens competitivas
+8. **Menções em Diários Oficiais** — Resultados do Querido Diário (se houver)
+9. **Próximos Passos** — Ações recomendadas com prioridade e prazo, priorizando editais com menor competição e maior aderência
+10. **Rodapé em todas as páginas:** "Tiago Sasaki - Consultor de Licitações (48)9 8834-4559"
 
 ---
 

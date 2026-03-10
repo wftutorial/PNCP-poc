@@ -32,6 +32,7 @@ import {
 } from "./components/DashboardErrorStates";
 import { useDashboardDerivedData } from "./components/useDashboardDerivedData";
 import type { DashboardData, Period } from "./components/DashboardTypes";
+import { PageErrorBoundary } from "../../components/PageErrorBoundary";
 
 const LOADING_TIMEOUT_MS = 10_000;
 
@@ -162,6 +163,7 @@ export default function DashboardPage() {
   // ── Dashboard content ───────────────────────────────────────────────────────
 
   return (
+    <PageErrorBoundary pageName="dashboard">
     <div className="min-h-screen bg-[var(--canvas)]">
       {error && hasExhaustedRetries && data && (
         <DashboardStaleBanner onRetry={manualRetry} />
@@ -238,5 +240,6 @@ export default function DashboardPage() {
         <DashboardQuickLinks />
       </div>
     </div>
+    </PageErrorBoundary>
   );
 }

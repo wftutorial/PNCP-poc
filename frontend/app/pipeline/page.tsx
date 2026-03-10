@@ -18,6 +18,7 @@ import { useShepherdTour, type TourStep } from "../../hooks/useShepherdTour";
 import { OnboardingTourButton } from "../../components/OnboardingTourButton";
 import { useAnalytics } from "../../hooks/useAnalytics";
 import { useTrialPhase } from "../../hooks/useTrialPhase";
+import { PageErrorBoundary } from "../../components/PageErrorBoundary";
 
 // @dnd-kit is code-split into PipelineKanban to reduce initial bundle size
 const _KanbanSkeleton = (
@@ -187,7 +188,7 @@ export default function PipelinePage() {
   }
 
   return (
-    <>
+    <PageErrorBoundary pageName="pipeline">
       <PageHeader title="Pipeline" />
       <main className="max-w-[1600px] mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-6">
@@ -370,6 +371,6 @@ export default function PipelinePage() {
           </div>
         </div>
       )}
-    </>
+    </PageErrorBoundary>
   );
 }

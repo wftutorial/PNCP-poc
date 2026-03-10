@@ -13,6 +13,7 @@ import { useSessions } from "../../hooks/useSessions";
 import { getUserFriendlyError } from "../../lib/error-messages";
 import { formatCurrencyBR } from "../../lib/format-currency";
 import { APP_NAME } from "../../lib/config";
+import { PageErrorBoundary } from "../../components/PageErrorBoundary";
 
 // UX-354 -> UX-356: Shared sector slug -> display name mapping
 import { getSectorDisplayName } from "../../lib/constants/sector-names";
@@ -233,6 +234,7 @@ export default function HistoricoPage() {
   const totalPages = Math.ceil(total / limit);
 
   return (
+    <PageErrorBoundary pageName="histórico">
     <div className="min-h-screen bg-[var(--canvas)]">
       <PageHeader
         title="Histórico"
@@ -419,5 +421,6 @@ export default function HistoricoPage() {
         )}
       </div>
     </div>
+    </PageErrorBoundary>
   );
 }

@@ -10,20 +10,20 @@ Apenas `/buscar` tem `SearchErrorBoundary`. Dashboard, pipeline e historico usam
 
 ## Acceptance Criteria
 
-- [ ] AC1: Criar `PageErrorBoundary` genérico em `components/` que preserva NavigationShell (sidebar/bottom nav funcional)
-- [ ] AC2: Wrap `/dashboard` page content com PageErrorBoundary
-- [ ] AC3: Wrap `/pipeline` page content com PageErrorBoundary
-- [ ] AC4: Wrap `/historico` page content com PageErrorBoundary
-- [ ] AC5: ErrorBoundary mostra mensagem contextual ("Erro ao carregar o dashboard/pipeline/histórico")
-- [ ] AC6: Botão "Tentar novamente" reseta o error boundary sem reload completo
-- [ ] AC7: Sentry reporta o erro com contexto de página
-- [ ] AC8: ErrorBoundary NÃO limpa localStorage nem SWR cache
-- [ ] AC9: `role="alert" aria-live="assertive"` na UI de erro
-- [ ] AC10: Testes unitários para PageErrorBoundary (render, reset, Sentry report)
+- [x] AC1: Criar `PageErrorBoundary` genérico em `components/` que preserva NavigationShell (sidebar/bottom nav funcional)
+- [x] AC2: Wrap `/dashboard` page content com PageErrorBoundary
+- [x] AC3: Wrap `/pipeline` page content com PageErrorBoundary
+- [x] AC4: Wrap `/historico` page content com PageErrorBoundary
+- [x] AC5: ErrorBoundary mostra mensagem contextual ("Erro ao carregar o dashboard/pipeline/histórico")
+- [x] AC6: Botão "Tentar novamente" reseta o error boundary sem reload completo
+- [x] AC7: Sentry reporta o erro com contexto de página
+- [x] AC8: ErrorBoundary NÃO limpa localStorage nem SWR cache
+- [x] AC9: `role="alert" aria-live="assertive"` na UI de erro
+- [x] AC10: Testes unitários para PageErrorBoundary (render, reset, Sentry report)
 
 ## File List
-- [ ] `components/PageErrorBoundary.tsx` (NEW)
-- [ ] `app/dashboard/page.tsx` (EDIT — wrap content)
-- [ ] `app/pipeline/page.tsx` (EDIT — wrap content)
-- [ ] `app/historico/page.tsx` (EDIT — wrap content)
-- [ ] `__tests__/components/PageErrorBoundary.test.tsx` (NEW)
+- [x] `components/PageErrorBoundary.tsx` (NEW)
+- [x] `app/dashboard/page.tsx` (EDIT — wrap content)
+- [x] `app/pipeline/page.tsx` (EDIT — wrap content)
+- [x] `app/historico/page.tsx` (EDIT — wrap content)
+- [x] `__tests__/components/PageErrorBoundary.test.tsx` (NEW)

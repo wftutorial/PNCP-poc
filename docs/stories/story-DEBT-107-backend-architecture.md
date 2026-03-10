@@ -23,17 +23,17 @@ Como arquiteto de software, quero completar a decomposicao do main.py monolitico
 
 ## Acceptance Criteria
 
-- [ ] AC1: main.py reduzido para <100 LOC — apenas app factory + route registration
-- [ ] AC2: Sentry config em `backend/sentry_config.py` (ou similar)
-- [ ] AC3: Lifespan logic em `backend/lifespan.py`
-- [ ] AC4: App state initialization em `backend/app_state.py`
-- [ ] AC5: Middleware setup em `backend/middleware.py`
-- [ ] AC6: `requests` removido do requirements.txt
-- [ ] AC7: Sync PNCPClient fallback usa `httpx` (wrapped em `asyncio.to_thread()`)
-- [ ] AC8: Todas as chamadas HTTP no codebase usam httpx
-- [ ] AC9: SYS-027 (chardet pin) automaticamente resolvido pela remocao de requests
-- [ ] AC10: N+1 queries em analytics resolvidos (SYS-031 via SYS-007)
-- [ ] AC11: Zero import errors apos decomposicao
+- [x] AC1: main.py reduzido para <100 LOC — apenas app factory + route registration (79 LOC)
+- [x] AC2: Sentry config em `backend/startup/sentry.py`
+- [x] AC3: Lifespan logic em `backend/startup/lifespan.py`
+- [x] AC4: App state initialization em `backend/startup/state.py`
+- [x] AC5: Middleware setup em `backend/startup/middleware_setup.py`
+- [x] AC6: `requests` removido do requirements.txt
+- [x] AC7: Sync PNCPClient fallback usa `httpx.Client` (wrapped em `asyncio.to_thread()`)
+- [x] AC8: Todas as chamadas HTTP no codebase usam httpx (0 `import requests` results)
+- [x] AC9: SYS-027 (chardet pin) automaticamente resolvido pela remocao de requests
+- [x] AC10: N+1 queries em analytics ja resolvidos (STORY-202 DB-M07 RPC — single query)
+- [x] AC11: Zero import errors apos decomposicao (`from main import app` OK)
 
 ## Testes Requeridos
 
@@ -73,10 +73,10 @@ Como arquiteto de software, quero completar a decomposicao do main.py monolitico
 
 ## Definition of Done
 
-- [ ] main.py < 100 LOC
-- [ ] Zero `import requests` no codebase
-- [ ] `requests` removido de requirements.txt
-- [ ] N+1 queries eliminados em analytics
-- [ ] Full test suite passando
+- [x] main.py < 100 LOC (79 LOC)
+- [x] Zero `import requests` no codebase
+- [x] `requests` removido de requirements.txt
+- [x] N+1 queries eliminados em analytics (STORY-202 DB-M07 RPC)
+- [x] Full test suite passando (pre-existing failures only)
 - [ ] Code review aprovado
-- [ ] Documentacao atualizada
+- [x] Documentacao atualizada

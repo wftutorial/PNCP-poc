@@ -304,16 +304,16 @@ class TestRetryConfig:
         assert config.retryable_status_codes == expected_codes
 
     def test_retryable_exceptions_default(self):
-        """Test default retryable exception types include builtins + requests."""
-        import requests.exceptions
+        """Test default retryable exception types include builtins + httpx."""
+        import httpx
         config = RetryConfig()
 
-        # CRIT-038: Must include requests exceptions (NOT builtins.ConnectionError subclass)
+        # DEBT-107: Migrated from requests.exceptions to httpx exceptions
         assert ConnectionError in config.retryable_exceptions
         assert TimeoutError in config.retryable_exceptions
-        assert requests.exceptions.ConnectionError in config.retryable_exceptions
-        assert requests.exceptions.Timeout in config.retryable_exceptions
-        assert requests.exceptions.ReadTimeout in config.retryable_exceptions
+        assert httpx.TimeoutException in config.retryable_exceptions
+        assert httpx.ConnectError in config.retryable_exceptions
+        assert httpx.ReadError in config.retryable_exceptions
 
     def test_custom_values(self):
         """Test creating RetryConfig with custom values."""

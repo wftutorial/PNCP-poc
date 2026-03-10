@@ -6,11 +6,8 @@ from typing import List, Tuple, Type
 
 from config.base import str_to_bool
 
-# CRIT-038: Import requests exceptions for retryable_exceptions.
-try:
-    import requests.exceptions as _req_exc
-except ImportError:
-    _req_exc = None  # type: ignore[assignment]
+# DEBT-107: httpx exceptions replace requests.exceptions
+import httpx
 
 
 # PNCP Modality Codes (codigoModalidadeContratacao)
@@ -56,20 +53,14 @@ class RetryConfig:
         default_factory=lambda: (408, 422, 429, 500, 502, 503, 504)
     )
 
-    # CRIT-038: requests.exceptions.* inherit from IOError, NOT builtins
+    # DEBT-107: httpx exceptions replace requests.exceptions (CRIT-038 original note preserved)
     retryable_exceptions: Tuple[Type[Exception], ...] = field(
         default_factory=lambda: (
             ConnectionError,
             TimeoutError,
-            *(
-                (
-                    _req_exc.ConnectionError,
-                    _req_exc.Timeout,
-                    _req_exc.ReadTimeout,
-                )
-                if _req_exc is not None
-                else ()
-            ),
+            httpx.TimeoutException,
+            httpx.ConnectError,
+            httpx.ReadError,
         )
     )
 

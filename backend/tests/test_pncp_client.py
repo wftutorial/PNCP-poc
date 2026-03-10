@@ -74,7 +74,7 @@ class TestPNCPClient:
         assert client.config.timeout == 15  # STORY-282 AC1: was 30
         assert client.config.connect_timeout == 10.0  # STORY-282 AC1: new
         assert client.config.read_timeout == 15.0  # STORY-282 AC1: new
-        assert client.session is not None
+        assert client.client is not None
         assert client._request_count == 0
 
     def test_client_initialization_custom_config(self):
@@ -89,13 +89,13 @@ class TestPNCPClient:
         """Test session is configured with correct headers."""
         client = PNCPClient()
 
-        assert client.session.headers["User-Agent"] == "SmartLic/1.0 (procurement-search; contato@smartlic.tech)"
-        assert client.session.headers["Accept"] == "application/json"
+        assert client.client.headers["User-Agent"] == "SmartLic/1.0 (procurement-search; contato@smartlic.tech)"
+        assert client.client.headers["Accept"] == "application/json"
 
     def test_context_manager(self):
         """Test client can be used as context manager."""
         with PNCPClient() as client:
-            assert client.session is not None
+            assert client.client is not None
 
         # Session should be closed after context exit
         # We can't easily test this without mocking, but coverage is achieved
@@ -136,7 +136,7 @@ class TestRateLimiting:
 class TestFetchPageSuccess:
     """Test successful fetch_page scenarios."""
 
-    @patch("pncp_client.requests.Session.get")
+    @patch("httpx.Client.get")
     def test_fetch_page_success(self, mock_get):
         """Test successful page fetch returns correct data."""
         # Mock successful response
@@ -156,7 +156,7 @@ class TestFetchPageSuccess:
         assert result["totalRegistros"] == 2
         assert mock_get.called
 
-    @patch("pncp_client.requests.Session.get")
+    @patch("httpx.Client.get")
     def test_fetch_page_with_uf_parameter(self, mock_get):
         """Test fetch_page includes UF parameter when provided."""
         mock_response = Mock()
@@ -172,7 +172,7 @@ class TestFetchPageSuccess:
         call_args = mock_get.call_args
         assert call_args[1]["params"]["uf"] == "SP"
 
-    @patch("pncp_client.requests.Session.get")
+    @patch("httpx.Client.get")
     def test_fetch_page_modalidade_parameter(self, mock_get):
         """Test fetch_page includes modalidade parameter."""
         mock_response = Mock()
@@ -188,7 +188,7 @@ class TestFetchPageSuccess:
         call_args = mock_get.call_args
         assert call_args[1]["params"]["codigoModalidadeContratacao"] == 6
 
-    @patch("pncp_client.requests.Session.get")
+    @patch("httpx.Client.get")
     def test_fetch_page_pagination_parameters(self, mock_get):
         """Test fetch_page sends correct pagination parameters."""
         mock_response = Mock()
@@ -210,7 +210,7 @@ class TestFetchPageSuccess:
 class TestFetchPageRetry:
     """Test retry logic for transient failures."""
 
-    @patch("pncp_client.requests.Session.get")
+    @patch("httpx.Client.get")
     @patch("time.sleep")  # Mock sleep to speed up tests
     def test_retry_on_500_server_error(self, mock_sleep, mock_get):
         """Test client retries on 500 server error."""
@@ -229,7 +229,7 @@ class TestFetchPageRetry:
         assert mock_get.call_count == 2
         assert mock_sleep.called
 
-    @patch("pncp_client.requests.Session.get")
+    @patch("httpx.Client.get")
     @patch("time.sleep")
     def test_retry_on_503_unavailable(self, mock_sleep, mock_get):
         """Test client retries on 503 service unavailable."""
@@ -246,7 +246,7 @@ class TestFetchPageRetry:
 
         assert mock_get.call_count == 2
 
-    @patch("pncp_client.requests.Session.get")
+    @patch("httpx.Client.get")
     @patch("time.sleep")
     def test_max_retries_exceeded_raises_error(self, mock_sleep, mock_get):
         """Test error is raised after max retries exceeded."""
@@ -266,7 +266,7 @@ class TestFetchPageRetry:
 class TestFetchPageRateLimiting:
     """Test rate limit (429) handling."""
 
-    @patch("pncp_client.requests.Session.get")
+    @patch("httpx.Client.get")
     @patch("time.sleep")
     def test_429_respects_retry_after_header(self, mock_sleep, mock_get):
         """Test 429 response respects Retry-After header."""
@@ -284,7 +284,7 @@ class TestFetchPageRateLimiting:
         sleep_calls = [call[0][0] for call in mock_sleep.call_args_list]
         assert 5 in sleep_calls  # Should sleep for 5 seconds
 
-    @patch("pncp_client.requests.Session.get")
+    @patch("httpx.Client.get")
     @patch("time.sleep")
     def test_429_uses_default_wait_without_retry_after(self, mock_sleep, mock_get):
         """Test 429 uses default 60s wait when Retry-After header missing."""
@@ -303,7 +303,7 @@ class TestFetchPageRateLimiting:
 class TestFetchPageNonRetryableErrors:
     """Test immediate failure for non-retryable errors."""
 
-    @patch("pncp_client.requests.Session.get")
+    @patch("httpx.Client.get")
     def test_400_bad_request_fails_immediately(self, mock_get):
         """Test 400 Bad Request fails immediately without retry."""
         mock_get.return_value = Mock(status_code=400, text="Bad Request")
@@ -316,7 +316,7 @@ class TestFetchPageNonRetryableErrors:
         # Should only try once (no retries)
         assert mock_get.call_count == 1
 
-    @patch("pncp_client.requests.Session.get")
+    @patch("httpx.Client.get")
     def test_404_not_found_fails_immediately(self, mock_get):
         """Test 404 Not Found fails immediately without retry."""
         mock_get.return_value = Mock(status_code=404, text="Not Found")
@@ -332,7 +332,7 @@ class TestFetchPageNonRetryableErrors:
 class TestFetchPageExceptionRetry:
     """Test retry logic for network exceptions."""
 
-    @patch("pncp_client.requests.Session.get")
+    @patch("httpx.Client.get")
     @patch("time.sleep")
     def test_retry_on_connection_error(self, mock_sleep, mock_get):
         """Test client retries on ConnectionError."""
@@ -347,7 +347,7 @@ class TestFetchPageExceptionRetry:
 
         assert mock_get.call_count == 2
 
-    @patch("pncp_client.requests.Session.get")
+    @patch("httpx.Client.get")
     @patch("time.sleep")
     def test_retry_on_timeout_error(self, mock_sleep, mock_get):
         """Test client retries on TimeoutError."""
@@ -361,7 +361,7 @@ class TestFetchPageExceptionRetry:
 
         assert mock_get.call_count == 2
 
-    @patch("pncp_client.requests.Session.get")
+    @patch("httpx.Client.get")
     @patch("time.sleep")
     def test_exception_after_max_retries_raises_error(self, mock_sleep, mock_get):
         """Test exception is raised after max retries for network errors."""
@@ -379,7 +379,7 @@ class TestFetchPageExceptionRetry:
 class TestFetchAllPagination:
     """Test fetch_all() automatic pagination functionality."""
 
-    @patch("pncp_client.requests.Session.get")
+    @patch("httpx.Client.get")
     def test_fetch_all_single_page_single_modalidade(self, mock_get):
         """Test fetch_all with single page and single modalidade returns all items."""
         # Mock single page response
@@ -408,7 +408,7 @@ class TestFetchAllPagination:
         # Should only call API once for single page, single modalidade
         assert mock_get.call_count == 1
 
-    @patch("pncp_client.requests.Session.get")
+    @patch("httpx.Client.get")
     def test_fetch_all_multiple_pages(self, mock_get):
         """Test fetch_all correctly handles multiple pages."""
         # Mock 3 pages of data
@@ -448,7 +448,7 @@ class TestFetchAllPagination:
         # Should call API 3 times (once per page)
         assert mock_get.call_count == 3
 
-    @patch("pncp_client.requests.Session.get")
+    @patch("httpx.Client.get")
     def test_fetch_all_multiple_ufs(self, mock_get):
         """Test fetch_all handles multiple UFs sequentially."""
         # Mock responses for SP (2 items) and RJ (1 item)
@@ -483,7 +483,7 @@ class TestFetchAllPagination:
         # Should call API twice (once per UF)
         assert mock_get.call_count == 2
 
-    @patch("pncp_client.requests.Session.get")
+    @patch("httpx.Client.get")
     def test_fetch_all_multiple_modalidades(self, mock_get):
         """Test fetch_all iterates over multiple modalidades."""
         # Mock responses for modalidade 6 and 7
@@ -513,7 +513,7 @@ class TestFetchAllPagination:
         # Should call API twice (once per modalidade)
         assert mock_get.call_count == 2
 
-    @patch("pncp_client.requests.Session.get")
+    @patch("httpx.Client.get")
     def test_fetch_all_deduplicates_by_codigo_compra(self, mock_get):
         """Test fetch_all removes duplicates based on codigoCompra."""
         # Mock responses with duplicate numeroControlePNCP across modalidades
@@ -545,7 +545,7 @@ class TestFetchAllPagination:
         assert "002" in codigo_compras
         assert "003" in codigo_compras
 
-    @patch("pncp_client.requests.Session.get")
+    @patch("httpx.Client.get")
     def test_fetch_all_empty_results(self, mock_get):
         """Test fetch_all handles empty results gracefully."""
         mock_response = Mock(status_code=200, headers=JSON_HEADERS)
@@ -563,7 +563,7 @@ class TestFetchAllPagination:
         assert len(results) == 0
         assert mock_get.call_count == 1
 
-    @patch("pncp_client.requests.Session.get")
+    @patch("httpx.Client.get")
     def test_fetch_all_progress_callback(self, mock_get):
         """Test fetch_all calls progress callback with correct values."""
         # Mock 2 pages
@@ -605,7 +605,7 @@ class TestFetchAllPagination:
         # Second page: page 2/2, 5 items total
         assert progress_calls[1] == (2, 2, 5)
 
-    @patch("pncp_client.requests.Session.get")
+    @patch("httpx.Client.get")
     def test_fetch_all_yields_individual_items(self, mock_get):
         """Test fetch_all is a generator yielding individual items, not lists."""
         mock_response = Mock(status_code=200, headers=JSON_HEADERS)
@@ -630,7 +630,7 @@ class TestFetchAllPagination:
         assert isinstance(first_item, dict)
         assert first_item["codigoCompra"] == "1"
 
-    @patch("pncp_client.requests.Session.get")
+    @patch("httpx.Client.get")
     def test_fetch_all_without_ufs(self, mock_get):
         """Test fetch_all works without specifying UFs (fetches all)."""
         mock_response = Mock(status_code=200, headers=JSON_HEADERS)
@@ -653,7 +653,7 @@ class TestFetchAllPagination:
         call_args = mock_get.call_args
         assert "uf" not in call_args[1]["params"]
 
-    @patch("pncp_client.requests.Session.get")
+    @patch("httpx.Client.get")
     def test_fetch_all_uses_default_modalidades(self, mock_get):
         """Test fetch_all uses DEFAULT_MODALIDADES [4,5,6,7] when none specified."""
         mock_response = Mock(status_code=200, headers=JSON_HEADERS)
@@ -676,7 +676,7 @@ class TestFetchAllPagination:
 class TestFetchByUFHelper:
     """Test _fetch_by_uf() helper method."""
 
-    @patch("pncp_client.requests.Session.get")
+    @patch("httpx.Client.get")
     def test_fetch_by_uf_stops_when_tem_proxima_false(self, mock_get):
         """Test _fetch_by_uf stops pagination when temProximaPagina is False."""
         # First page has temProximaPagina=True
@@ -708,7 +708,7 @@ class TestFetchByUFHelper:
         # Should stop after page 2 (not request page 3)
         assert mock_get.call_count == 2
 
-    @patch("pncp_client.requests.Session.get")
+    @patch("httpx.Client.get")
     def test_fetch_by_uf_correct_page_numbers(self, mock_get):
         """Test _fetch_by_uf sends correct page numbers (1-indexed)."""
         # Mock 2 pages
@@ -742,7 +742,7 @@ class TestFetchByUFHelper:
         assert call_1_params["pagina"] == 1
         assert call_2_params["pagina"] == 2
 
-    @patch("pncp_client.requests.Session.get")
+    @patch("httpx.Client.get")
     def test_fetch_by_uf_handles_uf_none(self, mock_get):
         """Test _fetch_by_uf works with uf=None (all UFs)."""
         mock_response = Mock(status_code=200, headers=JSON_HEADERS)
@@ -763,7 +763,7 @@ class TestFetchByUFHelper:
         call_params = mock_get.call_args[1]["params"]
         assert "uf" not in call_params
 
-    @patch("pncp_client.requests.Session.get")
+    @patch("httpx.Client.get")
     def test_fetch_by_uf_includes_modalidade(self, mock_get):
         """Test _fetch_by_uf includes modalidade in API calls."""
         mock_response = Mock(status_code=200, headers=JSON_HEADERS)
@@ -1113,7 +1113,7 @@ class TestBuscarTodasUfsParalelo:
 class TestFetchPageHTMLResponse:
     """Test retry on HTML responses (PNCP returning HTML instead of JSON)."""
 
-    @patch("pncp_client.requests.Session.get")
+    @patch("httpx.Client.get")
     @patch("time.sleep")
     def test_html_response_triggers_retry(self, mock_sleep, mock_get):
         """Test that HTML response (non-JSON content-type) triggers retry."""
@@ -1141,7 +1141,7 @@ class TestFetchPageHTMLResponse:
         assert mock_get.call_count == 2
         assert mock_sleep.called
 
-    @patch("pncp_client.requests.Session.get")
+    @patch("httpx.Client.get")
     @patch("time.sleep")
     def test_html_response_max_retries_raises_error(self, mock_sleep, mock_get):
         """Test PNCPAPIError raised after max retries with HTML responses."""
@@ -1161,7 +1161,7 @@ class TestFetchPageHTMLResponse:
         # Should try 3 times (initial + 2 retries)
         assert mock_get.call_count == 3
 
-    @patch("pncp_client.requests.Session.get")
+    @patch("httpx.Client.get")
     @patch("time.sleep")
     def test_empty_content_type_triggers_retry(self, mock_sleep, mock_get):
         """Test empty content-type triggers retry."""
@@ -1186,7 +1186,7 @@ class TestFetchPageHTMLResponse:
 class TestFetchPageJSONDecodeError:
     """Test retry on invalid JSON body (correct content-type but malformed body)."""
 
-    @patch("pncp_client.requests.Session.get")
+    @patch("httpx.Client.get")
     @patch("time.sleep")
     def test_json_decode_error_triggers_retry(self, mock_sleep, mock_get):
         """Test that JSONDecodeError triggers retry."""
@@ -1215,7 +1215,7 @@ class TestFetchPageJSONDecodeError:
         assert mock_get.call_count == 2
         assert mock_sleep.called
 
-    @patch("pncp_client.requests.Session.get")
+    @patch("httpx.Client.get")
     @patch("time.sleep")
     def test_json_decode_error_max_retries_raises_error(self, mock_sleep, mock_get):
         """Test PNCPAPIError raised after max retries with JSONDecodeError."""
@@ -1377,7 +1377,7 @@ class TestDefaultModalidadesCompetitive:
 class TestExcludedModalidadesNeverFetched:
     """STORY-241 AC3/AC6: Excluded modalities are filtered out of API calls."""
 
-    @patch("pncp_client.requests.Session.get")
+    @patch("httpx.Client.get")
     def test_excluded_modalidades_never_fetched_sync(self, mock_get):
         """AC3: fetch_all() filters out modalidades 9 and 14 even if explicitly passed."""
         mock_response = Mock(status_code=200, headers=JSON_HEADERS)
@@ -1398,7 +1398,7 @@ class TestExcludedModalidadesNeverFetched:
         call_params = mock_get.call_args[1]["params"]
         assert call_params["codigoModalidadeContratacao"] == 6
 
-    @patch("pncp_client.requests.Session.get")
+    @patch("httpx.Client.get")
     def test_excluded_only_results_in_zero_calls(self, mock_get):
         """AC3: If all requested modalidades are excluded, no API calls are made."""
         mock_response = Mock(status_code=200, headers=JSON_HEADERS)
@@ -1678,7 +1678,7 @@ class TestCrit043Http400PageNoiseReduction:
 
     # --- AC3: Sync path — 400 on page>1 returns empty, logs DEBUG ---
 
-    @patch("pncp_client.requests.Session.get")
+    @patch("httpx.Client.get")
     def test_ac3_sync_400_page2_returns_empty_logs_debug(self, mock_get, caplog):
         """AC3: Sync fetch_page with 400 on page>1 returns empty, logs DEBUG."""
         import logging
@@ -1699,7 +1699,7 @@ class TestCrit043Http400PageNoiseReduction:
         debug_msgs = [r for r in caplog.records if r.levelno == logging.DEBUG and "CRIT-043" in r.message]
         assert len(debug_msgs) >= 1
 
-    @patch("pncp_client.requests.Session.get")
+    @patch("httpx.Client.get")
     def test_ac4_sync_400_page1_raises_error(self, mock_get):
         """AC4: Sync fetch_page with 400 on page 1 still raises PNCPAPIError."""
         mock_get.return_value = Mock(status_code=400, text="Bad Request")
@@ -1711,7 +1711,7 @@ class TestCrit043Http400PageNoiseReduction:
                 modalidade=6, pagina=1,
             )
 
-    @patch("pncp_client.requests.Session.get")
+    @patch("httpx.Client.get")
     def test_ac4_sync_400_page1_logs_error(self, mock_get, caplog):
         """AC4: Sync fetch_page 400 on page 1 logs ERROR (real error)."""
         import logging

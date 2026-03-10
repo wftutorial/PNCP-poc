@@ -6,7 +6,7 @@ Business Analyst: @analyst (Atlas)
 Date: 2026-02-10
 """
 
-import requests
+import httpx
 from datetime import datetime, timedelta
 import json
 
@@ -39,7 +39,7 @@ def test_pncp_contratos_endpoint():
     print(f"Params: {json.dumps(params, indent=2)}")
 
     try:
-        response = requests.get(endpoint, params=params, timeout=30)
+        response = httpx.get(endpoint, params=params, timeout=30)
         print(f"\nStatus Code: {response.status_code}")
 
         if response.status_code == 200:
@@ -89,7 +89,7 @@ def test_pncp_contratos_endpoint():
     print(f"Params: {json.dumps(params_with_status, indent=2)}")
 
     try:
-        response = requests.get(endpoint, params=params_with_status, timeout=30)
+        response = httpx.get(endpoint, params=params_with_status, timeout=30)
         print(f"\nStatus Code: {response.status_code}")
 
         if response.status_code == 200:
@@ -118,7 +118,7 @@ def test_pncp_contratos_endpoint():
     print(f"Params: {json.dumps(licitacoes_params, indent=2)}")
 
     try:
-        response = requests.get(licitacoes_endpoint, params=licitacoes_params, timeout=30)
+        response = httpx.get(licitacoes_endpoint, params=licitacoes_params, timeout=30)
         print(f"\nStatus Code: {response.status_code}")
 
         if response.status_code == 200:

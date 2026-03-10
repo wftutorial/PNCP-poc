@@ -6,7 +6,7 @@ Business Analyst: @analyst (Atlas)
 Date: 2026-02-10
 """
 
-import requests
+import httpx
 import json
 import time
 
@@ -50,7 +50,7 @@ def test_receita_federal_api():
         print(f"\nEndpoint: {endpoint}")
 
         try:
-            response = requests.get(endpoint, timeout=10)
+            response = httpx.get(endpoint, timeout=10)
             print(f"Status Code: {response.status_code}")
 
             if response.status_code == 200:

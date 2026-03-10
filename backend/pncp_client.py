@@ -19,9 +19,6 @@ from datetime import date, datetime, timedelta
 from typing import Any, Callable, Dict, Generator, List, Optional
 
 import httpx
-import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 
 from config import RetryConfig, DEFAULT_MODALIDADES, MODALIDADES_EXCLUIDAS
 from exceptions import PNCPAPIError
@@ -787,41 +784,35 @@ class PNCPClient:
             config: Retry configuration (uses defaults if not provided)
         """
         self.config = config or RetryConfig()
-        self.session = self._create_session()
+        self.client = self._create_session()
         self._request_count = 0  # Per-session counter; reset not needed as each client instance is short-lived
         self._last_request_time = 0.0
 
-    def _create_session(self) -> requests.Session:
-        """
-        Create HTTP session with automatic retry strategy.
+    def _create_session(self) -> httpx.Client:
+        """Create HTTP client with timeout configuration.
 
+        DEBT-107: Migrated from requests.Session to httpx.Client.
         STORY-282 AC1: Uses aggressive timeout defaults from config.
 
         Returns:
-            Configured requests.Session with retry adapter
+            Configured httpx.Client
         """
-        session = requests.Session()
-
-        # Configure retry strategy using urllib3
-        retry_strategy = Retry(
-            total=self.config.max_retries,
-            backoff_factor=self.config.base_delay,
-            status_forcelist=self.config.retryable_status_codes,
-            allowed_methods=["GET"],
-            raise_on_status=False,  # We'll handle status codes manually
+        transport = httpx.HTTPTransport(retries=self.config.max_retries)
+        client = httpx.Client(
+            transport=transport,
+            timeout=httpx.Timeout(
+                connect=self.config.connect_timeout,
+                read=self.config.read_timeout,
+                write=30.0,
+                pool=30.0,
+            ),
+            headers={
+                "User-Agent": "SmartLic/1.0 (procurement-search; contato@smartlic.tech)",
+                "Accept": "application/json",
+            },
+            follow_redirects=True,
         )
-
-        adapter = HTTPAdapter(max_retries=retry_strategy)
-        session.mount("https://", adapter)
-        session.mount("http://", adapter)
-
-        # Set default headers (X-Request-ID is added per-request in fetch_page)
-        session.headers.update({
-            "User-Agent": "SmartLic/1.0 (procurement-search; contato@smartlic.tech)",
-            "Accept": "application/json",
-        })
-
-        return session
+        return client
 
     def _rate_limit(self) -> None:
         """
@@ -927,7 +918,7 @@ class PNCPClient:
                     f"{self.config.max_retries + 1}"
                 )
 
-                response = self.session.get(
+                response = self.client.get(
                     url, params=params, timeout=self.config.timeout,
                     headers=headers,
                 )
@@ -1340,8 +1331,8 @@ class PNCPClient:
             pagina += 1
 
     def close(self) -> None:
-        """Close the HTTP session and cleanup resources."""
-        self.session.close()
+        """Close the HTTP client and cleanup resources."""
+        self.client.close()
         logger.debug(f"Session closed. Total requests made: {self._request_count}")
 
     def __enter__(self):

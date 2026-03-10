@@ -1,11 +1,14 @@
 # Technical Debt Assessment - DRAFT
 
-**Data:** 2026-03-09
-**Status:** DRAFT — Pendente revisao dos especialistas
+**Data:** 2026-03-10 (atualizado — reconciliado com Fases 1-3 re-executadas)
+**Status:** DRAFT v2 — Pendente revisao dos especialistas (Fases 5-7)
 **Projeto:** SmartLic v0.5 (POC avancado em producao)
 **Autor:** @architect (AIOS Brownfield Discovery Phase 4 — Initial Consolidation)
+**Objetivo GTM:** Avaliar readiness para Go-to-Market e gerar stories para elevar score de 7.9 para 9+
 
-> **NOTA:** Esta auditoria PREVALECE sobre todas as analises anteriores (incluindo technical-debt-assessment.md de 2026-03-07 e quaisquer auditorias parciais anteriores). Todos os itens de debito foram re-catalogados com IDs unificados a partir das fontes primarias geradas nas Fases 1-3.
+> **NOTA:** Esta versão reconcilia o DRAFT original (2026-03-09) com as Fases 1-3 re-executadas em 2026-03-10.
+> Itens já resolvidos (DEBT-105 a DEBT-111) foram movidos para o Appendix.
+> Números atualizados: 192 backend files (72,693 LOC), 328 frontend files, 88 migrations, 10,774 tests.
 
 ---
 
@@ -379,23 +382,52 @@ FE-010 (CSP nonces) ──independent (but complex)
 
 ---
 
-## Appendix: Previously Fixed Items (for reference)
+## Appendix A: Items RESOLVIDOS desde o DRAFT original (confirmados na re-análise de 2026-03-10)
 
-These were identified in earlier audits and resolved in recent DEBT migrations:
+| ID Original | Issue | Resolução | Commit/DEBT |
+|-------------|-------|-----------|-------------|
+| SYS-001 | faulthandler + uvicorn crash (SIGSEGV) | uvicorn sem [standard], faulthandler.enable(), grpcio removido | CRIT-SIGSEGV |
+| SYS-002 | LLM_STRUCTURED_MAX_TOKENS=300 truncation | Aumentado para 800 (DEBT-101 AC5) | DEBT-101 |
+| SYS-003 | PNCP API max tamanhoPagina=50 | Já implementado no pncp_client.py | GTM-FIX-031 |
+| SYS-006 | main.py monolith decomposition | Decomposto para 80 LOC via startup/ (9 files) | DEBT-107 |
+| SYS-010 | OpenAI client timeout=15s | Reduzido para 5s (DEBT-103 AC1) | DEBT-103 |
+| FE-001 | /buscar monolithic 983 LOC | Decomposto para 270 LOC + useSearchOrchestration | DEBT-106 |
+| FE-002 | No next/dynamic for heavy deps | Dynamic imports: @dnd-kit, Recharts, SearchStateManager, TOTP | DEBT-105/106 |
+| FE-005 | No prefers-reduced-motion | Global media query em globals.css | DEBT-105 |
+| FE-007 | aria-live missing | Adicionado a 29 componentes | DEBT-105 |
+| FE-010 | unsafe-inline/unsafe-eval CSP | CSP nonce + strict-dynamic implementado | DEBT-108 |
+| FE-012 | eslint-disable exhaustive-deps (5+) | 0 ocorrências em app/buscar/, 3 remaining em outros | DEBT-111 |
+| FE-015 | No bundle size budget | .size-limit.js (250KB gzipped, CI-enforced) | DEBT-108 |
+
+## Appendix B: Items RESOLVIDOS em DEBT migrations anteriores
 
 | ID | Issue | Fixed In |
 |----|-------|----------|
-| DB-013 (old) | `partner_referrals.referred_user_id` NOT NULL vs ON DELETE SET NULL | `20260308100000_debt001` |
-| DB-038 (old) | Wrong table names in index migration | `20260308100000_debt001` |
-| DB-012 (old) | Duplicate `updated_at` trigger functions (partial fix) | `20260308100000_debt001` |
-| DB-001 (old) | `classification_feedback` auth.role() pattern | `20260308300000_debt009` |
-| DB-002 (old) | `health_checks`/`incidents` missing service_role policies | `20260308300000_debt009` |
-| DB-014 (old) | `plans.stripe_price_id` deprecated column (documented) | `20260309100000_debt017` |
-| DB-034 (old) | Cache cleanup trigger performance | `20260309100000_debt017` |
-| DB-035 (old) | Conversations correlated subquery | `20260309100000_debt017` |
+| DB-013 (old) | partner_referrals NOT NULL vs ON DELETE SET NULL | 20260308100000_debt001 |
+| DB-038 (old) | Wrong table names in index migration | 20260308100000_debt001 |
+| DB-012 (old) | Duplicate updated_at triggers (partial) | 20260308100000_debt001 |
+| DB-001 (old) | classification_feedback auth.role() | 20260308300000_debt009 |
+| DB-002 (old) | health_checks/incidents service_role | 20260308300000_debt009 |
+| DB-014 (old) | plans.stripe_price_id deprecated | 20260309100000_debt017 |
+
+## Appendix C: Novos achados da re-análise (2026-03-10)
+
+| ID | Issue | Fonte | Severidade |
+|----|-------|-------|------------|
+| ARCH-001 | routes/search.py 2177 LOC (maior arquivo) | system-architecture.md | HIGH |
+| ARCH-002 | search_pipeline.py 17 noqa:F401 re-exports | system-architecture.md | MEDIUM |
+| ARCH-003 | pncp_client.py lê 14 env vars via os.environ.get() | system-architecture.md | MEDIUM |
+| ARCH-004 | Dead config.py.bak e config_legacy.py.bak | system-architecture.md | LOW |
+| ARCH-006 | SearchForm.tsx 687 LOC, DataQualityBanner.tsx 661 LOC | system-architecture.md | LOW |
+| FE-TD-004 | Coverage thresholds 50-55% (target 60%) | frontend-spec.md | HIGH |
+| FE-TD-006 | Dual component directories (46+49 files) | frontend-spec.md | HIGH |
+| FE-TD-008 | 96 raw hex colors em TSX | frontend-spec.md | HIGH |
+| FE-TD-023 | Framer Motion ~70KB loaded globally | frontend-spec.md | MEDIUM |
+| A11Y-001 | Inline SVGs sem aria-hidden | frontend-spec.md | MEDIUM |
+| A11Y-002 | Color-only indicators (badges) | frontend-spec.md | MEDIUM |
 
 ---
 
-*Generated by @architect during Brownfield Discovery Phase 4 — Initial Consolidation*
-*Sources: system-architecture.md (Phase 1), DB-AUDIT.md (Phase 2), frontend-spec.md (Phase 3)*
-*Next step: Specialist review by @data-engineer, @ux-expert, and @qa*
+*Updated by @aios-master during Brownfield Discovery Phase 4 — Reconciliation*
+*Sources: system-architecture.md (Phase 1, updated), DB-AUDIT.md (Phase 2, updated), frontend-spec.md (Phase 3, updated)*
+*Next step: Specialist validation — Fases 5 (@data-engineer), 6 (@ux-expert), 7 (@qa)*

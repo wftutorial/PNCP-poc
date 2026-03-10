@@ -1,254 +1,260 @@
 # UX Specialist Review
 
-**Reviewer:** @ux-design-expert
-**Data:** 2026-03-09
-**Fonte:** docs/prd/technical-debt-DRAFT.md (Section 3), docs/frontend/frontend-spec.md
-**Supersedes:** ux-specialist-review.md v2.0 (2026-03-07, reviewer Uma)
-**Codebase Snapshot:** branch `main`, commit `3c71ce93`
+**Reviewer:** @ux-design-expert (Pixel)
+**Data:** 2026-03-10
+**Fonte:** docs/prd/technical-debt-DRAFT.md (Section 3 + Appendix A/C), docs/frontend/frontend-spec.md
+**Supersedes:** ux-specialist-review.md v3.0 (2026-03-09)
+**Codebase Snapshot:** branch `main`, commit `f7db269f` (DEBT-111)
 
 ---
 
-## Resumo da Revisao
+## Gate Status: VALIDATED
 
-The DRAFT Section 3 catalogs 29 frontend/UX debt items (FE-001 through FE-022 plus FE-A11Y-01 through FE-A11Y-07). After thorough codebase validation, I found that **several items have been partially or fully resolved** since the earlier discovery phases. The codebase shows strong progress on accessibility (aria-live now present in 15+ components, focus-trap-react in 6 modals, prefers-reduced-motion in globals.css) and performance (next/dynamic in 4 files for Recharts, dnd-kit, blog). However, the core structural debts remain: the `/buscar/page.tsx` monolith (983 LOC of orchestration logic), CSP unsafe-inline directives, and dual component directories.
-
-The overall accuracy of the DRAFT is **good** -- 21 of 29 items are confirmed as stated. 5 items need severity adjustment (mostly downgrades due to recent fixes). 3 items are effectively resolved and should be removed or downgraded to INFO. I identified 4 new UX debts not present in the DRAFT.
-
-| Status | Count |
-|--------|-------|
-| Confirmed (as-is) | 21 |
-| Severity Adjusted | 5 |
-| Removed / Downgraded to INFO | 3 |
-| Added (new) | 4 |
-| **Total validated frontend debts** | **30** |
+The reconciled DRAFT v2 (2026-03-10) already moved 7 resolved FE items to Appendix A. After verifying the actual codebase state of every remaining item, I confirm that the DRAFT is now **substantially accurate**. The remaining 15 frontend items plus 7 A11Y items plus 4 Appendix C items are real. I adjust severities, add hour estimates, assign GTM priorities, and identify 3 new findings below.
 
 ---
 
-## Debitos Validados
+## Items Already Fixed (confirmed in Appendix A -- remove from active debt)
 
-### Arquitetura e Estrutura (FE-001 through FE-003)
+| ID | Fixed In | Evidence |
+|----|----------|----------|
+| FE-001 | DEBT-106 | `app/buscar/page.tsx` is 270 LOC (verified via `wc -l`). Decomposed into `useSearchOrchestration` + `BuscarModals` aggregator. |
+| FE-002 | DEBT-105/106 | `next/dynamic` confirmed in 8 files: pipeline (dnd-kit), dashboard (Recharts x3), login (TOTP), buscar (SearchStateManager), blog (MDX). |
+| FE-005 | DEBT-105 | `globals.css:331` has `@media (prefers-reduced-motion: reduce)` with blanket `animation-duration: 0.01ms !important`. Also `useInView.ts` checks preference. |
+| FE-007 | DEBT-105 | `aria-live` present in 29 components (verified via grep: 51 occurrences across 29 files). Search flow fully covered. |
+| FE-010 | DEBT-108 | `middleware.ts:45` uses `nonce-${nonce}` + `strict-dynamic`. Old `unsafe-inline`/`unsafe-eval` kept only as rollback comment. `style-src 'unsafe-inline'` remains (acceptable for Tailwind). |
+| FE-012 | DEBT-111 | 0 `eslint-disable` in `app/buscar/`. 3 remaining in source files: `MunicipioFilter.tsx` (no-explicit-any), `OrgaoFilter.tsx` (no-explicit-any), `EnhancedLoadingProgress.tsx` (no-unused-vars). Plus several in test files. |
+| FE-015 | DEBT-108 | `.size-limit.js` exists with 250KB gzipped budget, CI-enforced. |
 
-| ID | Debito | Severidade Original | Severidade Ajustada | Horas | Prioridade | Impacto UX |
-|----|--------|---------------------|---------------------|-------|------------|------------|
-| FE-001 | `/buscar/page.tsx` monolithic 983 LOC, 30+ imports | CRITICAL | **HIGH** | 16-20h | P2 | Indirect: maintainability affects feature velocity, re-renders on prop changes degrade scroll responsiveness. The page is well-decomposed into sub-components (35 in `buscar/components/`) -- the remaining LOC is state orchestration. Extract into `useSearchOrchestration` hook rather than more visual components. |
-| FE-002 | No `next/dynamic` for heavy deps | CRITICAL | **MEDIUM** | 4-6h | P2 | **Partially fixed.** `next/dynamic` now used in pipeline (dnd-kit), dashboard charts (Recharts), login, and blog. Remaining gaps: Shepherd.js loaded on every /buscar visit regardless of tour state, framer-motion loaded globally in ProfileCompletionPrompt and landing page. Impact reduced from ~175KB to ~95KB. |
-| FE-003 | SSE proxy complexity | CRITICAL | **HIGH** | 20-24h | P3 | Correct assessment. Multiple fallback paths (SSE -> polling -> time-simulation) with 3+ retry strategies. Hard to debug, hard to test E2E. However, this is a working system in production -- refactoring risk is high. Prioritize documentation and integration tests before restructuring. |
-
-### Code Quality (FE-004 through FE-010)
-
-| ID | Debito | Severidade Original | Severidade Ajustada | Horas | Prioridade | Impacto UX |
-|----|--------|---------------------|---------------------|-------|------------|------------|
-| FE-004 | Test coverage 50-55% | HIGH | **HIGH** | Ongoing | P3 | Confirmed. Current thresholds (branches 50%, functions 55%, lines 55%) are below the 60% target. Not directly user-visible but increases regression risk on every change. |
-| FE-005 | No `prefers-reduced-motion` for 8 custom animations | HIGH | **REMOVED (INFO)** | 0h | N/A | **Already fixed.** `globals.css:331-337` contains a comprehensive `@media (prefers-reduced-motion: reduce)` block that disables all animations and transitions via `animation-duration: 0.01ms !important`. Additionally, `useInView.ts` checks for reduced-motion preference. The Tailwind config animations are properly covered by this global rule. |
-| FE-006 | Dual component directories (app/components/ 46 + components/ 49) | HIGH | **HIGH** | 6-8h | P2 | Confirmed. Ownership is actually clearer than described -- `components/` holds primitives and global components, `app/components/` holds auth-aware and app-specific shared components, `app/buscar/components/` holds search-specific. The issue is lack of documented convention and some misplaced files. Not a full reorg needed, just a documented rule + 5-10 file moves. |
-| FE-007 | `aria-live` missing on dynamic content updates | HIGH | **REMOVED (INFO)** | 0h | N/A | **Substantially fixed.** Found `aria-live` in 15+ production components: `ResultsHeader` (polite, atomic), `SearchStateManager` (assertive for errors, 4 instances), `EmptyResults` (polite), `UfProgressGrid` (polite), `SearchErrorBanner` (assertive), `ExpiredCacheBanner` (polite), `DataQualityBanner` (polite), `RefreshBanner` (polite), `ResultsLoadingSection` (polite), `EnhancedLoadingProgress` (polite), `PaymentFailedBanner` (assertive), `QuotaCounter` (polite), `Countdown` (polite). The search flow is now well-covered for screen readers. |
-| FE-008 | localStorage used without centralized abstraction | HIGH | **MEDIUM** | 6h | P3 | Partially valid. `lib/storage.ts` provides `safeSetItem` which is used in many places, but direct `localStorage.getItem` calls still appear throughout (e.g., `buscar/page.tsx` lines 221-264 read localStorage directly, `Sidebar.tsx` line 52 reads directly). The pattern is inconsistent -- writes use `safeSetItem` but reads are raw. |
-| FE-009 | Inline SVGs instead of centralized icon system | HIGH | **MEDIUM** | 8h | P3 | Partially valid. `lucide-react` is installed and used in `Sidebar.tsx` (8 icons from lucide). However, many components still use inline SVGs (buscar/page.tsx hamburger menu, ViabilityBadge chart icon, LlmSourceBadge spinner/bolt/calculator icons, ProfileCompletionPrompt user icon, SearchErrorBoundary warning icon). The inconsistency is real but `lucide-react` is tree-shakeable and covers most standard icons -- the remaining inline SVGs are mostly custom/domain-specific. |
-| FE-010 | `unsafe-inline` and `unsafe-eval` in CSP script-src | HIGH | **HIGH** | 12-16h | P1 | Confirmed. `middleware.ts:30` contains `'unsafe-inline' 'unsafe-eval'`. This is a real security concern, not just a best-practice gap. Implementing CSP nonces with Next.js requires middleware changes, script tag modifications, and careful testing with all third-party scripts (Stripe, Sentry, Cloudflare, Clarity, Mixpanel). The `style-src 'unsafe-inline'` is acceptable (Tailwind generates inline styles). |
-
-### Testing and Features (FE-011 through FE-018)
-
-| ID | Debito | Severidade Original | Severidade Ajustada | Horas | Prioridade | Impacto UX |
-|----|--------|---------------------|---------------------|-------|------------|------------|
-| FE-011 | No page-level tests for 5 pages | MEDIUM | **MEDIUM** | 16-20h | P3 | Confirmed. Dashboard, pipeline, historico, onboarding, and conta sub-pages lack dedicated render tests. These are all high-traffic authenticated pages. |
-| FE-012 | `eslint-disable exhaustive-deps` 5+ times in buscar | MEDIUM | **MEDIUM** | 3h | P3 | Confirmed: 3 instances found in `buscar/page.tsx` (lines 356, 377, 408). Each suppression hides a potential stale closure bug. Should be fixed by extracting stable references via useRef or restructuring effect dependencies. |
-| FE-013 | Hardcoded pricing fallback in planos/page.tsx | MEDIUM | **MEDIUM** | Ongoing | P3 | Confirmed. This is inherent to the architecture (Stripe is the source of truth, fallback needed for when Stripe is unreachable). Not fixable, only manageable via sync script (`scripts/sync-setores-fallback.js` pattern). |
-| FE-014 | Feature-gated dead code in production bundles | MEDIUM | **MEDIUM** | 6h | P3 | Confirmed. ORGS_ENABLED, alertas, mensagens code paths ship to production. Should use `next/dynamic` with feature flag checks to tree-shake unused paths. |
-| FE-015 | No bundle size budget in CI | MEDIUM | **MEDIUM** | 3h | P3 | Confirmed. `@lhci/cli` is in devDeps, scripts defined, but no CI workflow enforces budgets. A `size-limit` or `next-bundle-analyzer` step would catch regressions. |
-| FE-016 | Duplicate footer implementations | MEDIUM | **LOW** | 2h | P4 | Confirmed. `/buscar/page.tsx` has a full 40-line footer (lines 883-922) AND `NavigationShell.tsx` provides a minimal footer (line 54). The buscar footer is a deliberate design choice (richer content), not a bug. However, it creates duplicate `<footer>` landmarks which confuses screen reader landmark navigation (related to FE-A11Y-05). |
-| FE-017 | Theme init via dangerouslySetInnerHTML | MEDIUM | **LOW** | 1h | P4 | Low UX impact. The inline script prevents flash-of-wrong-theme (FOWT), which is the correct pattern for class-based dark mode. Standard Next.js practice. |
-| FE-018 | Raw `var(--*)` alongside Tailwind tokens | MEDIUM | **MEDIUM** | Ongoing | P3 | Confirmed. `tailwind.config.ts` already maps CSS vars to Tailwind tokens (`brand-blue`, `ink`, `surface-0`, etc.), but usage is inconsistent. Many components use `bg-[var(--surface-1)]` instead of `bg-surface-1`, or `text-[var(--ink)]` instead of `text-ink`. This is a linting enforcement issue, not a design system gap. |
-
-### Low Severity (FE-019 through FE-022)
-
-| ID | Debito | Severidade Original | Severidade Ajustada | Horas | Prioridade | Impacto UX |
-|----|--------|---------------------|---------------------|-------|------------|------------|
-| FE-019 | `@types/uuid` in dependencies | LOW | **LOW** | 0.5h | P4 | Trivial. Should be in devDependencies. Zero UX impact. |
-| FE-020 | `__tests__/e2e/` alongside `e2e-tests/` | LOW | **LOW** | 2h | P4 | Confirmed. Two E2E directories creates confusion for developers. Merge into `e2e-tests/`. |
-| FE-021 | No Storybook | LOW | **LOW** | 20-32h | Backlog | Not justified at current scale. With ~130 components and 1-2 developers, Storybook overhead exceeds benefit. Consider Ladle (lighter) when team reaches 3+ frontend developers. |
-| FE-022 | `Button.examples.tsx` but no visual regression | LOW | **LOW** | 8-12h | Backlog | Nice-to-have. Playwright visual comparisons would be more practical than a dedicated tool like Chromatic at this scale. |
-
-### Accessibility Gaps (FE-A11Y-01 through FE-A11Y-07)
-
-| ID | Debito | Severidade Original | Severidade Ajustada | Horas | Prioridade | Impacto UX |
-|----|--------|---------------------|---------------------|-------|------------|------------|
-| FE-A11Y-01 | Loading: no aria-busy/role="status" | MEDIUM | **LOW** | 2h | P3 | Partially mitigated. `EnhancedLoadingProgress` has `aria-live="polite"`, `ResultsLoadingSection` has `aria-live="polite"`. The loading spinner in `buscar/page.tsx` (line 551-557) lacks `role="status"` but is a brief auth check, not a long wait. Remaining gap: auth loading screen and page-level loading states. |
-| FE-A11Y-02 | SearchErrorBoundary not announced to AT | MEDIUM | **MEDIUM** | 1h | P2 | Confirmed. The error boundary fallback UI (SearchErrorBoundary.tsx:53-88) lacks `role="alert"` or `aria-live="assertive"`. When a crash occurs, screen readers are not notified. Quick fix: add `role="alert"` to the outer div. |
-| FE-A11Y-03 | Inline SVGs in pricing lack aria-hidden | LOW | **LOW** | 0.5h | P4 | Confirmed but low impact. Most inline SVGs throughout the codebase correctly use `aria-hidden="true"` (verified in ViabilityBadge, LlmSourceBadge, ReliabilityBadge, ProfileCompletionPrompt). Spot-check pricing page for stragglers. |
-| FE-A11Y-04 | Focus trap consistency across modals | MEDIUM | **REMOVED (INFO)** | 0h | N/A | **Substantially fixed.** `focus-trap-react` v12 is installed (package.json line 43) and actively used in 6 modal components: `DowngradeModal`, `InviteMemberModal`, `PaymentRecoveryModal`, `CancelSubscriptionModal`, `MobileDrawer`, `DeepAnalysisModal`. The main `Dialog` component used for save-search and keyboard-help should be verified, but the critical modals are covered. |
-| FE-A11Y-05 | Duplicate footers confuse landmark navigation | LOW | **MEDIUM** | 2h | P3 | Confirmed and more impactful than rated. `/buscar/page.tsx` has a `<footer role="contentinfo">` (line 883) AND `NavigationShell.tsx` has a `<footer>` (line 54). Screen readers will announce two contentinfo landmarks. The buscar page footer should either replace or integrate with the NavigationShell footer for this route. |
-| FE-A11Y-06 | Color-only indicators on badges | MEDIUM | **LOW** | 0h | N/A | **Largely resolved.** `ViabilityBadge` includes text labels ("Viabilidade alta/media/baixa") alongside colors (verified lines 48-60). `ReliabilityBadge` displays text level ("Alta/Media/Baixa") alongside colors (line 52). `LlmSourceBadge` uses text labels ("Resumo por IA", "Resumo automatico"). The badges combine color + text + icon, meeting WCAG 1.4.1. |
-| FE-A11Y-07 | Escape key inconsistency in modals | MEDIUM | **LOW** | 1h | P4 | Partially mitigated by `focus-trap-react` which handles Escape by default. The custom `Dialog` component should be verified for Escape handling. Low remaining risk. |
+These items are correctly in the Appendix. No action needed.
 
 ---
 
-## Debitos Adicionados
+## Items Validated (STILL OPEN)
 
-| ID | Debito | Severidade | Horas | Prioridade | Impacto UX |
-|----|--------|-----------|-------|------------|------------|
-| FE-NEW-01 | **ProfileCompletionPrompt (651 LOC) untested and imports framer-motion eagerly.** This component imports `framer-motion` at the top level (line 4), adding ~70KB to any page that renders it (dashboard). It should use `next/dynamic` with `ssr: false`. Additionally, zero test files exist for this component, which handles profile context API calls with optimistic UI. | MEDIUM | 6h | P2 | Medium: bundle bloat on dashboard; regression risk on profile flows |
-| FE-NEW-02 | **No error boundaries on dashboard, pipeline, historico, conta pages.** Only `/buscar` has `SearchErrorBoundary`. An unhandled exception on any other authenticated page crashes to the root `error.tsx`, losing all page context (scroll, filter state, form data). | HIGH | 4h | P1 | High: users lose all context on crash; must re-navigate from scratch |
-| FE-NEW-03 | **Direct localStorage reads in buscar/page.tsx without SSR guard.** Lines 221-234 use `localStorage.getItem` inside `useMemo` with `typeof window === 'undefined'` guards, but `useMemo` runs during SSR hydration mismatch checks. Should use `useEffect` + `useState` pattern or the existing `safeSetItem`/`safeGetItem` from `lib/storage.ts`. Potential hydration warnings in strict mode. | LOW | 2h | P3 | Low: works in practice but causes hydration mismatch warnings |
-| FE-NEW-04 | **Tour step HTML injected via raw string (Shepherd.js).** `SEARCH_TOUR_STEPS` and `RESULTS_TOUR_STEPS` (lines 58-119) use `text:` with raw HTML strings (`<span class="tour-step-counter">...`). This bypasses React's XSS protections. While the content is static, it sets a precedent for HTML injection. Shepherd.js supports React components as step content -- migration would be safer. | LOW | 3h | P4 | Low: no dynamic content, but establishes unsafe pattern |
+### From DRAFT Section 3 (remaining items)
+
+| ID | Status | Adjusted Severity | Hours | GTM Priority | UX Impact |
+|----|--------|-------------------|-------|--------------|-----------|
+| FE-003 | CONFIRMED | HIGH | 20-24h | POST-GTM | SSE proxy has 3 fallback paths (SSE, polling, time-simulation) with multiple retry strategies. Working in production. Refactoring risk is high -- document and test before restructuring. Not a GTM blocker because it works, just hard to maintain. |
+| FE-004 | CONFIRMED | MEDIUM (was HIGH) | Ongoing | POST-GTM | Coverage thresholds at 50/55/55/55% (verified in jest.config.js). Target is 60%. For B2G users this has zero direct impact; it increases regression risk for developers. Not a GTM blocker. |
+| FE-006 | CONFIRMED | MEDIUM (was HIGH) | 4-6h | GTM-RISK | Dual directories: `app/components/` (48 items), `components/` (34 items). The split is actually semi-logical (global primitives vs app-aware compositions) but undocumented. New developers will misplace files. Fix is documenting the convention + moving 3-4 misplaced files, not a full reorg. |
+| FE-008 | PARTIALLY FIXED | LOW (was HIGH) | 3h | POST-GTM | Raw `localStorage` calls (141 occurrences) vs safe wrappers (133 occurrences). Most raw calls are in test files and `lib/storage.ts` itself. In source files, ~6 files still use raw `localStorage.getItem` directly (`useSearchFilters.ts`, `SearchResults.tsx`, `layout.tsx`, `GoogleAnalytics.tsx`, `ContextualTutorialTooltip.tsx`). Low UX impact since the safe wrappers handle the critical private-browsing case. |
+| FE-009 | PARTIALLY FIXED | LOW (was HIGH) | 4h | POST-GTM | Lucide React is the standard icon library and is used throughout Sidebar, navigation, etc. Remaining inline SVGs are in `conta/layout.tsx` (5 nav icons, confirmed no `aria-hidden`) and a few domain-specific icons in badges. The `conta/layout.tsx` inline SVGs are the most visible gap -- 5 standard icons that should be Lucide. |
+| FE-011 | CONFIRMED | MEDIUM | 12-16h | GTM-RISK | No page-level tests for dashboard, pipeline, historico, onboarding, conta. These are all high-traffic authenticated pages. At minimum, render-smoke tests should exist before GTM to catch import/SSR crashes. |
+| FE-013 | CONFIRMED | LOW (was MEDIUM) | Ongoing | POST-GTM | Hardcoded pricing fallback is inherent to architecture. Managed via sync scripts. Not fixable, only manageable. |
+| FE-014 | CONFIRMED | LOW (was MEDIUM) | 6h | POST-GTM | Feature-gated code (alertas, mensagens, organizations) ships in bundles. Bundle budget (250KB) is in place, so this is controlled. Not a GTM concern unless bundle grows past budget. |
+| FE-016 | CONFIRMED | LOW (was MEDIUM) | 1.5h | POST-GTM | Documented as intentional per DEBT-111 AC9. Buscar has a richer footer with domain-specific links. Creates duplicate `<footer>` landmarks (a11y concern) but functional. |
+| FE-017 | CONFIRMED | INFO (was MEDIUM) | 0h | N/A | Theme init via `dangerouslySetInnerHTML` is standard Next.js dark mode pattern. Uses nonce for CSP. Not a debt item. |
+| FE-018 | CONFIRMED | LOW (was MEDIUM) | Ongoing | POST-GTM | Raw `var(--*)` usage alongside Tailwind tokens. 110 raw hex color occurrences across 20 TSX files (verified via grep). Cosmetic inconsistency, not a UX issue for end users. |
+| FE-019 | CONFIRMED | INFO | 0.5h | POST-GTM | Trivial: `@types/uuid` in dependencies instead of devDependencies. |
+| FE-020 | NO LONGER VALID | N/A | 0h | N/A | `__tests__/e2e/` directory does not exist (verified). Only `e2e-tests/` exists. This item should be removed. |
+| FE-021 | CONFIRMED | LOW | 0h (defer) | POST-GTM | No Storybook. Not justified at current team size (1-2 FE devs). Revisit when team reaches 3+. |
+| FE-022 | CONFIRMED | INFO | 0h (defer) | POST-GTM | `Button.examples.tsx` exists but no visual regression framework. Nice-to-have, not a GTM concern. |
+
+### Accessibility Items (FE-A11Y-01 through FE-A11Y-07)
+
+| ID | Status | Adjusted Severity | Hours | GTM Priority | UX Impact |
+|----|--------|-------------------|-------|--------------|-----------|
+| FE-A11Y-01 | PARTIALLY FIXED | LOW (was MEDIUM) | 1h | POST-GTM | Several loading components now have `role="status"` and `aria-busy`: `AuthLoadingScreen`, `dashboard/loading.tsx`, `buscar/loading.tsx`, `(protected)/loading.tsx`, `BackendStatusIndicator`. Remaining gaps are minor (login page spinner, some page-level loading states). |
+| FE-A11Y-02 | CONFIRMED | MEDIUM | 0.5h | GTM-RISK | `SearchErrorBoundary.tsx:54` has `role="alert" aria-live="assertive"` on the fallback div. **This item is actually fixed.** Downgrade to REMOVED. |
+| FE-A11Y-03 | CONFIRMED | LOW | 0.5h | POST-GTM | Inline SVGs in `conta/layout.tsx` (5 icons) lack `aria-hidden="true"`. Decorative icons should be hidden from AT. Quick fix. |
+| FE-A11Y-04 | LARGELY FIXED | INFO | 0h | N/A | `focus-trap-react` is used in 5 modal components: `DeepAnalysisModal`, `InviteMemberModal`, `CancelSubscriptionModal`, `MobileDrawer`, `PaymentRecoveryModal`, `DowngradeModal`. Critical modals are covered. |
+| FE-A11Y-05 | CONFIRMED | LOW (was LOW) | 1.5h | POST-GTM | Duplicate `<footer>` landmarks on buscar page. Real a11y issue but low practical impact for B2G users (unlikely to use landmark navigation). |
+| FE-A11Y-06 | FIXED | N/A | 0h | N/A | Badges all include text labels alongside colors. `ViabilityBadge`, `ReliabilityBadge`, `LlmSourceBadge` all use triple-encoding (color + text + icon). Meets WCAG 1.4.1. Remove from debt list. |
+| FE-A11Y-07 | LARGELY FIXED | INFO | 0h | N/A | `focus-trap-react` handles Escape by default in all modals using it. Remaining risk is minimal. |
+
+### Appendix C Items (new findings from re-analysis)
+
+| ID | Status | Adjusted Severity | Hours | GTM Priority | UX Impact |
+|----|--------|-------------------|-------|--------------|-----------|
+| ARCH-006 | CONFIRMED | MEDIUM | 8h | GTM-RISK | `SearchForm.tsx` (687 LOC) and `DataQualityBanner.tsx` (661 LOC) are the largest remaining components after the buscar page decomposition. SearchForm accepts 40+ props -- a sign it should be split into sub-components (form header, filter sections, action buttons). DataQualityBanner at 661 LOC is surprisingly large for a banner and likely contains complex logic that should be extracted. |
+| FE-TD-004 | CONFIRMED | MEDIUM | Ongoing | GTM-RISK | Same as FE-004. Coverage 50-55%, target 60%. |
+| FE-TD-006 | CONFIRMED | MEDIUM | 4-6h | GTM-RISK | Same as FE-006. Dual component directories. |
+| FE-TD-008 | CONFIRMED | LOW | 6h | POST-GTM | 110 raw hex color occurrences across 20 TSX files. Should use Tailwind tokens. Not user-visible. |
+| FE-TD-023 | CONFIRMED | MEDIUM | 4h | GTM-RISK | Framer Motion imported in 13 files including authenticated page components (`GlassCard`, `ScoreBar`, `GradientButton`, `ProfileCompletionPrompt`, `ProfileCongratulations`). These pull ~70KB into dashboard and other authenticated page bundles. Should wrap in `next/dynamic` or extract motion-dependent components to dynamic imports. |
+| A11Y-001 | CONFIRMED | LOW | 0.5h | POST-GTM | Same as FE-A11Y-03. Inline SVGs without `aria-hidden`. |
+| A11Y-002 | FIXED | N/A | 0h | N/A | Same as FE-A11Y-06. Color-only indicators resolved. |
 
 ---
 
-## Debitos Removidos/Downgraded
+## Additional Items to Remove from Debt List
 
-| ID | Motivo | Status Atual |
-|----|--------|-------------|
-| FE-005 | `prefers-reduced-motion` already implemented in `globals.css:331-337` with comprehensive universal rule that covers all 8 custom keyframe animations. Also `useInView.ts` checks for the preference. | **REMOVED** -- false positive in current codebase |
-| FE-007 | `aria-live` now present in 15+ production components covering search results, loading states, error states, quota displays, and progress indicators. Comprehensive coverage of the search flow. | **REMOVED** -- resolved since DRAFT was written |
-| FE-A11Y-04 | `focus-trap-react` v12 installed and used in 6 modal components. Critical modals (payment, cancellation, deep analysis, invite, downgrade, mobile drawer) all have focus trapping. | **REMOVED** -- resolved since DRAFT was written |
+| ID | Reason | Evidence |
+|----|--------|----------|
+| FE-020 | `__tests__/e2e/` directory does not exist | `ls` returns empty; only `e2e-tests/` exists |
+| FE-A11Y-02 | SearchErrorBoundary already has `role="alert" aria-live="assertive"` | Verified in SearchErrorBoundary.tsx:54 |
+| FE-A11Y-04 | `focus-trap-react` used in 5+ modals | Package.json + 5 modal files confirmed |
+| FE-A11Y-06 | All badges have text labels | ViabilityBadge, ReliabilityBadge, LlmSourceBadge verified |
+| FE-A11Y-07 | Escape handled by focus-trap-react | Default behavior in library |
+| A11Y-002 | Duplicate of FE-A11Y-06, already fixed | Same evidence |
+| FE-017 | Not a debt item | Standard dark mode FOWT prevention pattern with CSP nonce |
 
 ---
 
-## Respostas ao Architect
+## New UX Findings
 
-### 1. FE-001: Decomposicao do buscar page 983 LOC -- que sub-secoes devem ser independentemente carregaveis?
+| ID | Finding | Severity | Hours | GTM Priority | UX Impact |
+|----|---------|----------|-------|--------------|-----------|
+| FE-NEW-01 | **Framer Motion in authenticated page bundles.** `GlassCard`, `ScoreBar`, `GradientButton`, `ProfileCompletionPrompt`, `ProfileCongratulations` all statically import `framer-motion`. These are used on `/dashboard` and other authenticated pages. Since the landing page is the only page that benefits from framer-motion animations, authenticated pages pay ~70KB for minor hover/entrance effects that could use CSS transitions instead. | MEDIUM | 6h | GTM-RISK | ~70KB unnecessary JS on authenticated pages. Dashboard perceived load time affected. |
+| FE-NEW-02 | **`conta/layout.tsx` inline SVGs without `aria-hidden`.** The 5 navigation icons (user, shield, credit-card, database, users) are all inline SVGs without `aria-hidden="true"`. Screen readers will attempt to describe these decorative path elements. Also, these are standard icons available in Lucide React. | LOW | 1h | POST-GTM | Minor a11y issue. Screen readers read SVG paths. |
+| FE-NEW-03 | **No error boundaries on dashboard, pipeline, historico pages.** Only `/buscar` has `SearchErrorBoundary`. The root `error.tsx` catches crashes on other pages but loses all page context (scroll position, filter state, form data). For B2G users working through a pipeline of opportunities, losing pipeline state on a transient error is disruptive. | HIGH | 4h | GTM-BLOCKER | Users lose all in-progress work on unhandled exception. Recovery requires full page reload and re-navigation. |
 
-The buscar page is already well-decomposed at the component level (35 components in `app/buscar/components/`, further split into `search-results/` sub-directory). The 983 remaining lines are **orchestration logic**: state wiring between `useSearch`, `useSearchFilters`, `useShepherdTour`, `useOnboarding`, `useBroadcastChannel`, plus conditional rendering for trial/grace/payment states.
+---
 
-**Above-the-fold split for perceived performance:**
-- **Immediate render:** Header (sticky, line 563-615) + SearchForm (line 652-669) + empty results placeholder
-- **Deferred render:** SearchResults (line 701-795), Footer (line 883-922), Modals (lines 801-968)
+## Answers to Architect Questions
 
-**Recommended decomposition:**
-1. Extract `useSearchOrchestration()` hook (lines 130-508) -- consolidates 15+ state variables, 8+ useEffect hooks, and 6+ useCallback handlers into a single custom hook. This reduces the page component to ~200 lines of JSX.
-2. Extract `BuscarModals` component (lines 800-968) -- save dialog, keyboard help, trial conversion, PDF modal, payment recovery, onboarding tour button. All modal state can be lifted via a `useModalManager` hook.
-3. The footer (lines 883-922) should be removed in favor of extending NavigationShell footer for the buscar route (solves FE-016 + FE-A11Y-05 simultaneously).
+### 1. FE-001: Which sub-sections of the search page should be independently loadable?
 
-### 2. FE-005: prefers-reduced-motion -- quais animacoes sao essenciais vs decorativas?
+**Moot -- already decomposed.** The buscar page is now 270 LOC (DEBT-106). The decomposition created `useSearchOrchestration` hook + `BuscarModals` aggregator. The remaining code is JSX composition of well-separated components.
 
-**Moot point** -- already implemented. The global `@media (prefers-reduced-motion: reduce)` rule in `globals.css:331-337` applies to ALL elements with `animation-duration: 0.01ms !important` and `transition-duration: 0.01ms !important`. This is the recommended WCAG approach (blanket disable). No per-animation decision needed.
+However, the next decomposition targets should be the **sub-components** that are now the largest files:
+- `SearchForm.tsx` (687 LOC, 40+ props) -- split into `SearchFormHeader`, `SearchFilterAccordion`, `SearchFormActions`
+- `DataQualityBanner.tsx` (661 LOC) -- extract rule logic into a `useDataQualityRules` hook, keep the banner as a thin presenter
 
-For reference, if granular control were desired:
-- **Essential (should still animate, simplified):** `shimmer` (loading skeleton feedback), `slide-in-right` (drawer entrance -- reduce to instant)
-- **Decorative (should disable entirely):** `float`, `bounce-gentle`, `gradient`, `fade-in-up`, `slide-up`, `scale-in`
+**Above-the-fold split for perceived performance:** The SearchForm (sticky header) + empty state should render immediately. SearchResults and all banners/modals can be deferred until data arrives. This is already the natural behavior since results are fetched asynchronously.
 
-### 3. FE-006: Dual component directories -- ownership boundary
+### 2. FE-005: Which animations are essential vs decorative?
 
-The proposed rule aligns well with the current codebase reality:
-- `components/` = truly global, no page-specific dependencies (Button, Input, NavigationShell, Sidebar, EmptyState, ErrorStateWithRetry, LoadingProgress, PaymentFailedBanner, PlanCard, ProfileCompletionPrompt)
-- `app/components/` = app-wide providers and auth-aware compositions (AuthProvider, ThemeProvider, UserMenu, UpgradeModal, TrialBanner, QuotaBadge, Dialog, SavedSearchesDropdown)
-- `app/buscar/components/` = search-specific (SearchForm, SearchResults, ViabilityBadge, UfProgressGrid, etc.)
+**Already resolved.** The global `@media (prefers-reduced-motion: reduce)` in `globals.css:331` applies a blanket `animation-duration: 0.01ms !important` to all elements. No per-animation decision is needed.
 
-**Action items:**
-1. Document the rule in a `CONTRIBUTING.md` or add an ESLint import restriction rule
-2. Move `MobileDrawer` from `components/` to `app/components/` (it depends on app routing)
+For the record, the classification would be:
+- **Essential (should simplify, not remove):** `shimmer` (loading skeleton feedback provides visual continuity)
+- **Decorative (disable entirely):** `float`, `bounce-gentle`, `gradient`, `fade-in-up`, `slide-up`, `scale-in`, `slide-in-right`
+
+### 3. FE-006: Component directory ownership boundary
+
+The proposed rule is correct and aligns with the existing organic structure:
+- `components/` = truly global primitives used by 3+ pages (Button, Input, NavigationShell, Sidebar, ErrorBoundary, LoadingProgress)
+- `app/components/` = app-aware shared components (AuthProvider, ThemeProvider, UpgradeModal, QuotaBadge, Footer, landing sections)
+- `app/{page}/components/` = page-local (buscar components, dashboard components, pipeline components)
+
+**Concrete actions:**
+1. Document this rule in the project (CONTRIBUTING.md or a code comment in each directory)
+2. Move `BackendStatusIndicator` from `components/` to `app/components/` (it exports a context provider, so it is app-aware)
 3. Move `AlertNotificationBell` from `components/` to `app/components/` (depends on auth context)
-4. The `BackendStatusIndicator` in `components/` exports `useBackendStatusContext` which creates a provider dependency -- should be in `app/components/`
+4. Add an ESLint `no-restricted-imports` rule to prevent page-local components from being imported outside their page directory
 
-### 4. FE-007: aria-live -- experiencia esperada para leitores de tela
+### 4. FE-007: Expected screen reader experience during search
 
-**Already implemented** as described in the DRAFT. The current screen reader experience during search:
-1. **Search initiated:** `ResultsLoadingSection` announces progress updates via `aria-live="polite"`
-2. **Progress updates:** `UfProgressGrid` updates via `aria-live="polite"` for UF-level status
-3. **Results loaded:** `ResultsHeader` announces count via `aria-live="polite" aria-atomic="true"`
-4. **Errors:** `SearchStateManager` announces errors via `aria-live="assertive"` (4 instances: timeout, quota exceeded, general error, connection error)
-5. **Empty results:** `EmptyResults` announces via `aria-live="polite"`
+**Already implemented.** The current flow:
+1. Search button pressed: button gets `aria-busy="true"`
+2. Loading phase: `EnhancedLoadingProgress` announces via `aria-live="polite"` with percentage
+3. Per-UF progress: `UfProgressGrid` updates via `aria-live="polite"`
+4. Results loaded: `ResultsHeader` announces count via `aria-live="polite" aria-atomic="true"`
+5. Errors: `SearchStateManager` announces via `aria-live="assertive"` (4 distinct error types)
+6. Empty results: `EmptyResults` announces via `aria-live="polite"`
+7. Crash: `SearchErrorBoundary` announces via `role="alert" aria-live="assertive"`
 
-Only the SearchErrorBoundary crash fallback (FE-A11Y-02) remains unannounced.
+**Recommendation:** Only announce the final result count and errors. Intermediate progress updates via `aria-live="polite"` are fine -- "polite" means they queue and do not interrupt, so the screen reader user gets the count when the reader finishes its current utterance.
 
-### 5. FE-A11Y-06: Color-only indicators -- quais badges precisam redesign?
+### 5. FE-A11Y-06: Which badges need redesign?
 
-**Largely resolved.** All three badges now include text labels:
-- `ViabilityBadge`: "Viabilidade alta/media/baixa" + chart bar icon + color
-- `ReliabilityBadge`: "Alta/Media/Baixa" + shield icon + color
-- `LlmSourceBadge`: "Resumo por IA" / "Resumo automatico" + distinct icons + color
+**None.** All three badge types already use triple-encoding:
+- `ViabilityBadge`: color (green/yellow/red) + text label ("alta/media/baixa") + chart icon
+- `ReliabilityBadge`: color + text level + shield icon
+- `LlmSourceBadge`: color + descriptive text + distinct icon per source type
 
-No redesign needed. The badges meet WCAG 1.4.1 (Use of Color) with the current triple-encoding (color + text + icon).
+This meets WCAG 1.4.1 (Use of Color). Remove this item from the debt list.
 
-### 6. FE-016: Duplicate footers -- qual usar?
+### 6. FE-016: Should buscar use NavigationShell footer exclusively?
 
-The buscar page should use the NavigationShell footer exclusively. The inline buscar footer (lines 883-922) provides richer content (4-column grid with about/plans/support/legal links) but creates:
-1. Duplicate `<footer role="contentinfo">` landmarks (a11y issue)
-2. Maintenance burden (two footers to update)
-3. Inconsistency with other authenticated pages
+**Yes, long-term.** The buscar-specific footer (with domain links like "Sobre", "Planos", "Suporte", "Termos") provides value but creates duplicate `<footer>` landmarks. The recommended approach:
+1. Enhance the NavigationShell footer to accept optional "rich content" props
+2. Each page can pass page-specific footer links if needed
+3. Only one `<footer>` element renders per page
 
-**Recommendation:** Enhance the NavigationShell footer to include the richer content from the buscar footer, then remove the buscar inline footer. This gives all authenticated pages a consistent, rich footer.
+However, this is documented as intentional (DEBT-111 AC9) and has low practical impact. Classify as POST-GTM.
 
 ### 7. FE-021: Storybook vs lighter alternative?
 
-**Storybook is overkill** for current scale (~130 components, 1-2 frontend developers, pre-revenue product). Recommend:
-- **Now:** Continue with `Button.examples.tsx` pattern + Playwright visual regression screenshots
-- **At 3+ frontend devs:** Evaluate Ladle (Vite-based, 10x faster build than Storybook) or Storybook 8 with Vite builder
-- **Never:** Full Storybook + Chromatic CI -- too expensive for current scale
+**Neither, for now.** At the current scale (~130 components, 1-2 FE developers, pre-revenue), the overhead of any component documentation tool exceeds the benefit. The `Button.examples.tsx` pattern is sufficient.
+
+**Recommended timeline:**
+- **Now:** Continue `*.examples.tsx` pattern for key primitives. Use Playwright visual regression screenshots in E2E tests.
+- **3+ frontend developers:** Evaluate Ladle (Vite-based, fast, minimal config) or Storybook 8 with Vite builder.
+- **5+ developers or design system consumption by external teams:** Full Storybook + Chromatic CI.
 
 ---
 
-## Recomendacoes de Design
+## GTM Priority Summary
 
-### Padrao de Design System Recomendado
+### GTM-BLOCKER (must fix before paid users)
 
-The design system foundation is **stronger than the DRAFT suggests**:
-- `tailwind.config.ts` already maps all CSS custom properties to Tailwind tokens (colors, borders, shadows, fonts, border-radius)
-- `globals.css` has comprehensive light/dark mode variables with documented WCAG contrast ratios
-- `components/ui/button.tsx` exists with CVA (6 variants, 4 sizes, loading state, TypeScript-enforced aria-label for icon-only)
-- `components/ui/` directory has Input, Label, Pagination, CurrencyInput primitives
+| ID | Item | Hours |
+|----|------|-------|
+| FE-NEW-03 | Error boundaries on dashboard, pipeline, historico pages | 4h |
 
-**Gaps remaining:**
-1. No shared `Card` component (ad-hoc div + Tailwind throughout)
-2. No shared `Badge` component (7+ inline implementations)
-3. No shared `Select` component (3 custom filter selects with different styles)
-4. No enforcement mechanism for Tailwind token usage (raw `var(--*)` still common)
+**Total: 4h**
 
-**Recommended enforcement:** Add an ESLint rule or custom Tailwind plugin that warns on `bg-[var(--` patterns where a Tailwind token equivalent exists.
+Rationale: A paying B2G user working through their opportunity pipeline who hits an unhandled exception loses all state and must re-navigate. This is unacceptable for a paid product. Wrap each authenticated page in an error boundary with contextual recovery.
 
-### Quick Wins (< 2h cada)
+### GTM-RISK (fix within 30 days of launch)
 
-| # | Fix | Horas | Impacto |
-|---|-----|-------|---------|
-| 1 | Add `role="alert"` to SearchErrorBoundary fallback UI | 0.5h | Screen readers notified on crashes |
-| 2 | Move `@types/uuid` to devDependencies | 0.5h | Correct dependency classification |
-| 3 | Remove duplicate `<footer>` from buscar page (use NavigationShell) | 1.5h | Fix landmark duplication, reduce maintenance |
-| 4 | Add `aria-busy="true"` to auth loading spinner in buscar/page.tsx | 0.5h | Screen readers know content is loading |
-| 5 | Wrap ProfileCompletionPrompt with `next/dynamic({ ssr: false })` | 0.5h | Removes ~70KB framer-motion from dashboard initial load |
-| 6 | Add `role="status"` to loading spinners in auth check (line 551) | 0.5h | WCAG 4.1.3 compliance for loading states |
+| ID | Item | Hours |
+|----|------|-------|
+| FE-006 / FE-TD-006 | Document component directory convention + move 3-4 files | 4-6h |
+| FE-011 | Add render-smoke tests for dashboard, pipeline, historico, onboarding, conta | 12-16h |
+| FE-TD-023 / FE-NEW-01 | Dynamic-import or CSS-ify framer-motion on authenticated pages | 4-6h |
+| ARCH-006 | Split SearchForm.tsx (687 LOC) into sub-components | 6-8h |
 
-### Requer Design Review (> 8h)
+**Total: 26-36h**
 
-| # | Item | Horas | Por que precisa design review |
-|---|------|-------|-------------------------------|
-| 1 | FE-001: buscar page orchestration extraction | 16-20h | Extracting useSearchOrchestration changes how state flows through the component tree; needs careful verification of all conditional rendering paths |
-| 2 | FE-010: CSP nonce implementation | 12-16h | Requires testing all third-party scripts (Stripe checkout, Sentry, Mixpanel, Clarity, Cloudflare) still function correctly with nonce-based CSP |
-| 3 | FE-003: SSE proxy simplification | 20-24h | The fallback cascade (SSE -> polling -> simulation) is complex but battle-tested in production; simplification risks breaking degradation paths |
-| 4 | FE-NEW-02: Error boundaries for 5 pages | 4h | Each page needs a custom error fallback UI that preserves context and offers recovery actions appropriate to that page's function |
-| 5 | NavigationShell footer enhancement | 3h | Rich footer content (4-column layout) needs responsive design review for mobile authenticated layout |
+Rationale: These items affect either developer velocity (directory convention, test coverage) or user-perceived performance (framer-motion bundle, SearchForm maintainability). None will cause data loss or security issues, but they increase the risk of regressions during the rapid iteration period after GTM launch.
 
-### Acessibilidade - Plano de Remediacao
+### POST-GTM (fix incrementally)
 
-**Tier 0 -- Already resolved (no action needed):**
-- `aria-live` on search results and dynamic content (FE-007) -- DONE
-- `prefers-reduced-motion` global rule (FE-005) -- DONE
-- Focus trapping in modals via `focus-trap-react` (FE-A11Y-04) -- DONE
-- Color-only indicators on badges (FE-A11Y-06) -- DONE, text labels present
-- Button aria-label enforcement for icon-only buttons -- TypeScript-enforced in `button.tsx`
-
-**Tier 1 -- Sprint fix (3h total):**
-
-| Fix | WCAG Reference | Horas |
-|-----|---------------|-------|
-| Add `role="alert"` to SearchErrorBoundary fallback | WCAG 4.1.3 Status Messages (AA) | 0.5h |
-| Remove duplicate `<footer role="contentinfo">` from buscar page | WCAG 1.3.1 Info and Relationships (A), WCAG 1.3.6 Identify Purpose (AAA) | 1.5h |
-| Add `role="status"` / `aria-busy` to auth loading states | WCAG 4.1.3 Status Messages (AA) | 0.5h |
-| Verify Dialog component Escape key handling | WCAG 2.1.2 No Keyboard Trap (A) | 0.5h |
-
-**Tier 2 -- Next sprint (6h total):**
-
-| Fix | WCAG Reference | Horas |
-|-----|---------------|-------|
-| Audit heading hierarchy on all authenticated pages (skip levels?) | WCAG 1.3.1 Info and Relationships (A) | 2h |
-| Add `aria-describedby` for form validation error messages | WCAG 1.3.1, 3.3.1 Error Identification (A) | 2h |
-| Ensure all inline SVGs have `aria-hidden="true"` (spot audit) | WCAG 1.1.1 Non-text Content (A) | 1h |
-| Add skip-to-content verification on all page layouts | WCAG 2.4.1 Bypass Blocks (A) | 1h |
-
-**Tier 3 -- Monitoring (ongoing):**
-- Enable `@axe-core/playwright` accessibility assertions in E2E tests (already in devDeps, just needs activation)
-- Add Lighthouse CI accessibility threshold (score >= 90) to CI pipeline
-- Quarterly manual screen reader audit using NVDA/VoiceOver on the 5 core flows (search, pipeline, dashboard, account, billing)
+All remaining items: FE-003, FE-004, FE-008, FE-009, FE-013, FE-014, FE-016, FE-018, FE-019, FE-021, FE-022, FE-TD-008, FE-A11Y-01, FE-A11Y-03, FE-A11Y-05, FE-NEW-02.
 
 ---
 
-*End of UX Specialist Review v3.0*
-*Next step: Consolidation with @data-engineer and @qa reviews into FINAL technical debt assessment.*
+## Design Recommendations
+
+### 1. Error Boundary Strategy for Authenticated Pages
+
+Each authenticated page should have a lightweight error boundary that:
+- Preserves the navigation shell (sidebar/bottom nav remain functional)
+- Shows a contextual error message ("Erro ao carregar o pipeline")
+- Offers a "Tentar novamente" button that resets the error boundary
+- Reports to Sentry with page context
+- Does NOT clear any localStorage/SWR cache
+
+Implementation: Create a generic `PageErrorBoundary` component in `components/` that wraps page content, not the layout.
+
+### 2. Framer Motion Isolation
+
+Instead of removing framer-motion entirely from authenticated pages (which would remove subtle polish), isolate it:
+1. Replace `GlassCard`, `ScoreBar`, `GradientButton` hover effects with CSS `transition` + `transform` (identical visual result, zero JS)
+2. Keep `motion.div` usage only in `SearchStateManager` (already dynamically imported) and landing page components
+3. `ProfileCompletionPrompt` and `ProfileCongratulations` entrance animations can use CSS `@keyframes fade-in-up` (already defined in globals.css)
+
+This reduces framer-motion to landing-page-only, saving ~70KB on authenticated page bundles.
+
+### 3. SearchForm Decomposition
+
+`SearchForm.tsx` at 687 LOC with 40+ props is the next decomposition target after the successful buscar page split. Recommended structure:
+
+```
+SearchForm (container, ~100 LOC)
+  -> SearchFormHeader (sector select, search terms input)
+  -> SearchFilterPanel (UF selector, date range, value range, modalidade)
+  -> SearchFormActions (search button, saved searches dropdown, keyboard shortcut hint)
+```
+
+Each sub-component receives only its relevant props, reducing the prop-drilling surface.
+
+### 4. Hex Color Cleanup
+
+110 raw hex colors across 20 files. Most are in:
+- `signup/page.tsx` (10 occurrences) -- social button colors
+- `privacidade/page.tsx` (14 occurrences) -- legal page styling
+- `ThemeProvider.tsx` (29 occurrences) -- theme definition (appropriate use)
+- `login/page.tsx` (5 occurrences) -- social button colors
+
+Action: The ThemeProvider occurrences are correct (they define the CSS variables). For remaining files, replace with `var(--*)` references or Tailwind tokens. The social button colors (Google blue, GitHub black) are inherently hardcoded and can stay as hex in a constants file.
+
+---
+
+*End of UX Specialist Review v4.0*
+*Reviewer: @ux-design-expert (Pixel), Phase 6 Brownfield Discovery*
+*Next step: Consolidation with @data-engineer (Phase 5) and @qa (Phase 7) reviews into FINAL assessment*

@@ -1,564 +1,380 @@
-# SmartLic Database Audit Report
+# Database Audit Report
 
-**Audit Date:** 2026-03-09
+**Audit Date:** 2026-03-10
 **Auditor:** @data-engineer (AIOS Brownfield Discovery Phase 2)
-**Scope:** 76 migration files (66 Supabase + 10 backend), 27+ tables, 13+ functions, 70+ indexes
-**Severity Scale:** CRITICAL > HIGH > MEDIUM > LOW > INFO
+**Scope:** 57 migration files (47 Supabase + 10 backend), 21 tables, 17 functions, 60+ indexes, Redis cache layer
 
 ---
 
-## Table of Contents
+## 1. Schema Health
 
-1. [Summary Dashboard](#summary-dashboard)
-2. [CRITICAL Issues](#critical-issues)
-3. [HIGH Issues](#high-issues)
-4. [MEDIUM Issues](#medium-issues)
-5. [LOW Issues](#low-issues)
-6. [INFO / Recommendations](#info--recommendations)
+### Tables Inventory
 
----
+| # | Table | Columns | Indexes | RLS | Triggers | Issues |
+|---|-------|---------|---------|-----|----------|--------|
+| 1 | profiles | 18 | 7 | 5 policies | 1 (updated_at) | OK |
+| 2 | plans | 13 | 0 | 1 policy | 1 (updated_at) | No index on is_active |
+| 3 | plan_billing_periods | 7 | 0 | 2 policies | 0 | No index, low volume OK |
+| 4 | plan_features | 8 | 1 | 1 policy | 1 (updated_at) | OK |
+| 5 | user_subscriptions | 14 | 5 | 2 policies | 1 (updated_at) | OK |
+| 6 | monthly_quota | 6 | 1 | 2 policies | 0 | No updated_at trigger |
+| 7 | search_sessions | 24 | 6 | 3 policies | 0 | No updated_at, missing DELETE policy |
+| 8 | search_results_cache | 19 | 6 | 2 policies | 1 (cleanup) | OK |
+| 9 | search_state_transitions | 8 | 2 | 2 policies | 0 | No FK to search_sessions |
+| 10 | conversations | 8 | 3 | 4 policies | 0 | No updated_at trigger |
+| 11 | messages | 8 | 4 | 4 policies | 1 (last_message) | Missing updated_at |
+| 12 | pipeline_items | 14 | 3 | 5 policies | 1 (updated_at) | OK |
+| 13 | stripe_webhook_events | 6 | 2 | 3 policies | 0 | OK |
+| 14 | audit_events | 7 | 4 | 2 policies | 0 | No retention monitoring |
+| 15 | user_oauth_tokens | 9 | 2 | 4+1 policies | 0 | Missing updated_at trigger |
+| 16 | google_sheets_exports | 8 | 4 | 4 policies | 0 | Missing updated_at trigger |
+| 17 | classification_feedback | 14 | 2 | 5 policies | 0 | Missing updated_at, no service_role ALL |
+| 18 | trial_email_log | 4 | 1 | 0 policies | 0 | No user-facing RLS (service-only) |
+| 19 | alert_preferences | 7 | 2 | 4 policies | 2 | OK |
+| 20 | alerts | 7 | 2 | 5 policies | 1 (updated_at) | OK |
+| 21 | alert_sent_items | 4 | 3 | 2 policies | 0 | No retention policy |
 
-## Summary Dashboard
-
-| Severity | Count | Status |
-|----------|-------|--------|
-| CRITICAL | 2 | Needs immediate attention |
-| HIGH | 8 | Should fix in next sprint |
-| MEDIUM | 12 | Plan for upcoming release |
-| LOW | 9 | Address when convenient |
-| INFO | 6 | Best-practice recommendations |
-| **Total** | **37** | |
-
-### Previously Fixed Issues (for reference)
-
-These were identified in earlier audits and resolved in recent DEBT migrations:
-
-| ID | Issue | Fixed In |
-|----|-------|----------|
-| DB-013 | `partner_referrals.referred_user_id` NOT NULL vs ON DELETE SET NULL | `20260308100000_debt001` |
-| DB-038 | Wrong table names in index migration | `20260308100000_debt001` |
-| DB-012 | Duplicate `updated_at` trigger functions | `20260308100000_debt001` |
-| DB-001 | `classification_feedback` auth.role() pattern | `20260308300000_debt009` |
-| DB-002 | `health_checks/incidents` missing service_role policies | `20260308300000_debt009` |
-| DB-014 | `plans.stripe_price_id` deprecated column | `20260309100000_debt017` (documented) |
-| DB-034 | Cache cleanup trigger performance | `20260309100000_debt017` (short-circuit added) |
-| DB-035 | Conversations correlated subquery | `20260309100000_debt017` (LEFT JOIN LATERAL) |
+### Summary
+- **21 tables** in public schema (+ 1 system user in auth.users)
+- **17 functions** (6 SECURITY DEFINER)
+- **1 custom enum type** (alert_frequency)
+- **2 extensions** (pg_trgm, pg_cron)
+- **4 pg_cron retention jobs**
 
 ---
 
-## CRITICAL Issues
+## 2. RLS Coverage
 
-### CRIT-01: FK Target Inconsistency — `auth.users` vs `profiles`
+| Table | SELECT | INSERT | UPDATE | DELETE | Service Role | Gaps |
+|-------|--------|--------|--------|--------|-------------|------|
+| profiles | Own | Own + service | Own | NONE | ALL | **No DELETE policy** |
+| plans | Public | NONE | NONE | NONE | NONE | Read-only, OK |
+| plan_billing_periods | Public | NONE | NONE | NONE | ALL | OK |
+| plan_features | Public | NONE | NONE | NONE | NONE | **No service_role write** |
+| user_subscriptions | Own | NONE | NONE | NONE | ALL | **No user INSERT/UPDATE** |
+| monthly_quota | Own | NONE | NONE | NONE | ALL | OK (service writes) |
+| search_sessions | Own | Own | NONE | NONE | ALL | **No user UPDATE/DELETE** |
+| search_results_cache | Own | NONE | NONE | NONE | ALL | OK (service writes) |
+| search_state_transitions | Own (join) | NONE | NONE | NONE | INSERT only | **No service SELECT** |
+| conversations | Own+admin | Own | Admin | NONE | ALL | **No DELETE** |
+| messages | Own+admin | Own+admin | Own+admin | NONE | ALL | **No DELETE** |
+| pipeline_items | Own | Own | Own | Own | ALL | OK |
+| stripe_webhook_events | Admin+service | Service | NONE | NONE | Partial | **No UPDATE for status change** |
+| audit_events | Admin | NONE | NONE | NONE | ALL | OK |
+| user_oauth_tokens | Own | NONE | Own | Own | ALL | **No user INSERT** |
+| google_sheets_exports | Own | Own | Own | NONE | ALL | **No DELETE** |
+| classification_feedback | Own | Own | Own | Own | auth.role() check | **RLS uses auth.role() not TO clause** |
+| trial_email_log | NONE | NONE | NONE | NONE | NONE | Service-role bypasses RLS |
+| alert_preferences | Own | Own | Own | NONE | ALL (auth.role()) | **Service policy uses auth.role() not TO** |
+| alerts | Own | Own | Own | Own | ALL (TO service_role) | OK |
+| alert_sent_items | Own (join) | NONE | NONE | NONE | ALL (TO service_role) | OK |
 
-**Tables affected:** 12 of 27 tables reference user IDs
+### Critical RLS Gaps
 
-Some tables reference `auth.users(id)` directly, while others reference `profiles(id)`. Both work in practice because `profiles.id` = `auth.users.id`, but this creates an inconsistent contract:
+1. **profiles has no DELETE policy** -- Users cannot delete own profile via RLS. Deletion relies on auth.users cascade. Not necessarily a problem but worth documenting.
 
-| FK Target | Tables |
-|-----------|--------|
-| `auth.users(id)` | `monthly_quota`, `user_oauth_tokens`, `google_sheets_exports`, `classification_feedback`, `search_results_cache`, `search_results_store`, `pipeline_items`, `organizations`, `organization_members`, `trial_email_log`, `partner_referrals` |
-| `profiles(id)` | `user_subscriptions`, `search_sessions`, `conversations`, `messages`, `alert_preferences`, `alerts` |
+2. **classification_feedback uses `auth.role() = 'service_role'`** (mig 006 in backend) -- This is the OLDER pattern. Best practice is `TO service_role` clause. The `auth.role()` check works but is less explicit.
 
-**Risk:** If `profiles` row creation fails (e.g., `handle_new_user()` trigger error), tables referencing `profiles(id)` will reject inserts while tables referencing `auth.users(id)` will succeed, causing partial state.
+3. **alert_preferences service policy uses `auth.role() = 'service_role'`** (mig 20260226100000) -- Same pattern issue as classification_feedback.
 
-**Impact:** Data integrity risk during edge-case signup failures. Tables referencing `profiles(id)` with `ON DELETE CASCADE` will cascade differently than tables referencing `auth.users(id)`.
+4. **stripe_webhook_events has no UPDATE policy** -- Migration 20260227120001 added a `status` column and GRANT UPDATE, but no RLS UPDATE policy exists. Service role bypasses RLS, so this works in practice, but is inconsistent.
 
-**Fix:** Standardize all user FKs to either `auth.users(id)` (safer, since auth.users is the source of truth) or `profiles(id)` (more consistent with app-layer expectations). Migration `20260304100000_fk_standardization_to_profiles.sql` and `20260225120000_standardize_fks_to_profiles.sql` attempted partial standardization but did not complete it.
-
-**Effort:** Medium (requires careful migration with FK recreation)
+5. **plan_features has no service_role write policy** -- Backend cannot modify feature flags via PostgREST. Modifications require direct SQL or migration.
 
 ---
 
-### CRIT-02: `search_results_store` Missing ON DELETE CASCADE
+## 3. Performance Issues
 
-The `search_results_store.user_id` FK references `auth.users(id)` without `ON DELETE CASCADE`:
+### Missing Indexes
 
-```sql
-user_id UUID NOT NULL REFERENCES auth.users(id)  -- no ON DELETE behavior specified
+| Table | Missing Index | Impact | Priority |
+|-------|--------------|--------|----------|
+| `plans` | `is_active` | Minor -- small table, sequential scan OK | LOW |
+| `search_sessions` | `(user_id, created_at DESC, status)` covering index | Medium -- historico page queries | MEDIUM |
+| `search_state_transitions` | `(created_at)` for retention cleanup | Low -- no pg_cron job yet | LOW |
+| `alert_sent_items` | No retention cleanup index | Medium -- table grows unbounded | MEDIUM |
+
+### N+1 Patterns (Identified and Resolved)
+
+1. **Conversations N+1** -- Fixed by `get_conversations_with_unread_count()` RPC (mig 019). The backend code should verify it uses this RPC.
+
+2. **Analytics summary** -- Fixed by `get_analytics_summary()` RPC (mig 019). Eliminates full-table scan.
+
+### Query Optimization Opportunities
+
+1. **search_sessions has 24 columns** -- Many columns added incrementally via ALTER TABLE. Consider a JSON `metadata` column for rarely-queried fields (failed_ufs, pipeline_stage, response_state) to reduce row width.
+
+2. **search_results_cache.results JSONB** -- Can reach 2MB (CHECK constraint). Consider storing in Supabase Storage instead of inline JSONB for entries > 500KB. Would dramatically reduce table bloat and vacuum pressure.
+
+3. **profiles table has 18 columns** -- Accumulated via 8 ALTER TABLE migrations. Context_data JSONB helps, but subscription_status, trial_expires_at, subscription_end_date, email_unsubscribed could be a separate `profile_settings` table.
+
+---
+
+## 4. Security Issues
+
+### RLS Gaps
+
+1. **`FOR ALL USING (true)` without `TO service_role`** -- Fixed for most tables in migrations 016, 027, 028. Remaining instances:
+   - `classification_feedback.feedback_admin_all` uses `auth.role() = 'service_role'` (functional but suboptimal)
+   - `alert_preferences` service policy uses `auth.role()` pattern
+
+2. **Stripe price IDs hardcoded in migrations** -- Production Stripe price IDs (price_1Sy..., price_1T1..., price_1T54...) are in migration SQL files committed to git. Not a secret per se (they are public IDs), but environment-specific. Documented in migration 021 comments.
+
+3. **System user with nil UUID** -- Migration 20260226110000 creates a user with ID `00000000-0000-0000-0000-000000000000` in auth.users. This is an internal system account for cache warming. Has `plan_type='master'` and `is_admin=false`. Acceptable pattern but should be documented as a known system account.
+
+### Data Exposure Risks
+
+1. **audit_events PII hashing** -- Good: SHA-256 truncated to 16 hex chars for actor_id, target_id, IP. LGPD/GDPR compliant.
+
+2. **OAuth tokens marked as AES-256 encrypted** -- The schema comments state tokens are encrypted, but encryption is handled at application level (backend). No DB-level encryption beyond Supabase's at-rest encryption.
+
+3. **search_results_cache.results** -- Contains full search results as JSONB. If exposed via RLS bypass, reveals business intelligence data. Current RLS (own + service_role) is adequate.
+
+---
+
+## 5. Data Integrity Issues
+
+### Missing Constraints
+
+| Table | Issue | Severity | Recommendation |
+|-------|-------|----------|----------------|
+| `search_state_transitions` | No FK to `search_sessions.search_id` | MEDIUM | Add FK with ON DELETE CASCADE (or SET NULL) |
+| `search_sessions.status` | No CHECK on `error_code` values | LOW | Add CHECK constraint for documented error codes |
+| `pipeline_items.uf` | No CHECK against valid UF codes | LOW | Add CHECK or validate in application |
+| `search_results_cache.priority` | No CHECK constraint | LOW | Add CHECK: hot, warm, cold |
+| `profiles.subscription_status` vs `user_subscriptions.subscription_status` | Duplicate concept | MEDIUM | Source of truth unclear -- profiles is denormalized copy |
+
+### Orphan Data Risks
+
+1. **search_state_transitions with no FK** -- If a search_session is deleted, its transitions remain. This is by design (audit trail), but there is no pg_cron cleanup job for this table. Over time, this table will grow unbounded.
+
+2. **alert_sent_items without retention** -- No pg_cron job for cleanup. Items accumulate indefinitely. Should add a job to delete entries > 90 days.
+
+3. **classification_feedback has no retention policy** -- Will grow indefinitely. Consider archival strategy.
+
+### Cascade Gaps
+
+| FK | ON DELETE | Issue |
+|----|-----------|-------|
+| user_subscriptions.plan_id -> plans.id | RESTRICT | Intentional (documented in mig 022) |
+| All user_id FKs -> profiles.id | CASCADE | Correct |
+| alert_sent_items.alert_id -> alerts.id | CASCADE | Correct |
+| messages.conversation_id -> conversations.id | CASCADE | Correct |
+
+---
+
+## 6. Migration Health
+
+### Migration Naming Inconsistency
+
+The project uses TWO naming conventions:
+1. **Sequential:** `001_profiles_and_sessions.sql` through `033_fix_missing_cache_columns.sql` (33 files)
+2. **Timestamped:** `20260220120000_*.sql` through `20260227120003_*.sql` (14 files)
+
+This causes:
+- **Duplicate numbering:** `027_fix_plan_type_default_and_rls.sql` AND `027b_search_cache_add_sources_and_fetched_at.sql` share the `027` prefix. Migration 033 exists specifically to fix the columns that 027b was supposed to add.
+- **Ordering ambiguity:** Sequential files (e.g., `033_`) sort AFTER timestamped files (e.g., `20260220...`) alphabetically, but chronologically `033` was earlier.
+
+### Duplicate/Overlapping Migrations
+
+| Issue | Files | Status |
+|-------|-------|--------|
+| 027/027b collision | 027_fix_plan_type + 027b_search_cache | Fixed by 033 |
+| handle_new_user() redefined 8 times | 001, 007, 016, 024, 027, 20260224, 20260225110000 | Each version cumulative; only latest matters |
+| profiles.plan_type CHECK redefined 4 times | 006a, 020, 029, present state | Normal evolution |
+
+### Backend vs Supabase Migration Overlap
+
+7 files in `backend/migrations/` duplicate content from `supabase/migrations/`:
+- `002_monthly_quota.sql` = `supabase/002_monthly_quota.sql`
+- `003_atomic_quota_increment.sql` = `supabase/003_atomic_quota_increment.sql`
+- `004_google_oauth_tokens.sql` = `supabase/013_google_oauth_tokens.sql`
+- `005_google_sheets_exports.sql` = `supabase/014_google_sheets_exports.sql`
+- `007_search_session_lifecycle.sql` ~ `supabase/20260221100000_search_session_lifecycle.sql`
+- `008_search_state_transitions.sql` ~ `supabase/20260221100002_create_search_state_transitions.sql`
+- `009_add_search_id_to_search_sessions.sql` = `supabase/20260220120000_add_search_id_to_search_sessions.sql`
+
+This dual-track is confusing. The `backend/migrations/` directory appears to be a historical artifact from before the team standardized on `supabase/migrations/`.
+
+### Rollback Readiness
+
+- **008_rollback.sql.bak** exists but is a `.bak` file (not executable).
+- No other migration has a rollback script.
+- Most migrations use `IF NOT EXISTS` / `IF EXISTS` for idempotency, which is good.
+- The pg_cron jobs in migration 022 have `cron.unschedule()` commands documented in comments.
+
+---
+
+## 7. Redis Cache Architecture
+
+### Key Patterns
+
+| Key Pattern | Purpose | TTL | Module |
+|-------------|---------|-----|--------|
+| `smartlic:cache:{params_hash}` | Search results L1 cache | 4h (hot: 2h, warm: 6h, cold: 1h) | search_cache.py |
+| `smartlic:auth:{token_hash}` | JWT validation cache (L2) | 5min | auth.py |
+| `smartlic:quota:{user_id}:{month}` | Quota count cache | None (explicit invalidation) | quota.py |
+| `smartlic:llm:{prompt_hash}` | LLM response cache | Variable | llm_arbiter.py |
+| `smartlic:cb:*` | Circuit breaker state | Variable | Various |
+| `features:*` | Feature flag cache | 5min | cache.py |
+
+### TTL Strategy
+
+```
+L1 InMemory/Redis: 4h (Fresh)
+  - Hot: 2h (high access, frequently refreshed)
+  - Warm: 6h (moderate access)
+  - Cold: 1h (low access, aggressive eviction)
+
+L2 Supabase: 24h (Stale, SWR eligible)
+L3 Local File: 24h (Emergency fallback only)
+
+Auth cache: 60s L1, 5min L2 (Redis)
 ```
 
-If a user account is deleted, their search results store entries will block the deletion (FK violation) or remain as orphaned rows depending on Supabase's handling.
+### Pool Configuration
 
-**Impact:** User account deletion may fail or leave orphaned data.
+| Pool | Max Connections | Socket Timeout | Purpose |
+|------|-----------------|----------------|---------|
+| Main async | 50 | 30s | General operations |
+| SSE | 10 | 60s | SSE XREAD polling |
+| Sync | 12 | 30s | LLM arbiter (ThreadPoolExecutor) |
 
-**Fix:**
-```sql
-ALTER TABLE search_results_store
-  DROP CONSTRAINT search_results_store_user_id_fkey,
-  ADD CONSTRAINT search_results_store_user_id_fkey
-    FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+### Cache Invalidation
+
+- **Plan status cache:** Invalidated on Stripe webhook via `invalidate_plan_status_cache(user_id)` (5min TTL as backup)
+- **Auth token cache:** LRU with 60s TTL, max 1000 entries
+- **Search cache:** SWR pattern (serve stale, revalidate in background)
+- **Feature flags:** TTL-based (5min), no explicit invalidation
+
+### Resilience
+
+- **Redis unavailable:** Falls back to `InMemoryCache` (LRU, 10K entries max)
+- **Fallback monitoring:** `REDIS_AVAILABLE` Prometheus gauge, `REDIS_FALLBACK_DURATION` gauge
+- **Warning after 5min:** Periodic WARNING log every 60s when in fallback > 5min
+
+---
+
+## 8. Technical Debt Inventory
+
+| ID | Issue | Severity | Impact | Est. Hours |
+|----|-------|----------|--------|------------|
+| DB-001 | `search_state_transitions` has no FK to `search_sessions.search_id` | MEDIUM | Orphan rows on session deletion; no referential integrity | 2 |
+| DB-002 | `classification_feedback` RLS uses `auth.role()` instead of `TO service_role` | LOW | Functional but inconsistent with project convention | 1 |
+| DB-003 | `alert_preferences` service RLS uses `auth.role()` pattern | LOW | Same as DB-002 | 1 |
+| DB-004 | `backend/migrations/` duplicates `supabase/migrations/` | MEDIUM | Confusion about source of truth for migrations | 2 |
+| DB-005 | Migration naming inconsistency (sequential vs timestamped) | LOW | Ordering ambiguity, no runtime impact | 1 |
+| DB-006 | `handle_new_user()` trigger redefined 8 times across migrations | LOW | Only latest version matters, but hard to audit | 0 |
+| DB-007 | No retention policy for `search_state_transitions` | MEDIUM | Table grows unbounded (audit trail) | 2 |
+| DB-008 | No retention policy for `alert_sent_items` | MEDIUM | Table grows unbounded | 1 |
+| DB-009 | No retention policy for `classification_feedback` | LOW | Low volume currently | 1 |
+| DB-010 | `search_results_cache.results` JSONB up to 2MB inline | MEDIUM | Table bloat, vacuum pressure, backup size | 8 |
+| DB-011 | `profiles.subscription_status` duplicates `user_subscriptions.subscription_status` | MEDIUM | Two sources of truth for same concept | 4 |
+| DB-012 | `search_sessions` has 24 columns (wide table) | LOW | Row width affects scan performance | 4 |
+| DB-013 | `user_oauth_tokens` missing `updated_at` trigger | LOW | `updated_at` column exists but not auto-updated | 1 |
+| DB-014 | `google_sheets_exports` missing `updated_at` trigger | LOW | Has `last_updated_at` but no trigger | 1 |
+| DB-015 | `monthly_quota` has no `updated_at` trigger | LOW | `updated_at` column exists, updated manually in RPC | 0 |
+| DB-016 | `stripe_webhook_events` no UPDATE RLS policy | LOW | Service role bypasses RLS, works but inconsistent | 1 |
+| DB-017 | `plan_features` no service_role write policy | LOW | Cannot modify via PostgREST API; requires SQL | 1 |
+| DB-018 | `conversations` missing `updated_at` auto-trigger | LOW | `updated_at` column exists; manually set in `update_conversation_last_message` | 1 |
+| DB-019 | `search_results_cache.priority` has no CHECK constraint | LOW | Application enforces hot/warm/cold but DB allows any text | 1 |
+| DB-020 | Duplicate `update_*_updated_at()` functions | LOW | 4 separate functions that all do `NEW.updated_at = now()`. Could reuse `update_updated_at()` | 2 |
+
+### Severity Distribution
+- **MEDIUM:** 6 items (DB-001, 004, 007, 008, 010, 011)
+- **LOW:** 14 items
+
+### Total Estimated Effort: ~35 hours
+
+---
+
+## 9. Questions for @architect
+
+1. **search_state_transitions FK:** Should we add a FK from `search_state_transitions.search_id` to `search_sessions.search_id`? The lack of FK means transitions persist even after session deletion (audit benefit), but also means orphan rows accumulate. What is the retention policy?
+
+2. **Dual subscription_status:** `profiles.subscription_status` and `user_subscriptions.subscription_status` both track subscription state. Which is the source of truth? Can we deprecate one? The `sync_profile_plan_type()` trigger was removed (mig 030) because it referenced a non-existent `status` column, suggesting the sync mechanism is broken.
+
+3. **search_results_cache.results as JSONB:** At up to 2MB per row, this table can get large fast (10 entries/user * N users * 2MB). Should we move large results to Supabase Storage (bucket) with only a reference URL in the table? This would reduce table bloat significantly.
+
+4. **Backend migrations directory:** Can we deprecate `backend/migrations/` entirely? All recent migrations go to `supabase/migrations/`. The duplicate files are a maintenance burden and potential source of confusion.
+
+5. **Migration naming convention:** Should we standardize on timestamped naming (YYYYMMDDHHMMSS) going forward? The mixed sequential+timestamped scheme causes ordering issues.
+
+6. **alert_sent_items retention:** This table has no cleanup job. At scale, it could grow large. Should we add a pg_cron job to delete entries > 90 days? Or should sent items be kept indefinitely for audit purposes?
+
+7. **`update_*_updated_at()` function proliferation:** There are 4 separate trigger functions that all do `NEW.updated_at = now()`. The generic `update_updated_at()` from migration 001 does the same thing. Should we consolidate to use the generic one everywhere?
+
+8. **Supabase Connection Pool Sizing:** `supabase_client.py` configures `max_connections=25` per worker. With 2 Gunicorn workers, that is 50 total. Supabase Free tier allows 50 connections, Pro allows more. Are we at risk of exhaustion during traffic spikes? The `SUPABASE_POOL_MAX_CONNECTIONS` env var makes this tunable, but the default may need review.
+
+---
+
+## Appendix: Migration Execution Order
+
+For disaster recovery (recreate DB from migrations), execute in this order:
+
+```
+001_profiles_and_sessions.sql
+002_monthly_quota.sql
+003_atomic_quota_increment.sql
+004_add_is_admin.sql
+005_update_plans_to_new_tiers.sql
+006a_update_profiles_plan_type_constraint.sql
+006b_search_sessions_service_role_policy.sql
+007_add_whatsapp_consent.sql
+008_add_billing_period.sql
+009_create_plan_features.sql
+010_stripe_webhook_events.sql
+011_add_billing_helper_functions.sql
+012_create_messages.sql
+013_google_oauth_tokens.sql
+014_google_sheets_exports.sql
+015_add_stripe_price_ids_monthly_annual.sql
+016_security_and_index_fixes.sql
+017_sync_plan_type_trigger.sql
+018_standardize_fk_references.sql
+019_rpc_performance_functions.sql
+020_tighten_plan_type_constraint.sql
+021_user_subscriptions_updated_at.sql
+022_retention_cleanup.sql
+023_audit_events.sql
+024_add_profile_context.sql
+025_create_pipeline_items.sql
+026_search_results_cache.sql
+027_fix_plan_type_default_and_rls.sql
+027b_search_cache_add_sources_and_fetched_at.sql
+028_fix_stripe_webhook_events_rls.sql
+029_single_plan_model.sql
+030_remove_dead_sync_trigger.sql
+031_cache_health_metadata.sql
+032_cache_priority_fields.sql
+033_fix_missing_cache_columns.sql
+20260220120000_add_search_id_to_search_sessions.sql
+20260221100000_search_session_lifecycle.sql
+20260221100001_create_get_table_columns_simple.sql
+20260221100002_create_search_state_transitions.sql
+20260223100000_add_params_hash_global.sql
+20260224000000_phone_email_unique.sql
+20260224100000_trial_email_log.sql
+20260224200000_fix_cache_user_fk.sql
+20260225100000_add_missing_profile_columns.sql
+20260225110000_fix_handle_new_user_trigger.sql
+20260225120000_standardize_fks_to_profiles.sql
+20260225130000_rls_policy_hardening.sql
+20260225140000_add_session_composite_index.sql
+20260225150000_jsonb_storage_governance.sql
+20260226100000_alert_preferences.sql
+20260226110000_warming_user_profile.sql
+20260226120000_story277_repricing_stripe_ids.sql
+20260227100000_create_alerts.sql
+20260227120001_concurrency_stripe_webhook.sql
+20260227120002_concurrency_pipeline_version.sql
+20260227120003_concurrency_quota_rpc.sql
 ```
 
-**Effort:** Low (single ALTER TABLE)
-
----
-
-## HIGH Issues
-
-### HIGH-01: `classification_feedback` Missing ON DELETE CASCADE
-
-`classification_feedback.user_id` references `auth.users(id)` without cascade behavior:
-
-```sql
-user_id UUID NOT NULL REFERENCES auth.users(id)  -- no ON DELETE specified
+Also apply from `backend/migrations/`:
+```
+006_classification_feedback.sql  (creates classification_feedback table)
+010_normalize_session_arrays.sql (normalizes arrays in search_sessions)
 ```
 
-**Impact:** Same as CRIT-02 -- user deletion blocked or orphaned feedback rows.
-
-**Fix:** Add `ON DELETE CASCADE` to the FK constraint.
-
----
-
-### HIGH-02: Duplicate/Redundant `updated_at` Trigger Functions
-
-Despite DEBT-001 consolidating triggers to `set_updated_at()`, three tables still use their own dedicated trigger functions:
-
-| Table | Function | Should Use |
-|-------|----------|------------|
-| `pipeline_items` | `update_pipeline_updated_at()` | `set_updated_at()` |
-| `alert_preferences` | `update_alert_preferences_updated_at()` | `set_updated_at()` |
-| `alerts` | `update_alerts_updated_at()` | `set_updated_at()` |
-
-All three functions are identical (`NEW.updated_at = now(); RETURN NEW;`).
-
-**Impact:** Code duplication. 4 identical functions exist when 1 would suffice.
-
-**Fix:** Migrate triggers to use `set_updated_at()`, then drop the 3 redundant functions.
-
-**Effort:** Low
-
----
-
-### HIGH-03: `search_state_transitions` No FK Constraint
-
-`search_state_transitions.search_id` has no FK to `search_sessions.search_id`. This is documented (DEBT-017/DB-050) as intentional because `search_sessions.search_id` is nullable and not unique. However, this means orphaned transition records can accumulate indefinitely.
-
-**Impact:** Table grows unbounded for searches that never create a session record. No retention cleanup exists.
-
-**Fix:** Add a pg_cron retention job to delete transitions older than 90 days:
-```sql
-SELECT cron.schedule('cleanup-old-transitions', '0 3 * * *',
-  $$DELETE FROM search_state_transitions WHERE created_at < NOW() - INTERVAL '90 days'$$);
-```
-
-**Effort:** Low
-
----
-
-### HIGH-04: `alert_preferences` Service Role Policy Uses `auth.role()`
-
-The service role policy uses the older `auth.role() = 'service_role'` pattern instead of the standardized `TO service_role` pattern:
-
-```sql
-CREATE POLICY "Service role full access to alert preferences"
-  ON alert_preferences FOR ALL
-  USING (auth.role() = 'service_role');  -- OLD pattern
-```
-
-The `auth.role()` approach evaluates per-row and is less efficient. The DEBT-009 migration standardized `classification_feedback`, `health_checks`, and `incidents` but missed `alert_preferences`.
-
-**Impact:** Minor performance cost on every query. Inconsistent with project convention.
-
-**Fix:**
-```sql
-DROP POLICY "Service role full access to alert preferences" ON alert_preferences;
-CREATE POLICY "service_role_all" ON alert_preferences
-  FOR ALL TO service_role USING (true) WITH CHECK (true);
-```
-
----
-
-### HIGH-05: `organizations` and `organization_members` Service Role Uses `auth.role()`
-
-Same issue as HIGH-04. Both tables use the old `auth.role() = 'service_role'` pattern:
-
-```sql
--- organizations
-USING (auth.role() = 'service_role');
--- organization_members
-USING (auth.role() = 'service_role');
-```
-
-**Fix:** Replace with `TO service_role` pattern for both tables.
-
----
-
-### HIGH-06: `partners` and `partner_referrals` Service Role Uses `auth.role()`
-
-Same pattern issue:
-
-```sql
-CREATE POLICY partners_service_role ON partners
-  FOR ALL USING (auth.role() = 'service_role');
-CREATE POLICY partner_referrals_service_role ON partner_referrals
-  FOR ALL USING (auth.role() = 'service_role');
-```
-
-**Note:** Migration `20260304200000_rls_standardize_service_role.sql` may have addressed this. Verify in production.
-
----
-
-### HIGH-07: `search_results_store` Service Role Uses `auth.role()`
-
-```sql
-CREATE POLICY "Service role full access" ON search_results_store
-  FOR ALL USING (auth.role() = 'service_role');
-```
-
-**Fix:** Standardize to `TO service_role` pattern.
-
----
-
-### HIGH-08: `health_checks` and `incidents` Missing Retention Jobs
-
-Both tables accumulate data indefinitely:
-- `health_checks`: Comment says "30-day retention" but no pg_cron job exists
-- `incidents`: No retention policy documented
-
-**Impact:** Unbounded table growth in production.
-
-**Fix:** Add pg_cron jobs:
-```sql
-SELECT cron.schedule('cleanup-old-health-checks', '0 3 * * *',
-  $$DELETE FROM health_checks WHERE checked_at < NOW() - INTERVAL '30 days'$$);
-
-SELECT cron.schedule('cleanup-old-incidents', '0 3 1 * *',
-  $$DELETE FROM incidents WHERE status = 'resolved' AND resolved_at < NOW() - INTERVAL '90 days'$$);
-```
-
----
-
-## MEDIUM Issues
-
-### MED-01: Redundant Indexes
-
-Several tables have redundant indexes that waste storage and slow writes:
-
-| Table | Redundant Index | Covered By |
-|-------|----------------|------------|
-| `alert_preferences` | `idx_alert_preferences_user_id` | `alert_preferences_user_id_unique` (UNIQUE constraint) |
-| `search_results_store` | `idx_search_results_store_user_id` | `idx_search_results_user` (same column) |
-| `search_sessions` | `idx_search_sessions_user_id` | `idx_search_sessions_user` (same column) |
-| `partners` | `idx_partners_slug` | UNIQUE constraint on `slug` |
-
-**Impact:** Extra write overhead and storage for no query benefit.
-
-**Fix:**
-```sql
-DROP INDEX IF EXISTS idx_alert_preferences_user_id;
-DROP INDEX IF EXISTS idx_search_results_store_user_id;
-DROP INDEX IF EXISTS idx_search_sessions_user_id;
-DROP INDEX IF EXISTS idx_partners_slug;
-```
-
----
-
-### MED-02: `conversations` Missing Composite Index for Admin Inbox
-
-Admin inbox queries filter by `status` + order by `last_message_at DESC`. Individual indexes exist but a composite would be more efficient:
-
-**Fix:**
-```sql
-CREATE INDEX idx_conversations_status_last_msg ON conversations(status, last_message_at DESC);
-```
-
----
-
-### MED-03: `plans.stripe_price_id` Legacy Column Still In Use
-
-The column is marked DEPRECATED (DEBT-017/DB-014) via SQL COMMENT, but `billing.py` still uses it as a fallback. This creates confusion about which column is authoritative.
-
-**Impact:** Risk of stale data if the deprecated column falls out of sync with `stripe_price_id_monthly`.
-
-**Fix:** Update `billing.py` to exclusively use `stripe_price_id_monthly` / `plan_billing_periods.stripe_price_id`, then DROP the legacy column.
-
----
-
-### MED-04: `search_sessions.status` CHECK Constraint Mismatch
-
-The CHECK constraint allows `cancelled` but the DEBT-017 comment documents valid transitions using `cancelled` (with double-l). However, the actual CHECK values include both patterns:
-- CHECK: `created, processing, completed, failed, timed_out, cancelled`
-- Status column added in `20260221100000` uses `consolidating` and `partial` in transition comments but these are NOT in the CHECK
-
-**Impact:** State transitions documented in DEBT-017 comment include states (`consolidating`, `partial`) not allowed by the CHECK constraint.
-
-**Fix:** Either add `consolidating` and `partial` to the CHECK constraint or update documentation to match actual constraint values.
-
----
-
-### MED-05: `monthly_quota.user_id` References `auth.users` Not `profiles`
-
-This table references `auth.users(id)` directly while logically it should follow the same pattern as other user tables. The `increment_quota_atomic()` function also uses `auth.users` reference.
-
-**Impact:** Inconsistency (part of CRIT-01). No functional bug but breaks convention.
-
----
-
-### MED-06: Missing `updated_at` on Several Tables
-
-These tables lack `updated_at` columns, making change tracking impossible:
-
-| Table | Issue |
-|-------|-------|
-| `search_state_transitions` | Append-only, so acceptable |
-| `classification_feedback` | Has `created_at` only -- feedback cannot be edited? But UPDATE policy exists |
-| `stripe_webhook_events` | Append-only, so acceptable |
-| `trial_email_log` | Append-only, so acceptable |
-| `alert_sent_items` | Append-only, so acceptable |
-| `health_checks` | Append-only, so acceptable |
-| `incidents` | Mutable (resolved_at updated) but no `updated_at` |
-| `partners` | Mutable (status changes) but no `updated_at` |
-
-**Fix (for mutable tables):**
-```sql
-ALTER TABLE incidents ADD COLUMN updated_at TIMESTAMPTZ DEFAULT now();
-ALTER TABLE partners ADD COLUMN updated_at TIMESTAMPTZ DEFAULT now();
-```
-
----
-
-### MED-07: `search_results_cache` Duplicate Size Constraints
-
-Two CHECK constraints enforce the same 2MB limit:
-1. `chk_results_max_size` from `20260225150000_jsonb_storage_governance.sql`: `octet_length(results::text) <= 2097152`
-2. (Potentially) the same constraint re-added in `20260304110000_search_results_store_hardening.sql` on `search_results_store`
-
-For `search_results_cache`, only one CHECK should exist. Verify in production that there is no duplicate.
-
----
-
-### MED-08: `partner_referrals` Missing ON DELETE CASCADE on `partner_id`
-
-```sql
-partner_id UUID NOT NULL REFERENCES partners(id)  -- no ON DELETE specified
-```
-
-If a partner is deleted, referral records will block the deletion.
-
-**Fix:** Add `ON DELETE CASCADE` or `ON DELETE SET NULL` depending on business rules.
-
----
-
-### MED-09: Naming Convention Inconsistencies
-
-Trigger and function names follow multiple patterns:
-
-| Pattern | Examples |
-|---------|----------|
-| `tr_` prefix | `tr_pipeline_items_updated_at`, `tr_organizations_updated_at` |
-| `trg_` prefix | `trg_update_conversation_last_message`, `trg_cleanup_search_cache` |
-| `trigger_` prefix | `trigger_alerts_updated_at`, `trigger_alert_preferences_updated_at` |
-| No prefix | `profiles_updated_at`, `plans_updated_at` |
-
-DEBT-017/DB-020 documented the naming convention but it was not retroactively applied.
-
-**Fix:** Standardize to a single prefix (`trg_` is most common in the codebase). Low priority since names don't affect functionality.
-
----
-
-### MED-10: `google_sheets_exports` Using `last_updated_at` Instead of `updated_at`
-
-Every other table uses `updated_at` but this table uses `last_updated_at`. No `set_updated_at()` trigger is attached.
-
-**Impact:** Inconsistent naming. Column must be updated manually by application code.
-
-**Fix:** Rename to `updated_at` and add trigger, or document the exception.
-
----
-
-### MED-11: `organizations.plan_type` Has No CHECK Constraint
-
-The column defaults to `'consultoria'` but accepts any text value. Should be constrained to valid plan types.
-
-**Fix:**
-```sql
-ALTER TABLE organizations ADD CONSTRAINT chk_organizations_plan_type
-  CHECK (plan_type IN ('consultoria', 'smartlic_pro', 'master'));
-```
-
----
-
-### MED-12: `pipeline_items` Service Role Policy Originally Overly Permissive
-
-Migration 025 created the policy as `FOR ALL USING (true)` without `TO service_role`, allowing any authenticated user to bypass per-operation policies. This was **fixed in migration 027**, but the pattern should be verified in production.
-
----
-
-## LOW Issues
-
-### LOW-01: `user_oauth_tokens.provider` Overly Broad CHECK
-
-The CHECK allows `google, microsoft, dropbox` but only Google is implemented. Dead values in constraint.
-
-**Impact:** No functional issue, but misleading schema documentation.
-
-**Fix:** Tighten to `CHECK (provider = 'google')` and expand when needed.
-
----
-
-### LOW-02: `audit_events` No Index on `details` JSONB
-
-If future queries need to filter by `details` content (e.g., event subtype), a GIN index would be needed.
-
-**Impact:** None currently. Future-proofing concern only.
-
----
-
-### LOW-03: `search_results_cache` Has 8 Indexes
-
-The table has accumulated indexes across 5+ migrations:
-- `idx_search_cache_user`
-- `idx_search_cache_params_hash`
-- `idx_search_cache_global_hash`
-- `idx_search_cache_degraded`
-- `idx_search_cache_priority`
-- `idx_search_cache_fetched_at`
-- Plus UNIQUE constraint index and PK
-
-**Impact:** Write amplification on INSERT/UPDATE. The cleanup trigger fires on every INSERT, compounding the overhead.
-
-**Fix:** Profile actual query patterns and remove unused indexes. `idx_search_cache_params_hash` may be redundant with the UNIQUE index on `(user_id, params_hash)`.
-
----
-
-### LOW-04: `search_sessions` Accumulating Without Retention
-
-No retention policy exists for old search sessions. Over time, this table will grow unbounded.
-
-**Fix:** Add pg_cron job to archive or delete sessions older than 12 months (matching `audit_events` retention):
-```sql
-SELECT cron.schedule('cleanup-old-sessions', '0 4 2 * *',
-  $$DELETE FROM search_sessions WHERE created_at < NOW() - INTERVAL '12 months'$$);
-```
-
----
-
-### LOW-05: `classification_feedback` Accumulating Without Retention
-
-Same unbounded growth concern. No cleanup strategy documented.
-
----
-
-### LOW-06: `conversations` and `messages` No Retention Policy
-
-Support conversations accumulate indefinitely. Consider archiving resolved conversations older than 24 months.
-
----
-
-### LOW-07: `alert_sent_items` Missing Retention
-
-Dedup records accumulate for every alert sent. Over time with many active alerts, this table will grow significantly.
-
-**Fix:** Add retention (e.g., 90 days) since items older than alert re-check window are no longer needed for dedup:
-```sql
-SELECT cron.schedule('cleanup-old-alert-sent-items', '0 5 * * 0',
-  $$DELETE FROM alert_sent_items WHERE sent_at < NOW() - INTERVAL '90 days'$$);
-```
-
----
-
-### LOW-08: `stripe_webhook_events` No Automated Retention
-
-Comment in migration says "Keep events for 90 days for compliance/debugging" but no pg_cron job was created.
-
-**Fix:**
-```sql
-SELECT cron.schedule('cleanup-old-webhook-events', '0 4 * * *',
-  $$DELETE FROM stripe_webhook_events WHERE processed_at < NOW() - INTERVAL '90 days'$$);
-```
-
----
-
-### LOW-09: `pipeline_items` Missing `search_id` Reference
-
-Pipeline items snapshot bid data but don't link back to the search session that found them. This makes it impossible to trace which search led to a pipeline addition.
-
-**Fix:** Consider adding an optional `search_id UUID` column.
-
----
-
-## INFO / Recommendations
-
-### INFO-01: Consolidate Backend Migrations
-
-The `backend/migrations/` directory is now fully redundant after DEBT-002 bridge migration. Consider:
-- Adding a `DEPRECATED` notice to `backend/migrations/README.md`
-- Preventing CI from running backend migrations independently
-- Eventually removing the directory
-
-### INFO-02: Schema Versioning
-
-No schema version table exists. Consider adding a `schema_version` table to track which migrations have been applied and when, independent of Supabase's internal tracking.
-
-### INFO-03: Backup Strategy Documentation
-
-No backup strategy is documented in the schema. Supabase provides automatic daily backups, but:
-- Point-in-time recovery window should be documented
-- Backup verification process should be established
-- Cross-region backup should be considered for disaster recovery
-
-### INFO-04: Connection Pooling
-
-The schema does not account for connection pooling. With Railway backend + Supabase, connections should go through Supabase's built-in pgbouncer (port 6543) for transaction-mode pooling. Verify this is configured correctly.
-
-### INFO-05: Consider Partitioning for High-Volume Tables
-
-Tables that will grow significantly over time are candidates for partitioning:
-- `search_state_transitions` (by `created_at` range)
-- `audit_events` (by `timestamp` range)
-- `alert_sent_items` (by `sent_at` range)
-
-This is premature at current scale but should be planned when any table exceeds 10M rows.
-
-### INFO-06: JSONB Column Schema Validation
-
-Several tables use JSONB columns without database-level schema validation:
-- `profiles.context_data`
-- `alerts.filters`
-- `search_results_cache.results`
-- `search_results_cache.search_params`
-- `health_checks.sources_json`
-- `health_checks.components_json`
-
-Application-level validation (Pydantic) handles this, but consider adding PostgreSQL CHECK constraints for critical JSONB fields if data corruption becomes a concern.
-
----
-
-## Action Priority Matrix
-
-### Immediate (This Sprint)
-
-| ID | Issue | Effort | Impact |
-|----|-------|--------|--------|
-| CRIT-02 | `search_results_store` missing ON DELETE CASCADE | Low | Blocks user deletion |
-| HIGH-01 | `classification_feedback` missing ON DELETE CASCADE | Low | Blocks user deletion |
-| HIGH-03 | `search_state_transitions` retention job | Low | Unbounded growth |
-| HIGH-08 | `health_checks`/`incidents` retention jobs | Low | Unbounded growth |
-| LOW-08 | `stripe_webhook_events` retention job | Low | Unbounded growth |
-
-### Next Sprint
-
-| ID | Issue | Effort | Impact |
-|----|-------|--------|--------|
-| HIGH-04/05/06/07 | Standardize `auth.role()` to `TO service_role` | Low | Consistency + perf |
-| HIGH-02 | Consolidate trigger functions | Low | Code cleanliness |
-| MED-01 | Drop redundant indexes | Low | Write performance |
-| MED-08 | `partner_referrals.partner_id` ON DELETE | Low | Data integrity |
-
-### Planned
-
-| ID | Issue | Effort | Impact |
-|----|-------|--------|--------|
-| CRIT-01 | FK target standardization | Medium | Architecture consistency |
-| MED-03 | Remove `plans.stripe_price_id` legacy column | Medium | Code clarity |
-| MED-04 | `search_sessions.status` CHECK alignment | Low | Documentation accuracy |
-| MED-09 | Naming convention standardization | Low | Readability |
-| MED-10 | `google_sheets_exports.last_updated_at` rename | Low | Convention |
-| MED-11 | `organizations.plan_type` CHECK | Low | Data integrity |
-
-### Low Priority / Future
-
-| ID | Issue | Effort | Impact |
-|----|-------|--------|--------|
-| LOW-01 to LOW-09 | Various | Low-Medium | Maintenance |
-| INFO-01 to INFO-06 | Recommendations | Varies | Best practices |
+Note: Backend migrations 002-005, 007-009 are duplicates of supabase migrations and should NOT be applied twice.

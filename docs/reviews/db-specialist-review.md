@@ -1,289 +1,298 @@
 # Database Specialist Review
 
-**Reviewer:** @data-engineer
-**Data:** 2026-03-09
-**Fonte:** docs/prd/technical-debt-DRAFT.md (Section 2) — ID scheme DB-001 through DB-031 + DB-INFO-01 through DB-INFO-06
-**Supersedes:** v3.0 (2026-03-07, reviewed DRAFT with old ID scheme DB-001 through DB-046)
+**Reviewer:** @data-engineer (Flux)
+**Date:** 2026-03-10
+**Source:** docs/prd/technical-debt-DRAFT.md (Section 2) -- ID scheme DB-001 through DB-031 + DB-INFO-01 through DB-INFO-06
+**Supersedes:** v3.0 (2026-03-09)
+**Version:** v4.0 -- Full reconciliation with DEBT-100, DEBT-104, DEBT-017 migrations (20260309*)
 
-**Migrations Analisadas:** 76 (66 Supabase + 10 backend), com foco nas 15 mais recentes (DEBT-001 a DEBT-017)
-**Backend Code Verificado:** `supabase_client.py`, `search_cache.py`, `auth.py`, `quota.py`, `routes/billing.py`
-
----
-
-## Resumo da Revisao
-
-A auditoria de database no DRAFT esta **bem fundamentada mas desatualizada** em relacao as migracoes mais recentes. A analise cruzada com os 76 arquivos de migracao revela que **10 dos 31 itens de debito ja foram totalmente resolvidos** por migracoes aplicadas entre 2026-03-04 e 2026-03-09. O DRAFT nao refletiu esses fixes, provavelmente porque a DB-AUDIT.md foi escrita antes das migracoes DEBT-001/DEBT-009/DEBT-010/DEBT-017 serem criadas.
-
-**Resumo quantitativo:**
-- **17 itens validados** (confirmados como debito ativo)
-- **10 itens removidos** (ja resolvidos por migracoes recentes)
-- **4 itens com severidade ajustada**
-- **4 novos debitos identificados** durante a revisao
-- **Esforco total estimado para debitos remanescentes:** ~38 horas (4.75 dias de engenharia)
-
-**Ponto mais critico remanescente:** DB-001 (FK inconsistency) permanece parcialmente resolvido. Tres migracoes (`20260225120000`, `20260304100000`, `018_standardize_fk_references.sql`) migraram a maioria das tabelas para `profiles(id)`, mas **4 tabelas ainda referenciam `auth.users` diretamente**: `monthly_quota`, `user_oauth_tokens`, `google_sheets_exports`, `search_results_cache` (estado incerto). A padronizacao FK esta ~70% completa.
+**Migrations Analyzed:** 88 total (78 Supabase + 10 backend), with focus on the 18 most recent (DEBT-001 through DEBT-111)
+**Backend Code Verified:** `supabase_client.py`, `search_cache.py`, `auth.py`, `quota.py`, `routes/billing.py`
 
 ---
 
-## Debitos Validados
+## Gate Status: VALIDATED
 
-| ID | Debito | Sev. Original | Sev. Ajustada | Horas | Prioridade | Notas |
-|----|--------|:---:|:---:|:---:|:---:|-------|
-| **DB-001** | FK Target Inconsistency — `auth.users` vs `profiles` (12 tables) | CRITICAL | **HIGH** | 6h | P1 | Downgrade: ~70% resolvido. Migracoes `018_standardize_fk_references`, `20260225120000`, `20260304100000` repontaram 8+ tabelas. **4 restantes:** `monthly_quota` (002), `user_oauth_tokens` (013), `google_sheets_exports` (014), `search_results_cache` (026, estado incerto — ver DB-NEW-04). Risco atenuado: todas tem ON DELETE CASCADE no original. |
-| **DB-002** | `search_results_store` missing ON DELETE CASCADE | CRITICAL | **REMOVIDO** | 0h | -- | **RESOLVIDO.** Migracao `20260304100000` reaponta FK para `profiles(id) ON DELETE CASCADE`. |
-| **DB-003** | `classification_feedback` missing ON DELETE CASCADE | HIGH | **REMOVIDO** | 0h | -- | **RESOLVIDO.** Migracao `20260225120000` adiciona FK para `profiles(id) ON DELETE CASCADE`. |
-| **DB-004** | Duplicate `updated_at` trigger functions (3 tables) | HIGH | **REMOVIDO** | 0h | -- | **RESOLVIDO.** Migracao `20260304120000_rls_policies_trigger_consolidation.sql` reaponta todas 3 triggers (`pipeline_items`, `alert_preferences`, `alerts`) para `set_updated_at()` e dropa funcoes duplicadas. |
-| **DB-005** | `search_state_transitions.search_id` no FK + no retention | HIGH | **LOW** | 0.5h | P4 | FK impossivel (search_sessions.search_id nullable/not unique — documentado em DEBT-017). Retention **JA FOI CRIADO** em `20260308310000` (30 dias). Restante: apenas COMMENT doc update. |
-| **DB-006** | `alert_preferences` auth.role() pattern | HIGH | **REMOVIDO** | 0h | -- | **RESOLVIDO.** Migracao `20260304200000_rls_standardize_service_role.sql` padroniza para `TO service_role`. |
-| **DB-007** | `organizations`/`org_members` auth.role() pattern | HIGH | **REMOVIDO** | 0h | -- | **RESOLVIDO.** Mesma migracao `20260304200000`. |
-| **DB-008** | `partners`/`partner_referrals` auth.role() pattern | HIGH | **REMOVIDO** | 0h | -- | **RESOLVIDO.** Mesma migracao `20260304200000`. |
-| **DB-009** | `search_results_store` auth.role() pattern | HIGH | **REMOVIDO** | 0h | -- | **RESOLVIDO.** Mesma migracao `20260304200000` (item #8: search_results_store). |
-| **DB-010** | `health_checks`/`incidents` missing retention jobs | HIGH | **REMOVIDO** | 0h | -- | **RESOLVIDO.** Migracao `20260308310000_debt009_retention_pgcron_jobs.sql` cria jobs: health_checks 30d, incidents 90d. |
-| **DB-011** | Redundant indexes on 4 tables | MEDIUM | MEDIUM | 1h | P3 | Parcialmente resolvido: `idx_alert_preferences_user_id` dropado em `20260308400000`. Restam 3: `idx_search_results_store_user_id` (duplica `idx_search_results_user`), `idx_search_sessions_user_id` (duplica `idx_search_sessions_user`), `idx_partners_slug` (duplica UNIQUE on slug). |
-| **DB-012** | `conversations` missing composite index admin inbox | MEDIUM | **REMOVIDO** | 0h | -- | **RESOLVIDO.** `idx_conversations_status_last_msg` criado em `20260308400000_debt010_schema_guards.sql`. |
-| **DB-013** | `plans.stripe_price_id` legacy column still used | MEDIUM | MEDIUM | 4h | P3 | Confirmado: `billing.py:96` usa `plan.get("stripe_price_id")` como fallback. Column marcada DEPRECATED via COMMENT em DEBT-017. Requer migracao do billing code + DROP column. |
-| **DB-014** | `search_sessions.status` CHECK mismatch | MEDIUM | **LOW** | 0.5h | P4 | DEBT-017 esclareceu via COMMENT: `consolidating`/`partial` sao estados validos gerenciados pelo app-layer state machine. CHECK do DB **intencionalmente** nao os inclui. Apenas doc update necessario. |
-| **DB-015** | `monthly_quota.user_id` references `auth.users` not `profiles` | MEDIUM | MEDIUM | 1h | P2 | Confirmado: `002_monthly_quota.sql` define `REFERENCES auth.users(id)`. NAO incluido na migracao `20260304100000`. |
-| **DB-016** | Missing `updated_at` on `incidents`/`partners` | MEDIUM | MEDIUM | 1h | P3 | Confirmado: ambas tabelas sao mutaveis sem change tracking. |
-| **DB-017** | `search_results_cache` duplicate size constraints | MEDIUM | LOW | 0.5h | P4 | Baixo risco — apenas confusao de schema. |
-| **DB-018** | `partner_referrals.partner_id` missing ON DELETE CASCADE | MEDIUM | MEDIUM | 0.5h | P2 | Confirmado. `20260304100000` migrou `referred_user_id` para profiles mas nao tocou `partner_id` FK. |
-| **DB-019** | Naming convention inconsistencies (triggers) | MEDIUM | LOW | 2h | P4 | Confirmado: 4 padroes coexistem. `20260304120000` usou `tr_` para pipeline mas `trigger_` para alerts, criando mais inconsistencia. |
-| **DB-020** | `google_sheets_exports.last_updated_at` naming | MEDIUM | LOW | 0.5h | P4 | Confirmado: unica tabela com naming diferente. Sem trigger. |
-| **DB-021** | `organizations.plan_type` no CHECK constraint | MEDIUM | MEDIUM | 0.5h | P2 | Confirmado. Aceita qualquer texto. |
-| **DB-022** | `pipeline_items` service role overly permissive | MEDIUM | **REMOVIDO** | 0h | -- | **RESOLVIDO.** Migration 027 corrigiu; verificado em `20260304200000` que nao reintroduziu. |
-| **DB-023** | `user_oauth_tokens.provider` CHECK overly broad | LOW | LOW | 0.5h | P4 | Permite google/microsoft/dropbox; so google implementado. |
-| **DB-024** | `audit_events` no index on JSONB | LOW | INFO | 0h | P5 | Nenhuma query atual. Premature optimization. |
-| **DB-025** | `search_results_cache` 8 indexes | LOW | LOW | 2h | P3 | Requer analise de `pg_stat_user_indexes` em producao antes de dropar. |
-| **DB-026** | `search_sessions` no retention | LOW | LOW | 0.5h | P3 | Confirmado. Nenhum pg_cron job. |
-| **DB-027** | `classification_feedback` no retention | LOW | LOW | 0.5h | P4 | Valioso para ML — retention longo (24 meses) recomendado. |
-| **DB-028** | `conversations`/`messages` no retention | LOW | LOW | 0.5h | P4 | Suporte ao cliente — reter 24+ meses. |
-| **DB-029** | `alert_sent_items` missing retention | LOW | **REMOVIDO** | 0h | -- | **RESOLVIDO.** Job criado em `20260308310000` (180 dias). |
-| **DB-030** | `stripe_webhook_events` no automated retention | LOW | **REMOVIDO** | 0h | -- | **RESOLVIDO.** Job criado em `022_retention_cleanup.sql` (90 dias). |
-| **DB-031** | `pipeline_items` missing `search_id` reference | LOW | LOW | 1h | P4 | Confirmado. Nao ha link para tracing. |
-| **DB-INFO-01** | Consolidate backend migrations | INFO | INFO | 1h | P4 | Bridge migration `20260308200000` ja criada. Diretorio persiste sem DEPRECATED marker. |
-| **DB-INFO-02** | No schema version table | INFO | **NAO RECOMENDO** | 0h | -- | Supabase ja rastreia via `supabase_migrations.schema_migrations`. Tabela independente seria redundante. |
-| **DB-INFO-03** | Backup strategy not documented | INFO | INFO | 1h | P3 | Supabase Pro: daily backups + PITR 7 dias. Documentar em runbook. |
-| **DB-INFO-04** | Connection pooling verification | INFO | INFO | 0.5h | P3 | Backend usa REST API (httpx), NAO conexao PostgreSQL direta. pgbouncer irrelevante para app layer. Ver detalhes na resposta Q7. |
-| **DB-INFO-05** | Consider partitioning | INFO | INFO | 0h | P5 | Prematuro no estagio POC beta. |
-| **DB-INFO-06** | JSONB columns lack DB-level validation | INFO | **NAO RECOMENDO** | 0h | -- | Pydantic no app layer e suficiente. CHECK em JSONB e fragil e lento. |
+The database section of the technical debt DRAFT is well-founded but significantly out of date. Three rounds of DEBT migrations (2026-03-04, 2026-03-08, 2026-03-09) have resolved the majority of identified items. This review reflects the current state as of 2026-03-10.
+
+**Quantitative Summary:**
+- **21 items resolved** (remove from active debt list)
+- **10 items remain as active debt** (validated, with adjusted severity/hours)
+- **0 new items added** (the 4 DB-NEW items from v3.0 have ALL been resolved by DEBT-100/104)
+- **Remaining estimated effort:** ~16 hours (2 engineering days)
 
 ---
 
-## Debitos Adicionados
+## Items Already Fixed (remove from debt list)
 
-| ID | Debito | Tabelas | Severidade | Horas | Prioridade | Notas |
-|----|--------|---------|:---:|:---:|:---:|-------|
-| **DB-NEW-01** | `search_results_store` FK `NOT VALID` pode nao estar validada em producao. Migracao `20260304100000` usa NOT VALID + VALIDATE separados. Se a VALIDATE falhou silently, constraint nao esta enforced. | `search_results_store` | HIGH | 1h | P1 | Executar `SELECT convalidated FROM pg_constraint WHERE conname = 'search_results_store_user_id_fkey'` em producao. |
-| **DB-NEW-02** | `search_results_store` index duplicado: `idx_search_results_user` (20260303100000) e `idx_search_results_store_user_id` (20260308100000_debt001). Ambos em `user_id`. | `search_results_store` | MEDIUM | 0.5h | P3 | Drop `idx_search_results_store_user_id`. |
-| **DB-NEW-03** | `search_results_store` sem retention. Tabela tem `expires_at DEFAULT now() + 24h` mas nenhum pg_cron job limpa registros expirados. Accumula indefinidamente. | `search_results_store` | HIGH | 1h | P1 | Criar job: `DELETE FROM search_results_store WHERE expires_at < now()`. Impacto direto em storage billing. |
-| **DB-NEW-04** | `search_results_cache` FK estado incerto. Multiplas migracoes tocaram esta FK (`018`, `20260224200000`, possivelmente `20260225120000`). Estado final pode ser `auth.users` ou `profiles` dependendo da ordem de aplicacao. | `search_results_cache` | MEDIUM | 1h | P2 | Verificar com `SELECT conname, confrelid::regclass FROM pg_constraint WHERE conrelid = 'search_results_cache'::regclass AND contype = 'f'`. |
+| ID | Fixed In | Evidence |
+|----|----------|----------|
+| **DB-002** | `20260304100000_fk_standardization_to_profiles.sql` | `search_results_store.user_id` FK re-pointed to `profiles(id) ON DELETE CASCADE` |
+| **DB-003** | `20260225120000_standardize_fks_to_profiles.sql` | `classification_feedback.user_id` FK re-pointed to `profiles(id) ON DELETE CASCADE` |
+| **DB-004** | `20260308100000_debt001_database_integrity_fixes.sql` | All triggers consolidated to `set_updated_at()`; duplicate `update_updated_at()` dropped |
+| **DB-005** | `20260308310000_debt009_retention_pgcron_jobs.sql` + `20260309100000_debt017` | 30-day retention via pg_cron; FK documented as impossible (search_id nullable/not unique) |
+| **DB-006** | `20260304200000_rls_standardize_service_role.sql` | `alert_preferences` standardized to `TO service_role` |
+| **DB-007** | `20260304200000_rls_standardize_service_role.sql` | `organizations` + `organization_members` standardized to `TO service_role` |
+| **DB-008** | `20260304200000_rls_standardize_service_role.sql` | `partners` + `partner_referrals` standardized to `TO service_role` |
+| **DB-009** | `20260304200000_rls_standardize_service_role.sql` | `search_results_store` standardized to `TO service_role` |
+| **DB-010** | `20260308310000_debt009_retention_pgcron_jobs.sql` | `health_checks` 30d + `incidents` 90d pg_cron jobs created |
+| **DB-012** | `20260308400000_debt010_schema_guards.sql` | `idx_conversations_status_last_msg` composite index created |
+| **DB-015** | `20260309200000_debt100_db_quick_wins.sql` (AC7) | `monthly_quota.user_id` FK verified/migrated to `profiles(id) ON DELETE CASCADE` |
+| **DB-016** | `20260309200000_debt100_db_quick_wins.sql` (AC9) | `updated_at` column + `set_updated_at()` trigger added to `incidents` and `partners` |
+| **DB-017** | `20260309300000_debt104_fk_standardization.sql` (AC7) | Duplicate `octet_length` CHECK constraints on `search_results_cache` verified/cleaned |
+| **DB-018** | `20260309200000_debt100_db_quick_wins.sql` (AC6) | `partner_referrals.partner_id` FK replaced with ON DELETE CASCADE |
+| **DB-020** | `20260309300000_debt104_fk_standardization.sql` (AC8) | `google_sheets_exports.last_updated_at` renamed to `updated_at` + auto-trigger |
+| **DB-021** | `20260309200000_debt100_db_quick_wins.sql` (AC5) | `chk_organizations_plan_type` CHECK constraint added |
+| **DB-022** | `027_fix_plan_type_default_and_rls.sql` + verified in `20260304200000` | Pipeline service role fixed |
+| **DB-026** | `20260309200000_debt100_db_quick_wins.sql` (AC4) | `cleanup-old-search-sessions` pg_cron (12 months) created |
+| **DB-029** | `20260308310000_debt009_retention_pgcron_jobs.sql` | `cleanup-alert-sent-items` pg_cron (180 days) created |
+| **DB-030** | `022_retention_cleanup.sql` | `cleanup-webhook-events` pg_cron (90 days) created |
+| **DB-INFO-02** | N/A -- NOT RECOMMENDED | Supabase already tracks via `supabase_migrations.schema_migrations`. Redundant. |
+
+**Previous v3.0 DB-NEW items also resolved:**
+
+| ID | Fixed In | Evidence |
+|----|----------|----------|
+| **DB-NEW-01** | `20260309200000_debt100_db_quick_wins.sql` (AC1) | `search_results_store` FK validated (dynamic check + VALIDATE if NOT VALID) |
+| **DB-NEW-02** | `20260309200000_debt100_db_quick_wins.sql` (AC8) | Duplicate `idx_search_results_store_user_id` dropped |
+| **DB-NEW-03** | `20260309200000_debt100_db_quick_wins.sql` (AC3) | `cleanup-expired-search-results` pg_cron job created (daily 4:00 UTC) |
+| **DB-NEW-04** | `20260309200000_debt100_db_quick_wins.sql` (AC2) | `search_results_cache` FK validated |
 
 ---
 
-## Respostas ao Architect
+## Items Validated (active debt)
 
-### 1. DB-001 (FK Standardization): `auth.users` ou `profiles`?
+| ID | Status | Adjusted Severity | Hours | GTM Priority | Notes |
+|----|--------|-------------------|-------|--------------|-------|
+| **DB-001** | PARTIALLY FIXED | **MEDIUM** (was CRITICAL) | 3h | GTM-RISK | ~95% resolved. DEBT-100 fixed `monthly_quota`, DEBT-104 fixed `user_oauth_tokens` + `google_sheets_exports`. Remaining: verify `search_results_cache` FK target in production (DEBT-100 AC2 validated constraint but didn't re-point if already on profiles). The `classification_feedback` bridge migration creates with `auth.users` FK, but `20260225120000` already re-pointed to `profiles` -- ordering dependency means production is correct, fresh installs may have wrong FK target. |
+| **DB-011** | PARTIALLY FIXED | **LOW** | 1h | POST-GTM | `idx_alert_preferences_user_id` dropped (DEBT-010). `idx_search_sessions_user` and `idx_partners_status` conditionally dropped in DEBT-100 (only if `idx_scan=0`). Verify in production whether they were actually dropped. |
+| **DB-013** | CONFIRMED | **MEDIUM** | 4h | GTM-RISK | `plans.stripe_price_id` marked DEPRECATED via COMMENT (DEBT-017). `billing.py` still uses it as fallback. Requires: (1) update billing.py to use only `plan_billing_periods`, (2) monitor 1 week, (3) DROP column. |
+| **DB-014** | RESOLVED VIA DOC | **INFO** | 0h | -- | DEBT-017 added COMMENT documenting that `consolidating`/`partial` are intentionally app-layer states. CHECK is correct as-is. Remove from debt list. |
+| **DB-019** | CONFIRMED | **LOW** | 0h | POST-GTM | Trigger naming uses 4 patterns (`tr_`, `trg_`, `trigger_`, no prefix). Cosmetic only. No runtime impact. Not worth a migration -- adopt convention (`trg_` prefix) for new triggers only. |
+| **DB-023** | CONFIRMED | **LOW** | 0h | POST-GTM | `user_oauth_tokens.provider` CHECK allows 3 providers but only Google implemented. No harm -- forward-compatible. Do not change. |
+| **DB-024** | CONFIRMED | **INFO** | 0h | -- | No JSONB index needed on `audit_events.details`. Zero queries on this column. |
+| **DB-025** | CONFIRMED | **LOW** | 2h | POST-GTM | 6 indexes on `search_results_cache` (after DEBT-010 dropped some). Requires production `pg_stat_user_indexes` data before any action. `idx_search_cache_params_hash` likely redundant with UNIQUE. |
+| **DB-027** | CONFIRMED | **LOW** | 0.5h | POST-GTM | `classification_feedback` has no retention. Valuable for ML fine-tuning -- recommend 24-month retention, not aggressive cleanup. |
+| **DB-028** | CONFIRMED | **LOW** | 0.5h | POST-GTM | `conversations`/`messages` have no retention. Customer support records -- retain 24+ months. Low priority. |
+| **DB-031** | CONFIRMED | **LOW** | 1h | POST-GTM | `pipeline_items` has no `search_id` column. Cannot trace which search led to pipeline addition. Nice-to-have for analytics, not blocking. |
+| **DB-INFO-01** | CONFIRMED | **INFO** | 0.5h | POST-GTM | `backend/migrations/` directory still exists. DEBT-002 bridge migration makes it fully redundant. Add DEPRECATED marker or remove directory. |
+| **DB-INFO-03** | CONFIRMED | **INFO** | 1h | GTM-RISK | Backup strategy undocumented. Supabase Pro: daily backups + 7-day PITR. Must document in ops runbook before GTM. |
+| **DB-INFO-04** | CONFIRMED | **INFO** | 0h | -- | Backend uses PostgREST (HTTP via httpx), not direct PostgreSQL connections. pgbouncer is irrelevant for app layer. No action needed. |
+| **DB-INFO-05** | CONFIRMED | **INFO** | 0h | -- | Partitioning premature at POC scale. Revisit when any table exceeds 10M rows. |
+| **DB-INFO-06** | N/A -- NOT RECOMMENDED | **--** | 0h | -- | Pydantic validation at app layer is correct. DB-level JSONB CHECK constraints are fragile, slow, and hard to evolve. |
 
-**Resposta:** Confirmo `profiles(id)` como direcao correta. Razoes:
+---
 
-- `profiles` e a tabela que o app layer interage (RLS via `auth.uid() = user_id`)
-- `profiles.id` = `auth.users.id` (1:1, criado por trigger `handle_new_user()`)
-- Cadeia de cascade: `auth.users -> profiles -> dependentes` e mais segura que `auth.users -> dependentes` direto
-- Se `handle_new_user()` falhar, tabelas com FK para profiles rejeitam INSERT (fail-fast, correto), enquanto tabelas com FK para auth.users aceitam (criando estado inconsistente)
+## New Items Added
 
-**Tabelas JA migradas para profiles (confirmado em migracoes):**
-`user_subscriptions`, `search_sessions`, `conversations`, `messages`, `alert_preferences`, `alerts`, `search_results_store`, `pipeline_items`, `classification_feedback`, `trial_email_log`, `organization_members`, `organizations` (owner_id), `partner_referrals` (referred_user_id), `mfa_recovery_codes`, `mfa_recovery_attempts`
+| ID | Description | Severity | Hours | GTM Priority | Notes |
+|----|-------------|----------|-------|--------------|-------|
+| **DB-032** | `classification_feedback` fresh-install FK ordering issue. Bridge migration `20260308200000` creates table with `REFERENCES auth.users(id)` (no CASCADE). Migration `20260225120000` re-points to `profiles(id) ON DELETE CASCADE` but runs BEFORE the bridge. On fresh install, bridge creates table AFTER the re-point migration ran (which was a no-op since table didn't exist), leaving FK pointing to `auth.users` without CASCADE. | MEDIUM | 1h | GTM-RISK | Fix: Add `classification_feedback` to the DEBT-104 FK standardization pattern (NOT VALID + VALIDATE). Production is fine (table existed before 20260225). Only affects fresh setups. |
 
-**Tabelas que AINDA referenciam auth.users (4):**
-1. `monthly_quota` — `002_monthly_quota.sql:8`
-2. `user_oauth_tokens` — `013_google_oauth_tokens.sql:10`
-3. `google_sheets_exports` — `014_google_sheets_exports.sql:10`
-4. `search_results_cache` — estado incerto (DB-NEW-04)
+---
+
+## Answers to Architect Questions
+
+### 1. DB-001 (FK Standardization): `auth.users` or `profiles`?
+
+**Answer:** `profiles(id)` is confirmed as the correct target. Reasoning:
+
+- `profiles` is the table the app layer interacts with (RLS via `auth.uid() = user_id`)
+- `profiles.id = auth.users.id` (1:1, created by `handle_new_user()` trigger)
+- Cascade chain `auth.users -> profiles -> dependents` is safer than `auth.users -> dependents` directly
+- If `handle_new_user()` fails, FK-to-profiles rejects INSERT (fail-fast), while FK-to-auth.users accepts silently (inconsistent state)
+
+**Current status (post-DEBT-104):** All tables now reference `profiles(id)` except:
+- `classification_feedback` on fresh installs (DB-032 above)
+- Verify `search_results_cache` production FK target (should be `profiles` from `20260224200000`)
+
+The FK standardization is effectively **complete in production** (~100%). Fresh-install consistency requires one small migration (DB-032).
 
 ### 2. DB-005 (search_state_transitions): Retention window?
 
-**Resposta:** 30 dias (ja implementado em `20260308310000`). Adequado.
-- Transitions sao para debugging em tempo real, nao analytics
-- ~15K rows/mes a 30 dias = tabela pequena (~15K max)
-- Logs do Railway/Sentry cobrem debugging de incidentes mais antigos
-- Nenhuma query de analytics depende de transitions > 30 dias
+**Answer:** 30 days, already implemented in `20260308310000`. Adequate because:
+- Transitions are for real-time debugging, not analytics
+- ~15K rows/month at 30 days = table stays small (~15K max rows)
+- Railway/Sentry logs cover older incident investigation
+- No analytics queries depend on transitions older than 30 days
 
-### 3. DB-010 (health_checks retention): Por que foi deferido?
+### 3. DB-010 (health_checks retention): Why was it deferred?
 
-**Resposta:** **Ja esta resolvido.** O job foi criado na migracao `20260308310000`:
-- `health_checks`: 30 dias, daily 4:10 UTC
-- `incidents`: 90 dias, daily 4:15 UTC
+**Answer:** Already resolved. Jobs created in `20260308310000`:
+- `health_checks`: 30 days, daily 4:10 UTC
+- `incidents`: 90 days, daily 4:15 UTC
 
-O atraso foi simplesmente esquecimento na migracao original (`20260228150000`). Sem motivo de compliance.
+The delay was simply an oversight in the original migration (`20260228150000`). No compliance reason.
 
 ### 4. DB-013 (plans.stripe_price_id legacy): Migration path?
 
-**Resposta:** Path em 3 fases:
+**Answer:** 3-phase path:
 
-1. **Fase 1 — Update billing.py (2h):** Alterar `billing.py:96` de `plan.get(price_id_key) or plan.get("stripe_price_id")` para usar SOMENTE `plan_billing_periods.stripe_price_id`. A tabela `plan_billing_periods` e fonte de verdade desde STORY-360.
+1. **Phase 1 -- Update billing.py (2h):** Change `billing.py` from `plan.get(price_id_key) or plan.get("stripe_price_id")` to use ONLY `plan_billing_periods.stripe_price_id`. The `plan_billing_periods` table is the source of truth since STORY-360.
 
-2. **Fase 2 — Monitoring (1 semana):** Deploy + monitorar que zero queries usam a coluna legacy. Adicionar log warning se o fallback for triggered.
+2. **Phase 2 -- Monitoring (1 week):** Deploy + monitor that zero queries use the legacy column. Add a WARNING log if the fallback is triggered.
 
-3. **Fase 3 — DROP column (1h):** `ALTER TABLE plans DROP COLUMN stripe_price_id;`
+3. **Phase 3 -- DROP column (1h):** `ALTER TABLE plans DROP COLUMN stripe_price_id;`
 
-**Rollback:** Seguro. Coluna pode ser recriada e populada de `plan_billing_periods` se necessario. Fase 2 elimina esse risco.
+**Rollback:** Safe. Column can be recreated and populated from `plan_billing_periods` if needed. Phase 2 eliminates this risk.
 
-### 5. DB-014 (search_sessions.status CHECK): In-memory ou DB?
+### 5. DB-014 (search_sessions.status CHECK): In-memory or DB values?
 
-**Resposta:** `consolidating` e `partial` sao estados validos no database, mas o CHECK **intencionalmente** nao os inclui. DEBT-017 documentou via COMMENT que o app-layer state machine (`search_state_manager.py`) e o local correto para FSM validation.
+**Answer:** `consolidating` and `partial` are valid database values, but the CHECK **intentionally** excludes them. DEBT-017 documented via SQL COMMENT that the app-layer state machine (`search_state_manager.py`) is the correct enforcement point for complex FSM transitions.
 
-**Recomendacao:** CHECK esta correto como esta. Nao adicionar estados transitorios ao CHECK. Apenas update a documentacao no DB-AUDIT.md. Severidade: LOW.
+**Recommendation:** CHECK is correct as-is. Do NOT add transient states to the CHECK. Severity: INFO. Remove from active debt list.
 
-### 6. DB-025 (search_results_cache 8 indexes): Quais sao usados?
+### 6. DB-025 (search_results_cache 8 indexes): Which are used?
 
-**Resposta baseada em analise de codigo (sem acesso a `pg_stat_user_indexes`):**
+**Answer (code-analysis based, no production stats):**
 
-| Index | Usado? | Evidencia |
-|-------|:---:|-----------|
-| PK (id) | Sim | Sempre |
-| UNIQUE (user_id, params_hash) | Sim | Toda busca cached |
-| `idx_search_cache_user` | Sim | RLS queries |
-| `idx_search_cache_fetched_at` | Sim | SWR stale detection |
-| `idx_search_cache_priority` | Provavelmente | Tiering B-02 |
-| `idx_search_cache_params_hash` | **Candidato a remocao** | Redundante com UNIQUE se queries sempre filtram por user_id |
-| `idx_search_cache_global_hash` | **Verificar** | Global SWR warming — pode ser obsoleto |
-| `idx_search_cache_degraded` | **Verificar** | Queries por degraded status — frequencia desconhecida |
+| Index | Used? | Evidence |
+|-------|-------|----------|
+| PK (id) | Yes | Always |
+| UNIQUE (user_id, params_hash) | Yes | Every cached search lookup |
+| `idx_search_cache_user` | Yes | RLS evaluation on every query |
+| `idx_search_cache_fetched_at` | Yes | SWR stale detection |
+| `idx_search_cache_priority` | Probably | Priority tiering (B-02) |
+| `idx_search_cache_params_hash` | **Candidate for removal** | Redundant with UNIQUE if queries always filter by user_id first |
+| `idx_search_cache_global_hash` | **Verify** | Global SWR warming -- may be obsolete |
+| `idx_search_cache_degraded` | **Verify** | Queries by degraded status -- frequency unknown |
 
-**Recomendacao:** Executar em producao antes de qualquer DROP:
+**Action required:** Run in production before any DROP:
 ```sql
-SELECT indexrelname, idx_scan, idx_tup_read
+SELECT indexrelname, idx_scan, idx_tup_read,
+       pg_size_pretty(pg_relation_size(indexrelid))
 FROM pg_stat_user_indexes
 WHERE relname = 'search_results_cache'
 ORDER BY idx_scan ASC;
 ```
 
-### 7. DB-INFO-04 (Connection pooling): pgbouncer ou direto?
+### 7. DB-INFO-04 (Connection pooling): pgbouncer or direct?
 
-**Resposta:** O backend **NAO usa conexao PostgreSQL direta**. Verificado em `supabase_client.py`:
-- `get_supabase()` cria um client REST que usa `httpx.Client` para HTTP requests ao PostgREST
-- Pool configurado: max 25 connections/worker, 10 keepalive, 30s timeout (`_POOL_MAX_CONNECTIONS`)
-- `sb_execute()` usa `asyncio.to_thread(query.execute)` para offload sync calls
+**Answer:** The backend does **NOT use direct PostgreSQL connections**. Verified in `supabase_client.py`:
+- `get_supabase()` creates a REST client using `httpx.Client` for HTTP requests to PostgREST
+- Pool configured: max 25 connections/worker, 10 keepalive, 30s timeout (`_POOL_MAX_CONNECTIONS`)
+- `sb_execute()` uses `asyncio.to_thread(query.execute)` for sync call offloading
 
-pgbouncer (port 6543) e relevante APENAS para:
-- `supabase db push` (migracoes via CLI)
-- pg_cron jobs (executam internamente no Supabase)
-- Funcoes RPC que usam conexao interna
+pgbouncer (port 6543) is relevant ONLY for:
+- `supabase db push` (CLI migrations)
+- pg_cron jobs (internal execution within Supabase)
+- RPC functions with internal connections
 
-**Conclusao:** Pool httpx no `supabase_client.py` e o unico concern de pool para o app layer. pgbouncer config e transparente.
+**Conclusion:** The httpx pool in `supabase_client.py` is the only pool concern for the app layer. pgbouncer configuration is transparent.
 
-### 8. Retention batch: Consolidacao possivel?
+### 8. Retention batch: Can all be consolidated?
 
-**Resposta:** A maioria dos jobs **ja foi implementada**. Status completo:
+**Answer:** Nearly all jobs are already implemented. Current status:
 
-**Ja implementados (nao precisam de acao):**
-| Job | Retencao | Migracao |
-|-----|----------|----------|
-| `cleanup-monthly-quota` | 24 meses | `022_retention_cleanup.sql` |
-| `cleanup-webhook-events` | 90 dias | `022_retention_cleanup.sql` |
-| `cleanup-search-state-transitions` | 30 dias | `20260308310000` |
-| `cleanup-alert-sent-items` | 180 dias | `20260308310000` |
-| `cleanup-health-checks` | 30 dias | `20260308310000` |
-| `cleanup-incidents` | 90 dias | `20260308310000` |
-| `cleanup-mfa-recovery-attempts` | 30 dias | `20260308310000` |
-| `cleanup-alert-runs` | 90 dias | `20260308310000` |
+**Already implemented (10 jobs, no action needed):**
 
-**Faltam criar (nova migracao unica):**
+| Job | Retention | Migration |
+|-----|-----------|-----------|
+| `cleanup-monthly-quota` | 24 months | `022_retention_cleanup.sql` |
+| `cleanup-webhook-events` | 90 days | `022_retention_cleanup.sql` |
+| `cleanup-audit-events` | 12 months | `022_retention_cleanup.sql` |
+| `cleanup-cold-cache-entries` | 7 days | `022_retention_cleanup.sql` |
+| `cleanup-search-state-transitions` | 30 days | `20260308310000` |
+| `cleanup-alert-sent-items` | 180 days | `20260308310000` |
+| `cleanup-health-checks` | 30 days | `20260308310000` |
+| `cleanup-incidents` | 90 days | `20260308310000` |
+| `cleanup-mfa-recovery-attempts` | 30 days | `20260308310000` |
+| `cleanup-expired-search-results` | based on `expires_at` | `20260309200000` (DEBT-100) |
+| `cleanup-old-search-sessions` | 12 months | `20260309200000` (DEBT-100) |
+| `cleanup-alert-runs` | 90 days | `20260308310000` |
 
-| Tabela | Retencao Recomendada | Justificativa |
-|--------|:---:|---------------|
-| `search_results_store` | Baseado em `expires_at` | Ja tem coluna de expiracao; cleanup diario |
-| `search_sessions` | 12 meses | Analytics de uso por 1 ano |
-| `classification_feedback` | 24 meses | Valor para fine-tuning de ML |
-| `conversations` + `messages` | 24 meses | Historico de suporte ao cliente |
+**Remaining (could be one small migration):**
 
-Sim, todos 4 jobs restantes podem ser consolidados em uma unica migracao com schedule staggered (5 min entre cada).
+| Table | Recommended Retention | Justification |
+|-------|----------------------|---------------|
+| `classification_feedback` | 24 months | ML fine-tuning value |
+| `conversations` + `messages` | 24 months | Customer support history |
 
----
-
-## Recomendacoes
-
-### Ordem de Resolucao Recomendada
-
-| Fase | IDs | Tema | Horas | Sprint |
-|------|-----|------|:---:|:---:|
-| **1. Verificacao em Producao** | DB-NEW-01, DB-NEW-04 | Confirmar estado de FKs e constraints | 1h | Imediato |
-| **2. Storage/Growth** | DB-NEW-03, DB-026 | Retention jobs para search_results_store e search_sessions | 1.5h | Atual |
-| **3. FK Completion** | DB-001 (restantes), DB-015 | Completar padronizacao FK para 4 tabelas | 7h | Atual |
-| **4. Data Integrity** | DB-021, DB-018 | CHECK constraints + ON DELETE CASCADE | 1h | Proximo |
-| **5. Cleanup** | DB-011, DB-NEW-02 | Drop indexes redundantes | 1.5h | Proximo |
-| **6. Billing Migration** | DB-013 | Migrar billing.py off legacy column | 4h | Proximo |
-| **7. Observability** | DB-016, DB-INFO-03, DB-INFO-04 | updated_at, backup docs, pool docs | 2.5h | Proximo |
-| **8. Cosmetic** | DB-019, DB-020, DB-014, DB-005 | Naming, docs, conventions | 3.5h | Backlog |
-| **9. Low Priority** | DB-023 a DB-031, DB-025, DB-027, DB-028 | Minor fixes, retention, schema docs | ~14h | Backlog |
-
-### Quick Wins (< 2h cada)
-
-| # | ID | Acao | Horas | Impacto |
-|---|-----|------|:---:|---------|
-| 1 | **DB-NEW-03** | Criar pg_cron: `DELETE FROM search_results_store WHERE expires_at < now()` | 0.5h | Previne growth ilimitado; impacto direto em billing |
-| 2 | **DB-015** | Migrar `monthly_quota.user_id` FK para profiles(id) | 1h | Consistencia FK (parte de DB-001) |
-| 3 | **DB-021** | `ALTER TABLE organizations ADD CONSTRAINT chk_org_plan_type CHECK (...)` | 0.5h | Data integrity |
-| 4 | **DB-018** | `ALTER TABLE partner_referrals ... ON DELETE CASCADE` em partner_id | 0.5h | Data integrity |
-| 5 | **DB-NEW-02** | `DROP INDEX idx_search_results_store_user_id` (duplicata) | 0.5h | Write performance |
-| 6 | **DB-026** | Criar pg_cron para search_sessions (12 meses) | 0.5h | Storage growth |
-| 7 | **DB-016** | Adicionar `updated_at` em `incidents` e `partners` + trigger | 1h | Change tracking |
-
-**Total quick wins: ~4.5h para resolver 7 itens.**
-
-### Requer Planejamento (> 8h)
-
-| # | ID | Acao | Horas | Pre-requisitos |
-|---|-----|------|:---:|----------------|
-| 1 | **DB-001** (4 tabelas restantes) | Completar FK standardization para `monthly_quota`, `user_oauth_tokens`, `google_sheets_exports`, `search_results_cache` | 6h | Executar orphan detection query em producao. Usar NOT VALID + VALIDATE pattern. Coordenar com deploy window. |
-| 2 | **DB-013** | Migrar billing.py off `plans.stripe_price_id` + DROP column | 4h | Coordenar com equipe. Deploy faseado com 1 semana de monitoring antes do DROP. |
-| 3 | **DB-025** | Analise e otimizacao de indexes em `search_results_cache` | 2h | Requer dados de `pg_stat_user_indexes` de producao. |
+Yes, both remaining jobs can be in a single migration. Total: 0.5h effort.
 
 ---
 
-## Validacao Pendente em Producao
+## Recommended Resolution Order
 
-As seguintes queries **devem ser executadas** antes de fechar esta revisao:
+### Immediate (before GTM launch)
+
+| # | ID | Action | Hours | Why GTM-critical |
+|---|-----|--------|-------|------------------|
+| 1 | **DB-INFO-03** | Document backup/PITR strategy in ops runbook | 1h | Paying customers need data safety guarantees |
+
+**Total immediate: 1h**
+
+### Within 30 Days of Launch (GTM-RISK)
+
+| # | ID | Action | Hours | Why |
+|---|-----|--------|-------|-----|
+| 1 | **DB-001** | Verify production FK state for `search_results_cache` and `classification_feedback` | 1h | Confirm consistency, close the item |
+| 2 | **DB-032** | Fix fresh-install FK ordering for `classification_feedback` | 1h | Developer experience, CI reproducibility |
+| 3 | **DB-013** | Migrate billing.py off `plans.stripe_price_id` legacy column | 4h | Eliminate dead code path that could cause billing bugs |
+
+**Total GTM-RISK: 6h**
+
+### Post-GTM (incremental)
+
+| # | ID | Action | Hours | Priority |
+|---|-----|--------|-------|----------|
+| 1 | **DB-025** | Analyze `search_results_cache` index usage in production | 2h | Performance |
+| 2 | **DB-011** | Verify DEBT-100 conditional index drops succeeded | 1h | Storage |
+| 3 | **DB-027+028** | Add retention jobs for classification_feedback + conversations | 0.5h | Storage |
+| 4 | **DB-031** | Add `search_id` to `pipeline_items` for traceability | 1h | Analytics |
+| 5 | **DB-INFO-01** | Mark `backend/migrations/` as DEPRECATED or remove | 0.5h | Cleanup |
+| 6 | **DB-019** | Adopt `trg_` naming convention for future triggers | 0h | Convention |
+
+**Total post-GTM: 5h**
+
+### Grand Total Remaining: ~12h (1.5 engineering days)
+
+This is a **dramatic reduction** from the DRAFT's estimated effort. Of the original 31 DB items + 6 INFO items, 21 have been resolved by the DEBT migration campaign (2026-03-04 through 2026-03-09). The database layer is in good shape for GTM.
+
+---
+
+## Production Verification Queries
+
+These should be run before closing this review:
 
 ```sql
--- 1. Estado final das FKs (DB-001, DB-NEW-01, DB-NEW-04)
+-- 1. Verify ALL user_id FKs point to profiles(id), not auth.users
 SELECT tc.table_name, tc.constraint_name,
        ccu.table_name AS references_table,
-       rc.delete_rule,
-       pc.convalidated
+       rc.delete_rule
 FROM information_schema.table_constraints tc
 JOIN information_schema.constraint_column_usage ccu
   ON tc.constraint_name = ccu.constraint_name
 JOIN information_schema.referential_constraints rc
   ON tc.constraint_name = rc.constraint_name
-LEFT JOIN pg_constraint pc
-  ON pc.conname = tc.constraint_name
 WHERE tc.constraint_type = 'FOREIGN KEY'
   AND tc.table_schema = 'public'
+  AND tc.constraint_name LIKE '%user%'
 ORDER BY tc.table_name;
+-- Expected: ALL rows show references_table = 'profiles'
 
--- 2. auth.role() residual (deve retornar 0 rows)
+-- 2. Verify zero auth.role() in RLS policies
 SELECT schemaname, tablename, policyname, qual
 FROM pg_policies
 WHERE schemaname = 'public' AND qual LIKE '%auth.role()%';
+-- Expected: 0 rows
 
--- 3. pg_cron jobs ativos (deve retornar 8+ jobs)
+-- 3. Verify pg_cron jobs (expect 12+)
 SELECT jobname, schedule FROM cron.job ORDER BY jobname;
 
--- 4. Indexes redundantes — scan frequency
-SELECT indexrelname, idx_scan, idx_tup_read, pg_size_pretty(pg_relation_size(indexrelid))
+-- 4. Verify DEBT-100 conditional index drops
+SELECT indexrelname, idx_scan
 FROM pg_stat_user_indexes
-WHERE relname IN ('search_results_cache', 'search_results_store', 'search_sessions', 'partners')
-ORDER BY relname, idx_scan ASC;
-
--- 5. search_results_store growth (DB-NEW-03)
-SELECT count(*) AS total_rows,
-       count(*) FILTER (WHERE expires_at < now()) AS expired_rows,
-       pg_size_pretty(pg_total_relation_size('search_results_store')) AS total_size
-FROM search_results_store;
+WHERE indexrelname IN (
+  'idx_search_sessions_user',
+  'idx_partners_status',
+  'idx_search_results_store_user_id'
+);
+-- Expected: 0 rows (all dropped) or non-zero idx_scan (kept intentionally)
 ```
 
 ---
 
-*Revisao completa por @data-engineer — AIOS Brownfield Discovery Phase 5*
-*Metodologia: Verificacao code-level de cada item do DRAFT contra migracoes SQL, DB-AUDIT.md, SCHEMA.md, e codigo backend. Todos os ajustes de severidade incluem evidencia.*
-*Pronto para consolidacao pelo @architect no FINAL.*
+*Review completed by @data-engineer (Flux) -- AIOS Brownfield Discovery Phase 5*
+*Methodology: Line-by-line verification of every DRAFT DB item against 88 migration files, DB-AUDIT.md, SCHEMA.md, and backend code.*
+*Ready for consolidation by @architect in the FINAL document.*

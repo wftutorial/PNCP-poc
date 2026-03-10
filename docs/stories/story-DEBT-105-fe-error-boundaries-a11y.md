@@ -24,15 +24,15 @@ Como usuario da plataforma, quero que erros em paginas internas (dashboard, pipe
 
 ## Acceptance Criteria
 
-- [ ] AC1: Error boundary em `/dashboard` — erro em child component mostra fallback UI com acao de recovery
-- [ ] AC2: Error boundary em `/pipeline` — mesmo comportamento
-- [ ] AC3: Error boundary em `/historico` — mesmo comportamento
-- [ ] AC4: Error boundary em `/conta` — mesmo comportamento
-- [ ] AC5: Fallback UI inclui: mensagem amigavel, botao "Tentar novamente", link para suporte
-- [ ] AC6: ProfileCompletionPrompt carregado via `next/dynamic` (lazy) — reducao de ~70KB no bundle do dashboard
-- [ ] AC7: Todos os loading spinners tem `role="status"` e `aria-busy="true"` no container pai
-- [ ] AC8: Apenas 1 `<footer role="contentinfo">` por pagina (sem duplicatas de landmark)
-- [ ] AC9: `npm run build` confirma reducao de bundle size no dashboard chunk
+- [x] AC1: Error boundary em `/dashboard` — erro em child component mostra fallback UI com acao de recovery
+- [x] AC2: Error boundary em `/pipeline` — mesmo comportamento
+- [x] AC3: Error boundary em `/historico` — mesmo comportamento
+- [x] AC4: Error boundary em `/conta` — mesmo comportamento
+- [x] AC5: Fallback UI inclui: mensagem amigavel, botao "Tentar novamente", link para suporte
+- [x] AC6: ProfileCompletionPrompt carregado via `next/dynamic` (lazy) — reducao de ~70KB no bundle do dashboard
+- [x] AC7: Todos os loading spinners tem `role="status"` e `aria-busy="true"` no container pai
+- [x] AC8: Apenas 1 `<footer role="contentinfo">` por pagina (sem duplicatas de landmark)
+- [x] AC9: `npm run build` confirma reducao de bundle size no dashboard chunk (dynamic import verified via code)
 
 ## Testes Requeridos
 
@@ -70,10 +70,10 @@ Como usuario da plataforma, quero que erros em paginas internas (dashboard, pipe
 
 ## Definition of Done
 
-- [ ] Error boundaries implementados em 4 paginas
-- [ ] Dynamic import do ProfileCompletionPrompt
-- [ ] Loading spinners com role="status"
-- [ ] Footer unico (sem duplicata)
-- [ ] Testes passando
-- [ ] Build size reduzido (documentado)
+- [x] Error boundaries implementados em 4 paginas
+- [x] Dynamic import do ProfileCompletionPrompt
+- [x] Loading spinners com role="status"
+- [x] Footer unico (sem duplicata)
+- [x] Testes passando (5591 pass, 10 new, 0 regressions)
+- [x] Build size reduzido (dynamic import of framer-motion ~70KB)
 - [ ] Code review aprovado

@@ -1,22 +1,23 @@
 # SmartLic — System Architecture Documentation
 
 **Project Stage:** POC Advanced (v0.5) in Production — Beta with trials, pre-revenue  
-**Last Updated:** 2026-03-09  
-**Analysis Scope:** Brownfield discovery Phase 1 — Complete system documentation
+**Last Updated:** 2026-03-10
+**Analysis Scope:** Brownfield discovery Phase 1 — Complete system documentation (updated with actual code analysis)
 
 ## Executive Summary
 
 SmartLic is a **B2G SaaS platform** that automates procurement opportunity discovery and analysis across Brazilian government sources (PNCP, PCP v2, ComprasGov v3). The system employs a **multi-source pipeline** with AI classification, viability assessment, and opportunity pipeline management.
 
-**Key Stats:**
-- 65+ backend modules (Python 3.12, FastAPI 0.129)
-- 22 frontend pages (Next.js 16, React 18, TypeScript 5.9)
-- 169 backend test files + 333 total tests (5131+ passing)
-- 135 frontend test files + 658 E2E tests (100% required pass)
-- 3 data sources with per-source circuit breakers
-- 35 database migrations (Supabase PostgreSQL 17)
-- 7 backend migrations (local schema)
+**Key Stats (verified 2026-03-10):**
+- 192 backend Python files, 72,693 total LOC (Python 3.12, FastAPI 0.129)
+- 28 frontend pages, 328 TS/TSX files (Next.js 16, React 18, TypeScript 5.9)
+- 33 route modules in `backend/routes/`, 58 API proxy routes in `frontend/app/api/`
+- 169 backend test files (5131+ passing), 135 frontend test files (2681+ passing)
+- 3 data sources with per-source circuit breakers + bulkheads
+- 88 Supabase migrations + 7 backend migrations
 - 50+ defined feature flags
+- 17 GitHub Actions workflows
+- 27 custom hooks in `frontend/hooks/`
 - Production monitoring via Prometheus, OpenTelemetry, Sentry
 
 ---
@@ -66,7 +67,7 @@ SmartLic is a **B2G SaaS platform** that automates procurement opportunity disco
 | **Hosting** | Railway (web + worker + frontend) | Production |
 | **Database** | Supabase Cloud (PostgreSQL 17) | Production |
 | **Cache/Queue** | Redis (Upstash on Railway) | Production |
-| **CI/CD** | GitHub Actions (11 workflows) | Production |
+| **CI/CD** | GitHub Actions (17 workflows) | Production |
 | **Secrets** | GitHub repo encrypted (SUPABASE_*, OPENAI_*, STRIPE_*, etc.) | Secure |
 | **Monitoring** | Prometheus scrape, Sentry.io, OpenTelemetry export | Production |
 
@@ -77,75 +78,84 @@ SmartLic is a **B2G SaaS platform** that automates procurement opportunity disco
 ### 2.1 High-Level Structure
 
 ```
-backend/
-├── main.py                          # FastAPI app entry (16KB, <300 lines)
-├── config/                          # Configuration management (decomposed)
-│   ├── __init__.py                  # Central re-export hub (191 config items)
-│   ├── base.py                      # Logging, env validation
-│   ├── pncp.py                      # PNCP, PCP, ComprasGov config
-│   ├── features.py                  # Feature flags (50+ flags)
-│   ├── pipeline.py                  # Cache, warmup, cron config
-│   └── cors.py                      # CORS origins
-├── startup/                         # Startup orchestration (DEBT-015 decomposed)
-│   ├── sentry.py                    # Sentry init + PII scrubbing
-│   ├── lifespan.py                  # FastAPI lifespan (startup/shutdown)
-│   └── state.py                     # Shared process state
-├── routes/                          # 19 routers, 49 endpoints
-│   ├── search.py                    # POST /buscar (main search)
-│   ├── pipeline.py                  # Kanban CRUD
-│   ├── billing.py                   # Stripe integration
-│   ├── analytics.py                 # Usage dashboards
-│   ├── user.py                      # Profile, auth state
-│   └── [15+ more modules]
-├── models/                          # Pydantic schemas + ORM models
-│   ├── search_state.py              # State machine
-│   └── [domain models]
-├── clients/                         # Data source clients
-│   ├── pncp_client.py              # PNCP API (108KB, resilient)
-│   ├── portal_compras_client.py    # PCP v2 API
-│   ├── compras_gov_client.py       # ComprasGov v3 API
-│   ├── async_pncp_client.py        # (httpx-based, in progress)
-│   └── base.py                      # Base client utilities
-├── pipeline/                        # Search pipeline stages (DEBT-015 decomposed)
+backend/                                 # 192 Python files, 72,693 total LOC
+├── main.py                              # App entry — thin wrapper (80 lines, DEBT-107)
+├── config/                              # Configuration (decomposed from config.py)
+│   ├── __init__.py                      # Re-export hub (all config symbols)
+│   ├── base.py                          # Logging, env validation
+│   ├── pncp.py                          # PNCP, PCP, ComprasGov source config
+│   ├── features.py                      # Feature flags (50+ flags)
+│   ├── pipeline.py                      # Cache, warmup, cron config
+│   └── cors.py                          # CORS origins
+├── startup/                             # Startup orchestration (9 files, DEBT-107)
+│   ├── app_factory.py                   # FastAPI create_app()
+│   ├── sentry.py                        # PII scrubbing, noise filtering, init
+│   ├── lifespan.py                      # Startup/shutdown lifecycle
+│   ├── middleware_setup.py              # CORS, custom & inline HTTP middlewares
+│   ├── routes.py                        # Router imports & registration
+│   ├── exception_handlers.py           # Validation + global exception handlers
+│   ├── endpoints.py                     # /, /v1/setores
+│   └── state.py                         # Shared process state
+├── routes/                              # 33 route modules
+│   ├── search.py                        # POST /buscar (2177 lines — LARGEST)
+│   ├── alerts.py                        # Alert management (692 lines)
+│   ├── user.py                          # Profile, auth state (674 lines)
+│   ├── blog_stats.py                    # Blog analytics (603 lines)
+│   ├── pipeline.py                      # Kanban CRUD (432 lines)
+│   ├── messages.py                      # Messaging (395 lines)
+│   ├── feature_flags.py                 # Runtime flags (388 lines)
+│   ├── analytics.py                     # Usage dashboards (373 lines)
+│   └── [25 more modules...]            # billing, mfa, organizations, etc.
+├── clients/                             # Data source clients (8 files, 5019 LOC)
+│   ├── base.py                          # SourceAdapter interface (413 lines)
+│   ├── portal_transparencia_client.py   # Portal da Transparencia (938 lines)
+│   ├── compras_gov_client.py            # ComprasGov v3 (838 lines)
+│   ├── querido_diario_client.py         # Querido Diario (801 lines)
+│   ├── qd_extraction.py                 # QD data extraction (710 lines)
+│   ├── portal_compras_client.py         # PCP v2 (646 lines)
+│   └── sanctions.py                     # Sanctions check (639 lines)
+├── pipeline/                            # Search pipeline stages (13 files, 3530 LOC)
 │   ├── stages/
-│   │   ├── validate.py              # Stage 1: Input validation
-│   │   ├── prepare.py               # Stage 2: State prep
-│   │   ├── execute.py               # Stage 3: Multi-source fetch
-│   │   ├── filter.py                # Stage 4: Keyword + LLM filter
-│   │   ├── enrich.py                # Stage 5: Status, viability, summary
-│   │   ├── generate.py              # Stage 6: Excel, SSE emit
-│   │   └── persist.py               # Stage 7: Cache, audit
-│   ├── cache_manager.py             # Two-level cache orchestration
-│   ├── helpers.py                   # Pipeline utilities
-│   ├── worker.py                    # Async worker setup
-│   └── tracing.py                   # OpenTelemetry spans
-├── search_pipeline.py               # 7-stage orchestrator (<200 lines)
-├── consolidation.py                 # Multi-source dedup (41KB)
-├── filter.py                        # Keyword matching engine (177KB)
-├── llm_arbiter.py                   # LLM classification (48KB)
-├── auth.py                          # JWT validation + token cache (20KB)
-├── authorization.py                 # RLS, admin checks, quotas (6KB)
-├── cache.py                         # Redis L1 + L2 abstraction
-├── search_cache.py                  # Search result caching
-├── quota.py                         # Billing quota enforcement
-├── health.py                        # Health check logic (36KB)
-├── metrics.py                       # Prometheus metrics (32KB)
-├── middleware.py                    # Request correlation, rate limiting
-├── excel.py                         # Excel generation (12KB)
-├── google_sheets.py                 # Google Sheets API
-├── pdf_report.py                    # PDF report generation
-├── email_service.py                 # Transactional emails (Resend)
-├── job_queue.py                     # ARQ background jobs (85KB)
-├── cron_jobs.py                     # Scheduled tasks (80KB, 7 cron jobs)
-├── audit.py                         # Event audit logging
-├── feedback_analyzer.py             # User feedback patterns
-├── bid_analyzer.py                  # Per-bid intelligence
-├── bulkhead.py                      # Concurrency isolation
-├── item_inspector.py                # Deep item analysis
-├── filter_stats.py                  # Filter performance tracking
-└── tests/                           # 169 test files, 333 total
+│   │   ├── execute.py                   # Stage 3: Multi-source fetch (1186 lines)
+│   │   ├── generate.py                  # Stage 6: Excel, SSE emit (531 lines)
+│   │   ├── filter_stage.py              # Stage 4: Keyword + LLM filter (359 lines)
+│   │   ├── validate.py                  # Stage 1: Input validation (212 lines)
+│   │   ├── persist.py                   # Stage 7: Cache, audit (167 lines)
+│   │   ├── prepare.py                   # Stage 2: State prep (144 lines)
+│   │   └── enrich.py                    # Stage 5: Status, viability (115 lines)
+│   ├── cache_manager.py                 # Two-level cache orchestration (345 lines)
+│   ├── helpers.py                       # Pipeline utilities (246 lines)
+│   ├── worker.py                        # Async worker setup (79 lines)
+│   └── tracing.py                       # OpenTelemetry spans (53 lines)
+├── search_pipeline.py                   # 7-stage orchestrator (169 lines)
+├── pncp_client.py                       # PNCP API client (2580 lines — 2nd largest)
+├── search_cache.py                      # Search result caching (2512 lines)
+├── job_queue.py                         # ARQ background jobs (2189 lines)
+├── filter.py                            # Keyword filter FACADE (2141 lines)
+├── schemas.py                           # Pydantic models (2119 lines)
+├── cron_jobs.py                         # Scheduled tasks (2039 lines)
+├── quota.py                             # Billing quota enforcement (1622 lines)
+├── llm_arbiter.py                       # LLM classification (1271 lines)
+├── filter_keywords.py                   # Keyword matching core (1151 lines)
+├── metrics.py                           # Prometheus metrics defs (1002 lines)
+├── health.py                            # Health check logic (960 lines)
+├── admin.py                             # Admin panel backend (957 lines)
+├── consolidation.py                     # Multi-source dedup (917 lines)
+├── pdf_report.py                        # PDF report generation (895 lines)
+├── progress.py                          # SSE progress tracking (887 lines)
+├── filter_density.py                    # Sector context scoring (367 lines)
+├── filter_uf.py                         # UF filtering (303 lines)
+├── filter_status.py                     # Status filtering (289 lines)
+├── filter_value.py                      # Value range filtering (162 lines)
+├── filter_stats.py                      # Filter performance tracking (249 lines)
+├── auth.py                              # JWT validation + token cache (519 lines)
+├── cache.py                             # Redis L1 + L2 abstraction
+├── bid_analyzer.py                      # Per-bid intelligence (437 lines)
+├── item_inspector.py                    # Deep item analysis (466 lines)
+├── bulkhead.py                          # Concurrency isolation
+└── tests/                               # 169 test files, 5131+ passing
 
-Supabase Migrations: 35 files
+Supabase Migrations: 88 files
 Backend Migrations: 7 files
 ```
 
@@ -183,8 +193,9 @@ run()
 ---
 
 #### **pncp_client.py** — Resilient HTTP Client
-**Lines:** 108KB | **Responsibility:** Fetch from PNCP API  
+**Lines:** 2580 | **Responsibility:** Fetch from PNCP API
 **Pattern:** Retry + circuit breaker + bulkhead
+**DEBT NOTE:** Reads 14 env vars directly via `os.environ.get()` instead of using `config/` package
 
 **Key Config (per CLAUDE.md):**
 ```python
@@ -219,9 +230,11 @@ PIPELINE_TIMEOUT = 360s                # Entire pipeline
 
 ---
 
-#### **filter.py** — Keyword Matching Engine
-**Lines:** 177KB | **Responsibility:** Sector-based filtering  
+#### **filter.py** — Keyword Matching Engine (FACADE)
+**Lines:** 2141 (facade) + 2521 (5 sub-modules) = 4662 total | **Responsibility:** Sector-based filtering
 **Pattern:** Keyword density scoring + LLM arbiter fallback
+**Structure:** Decomposed (DEBT-110 AC4) into `filter_keywords.py` (1151), `filter_density.py` (367),
+`filter_status.py` (289), `filter_value.py` (162), `filter_uf.py` (303). Facade re-exports all symbols.
 
 **Validation:**
 ```python
@@ -252,14 +265,14 @@ validate_terms(terms: list[str]) → {
 ---
 
 #### **llm_arbiter.py** — AI Classification
-**Lines:** 48KB | **Responsibility:** False positive elimination + zero-match classification  
+**Lines:** 1271 | **Responsibility:** False positive elimination + zero-match classification
 **Pattern:** Structured output + dual-cache (L1 in-memory, L2 Redis)
 
 **Models:**
 - **gpt-4.1-nano** (default) — 33% cheaper than gpt-4o-mini
-- Max tokens: 300 (CRIT-038: increased from 150 to avoid truncation)
+- Max tokens: 800 (DEBT-101 AC5: increased from 300 to prevent JSON truncation)
 - Temperature: 0 (deterministic)
-- Timeout: 15s (HARDEN-001, 5× p99 latency)
+- Timeout: 5s (DEBT-103 AC1: reduced from 15s to 5s, still 5x p99)
 
 **LLMClassification Schema (D-02 AC1):**
 ```python
@@ -283,8 +296,8 @@ class LLMClassification(BaseModel):
 ---
 
 #### **consolidation.py** — Multi-Source Dedup
-**Lines:** 41KB | **Responsibility:** Fetch from 3 sources, merge, deduplicate  
-**Pattern:** Parallel fetch with per-source timeout
+**Lines:** 917 | **Responsibility:** Fetch from 3 sources, merge, deduplicate
+**Pattern:** Parallel fetch with per-source timeout + bulkhead isolation
 
 **Sources (Priority Order):**
 1. PNCP (priority 1, highest)
@@ -315,7 +328,7 @@ PerSource(180s) > PerUF(30s) > PerModality(20s) > HTTP(10s)
 ---
 
 #### **auth.py** — JWT Token Validation
-**Lines:** 20KB | **Responsibility:** Validate Supabase JWT, cache tokens  
+**Lines:** 519 | **Responsibility:** Validate Supabase JWT, cache tokens
 **Pattern:** Local JWT decode + dual-cache (L1 memory, L2 Redis)
 
 **Key Security Updates (STORY-210, STORY-227):**
@@ -342,7 +355,7 @@ L2: Redis (300s TTL, shared across Gunicorn workers)
 
 ---
 
-### 2.3 API Routes (49 Endpoints)
+### 2.3 API Routes (33 Route Modules, 10,600 LOC)
 
 | Module | Endpoints | Purpose |
 |--------|-----------|---------|
@@ -362,7 +375,7 @@ L2: Redis (300s TTL, shared across Gunicorn workers)
 
 ---
 
-### 2.4 Database Schema (35 Supabase + 7 Backend Migrations)
+### 2.4 Database Schema (88 Supabase + 7 Backend Migrations)
 
 **Key Tables:**
 
@@ -592,36 +605,55 @@ SearchResults.tsx:
   └─ Show cache status (fresh/stale/expired)
 ```
 
-### 3.3 Key Frontend Hooks & Patterns
+### 3.3 Key Frontend Hooks (27 custom hooks, 3,691 LOC)
 
-| Hook | Purpose |
-|------|---------|
-| `useSearch()` | SSE + polling search orchestration |
-| `useSearchFilters()` | Filter state management |
-| `useAuth()` | JWT token + user context |
-| `usePlan()` | Subscription status, quota check |
-| `useTrialPhase()` | Trial countdown, paywall logic |
-| `useAnalytics()` | Mixpanel/Sentry event tracking |
-| `useOnboarding()` | First-time user flow |
-| `useShepherdTour()` | Guided onboarding tours |
-| `useBroadcastChannel()` | Cross-tab state sync |
-| `useNavigationGuard()` | Unsaved changes warning |
+| Hook | Lines | Purpose |
+|------|-------|---------|
+| `useSearchSSE.ts` | 769 | SSE + polling search progress (largest hook) |
+| `useFetchWithBackoff.ts` | 251 | Exponential backoff fetcher (2s-30s cap, max 5 retries) |
+| `usePipeline.ts` | 222 | Kanban pipeline state + drag-drop |
+| `useFeatureFlags.ts` | 170 | Runtime feature flag system |
+| `useShepherdTour.ts` | 162 | Guided onboarding tours |
+| `useSearchPolling.ts` | 155 | Search status polling fallback |
+| `useSavedSearches.ts` | 148 | Saved search persistence |
+| `useAnalytics.ts` | 139 | Mixpanel/Sentry event tracking |
+| `useUserProfile.ts` | 112 | User profile data + mutations |
+| `useKeyboardShortcuts.ts` | 105 | Keyboard shortcut bindings |
+| `useBroadcastChannel.ts` | 93 | Cross-tab state sync |
+| `usePlan.ts` | 86 | Subscription status, quota check |
+| `useOrganization.ts` | 86 | Multi-tenant org context |
+| `useQuota.ts` | 75 | Plan quota tracking |
+| `usePublicMetrics.ts` | 68 | Public metrics display |
+| `useAlerts.ts` | 66 | Alert preferences |
+| `useNavigationGuard.ts` | 63 | Unsaved changes warning |
+| `useTrialPhase.ts` | -- | Trial countdown, paywall logic |
+| `useIsMobile.ts` | -- | Responsive breakpoint detection |
+| `useServiceWorker.ts` | -- | PWA service worker registration |
 
-### 3.4 API Proxy Endpoints (frontend/app/api/)
+### 3.4 API Proxy Endpoints (58 routes in frontend/app/api/)
+
+Key proxies (full list: 58 route.ts files across auth, billing, search, admin, etc.):
 
 | Route | Backend Endpoint | Purpose |
 |-------|-----------------|---------|
-| `/api/buscar` | POST /v1/buscar | Proxy search request |
-| `/api/buscar-progress/{id}` | GET /v1/buscar-progress/{id} | SSE stream |
-| `/api/download` | POST /v1/export/excel | Export generation |
-| `/api/analytics` | GET /v1/analytics/* | Dashboard data |
-| `/api/admin` | GET /v1/admin/* | Admin operations |
-| `/api/feedback` | POST /v1/feedback | User feedback |
-| `/api/trial-status` | GET /v1/trial-status | Trial countdown |
-| `/api/user` | GET /v1/me | Current user |
-| `/api/plans` | GET /v1/plans | Pricing data |
-| `/api/pipeline` | CRUD /v1/pipeline | Kanban state |
-| `/api/sessions` | GET /v1/sessions | Search history |
+| `/api/buscar` | POST /buscar | Proxy search request |
+| `/api/buscar-progress` | GET /buscar-progress/{id} | SSE stream proxy |
+| `/api/buscar-results/[searchId]` | GET /buscar-results/{id} | Fetch completed results |
+| `/api/download` | POST /export/excel | Export generation |
+| `/api/analytics` | GET /analytics/* | Dashboard data |
+| `/api/admin/[...path]` | GET /admin/* | Admin operations (catch-all) |
+| `/api/feedback` | POST /feedback | User feedback |
+| `/api/trial-status` | GET /trial-status | Trial countdown |
+| `/api/me` | GET /me | Current user |
+| `/api/plans` | GET /plans | Pricing data |
+| `/api/pipeline` | CRUD /pipeline | Kanban state |
+| `/api/sessions` | GET /sessions | Search history |
+| `/api/alerts` | CRUD /alerts | Alert preferences |
+| `/api/messages/*` | CRUD /conversations | Messaging |
+| `/api/organizations/*` | CRUD /organizations | Multi-tenant |
+| `/api/auth/*` | Auth endpoints | Login, signup, OAuth, MFA |
+| `/api/bid-analysis/[bidId]` | GET /bid-analysis/{id} | Per-bid intelligence |
+| `/api/reports/diagnostico` | POST /reports/diagnostico | PDF diagnostic report |
 
 ### 3.5 Component Hierarchy
 
@@ -930,12 +962,14 @@ STRIPE_SECRET_KEY=sk_live_...
 # 50+ more config vars
 ```
 
-### 6.2 CI/CD Workflows (11 GitHub Actions)
+### 6.2 CI/CD Workflows (17 GitHub Actions)
 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
 | `backend-tests.yml` | PR + push | Run pytest (169 files, 5131+ tests) |
 | `frontend-tests.yml` | PR + push | Run Jest (135 files) |
+| `backend-ci.yml` | PR + push | Backend CI (lint, type check, test) |
+| `tests.yml` | PR + push | Combined test orchestration |
 | `e2e.yml` | PR + push | Playwright tests (60 critical flows) |
 | `migration-gate.yml` | PR touch `supabase/migrations/` | Warn of pending migrations |
 | `migration-check.yml` | Push to main, daily | Block if unapplied migrations |
@@ -945,6 +979,10 @@ STRIPE_SECRET_KEY=sk_live_...
 | `load-test.yml` | Manual trigger | Locust load test |
 | `codeql.yml` | PR + schedule | Security scanning |
 | `pr-validation.yml` | PR | Type check, lint, schema validation |
+| `sync-sectors.yml` | Schedule | Sync sector definitions |
+| `cleanup.yml` | Schedule | Resource cleanup |
+| `dependabot-auto-merge.yml` | Dependabot PR | Auto-merge safe dep updates |
+| `handle-new-user-guard.yml` | Webhook | New user onboarding guard |
 
 ### 6.3 Database Migrations (CRIT-050)
 
@@ -965,19 +1003,22 @@ STRIPE_SECRET_KEY=sk_live_...
    - Marks deploy as DEGRADED if push fails (does NOT rollback)
 
 **Migration Files:**
-- Supabase: `/supabase/migrations/` (35 files, numbered sequentially)
+- Supabase: `/supabase/migrations/` (88 files, numbered sequentially)
 - Backend: `/backend/migrations/` (7 files, local schema changes)
 
 ---
 
 ## 7. Technical Debt Inventory
 
+*Updated 2026-03-10 with verified code analysis. Items marked RESOLVED have been fixed
+but remain documented for reference. Active items are sorted by severity.*
+
 ### Critical Issues (SEVERITY: CRITICAL)
 
 | ID | Category | Location | Issue | Impact | Est. Effort | Debt Type |
 |---|----------|----------|-------|--------|-------------|-----------|
-| **CRIT-SIGSEGV** | Reliability | `main.py:1`, `requirements.txt:5` | faulthandler enabled + uvicorn WITHOUT [standard] extra (uvloop crashes on Railway) | Process crashes on Linux containers | 0.5d | Reliability |
-| **CRIT-038** | Reliability | `llm_arbiter.py:61` | LLM_STRUCTURED_MAX_TOKENS=300 (was 150, truncation 20-30% of calls) | JSON parsing failures, silent API timeouts | 0.5d | Reliability |
+| **CRIT-SIGSEGV** | Reliability | `main.py:1-9`, `requirements.txt:10` | RESOLVED: faulthandler disabled in prod, uvicorn[standard] re-enabled | Was: process crashes on Railway | -- | Reliability |
+| **CRIT-038** | Reliability | `llm_arbiter.py:68` | RESOLVED: LLM_STRUCTURED_MAX_TOKENS increased to 800 (DEBT-101 AC5) | Was: JSON truncation in 20-30% of calls | -- | Reliability |
 | **CRIT-050** | Reliability | `.github/workflows/` | Three-layer migration defense (warning + block + auto-apply) | Prevents unapplied migrations in production | 1d | Reliability |
 | **CRIT-PNCP-PAGESIZE** | Reliability | `pncp_client.py` | PNCP API reduced max tamanhoPagina from 500 → 50 (Feb 2026) | Silent HTTP 400 on oversized requests | 1d | Compatibility |
 | **STORY-210 AC3** | Security | `auth.py:306` | Hash FULL token (SHA256) not just payload | Token identity collision (CVSS 9.1) | 0.5d | Security |
@@ -1015,6 +1056,20 @@ STRIPE_SECRET_KEY=sk_live_...
 | **FE-020** | Performance | `frontend/app/layout.tsx:31` | Font preload optimization (skip display fonts to avoid blocking critical path) | Faster LCP | 0.5d | Performance |
 | **CHARDET-PIN** | Reliability | `requirements.txt:26` | chardet<6 pin (requests<=2.32.5 incompatible with chardet 6.0.0) | Remove once requests>=2.33.0 ships | 0.5d | Reliability |
 | **PYTEST-TIMEOUT-WINDOWS** | Reliability | `pytest.ini` or `pyproject.toml` | timeout_method="thread" (signal-based fails on Windows) | Windows dev compatibility | 0.5d | Reliability |
+
+### New Findings from Code Analysis (2026-03-10)
+
+| ID | Severity | Category | Location | Issue | Impact | Est. Effort |
+|---|----------|----------|----------|-------|--------|-------------|
+| **ARCH-001** | HIGH | Maintainability | `routes/search.py` (2177 lines) | Largest route module by far -- buscar_licitacoes endpoint, SSE generator, state machine wiring all in one file | Hard to test, hard to review, merge conflicts | 2d |
+| **ARCH-002** | HIGH | Maintainability | `search_pipeline.py` (17 noqa:F401 imports) | Re-exports 17+ symbols solely for backward test compatibility. Tests patch `search_pipeline.X` instead of actual module | Test fragility, import coupling | 1d |
+| **ARCH-003** | MEDIUM | Config Hygiene | `pncp_client.py` (14 `os.environ.get()` calls) | Circuit breaker, timeout, batch config read directly instead of via `config/` package | Config scattered across modules | 1d |
+| **ARCH-004** | MEDIUM | Dead Code | `config.py.bak`, `config_legacy.py.bak` in backend/ | Backup files from decomposition left in repo | Confusing, repo clutter | 0.5h |
+| **ARCH-005** | MEDIUM | Maintainability | `filter.py` (2141-line facade) | Facade that re-exports from 5 sub-modules -- the facade itself contains `aplicar_todos_filtros` (main orchestrator) plus ThreadPoolExecutor, random, uuid imports | Split orchestrator from re-exports | 1d |
+| **ARCH-006** | LOW | Frontend | `SearchForm.tsx` (687 lines) | Largest frontend component -- handles sector select, UF multi-select, date range, value range, modalidade, status, and custom terms in one component | Should decompose into sub-form components | 1.5d |
+| **ARCH-007** | LOW | Frontend | `DataQualityBanner.tsx` (661 lines) | Very large presentational component for a banner | Review for decomposition | 0.5d |
+| **ARCH-008** | LOW | Frontend | `useSearchSSE.ts` (769 lines) | Complex SSE hook with retry logic, polling fallback, terminal guards -- well-documented but large | Consider splitting into SSE + polling hooks | 1d |
+| **ARCH-009** | LOW | Observability | 30 TODO/FIXME/HACK comments across backend | Scattered improvement notes not tracked in issue tracker | Audit and convert to issues or remove | 0.5d |
 
 ### Low-Priority Issues (SEVERITY: LOW)
 
@@ -1256,47 +1311,88 @@ WARMUP_RATE_LIMIT_RPS=5                   # Prevent API overload
 
 ---
 
-## 13. File Count & Metrics Summary
+## 13. File Count & Metrics Summary (verified 2026-03-10)
 
 | Metric | Count |
 |--------|-------|
-| **Backend Python Files** | 65+ |
+| **Backend Python Files** | 192 |
+| **Backend Total LOC** | 72,693 |
+| **Backend Route Modules** | 33 (10,600 LOC) |
 | **Backend Test Files** | 169 |
 | **Backend Total Tests** | 5131+ |
-| **Frontend TSX Files** | 22 pages + 40+ components |
+| **Frontend Pages** | 28 |
+| **Frontend TS/TSX Files** | 328 |
+| **Frontend Buscar Components** | 44 (7,574 LOC) |
+| **Frontend Custom Hooks** | 27 (3,691 LOC) |
+| **Frontend API Proxy Routes** | 58 |
 | **Frontend Test Files** | 135 |
 | **Frontend E2E Tests** | 60 |
-| **Database Migrations** | 35 (Supabase) + 7 (backend) |
+| **Database Migrations** | 88 (Supabase) + 7 (backend) |
 | **Feature Flags** | 50+ |
-| **API Endpoints** | 49 |
-| **Cron Jobs** | 7 |
+| **Cron Jobs** | 7+ |
 | **Background Job Types** | 4+ |
+| **Pipeline Stage Modules** | 13 (3,530 LOC) |
+| **Client Modules** | 8 (5,019 LOC) |
 | **Prometheus Metrics** | 30+ |
 | **Monitoring Channels** | Prometheus, OTel, Sentry |
-| **GitHub Workflows** | 11 |
+| **GitHub Workflows** | 17 |
 | **Dependencies (Backend)** | 40+ pinned packages |
-| **Dependencies (Frontend)** | 61 + 20 dev deps |
+| **Dependencies (Frontend)** | 31 + 20 dev deps |
 | **Database Tables** | 20+ (with RLS policies) |
 | **Supabase Functions** | 5+ (RPC helpers) |
 
 ---
 
-## 14. Conclusion
+## 14. Questions for Specialists
 
-SmartLic is a **well-architected, production-grade SaaS platform** with:
+### For @data-engineer
 
-✓ **Resilient multi-source pipeline** with circuit breakers, bulkheads, and graceful degradation  
-✓ **Intelligent filtering** combining keywords + LLM classification + viability assessment  
-✓ **Comprehensive monitoring** (Prometheus, OTel, Sentry)  
-✓ **Strong security** (JWT + RLS + input validation + CORS)  
-✓ **Extensive test coverage** (5131 backend + 2681 frontend tests)  
-✓ **Type-safe** (Pydantic v2 backend, TypeScript 5.9 frontend)  
-✓ **Scalable infrastructure** (Railway auto-scaling, Redis cache, ARQ background jobs)  
+1. **88 migrations and counting** -- Is there a migration squash strategy? At what point do we consolidate old migrations into a baseline?
+2. **Cache key correctness (STORY-306)** -- The cache key now includes date_from/date_to. Has this been validated with production cache hit rates? Are there orphaned cache entries from the old key format?
+3. **search_sessions table cleanup** -- Cron runs every 6h deleting old sessions. What is the table growth rate? Do we need partitioning?
+4. **Redis memory usage** -- Progress tracker uses Redis Streams with 5-min TTL. With 2 Gunicorn workers and concurrent searches, what is peak Redis memory?
+5. **LLM classification audit trail** -- `llm_classifications` table stores every LLM decision. Growth rate? Retention policy?
 
-**Technical Debt:** Mostly low-priority (legacy code patterns, fund more refactoring)  
-**Risk Areas:** LLM cost, PNCP API reliability, cache coherency  
-**Recommended Next:** AsyncPNCPClient completion, database optimization, mobile app
+### For @ux-design-expert
+
+1. **SearchForm.tsx (687 lines)** -- This is a monolithic form component handling sector, UFs, dates, value range, modalidade, status, and custom terms. Should it be decomposed into sub-form sections with their own validation?
+2. **DataQualityBanner.tsx (661 lines)** -- This banner component is unusually large for a notification element. What is driving the complexity? Can banners be standardized?
+3. **44 components in `/buscar/components/`** -- Is the search page over-componentized? Are users overwhelmed by the number of banners (CacheBanner, DegradationBanner, PartialResultsPrompt, PartialTimeoutBanner, FilterRelaxedBanner, RefreshBanner, ExpiredCacheBanner, SearchErrorBanner, OnboardingBanner, OnboardingSuccessBanner, DataQualityBanner, TruncationWarningBanner)?
+4. **28 frontend pages** -- Are all pages actively used? Blog content pages (como-avaliar-licitacao, como-evitar-prejuizo, etc.) may have low traffic.
+5. **Mobile experience** -- `useIsMobile.ts` hook exists but no dedicated mobile views. Is responsive design sufficient or do mobile users need a distinct experience?
+
+### For @dev (Priority Actions)
+
+1. **ARCH-001**: `routes/search.py` at 2177 lines needs decomposition. Suggested: extract SSE generator, state machine wiring, and retry logic into separate modules.
+2. **ARCH-002**: Clean up 17 `noqa:F401` re-exports in `search_pipeline.py`. Update tests to patch actual source modules instead.
+3. **ARCH-003**: Move 14 `os.environ.get()` calls from `pncp_client.py` into `config/pncp.py`.
+4. **ARCH-004**: Delete `config.py.bak` and `config_legacy.py.bak`.
 
 ---
 
-**Documentation compiled via comprehensive codebase analysis (50+ key files read, 333 backend tests + 658 frontend tests verified)**
+## 15. Conclusion
+
+SmartLic is a **well-architected, production-grade SaaS platform** with:
+
+- Resilient multi-source pipeline with circuit breakers, bulkheads, and graceful degradation
+- Intelligent filtering combining keywords + LLM classification + viability assessment
+- Comprehensive monitoring (Prometheus, OTel, Sentry)
+- Strong security (JWT + RLS + MFA + input validation + CORS)
+- Extensive test coverage (5131 backend + 2681 frontend tests)
+- Type-safe (Pydantic v2 backend, TypeScript 5.9 frontend)
+- Scalable infrastructure (Railway, Redis, ARQ background jobs)
+
+**Technical Debt Summary:** 6 critical (4 RESOLVED), 8 high, 13 medium, 5 low, plus 9 newly identified from this analysis (ARCH-001 through ARCH-009).
+
+**Top Risk Areas:** LLM cost scaling, PNCP API reliability (50-page limit), cache coherency across workers.
+
+**Recommended Next Actions (priority order):**
+1. Decompose `routes/search.py` (2177 lines) -- highest-impact maintainability win
+2. Clean up test coupling via `search_pipeline.py` re-exports
+3. Consolidate env var reads into `config/` package
+4. Database migration squash strategy
+5. Frontend component audit (banner consolidation)
+
+---
+
+**Documentation compiled via comprehensive codebase analysis. 192 Python files (72,693 LOC), 328 TS/TSX files, 88 migrations, 17 CI workflows verified against actual source code on 2026-03-10.**

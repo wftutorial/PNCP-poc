@@ -335,6 +335,7 @@ def enrich_workbook(filepath: Path) -> dict:
                 "num": row_data[COL_MAP["num"]],
                 "empresa": empresa,
                 "nome_fantasia": nome_fantasia,
+                "cnpj": str(row_data[COL_MAP["cnpj"]] or ""),
                 "decisor": decisor,
                 "cargo": str(row_data[COL_MAP["cargo_decisor"]] or ""),
                 "whatsapp": wa_number,
@@ -360,7 +361,7 @@ def enrich_workbook(filepath: Path) -> dict:
 
     # Headers
     wa_headers = [
-        "#", "Empresa", "Nome Fantasia", "Decisor", "Cargo",
+        "#", "Empresa", "Nome Fantasia", "CNPJ", "Decisor", "Cargo",
         "WhatsApp", "Link wa.me", "Email", "Cidade",
         "Fat. Gov Mensal", "Contratos", "UFs",
         "Mensagem WhatsApp",
@@ -375,7 +376,7 @@ def enrich_workbook(filepath: Path) -> dict:
         cell.border = THIN_BORDER
 
     # Column widths
-    widths = [5, 30, 25, 20, 18, 16, 35, 30, 20, 15, 10, 15, 60, 12, 12, 25, 12, 12, 12, 30]
+    widths = [5, 30, 25, 20, 20, 18, 16, 35, 30, 20, 15, 10, 15, 60, 12, 12, 25, 12, 12, 12, 30]
     for i, w in enumerate(widths, 1):
         ws_wa.column_dimensions[get_column_letter(i)].width = w
 
@@ -385,37 +386,38 @@ def enrich_workbook(filepath: Path) -> dict:
         ws_wa.cell(row=row, column=1, value=idx).border = THIN_BORDER
         ws_wa.cell(row=row, column=2, value=lead["empresa"]).border = THIN_BORDER
         ws_wa.cell(row=row, column=3, value=lead["nome_fantasia"]).border = THIN_BORDER
-        ws_wa.cell(row=row, column=4, value=lead["decisor"]).border = THIN_BORDER
-        ws_wa.cell(row=row, column=5, value=lead["cargo"]).border = THIN_BORDER
-        ws_wa.cell(row=row, column=6, value=lead["whatsapp_display"]).border = THIN_BORDER
+        ws_wa.cell(row=row, column=4, value=lead["cnpj"]).border = THIN_BORDER
+        ws_wa.cell(row=row, column=5, value=lead["decisor"]).border = THIN_BORDER
+        ws_wa.cell(row=row, column=6, value=lead["cargo"]).border = THIN_BORDER
+        ws_wa.cell(row=row, column=7, value=lead["whatsapp_display"]).border = THIN_BORDER
 
-        link_cell = ws_wa.cell(row=row, column=7, value=lead["link"])
+        link_cell = ws_wa.cell(row=row, column=8, value=lead["link"])
         link_cell.font = LINK_FONT
         link_cell.hyperlink = lead["link"]
         link_cell.border = THIN_BORDER
 
-        ws_wa.cell(row=row, column=8, value=lead["email"]).border = THIN_BORDER
-        ws_wa.cell(row=row, column=9, value=lead["cidade"]).border = THIN_BORDER
+        ws_wa.cell(row=row, column=9, value=lead["email"]).border = THIN_BORDER
+        ws_wa.cell(row=row, column=10, value=lead["cidade"]).border = THIN_BORDER
 
-        fat_cell = ws_wa.cell(row=row, column=10, value=lead["fat_gov"])
+        fat_cell = ws_wa.cell(row=row, column=11, value=lead["fat_gov"])
         fat_cell.number_format = '#,##0.00'
         fat_cell.border = THIN_BORDER
 
-        ws_wa.cell(row=row, column=11, value=lead["contratos"]).border = THIN_BORDER
-        ws_wa.cell(row=row, column=12, value=lead["ufs"]).border = THIN_BORDER
+        ws_wa.cell(row=row, column=12, value=lead["contratos"]).border = THIN_BORDER
+        ws_wa.cell(row=row, column=13, value=lead["ufs"]).border = THIN_BORDER
 
-        msg_cell = ws_wa.cell(row=row, column=13, value=lead["message"])
+        msg_cell = ws_wa.cell(row=row, column=14, value=lead["message"])
         msg_cell.font = MSG_FONT
         msg_cell.alignment = Alignment(wrap_text=True, vertical="top")
         msg_cell.border = THIN_BORDER
 
         # Empty tracking columns
-        for col in range(14, 21):
+        for col in range(15, 22):
             ws_wa.cell(row=row, column=col, value="").border = THIN_BORDER
 
         # Color confirmed cellphones green-ish
         if lead["is_cellphone"]:
-            ws_wa.cell(row=row, column=6).fill = PatternFill(
+            ws_wa.cell(row=row, column=7).fill = PatternFill(
                 start_color="E8F5E9", end_color="E8F5E9", fill_type="solid"
             )
 

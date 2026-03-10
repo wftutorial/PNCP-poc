@@ -19,7 +19,9 @@ Usage:
 
 from datetime import datetime, timezone
 from typing import Any
+import hashlib
 import json
+import logging
 import os
 
 from openai import OpenAI
@@ -27,6 +29,59 @@ from openai import OpenAI
 from schemas import ResumoEstrategico, Recomendacao
 from excel import parse_datetime
 from middleware import request_id_var
+
+logger = logging.getLogger(__name__)
+
+# ============================================================================
+# DEBT-110 AC3: Redis L2 cache for LLM summaries (cross-worker sharing)
+# ============================================================================
+_SUMMARY_CACHE_PREFIX = "smartlic:summary:"
+_SUMMARY_CACHE_TTL = int(os.getenv("LLM_SUMMARY_CACHE_TTL", "86400"))  # 24h default
+
+
+def _summary_cache_key(licitacoes: list[dict], sector_name: str, termos_busca: str | None) -> str:
+    """Build content-based cache key for LLM summaries.
+
+    Key is MD5 of sorted bid IDs + sector + terms, so identical searches
+    across workers share the same cached summary.
+    """
+    bid_ids = sorted(
+        lic.get("numeroCompra") or lic.get("id") or (lic.get("objetoCompra") or "")[:50]
+        for lic in licitacoes[:50]
+    )
+    payload = json.dumps({"bids": bid_ids, "sector": sector_name, "terms": termos_busca}, sort_keys=True)
+    return hashlib.md5(payload.encode()).hexdigest()
+
+
+def _summary_cache_get(cache_key: str) -> ResumoEstrategico | None:
+    """Read summary from Redis L2 cache. Returns None on miss/error."""
+    try:
+        from redis_pool import get_sync_redis
+        redis = get_sync_redis()
+        if not redis:
+            return None
+        data = redis.get(f"{_SUMMARY_CACHE_PREFIX}{cache_key}")
+        if data:
+            from metrics import LLM_SUMMARY_CACHE_HITS
+            LLM_SUMMARY_CACHE_HITS.inc()
+            parsed = json.loads(data)
+            return ResumoEstrategico(**parsed)
+    except Exception as e:
+        logger.debug(f"DEBT-110: Summary cache read failed: {e}")
+    return None
+
+
+def _summary_cache_set(cache_key: str, resumo: ResumoEstrategico) -> None:
+    """Write summary to Redis L2 cache. Fire-and-forget on error."""
+    try:
+        from redis_pool import get_sync_redis
+        redis = get_sync_redis()
+        if not redis:
+            return
+        data = json.dumps(resumo.model_dump(), default=str)
+        redis.setex(f"{_SUMMARY_CACHE_PREFIX}{cache_key}", _SUMMARY_CACHE_TTL, data)
+    except Exception as e:
+        logger.debug(f"DEBT-110: Summary cache write failed: {e}")
 
 
 def _format_brl_full(value: float) -> str:
@@ -79,6 +134,19 @@ def gerar_resumo(licitacoes: list[dict[str, Any]], sector_name: str = "uniformes
         >>> resumo.total_oportunidades
         1
     """
+    # DEBT-110 AC3: Check Redis L2 cache before calling OpenAI
+    _cache_key = _summary_cache_key(licitacoes, sector_name, termos_busca)
+    cached = _summary_cache_get(_cache_key)
+    if cached is not None:
+        logger.info(f"DEBT-110: Summary cache HIT for {sector_name} ({len(licitacoes)} bids)")
+        return cached
+    else:
+        try:
+            from metrics import LLM_SUMMARY_CACHE_MISSES
+            LLM_SUMMARY_CACHE_MISSES.inc()
+        except Exception:
+            pass
+
     # Handle empty input
     if not licitacoes:
         _ctx_label = f"para '{termos_busca}'" if termos_busca else f"de {sector_name}"
@@ -218,6 +286,9 @@ Data atual: {hoje.strftime("%d/%m/%Y")}
 
     if not resumo:
         raise ValueError("OpenAI API returned empty response")
+
+    # DEBT-110 AC3: Cache the result in Redis L2
+    _summary_cache_set(_cache_key, resumo)
 
     # CRITICAL: Validate that ambiguous deadline terminology is not present
     forbidden_terms = [

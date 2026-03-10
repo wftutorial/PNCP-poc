@@ -194,8 +194,9 @@ def _log_token_usage(
     search_id: str,
     input_tokens: int,
     output_tokens: int,
+    call_type: str = "arbiter",
 ) -> None:
-    """Track token usage per search for cost monitoring (AC9)."""
+    """Track token usage per search for cost monitoring (AC9) + DEBT-110 AC14."""
     if search_id not in _search_token_stats:
         _search_token_stats[search_id] = {
             "llm_tokens_input": 0,
@@ -206,6 +207,18 @@ def _log_token_usage(
     stats["llm_tokens_input"] += input_tokens
     stats["llm_tokens_output"] += output_tokens
     stats["llm_calls"] += 1
+
+    # DEBT-110 AC14: Cumulative cost metric (Prometheus)
+    cost_usd = (
+        input_tokens * _PRICING_INPUT_PER_M / 1_000_000
+        + output_tokens * _PRICING_OUTPUT_PER_M / 1_000_000
+    )
+    cost_brl = cost_usd * _USD_TO_BRL
+    try:
+        from metrics import LLM_COST_BRL
+        LLM_COST_BRL.labels(model=LLM_MODEL, call_type=call_type).inc(cost_brl)
+    except Exception:
+        pass  # Never let metrics break LLM flow
 
 
 def get_search_cost_stats(search_id: str) -> dict:

@@ -964,6 +964,26 @@ TASK_REGISTRY_TOTAL = _create_gauge(
 
 
 # ============================================================================
+# DEBT-110 AC14: LLM cost tracking
+# ============================================================================
+
+LLM_COST_BRL = _create_counter(
+    "smartlic_llm_cost_brl_total",
+    "Cumulative LLM cost in BRL",
+    labelnames=["model", "call_type"],  # call_type: arbiter, summary, zero_match
+)
+
+LLM_SUMMARY_CACHE_HITS = _create_counter(
+    "smartlic_llm_summary_cache_hits_total",
+    "LLM summary Redis cache hits (cross-worker sharing)",
+)
+
+LLM_SUMMARY_CACHE_MISSES = _create_counter(
+    "smartlic_llm_summary_cache_misses_total",
+    "LLM summary Redis cache misses",
+)
+
+# ============================================================================
 # ASGI app factory for /metrics endpoint
 # ============================================================================
 

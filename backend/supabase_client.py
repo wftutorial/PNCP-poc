@@ -413,8 +413,18 @@ def _is_schema_error(exc: Exception) -> bool:
     return any(code in msg for code in ("PGRST205", "PGRST204", "42703", "42P01"))
 
 
+# DEBT-110 AC1: CB thresholds configurable via env vars
+_CB_WINDOW_SIZE = int(os.getenv("SUPABASE_CB_WINDOW_SIZE", "10"))
+_CB_FAILURE_RATE = float(os.getenv("SUPABASE_CB_FAILURE_RATE", "0.5"))
+_CB_COOLDOWN_S = float(os.getenv("SUPABASE_CB_COOLDOWN_SECONDS", "60.0"))
+_CB_TRIAL_CALLS = int(os.getenv("SUPABASE_CB_TRIAL_CALLS", "3"))
+
 # Global singleton — used by all modules
 supabase_cb = SupabaseCircuitBreaker(
+    window_size=_CB_WINDOW_SIZE,
+    failure_rate_threshold=_CB_FAILURE_RATE,
+    cooldown_seconds=_CB_COOLDOWN_S,
+    trial_calls_max=_CB_TRIAL_CALLS,
     exclude_predicates=[_is_schema_error],
 )
 

@@ -9,6 +9,26 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
+// Mock usePathname for layout (AC5)
+jest.mock('next/navigation', () => ({
+  usePathname: () => '/conta/perfil',
+  useRouter: () => ({
+    push: jest.fn(),
+    replace: jest.fn(),
+    back: jest.fn(),
+  }),
+}));
+
+// Mock PageHeader for layout
+jest.mock('@/components/PageHeader', () => ({
+  PageHeader: ({ title }: { title: string }) => <div data-testid="page-header">{title}</div>,
+}));
+
+// Mock ErrorBoundary for layout
+jest.mock('@/components/ErrorBoundary', () => ({
+  ErrorBoundary: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+
 // Mock useUser from UserContext
 const mockSignOut = jest.fn();
 const mockUser = {
@@ -141,6 +161,67 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
+// ═══ ContaLayout sidebar tests (AC5) ═══
+
+describe('ContaLayout sidebar (AC5)', () => {
+  let ContaLayout: any;
+
+  beforeEach(async () => {
+    const mod = await import('@/app/conta/layout');
+    ContaLayout = mod.default;
+  });
+
+  it('should render sidebar navigation', () => {
+    render(
+      <ContaLayout>
+        <div>Content</div>
+      </ContaLayout>
+    );
+    expect(screen.getByTestId('conta-sidebar')).toBeInTheDocument();
+  });
+
+  it('should display all nav items', () => {
+    render(
+      <ContaLayout>
+        <div>Content</div>
+      </ContaLayout>
+    );
+
+    expect(screen.getAllByText(/Perfil/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Seguranca/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Acesso/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Dados e LGPD/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Equipe/i).length).toBeGreaterThan(0);
+  });
+
+  it('should have correct hrefs for nav links', () => {
+    render(
+      <ContaLayout>
+        <div>Content</div>
+      </ContaLayout>
+    );
+
+    const links = screen.getAllByRole('link');
+    const hrefs = links.map((l: HTMLElement) => l.getAttribute('href'));
+
+    expect(hrefs).toContain('/conta/perfil');
+    expect(hrefs).toContain('/conta/seguranca');
+    expect(hrefs).toContain('/conta/plano');
+    expect(hrefs).toContain('/conta/dados');
+    expect(hrefs).toContain('/conta/equipe');
+  });
+
+  it('should render children content area', () => {
+    render(
+      <ContaLayout>
+        <div data-testid="test-child">Hello</div>
+      </ContaLayout>
+    );
+
+    expect(screen.getByTestId('test-child')).toBeInTheDocument();
+  });
+});
+
 // ═══ PerfilPage tests ═══
 
 describe('PerfilPage', () => {
@@ -196,6 +277,45 @@ describe('PerfilPage', () => {
       render(<PerfilPage />);
       const nameFields = screen.getAllByText('-');
       expect(nameFields.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Error state (AC6)', () => {
+    it('should show toast error on profile save API failure', async () => {
+      const { toast } = require('sonner');
+
+      // Override useProfileContext mock to return profile data with edit button
+      jest.requireMock('@/hooks/useProfileContext').useProfileContext = () => ({
+        profileCtx: { ufs_atuacao: ['SP'], porte_empresa: 'EPP' },
+        isLoading: false,
+        error: null,
+        updateCache: jest.fn(),
+        mutate: jest.fn(),
+      });
+
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: false,
+        json: async () => ({ detail: 'Server error' }),
+      });
+
+      render(<PerfilPage />);
+
+      // Click edit button
+      const editBtn = screen.getByTestId('edit-profile-btn');
+      fireEvent.click(editBtn);
+
+      // Submit the form
+      await waitFor(() => {
+        expect(screen.getByTestId('save-profile-btn')).toBeInTheDocument();
+      });
+
+      fireEvent.submit(screen.getByTestId('save-profile-btn').closest('form')!);
+
+      await waitFor(() => {
+        expect(toast.error).toHaveBeenCalledWith(
+          expect.stringContaining('Erro ao salvar perfil')
+        );
+      });
     });
   });
 });

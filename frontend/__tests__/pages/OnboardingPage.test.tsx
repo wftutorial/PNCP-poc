@@ -548,4 +548,97 @@ describe('OnboardingPage', () => {
       });
     });
   });
+
+  describe('Error states (AC6)', () => {
+    async function completeAndSubmit() {
+      render(<OnboardingPage />);
+
+      // Step 1
+      fireEvent.change(screen.getByPlaceholderText(/ex: comércio de uniformes/i), {
+        target: { value: 'Uniformes escolares' },
+      });
+      fireEvent.change(screen.getByPlaceholderText(/ex: encontrar oportunidades/i), {
+        target: { value: 'Buscar uniformes acima de R$ 100k' },
+      });
+
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('btn-continuar'));
+      });
+      await waitFor(() => expect(screen.getByText(/onde você atua/i)).toBeInTheDocument());
+
+      // Step 2 — select SP
+      fireEvent.click(screen.getByTestId('uf-button-SP'));
+      await waitFor(() => expect(screen.getByText(/1 selecionados/i)).toBeInTheDocument());
+
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('btn-continuar'));
+      });
+      await waitFor(() => expect(screen.getByText(/pronto para começar/i)).toBeInTheDocument());
+
+      // Step 3 — submit
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('btn-continuar'));
+      });
+    }
+
+    it('shows error toast when profile save fails', async () => {
+      const { toast } = require('sonner');
+      setupFetchMocks({ profileSaveOk: false });
+
+      await completeAndSubmit();
+
+      await waitFor(() => {
+        expect(toast.error).toHaveBeenCalledWith(
+          expect.stringContaining('Erro')
+        );
+      });
+    });
+
+    it('re-enables submit button after profile save error', async () => {
+      setupFetchMocks({ profileSaveOk: false });
+
+      await completeAndSubmit();
+
+      await waitFor(() => {
+        const btn = screen.getByTestId('btn-continuar');
+        expect(btn).not.toBeDisabled();
+        expect(btn).toHaveTextContent(/ver minhas oportunidades/i);
+      });
+    });
+
+    it('shows success toast and redirects with ufs when first-analysis fails', async () => {
+      const { toast } = require('sonner');
+      setupFetchMocks({ firstAnalysisOk: false });
+
+      await completeAndSubmit();
+
+      await waitFor(() => {
+        expect(toast.success).toHaveBeenCalledWith(
+          expect.stringContaining('Perfil salvo')
+        );
+        expect(mockPush).toHaveBeenCalledWith(expect.stringContaining('/buscar?ufs='));
+      });
+    });
+
+    it('handles network error during submission gracefully', async () => {
+      const { toast } = require('sonner');
+      (global.fetch as jest.Mock).mockImplementation((url: string, opts?: RequestInit) => {
+        if (url.includes('profile-context') && opts?.method === 'PUT') {
+          return Promise.reject(new Error('Network error'));
+        }
+        if (url.includes('profile-context')) {
+          return Promise.resolve({ ok: true, json: async () => ({ context_data: {} }) });
+        }
+        return Promise.resolve({ ok: true, json: async () => ({}) });
+      });
+
+      await completeAndSubmit();
+
+      await waitFor(() => {
+        expect(toast.error).toHaveBeenCalledWith(
+          expect.stringContaining('Erro')
+        );
+      });
+    });
+  });
 });

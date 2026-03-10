@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { safeSetItem } from '../lib/storage';
+import { safeSetItem, safeGetItem, safeRemoveItem } from '../lib/storage';
 
 export interface TourStep {
   id: string;
@@ -31,8 +31,7 @@ export function useShepherdTour({ tourId, steps, onComplete, onSkip }: UseShephe
   const storageKey = `onboarding_${tourId}_tour_completed`;
 
   const isCompleted = useCallback((): boolean => {
-    if (typeof window === 'undefined') return true;
-    return localStorage.getItem(storageKey) === 'true';
+    return safeGetItem(storageKey) === 'true';
   }, [storageKey]);
 
   const markCompleted = useCallback(() => {
@@ -40,7 +39,7 @@ export function useShepherdTour({ tourId, steps, onComplete, onSkip }: UseShephe
   }, [storageKey]);
 
   const resetCompletion = useCallback(() => {
-    localStorage.removeItem(storageKey);
+    safeRemoveItem(storageKey);
   }, [storageKey]);
 
   // Initialize Shepherd tour

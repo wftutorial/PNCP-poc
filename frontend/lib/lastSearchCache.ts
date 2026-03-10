@@ -6,7 +6,7 @@
  * when all sources are down.
  */
 
-import { safeSetItem } from "./storage";
+import { safeSetItem, safeGetItem, safeRemoveItem } from "./storage";
 
 const LAST_SEARCH_KEY = "smartlic_last_search";
 const LAST_SEARCH_TTL = 24 * 60 * 60 * 1000; // 24 hours
@@ -18,24 +18,18 @@ export interface LastSearchData {
 
 /** Save the most recent successful search result to localStorage */
 export function saveLastSearch(result: unknown): void {
-  if (typeof window === "undefined") return;
-  try {
-    const data: LastSearchData = { result, timestamp: Date.now() };
-    safeSetItem(LAST_SEARCH_KEY, JSON.stringify(data));
-  } catch {
-    // localStorage might be full — silently ignore
-  }
+  const data: LastSearchData = { result, timestamp: Date.now() };
+  safeSetItem(LAST_SEARCH_KEY, JSON.stringify(data));
 }
 
 /** Load the last search result (returns null if missing or expired) */
 export function getLastSearch(): LastSearchData | null {
-  if (typeof window === "undefined") return null;
   try {
-    const raw = localStorage.getItem(LAST_SEARCH_KEY);
+    const raw = safeGetItem(LAST_SEARCH_KEY);
     if (!raw) return null;
     const data: LastSearchData = JSON.parse(raw);
     if (Date.now() - data.timestamp > LAST_SEARCH_TTL) {
-      localStorage.removeItem(LAST_SEARCH_KEY);
+      safeRemoveItem(LAST_SEARCH_KEY);
       return null;
     }
     return data;

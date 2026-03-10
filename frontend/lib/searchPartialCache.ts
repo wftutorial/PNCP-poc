@@ -10,7 +10,7 @@
  * - Recovered on SSE disconnect or timeout
  */
 
-import { safeSetItem } from "./storage";
+import { safeSetItem, safeGetItem, safeRemoveItem } from "./storage";
 
 const PARTIAL_PREFIX = "search_partial_";
 const PARTIAL_TTL_MS = 30 * 60 * 1000; // 30 minutes
@@ -40,22 +40,17 @@ export function savePartialSearch(
   ufsCompleted: string[],
   totalUfs: number
 ): void {
-  if (typeof window === "undefined") return;
-  try {
-    const key = `${PARTIAL_PREFIX}${searchId}`;
-    const existing = _readPartial(key);
-    const data: PartialSearchData = {
-      partialResult,
-      searchId,
-      ufsCompleted,
-      totalUfs,
-      updatedAt: Date.now(),
-      createdAt: existing?.createdAt ?? Date.now(),
-    };
-    safeSetItem(key, JSON.stringify(data));
-  } catch {
-    // localStorage full or unavailable — silently ignore
-  }
+  const key = `${PARTIAL_PREFIX}${searchId}`;
+  const existing = _readPartial(key);
+  const data: PartialSearchData = {
+    partialResult,
+    searchId,
+    ufsCompleted,
+    totalUfs,
+    updatedAt: Date.now(),
+    createdAt: existing?.createdAt ?? Date.now(),
+  };
+  safeSetItem(key, JSON.stringify(data));
 }
 
 /**
@@ -63,7 +58,6 @@ export function savePartialSearch(
  * Returns null if not found or expired (>30 min TTL).
  */
 export function recoverPartialSearch(searchId: string): PartialSearchData | null {
-  if (typeof window === "undefined") return null;
   const key = `${PARTIAL_PREFIX}${searchId}`;
   return _readPartial(key);
 }
@@ -72,12 +66,7 @@ export function recoverPartialSearch(searchId: string): PartialSearchData | null
  * Clear partial search data after a successful complete search.
  */
 export function clearPartialSearch(searchId: string): void {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.removeItem(`${PARTIAL_PREFIX}${searchId}`);
-  } catch {
-    // silently ignore
-  }
+  safeRemoveItem(`${PARTIAL_PREFIX}${searchId}`);
 }
 
 /**
@@ -85,13 +74,12 @@ export function clearPartialSearch(searchId: string): void {
  * Call periodically (e.g., on mount) to prevent localStorage bloat.
  */
 export function cleanupExpiredPartials(): void {
-  if (typeof window === "undefined") return;
   try {
     const keysToRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (key?.startsWith(PARTIAL_PREFIX)) {
-        const raw = localStorage.getItem(key);
+        const raw = safeGetItem(key);
         if (raw) {
           try {
             const data: PartialSearchData = JSON.parse(raw);
@@ -104,7 +92,7 @@ export function cleanupExpiredPartials(): void {
         }
       }
     }
-    keysToRemove.forEach((k) => localStorage.removeItem(k));
+    keysToRemove.forEach((k) => safeRemoveItem(k));
   } catch {
     // silently ignore
   }
@@ -113,11 +101,11 @@ export function cleanupExpiredPartials(): void {
 /** Internal helper to read and validate a partial entry */
 function _readPartial(key: string): PartialSearchData | null {
   try {
-    const raw = localStorage.getItem(key);
+    const raw = safeGetItem(key);
     if (!raw) return null;
     const data: PartialSearchData = JSON.parse(raw);
     if (Date.now() - data.updatedAt > PARTIAL_TTL_MS) {
-      localStorage.removeItem(key);
+      safeRemoveItem(key);
       return null;
     }
     return data;

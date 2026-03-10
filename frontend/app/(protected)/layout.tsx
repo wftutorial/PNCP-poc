@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useRef, Suspense } from "react";
 import { AppHeader } from "../components/AppHeader";
 import { Breadcrumbs } from "../components/Breadcrumbs";
-import { safeSetItem } from "../../lib/storage";
+import { safeSetItem, safeGetItem } from "../../lib/storage";
 import ProtectedLoading from "./loading";
 
 /**
@@ -41,7 +41,7 @@ export default function ProtectedLayout({
     onboardingCheckRef.current = true;
 
     // Skip check if already completed or if user is visiting non-search pages
-    const completed = typeof window !== 'undefined' && localStorage.getItem("smartlic-onboarding-completed") === "true";
+    const completed = safeGetItem("smartlic-onboarding-completed") === "true";
     if (completed) return;
 
     // Only redirect from /buscar (the main landing after login)

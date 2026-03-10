@@ -19,7 +19,7 @@ import { dateDiffInDays } from "../../../lib/utils/dateDiffInDays";
 import { toast } from "sonner";
 import { checkHasLastSearch, getLastSearch } from "../../../lib/lastSearchCache";
 import type { BuscaResult } from "../../types";
-import { safeSetItem } from "../../../lib/storage";
+import { safeSetItem, safeGetItem, safeRemoveItem } from "../../../lib/storage";
 
 import { SEARCH_TOUR_STEPS, RESULTS_TOUR_STEPS, type TrialValue } from "../constants/tour-steps";
 import type { SearchResultsProps } from "../types/search-results";
@@ -105,14 +105,12 @@ export function useSearchOrchestration() {
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
 
   const hasSearchedBefore = useMemo(() => {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem('smartlic-has-searched') === 'true';
+    return safeGetItem('smartlic-has-searched') === 'true';
   }, []);
 
   const isProfileComplete = useMemo(() => {
-    if (typeof window === 'undefined') return true;
     try {
-      const cached = localStorage.getItem('profileContext');
+      const cached = safeGetItem('profileContext');
       if (!cached) return false;
       const ctx = JSON.parse(cached);
       return !!(ctx.porte_empresa && ctx.ufs_atuacao?.length > 0);
@@ -122,15 +120,14 @@ export function useSearchOrchestration() {
   const [lastSearchAvailable, setLastSearchAvailable] = useState(() => checkHasLastSearch());
 
   const [customizeOpen, setCustomizeOpen] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    if (localStorage.getItem('smartlic-has-searched') !== 'true') return false;
-    const legacy = localStorage.getItem('smartlic-customize-open');
-    const current = localStorage.getItem('smartlic:buscar:filters-expanded');
+    if (safeGetItem('smartlic-has-searched') !== 'true') return false;
+    const legacy = safeGetItem('smartlic-customize-open');
+    const current = safeGetItem('smartlic:buscar:filters-expanded');
     if (current !== null) return current === 'true';
     if (legacy !== null) {
       const wasOpen = legacy === 'open';
       safeSetItem('smartlic:buscar:filters-expanded', String(wasOpen));
-      localStorage.removeItem('smartlic-customize-open');
+      safeRemoveItem('smartlic-customize-open');
       return wasOpen;
     }
     return false;
@@ -141,9 +138,8 @@ export function useSearchOrchestration() {
   }, [customizeOpen]);
 
   const [showFirstUseTip, setShowFirstUseTip] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem('smartlic-has-searched') !== 'true'
-      && localStorage.getItem('smartlic-first-tip-dismissed') !== 'true';
+    return safeGetItem('smartlic-has-searched') !== 'true'
+      && safeGetItem('smartlic-first-tip-dismissed') !== 'true';
   });
 
   const dismissFirstUseTip = useCallback(() => {
@@ -222,8 +218,8 @@ export function useSearchOrchestration() {
   });
 
   useEffect(() => {
-    const welcomeDone = localStorage.getItem('smartlic_onboarding_completed') === 'true' ||
-                         localStorage.getItem('smartlic_onboarding_dismissed') === 'true';
+    const welcomeDone = safeGetItem('smartlic_onboarding_completed') === 'true' ||
+                         safeGetItem('smartlic_onboarding_dismissed') === 'true';
     if (welcomeDone && !isSearchTourCompleted()) {
       const timer = setTimeout(() => {
         startSearchTour();

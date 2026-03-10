@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { useAuth } from "../components/AuthProvider";
 import { useAnalytics } from "../../hooks/useAnalytics";
 import { useBackendStatusContext } from "../../components/BackendStatusIndicator";
@@ -29,12 +29,8 @@ import {
   DashboardEmptyState,
   DashboardStaleBanner,
 } from "./components/DashboardErrorStates";
-import { DashboardViewToggle } from "./components/DashboardViewToggle";
 import { useDashboardDerivedData } from "./components/useDashboardDerivedData";
 import type { DashboardData, Period } from "./components/DashboardTypes";
-
-// UX-406: Feature flag — organizations/teams not yet implemented in backend
-const ORGS_ENABLED = process.env.NEXT_PUBLIC_ORGS_ENABLED === "true";
 
 const LOADING_TIMEOUT_MS = 10_000;
 
@@ -52,10 +48,6 @@ export default function DashboardPage() {
   const isMobile = useIsMobile();
 
   const [period, setPeriod] = useState<Period>("week");
-  const [viewMode, setViewMode] = useState<"personal" | "team">("personal");
-  const [userOrg, setUserOrg] = useState<{ id: string; name: string; user_role: string } | null>(null);
-  const [teamData, setTeamData] = useState<DashboardData | null>(null);
-  const [teamLoading, setTeamLoading] = useState(false);
 
   // STORY-260: Profile completeness (FE-007: SWR)
   // Local override allows ProfileCompletionPrompt to show immediate feedback;
@@ -63,44 +55,6 @@ export default function DashboardPage() {
   const { completenessPct: swrProfilePct } = useProfileCompleteness();
   const [profilePctOverride, setProfilePctOverride] = useState<number | null>(null);
   const profilePct = profilePctOverride ?? swrProfilePct;
-
-  // AC19: Fetch org membership — show team toggle only for owners/admins
-  // UX-406: Gated by ORGS_ENABLED — backend endpoint doesn't exist yet
-  useEffect(() => {
-    if (!ORGS_ENABLED || !session?.access_token) return;
-    fetch("/api/organizations/me", {
-      headers: { Authorization: `Bearer ${session.access_token}` },
-    })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data?.organization && ["owner", "admin"].includes(data.organization.user_role)) {
-          setUserOrg(data.organization);
-        }
-      })
-      .catch(() => {});
-  }, [session?.access_token]);
-
-  // AC19: Fetch team dashboard data when switching to team view
-  // UX-406: Gated by ORGS_ENABLED — backend endpoint doesn't exist yet
-  useEffect(() => {
-    if (!ORGS_ENABLED || viewMode !== "team" || !userOrg || !session?.access_token) return;
-    setTeamLoading(true);
-    fetch(`/api/organizations/${userOrg.id}/dashboard`, {
-      headers: { Authorization: `Bearer ${session.access_token}` },
-    })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data) {
-          setTeamData({
-            summary: data.summary ?? null,
-            timeSeries: data.time_series ?? [],
-            dimensions: data.dimensions ?? null,
-          });
-        }
-      })
-      .catch(() => {})
-      .finally(() => setTeamLoading(false));
-  }, [viewMode, userOrg, session?.access_token]);
 
   const fetchAnalytics = useCallback(
     async (endpoint: string, params?: Record<string, string>, signal?: AbortSignal) => {
@@ -159,11 +113,9 @@ export default function DashboardPage() {
   const timeSeriesError = data?.timeSeriesError ?? false;
   const dimensionsError = data?.dimensionsError ?? false;
 
-  // AC19: Active dataset — personal or team view
-  const activeData = viewMode === "team" && teamData ? teamData : data;
-  const summary = activeData?.summary ?? null;
-  const timeSeries = activeData?.timeSeries ?? [];
-  const dimensions = activeData?.dimensions ?? null;
+  const summary = data?.summary ?? null;
+  const timeSeries = data?.timeSeries ?? [];
+  const dimensions = data?.dimensions ?? null;
 
   const { ufPieData, sectorChartData, handleExportCSV } = useDashboardDerivedData(
     summary,
@@ -234,23 +186,9 @@ export default function DashboardPage() {
       />
 
       <div className="max-w-6xl mx-auto py-8 px-4">
-        {ORGS_ENABLED && (
-          <DashboardViewToggle
-            viewMode={viewMode}
-            setViewMode={setViewMode}
-            userOrg={userOrg}
-            teamLoading={teamLoading}
-          />
-        )}
-
-        {summary && viewMode === "personal" && (
+        {summary && (
           <p className="text-sm text-[var(--ink-muted)] mb-6">
             Membro desde {formatDate(summary.member_since)}
-          </p>
-        )}
-        {ORGS_ENABLED && viewMode === "team" && userOrg && (
-          <p className="text-sm text-[var(--ink-muted)] mb-6">
-            Dados agregados da equipe — {userOrg.name}
           </p>
         )}
 

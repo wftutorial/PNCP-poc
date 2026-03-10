@@ -2,17 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { safeSetItem } from "../lib/storage";
+import { safeSetItem, safeGetItem } from "../lib/storage";
 
 const DISMISSED_KEY = "profile_congratulations_dismissed";
 
 function isDismissed(): boolean {
-  if (typeof window === "undefined") return false;
-  try {
-    return localStorage.getItem(DISMISSED_KEY) === "true";
-  } catch {
-    return false;
-  }
+  return safeGetItem(DISMISSED_KEY) === "true";
 }
 
 function setDismissed(): void {

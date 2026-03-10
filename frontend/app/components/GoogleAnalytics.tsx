@@ -2,13 +2,15 @@
 
 import Script from 'next/script';
 import { useEffect } from 'react';
+import { safeGetItem } from '../../lib/storage';
 
-export function GoogleAnalytics() {
+// DEBT-108: nonce prop passed from layout.tsx (read from x-nonce header set by middleware).
+export function GoogleAnalytics({ nonce }: { nonce?: string }) {
   const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA4_MEASUREMENT_ID;
 
   useEffect(() => {
     // Check for user consent (LGPD/GDPR compliant)
-    const hasConsent = localStorage.getItem('cookie-consent') === 'accepted';
+    const hasConsent = safeGetItem('cookie-consent') === 'accepted';
 
     if (hasConsent && GA_MEASUREMENT_ID && typeof window !== 'undefined') {
       // Initialize dataLayer
@@ -32,11 +34,14 @@ export function GoogleAnalytics() {
 
   return (
     <>
+      {/* DEBT-108: nonce allows this external script under nonce-based CSP */}
       <Script
         src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
         strategy="afterInteractive"
+        nonce={nonce}
       />
-      <Script id="google-analytics" strategy="afterInteractive">
+      {/* DEBT-108: nonce allows this inline script block under nonce-based CSP */}
+      <Script id="google-analytics" strategy="afterInteractive" nonce={nonce}>
         {`
           window.dataLayer = window.dataLayer || [];
           function gtag(){dataLayer.push(arguments);}
@@ -61,7 +66,7 @@ export function trackEvent(
   eventParams?: Record<string, string | number | boolean | object>
 ) {
   if (typeof window !== 'undefined' && window.gtag) {
-    const hasConsent = localStorage.getItem('cookie-consent') === 'accepted';
+    const hasConsent = safeGetItem('cookie-consent') === 'accepted';
     if (hasConsent) {
       window.gtag('event', eventName, eventParams);
     }

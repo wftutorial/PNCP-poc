@@ -2,7 +2,8 @@
 
 import Script from 'next/script';
 
-export function ClarityAnalytics() {
+// DEBT-108: nonce prop passed from layout.tsx (read from x-nonce header set by middleware).
+export function ClarityAnalytics({ nonce }: { nonce?: string }) {
   const CLARITY_PROJECT_ID = process.env.NEXT_PUBLIC_CLARITY_PROJECT_ID;
 
   if (!CLARITY_PROJECT_ID) {
@@ -10,7 +11,8 @@ export function ClarityAnalytics() {
   }
 
   return (
-    <Script id="microsoft-clarity" strategy="afterInteractive">
+    // DEBT-108: nonce allows this inline script block under nonce-based CSP
+    <Script id="microsoft-clarity" strategy="afterInteractive" nonce={nonce}>
       {`
         (function(c,l,a,r,i,t,y){
           c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};

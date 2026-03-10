@@ -66,6 +66,35 @@ function evict(): number {
  * On QuotaExceededError, evicts stale entries and retries once.
  * Never throws — worst case the write is silently dropped.
  */
+/**
+ * Safe wrapper around localStorage.getItem.
+ *
+ * Returns defaultValue on any error (SecurityError in private browsing,
+ * SSR where window is undefined, etc.). Never throws.
+ */
+export function safeGetItem(key: string, defaultValue: string | null = null): string | null {
+  if (typeof window === 'undefined') return defaultValue;
+  try {
+    return localStorage.getItem(key) ?? defaultValue;
+  } catch {
+    return defaultValue;
+  }
+}
+
+/**
+ * Safe wrapper around localStorage.removeItem.
+ *
+ * Silently ignores errors (SSR, SecurityError). Never throws.
+ */
+export function safeRemoveItem(key: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // Silently ignore — removal failure is non-critical
+  }
+}
+
 export function safeSetItem(key: string, value: string): void {
   try {
     localStorage.setItem(key, value);

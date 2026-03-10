@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useAnalytics } from "../../hooks/useAnalytics";
-import { safeSetItem } from "../../lib/storage";
+import { safeSetItem, safeGetItem } from "../../lib/storage";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -94,9 +94,8 @@ function incrementSessionCount(): void {
 }
 
 function isDismissed(variant: UpsellVariant): boolean {
-  if (typeof window === "undefined") return false;
   try {
-    const ts = localStorage.getItem(DISMISS_PREFIX + variant);
+    const ts = safeGetItem(DISMISS_PREFIX + variant);
     if (!ts) return false;
     return Date.now() - parseInt(ts, 10) < DISMISS_TTL;
   } catch {

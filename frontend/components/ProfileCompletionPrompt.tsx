@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { safeSetItem } from "../lib/storage";
+import { safeSetItem, safeRemoveItem } from "../lib/storage";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -130,11 +130,10 @@ function markSkipped(questionId: string): void {
 }
 
 function markSaved(questionId: string): void {
-  if (typeof window === "undefined") return;
   try {
     safeSetItem(`${SAVED_KEY_PREFIX}${questionId}`, "true");
     // Clear skipped flag if it was set before
-    localStorage.removeItem(`${SKIPPED_KEY_PREFIX}${questionId}`);
+    safeRemoveItem(`${SKIPPED_KEY_PREFIX}${questionId}`);
   } catch {
     // ignore
   }

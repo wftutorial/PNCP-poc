@@ -22,12 +22,27 @@ import { createServerClient } from "@supabase/ssr";
  * AC6: Cross-Origin-Opener-Policy: same-origin.
  * AC7: COEP skipped — require-corp breaks Stripe checkout iframe (no CORP headers).
  * AC8: X-DNS-Prefetch-Control: off.
+ *
+ * DEBT-108: CSP nonce-based script-src (removes 'unsafe-inline' / 'unsafe-eval').
+ * A per-request nonce is generated here, set on x-nonce response header, and
+ * read by app/layout.tsx to hydrate Script / inline-script nonce attributes.
+ * 'strict-dynamic' lets nonced scripts load their own child scripts automatically.
+ *
+ * DEBT-108 AC6: To rollback CSP nonce, replace the script-src line below with:
+ * "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://static.cloudflareinsights.com https://cdn.sentry.io https://www.clarity.ms https://www.googletagmanager.com",
+ * and remove the nonce generation + x-nonce header lines.
  */
 function addSecurityHeaders(response: NextResponse): NextResponse {
-  // AC1+AC4: Content Security Policy — enforcing mode
+  // DEBT-108: Generate a cryptographically random nonce per request
+  const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
+
+  // AC1+AC4: Content Security Policy — enforcing mode with nonce-based script-src
   const csp = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://static.cloudflareinsights.com https://cdn.sentry.io https://www.clarity.ms",
+    // DEBT-108: nonce + strict-dynamic replaces unsafe-inline/unsafe-eval.
+    // 'strict-dynamic' propagates trust to scripts loaded by nonced scripts.
+    // Fallback hosts kept for browsers that do not support strict-dynamic/nonces.
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://js.stripe.com https://static.cloudflareinsights.com https://cdn.sentry.io https://www.clarity.ms https://www.googletagmanager.com`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: https: blob:",
     "font-src 'self' data:",
@@ -41,6 +56,9 @@ function addSecurityHeaders(response: NextResponse): NextResponse {
 
   // AC1: Enforcing CSP (promoted from Report-Only in STORY-300)
   response.headers.set("Content-Security-Policy", csp);
+
+  // DEBT-108: Expose nonce to layout.tsx via response header
+  response.headers.set("x-nonce", nonce);
 
   // AC2: Reporting API v1 — report-to group definition
   response.headers.set(

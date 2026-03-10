@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "../../../lib/supabase";
 import { useAnalytics } from "../../../hooks/useAnalytics";
+import { safeRemoveItem } from "../../../lib/storage";
 
 /**
  * Client-side Auth Callback Handler
@@ -51,14 +52,14 @@ export default function AuthCallbackPage() {
           ];
 
           keysToRemove.forEach(key => {
-            localStorage.removeItem(key);
+            safeRemoveItem(key);
             sessionStorage.removeItem(key);
           });
 
           // Clear Supabase-specific keys (preserve code_verifier / code-verifier!)
           Object.keys(localStorage).forEach(key => {
             if (key.startsWith('sb-') && !key.includes('code_verifier') && !key.includes('code-verifier')) {
-              localStorage.removeItem(key);
+              safeRemoveItem(key);
             }
           });
         } catch (storageError) {

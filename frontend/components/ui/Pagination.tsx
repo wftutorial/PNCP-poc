@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect } from "react";
-import { safeSetItem } from "../../lib/storage";
+import { safeSetItem, safeGetItem } from "../../lib/storage";
 
 const PAGE_SIZE_KEY = "smartlic_page_size";
 const PAGE_SIZES = [10, 20, 50] as const;
@@ -23,8 +23,7 @@ export interface PaginationProps {
 }
 
 function getStoredPageSize(): PageSize {
-  if (typeof window === "undefined") return 20;
-  const stored = localStorage.getItem(PAGE_SIZE_KEY);
+  const stored = safeGetItem(PAGE_SIZE_KEY);
   if (stored && PAGE_SIZES.includes(Number(stored) as PageSize)) {
     return Number(stored) as PageSize;
   }
@@ -32,9 +31,7 @@ function getStoredPageSize(): PageSize {
 }
 
 function storePageSize(size: PageSize) {
-  if (typeof window !== "undefined") {
-    safeSetItem(PAGE_SIZE_KEY, String(size));
-  }
+  safeSetItem(PAGE_SIZE_KEY, String(size));
 }
 
 /** Initialize pagination state — call once at mount */

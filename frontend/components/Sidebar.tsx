@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "../app/components/AuthProvider";
 import { usePlan } from "../hooks/usePlan";
-import { safeSetItem } from "../lib/storage";
+import { safeSetItem, safeGetItem } from "../lib/storage";
 import {
   Search,
   LayoutDashboard,
@@ -48,7 +48,7 @@ export function Sidebar() {
 
   // Load persisted state
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = safeGetItem(STORAGE_KEY);
     if (stored === "true") setCollapsed(true);
   }, []);
 

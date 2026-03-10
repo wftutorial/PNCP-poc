@@ -11,7 +11,7 @@
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { safeSetItem } from '../lib/storage';
+import { safeSetItem, safeGetItem, safeRemoveItem } from '../lib/storage';
 
 // Type definitions for Shepherd.js (using any temporarily until @types available)
 // TODO: Add @types/shepherd.js if available or create custom types
@@ -61,18 +61,18 @@ export function useOnboarding(options: OnboardingOptions = {}) {
   // Check localStorage on mount
   useEffect(() => {
     // Migrate legacy keys
-    const legacyCompleted = localStorage.getItem('bidiq_onboarding_completed');
+    const legacyCompleted = safeGetItem('bidiq_onboarding_completed');
     if (legacyCompleted) {
       safeSetItem(ONBOARDING_STORAGE_KEY, legacyCompleted);
-      localStorage.removeItem('bidiq_onboarding_completed');
+      safeRemoveItem('bidiq_onboarding_completed');
     }
-    const legacyDismissed = localStorage.getItem('bidiq_onboarding_dismissed');
+    const legacyDismissed = safeGetItem('bidiq_onboarding_dismissed');
     if (legacyDismissed) {
       safeSetItem(ONBOARDING_DISMISSED_KEY, legacyDismissed);
-      localStorage.removeItem('bidiq_onboarding_dismissed');
+      safeRemoveItem('bidiq_onboarding_dismissed');
     }
-    const completed = localStorage.getItem(ONBOARDING_STORAGE_KEY) === 'true';
-    const dismissed = localStorage.getItem(ONBOARDING_DISMISSED_KEY) === 'true';
+    const completed = safeGetItem(ONBOARDING_STORAGE_KEY) === 'true';
+    const dismissed = safeGetItem(ONBOARDING_DISMISSED_KEY) === 'true';
     setHasCompleted(completed);
     setHasDismissed(dismissed);
   }, []);
@@ -259,8 +259,8 @@ export function useOnboarding(options: OnboardingOptions = {}) {
    * Manually trigger the tour (for returning users)
    */
   const restartTour = useCallback(() => {
-    localStorage.removeItem(ONBOARDING_STORAGE_KEY);
-    localStorage.removeItem(ONBOARDING_DISMISSED_KEY);
+    safeRemoveItem(ONBOARDING_STORAGE_KEY);
+    safeRemoveItem(ONBOARDING_DISMISSED_KEY);
     setHasCompleted(false);
     setHasDismissed(false);
     startTour();

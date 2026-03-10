@@ -50,3 +50,16 @@ jobs:
           npm audit --audit-level=high 2>&1 | tee audit-output.txt || true
           echo "✅ npm audit scan complete"
         continue-on-error: true
+
+      # DEBT-108 AC10/AC11: Bundle size budget — 250 KB gzipped first load JS
+      - name: Build for bundle analysis
+        run: npm run build
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-key
+          SENTRY_AUTH_TOKEN: ''
+
+      - name: Check bundle size budget (AC10/AC11)
+        run: npx size-limit
+        working-directory: frontend

@@ -9,7 +9,7 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import { safeSetItem } from './storage';
+import { safeSetItem, safeGetItem, safeRemoveItem } from './storage';
 
 const STORAGE_KEY = 'descomplicita_saved_searches';
 const MAX_SAVED_SEARCHES = 10;
@@ -36,7 +36,7 @@ export interface SavedSearch {
  */
 export function loadSavedSearches(): SavedSearch[] {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = safeGetItem(STORAGE_KEY);
     if (!stored) return [];
 
     const searches = JSON.parse(stored) as SavedSearch[];
@@ -165,11 +165,7 @@ export function markSearchAsUsed(id: string): SavedSearch | null {
  * Clear all saved searches
  */
 export function clearAllSavedSearches(): void {
-  try {
-    localStorage.removeItem(STORAGE_KEY);
-  } catch (error) {
-    console.error('Failed to clear saved searches:', error);
-  }
+  safeRemoveItem(STORAGE_KEY);
 }
 
 /**

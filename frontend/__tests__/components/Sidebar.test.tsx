@@ -52,6 +52,8 @@ jest.mock("../../hooks/usePlan", () => ({
 // Mock storage utility
 jest.mock("../../lib/storage", () => ({
   safeSetItem: jest.fn(),
+  safeGetItem: jest.fn(() => null),
+  safeRemoveItem: jest.fn(),
 }));
 
 // Provide a localStorage mock

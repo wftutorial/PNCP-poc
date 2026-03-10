@@ -14,7 +14,7 @@ import { APP_NAME } from "../../lib/config";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/Input";
 import { Label } from "../../components/ui/Label";
-import { safeSetItem } from "../../lib/storage";
+import { safeSetItem, safeGetItem } from "../../lib/storage";
 import { signupSchema, type SignupFormData, getPasswordStrength } from "../../lib/schemas/forms";
 
 // STORY-258: Email type result
@@ -259,7 +259,7 @@ export default function SignupPage() {
       setPartnerInfo({ name: partnerSlug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()), slug: partnerSlug });
     } else {
       // Check if already stored from previous visit
-      const stored = localStorage.getItem("smartlic_partner");
+      const stored = safeGetItem("smartlic_partner");
       if (stored) {
         setPartnerInfo({ name: stored.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()), slug: stored });
       }

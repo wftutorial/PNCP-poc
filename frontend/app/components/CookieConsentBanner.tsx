@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { safeSetItem } from "../../lib/storage";
+import { safeSetItem, safeGetItem, safeRemoveItem } from "../../lib/storage";
 
 export interface CookieConsent {
   analytics: boolean;
@@ -12,15 +12,14 @@ export interface CookieConsent {
 const CONSENT_KEY = "smartlic_cookie_consent";
 
 export function getCookieConsent(): CookieConsent | null {
-  if (typeof window === "undefined") return null;
   try {
     // Migrate legacy key
-    const legacy = localStorage.getItem("bidiq_cookie_consent");
+    const legacy = safeGetItem("bidiq_cookie_consent");
     if (legacy) {
       safeSetItem(CONSENT_KEY, legacy);
-      localStorage.removeItem("bidiq_cookie_consent");
+      safeRemoveItem("bidiq_cookie_consent");
     }
-    const raw = localStorage.getItem(CONSENT_KEY);
+    const raw = safeGetItem(CONSENT_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (typeof parsed.analytics === "boolean" && typeof parsed.timestamp === "string") {
@@ -43,7 +42,7 @@ export function setCookieConsent(analytics: boolean): CookieConsent {
 }
 
 export function clearCookieConsent(): void {
-  localStorage.removeItem(CONSENT_KEY);
+  safeRemoveItem(CONSENT_KEY);
   window.dispatchEvent(new CustomEvent("cookie-consent-changed", { detail: null }));
 }
 

@@ -63,34 +63,51 @@ curl -s "https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao\
   Se o campo `linkSistemaOrigem` estiver presente no resultado da API, usar ele diretamente.
   Se nenhum campo de link estiver disponível, usar o `numeroControlePNCP` no formato: `https://pncp.gov.br/app/editais/{numeroControlePNCP}` (onde numeroControlePNCP já contém cnpj/ano/seq separados por `-`, mas o link usa o valor como path único).
 
-**2b. PCP v2 (obrigatório)**
+**2b. PCP v2 (obrigatório — editais complementares)**
 ```bash
-curl -s "https://compras.api.portaldecompraspublicas.com.br/v2/licitacao/processos?page=1"
+# IMPORTANTE: usar dataInicial/dataFinal/tipoData=1 para filtrar por data (reduz de 364K para ~2K resultados)
+# Usar `pagina` (NÃO `page`) para paginação. Fixo em 10 resultados/página.
+curl -s "https://compras.api.portaldecompraspublicas.com.br/v2/licitacao/processos\
+  ?pagina=1\
+  &dataInicial={30_dias_atras_DDMMYYYY}\
+  &dataFinal={hoje_DDMMYYYY}\
+  &tipoData=1"
 ```
-- Paginar (10/page, usar `nextPage`)
-- Filtrar client-side por keywords do setor
-- PCP v2 não tem campo UF no servidor — filtrar client-side
+- **Paginação:** Usar campo `pagina` (incrementar de 1 em 1). Response tem `total` e `pageCount`. Max 20 páginas (200 resultados) para não sobrecarregar.
+- **Filtro server-side:** APENAS data (`dataInicial`/`dataFinal` formato DD/MM/YYYY + `tipoData=1`). Sem filtro de keyword/UF no servidor.
+- **Filtro client-side (obrigatório):** Filtrar `resumo` por keywords do setor + `unidadeCompradora.uf` pela UF da empresa.
 - valor_estimado sempre 0.0 (PCP v2 não tem dados de valor)
-- **LINK PCP v2:** Cada resultado tem campo `url` ou pode ser construído a partir de `id`. Se não tiver URL direta, usar `https://www.portaldecompraspublicas.com.br/processos/{id}`. Se o edital também tem `numeroControlePNCP`, construir o link PNCP: `https://pncp.gov.br/app/editais/{cnpj}/{ano}/{seq}`
+- **Campos úteis do response:** `resumo` (objeto), `razaoSocial` (órgão), `unidadeCompradora.uf`, `unidadeCompradora.cidade`, `dataHoraInicioPropostas`, `dataHoraFinalPropostas`, `tipoLicitacao.modalidadeLicitacao`, `urlReferencia`, `codigoLicitacao`
+- **LINK PCP v2:** Construir a partir de `urlReferencia`: `https://www.portaldecompraspublicas.com.br{urlReferencia}`. Se o edital também tem `numeroControlePNCP`, construir o link PNCP: `https://pncp.gov.br/app/editais/{cnpj}/{ano}/{seq}`
 
 **2c. Querido Diário (complementar — diários oficiais municipais)**
 ```bash
-# Buscar por nome da empresa + keywords do setor nos diários oficiais
+# Buscar por keywords do setor nos diários oficiais (últimos 30 dias)
+# Suporta: published_since, published_until, territory_ids (IBGE 7 dígitos), querystring (OpenSearch syntax)
 curl -s "https://api.queridodiario.ok.org.br/gazettes\
   ?querystring={keywords_setor_url_encoded}\
+  &published_since={30_dias_atras_YYYY-MM-DD}\
+  &published_until={hoje_YYYY-MM-DD}\
   &excerpt_size=500\
   &number_of_excerpts=3\
-  &size=20"
+  &size=20\
+  &sort_by=descending_date"
 ```
-- API retorna JSON (não HTML) com excerpts de texto dos diários oficiais
-- Sem parâmetro de CNPJ — buscar por keywords do setor
-- Buscar também pelo nome fantasia da empresa para menções diretas
-- Não tem data range — resultados são os mais recentes
-- Rate limit: ~60 req/min (self-imposed)
-- Extrair: data publicação, território (município), excerpts com contexto
-- IMPORTANTE: Querido Diário é texto OCR não estruturado — usar como fonte complementar, não primária
+- **Filtros disponíveis:** `querystring` (full-text, suporta `+` AND, `|` OR, `-` NOT, `"frase"`), `published_since`/`published_until` (YYYY-MM-DD), `territory_ids` (código IBGE 7 dígitos — buscar na API `/cities` se necessário)
+- Buscar com 2 queries: (1) keywords do setor, (2) nome fantasia/razão social da empresa
+- **Response:** `territory_name`, `state_code`, `date`, `excerpts[]`, `url` (PDF do diário), `txt_url` (texto plano)
+- Paginação via `offset` + `size` (não page-based). `total_gazettes` dá o total.
+- Rate limit: ~60 req/min (self-imposed). Lag de ~1 dia (diário de ontem já está disponível)
+- IMPORTANTE: Texto OCR não estruturado — usar como fonte complementar para menções, não para dados de editais
 
 **Dedup:** Se mesmo edital aparece em PNCP + PCP, priorizar dados PNCP (mais completos).
+
+**Fontes descartadas (testadas em 2026-03-10, não funcionais):**
+- ComprasGov v3 (`dadosabertos.compras.gov.br`) — FORA DO AR desde fev/2026, todos endpoints 404
+- Comprasnet Contratos (`contratos.comprasnet.gov.br/api/`) — API retorna HTTP 500/404
+- Portal Transparência `/licitacoes` — Retorna 0 resultados para qualquer órgão/período
+- TCE-PE (`sistemas.tce.pe.gov.br/DadosAbertos/`) — HTTP 500 "ERRO"
+- TCE-RJ (`dados.tcerj.tc.br/api/v1/`) — Retorna HTML portal, não JSON API
 
 ### Phase 2b: Download e Análise Documental dos Editais (Claude direto)
 
@@ -378,15 +395,17 @@ O JSON de input deve ser criado pelo agente com toda a informação coletada nas
 
 ## APIs Reference
 
-| API | Endpoint | Auth | Rate Limit | Uso |
-|-----|----------|------|------------|-----|
-| OpenCNPJ | `api.opencnpj.org/{CNPJ}` | Nenhuma | 50 req/s | Perfil da empresa |
-| Portal Transparência | `api.portaldatransparencia.gov.br/api-de-dados/` | `chave-api-dados` header | 90 req/min | Sanções + contratos federais |
-| PNCP Consulta | `pncp.gov.br/api/consulta/v1/contratacoes/publicacao` | Nenhuma | ~100 req/min | Busca de editais |
-| **PNCP Arquivos** | **`pncp.gov.br/api/pncp/v1/orgaos/{cnpj}/compras/{ano}/{seq}/arquivos`** | **Nenhuma** | **~60 req/min** | **Lista de documentos do edital** |
-| **PNCP Download** | **`pncp.gov.br/pncp-api/v1/orgaos/{cnpj}/compras/{ano}/{seq}/arquivos/{n}`** | **Nenhuma** | **~30 req/min** | **Download direto do PDF** |
-| PCP v2 | `compras.api.portaldecompraspublicas.com.br/v2/licitacao/processos` | Nenhuma | ~60 req/min | Editais complementares |
-| Querido Diário | `api.queridodiario.ok.org.br/gazettes` | Nenhuma | ~60 req/min | Diários oficiais |
+| API | Endpoint | Auth | Rate Limit | Uso | Tipo |
+|-----|----------|------|------------|-----|------|
+| OpenCNPJ | `api.opencnpj.org/{CNPJ}` | Nenhuma | 50 req/s | Perfil da empresa | Perfil |
+| Portal Transparência | `api.portaldatransparencia.gov.br/api-de-dados/` | `chave-api-dados` header | 90 req/min | Sanções + contratos + licitações federais | Perfil + Editais |
+| PNCP Consulta | `pncp.gov.br/api/consulta/v1/contratacoes/publicacao` | Nenhuma | ~100 req/min | Busca de editais (primária) | **Editais** |
+| PNCP Arquivos | `pncp.gov.br/api/pncp/v1/orgaos/{cnpj}/compras/{ano}/{seq}/arquivos` | Nenhuma | ~60 req/min | Lista de documentos do edital | Docs |
+| PNCP Download | `pncp.gov.br/pncp-api/v1/orgaos/{cnpj}/compras/{ano}/{seq}/arquivos/{n}` | Nenhuma | ~30 req/min | Download direto do PDF | Docs |
+| PCP v2 | `compras.api.portaldecompraspublicas.com.br/v2/licitacao/processos` | Nenhuma | ~60 req/min | Editais complementares (filtro client-side) | **Editais** |
+| Querido Diário | `api.queridodiario.ok.org.br/gazettes` | Nenhuma | ~60 req/min | Diários oficiais municipais (full-text) | **Menções** |
+
+**Fontes testadas e descartadas (2026-03-10):** ComprasGov v3 (404), Comprasnet Contratos (500), Portal Transparência /licitacoes (0 resultados), TCE-PE (500), TCE-RJ (HTML não JSON).
 
 ### PNCP Arquivos — Detalhes Técnicos
 
@@ -410,11 +429,17 @@ GET /pncp-api/v1/orgaos/{cnpj}/compras/{ano}/{seq}/arquivos/{sequencialDocumento
 ## Execution
 
 Quando invocado:
-1. **Phase 1:** Perfil da empresa (OpenCNPJ + Portal Transparência)
-2. **Phase 2a:** Varredura de editais abertos (PNCP + PCP + Querido Diário)
-3. **Phase 2b:** Download dos PDFs dos editais PNCP + análise documental pelo Claude (ficha técnica, habilitação, condições, red flags)
+1. **Phase 1:** Perfil da empresa (OpenCNPJ + Portal Transparência sanções/contratos)
+2. **Phase 2a:** Varredura multi-fonte de editais abertos:
+   - PNCP (primário — server-side filtering)
+   - PCP v2 (complementar — client-side filtering com filtro de data)
+   - Portal Transparência /licitações (federal — para órgãos já conhecidos)
+   - Querido Diário (menções em diários oficiais — full-text search com filtro de data/território)
+3. **Phase 2b:** Download dos PDFs dos editais PNCP + análise documental pelo Claude
 4. **Phase 3:** Análise estratégica cruzando perfil + edital + documento real
-5. **Phase 3b:** Inteligência competitiva (incumbentes, concorrentes, preços)
+5. **Phase 3b:** Inteligência competitiva:
+   - PNCP histórico (incumbentes, contratos anteriores, valores praticados)
+   - OpenCNPJ (perfil dos concorrentes)
 6. **Phase 4:** Inteligência de mercado (panorama, tendências, nichos)
 7. **Phase 5:** Geração do PDF final
 8. Dados intermediários salvos em `docs/reports/data-{CNPJ}-{data}.json`

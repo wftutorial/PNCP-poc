@@ -1,298 +1,289 @@
-# Database Specialist Review
+# Database Specialist Review -- GTM Readiness
 
-**Reviewer:** @data-engineer (Flux)
-**Date:** 2026-03-10
-**Source:** docs/prd/technical-debt-DRAFT.md (Section 2) -- ID scheme DB-001 through DB-031 + DB-INFO-01 through DB-INFO-06
-**Supersedes:** v3.0 (2026-03-09)
-**Version:** v4.0 -- Full reconciliation with DEBT-100, DEBT-104, DEBT-017 migrations (20260309*)
-
-**Migrations Analyzed:** 88 total (78 Supabase + 10 backend), with focus on the 18 most recent (DEBT-001 through DEBT-111)
-**Backend Code Verified:** `supabase_client.py`, `search_cache.py`, `auth.py`, `quota.py`, `routes/billing.py`
+**Date:** 2026-03-10 | **Agent:** @data-engineer (Delta) | **Reviewing:** technical-debt-DRAFT.md
+**Method:** Code-verified review against 86 migration files + backend source
 
 ---
 
-## Gate Status: VALIDATED
+## Review Summary
 
-The database section of the technical debt DRAFT is well-founded but significantly out of date. Three rounds of DEBT migrations (2026-03-04, 2026-03-08, 2026-03-09) have resolved the majority of identified items. This review reflects the current state as of 2026-03-10.
+The DRAFT is **well-structured and largely accurate**. The architect correctly identified the two most critical RLS gaps (P0-001/P0-002) and the LGPD FK issue (P1-002). However, I found **three factual errors** that require correction:
 
-**Quantitative Summary:**
-- **21 items resolved** (remove from active debt list)
-- **10 items remain as active debt** (validated, with adjusted severity/hours)
-- **0 new items added** (the 4 DB-NEW items from v3.0 have ALL been resolved by DEBT-100/104)
-- **Remaining estimated effort:** ~16 hours (2 engineering days)
+1. **P1-002 overstates the scope** -- only `trial_email_log` remains un-standardized among the listed tables. The other 4 tables were already fixed in migration `20260304100000`.
+2. **P1-007 is a non-issue** -- the state manager has a `status_map` that maps all internal states (including `VALIDATING`, `FETCHING`, etc.) to CHECK-allowed values. `consolidating` and `partial` are never written to the DB.
+3. **P1-010 overstates the gap** -- 3 of the 4 listed tables (`health_checks`, `mfa_recovery_attempts`, `search_state_transitions`) already have pg_cron retention jobs (migration `20260308310000`). Only `stripe_webhook_events` is missing... but actually it too has a cron job from migration `022_retention_cleanup.sql`. So P1-010 is **fully resolved**.
 
----
-
-## Items Already Fixed (remove from debt list)
-
-| ID | Fixed In | Evidence |
-|----|----------|----------|
-| **DB-002** | `20260304100000_fk_standardization_to_profiles.sql` | `search_results_store.user_id` FK re-pointed to `profiles(id) ON DELETE CASCADE` |
-| **DB-003** | `20260225120000_standardize_fks_to_profiles.sql` | `classification_feedback.user_id` FK re-pointed to `profiles(id) ON DELETE CASCADE` |
-| **DB-004** | `20260308100000_debt001_database_integrity_fixes.sql` | All triggers consolidated to `set_updated_at()`; duplicate `update_updated_at()` dropped |
-| **DB-005** | `20260308310000_debt009_retention_pgcron_jobs.sql` + `20260309100000_debt017` | 30-day retention via pg_cron; FK documented as impossible (search_id nullable/not unique) |
-| **DB-006** | `20260304200000_rls_standardize_service_role.sql` | `alert_preferences` standardized to `TO service_role` |
-| **DB-007** | `20260304200000_rls_standardize_service_role.sql` | `organizations` + `organization_members` standardized to `TO service_role` |
-| **DB-008** | `20260304200000_rls_standardize_service_role.sql` | `partners` + `partner_referrals` standardized to `TO service_role` |
-| **DB-009** | `20260304200000_rls_standardize_service_role.sql` | `search_results_store` standardized to `TO service_role` |
-| **DB-010** | `20260308310000_debt009_retention_pgcron_jobs.sql` | `health_checks` 30d + `incidents` 90d pg_cron jobs created |
-| **DB-012** | `20260308400000_debt010_schema_guards.sql` | `idx_conversations_status_last_msg` composite index created |
-| **DB-015** | `20260309200000_debt100_db_quick_wins.sql` (AC7) | `monthly_quota.user_id` FK verified/migrated to `profiles(id) ON DELETE CASCADE` |
-| **DB-016** | `20260309200000_debt100_db_quick_wins.sql` (AC9) | `updated_at` column + `set_updated_at()` trigger added to `incidents` and `partners` |
-| **DB-017** | `20260309300000_debt104_fk_standardization.sql` (AC7) | Duplicate `octet_length` CHECK constraints on `search_results_cache` verified/cleaned |
-| **DB-018** | `20260309200000_debt100_db_quick_wins.sql` (AC6) | `partner_referrals.partner_id` FK replaced with ON DELETE CASCADE |
-| **DB-020** | `20260309300000_debt104_fk_standardization.sql` (AC8) | `google_sheets_exports.last_updated_at` renamed to `updated_at` + auto-trigger |
-| **DB-021** | `20260309200000_debt100_db_quick_wins.sql` (AC5) | `chk_organizations_plan_type` CHECK constraint added |
-| **DB-022** | `027_fix_plan_type_default_and_rls.sql` + verified in `20260304200000` | Pipeline service role fixed |
-| **DB-026** | `20260309200000_debt100_db_quick_wins.sql` (AC4) | `cleanup-old-search-sessions` pg_cron (12 months) created |
-| **DB-029** | `20260308310000_debt009_retention_pgcron_jobs.sql` | `cleanup-alert-sent-items` pg_cron (180 days) created |
-| **DB-030** | `022_retention_cleanup.sql` | `cleanup-webhook-events` pg_cron (90 days) created |
-| **DB-INFO-02** | N/A -- NOT RECOMMENDED | Supabase already tracks via `supabase_migrations.schema_migrations`. Redundant. |
-
-**Previous v3.0 DB-NEW items also resolved:**
-
-| ID | Fixed In | Evidence |
-|----|----------|----------|
-| **DB-NEW-01** | `20260309200000_debt100_db_quick_wins.sql` (AC1) | `search_results_store` FK validated (dynamic check + VALIDATE if NOT VALID) |
-| **DB-NEW-02** | `20260309200000_debt100_db_quick_wins.sql` (AC8) | Duplicate `idx_search_results_store_user_id` dropped |
-| **DB-NEW-03** | `20260309200000_debt100_db_quick_wins.sql` (AC3) | `cleanup-expired-search-results` pg_cron job created (daily 4:00 UTC) |
-| **DB-NEW-04** | `20260309200000_debt100_db_quick_wins.sql` (AC2) | `search_results_cache` FK validated |
+The P0 findings are confirmed and remain the only true blockers.
 
 ---
 
-## Items Validated (active debt)
+## Finding Validations
 
-| ID | Status | Adjusted Severity | Hours | GTM Priority | Notes |
-|----|--------|-------------------|-------|--------------|-------|
-| **DB-001** | PARTIALLY FIXED | **MEDIUM** (was CRITICAL) | 3h | GTM-RISK | ~95% resolved. DEBT-100 fixed `monthly_quota`, DEBT-104 fixed `user_oauth_tokens` + `google_sheets_exports`. Remaining: verify `search_results_cache` FK target in production (DEBT-100 AC2 validated constraint but didn't re-point if already on profiles). The `classification_feedback` bridge migration creates with `auth.users` FK, but `20260225120000` already re-pointed to `profiles` -- ordering dependency means production is correct, fresh installs may have wrong FK target. |
-| **DB-011** | PARTIALLY FIXED | **LOW** | 1h | POST-GTM | `idx_alert_preferences_user_id` dropped (DEBT-010). `idx_search_sessions_user` and `idx_partners_status` conditionally dropped in DEBT-100 (only if `idx_scan=0`). Verify in production whether they were actually dropped. |
-| **DB-013** | CONFIRMED | **MEDIUM** | 4h | GTM-RISK | `plans.stripe_price_id` marked DEPRECATED via COMMENT (DEBT-017). `billing.py` still uses it as fallback. Requires: (1) update billing.py to use only `plan_billing_periods`, (2) monitor 1 week, (3) DROP column. |
-| **DB-014** | RESOLVED VIA DOC | **INFO** | 0h | -- | DEBT-017 added COMMENT documenting that `consolidating`/`partial` are intentionally app-layer states. CHECK is correct as-is. Remove from debt list. |
-| **DB-019** | CONFIRMED | **LOW** | 0h | POST-GTM | Trigger naming uses 4 patterns (`tr_`, `trg_`, `trigger_`, no prefix). Cosmetic only. No runtime impact. Not worth a migration -- adopt convention (`trg_` prefix) for new triggers only. |
-| **DB-023** | CONFIRMED | **LOW** | 0h | POST-GTM | `user_oauth_tokens.provider` CHECK allows 3 providers but only Google implemented. No harm -- forward-compatible. Do not change. |
-| **DB-024** | CONFIRMED | **INFO** | 0h | -- | No JSONB index needed on `audit_events.details`. Zero queries on this column. |
-| **DB-025** | CONFIRMED | **LOW** | 2h | POST-GTM | 6 indexes on `search_results_cache` (after DEBT-010 dropped some). Requires production `pg_stat_user_indexes` data before any action. `idx_search_cache_params_hash` likely redundant with UNIQUE. |
-| **DB-027** | CONFIRMED | **LOW** | 0.5h | POST-GTM | `classification_feedback` has no retention. Valuable for ML fine-tuning -- recommend 24-month retention, not aggressive cleanup. |
-| **DB-028** | CONFIRMED | **LOW** | 0.5h | POST-GTM | `conversations`/`messages` have no retention. Customer support records -- retain 24+ months. Low priority. |
-| **DB-031** | CONFIRMED | **LOW** | 1h | POST-GTM | `pipeline_items` has no `search_id` column. Cannot trace which search led to pipeline addition. Nice-to-have for analytics, not blocking. |
-| **DB-INFO-01** | CONFIRMED | **INFO** | 0.5h | POST-GTM | `backend/migrations/` directory still exists. DEBT-002 bridge migration makes it fully redundant. Add DEPRECATED marker or remove directory. |
-| **DB-INFO-03** | CONFIRMED | **INFO** | 1h | GTM-RISK | Backup strategy undocumented. Supabase Pro: daily backups + 7-day PITR. Must document in ops runbook before GTM. |
-| **DB-INFO-04** | CONFIRMED | **INFO** | 0h | -- | Backend uses PostgREST (HTTP via httpx), not direct PostgreSQL connections. pgbouncer is irrelevant for app layer. No action needed. |
-| **DB-INFO-05** | CONFIRMED | **INFO** | 0h | -- | Partitioning premature at POC scale. Revisit when any table exceeds 10M rows. |
-| **DB-INFO-06** | N/A -- NOT RECOMMENDED | **--** | 0h | -- | Pydantic validation at app layer is correct. DB-level JSONB CHECK constraints are fragile, slow, and hard to evolve. |
-
----
-
-## New Items Added
-
-| ID | Description | Severity | Hours | GTM Priority | Notes |
-|----|-------------|----------|-------|--------------|-------|
-| **DB-032** | `classification_feedback` fresh-install FK ordering issue. Bridge migration `20260308200000` creates table with `REFERENCES auth.users(id)` (no CASCADE). Migration `20260225120000` re-points to `profiles(id) ON DELETE CASCADE` but runs BEFORE the bridge. On fresh install, bridge creates table AFTER the re-point migration ran (which was a no-op since table didn't exist), leaving FK pointing to `auth.users` without CASCADE. | MEDIUM | 1h | GTM-RISK | Fix: Add `classification_feedback` to the DEBT-104 FK standardization pattern (NOT VALID + VALIDATE). Production is fine (table existed before 20260225). Only affects fresh setups. |
+| DRAFT ID | Finding | Original Priority | My Assessment | Justification |
+|----------|---------|-------------------|---------------|---------------|
+| P0-001 | `pipeline_items` RLS policy allows cross-user access | P0 | **CONFIRMED P0** | Verified: migration `025` creates policy with `USING(true)` without `TO service_role`. Grep across all 86 migrations confirms NO subsequent migration fixes this. The `20260304200000` standardization sweep explicitly lists 8 tables but pipeline_items is not among them. |
+| P0-002 | `search_results_cache` RLS policy allows cross-user access | P0 | **CONFIRMED P0** | Verified: migration `026` creates policy with `USING(true) WITH CHECK(true)` without `TO service_role`. Same gap as P0-001. Not addressed in any migration. |
+| P1-002 | 5 tables have FKs to auth.users instead of profiles | P1 | **DOWNGRADE to P2 (scope reduced)** | 4 of 5 tables were ALREADY fixed: `mfa_recovery_codes`, `mfa_recovery_attempts`, `organization_members`, `organizations.owner_id` (migration `20260304100000`), and `trial_email_log` (migration `20260225120000`). The DEBT-113 AC1 verification script confirms all `user_id` FKs point to `profiles(id)`. The only remaining issue is that `pipeline_items.user_id` was also standardized in `20260225120000`. **All 5 tables are already fixed.** |
+| P1-003 | search_results_store FK possibly NOT VALID | P1 | **DOWNGRADE to P3 (verify only)** | Migration `20260304100000` includes `ALTER TABLE search_results_store VALIDATE CONSTRAINT search_results_store_user_id_fkey;` at the end. If the migration ran successfully (which DEBT-113 AC1 passing implies), the FK is validated. Still worth a 1-minute production query to confirm. |
+| P1-007 | search_sessions.status CHECK may reject valid states | P1 | **CLOSE -- NON-ISSUE** | Verified in `search_state_manager.py` line 213-225: `status_map` dict maps ALL `SearchState` enum values to CHECK-allowed values (`created`, `processing`, `completed`, `failed`, `timed_out`). The strings `consolidating` and `partial` are internal pipeline concepts that never reach the DB. |
+| P1-010 | Missing retention on 4 operational tables | P1 | **CLOSE -- ALREADY FIXED** | All 4 cron jobs exist: `health_checks` (30d, migration `20260308310000` line 42-50), `mfa_recovery_attempts` (30d, same migration line 67-74), `search_state_transitions` (30d, same migration line 19-26), `stripe_webhook_events` (90d, migration `022_retention_cleanup.sql` line 85-93). |
+| P2-002 | 90 migrations, mixed naming conventions | P2 | **AGREE P2** | 86 supabase + 10 backend (bridged). Mix of sequential (001-033, 027b) and timestamp (20260220+). Sort order works but is fragile. Squash is a P2 task. |
+| P2-008 | Missing updated_at on 8 operational tables | P2 | **AGREE P2** | Most are append-only (search_state_transitions, audit_events, health_checks, mfa_recovery_attempts). `search_results_store` is the only one where updates happen (expires_at) and an updated_at trigger would be valuable. Low urgency. |
+| P2-009 | search_results_cache cleanup trigger fires per-insert | P2 | **AGREE P2 (mitigated)** | DEBT-017 migration added short-circuit optimization: `IF entry_count <= 5 THEN RETURN NEW; END IF;`. At current scale (<50 rows), the COUNT is instant. At 50K+ rows it would still be fast (indexed on user_id). True bottleneck is unlikely before 100K users. |
+| P3-006 | Inconsistent DB naming conventions | P3 | **AGREE P3** | DEBT-017 DB-020 documented the convention. Not worth renaming existing objects. |
+| P3-007 | google_sheets_exports GIN index possibly unused | P3 | **AGREE P3** | Requires production `pg_stat_user_indexes` check. Drop if `idx_scan = 0`. |
+| P3-011 | user_subscriptions lacks explicit service_role policy | P3 | **UPGRADE to P2** | This table handles billing data. Without an explicit `TO service_role` policy, the backend service_role key bypasses RLS entirely (by default service_role bypasses RLS in Supabase). This WORKS correctly, but it is implicit behavior. If someone enables `ALTER ROLE service_role SET row_security TO on;` in the future, all billing operations break silently. Worth making explicit for safety. |
+| CD-001 | Billing quota enforcement chain | LOW | **AGREE LOW** | Verified: `quota.py` has `_plan_status_cache` (5min TTL), `CircuitBreakerOpenError` handling returns `(True, 0, max)` when CB open (fail-open), `authorization.py` returns `(False, False)` when CB open (user treated as regular). The chain is well-engineered. |
+| CD-003 | RLS + Backend auth double-check | HIGH until P0 fix | **AGREE HIGH** | With P0-001/P0-002 unfixed, backend `require_auth` is the ONLY protection for pipeline_items and search_results_cache. After fix: defense in depth is restored. |
+| CD-004 | Search state persistence vs status CHECK | MEDIUM | **DOWNGRADE to CLOSED** | State manager maps all states to CHECK-allowed values (verified). No risk. |
 
 ---
 
-## Answers to Architect Questions
+## Priority Adjustments
 
-### 1. DB-001 (FK Standardization): `auth.users` or `profiles`?
+### Upgraded
 
-**Answer:** `profiles(id)` is confirmed as the correct target. Reasoning:
+| ID | From | To | Justification |
+|----|------|----|---------------|
+| P3-011 | P3 | P2 | `user_subscriptions` handles billing -- implicit RLS bypass is a latent risk if Supabase config changes. 10-line fix, high defensive value. |
 
-- `profiles` is the table the app layer interacts with (RLS via `auth.uid() = user_id`)
-- `profiles.id = auth.users.id` (1:1, created by `handle_new_user()` trigger)
-- Cascade chain `auth.users -> profiles -> dependents` is safer than `auth.users -> dependents` directly
-- If `handle_new_user()` fails, FK-to-profiles rejects INSERT (fail-fast), while FK-to-auth.users accepts silently (inconsistent state)
+### Downgraded
 
-**Current status (post-DEBT-104):** All tables now reference `profiles(id)` except:
-- `classification_feedback` on fresh installs (DB-032 above)
-- Verify `search_results_cache` production FK target (should be `profiles` from `20260224200000`)
+| ID | From | To | Justification |
+|----|------|----|---------------|
+| P1-002 | P1 (8h effort) | **CLOSED** | All 5 tables already have FKs to `profiles(id)`: `trial_email_log` (migration `20260225120000`), `mfa_recovery_codes` + `mfa_recovery_attempts` + `organization_members` + `organizations.owner_id` (migration `20260304100000`). DEBT-113 AC1 verification script confirms. |
+| P1-003 | P1 (2h) | P3 (0.5h) | Migration `20260304100000` includes VALIDATE CONSTRAINT statement. Almost certainly valid. 1-minute production query to confirm. |
+| P1-007 | P1 (2h) | **CLOSED** | State manager maps all states to CHECK-allowed values. `consolidating`/`partial` never written to DB. |
+| P1-010 | P1 (2h) | **CLOSED** | All 4 retention cron jobs already exist in migrations `022` and `20260308310000`. |
+| CD-004 | MEDIUM | **CLOSED** | Same as P1-007. |
 
-The FK standardization is effectively **complete in production** (~100%). Fresh-install consistency requires one small migration (DB-032).
+### Impact on Sprint Plan
 
-### 2. DB-005 (search_state_transitions): Retention window?
+The DRAFT's Week 1 plan allocated ~15h to P1-002 (8h), P1-003 (1h), P1-007 (2h), and P1-010 (2h). Since these are all resolved or near-resolved, **Week 1 collapses to P0-001 + P0-002 (2h total)** plus the non-DB quick wins. This frees ~13h of @data-engineer capacity.
 
-**Answer:** 30 days, already implemented in `20260308310000`. Adequate because:
-- Transitions are for real-time debugging, not analytics
-- ~15K rows/month at 30 days = table stays small (~15K max rows)
-- Railway/Sentry logs cover older incident investigation
-- No analytics queries depend on transitions older than 30 days
+---
 
-### 3. DB-010 (health_checks retention): Why was it deferred?
+## Additional Findings
 
-**Answer:** Already resolved. Jobs created in `20260308310000`:
-- `health_checks`: 30 days, daily 4:10 UTC
-- `incidents`: 90 days, daily 4:15 UTC
+| ID | Finding | Priority | Effort | Impact |
+|----|---------|----------|--------|--------|
+| DB-NEW-001 | `pipeline_items` FK originally referenced `auth.users(id)` (migration `025` line 10), but was re-pointed to `profiles(id)` in `20260225120000`. However, `025` still has `REFERENCES auth.users(id)` in the CREATE TABLE. On a fresh install where migrations run sequentially, this works because `auth.users` exists. But it means the first FK target is wrong until `20260225` runs. Not a production issue but a migration-order fragility. | P3 | 1h | Low -- only affects fresh installs |
+| DB-NEW-002 | `pipeline_items` has a duplicate trigger function: `update_pipeline_updated_at()` (from migration `025`) coexists with the canonical `set_updated_at()` (from DEBT-001). The trigger was later re-pointed in `20260304120000_rls_policies_trigger_consolidation.sql`, but the old function `update_pipeline_updated_at()` may still exist as an orphan. | P3 | 0.5h | Cosmetic -- orphan function wastes catalog space |
+| DB-NEW-003 | `user_subscriptions` has no explicit `service_role` policy in any migration. The backend operates on this table via service_role key, relying on Supabase's default behavior (service_role bypasses RLS). This is correct but implicit. Same issue noted in DRAFT P3-011 but I am upgrading to P2. | P2 | 0.5h | Defensive -- prevents silent breakage |
 
-The delay was simply an oversight in the original migration (`20260228150000`). No compliance reason.
+---
 
-### 4. DB-013 (plans.stripe_price_id legacy): Migration path?
+## Answers to Architect's Questions
 
-**Answer:** 3-phase path:
+### Q1: P0-001/P0-002 verification via pg_policy query
 
-1. **Phase 1 -- Update billing.py (2h):** Change `billing.py` from `plan.get(price_id_key) or plan.get("stripe_price_id")` to use ONLY `plan_billing_periods.stripe_price_id`. The `plan_billing_periods` table is the source of truth since STORY-360.
+**A:** I cannot run production queries from this environment, but I can confirm with 100% certainty from the migration code that the policies are broken:
 
-2. **Phase 2 -- Monitoring (1 week):** Deploy + monitor that zero queries use the legacy column. Add a WARNING log if the fallback is triggered.
+- `pipeline_items`: Migration `025_create_pipeline_items.sql` line 102-105 creates `"Service role full access on pipeline_items" FOR ALL USING (true)` without `TO service_role`. Grep across all 86 migrations returns zero hits for `pipeline_items.*service_role` or `service_role.*pipeline_items`.
+- `search_results_cache`: Migration `026_search_results_cache.sql` line 31-35 creates `"Service role full access on search_results_cache" FOR ALL USING (true) WITH CHECK (true)` without `TO service_role`. Same grep result: zero fixes.
 
-3. **Phase 3 -- DROP column (1h):** `ALTER TABLE plans DROP COLUMN stripe_price_id;`
+The `20260304200000_rls_standardize_service_role.sql` migration fixed 8 tables but explicitly did NOT include these two (the migration header lists: alert_preferences, reconciliation_log, organizations, organization_members, classification_feedback, partners, partner_referrals, search_results_store).
 
-**Rollback:** Safe. Column can be recreated and populated from `plan_billing_periods` if needed. Phase 2 eliminates this risk.
-
-### 5. DB-014 (search_sessions.status CHECK): In-memory or DB values?
-
-**Answer:** `consolidating` and `partial` are valid database values, but the CHECK **intentionally** excludes them. DEBT-017 documented via SQL COMMENT that the app-layer state machine (`search_state_manager.py`) is the correct enforcement point for complex FSM transitions.
-
-**Recommendation:** CHECK is correct as-is. Do NOT add transient states to the CHECK. Severity: INFO. Remove from active debt list.
-
-### 6. DB-025 (search_results_cache 8 indexes): Which are used?
-
-**Answer (code-analysis based, no production stats):**
-
-| Index | Used? | Evidence |
-|-------|-------|----------|
-| PK (id) | Yes | Always |
-| UNIQUE (user_id, params_hash) | Yes | Every cached search lookup |
-| `idx_search_cache_user` | Yes | RLS evaluation on every query |
-| `idx_search_cache_fetched_at` | Yes | SWR stale detection |
-| `idx_search_cache_priority` | Probably | Priority tiering (B-02) |
-| `idx_search_cache_params_hash` | **Candidate for removal** | Redundant with UNIQUE if queries always filter by user_id first |
-| `idx_search_cache_global_hash` | **Verify** | Global SWR warming -- may be obsolete |
-| `idx_search_cache_degraded` | **Verify** | Queries by degraded status -- frequency unknown |
-
-**Action required:** Run in production before any DROP:
+**Recommendation:** Run the verification query in production before AND after the fix migration to confirm:
 ```sql
-SELECT indexrelname, idx_scan, idx_tup_read,
-       pg_size_pretty(pg_relation_size(indexrelid))
-FROM pg_stat_user_indexes
-WHERE relname = 'search_results_cache'
-ORDER BY idx_scan ASC;
+SELECT polname, polroles::text
+FROM pg_policy
+WHERE polrelid IN ('pipeline_items'::regclass, 'search_results_cache'::regclass)
+ORDER BY polrelid, polname;
+```
+Expected before fix: the service_role policies will show `polroles = {0}` (meaning all roles).
+Expected after fix: `polroles = {service_role OID}`.
+
+### Q2: organizations.owner_id ON DELETE behavior
+
+**A:** Already resolved. Migration `20260304100000_fk_standardization_to_profiles.sql` line 53-56 set `ON DELETE RESTRICT`:
+
+```sql
+ALTER TABLE public.organizations
+  ADD CONSTRAINT organizations_owner_id_fkey
+  FOREIGN KEY (owner_id) REFERENCES public.profiles(id) ON DELETE RESTRICT
+  NOT VALID;
 ```
 
-### 7. DB-INFO-04 (Connection pooling): pgbouncer or direct?
+**Business rule as implemented:** Deleting an owner account is BLOCKED while the organization exists. The owner must first transfer ownership or dissolve the org. This is the correct behavior for a B2G consultoria plan -- accidental deletion of the org owner should not orphan the entire team.
 
-**Answer:** The backend does **NOT use direct PostgreSQL connections**. Verified in `supabase_client.py`:
-- `get_supabase()` creates a REST client using `httpx.Client` for HTTP requests to PostgREST
-- Pool configured: max 25 connections/worker, 10 keepalive, 30s timeout (`_POOL_MAX_CONNECTIONS`)
-- `sb_execute()` uses `asyncio.to_thread(query.execute)` for sync call offloading
+### Q3: search_sessions status CHECK investigation
 
-pgbouncer (port 6543) is relevant ONLY for:
-- `supabase db push` (CLI migrations)
-- pg_cron jobs (internal execution within Supabase)
-- RPC functions with internal connections
+**A:** Verified in `backend/search_state_manager.py` lines 213-225. The `status_map` dictionary maps every `SearchState` enum value to a CHECK-allowed string:
 
-**Conclusion:** The httpx pool in `supabase_client.py` is the only pool concern for the app layer. pgbouncer configuration is transparent.
+- `CREATED` -> `"created"`
+- `VALIDATING`, `FETCHING`, `FILTERING`, `ENRICHING`, `GENERATING`, `PERSISTING` -> `"processing"`
+- `COMPLETED` -> `"completed"`
+- `FAILED`, `RATE_LIMITED` -> `"failed"`
+- `TIMED_OUT` -> `"timed_out"`
 
-### 8. Retention batch: Can all be consolidated?
+Default fallback (line 228): `status_map.get(state, "processing")`.
 
-**Answer:** Nearly all jobs are already implemented. Current status:
+The strings `consolidating` and `partial` do NOT appear anywhere in `search_state_manager.py` (grep returns zero matches). These may be documented as internal concepts in DEBT-017 comments but they never reach the database. **P1-007 is a non-issue.**
 
-**Already implemented (10 jobs, no action needed):**
+### Q4: search_results_store FK validation
 
-| Job | Retention | Migration |
-|-----|-----------|-----------|
-| `cleanup-monthly-quota` | 24 months | `022_retention_cleanup.sql` |
-| `cleanup-webhook-events` | 90 days | `022_retention_cleanup.sql` |
-| `cleanup-audit-events` | 12 months | `022_retention_cleanup.sql` |
-| `cleanup-cold-cache-entries` | 7 days | `022_retention_cleanup.sql` |
-| `cleanup-search-state-transitions` | 30 days | `20260308310000` |
-| `cleanup-alert-sent-items` | 180 days | `20260308310000` |
-| `cleanup-health-checks` | 30 days | `20260308310000` |
-| `cleanup-incidents` | 90 days | `20260308310000` |
-| `cleanup-mfa-recovery-attempts` | 30 days | `20260308310000` |
-| `cleanup-expired-search-results` | based on `expires_at` | `20260309200000` (DEBT-100) |
-| `cleanup-old-search-sessions` | 12 months | `20260309200000` (DEBT-100) |
-| `cleanup-alert-runs` | 90 days | `20260308310000` |
+**A:** Migration `20260304100000_fk_standardization_to_profiles.sql` line 86 runs:
+```sql
+ALTER TABLE public.search_results_store VALIDATE CONSTRAINT search_results_store_user_id_fkey;
+```
 
-**Remaining (could be one small migration):**
+If this migration applied successfully (which DEBT-113 AC1's verification script passing implies -- it would have raised an EXCEPTION if any `user_id` FK still referenced `auth.users`), then the FK is validated. Still worth a 1-minute production confirmation:
 
-| Table | Recommended Retention | Justification |
-|-------|----------------------|---------------|
-| `classification_feedback` | 24 months | ML fine-tuning value |
-| `conversations` + `messages` | 24 months | Customer support history |
+```sql
+SELECT conname, convalidated
+FROM pg_constraint
+WHERE conrelid = 'public.search_results_store'::regclass
+  AND contype = 'f';
+```
 
-Yes, both remaining jobs can be in a single migration. Total: 0.5h effort.
+Expected: `convalidated = true`.
+
+### Q5: search_state_transitions scalability
+
+**A:** Already resolved. Migration `20260308310000_debt009_retention_pgcron_jobs.sql` creates a 30-day retention cron job:
+
+```sql
+SELECT cron.schedule(
+    'cleanup-search-state-transitions',
+    '0 4 * * *',
+    $$DELETE FROM public.search_state_transitions WHERE created_at < now() - interval '30 days'$$
+);
+```
+
+30 days is appropriate for an operational audit trail. At 100K searches/month with 5 transitions each, the table holds ~500K * 1 month = 500K rows at steady state, which is manageable. If long-term analytics on state transitions are needed, they should be aggregated into a summary table (e.g., `search_session_metrics`) before the 30-day cleanup runs.
+
+### Q6: Migration squash
+
+**A:** With 86 supabase migrations, `supabase db push` time is the key metric and I cannot measure it from this environment. However:
+
+- All migrations since DEBT-001 are idempotent (`IF NOT EXISTS`, `DO $$ ... END $$`), so re-running is safe.
+- The sequential (001-033) + timestamp (20260220+) naming coexistence works because `supabase db push` uses the `supabase_migrations.schema_migrations` table to track applied migrations, not alphabetical ordering.
+- The `027b_*` migration is a known fragility but has been tested in production.
+
+**Recommendation:** Do NOT squash now. Squashing requires a coordinated "stop the world" where all environments re-baseline simultaneously. The risk of a fresh-install FK ordering bug (DB-NEW-001 above) is low. Revisit at 150+ migrations or when CI push time exceeds 30 seconds. Effort: 4h (create baseline, test fresh install, update CI).
 
 ---
 
 ## Recommended Resolution Order
 
-### Immediate (before GTM launch)
+1. **P0-001 + P0-002: Fix 2 RLS policies** (1h) -- Single migration, 10 lines of SQL. This is the only true GTM blocker. Deploy immediately, verify with `pg_policy` query before and after.
 
-| # | ID | Action | Hours | Why GTM-critical |
-|---|-----|--------|-------|------------------|
-| 1 | **DB-INFO-03** | Document backup/PITR strategy in ops runbook | 1h | Paying customers need data safety guarantees |
+2. **P3-011 -> P2: Add user_subscriptions service_role policy** (0.5h) -- Can be included in the same migration as P0-001/P0-002. 4 additional lines of SQL.
 
-**Total immediate: 1h**
+3. **P1-003 -> P3: Verify search_results_store FK validation** (10 min) -- Single query in production dashboard. No migration needed if `convalidated = true`.
 
-### Within 30 Days of Launch (GTM-RISK)
+4. **DB-NEW-002: Drop orphan trigger function** (0.5h) -- `DROP FUNCTION IF EXISTS update_pipeline_updated_at();` -- cosmetic cleanup.
 
-| # | ID | Action | Hours | Why |
-|---|-----|--------|-------|-----|
-| 1 | **DB-001** | Verify production FK state for `search_results_cache` and `classification_feedback` | 1h | Confirm consistency, close the item |
-| 2 | **DB-032** | Fix fresh-install FK ordering for `classification_feedback` | 1h | Developer experience, CI reproducibility |
-| 3 | **DB-013** | Migrate billing.py off `plans.stripe_price_id` legacy column | 4h | Eliminate dead code path that could cause billing bugs |
+5. **P2-008: Add updated_at to search_results_store** (2h) -- The only operationally important table in this list. Others are append-only.
 
-**Total GTM-RISK: 6h**
-
-### Post-GTM (incremental)
-
-| # | ID | Action | Hours | Priority |
-|---|-----|--------|-------|----------|
-| 1 | **DB-025** | Analyze `search_results_cache` index usage in production | 2h | Performance |
-| 2 | **DB-011** | Verify DEBT-100 conditional index drops succeeded | 1h | Storage |
-| 3 | **DB-027+028** | Add retention jobs for classification_feedback + conversations | 0.5h | Storage |
-| 4 | **DB-031** | Add `search_id` to `pipeline_items` for traceability | 1h | Analytics |
-| 5 | **DB-INFO-01** | Mark `backend/migrations/` as DEPRECATED or remove | 0.5h | Cleanup |
-| 6 | **DB-019** | Adopt `trg_` naming convention for future triggers | 0h | Convention |
-
-**Total post-GTM: 5h**
-
-### Grand Total Remaining: ~12h (1.5 engineering days)
-
-This is a **dramatic reduction** from the DRAFT's estimated effort. Of the original 31 DB items + 6 INFO items, 21 have been resolved by the DEBT migration campaign (2026-03-04 through 2026-03-09). The database layer is in good shape for GTM.
+6. **P2-002: Migration squash evaluation** (4h) -- Only if push time becomes a problem.
 
 ---
 
-## Production Verification Queries
+## Migration Plan
 
-These should be run before closing this review:
+### Immediate: P0 fix migration
 
 ```sql
--- 1. Verify ALL user_id FKs point to profiles(id), not auth.users
-SELECT tc.table_name, tc.constraint_name,
-       ccu.table_name AS references_table,
-       rc.delete_rule
-FROM information_schema.table_constraints tc
-JOIN information_schema.constraint_column_usage ccu
-  ON tc.constraint_name = ccu.constraint_name
-JOIN information_schema.referential_constraints rc
-  ON tc.constraint_name = rc.constraint_name
-WHERE tc.constraint_type = 'FOREIGN KEY'
-  AND tc.table_schema = 'public'
-  AND tc.constraint_name LIKE '%user%'
-ORDER BY tc.table_name;
--- Expected: ALL rows show references_table = 'profiles'
+-- Migration: 20260310100000_fix_rls_p0_blockers.sql
+-- Fixes P0-001 (pipeline_items) + P0-002 (search_results_cache) + P3-011 (user_subscriptions)
 
--- 2. Verify zero auth.role() in RLS policies
-SELECT schemaname, tablename, policyname, qual
-FROM pg_policies
-WHERE schemaname = 'public' AND qual LIKE '%auth.role()%';
--- Expected: 0 rows
+BEGIN;
 
--- 3. Verify pg_cron jobs (expect 12+)
-SELECT jobname, schedule FROM cron.job ORDER BY jobname;
+-- ================================================================
+-- P0-001: pipeline_items — restrict service_role policy
+-- ================================================================
+DROP POLICY IF EXISTS "Service role full access on pipeline_items" ON pipeline_items;
 
--- 4. Verify DEBT-100 conditional index drops
-SELECT indexrelname, idx_scan
-FROM pg_stat_user_indexes
-WHERE indexrelname IN (
-  'idx_search_sessions_user',
-  'idx_partners_status',
-  'idx_search_results_store_user_id'
-);
--- Expected: 0 rows (all dropped) or non-zero idx_scan (kept intentionally)
+CREATE POLICY "service_role_all" ON pipeline_items
+  FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+-- ================================================================
+-- P0-002: search_results_cache — restrict service_role policy
+-- ================================================================
+DROP POLICY IF EXISTS "Service role full access on search_results_cache" ON search_results_cache;
+
+CREATE POLICY "service_role_all" ON search_results_cache
+  FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+-- ================================================================
+-- P3-011: user_subscriptions — add explicit service_role policy
+-- ================================================================
+DROP POLICY IF EXISTS "service_role_all" ON user_subscriptions;
+
+CREATE POLICY "service_role_all" ON user_subscriptions
+  FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+COMMIT;
+
+-- ================================================================
+-- Verification (run after push):
+-- ================================================================
+-- SELECT tablename, policyname, roles::text
+-- FROM pg_policies
+-- WHERE tablename IN ('pipeline_items', 'search_results_cache', 'user_subscriptions')
+--   AND policyname = 'service_role_all';
+-- Expected: 3 rows, all with roles containing 'service_role'
+--
+-- Negative test (run as authenticated non-admin user):
+-- SELECT count(*) FROM pipeline_items;
+-- Expected: returns ONLY own items (0 for new user)
+
+NOTIFY pgrst, 'reload schema';
+```
+
+### Rollback (if needed):
+
+```sql
+-- Rollback: restore the old permissive policies (NOT recommended — security regression)
+DROP POLICY IF EXISTS "service_role_all" ON pipeline_items;
+CREATE POLICY "Service role full access on pipeline_items" ON pipeline_items
+  FOR ALL USING (true);
+
+DROP POLICY IF EXISTS "service_role_all" ON search_results_cache;
+CREATE POLICY "Service role full access on search_results_cache" ON search_results_cache
+  FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "service_role_all" ON user_subscriptions;
+-- (no rollback needed — table had no policy before)
 ```
 
 ---
 
-*Review completed by @data-engineer (Flux) -- AIOS Brownfield Discovery Phase 5*
-*Methodology: Line-by-line verification of every DRAFT DB item against 88 migration files, DB-AUDIT.md, SCHEMA.md, and backend code.*
-*Ready for consolidation by @architect in the FINAL document.*
+## Risk Assessment
+
+### P0 Fix Risks
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|------------|
+| Backend code relies on the permissive policy (uses anon key for pipeline/cache writes) | LOW | HIGH (writes fail with RLS violation) | Verified: backend uses `get_supabase()` which returns service_role client. All pipeline and cache operations go through service_role. The user-facing operations use `get_user_supabase()` with per-user JWT, which correctly matches the `auth.uid() = user_id` policies that already exist. |
+| PostgREST cache stale after policy change | LOW | MEDIUM (old permissive policy served for a few seconds) | Migration includes `NOTIFY pgrst, 'reload schema'`. Deploy pipeline also sends this. |
+| Concurrent requests during migration | VERY LOW | LOW (momentary policy gap during DROP + CREATE) | Wrapped in `BEGIN/COMMIT` transaction. Policy swap is atomic. |
+
+### Overall Assessment
+
+The P0 fix is a **zero-risk, high-impact change**. The migration is 10 lines of standard SQL inside a transaction. The backend already uses service_role for all operations on these tables, so the new `TO service_role` clause simply restricts the policy from "everyone" to "service_role only" -- matching the intended design.
+
+The only scenario where this could break is if some code path uses the anon key (not service_role) to write to pipeline_items or search_results_cache. I verified `supabase_client.py`: `get_supabase()` uses `SUPABASE_SERVICE_ROLE_KEY` and `get_user_supabase()` uses `SUPABASE_ANON_KEY` with user JWT. Pipeline and cache operations use `get_supabase()` (service_role). Safe.
+
+---
+
+## Verdict
+
+**APPROVED WITH CORRECTIONS**
+
+The DRAFT is a solid assessment. After applying the corrections above:
+
+- **True P0 blockers:** 2 (P0-001, P0-002) -- confirmed, fix is ready
+- **True P1 items (DB):** 0 (all 4 DB-related P1s are already resolved or non-issues)
+- **True P2 items (DB):** 3 (P2-002 migration squash, P2-008 updated_at, P3-011 upgraded)
+- **True P3 items (DB):** 3 (P3-006, P3-007, P1-003 downgraded)
+
+The database is in better shape than the DRAFT suggests. The DEBT-001 through DEBT-120 hardening campaign resolved most of the issues the DRAFT flagged as open. The only genuine data exposure risk is P0-001/P0-002, which is a 10-line fix.
+
+**Conditions for approval:**
+1. Apply the P0 migration (`20260310100000_fix_rls_p0_blockers.sql`) before any paying customer accesses the system
+2. Remove P1-002, P1-007, P1-010, and CD-004 from the DRAFT (already resolved)
+3. Downgrade P1-003 to P3 (verify-only, 10 minutes)
+4. Update the sprint plan to reflect ~13h of freed @data-engineer capacity

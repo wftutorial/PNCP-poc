@@ -1,0 +1,70 @@
+{
+  "generated_at": "2026-03-11T00:56:22.661Z",
+  "methodology": "PNCP /contratos endpoint - fetched all national contracts and filtered by organ CNPJ. Date range: 2024-03-10 to 2026-03-10 (split into two 365-day windows). Top 5 suppliers by total contract value.",
+  "data_limitations": "PNCP contratos endpoint does not support direct organ CNPJ filter - data is scraped from national feed. Results limited to contracts published on PNCP platform.",
+  "zambeline": {
+    "cnpj": "09352456000195",
+    "name": "ZAMBELINE ENGENHARIA LTDA",
+    "porte": "EPP",
+    "sede": "Vitória/ES",
+    "capital_social": 1400000
+  },
+  "organs": [
+    {
+      "orgao": "Prefeitura de Vitória",
+      "cnpj": "27142058000126",
+      "target_opportunity": "Casa da Mulher Brasileira R$2.1M",
+      "total_contracts_analyzed": 0,
+      "date_range_analyzed": "2024-03-10 to 2026-03-10",
+      "avg_contract_value": 0,
+      "total_value_analyzed": 0,
+      "incumbents": [],
+      "competition_level": "N/A - Sem dados PNCP",
+      "local_es_suppliers": 0,
+      "avg_discount": "10-20% estimated (obras civis: typically 5-15% below estimate)",
+      "zambeline_position": "Prefeitura de Vitória não possui contratos publicados no PNCP no período analisado. Verificar se o órgão usa outros sistemas (BLL, ComprasNet, TCE-ES)."
+    },
+    {
+      "orgao": "DER-ES",
+      "cnpj": "04889717000197",
+      "target_opportunity": "Reforma 11 BPM R$6.5M + Contenção ES-264 R$9.3M",
+      "total_contracts_analyzed": 0,
+      "date_range_analyzed": "2024-03-10 to 2026-03-10",
+      "avg_contract_value": 0,
+      "total_value_analyzed": 0,
+      "incumbents": [],
+      "competition_level": "N/A - Sem dados PNCP",
+      "local_es_suppliers": 0,
+      "avg_discount": "10-20% estimated (obras civis: typically 5-15% below estimate)",
+      "zambeline_position": "DER-ES não possui contratos publicados no PNCP no período analisado. Verificar se o órgão usa outros sistemas (BLL, ComprasNet, TCE-ES)."
+    },
+    {
+      "orgao": "Prefeitura de Viana",
+      "cnpj": "27165547000101",
+      "target_opportunity": "Escola FNDE R$8.4M",
+      "total_contracts_analyzed": 0,
+      "date_range_analyzed": "2024-03-10 to 2026-03-10",
+      "avg_contract_value": 0,
+      "total_value_analyzed": 0,
+      "incumbents": [],
+      "competition_level": "N/A - Sem dados PNCP",
+      "local_es_suppliers": 0,
+      "avg_discount": "10-20% estimated (obras civis: typically 5-15% below estimate)",
+      "zambeline_position": "Prefeitura de Viana não possui contratos publicados no PNCP no período analisado. Verificar se o órgão usa outros sistemas (BLL, ComprasNet, TCE-ES)."
+    },
+    {
+      "orgao": "Prefeitura de Colatina",
+      "cnpj": "27165729000174",
+      "target_opportunity": "Infraestrutura R$19.8M",
+      "total_contracts_analyzed": 0,
+      "date_range_analyzed": "2024-03-10 to 2026-03-10",
+      "avg_contract_value": 0,
+      "total_value_analyzed": 0,
+      "incumbents": [],
+      "competition_level": "N/A - Sem dados PNCP",
+      "local_es_suppliers": 0,
+      "avg_discount": "10-20% estimated (obras civis: typically 5-15% below estimate)",
+      "zambeline_position": "Prefeitura de Colatina não possui contratos publicados no PNCP no período analisado. Verificar se o órgão usa outros sistemas (BLL, ComprasNet, TCE-ES)."
+    }
+  ]
+}

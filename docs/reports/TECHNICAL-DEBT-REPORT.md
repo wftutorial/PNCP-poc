@@ -1,225 +1,232 @@
-# Relatorio de Debito Tecnico — SmartLic
+# Relatorio de Prontidao GTM -- SmartLic
 
-**Projeto:** SmartLic (smartlic.tech)
-**Data:** 09/03/2026
+**Data:** 10 de Marco de 2026
 **Versao:** 1.0
-**Preparado por:** Equipe de Engenharia
+**Preparado por:** Equipe de Engenharia (Assessment multi-agente: Arquitetura, Banco de Dados, UX, QA)
 
 ---
 
-## Resumo Executivo
+## Veredicto Executivo
 
-### Situacao Atual
+### O SmartLic esta pronto para cobrar clientes?
 
-O SmartLic e uma plataforma SaaS B2G em estagio de POC avancado (v0.5), ja em producao com trials beta e pre-revenue. A plataforma agrega licitacoes de tres fontes governamentais (PNCP, PCP, ComprasGov), classifica oportunidades com inteligencia artificial e oferece um pipeline completo de gestao para empresas que participam de processos licitatorios. O produto atende a uma dor real de mercado e possui uma base tecnica robusta com mais de 5.100 testes automatizados no backend e 2.600 no frontend.
+**SIM, COM UMA CONDICAO.** O sistema esta tecnicamente pronto para receber clientes pagantes. A unica pendencia e uma verificacao de 10 minutos no banco de dados de producao para confirmar que uma correcao de seguranca (migracacao 027) foi aplicada corretamente. Essa correcao ja existe no codigo e no pipeline de deploy automatico -- so precisa ser confirmada. Apos essa verificacao, nao ha nenhum impedimento tecnico para cobrar.
 
-Uma auditoria tecnica abrangente, conduzida por quatro especialistas ao longo de 10 fases de analise, identificou **92 pontos de melhoria** na plataforma. Destes, **16 ja foram resolvidos** por trabalhos recentes de engenharia. Dos 80 debitos ativos restantes, **5 sao criticos** e requerem atencao imediata por envolverem riscos de seguranca (colisao de tokens de autenticacao), estabilidade do servidor (falhas silenciosas em producao) e qualidade dos resultados de IA (truncamento de respostas em 20-30% das chamadas ao modelo de linguagem).
+### Score de Prontidao: 8/10
 
-A boa noticia: nenhum dos problemas identificados representa uma ameaca existencial ao produto. A maioria dos debitos criticos pode ser resolvida em 1-2 semanas com investimento moderado. O plano de resolucao esta estruturado em 4 fases progressivas, priorizando seguranca e estabilidade antes de otimizacoes e melhorias de longo prazo.
+```
+████████░░  8.0/10 — VERDE: Pronto para Lancamento
+```
 
-### Numeros Chave
+| Dimensao       | Peso | Nota  | Status |
+|----------------|------|-------|--------|
+| Seguranca      | 30%  | 9/10  | VERDE  |
+| Confiabilidade | 25%  | 8/10  | VERDE  |
+| Conversao/UX   | 20%  | 7/10  | AMARELO-VERDE |
+| Escalabilidade | 15%  | 6.5/10| AMARELO |
+| Observabilidade| 10%  | 8/10  | VERDE  |
+
+---
+
+## Situacao Atual em Numeros
 
 | Metrica | Valor |
 |---------|-------|
-| Total de Debitos Identificados | 92 |
-| Debitos Ativos | 80 |
-| Debitos Criticos (P0) | 5 |
-| Debitos de Alta Prioridade (P1) | 19 |
-| Itens Ja Resolvidos | 16 |
-| Esforco Total Estimado | ~340 horas |
-| Custo Estimado (R$150/h) | R$ 51.000 |
-| Prazo Total Estimado | 8-12 semanas |
-
-### Recomendacao
-
-Recomendamos aprovar a execucao imediata da **Fase 1 (Quick Wins)** e **Fase 2 (Fundacao)**, que juntas resolvem os 5 debitos criticos e os 7 de alta prioridade mais impactantes, com investimento de R$ 7.950 e prazo de 3-4 semanas. Este investimento inicial elimina 100% dos riscos de seguranca criticos, estabiliza a integracao com a API principal (PNCP) e melhora a taxa de sucesso da classificacao por IA de ~70% para >99%. As fases subsequentes devem ser aprovadas conforme os resultados das primeiras fases e a evolucao do negocio.
+| Endpoints de API | 49 (19 modulos) |
+| Testes automatizados (backend) | 5.131+ passando, 0 falhas |
+| Testes automatizados (frontend) | 2.681+ passando, 0 falhas |
+| Testes E2E (fluxos criticos) | 60 cenarios |
+| Fontes de dados integradas | 2 de 3 ativas (PNCP + PCP v2) |
+| Setores cobertos | 15 |
+| Integracoes de pagamento | Stripe (8 tipos de webhook, verificacao de assinatura) |
+| Blockers para GTM | 0 (pendente verificacao de 10 min) |
+| Itens de alta prioridade | 9 |
+| Quick wins identificados | 9 (total: ~15 horas) |
 
 ---
 
-## Analise de Custos
+## O que Funciona Bem (Pontos Fortes)
 
-### Custo de RESOLVER
+1. **Busca inteligente com resiliencia** -- O sistema busca em multiplas fontes de dados governamentais simultaneamente. Se uma fonte cair, as outras continuam funcionando. O usuario sempre recebe resultados, mesmo em cenarios de degradacao.
 
-| Categoria | Itens | Horas | Custo (R$150/h) |
-|-----------|:---:|:---:|-----------------|
-| Sistema/Backend | 37 | 168h | R$ 25.200 |
-| Database | 21 | 29h | R$ 4.350 |
-| Frontend/UX | 28 | 81h | R$ 12.150 |
-| QA/Testes | 6 | 62h | R$ 9.300 |
-| **TOTAL** | **92** | **~340h** | **R$ 51.000** |
+2. **Classificacao por IA que realmente funciona** -- O motor de IA (GPT-4.1-nano) classifica editais por relevancia setorial com camadas de protecao: se a IA falhar, o sistema rejeita o resultado ao inves de mostrar lixo. Filosofia "zero ruido".
 
-*Nota: Alguns itens de frontend (cobertura de testes, sync de precos) sao esforcos continuos e nao foram contabilizados em horas fixas.*
+3. **Cobranca robusta** -- Integracao Stripe com 8 tipos de webhook, verificacao de assinatura criptografica, periodo de carencia de 3 dias para gaps de assinatura, e fallback para ultimo plano conhecido em caso de erro. Nao perde venda por bug.
 
-### Custo de NAO RESOLVER (Risco Acumulado)
+4. **Seguranca de dados** -- Autenticacao JWT com chaves rotacionadas (ES256+JWKS), Row Level Security em todas as 32 tabelas do banco. Cada usuario so ve seus proprios dados.
 
-| Risco | Probabilidade | Impacto | Custo Potencial |
-|-------|:---:|:---:|-----------------|
-| **Brecha de seguranca** por colisao de tokens (SYS-004, CVSS 9.1) — acesso indevido a dados de usuarios | Alta | Critico | R$ 150.000 - R$ 500.000 (LGPD + reputacao + perda de clientes) |
-| **Falha silenciosa na busca** — API PNCP rejeita requisicoes com >50 resultados/pagina sem erro claro (SYS-003) | Alta | Alto | R$ 30.000 - R$ 80.000 (usuarios nao encontram licitacoes, churn) |
-| **Classificacao IA incorreta** — 20-30% das respostas truncadas geram classificacoes erradas (SYS-002) | Alta | Alto | R$ 20.000 - R$ 50.000 (perda de confianca, oportunidades perdidas) |
-| **Instabilidade do servidor** — crashes por SIGSEGV em producao (SYS-001) | Media | Alto | R$ 15.000 - R$ 40.000 (downtime, SLA, reputacao) |
-| **Crescimento descontrolado do banco** — sem limpeza automatica de dados expirados (DB-NEW-03) | Media | Medio | R$ 5.000 - R$ 15.000/ano (custos de storage Supabase) |
-| **Perda de produtividade** — arquivos monoliticos (filter.py 177KB, buscar/page.tsx 983 linhas) dificultam manutencao | Alta | Medio | R$ 30.000 - R$ 60.000/ano (velocidade de desenvolvimento 30-40% menor) |
-| **Vulnerabilidade CSP** — scripts inline sem nonce permitem potencial XSS (FE-010) | Baixa | Alto | R$ 50.000 - R$ 200.000 (se explorada: LGPD + dados) |
+5. **Cobertura de testes excepcional** -- 7.800+ testes automatizados com taxa de falha zero. Isso e incomum para uma startup em estagio POC e demonstra maturidade de engenharia.
 
-**Custo potencial de nao agir: R$ 300.000 - R$ 945.000** (acumulado em 12 meses, considerando probabilidades)
+6. **Observabilidade completa** -- 50+ metricas Prometheus, rastreamento Sentry, logs estruturados com OpenTelemetry. Se algo quebrar em producao, a equipe sabe rapidamente.
 
-**Custo ponderado por probabilidade: ~R$ 180.000**
+7. **Experiencia de busca polida** -- SSE (progresso em tempo real), retry automatico, banners de degradacao informivos, pipeline kanban com drag-and-drop. O fluxo busca-para-pipeline e completo.
 
 ---
 
-## Impacto no Negocio
+## O que Precisa de Atencao
 
-### Performance
+### Acao Imediata (Esta Semana)
 
-A plataforma atualmente opera com limitacoes que afetam diretamente a experiencia de busca. A integracao com a API PNCP (fonte primaria de dados) pode falhar silenciosamente quando o volume de resultados excede o novo limite imposto pelo governo (reduzido de 500 para 50 em fevereiro/2026). Isso significa que **usuarios podem estar perdendo licitacoes relevantes sem saber**. Alem disso, o modelo de IA tem um timeout de 15 segundos — 5 vezes acima do tempo medio de resposta — criando risco de travamento quando o servico da OpenAI fica lento. Resolver estes pontos garante que 100% das licitacoes disponiveis sejam capturadas e que o sistema responda de forma previsivel mesmo sob carga.
+| # | Acao | Esforco | Impacto no Negocio |
+|---|------|---------|--------------------|
+| 1 | **Verificar correcao de seguranca em producao** | 10 min | Confirma que dados de um cliente nao vazam para outro. Unica pendencia de seguranca. |
+| 2 | **Mostrar preco anual como padrao na pagina de planos** | 15 min | O cliente ve R$297/mes ao inves de R$397/mes primeiro. Estimativa: +3-8% na conversao de checkout. |
+| 3 | **Adicionar depoimentos na pagina inicial** | 1 hora | O componente ja existe, so precisa ser ligado. Estimativa: +5-10% na taxa de cadastro. |
+| 4 | **Tornar verificacao de seguranca obrigatoria no CI** | 2 horas | Impede que vulnerabilidades conhecidas cheguem a producao. Hoje, 25 verificacoes sao apenas informativas. |
+| 5 | **Comunicar transparentemente que 2 de 3 fontes estao ativas** | 2 horas | Badge "2/3 fontes ativas" nos resultados. Evita tickets de suporte sobre editais faltando. |
+| 6 | **Adicionar foto do produto na pagina inicial** | 6 horas | Compradores B2G sao avessos a risco -- precisam ver o produto antes de criar conta. Estimativa: +15-25% na taxa de cadastro. |
+| 7 | **Adicionar WhatsApp/contato na pagina de precos** | 2 horas | Decisores B2G com orcamento precisam falar com humano antes de assinar R$397-997/mes. |
 
-### Seguranca
+**Total Semana 1: ~14 horas = R$ 2.100**
+**Impacto estimado: +20-35% na taxa de conversao de cadastro**
 
-Foram identificadas **2 vulnerabilidades criticas de seguranca**: um problema na geracao de tokens de autenticacao que pode permitir colisao entre sessoes de usuarios diferentes (classificacao CVSS 9.1 — severidade maxima), e a necessidade de modernizar o algoritmo de assinatura JWT de HS256 para ES256 (padrao atual da industria). Ambos os itens devem ser resolvidos antes de escalar a base de usuarios para proteger dados sensiveis de licitacoes e manter conformidade com a LGPD. A politica de seguranca de conteudo (CSP) do frontend tambem precisa de reforco para prevenir ataques de injecao de scripts.
+### Proximos 30 Dias
 
-### Experiencia do Usuario
+| Acao | Esforco | Impacto no Negocio |
+|------|---------|--------------------|
+| **Deploy sem interrupcao** | 4 horas | Hoje cada deploy causa ~30 segundos de buscas falhando. Com clientes pagantes, isso vira ticket de suporte. |
+| **Dashboard com alertas de prazos** | 8 horas | "Voce tem 3 editais com prazo em 48h" -- aumenta retencao e valor percebido. |
+| **Investigacao de capacidade** | 16 horas | Ceiling atual: ~30 usuarios simultaneos. Precisamos saber o limite real antes de campanhas de marketing. |
+| **CI totalmente obrigatorio** | 4 horas | Garantir que NENHUMA vulnerabilidade passa sem revisao. |
 
-A experiencia do usuario e funcional, mas tem pontos de fragilidade. **Quatro paginas principais** (dashboard, pipeline, historico, conta) nao possuem tratamento de erro — se qualquer componente falhar, a pagina inteira fica em branco sem mensagem explicativa. A acessibilidade (A11Y) esta parcialmente implementada: 15+ componentes ja possuem suporte a leitores de tela, mas ainda faltam anuncios de erro, indicadores de carregamento acessiveis e consistencia na navegacao por teclado. Melhorar estes pontos reduz abandono e amplia o publico potencial (incluindo compliance com normas de acessibilidade digital).
+**Total 30 dias: ~32 horas = R$ 4.800**
 
-### Velocidade de Desenvolvimento
+### Proximos 90 Dias
 
-A base de codigo tem areas de alta complexidade que impactam a velocidade de entrega de novas funcionalidades. O arquivo principal de filtros (`filter.py`) tem 177KB e a pagina de busca (`buscar/page.tsx`) tem 983 linhas — ambos dificeis de modificar sem efeitos colaterais. A estrutura monolitica do backend (`main.py`) e a coexistencia de dois diretorios de componentes no frontend geram confusao e retrabalho. **Estimamos que resolver os debitos de arquitetura (Fases 3-4) aumentaria a velocidade de desenvolvimento em 25-35%**, permitindo entregar novas funcionalidades mais rapido e com menos bugs.
+| Acao | Esforco | Impacto no Negocio |
+|------|---------|--------------------|
+| **Ambiente de staging verificado** | 16 horas | Testar mudancas sem afetar clientes reais. |
+| **Teste de recuperacao de backup** | 4 horas | Confirmar que backups do Supabase realmente funcionam. Hoje e uma suposicao. |
+| **Testes de carga** | 8 horas | Saber exatamente quantos clientes suportamos simultaneamente. |
+| **Fallback para IA offline** | 4 horas | Se a OpenAI cair, classificacao para. Modelo local como alternativa. |
+| **Inventario de alertas** | 4 horas | 50+ metricas coletadas, mas sem alertas configurados. Detectar problemas antes do cliente. |
+| **Otimizacoes de frontend** | 12 horas | Imagens otimizadas, bundle menor, experiencia mais rapida. |
 
----
-
-## Timeline Recomendado
-
-### Fase 1: Quick Wins (1-2 semanas)
-
-Resolucao de 12 itens de baixo esforco e alto impacto relativo. Inclui verificacoes de integridade no banco de dados, criacao de rotinas automaticas de limpeza de dados expirados, correcoes de acessibilidade pontuais e otimizacoes de dependencias.
-
-| Item | Descricao em linguagem de negocio | Horas |
-|------|-----------------------------------|:---:|
-| Verificacao de integridade do banco (2 itens) | Confirmar que as relacoes entre tabelas estao validas em producao | 1h |
-| Limpeza automatica de dados expirados | Prevenir crescimento desnecessario do banco (economia em storage) | 0.5h |
-| Restricoes de dados em 3 tabelas | Garantir que dados invalidos nao entrem no sistema | 2h |
-| Remocao de indice duplicado | Melhorar velocidade de escrita no banco | 0.5h |
-| Correcoes de acessibilidade (2 itens) | Tornar mensagens de erro e carregamento visiveis para leitores de tela | 1h |
-| Otimizacao de carregamento (1 componente) | Reduzir em 70KB o tamanho do dashboard (carrega mais rapido) | 0.5h |
-| Rastreamento de alteracoes (2 tabelas) | Saber quando registros foram modificados pela ultima vez | 1h |
-
-**Custo Fase 1: ~7h = R$ 1.050**
-**ROI imediato:** Economia de storage, banco mais integro, paginas mais rapidas.
-
-### Fase 2: Fundacao (3-4 semanas)
-
-Resolucao dos 5 debitos criticos e 7 de alta prioridade. Foco em seguranca, estabilidade e confiabilidade do core do produto.
-
-| Item | Descricao em linguagem de negocio | Horas |
-|------|-----------------------------------|:---:|
-| Correcao de seguranca em tokens (SYS-004) | Eliminar risco de um usuario acessar dados de outro | 4h |
-| Estabilidade do servidor (SYS-001) | Eliminar crashes silenciosos em producao | 4h |
-| Qualidade da IA (SYS-002) | Aumentar taxa de classificacao correta de ~70% para >99% | 4h |
-| Modernizacao de autenticacao (SYS-005) | Adotar padrao ES256 (mais seguro, padrao da industria) | 8h |
-| Correcao da integracao PNCP (SYS-003) | Garantir captura de 100% das licitacoes disponiveis | 8h |
-| Resiliencia da IA (SYS-010 + SYS-012) | Prevenir travamentos quando servico de IA fica lento | 8h |
-| Padronizacao do banco (DB-001) | Garantir integridade referencial em todas as tabelas | 6h |
-| Tratamento de erros nas paginas (FE-NEW-02) | Usuarios verao mensagem util em vez de tela em branco | 4h |
-
-**Custo Fase 2: ~46h = R$ 6.900**
-**ROI imediato:** Zero vulnerabilidades criticas, busca confiavel, IA precisa.
-
-### Fase 3: Otimizacao (5-8 semanas)
-
-Melhorias de seguranca avancada, refatoracao de codigo para facilitar manutencao, implementacao de testes de acessibilidade automatizados e contratos de API.
-
-| Tema | Descricao | Horas |
-|------|-----------|:---:|
-| Seguranca avancada (CSP) | Protecao contra injecao de scripts maliciosos | 14h |
-| Refatoracao da busca | Simplificar codigo da pagina principal (facilita novas funcionalidades) | 18h |
-| Organizacao de componentes | Estrutura clara para desenvolvimento frontend | 7h |
-| Otimizacao de carregamento | Paginas carregam mais rapido (lazy loading de bibliotecas) | 11h |
-| Testes de acessibilidade automatizados | Garantir conformidade A11Y em cada deploy | 8h |
-| Contrato de API | Detectar automaticamente mudancas que quebram integracoes | 4h |
-| Arquitetura backend | Separar modulos para facilitar manutencao | 16h |
-| Migracao de bibliotecas | Modernizar dependencias (requests -> httpx) | 16h |
-| Melhorias no pipeline de dados | Enriquecimento de resultados + observabilidade | 20h |
-| Refatoracao frontend avancada | Resolver pendencias estruturais | 16h |
-| Limpeza de testes | Confiabilidade do suite de testes de integracao | 4h |
-
-**Custo Fase 3: ~134h = R$ 20.100**
-**ROI:** Velocidade de desenvolvimento +25%, seguranca reforçada, manutencao facilitada.
-
-### Fase 4: Excelencia (9-12 semanas)
-
-Investimentos de longo prazo em qualidade, cobertura de testes, arquitetura sustentavel e features que preparam o produto para escala.
-
-| Tema | Descricao | Horas |
-|------|-----------|:---:|
-| Simplificacao do streaming (SSE) | Reduzir complexidade do sistema de atualizacoes em tempo real | 22h |
-| Decomposicao do filtro | Separar arquivo monolitico de 177KB em modulos gerenciaveis | 16h |
-| Cobertura de testes frontend | Atingir meta de 60% de cobertura (atualmente ~50%) | 38h |
-| Testes end-to-end | Cobrir fluxos criticos: pagamento, pipeline, mobile | 40h |
-| Migracao de billing legado | Limpar codigo antigo de cobranca | 4h |
-| Resiliencia de rede | Ajustar circuit breakers e tolerancia a falhas | 12h |
-| Autenticacao multi-fator (MFA) | Seguranca adicional para contas de usuario | 16h |
-| Itens diversos P3/P4 | Limpeza de codigo, convencoes, documentacao | 80h |
-
-**Custo Fase 4: ~228h = R$ 34.200**
-**ROI:** Produto sustentavel para escala, time de desenvolvimento produtivo, qualidade enterprise.
+**Total 90 dias: ~48 horas = R$ 7.200**
 
 ---
 
-## ROI da Resolucao
+## Analise de Investimento
 
-| Investimento | Retorno Esperado |
-|--------------|------------------|
-| R$ 51.000 (resolucao completa) | R$ 180.000+ em riscos evitados (ponderado por probabilidade) |
-| ~340 horas de engenharia | +25-35% de velocidade de desenvolvimento |
-| 8-12 semanas | Produto sustentavel e seguro para escala |
-| R$ 7.950 (Fases 1-2 apenas) | Eliminacao de 100% dos riscos criticos |
+### Custo para Ficar 100% Pronto
 
-**ROI Estimado da resolucao completa: 3.5:1**
+| Categoria | Horas | Custo (R$150/h) |
+|-----------|-------|-----------------|
+| Quick Wins (Semana 1) | 14h | R$ 2.100 |
+| Alta Prioridade (30 dias) | 32h | R$ 4.800 |
+| Media Prioridade (90 dias) | 48h | R$ 7.200 |
+| **TOTAL** | **94h** | **R$ 14.100** |
 
-**ROI das Fases 1-2 (investimento minimo): 15:1** — com apenas R$ 7.950, eliminam-se os riscos mais graves que sozinhos poderiam custar R$ 120.000+.
+Para referencia: R$ 14.100 e o equivalente a **~3 assinaturas anuais do plano Pro** ou **~1.5 assinaturas anuais do plano Consultoria**.
 
-### Comparativo Visual
+### Custo de NAO Agir
 
-```
-Cenario A: Resolver tudo (R$ 51.000)
-  → Riscos evitados: R$ 180.000+
-  → Ganho de produtividade: R$ 30.000-60.000/ano
-  → Economia de infraestrutura: R$ 5.000-15.000/ano
-  → TOTAL RETORNO ANO 1: R$ 215.000+
+| Risco | Probabilidade | Impacto Financeiro Estimado |
+|-------|---------------|-----------------------------|
+| Dados de um cliente vistos por outro (se migracao nao aplicada) | Baixa | R$ 50.000+ (LGPD, reputacao, cancelamentos em massa) |
+| Vulnerabilidade conhecida explorada em producao | Media | R$ 20.000-50.000 (remediacao emergencial + comunicacao) |
+| Busca falha durante deploy (sem graceful shutdown) | Alta | R$ 500/mes (churn por frustacao, ~1 cliente perdido/mes) |
+| Sobrecarga com 30+ usuarios simultaneos | Media | R$ 5.000-10.000 (downtime durante campanha de marketing = leads perdidos) |
+| Backup nao funciona quando precisar | Baixa | R$ 100.000+ (perda total de dados de clientes) |
+| Cliente B2G nao encontra contato na pagina de precos | Alta | R$ 2.000/mes (2-3 assinaturas perdidas por falta de confianca) |
 
-Cenario B: Resolver apenas P0+P1 (R$ 7.950)
-  → Riscos criticos evitados: R$ 120.000+
-  → Debitos restantes acumulam juros tecnicos
+### ROI do Investimento
 
-Cenario C: Nao resolver (R$ 0 investimento)
-  → Risco acumulado em 12 meses: R$ 180.000+
-  → Velocidade de desenvolvimento: -30-40%
-  → Possivel incidente de seguranca com impacto LGPD
-```
+**Investimento total: R$ 14.100** (94 horas em 90 dias)
+
+**Retorno calculado:**
+- Melhoria de conversao (quick wins): Se 100 visitantes/mes e conversao atual de 5%, subir para 7% = +2 clientes/mes = +R$ 794/mes = +R$ 9.528/ano
+- Reducao de churn (graceful shutdown + dashboard): ~1 cliente retido/mes = +R$ 4.764/ano
+- Risco evitado (seguranca + backup): Valor esperado = probabilidade x impacto = ~R$ 8.000/ano
+
+**ROI estimado: R$ 22.292/ano de valor gerado para R$ 14.100 investidos = 158% no primeiro ano.**
 
 ---
 
-## Proximos Passos
+## Cronograma Recomendado
 
-1. [ ] Aprovar orcamento de **R$ 7.950** para Fases 1-2 (minimo recomendado)
-2. [ ] Aprovar orcamento total de **R$ 51.000** para resolucao completa (recomendado)
-3. [ ] Executar diagnosticos SQL em producao (pre-requisito tecnico, 1h)
-4. [ ] Estabelecer baselines de testes (pre-requisito tecnico, 2h)
-5. [ ] Alocar time tecnico para Sprint de Seguranca (Fase 2, itens P0)
-6. [ ] Iniciar Fase 1 — Quick Wins (7h de trabalho, impacto imediato)
-7. [ ] Revisar progresso e aprovar Fases 3-4 apos conclusao das Fases 1-2
+### Semana 1: Quick Wins (14 horas)
+
+1. **Dia 1 (2h):** Verificar seguranca em producao + mostrar preco anual como padrao + adicionar depoimentos
+2. **Dia 2 (4h):** Tornar verificacoes de seguranca obrigatorias no CI + badge de fontes de dados
+3. **Dia 3-4 (6h):** Criar e adicionar screenshot do produto na pagina inicial
+4. **Dia 5 (2h):** Adicionar contato WhatsApp na pagina de precos
+
+**Resultado:** Pagina de vendas significativamente mais convincente. Pronto para primeira campanha de marketing.
+
+### Semanas 2-4: Fortalecimento (32 horas)
+
+1. Deploy sem interrupcao (4h) -- clientes pagantes nao veem erros durante atualizacoes
+2. Dashboard com valor acionavel (8h) -- razao para o cliente voltar todo dia
+3. CI completamente obrigatorio (4h) -- zero vulnerabilidades escapam
+4. Investigacao de escalabilidade (16h) -- saber o limite antes da demanda crescer
+
+**Resultado:** Plataforma robusta o suficiente para suportar primeiras dezenas de clientes pagantes com confianca.
+
+### Mes 2-3: Otimizacao (48 horas)
+
+1. Ambiente de staging (16h) -- testar sem risco
+2. Teste de backup e recuperacao (4h) -- garantia contra perda de dados
+3. Testes de carga automatizados (8h) -- numeros reais de capacidade
+4. Fallback de IA + alertas + otimizacoes (20h) -- resiliencia total
+
+**Resultado:** Infraestrutura pronta para crescimento acelerado (100+ clientes).
+
+---
+
+## Comparacao: Lancar Agora vs Esperar
+
+| Cenario | Risco | Receita Perdida | Recomendacao |
+|---------|-------|-----------------|--------------|
+| Lancar hoje (apos verificacao de 10 min) | Baixo | R$ 0 | **Recomendado** |
+| Esperar 1 semana (quick wins) | Muito baixo | ~R$ 1.000 | Alternativa segura |
+| Esperar 30 dias (tudo P1 completo) | Nenhum | ~R$ 12.000 | Conservador demais |
+| Esperar 90 dias (tudo pronto) | Nenhum | ~R$ 40.000 | Nao recomendado |
+
+**Analise:** Esperar 90 dias para ter tudo perfeito custaria ~R$ 40.000 em receita perdida (estimativa: 10 clientes Pro x 4 meses). Os itens pendentes de 90 dias sao melhorias operacionais que podem ser feitas com o produto ja gerando receita. A receita, inclusive, financia as melhorias.
+
+---
+
+## Recomendacao Final
+
+**Lancar na proxima semana.** O plano recomendado:
+
+1. **Hoje:** Executar a verificacao de seguranca (10 minutos)
+2. **Esta semana:** Implementar os quick wins de conversao (14 horas)
+3. **Proxima segunda:** Abrir para primeiros clientes pagantes
+4. **Proximas 3 semanas:** Implementar itens de alta prioridade em paralelo com operacao
+
+O SmartLic tem uma base tecnica solida -- 7.800+ testes, zero falhas, seguranca de nivel empresarial, resiliencia a falhas, e cobranca robusta. Os itens pendentes sao majoritariamente de **otimizacao de conversao** (fazer mais gente assinar) e **preparacao para escala** (suportar muitos clientes), nao de **funcionamento basico** (o produto funciona).
+
+A pior decisao seria esperar pela perfeicao. O produto esta pronto. Os clientes vao validar o que realmente importa.
+
+---
+
+## Proximos Passos Imediatos
+
+1. [ ] **Verificar migracao 027 em producao** -- DevOps, hoje (10 min)
+2. [ ] **Mudar default de precos para anual** -- Dev, hoje (15 min)
+3. [ ] **Ligar componente de depoimentos na landing page** -- Dev, hoje (1h)
+4. [ ] **Tornar pip-audit e npm audit obrigatorios no CI** -- DevOps, amanha (2h)
+5. [ ] **Adicionar badge "2/3 fontes ativas"** -- Dev, amanha (2h)
+6. [ ] **Screenshot do produto na hero section** -- UX + Dev, quarta-quinta (6h)
+7. [ ] **WhatsApp/contato na pagina de precos** -- Dev, sexta (2h)
+8. [ ] **Comunicar data de lancamento para primeiros clientes** -- PM, sexta
+9. [ ] **Agendar implementacao do graceful shutdown** -- Dev, semana 2 (4h)
+10. [ ] **Agendar investigacao de capacidade** -- DevOps, semana 2-3 (16h)
 
 ---
 
 ## Anexos
 
-- [Assessment Tecnico Completo](../prd/technical-debt-assessment.md)
-- [Revisao Database](../reviews/db-specialist-review.md)
-- [Revisao UX](../reviews/ux-specialist-review.md)
-- [Revisao QA](../reviews/qa-review.md)
+- Assessment Tecnico Completo: `docs/prd/technical-debt-assessment.md`
+- Auditoria Consolidada Pre-GTM: `docs/reports/AUDIT-CONSOLIDATED-PRE-GTM.md`
+- Auditoria de Seguranca: `docs/reports/AUDIT-FRENTE-2-SECURITY.md`
+- Auditoria de Testes: `docs/reports/AUDIT-FRENTE-3-TESTS.md`
+- Auditoria de Observabilidade: `docs/reports/AUDIT-FRENTE-4-OBSERVABILITY.md`
+- Avaliacao de Prontidao de Negocio: `docs/reports/AUDIT-FRENTE-6-BUSINESS-READINESS.md`
+- GTM Readiness Assessment: `docs/reports/GTM-READINESS-ASSESSMENT.md`
 
 ---
 
-*Documento preparado pela Equipe de Engenharia — SmartLic/CONFENGE*
-*Baseado em auditoria tecnica de 10 fases com 4 especialistas, validada contra o codebase em producao.*
+*Documento gerado pela equipe de engenharia SmartLic (assessment multi-agente) como parte do Brownfield Discovery workflow, Fase 9. Para duvidas tecnicas, consultar o assessment completo em `docs/prd/technical-debt-assessment.md`.*

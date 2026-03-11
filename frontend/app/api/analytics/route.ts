@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const endpoint = searchParams.get("endpoint");
 
-  if (!endpoint || !["summary", "searches-over-time", "top-dimensions", "trial-value"].includes(endpoint)) {
+  if (!endpoint || !["summary", "searches-over-time", "top-dimensions", "trial-value", "new-opportunities"].includes(endpoint)) {
     return NextResponse.json({ error: "Invalid endpoint" }, { status: 400 });
   }
 

@@ -4,6 +4,7 @@ Provides aggregated user statistics from search_sessions table:
 1. GET /analytics/summary - Overall user statistics
 2. GET /analytics/searches-over-time - Time-series search data
 3. GET /analytics/top-dimensions - Top UFs and sectors
+4. GET /analytics/new-opportunities - New opportunities since last search (DEBT-127)
 """
 
 import logging
@@ -59,6 +60,14 @@ class DimensionItem(BaseModel):
 class TopDimensionsResponse(BaseModel):
     top_ufs: list[DimensionItem]
     top_sectors: list[DimensionItem]
+
+
+class NewOpportunitiesResponse(BaseModel):
+    """DEBT-127 AC6-AC9: New opportunities since last search."""
+    count: int
+    has_previous_search: bool
+    last_search_at: str | None = None
+    days_since_last_search: int | None = None
 
 
 # ============================================================================
@@ -336,6 +345,59 @@ async def get_trial_value(user: dict = Depends(require_auth), db=Depends(get_db)
             status_code=503,
             detail="Informação de valor do trial temporariamente indisponível"
         )
+
+
+# ============================================================================
+# DEBT-127 AC6-AC9: New opportunities since last search
+# ============================================================================
+
+@router.get("/new-opportunities", response_model=NewOpportunitiesResponse)
+async def get_new_opportunities(user: dict = Depends(require_auth), db=Depends(get_db)):
+    """Get count of opportunities from user's most recent search.
+
+    DEBT-127 AC6-AC9: Drives users back to /buscar by showing how many
+    opportunities were found in their latest search and how long ago it was.
+    If no previous search exists, returns has_previous_search=False for
+    onboarding prompt (AC9).
+    """
+    user_id = user["id"]
+
+    try:
+        result = await sb_execute(
+            db.table("search_sessions")
+            .select("created_at, total_filtered")
+            .eq("user_id", user_id)
+            .order("created_at", desc=True)
+            .limit(1)
+        )
+
+        sessions = result.data or []
+
+        if not sessions:
+            return NewOpportunitiesResponse(
+                count=0,
+                has_previous_search=False,
+            )
+
+        last_session = sessions[0]
+        created_at = last_session["created_at"]
+        if isinstance(created_at, str):
+            last_dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+        else:
+            last_dt = created_at
+
+        days_since = (datetime.now(timezone.utc) - last_dt).days
+
+        return NewOpportunitiesResponse(
+            count=last_session.get("total_filtered") or 0,
+            has_previous_search=True,
+            last_search_at=created_at,
+            days_since_last_search=max(days_since, 0),
+        )
+
+    except Exception as e:
+        logger.error(f"Error fetching new opportunities for user {mask_user_id(user_id)}: {e}")
+        return NewOpportunitiesResponse(count=0, has_previous_search=False)
 
 
 # ============================================================================

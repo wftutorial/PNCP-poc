@@ -31,6 +31,29 @@ export interface TopDimensions {
 
 export type Period = "day" | "week" | "month";
 
+// DEBT-127: Pipeline alerts and new opportunities
+export interface PipelineAlertItem {
+  id: string;
+  pncp_id: string;
+  objeto: string;
+  orgao?: string;
+  uf?: string;
+  data_encerramento?: string;
+  stage: string;
+}
+
+export interface PipelineAlertsData {
+  items: PipelineAlertItem[];
+  total: number;
+}
+
+export interface NewOpportunitiesData {
+  count: number;
+  has_previous_search: boolean;
+  last_search_at?: string;
+  days_since_last_search?: number;
+}
+
 // CRIT-018 AC4/AC5: Per-section error flags for independent failure handling
 export interface DashboardData {
   summary: AnalyticsSummary | null;

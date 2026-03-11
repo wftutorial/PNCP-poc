@@ -12,24 +12,24 @@ The current dashboard shows analytics (searches over time, top dimensions, trial
 
 ### Pipeline Deadline Alerts
 
-- [ ] AC1: Dashboard shows count of pipeline items with deadlines in the next 7 days
-- [ ] AC2: Alert card displays "X editais vencem esta semana" with a link to `/pipeline`
-- [ ] AC3: Items are sourced from `pipeline_items` where `deadline` is within 7 days and status is not `archived` or `won`
-- [ ] AC4: If no upcoming deadlines, card shows encouraging message ("Nenhum prazo urgente")
-- [ ] AC5: Backend endpoint `GET /v1/pipeline/alerts` returns deadline alerts (or extend existing endpoint)
+- [x] AC1: Dashboard shows count of pipeline items with deadlines in the next 7 days
+- [x] AC2: Alert card displays "X editais vencem esta semana" with a link to `/pipeline`
+- [x] AC3: Items are sourced from `pipeline_items` where `deadline` is within 7 days and status is not `archived` or `won`
+- [x] AC4: If no upcoming deadlines, card shows encouraging message ("Nenhum prazo urgente")
+- [x] AC5: Backend endpoint `GET /v1/pipeline/alerts` returns deadline alerts (or extend existing endpoint)
 
 ### New Opportunities Since Last Search
 
-- [ ] AC6: Dashboard shows count of new opportunities since the user's last search
-- [ ] AC7: "X novas oportunidades desde sua ultima busca" with a CTA to `/buscar`
-- [ ] AC8: Count is derived from comparing latest search results against previous session
-- [ ] AC9: If no previous search exists, show onboarding prompt ("Faca sua primeira busca")
+- [x] AC6: Dashboard shows count of new opportunities since the user's last search
+- [x] AC7: "X novas oportunidades desde sua ultima busca" with a CTA to `/buscar`
+- [x] AC8: Count is derived from comparing latest search results against previous session
+- [x] AC9: If no previous search exists, show onboarding prompt ("Faca sua primeira busca")
 
 ### General
 
-- [ ] AC10: Both insight cards are prominently positioned (top of dashboard, before charts)
-- [ ] AC11: Cards are visually distinct (use accent colors or icons to draw attention)
-- [ ] AC12: Mobile-responsive layout (cards stack vertically on mobile)
+- [x] AC10: Both insight cards are prominently positioned (top of dashboard, before charts)
+- [x] AC11: Cards are visually distinct (use accent colors or icons to draw attention)
+- [x] AC12: Mobile-responsive layout (cards stack vertically on mobile)
 
 ## Technical Notes
 
@@ -48,10 +48,10 @@ The current dashboard shows analytics (searches over time, top dimensions, trial
 
 ## Test Requirements
 
-- [ ] Backend: `test_pipeline_alerts.py` -- deadline filtering, empty state, authorization
-- [ ] Frontend: Dashboard insight cards render with mock data
-- [ ] Frontend: CTA links navigate to correct pages
-- [ ] Existing dashboard tests pass
+- [x] Backend: `test_pipeline_alerts.py` -- deadline filtering, empty state, authorization
+- [x] Frontend: Dashboard insight cards render with mock data
+- [x] Frontend: CTA links navigate to correct pages
+- [x] Existing dashboard tests pass
 
 ## Files to Modify
 
@@ -61,7 +61,7 @@ The current dashboard shows analytics (searches over time, top dimensions, trial
 
 ## Definition of Done
 
-- [ ] All ACs pass
-- [ ] Tests pass (existing + new)
-- [ ] No regressions in CI
+- [x] All ACs pass
+- [x] Tests pass (existing + new)
+- [x] No regressions in CI
 - [ ] Code reviewed

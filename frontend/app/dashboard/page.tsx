@@ -18,6 +18,7 @@ import { DashboardStatCards } from "./components/DashboardStatCards";
 import { DashboardTimeSeriesChart } from "./components/DashboardTimeSeriesChart";
 import { DashboardDimensionsWidget } from "./components/DashboardDimensionsWidget";
 import { DashboardQuickLinks } from "./components/DashboardQuickLinks";
+import { InsightCards } from "./components/InsightCards";
 import {
   DashboardProfileHeaderControls,
   DashboardProfileSection,
@@ -31,7 +32,7 @@ import {
   DashboardStaleBanner,
 } from "./components/DashboardErrorStates";
 import { useDashboardDerivedData } from "./components/useDashboardDerivedData";
-import type { DashboardData, Period } from "./components/DashboardTypes";
+import type { DashboardData, Period, PipelineAlertsData, NewOpportunitiesData } from "./components/DashboardTypes";
 import { PageErrorBoundary } from "../../components/PageErrorBoundary";
 
 const LOADING_TIMEOUT_MS = 10_000;
@@ -58,6 +59,10 @@ export default function DashboardPage() {
   const [profilePctOverride, setProfilePctOverride] = useState<number | null>(null);
   const profilePct = profilePctOverride ?? swrProfilePct;
 
+  // DEBT-127: Insight cards data
+  const [pipelineAlerts, setPipelineAlerts] = useState<PipelineAlertsData | null>(null);
+  const [newOpportunities, setNewOpportunities] = useState<NewOpportunitiesData | null>(null);
+
   const fetchAnalytics = useCallback(
     async (endpoint: string, params?: Record<string, string>, signal?: AbortSignal) => {
       if (!session?.access_token) return null;
@@ -73,6 +78,23 @@ export default function DashboardPage() {
     [session?.access_token]
   );
 
+  // DEBT-127: Fetch pipeline alerts
+  const fetchPipelineAlerts = useCallback(
+    async (signal?: AbortSignal) => {
+      if (!session?.access_token) return;
+      try {
+        const res = await fetch("/api/pipeline?_path=/pipeline/alerts", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          signal,
+        });
+        if (res.ok) setPipelineAlerts(await res.json());
+      } catch {
+        // Non-critical — silently fail
+      }
+    },
+    [session?.access_token]
+  );
+
   // CRIT-018 AC1-AC6: Fetch function consumed by useFetchWithBackoff
   // AC4/AC5: Use Promise.allSettled so individual sections can fail independently
   const fetchDashboard = useCallback(
@@ -81,6 +103,12 @@ export default function DashboardPage() {
         fetchAnalytics("summary", undefined, signal),
         fetchAnalytics("searches-over-time", { period, range_days: "90" }, signal),
         fetchAnalytics("top-dimensions", { limit: "7" }, signal),
+        // DEBT-127: Fetch insights in parallel (non-blocking)
+        fetchAnalytics("new-opportunities", undefined, signal).then((d) => {
+          setNewOpportunities(d);
+          return d;
+        }),
+        fetchPipelineAlerts(signal),
       ]);
       trackEvent("dashboard_viewed", { period });
       return {
@@ -92,7 +120,7 @@ export default function DashboardPage() {
         dimensionsError: results[2].status === "rejected",
       };
     },
-    [period, fetchAnalytics, trackEvent]
+    [period, fetchAnalytics, fetchPipelineAlerts, trackEvent]
   );
 
   const {
@@ -197,6 +225,12 @@ export default function DashboardPage() {
           session={session}
           profilePct={profilePct}
           onProfileUpdated={setProfilePctOverride}
+        />
+
+        {/* DEBT-127 AC10: Insight cards prominently positioned before charts */}
+        <InsightCards
+          pipelineAlerts={pipelineAlerts}
+          newOpportunities={newOpportunities}
         />
 
         <DashboardStatCards

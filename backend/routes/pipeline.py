@@ -397,10 +397,10 @@ async def delete_pipeline_item(
 async def get_pipeline_alerts(
     user: dict = Depends(require_auth),
 ):
-    """Get pipeline items with deadlines within 3 days (AC6).
+    """Get pipeline items with deadlines within 7 days (DEBT-127 AC1).
 
     STORY-265 AC3: Trial expired can view alerts (read-only).
-    Returns items where data_encerramento < now() + 3 days
+    Returns items where data_encerramento < now() + 7 days
     and stage is NOT in ('enviada', 'resultado').
     """
     await _check_pipeline_read_access(user)
@@ -409,7 +409,7 @@ async def get_pipeline_alerts(
     sb = get_supabase()
 
     try:
-        deadline = (datetime.now(timezone.utc) + timedelta(days=3)).isoformat()
+        deadline = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
 
         result = await sb_execute(
             sb.table("pipeline_items")

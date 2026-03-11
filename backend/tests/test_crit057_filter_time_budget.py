@@ -37,7 +37,6 @@ class TestCrit057BatchBudgetGuard:
     """AC1/AC2: Budget guard inside batch zero-match loop."""
 
     @patch("config.LLM_ZERO_MATCH_ENABLED", True)
-    @patch("config.LLM_ZERO_MATCH_BATCH_ENABLED", True)
     @patch("config.LLM_ZERO_MATCH_BATCH_SIZE", 5)
     @patch("config.FILTER_ZERO_MATCH_BUDGET_S", 0.05)  # Very short budget to trigger
     @patch("config.LLM_FALLBACK_PENDING_ENABLED", True)
@@ -79,7 +78,6 @@ class TestCrit057BatchBudgetGuard:
             assert lic["_relevance_source"] == "pending_review"
 
     @patch("config.LLM_ZERO_MATCH_ENABLED", True)
-    @patch("config.LLM_ZERO_MATCH_BATCH_ENABLED", True)
     @patch("config.LLM_ZERO_MATCH_BATCH_SIZE", 5)
     @patch("config.FILTER_ZERO_MATCH_BUDGET_S", 999)  # Very high budget -- never triggers
     @patch("config.LLM_FALLBACK_PENDING_ENABLED", True)
@@ -111,45 +109,10 @@ class TestCrit057BatchBudgetGuard:
         assert len(pending) == 0, "No items should be pending_review with high budget"
 
 
-class TestCrit057IndividualBudgetGuard:
-    """AC1/AC2: Budget guard inside individual zero-match loop."""
-
-    @patch("config.LLM_ZERO_MATCH_ENABLED", True)
-    @patch("config.LLM_ZERO_MATCH_BATCH_ENABLED", False)  # Force individual mode
-    @patch("config.FILTER_ZERO_MATCH_BUDGET_S", 0.05)
-    @patch("config.LLM_FALLBACK_PENDING_ENABLED", True)
-    def test_individual_budget_exceeded(self):
-        """Individual mode with short budget -> interrupts and marks pending."""
-        from filter import aplicar_todos_filtros
-
-        licitacoes = [_make_lic(f"Material de construcao civil e obras publicas item {i:03d}") for i in range(20)]
-
-        def slow_classify(objeto, valor, setor_name=None, prompt_level=None, setor_id=None, termos_busca=None):
-            time.sleep(0.05)  # Each call 50ms, budget is 50ms
-            return {"is_primary": True, "confidence": 60, "evidence": []}
-
-        with patch("llm_arbiter.classify_contract_primary_match", slow_classify), \
-             patch("sectors.get_sector") as mock_sector:
-            mock_sector.return_value = _fake_sector()
-
-            resultado, stats = aplicar_todos_filtros(
-                licitacoes=licitacoes,
-                ufs_selecionadas={"SP"},
-                setor="engenharia",
-            )
-
-        assert stats.get("zero_match_budget_exceeded", 0) > 0
-        pending = [lic for lic in licitacoes if lic.get("_pending_review")]
-        assert len(pending) > 0
-        for lic in pending:
-            assert lic["_pending_review_reason"] == "zero_match_budget_exceeded"
-
-
 class TestCrit057Metrics:
     """AC3: Prometheus metric observed correctly."""
 
     @patch("config.LLM_ZERO_MATCH_ENABLED", True)
-    @patch("config.LLM_ZERO_MATCH_BATCH_ENABLED", True)
     @patch("config.LLM_ZERO_MATCH_BATCH_SIZE", 10)
     @patch("config.FILTER_ZERO_MATCH_BUDGET_S", 999)
     @patch("config.LLM_FALLBACK_PENDING_ENABLED", True)

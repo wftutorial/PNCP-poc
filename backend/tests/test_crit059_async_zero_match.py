@@ -127,7 +127,6 @@ class TestClassifyZeroMatchJob:
                  setex=AsyncMock(),
                  get=AsyncMock(return_value=None),
              )), \
-             patch("config.LLM_ZERO_MATCH_BATCH_ENABLED", True), \
              patch("config.LLM_ZERO_MATCH_BATCH_SIZE", 20), \
              patch("config.FILTER_ZERO_MATCH_BUDGET_S", 30), \
              patch("config.ZERO_MATCH_JOB_TIMEOUT_S", 120), \
@@ -169,7 +168,6 @@ class TestClassifyZeroMatchJob:
                  setex=AsyncMock(),
                  get=AsyncMock(return_value=None),
              )), \
-             patch("config.LLM_ZERO_MATCH_BATCH_ENABLED", True), \
              patch("config.LLM_ZERO_MATCH_BATCH_SIZE", 20), \
              patch("config.FILTER_ZERO_MATCH_BUDGET_S", 30), \
              patch("config.ZERO_MATCH_JOB_TIMEOUT_S", 120), \

@@ -48,7 +48,6 @@ def _run_filter(licitacoes, cap=200, ratio=0.7, budget=999, batch_size=20):
         return [{"is_primary": True, "confidence": 65, "evidence": ["match"]}] * len(items)
 
     with patch("config.LLM_ZERO_MATCH_ENABLED", True), \
-         patch("config.LLM_ZERO_MATCH_BATCH_ENABLED", True), \
          patch("config.LLM_ZERO_MATCH_BATCH_SIZE", batch_size), \
          patch("config.FILTER_ZERO_MATCH_BUDGET_S", budget), \
          patch("config.LLM_FALLBACK_PENDING_ENABLED", True), \
@@ -258,7 +257,6 @@ class TestCrit058CompatibilityCrit057:
     """AC8: Cap (CRIT-058) applies BEFORE LLM loop; budget (CRIT-057) applies DURING."""
 
     @patch("config.LLM_ZERO_MATCH_ENABLED", True)
-    @patch("config.LLM_ZERO_MATCH_BATCH_ENABLED", True)
     @patch("config.LLM_ZERO_MATCH_BATCH_SIZE", 5)
     @patch("config.FILTER_ZERO_MATCH_BUDGET_S", 999)  # High budget — won't trigger
     @patch("config.LLM_FALLBACK_PENDING_ENABLED", True)
@@ -370,7 +368,6 @@ class TestCrit058Stats:
     @patch("metrics.ZERO_MATCH_CAP_APPLIED_TOTAL")
     @patch("metrics.ZERO_MATCH_POOL_SIZE")
     @patch("config.LLM_ZERO_MATCH_ENABLED", True)
-    @patch("config.LLM_ZERO_MATCH_BATCH_ENABLED", True)
     @patch("config.LLM_ZERO_MATCH_BATCH_SIZE", 20)
     @patch("config.FILTER_ZERO_MATCH_BUDGET_S", 999)
     @patch("config.LLM_FALLBACK_PENDING_ENABLED", True)

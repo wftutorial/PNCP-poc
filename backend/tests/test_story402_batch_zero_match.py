@@ -25,12 +25,10 @@ def setup_env():
     """Set up environment for testing."""
     os.environ["LLM_ARBITER_ENABLED"] = "true"
     os.environ["LLM_ZERO_MATCH_ENABLED"] = "true"
-    os.environ["LLM_ZERO_MATCH_BATCH_ENABLED"] = "true"
     os.environ["OPENAI_API_KEY"] = "test-key"
     clear_cache()
     yield
     clear_cache()
-    os.environ.pop("LLM_ZERO_MATCH_BATCH_ENABLED", None)
 
 
 def _future_date(days=10):
@@ -125,7 +123,7 @@ class TestAC1BatchClassification:
         )
 
         assert len(results) == 1
-        assert results[0]["confidence"] == 70  # capped
+        assert results[0]["confidence"] == 60  # batch mode uses fixed confidence=60
 
     @patch("llm_arbiter._get_client")
     def test_batch_empty_items_returns_empty(self, mock_get_client):
@@ -193,90 +191,11 @@ class TestAC5IncompleteResponse:
         assert result == [True, False, True, False]
 
 
-# ==============================================================================
-# AC2: Batch failure → fallback to individual calls
-# ==============================================================================
+# DEBT-128: TestAC2BatchFallbackToIndividual removed — individual fallback mode
+# no longer exists. Batch mode is always-on.
 
 
-class TestAC2BatchFallbackToIndividual:
-    """AC2: When batch call fails, fallback to individual calls."""
-
-    @patch("llm_arbiter._get_client")
-    @patch("llm_arbiter._classify_zero_match_batch", side_effect=Exception("Batch crash"))
-    def test_batch_failure_triggers_individual_fallback(self, mock_batch, mock_get_client):
-        """If batch function raises exception, filter.py falls back to individual."""
-        mock_client = Mock()
-        mock_get_client.return_value = mock_client
-
-        # Individual calls succeed
-        resp = MagicMock()
-        resp.choices[0].message.content = "SIM"
-        resp.usage = None
-        mock_client.chat.completions.create.return_value = resp
-
-        bids = [
-            make_zero_match_bid(
-                codigo=f"FB-{i}",
-                objeto=f"Consultoria em planejamento e gestão pública para município {i}",
-            )
-            for i in range(5)
-        ]
-
-        aprovadas, stats = aplicar_todos_filtros(
-            licitacoes=bids,
-            ufs_selecionadas={"SP"},
-            setor="vestuario",
-        )
-
-        # Batch was attempted
-        assert mock_batch.called
-        # All 5 should have been processed (via individual fallback)
-        assert stats["llm_zero_match_calls"] == 5
-        # Individual calls made (5 bids = 5 calls)
-        assert mock_client.chat.completions.create.call_count == 5
-
-
-# ==============================================================================
-# AC6: Feature flag False → use individual loop
-# ==============================================================================
-
-
-class TestAC6FeatureFlag:
-    """AC6: LLM_ZERO_MATCH_BATCH_ENABLED=False uses individual calls."""
-
-    @patch("config.LLM_ZERO_MATCH_BATCH_ENABLED", False)
-    @patch("llm_arbiter._get_client")
-    def test_flag_disabled_uses_individual(self, mock_get_client):
-        """With batch flag off, each bid gets its own LLM call."""
-        mock_client = Mock()
-        mock_get_client.return_value = mock_client
-
-        resp = MagicMock()
-        resp.choices[0].message.content = "SIM"
-        resp.usage = None
-        mock_client.chat.completions.create.return_value = resp
-
-        bids = [
-            make_zero_match_bid(
-                codigo=f"IND-{i}",
-                objeto=f"Consultoria em planejamento estratégico e gestão empresarial {i}",
-            )
-            for i in range(5)
-        ]
-
-        aprovadas, stats = aplicar_todos_filtros(
-            licitacoes=bids,
-            ufs_selecionadas={"SP"},
-            setor="vestuario",
-        )
-
-        # All 5 classified individually
-        assert stats["llm_zero_match_calls"] == 5
-        assert stats["llm_zero_match_aprovadas"] == 5
-        # Individual calls: 1 per bid
-        assert mock_client.chat.completions.create.call_count == 5
-
-
+#
 # ==============================================================================
 # Integration: 50 zero-match items via batch (LLM mocked)
 # ==============================================================================
@@ -338,65 +257,6 @@ class TestIntegration50Items:
         assert mock_client.chat.completions.create.call_count == 3
 
 
-# ==============================================================================
-# Regression: Batch vs individual produce equivalent decisions
-# ==============================================================================
-
-
-class TestRegressionBatchVsIndividual:
-    """Regression: batch and individual modes produce consistent results."""
-
-    @patch("llm_arbiter._get_client")
-    def test_batch_and_individual_same_stats(self, mock_get_client):
-        """Both modes should produce same accept/reject counts for same inputs."""
-        mock_client = Mock()
-        mock_get_client.return_value = mock_client
-
-        # Individual mode: always returns SIM
-        resp_individual = MagicMock()
-        resp_individual.choices[0].message.content = "SIM"
-        resp_individual.usage = None
-
-        bids = [
-            make_zero_match_bid(
-                codigo=f"REG-{i}",
-                objeto=f"Consultoria em planejamento estratégico e gestão organizacional completa {i}",
-            )
-            for i in range(10)
-        ]
-
-        # Run individual mode
-        clear_cache()
-        mock_client.chat.completions.create.return_value = resp_individual
-
-        with patch("config.LLM_ZERO_MATCH_BATCH_ENABLED", False):
-            _, stats_ind = aplicar_todos_filtros(
-                licitacoes=[dict(b) for b in bids],
-                ufs_selecionadas={"SP"},
-                setor="vestuario",
-            )
-
-        # Run batch mode
-        clear_cache()
-        batch_lines = "\n".join(f"{i+1}. YES" for i in range(10))
-        resp_batch = MagicMock()
-        resp_batch.choices[0].message.content = batch_lines
-        resp_batch.usage = MagicMock()
-        resp_batch.usage.prompt_tokens = 1000
-        resp_batch.usage.completion_tokens = 30
-        mock_client.chat.completions.create.return_value = resp_batch
-
-        with patch("config.LLM_ZERO_MATCH_BATCH_ENABLED", True):
-            _, stats_batch = aplicar_todos_filtros(
-                licitacoes=[dict(b) for b in bids],
-                ufs_selecionadas={"SP"},
-                setor="vestuario",
-            )
-
-        # Same number of calls and approvals
-        assert stats_ind["llm_zero_match_calls"] == stats_batch["llm_zero_match_calls"]
-        assert stats_ind["llm_zero_match_aprovadas"] == stats_batch["llm_zero_match_aprovadas"]
-        assert stats_ind["llm_zero_match_rejeitadas"] == stats_batch["llm_zero_match_rejeitadas"]
 
 
 # ==============================================================================
@@ -457,9 +317,10 @@ class TestBatchPromptBuilding:
         ]
         prompt = _build_zero_match_batch_prompt("vestuario", "Vestuário", items)
 
-        assert '1. "Serviço A"' in prompt
-        assert '2. "Serviço B"' in prompt
-        assert '3. "Serviço C"' in prompt
+        # Format: {i}. [{val_display}] {obj}
+        assert "1. [R$ 100.00] Serviço A" in prompt
+        assert "2. [R$ 200.00] Serviço B" in prompt
+        assert "3. [R$ 300.00] Serviço C" in prompt
         assert "Vestuário" in prompt
 
     def test_prompt_without_sector_id(self):
@@ -487,7 +348,7 @@ class TestAC7BatchTimeout:
 
     @patch("llm_arbiter._get_client")
     def test_batch_timeout_rejects_all(self, mock_get_client):
-        """When batch call exceeds timeout, all items get rejected/pending."""
+        """When batch call exceeds timeout, exception is raised for caller to handle."""
         mock_client = Mock()
         mock_get_client.return_value = mock_client
 
@@ -499,11 +360,8 @@ class TestAC7BatchTimeout:
             for i in range(10)
         ]
 
-        results = _classify_zero_match_batch(
-            items=items, setor_id="vestuario", setor_name="Vestuário",
-        )
-
-        assert len(results) == 10
-        assert all(not r["is_primary"] for r in results)
-        # With PENDING fallback enabled, should have pending_review
-        assert all(r.get("pending_review", False) for r in results)
+        # _classify_zero_match_batch re-raises exceptions for caller to handle fallback
+        with pytest.raises(TimeoutError):
+            _classify_zero_match_batch(
+                items=items, setor_id="vestuario", setor_name="Vestuário",
+            )

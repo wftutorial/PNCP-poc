@@ -17,8 +17,8 @@ async def stage_enrich(pipeline, ctx: SearchContext) -> None:
     """Compute relevance scores, viability assessment, confidence-based re-ranking, and sorting."""
 
     # D-04 AC7: Viability assessment (Stage 4.5 — post-filter, pre-ranking)
-    from config import get_feature_flag
-    if get_feature_flag("VIABILITY_ASSESSMENT_ENABLED") and ctx.licitacoes_filtradas and not ctx.is_simplified:
+    # DEBT-128: Viability is always-on (VIABILITY_ASSESSMENT_ENABLED flag removed)
+    if ctx.licitacoes_filtradas and not ctx.is_simplified:
         # Get sector-specific value range
         vr = None
         if ctx.sector and hasattr(ctx.sector, "viability_value_range"):
@@ -53,10 +53,9 @@ async def stage_enrich(pipeline, ctx: SearchContext) -> None:
                 len(matched_terms), len(ctx.custom_terms), phrase_count
             )
 
-    # D-02 AC5 + D-04 AC9: Re-ranking by combined score when viability active
-    # Falls back to confidence-only when viability is disabled
+    # D-02 AC5 + D-04 AC9: Re-ranking by combined score (viability always-on)
     if ctx.licitacoes_filtradas:
-        viability_active = get_feature_flag("VIABILITY_ASSESSMENT_ENABLED") and any(
+        viability_active = any(
             bid.get("_viability_score") is not None for bid in ctx.licitacoes_filtradas
         )
 
@@ -71,6 +70,7 @@ async def stage_enrich(pipeline, ctx: SearchContext) -> None:
                 lic["_combined_score"] = round(combined)
                 return (-combined, -valor)
 
+            # Fallback for simplified searches without viability scores
             # Band: 0=high(>=80), 1=medium(50-79), 2=low(<50)
             if conf >= 80:
                 band = 0

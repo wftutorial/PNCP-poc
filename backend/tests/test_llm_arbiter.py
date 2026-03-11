@@ -258,35 +258,14 @@ class TestStructuredOutput:
         assert result["confidence"] == 20
         assert "obras" in result["rejection_reason"].lower()
 
-    def test_feature_flag_false_uses_binary_mode(self, mock_openai_client):
-        """AC10.7: Feature flag false uses old behavior (max_tokens=1)."""
-        mock_openai_client.chat.completions.create.return_value = _create_mock_response("SIM")
-
-        with patch("config.get_feature_flag", return_value=False):
-            result = classify_contract_primary_match(
-                objeto="Uniformes escolares",
-                valor=1_000_000,
-                setor_name="Vestuário",
-            )
-
-        assert result["is_primary"] is True
-        assert result["confidence"] == 100  # Binary: SIM=100
-        assert result["evidence"] == []
-
-        # Verify max_tokens=1 was used (binary)
-        call_args = mock_openai_client.chat.completions.create.call_args
-        assert call_args.kwargs["max_tokens"] == 1
-        assert "response_format" not in call_args.kwargs
-
     def test_structured_mode_uses_json_format(self, mock_openai_client):
-        """AC2: Structured mode uses response_format=json_object."""
+        """AC2: Structured mode uses response_format=json_object (always-on since DEBT-128)."""
         json_resp = _structured_json("SIM", 90)
         mock_openai_client.chat.completions.create.return_value = _create_mock_response(json_resp)
 
-        with patch("config.get_feature_flag", return_value=True):
-            classify_contract_primary_match(
-                objeto="Teste", valor=1_000_000, setor_name="Vestuário",
-            )
+        classify_contract_primary_match(
+            objeto="Teste", valor=1_000_000, setor_name="Vestuário",
+        )
 
         call_args = mock_openai_client.chat.completions.create.call_args
         assert call_args.kwargs["max_tokens"] == 800  # DEBT-101 AC5: increased 300→800 to eliminate truncation
@@ -577,14 +556,14 @@ class TestPromptConstruction:
     """Test prompt generation for different modes."""
 
     def test_sector_mode_prompt_format(self, mock_openai_client):
-        """Test sector mode prompt follows AC3.2 format."""
-        mock_openai_client.chat.completions.create.return_value = _create_mock_response("SIM")
+        """Test sector mode prompt follows AC3.2 format (structured output always-on since DEBT-128)."""
+        json_resp = _structured_json("SIM", 85)
+        mock_openai_client.chat.completions.create.return_value = _create_mock_response(json_resp)
 
-        with patch("config.get_feature_flag", return_value=False):
-            classify_contract_primary_match(
-                objeto="Teste de prompt", valor=1_000_000,
-                setor_name="Hardware e Equipamentos de TI",
-            )
+        classify_contract_primary_match(
+            objeto="Teste de prompt", valor=1_000_000,
+            setor_name="Hardware e Equipamentos de TI",
+        )
 
         call_args = mock_openai_client.chat.completions.create.call_args
         messages = call_args.kwargs["messages"]
@@ -595,33 +574,35 @@ class TestPromptConstruction:
         assert "Setor: Hardware e Equipamentos de TI" in user_msg
         assert "Valor: R$" in user_msg
         assert "PRIMARIAMENTE" in user_msg
-        assert "SIM ou NAO" in user_msg
+        # DEBT-128: Structured mode always uses JSON instruction
+        assert "JSON" in user_msg
 
     def test_custom_terms_mode_prompt_format(self, mock_openai_client):
-        """Test custom terms mode prompt follows AC3.3 format."""
-        mock_openai_client.chat.completions.create.return_value = _create_mock_response("SIM")
+        """Test custom terms mode prompt follows AC3.3 format (structured output always-on since DEBT-128)."""
+        json_resp = _structured_json("SIM", 85)
+        mock_openai_client.chat.completions.create.return_value = _create_mock_response(json_resp)
 
-        with patch("config.get_feature_flag", return_value=False):
-            classify_contract_primary_match(
-                objeto="Teste de prompt", valor=1_000_000,
-                termos_busca=["software", "sistema", "aplicativo"],
-            )
+        classify_contract_primary_match(
+            objeto="Teste de prompt", valor=1_000_000,
+            termos_busca=["software", "sistema", "aplicativo"],
+        )
 
         call_args = mock_openai_client.chat.completions.create.call_args
         user_msg = call_args.kwargs["messages"][1]["content"]
         assert "Termos buscados: software, sistema, aplicativo" in user_msg
         assert "OBJETO PRINCIPAL" in user_msg
-        assert "SIM ou NAO" in user_msg
+        # DEBT-128: Structured mode always uses JSON instruction
+        assert "JSON" in user_msg
 
     def test_objeto_truncation(self, mock_openai_client):
         """AC3.7: Test objeto is truncated to 500 chars."""
-        mock_openai_client.chat.completions.create.return_value = _create_mock_response("SIM")
+        json_resp = _structured_json("SIM", 85)
+        mock_openai_client.chat.completions.create.return_value = _create_mock_response(json_resp)
 
         long_objeto = "INICIO_" + "A" * 490 + "MARCA" + "B" * 490 + "_FIM"
-        with patch("config.get_feature_flag", return_value=False):
-            classify_contract_primary_match(
-                objeto=long_objeto, valor=1_000_000, setor_name="Vestuário",
-            )
+        classify_contract_primary_match(
+            objeto=long_objeto, valor=1_000_000, setor_name="Vestuário",
+        )
 
         call_args = mock_openai_client.chat.completions.create.call_args
         user_msg = call_args.kwargs["messages"][1]["content"]
@@ -632,19 +613,19 @@ class TestPromptConstruction:
 class TestLLMParameters:
     """Test LLM API call parameters."""
 
-    def test_llm_parameters_binary(self, mock_openai_client):
-        """AC3.4: Test LLM is called with correct parameters in binary mode."""
-        mock_openai_client.chat.completions.create.return_value = _create_mock_response("SIM")
+    def test_llm_parameters_structured(self, mock_openai_client):
+        """AC3.4: Test LLM is called with correct parameters in structured mode (DEBT-128: always-on)."""
+        json_resp = _structured_json("SIM", 85)
+        mock_openai_client.chat.completions.create.return_value = _create_mock_response(json_resp)
 
-        with patch("config.get_feature_flag", return_value=False):
-            classify_contract_primary_match(
-                objeto="Teste", valor=1_000_000, setor_name="Vestuário",
-            )
+        classify_contract_primary_match(
+            objeto="Teste", valor=1_000_000, setor_name="Vestuário",
+        )
 
         call_args = mock_openai_client.chat.completions.create.call_args
         assert call_args.kwargs["model"] == "gpt-4.1-nano"
-        assert call_args.kwargs["max_tokens"] == 1
         assert call_args.kwargs["temperature"] == 0
+        assert call_args.kwargs["response_format"] == {"type": "json_object"}
 
 
 # =============================================================================

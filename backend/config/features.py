@@ -28,13 +28,11 @@ FILTER_DEBUG_MODE: bool = str_to_bool(os.getenv("FILTER_DEBUG_MODE", "false"))
 FILTER_DEBUG_SAMPLE: int = int(os.getenv("FILTER_DEBUG_SAMPLE", "0"))
 QA_AUDIT_SAMPLE_RATE: float = float(os.getenv("QA_AUDIT_SAMPLE_RATE", "0.10"))
 
-# Synonym & zero-results
-SYNONYM_MATCHING_ENABLED: bool = str_to_bool(os.getenv("SYNONYM_MATCHING_ENABLED", "true"))
+# Zero-results relaxation
 ZERO_RESULTS_RELAXATION_ENABLED: bool = str_to_bool(os.getenv("ZERO_RESULTS_RELAXATION_ENABLED", "true"))
 
 # LLM Zero Match
 LLM_ZERO_MATCH_ENABLED: bool = str_to_bool(os.getenv("LLM_ZERO_MATCH_ENABLED", "true"))
-LLM_ZERO_MATCH_BATCH_ENABLED: bool = str_to_bool(os.getenv("LLM_ZERO_MATCH_BATCH_ENABLED", "true"))
 LLM_ZERO_MATCH_BATCH_SIZE: int = int(os.getenv("LLM_ZERO_MATCH_BATCH_SIZE", "20"))
 LLM_ZERO_MATCH_BATCH_TIMEOUT: float = float(os.getenv("LLM_ZERO_MATCH_BATCH_TIMEOUT", "5.0"))
 FILTER_ZERO_MATCH_BUDGET_S: float = float(os.getenv("FILTER_ZERO_MATCH_BUDGET_S", "30"))
@@ -48,9 +46,6 @@ PENDING_REVIEW_TTL_SECONDS: int = int(os.getenv("PENDING_REVIEW_TTL_SECONDS", "8
 PENDING_REVIEW_MAX_RETRIES: int = int(os.getenv("PENDING_REVIEW_MAX_RETRIES", "3"))
 PENDING_REVIEW_RETRY_DELAY: int = int(os.getenv("PENDING_REVIEW_RETRY_DELAY", "300"))
 
-# D-02: LLM Structured Output
-LLM_STRUCTURED_OUTPUT_ENABLED: bool = str_to_bool(os.getenv("LLM_STRUCTURED_OUTPUT_ENABLED", "true"))
-
 # D-01: Item Inspection (Gray Zone)
 ITEM_INSPECTION_ENABLED: bool = str_to_bool(os.getenv("ITEM_INSPECTION_ENABLED", "true"))
 _MAX_ITEM_RAW = int(os.getenv("MAX_ITEM_INSPECTIONS", "20"))
@@ -61,7 +56,6 @@ ITEM_INSPECTION_CONCURRENCY: int = int(os.getenv("ITEM_INSPECTION_CONCURRENCY", 
 
 # STORY-264: Trial Duration
 TRIAL_DURATION_DAYS: int = int(os.getenv("TRIAL_DURATION_DAYS", "14"))
-TRIAL_14_DAYS_ENABLED: bool = str_to_bool(os.getenv("TRIAL_14_DAYS_ENABLED", "true"))
 TRIAL_EMAILS_ENABLED: bool = str_to_bool(os.getenv("TRIAL_EMAILS_ENABLED", "true"))
 TRIAL_PAYWALL_ENABLED: bool = str_to_bool(os.getenv("TRIAL_PAYWALL_ENABLED", "true"))
 TRIAL_PAYWALL_DAY: int = int(os.getenv("TRIAL_PAYWALL_DAY", "7"))
@@ -124,16 +118,12 @@ _FEATURE_FLAG_TTL: float = 60.0
 _FEATURE_FLAG_REGISTRY: dict[str, tuple[str, str]] = {
     "ENABLE_NEW_PRICING": ("ENABLE_NEW_PRICING", "true"),
     "LLM_ARBITER_ENABLED": ("LLM_ARBITER_ENABLED", "true"),
-    "SYNONYM_MATCHING_ENABLED": ("SYNONYM_MATCHING_ENABLED", "true"),
     "ZERO_RESULTS_RELAXATION_ENABLED": ("ZERO_RESULTS_RELAXATION_ENABLED", "true"),
     "LLM_ZERO_MATCH_ENABLED": ("LLM_ZERO_MATCH_ENABLED", "true"),
-    "LLM_ZERO_MATCH_BATCH_ENABLED": ("LLM_ZERO_MATCH_BATCH_ENABLED", "true"),
     "ASYNC_ZERO_MATCH_ENABLED": ("ASYNC_ZERO_MATCH_ENABLED", "false"),
     "CO_OCCURRENCE_RULES_ENABLED": ("CO_OCCURRENCE_RULES_ENABLED", "true"),
     "FILTER_DEBUG_MODE": ("FILTER_DEBUG_MODE", "false"),
     "ITEM_INSPECTION_ENABLED": ("ITEM_INSPECTION_ENABLED", "true"),
-    "LLM_STRUCTURED_OUTPUT_ENABLED": ("LLM_STRUCTURED_OUTPUT_ENABLED", "true"),
-    "VIABILITY_ASSESSMENT_ENABLED": ("VIABILITY_ASSESSMENT_ENABLED", "true"),
     "USER_FEEDBACK_ENABLED": ("USER_FEEDBACK_ENABLED", "true"),
     "PROXIMITY_CONTEXT_ENABLED": ("PROXIMITY_CONTEXT_ENABLED", "true"),
     "RATE_LIMITING_ENABLED": ("RATE_LIMITING_ENABLED", "true"),
@@ -198,7 +188,6 @@ def log_feature_flags() -> None:
 
     logger.info(f"Feature Flag - ENABLE_NEW_PRICING: {ENABLE_NEW_PRICING}")
     logger.info(f"Feature Flag - LLM_ARBITER_ENABLED: {LLM_ARBITER_ENABLED}")
-    logger.info(f"Feature Flag - SYNONYM_MATCHING_ENABLED: {SYNONYM_MATCHING_ENABLED}")
     logger.info(f"Feature Flag - ZERO_RESULTS_RELAXATION_ENABLED: {ZERO_RESULTS_RELAXATION_ENABLED}")
     if not _cg_enabled:
         logger.warning(

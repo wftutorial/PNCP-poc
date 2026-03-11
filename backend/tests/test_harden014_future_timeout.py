@@ -40,7 +40,6 @@ class TestHarden014BatchFutureTimeout:
     """AC1+AC2+AC3: Per-future timeout in batch zero-match loop."""
 
     @patch("config.LLM_ZERO_MATCH_ENABLED", True)
-    @patch("config.LLM_ZERO_MATCH_BATCH_ENABLED", True)
     @patch("config.LLM_ZERO_MATCH_BATCH_SIZE", 5)
     @patch("config.FILTER_ZERO_MATCH_BUDGET_S", 999)
     @patch("config.LLM_FALLBACK_PENDING_ENABLED", True)
@@ -65,7 +64,7 @@ class TestHarden014BatchFutureTimeout:
         with patch("llm_arbiter._classify_zero_match_batch", classify_batch_with_hang), \
              patch("llm_arbiter.classify_contract_primary_match", return_value={"is_primary": False}), \
              patch("sectors.get_sector") as mock_sector, \
-             patch("filter.wait", side_effect=_fast_wait):
+             patch("filter_llm.wait", side_effect=_fast_wait):
             mock_sector.return_value = _fake_sector()
 
             resultado, stats = aplicar_todos_filtros(
@@ -83,7 +82,6 @@ class TestHarden014BatchFutureTimeout:
             assert lic["_relevance_source"] == "pending_review"
 
     @patch("config.LLM_ZERO_MATCH_ENABLED", True)
-    @patch("config.LLM_ZERO_MATCH_BATCH_ENABLED", True)
     @patch("config.LLM_ZERO_MATCH_BATCH_SIZE", 5)
     @patch("config.FILTER_ZERO_MATCH_BUDGET_S", 999)
     @patch("config.LLM_FALLBACK_PENDING_ENABLED", True)
@@ -109,51 +107,6 @@ class TestHarden014BatchFutureTimeout:
 
         pending = [lic for lic in licitacoes if lic.get("_pending_review")]
         assert len(pending) == 0, f"Expected 0 pending_review items, got {len(pending)}"
-
-
-class TestHarden014IndividualFutureTimeout:
-    """AC1+AC2+AC3: Per-future timeout in individual zero-match loop."""
-
-    @patch("config.LLM_ZERO_MATCH_ENABLED", True)
-    @patch("config.LLM_ZERO_MATCH_BATCH_ENABLED", False)
-    @patch("config.FILTER_ZERO_MATCH_BUDGET_S", 999)
-    @patch("config.LLM_FALLBACK_PENDING_ENABLED", True)
-    def test_hanging_individual_future_triggers_timeout(self):
-        """AC5: An individual future that hangs > timeout is cancelled, item marked pending_review."""
-        from filter import aplicar_todos_filtros
-
-        licitacoes = [_make_lic(f"Equipamento construcao civil {i:03d} para obra publica") for i in range(3)]
-
-        call_count = 0
-        cancel_event = threading.Event()
-
-        def classify_one_with_hang(objeto, valor, setor_name=None, termos_busca=None,
-                                   prompt_level=None, setor_id=None):
-            nonlocal call_count
-            call_count += 1
-            if call_count <= 2:
-                return {"is_primary": True, "confidence": 65, "evidence": ["ok"]}
-            else:
-                cancel_event.wait(timeout=1)
-                return {"is_primary": False}
-
-        with patch("llm_arbiter.classify_contract_primary_match", classify_one_with_hang), \
-             patch("sectors.get_sector") as mock_sector, \
-             patch("filter.wait", side_effect=_fast_wait):
-            mock_sector.return_value = _fake_sector()
-
-            resultado, stats = aplicar_todos_filtros(
-                licitacoes=licitacoes,
-                ufs_selecionadas={"SP"},
-                setor="engenharia",
-            )
-            cancel_event.set()
-
-        pending = [lic for lic in licitacoes if lic.get("_pending_review")]
-        assert len(pending) >= 1, f"Expected at least 1 pending_review item, got {len(pending)}"
-
-        for lic in pending:
-            assert lic["_pending_review_reason"] == "llm_future_timeout"
 
 
 class TestHarden014ArbiterFutureTimeout:
@@ -199,7 +152,7 @@ class TestHarden014ArbiterFutureTimeout:
                 return {"is_primary": False}
 
         with patch("llm_arbiter.classify_contract_primary_match", classify_with_hang), \
-             patch("filter.wait", side_effect=_fast_wait):
+             patch("filter_llm.wait", side_effect=_fast_wait):
 
             resultado, stats = aplicar_todos_filtros(
                 licitacoes=licitacoes,

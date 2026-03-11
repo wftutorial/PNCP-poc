@@ -268,7 +268,6 @@ class TestModuleLevelLoggingAC4:
         messages = " ".join(r.message for r in caplog.records)
         assert "ENABLE_NEW_PRICING" in messages
         assert "LLM_ARBITER_ENABLED" in messages
-        assert "SYNONYM_MATCHING_ENABLED" in messages
         assert "ZERO_RESULTS_RELAXATION_ENABLED" in messages
 
     def test_log_feature_flags_includes_boolean_values(self, caplog):

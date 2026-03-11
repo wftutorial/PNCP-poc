@@ -84,7 +84,6 @@ class TestListFeatureFlags:
         assert resp.status_code == 200
         flag_names = [f["name"] for f in resp.json()["flags"]]
         assert "LLM_ARBITER_ENABLED" in flag_names
-        assert "VIABILITY_ASSESSMENT_ENABLED" in flag_names
         assert "TRIAL_PAYWALL_ENABLED" in flag_names
 
     @patch("redis_pool.is_redis_available", new_callable=AsyncMock, return_value=False)

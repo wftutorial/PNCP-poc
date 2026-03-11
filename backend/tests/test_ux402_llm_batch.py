@@ -31,7 +31,6 @@ def setup_env():
     os.environ["LLM_ARBITER_ENABLED"] = "true"
     os.environ["LLM_ARBITER_MODEL"] = "gpt-4.1-nano"
     os.environ["OPENAI_API_KEY"] = "test-key-12345"
-    os.environ["LLM_ZERO_MATCH_BATCH_ENABLED"] = "true"
     os.environ["LLM_ZERO_MATCH_BATCH_SIZE"] = "20"
     os.environ["LLM_ZERO_MATCH_BATCH_TIMEOUT"] = "5.0"
     clear_cache()
@@ -274,7 +273,6 @@ class TestFilterBatchIntegration:
     """Integration tests for batch zero-match in filter.py."""
 
     @patch("llm_arbiter._get_client")
-    @patch("config.LLM_ZERO_MATCH_BATCH_ENABLED", True)
     @patch("config.LLM_ZERO_MATCH_ENABLED", True)
     def test_50_items_completes_via_batch(self, mock_get_client):
         """Integration: 50 zero-match items processed via batch (mocked LLM)."""
@@ -306,19 +304,6 @@ class TestFilterBatchIntegration:
         assert len(all_results) == 50
         assert all(r["is_primary"] for r in all_results)
         assert mock_client.chat.completions.create.call_count == 3  # 20 + 20 + 10
-
-    @patch("llm_arbiter._get_client")
-    @patch("config.LLM_ZERO_MATCH_BATCH_ENABLED", False)
-    @patch("config.LLM_ZERO_MATCH_ENABLED", True)
-    @patch("config.LLM_ZERO_MATCH_BATCH_SIZE", 20)
-    def test_feature_flag_false_skips_batch(self, mock_get_client):
-        """AC6: When LLM_ZERO_MATCH_BATCH_ENABLED=False, batch is not used.
-
-        Tests the flag at the filter.py level by verifying the import path.
-        """
-        # Just verify the config value is False
-        from config import LLM_ZERO_MATCH_BATCH_ENABLED
-        assert LLM_ZERO_MATCH_BATCH_ENABLED is False
 
     @patch("llm_arbiter._get_client")
     def test_batch_vs_individual_regression(self, mock_get_client):
@@ -397,16 +382,6 @@ class TestBatchMetrics:
         )
         assert len(results) == 2
         # Duration metric is observed inside the function (no assertion needed beyond no-error)
-
-    def test_config_flag_exists(self):
-        """AC6: LLM_ZERO_MATCH_BATCH_ENABLED config exists."""
-        from config import LLM_ZERO_MATCH_BATCH_ENABLED
-        assert isinstance(LLM_ZERO_MATCH_BATCH_ENABLED, bool)
-
-    def test_config_flag_in_registry(self):
-        """AC6: Feature flag is in the registry."""
-        from config import _FEATURE_FLAG_REGISTRY
-        assert "LLM_ZERO_MATCH_BATCH_ENABLED" in _FEATURE_FLAG_REGISTRY
 
     def test_batch_size_config(self):
         """AC1: Batch size config defaults to 20."""

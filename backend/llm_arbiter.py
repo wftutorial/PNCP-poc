@@ -6,7 +6,7 @@ Uses GPT-4.1-nano to classify contracts:
 - "uncertain zone" (1-5% term density): PRIMARILY about sector? SIM/NAO
 - "zero match" (0% keyword match): Is this contract relevant to sector? YES/NO
 
-D-02: When LLM_STRUCTURED_OUTPUT_ENABLED=true, returns JSON with:
+D-02: Returns structured JSON with:
   classe (SIM/NAO), confianca (0-100), evidencias (literal citations), motivo_exclusao
 
 Cost: ~R$ 0.00007 per classification (structured) vs ~R$ 0.00002 (binary)
@@ -645,8 +645,7 @@ def classify_contract_primary_match(
 ) -> dict:
     """Classify if contract is PRIMARILY about sector/terms.
 
-    D-02: Returns structured dict instead of bool when LLM_STRUCTURED_OUTPUT_ENABLED=true.
-    When disabled, returns legacy-compatible dict with confidence=100/0.
+    D-02: Returns structured dict with confidence, evidence, and rejection reason.
 
     Returns:
         dict with keys:
@@ -656,13 +655,12 @@ def classify_contract_primary_match(
             rejection_reason (str|None): Reason when NAO
             needs_more_data (bool): True when description insufficient
     """
-    from config import get_feature_flag
-
     # CRIT-004 AC13: Include search_id in classification logs for correlation
     from middleware import search_id_var
     _search_id = search_id_var.get("-")
 
-    structured_enabled = get_feature_flag("LLM_STRUCTURED_OUTPUT_ENABLED")
+    # DEBT-128: Structured output is always-on (LLM_STRUCTURED_OUTPUT_ENABLED removed)
+    structured_enabled = True
 
     # Feature flag check
     if not LLM_ENABLED:

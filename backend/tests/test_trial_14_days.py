@@ -18,11 +18,6 @@ class TestTrialDuration14Days:
         from config import TRIAL_DURATION_DAYS
         assert TRIAL_DURATION_DAYS == 14
 
-    def test_feature_flag_enabled_by_default(self):
-        """TRIAL_14_DAYS_ENABLED should be True by default."""
-        from config import TRIAL_14_DAYS_ENABLED
-        assert TRIAL_14_DAYS_ENABLED is True
-
     def test_trial_expires_at_14_days(self):
         """New trial should expire after 14 days, not 30."""
         from config import TRIAL_DURATION_DAYS

@@ -286,10 +286,8 @@ def _run_zero_match_llm(
 
     Returns (approved, pending_review).
     """
-    from llm_arbiter import classify_contract_primary_match as _classify_zm
     from llm_arbiter import _classify_zero_match_batch as _classify_batch
     from config import (
-        LLM_ZERO_MATCH_BATCH_ENABLED,
         LLM_ZERO_MATCH_BATCH_SIZE,
         FILTER_ZERO_MATCH_BUDGET_S,
     )
@@ -306,38 +304,14 @@ def _run_zero_match_llm(
     resultado_approved: List[dict] = []
     resultado_pending: List[dict] = []
     _llm_total = len(pool)
-    _batch_used = False
     stats["zero_match_budget_exceeded"] = 0
-    _zm_budget_hit = False
 
-    # Try batch mode first
-    if LLM_ZERO_MATCH_BATCH_ENABLED:
-        try:
-            success = _run_zero_match_batch(
-                pool, setor, setor_name, custom_terms, use_term_prompt,
-                on_progress, stats, resultado_approved, resultado_pending,
-                _classify_batch, LLM_ZERO_MATCH_BATCH_SIZE, FILTER_ZERO_MATCH_BUDGET_S,
-            )
-            if success:
-                _batch_used = True
-        except Exception as e:
-            logger.warning(
-                f"UX-402 AC2: Batch classification failed, falling back to individual: {e}"
-            )
-            stats["llm_zero_match_calls"] = 0
-            stats["llm_zero_match_aprovadas"] = 0
-            stats["llm_zero_match_rejeitadas"] = 0
-            stats["pending_review_count"] = 0
-            resultado_approved.clear()
-            resultado_pending.clear()
-
-    # Fallback to individual calls
-    if not _batch_used:
-        _run_zero_match_individual(
-            pool, setor, setor_name, custom_terms, use_term_prompt,
-            on_progress, stats, resultado_approved, resultado_pending,
-            _classify_zm, FILTER_ZERO_MATCH_BUDGET_S,
-        )
+    # DEBT-128: Batch mode is now always-on (LLM_ZERO_MATCH_BATCH_ENABLED removed)
+    _run_zero_match_batch(
+        pool, setor, setor_name, custom_terms, use_term_prompt,
+        on_progress, stats, resultado_approved, resultado_pending,
+        _classify_batch, LLM_ZERO_MATCH_BATCH_SIZE, FILTER_ZERO_MATCH_BUDGET_S,
+    )
 
     return resultado_approved, resultado_pending
 

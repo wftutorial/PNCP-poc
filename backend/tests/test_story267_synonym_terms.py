@@ -125,7 +125,6 @@ class TestFluxo2UsesTermSynonymMatches:
                 "ITEM_INSPECTION_ENABLED": False,
                 "LLM_ARBITER_ENABLED": False,
                 "SECTOR_RED_FLAGS_ENABLED": False,
-                "SYNONYM_MATCHING_ENABLED": True,
             }
             return flags.get(name, False)
 

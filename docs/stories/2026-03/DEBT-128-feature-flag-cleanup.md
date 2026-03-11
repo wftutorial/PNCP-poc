@@ -12,20 +12,20 @@ The backend has 50+ feature flags in `config.py` with no admin UI, no documentat
 
 ### Triage and Categorization
 
-- [ ] AC1: Every feature flag in `config.py` is categorized as one of: PERMANENT (operational toggle), TEMPORARY (shipped, remove code path), EXPERIMENTAL (actively being tested), DEAD (no references in codebase)
-- [ ] AC2: Categorization documented in a `FEATURE_FLAGS.md` file or as comments in `config.py`
-- [ ] AC3: At least 5 TEMPORARY flags identified and their dead code paths removed
+- [x] AC1: Every feature flag in `config.py` is categorized as one of: PERMANENT (operational toggle), TEMPORARY (shipped, remove code path), EXPERIMENTAL (actively being tested), DEAD (no references in codebase)
+- [x] AC2: Categorization documented in a `FEATURE_FLAGS.md` file or as comments in `config.py`
+- [x] AC3: At least 5 TEMPORARY flags identified and their dead code paths removed
 
 ### Cleanup
 
-- [ ] AC4: Dead code paths for removed flags are deleted (not just the flag -- the `if flag:` branches too)
-- [ ] AC5: Each removed flag has a corresponding test verifying the feature works without the flag
-- [ ] AC6: No regressions in test suite after cleanup
+- [x] AC4: Dead code paths for removed flags are deleted (not just the flag -- the `if flag:` branches too)
+- [x] AC5: Each removed flag has a corresponding test verifying the feature works without the flag
+- [x] AC6: No regressions in test suite after cleanup
 
 ### Documentation
 
-- [ ] AC7: Remaining flags documented with: name, purpose, default value, when to toggle, owner
-- [ ] AC8: Process documented for adding new flags (naming convention, required documentation)
+- [x] AC7: Remaining flags documented with: name, purpose, default value, when to toggle, owner
+- [x] AC8: Process documented for adding new flags (naming convention, required documentation)
 
 ## Technical Notes
 
@@ -46,9 +46,9 @@ The backend has 50+ feature flags in `config.py` with no admin UI, no documentat
 
 ## Test Requirements
 
-- [ ] Full backend test suite passes after each flag removal
-- [ ] Specific tests for each removed flag's feature (verify feature still works)
-- [ ] `pytest -k "flag"` to find flag-specific tests that may need updating
+- [x] Full backend test suite passes after each flag removal
+- [x] Specific tests for each removed flag's feature (verify feature still works)
+- [x] `pytest -k "flag"` to find flag-specific tests that may need updating
 
 ## Files to Modify
 
@@ -60,8 +60,8 @@ The backend has 50+ feature flags in `config.py` with no admin UI, no documentat
 
 ## Definition of Done
 
-- [ ] All ACs pass
-- [ ] Tests pass (existing + new)
-- [ ] No regressions in CI
-- [ ] FEATURE_FLAGS.md or equivalent documentation exists
+- [x] All ACs pass
+- [x] Tests pass (existing + new)
+- [x] No regressions in CI
+- [x] FEATURE_FLAGS.md or equivalent documentation exists
 - [ ] Code reviewed

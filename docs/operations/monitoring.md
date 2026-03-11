@@ -54,6 +54,12 @@
 | 6 | High Priority Issues (Backend) | High priority issues | Notify IssueOwners | smartlic-backend | 16137961 |
 | 7 | High Priority Issues (Frontend) | High priority issues | Notify IssueOwners | smartlic-frontend | 16688648 |
 | 8 | Uptime Monitoring (auto) | HTTP uptime check every 1 min | Auto-detected | smartlic-backend | 6595733 |
+| 9 | Circuit Breaker Open | CB state open (message + tag) | Notify IssueOwners | smartlic-backend | A configurar |
+| 10 | SSE Error Rate Warning | SSE errors > 5/min | Notify IssueOwners | smartlic-backend | A configurar |
+| 11 | SSE Error Rate Critical | SSE errors > 20/min | Notify IssueOwners | smartlic-backend | A configurar |
+| 12 | Response Latency P99 | /buscar p99 > 10s | Notify IssueOwners | smartlic-backend | A configurar |
+
+> **Nota:** Regras #9-12 adicionadas por DEBT-129. Configuração detalhada e runbooks em [`alerting-runbook.md`](./alerting-runbook.md).
 
 **Dashboard Sentry:** https://confenge.sentry.io/
 
@@ -178,8 +184,19 @@
 
 ---
 
-## 7. Histórico de Alterações
+## 7. Documentos Relacionados
+
+| Documento | Conteúdo |
+|-----------|----------|
+| [`capacity-limits.md`](./capacity-limits.md) | Limites de capacidade, gargalos, plano de escala |
+| [`alerting-runbook.md`](./alerting-runbook.md) | Inventário de alertas + runbooks (CB open, error rate, latency) |
+| [`cost-analysis.md`](./cost-analysis.md) | Análise de custos operacionais |
+
+---
+
+## 8. Histórico de Alterações
 
 | Data | Alteração | Story |
 |------|-----------|-------|
+| 2026-03-11 | Novas alert rules (#9-12), links para capacity-limits e alerting-runbook | DEBT-129 |
 | 2026-02-21 | Documento criado com monitors e alert rules | GTM-GO-001 |

@@ -293,9 +293,10 @@ class TestCalculationComment:
     """AC3: Code comment explaining timeout calculation."""
 
     def test_calculation_comment_exists(self):
-        """AC3: pncp_client.py contains calculation comment for PER_UF_TIMEOUT."""
-        import pncp_client
-        src = Path(pncp_client.__file__).read_text()
+        """AC3: config/pncp.py contains calculation comment for PER_UF_TIMEOUT.
+        DEBT-118: env var config moved from pncp_client.py to config/pncp.py."""
+        import config.pncp as config_pncp
+        src = Path(config_pncp.__file__).read_text()
         assert "4 mods" in src.lower() or "4 modalities" in src.lower(), (
             "Should have comment explaining 4 modalities calculation"
         )

@@ -101,6 +101,8 @@ COMPRASGOV_ENABLED: bool = str_to_bool(os.getenv("COMPRASGOV_ENABLED", "false"))
 PIPELINE_TIMEOUT: int = int(os.getenv("PIPELINE_TIMEOUT", "110"))
 CONSOLIDATION_TIMEOUT: int = int(os.getenv("CONSOLIDATION_TIMEOUT", "100"))
 PNCP_TIMEOUT_PER_SOURCE: int = int(os.getenv("PNCP_TIMEOUT_PER_SOURCE", "80"))
+# Per-UF timeout (GTM-FIX-029 AC1/AC5) — configurable
+# Calculation: 4 modalities × ~15s/mod (with retry) = ~60s + 30s margin = 90s
 PNCP_TIMEOUT_PER_UF: int = int(os.getenv("PNCP_TIMEOUT_PER_UF", "30"))
 PNCP_TIMEOUT_PER_UF_DEGRADED: int = int(os.getenv("PNCP_TIMEOUT_PER_UF_DEGRADED", "15"))
 PIPELINE_SKIP_LLM_AFTER_S: int = int(os.getenv("PIPELINE_SKIP_LLM_AFTER_S", "90"))
@@ -109,3 +111,56 @@ PIPELINE_SKIP_VIABILITY_AFTER_S: int = int(os.getenv("PIPELINE_SKIP_VIABILITY_AF
 # GTM-STAB-003 AC3: Consolidation early return
 EARLY_RETURN_THRESHOLD_PCT: float = float(os.getenv("EARLY_RETURN_THRESHOLD_PCT", "0.8"))
 EARLY_RETURN_TIME_S: float = float(os.getenv("EARLY_RETURN_TIME_S", "80.0"))
+
+# ============================================================================
+# DEBT-118: Circuit breaker & batching config (moved from pncp_client.py)
+# ============================================================================
+
+# Configurable via environment variables (GTM-FIX-005)
+PNCP_CIRCUIT_BREAKER_THRESHOLD: int = int(
+    # GTM-INFRA-001 AC4: Reduced from 50 to 15 — trips in ~30s instead of ~3min
+    os.getenv("PNCP_CIRCUIT_BREAKER_THRESHOLD", "15")
+)
+PNCP_CIRCUIT_BREAKER_COOLDOWN: int = int(
+    # GTM-INFRA-001 AC5: Reduced proportionally from 120s to 60s
+    os.getenv("PNCP_CIRCUIT_BREAKER_COOLDOWN", "60")
+)
+PCP_CIRCUIT_BREAKER_THRESHOLD: int = int(
+    # STORY-305 AC5: Aligned with PNCP — same class of government API, no justification for 2x tolerance
+    os.getenv("PCP_CIRCUIT_BREAKER_THRESHOLD", "15")
+)
+PCP_CIRCUIT_BREAKER_COOLDOWN: int = int(
+    # STORY-305 AC5: Aligned with PNCP (was 120s)
+    os.getenv("PCP_CIRCUIT_BREAKER_COOLDOWN", "60")
+)
+
+# STORY-305 AC2: ComprasGov circuit breaker — same class of government API
+COMPRASGOV_CIRCUIT_BREAKER_THRESHOLD: int = int(
+    os.getenv("COMPRASGOV_CIRCUIT_BREAKER_THRESHOLD", "15")
+)
+COMPRASGOV_CIRCUIT_BREAKER_COOLDOWN: int = int(
+    os.getenv("COMPRASGOV_CIRCUIT_BREAKER_COOLDOWN", "60")
+)
+
+# Per-modality timeout (STORY-252 AC6, GTM-RESILIENCE-F03 AC1) — configurable
+# PerModality=20s: GTM-STAB — tighter budget per modality under new PerUF=30s.
+# Hierarchy: PerModality(20s) < PerUF(30s) — margin 10s.
+PNCP_TIMEOUT_PER_MODALITY: float = float(
+    os.getenv("PNCP_TIMEOUT_PER_MODALITY", "20")
+)
+
+# Modality retry on timeout (STORY-252 AC9)
+PNCP_MODALITY_RETRY_BACKOFF: float = float(
+    os.getenv("PNCP_MODALITY_RETRY_BACKOFF", "3.0")
+)
+
+# GTM-FIX-031: Phased UF batching — reduces PNCP API pressure
+PNCP_BATCH_SIZE: int = int(os.getenv("PNCP_BATCH_SIZE", "5"))
+PNCP_BATCH_DELAY_S: float = float(os.getenv("PNCP_BATCH_DELAY_S", "2.0"))
+
+# B-06: Redis-backed circuit breaker toggle (rollback: set to "false")
+USE_REDIS_CIRCUIT_BREAKER: bool = os.getenv(
+    "USE_REDIS_CIRCUIT_BREAKER", "true"
+).lower() == "true"
+# B-06: Circuit breaker Redis key TTL — auto-expire safety net (AC12)
+CB_REDIS_TTL: int = int(os.getenv("CB_REDIS_TTL", "300"))  # 5 minutes

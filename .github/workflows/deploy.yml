@@ -179,10 +179,11 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
+      # DEBT-123 AC9: Migration push — intentionally non-blocking (marks deploy DEGRADED, not failed)
       - name: Apply migrations (db push)
         id: push
         if: steps.check.outputs.has_pending == 'true'
-        continue-on-error: true
+        continue-on-error: true  # DEBT-123 AC9: intentional — migration failure = DEGRADED deploy, not rollback
         run: |
           echo "=== Applying pending migrations ==="
           supabase db push --include-all
@@ -190,9 +191,10 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
+      # DEBT-123 AC9: PostgREST notify — intentionally non-blocking (schema auto-refreshes within ~60s)
       - name: Notify PostgREST schema reload
         if: steps.push.outcome == 'success' || steps.check.outputs.has_pending == 'false'
-        continue-on-error: true
+        continue-on-error: true  # DEBT-123 AC9: intentional — PostgREST auto-detects within ~60s if NOTIFY fails
         run: |
           if [ -n "$SUPABASE_DB_URL" ]; then
             psql "$SUPABASE_DB_URL" -c "NOTIFY pgrst, 'reload schema';" 2>&1

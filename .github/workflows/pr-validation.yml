@@ -139,6 +139,7 @@ jobs:
           fi
           pip install ruff mypy
 
+      # DEBT-123 AC9: Linting — intentionally non-blocking (advisory, not security-critical)
       - name: Lint with Ruff
         if: steps.check-backend.outputs.has_python_files == 'true'
         run: |
@@ -146,8 +147,9 @@ jobs:
           echo "Running Ruff linter..."
           ruff check . --output-format=github || true
           echo "✅ Linting complete"
-        continue-on-error: true
+        continue-on-error: true  # DEBT-123 AC9: intentional — linting is advisory
 
+      # DEBT-123 AC9: Formatting — intentionally non-blocking (advisory, not security-critical)
       - name: Check code formatting
         if: steps.check-backend.outputs.has_python_files == 'true'
         run: |
@@ -158,8 +160,9 @@ jobs:
             exit 1
           }
           echo "✅ Code formatting is correct"
-        continue-on-error: true
+        continue-on-error: true  # DEBT-123 AC9: intentional — formatting is advisory
 
+      # DEBT-123 AC9: Type checking — intentionally non-blocking (advisory, not security-critical)
       - name: Type checking with mypy
         if: steps.check-backend.outputs.has_python_files == 'true'
         run: |
@@ -169,7 +172,7 @@ jobs:
             mypy . --ignore-missing-imports --no-strict-optional || true
             echo "✅ Type checking complete"
           fi
-        continue-on-error: true
+        continue-on-error: true  # DEBT-123 AC9: intentional — type checking is advisory
 
       - name: Check Python syntax
         if: steps.check-backend.outputs.has_python_files == 'true'
@@ -213,13 +216,15 @@ jobs:
           cd frontend
           npm ci || npm install
 
+      # DEBT-123 AC9: Frontend lint — intentionally non-blocking (advisory, not security-critical)
       - name: Lint
         if: steps.check-frontend.outputs.has_package_json == 'true'
         run: |
           cd frontend
           npm run lint || echo "⚠️ Linting not configured yet"
-        continue-on-error: true
+        continue-on-error: true  # DEBT-123 AC9: intentional — linting is advisory
 
+      # DEBT-123 AC9: Frontend type check — intentionally non-blocking (advisory, not security-critical)
       - name: Type check
         if: steps.check-frontend.outputs.has_package_json == 'true'
         run: |
@@ -227,14 +232,15 @@ jobs:
           if [ -f tsconfig.json ]; then
             npx tsc --noEmit || echo "⚠️ Type errors found"
           fi
-        continue-on-error: true
+        continue-on-error: true  # DEBT-123 AC9: intentional — type checking is advisory
 
+      # DEBT-123 AC9: Frontend build — intentionally non-blocking (build validation is advisory in PR validation)
       - name: Build
         if: steps.check-frontend.outputs.has_package_json == 'true'
         run: |
           cd frontend
           npm run build || echo "⚠️ Build not configured yet"
-        continue-on-error: true
+        continue-on-error: true  # DEBT-123 AC9: intentional — build is validated in dedicated CI, advisory here
 
   security-scan:
     name: Security Scanning
@@ -252,6 +258,7 @@ jobs:
           severity: 'CRITICAL'
           exit-code: '1'
 
+      # DEBT-123 AC9: Trivy HIGH — intentionally non-blocking (CRITICAL is already blocking above)
       - name: Trivy scan (HIGH — warning only)
         uses: aquasecurity/trivy-action@master
         with:
@@ -260,15 +267,15 @@ jobs:
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'HIGH'
-        continue-on-error: true
+        continue-on-error: true  # DEBT-123 AC9: intentional — CRITICAL already blocking, HIGH is advisory
 
+      # DEBT-123 AC6: Secret scanning — BLOCKING (security-critical)
       - name: Check for secrets
         uses: trufflesecurity/trufflehog@main
         with:
           path: ./
           base: ${{ github.event.repository.default_branch }}
           head: HEAD
-        continue-on-error: true
 
   documentation:
     name: Documentation Check

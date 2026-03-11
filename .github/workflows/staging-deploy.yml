@@ -175,17 +175,16 @@ jobs:
           cd frontend
           npm ci
 
+      # DEBT-123 AC5: Frontend tests and coverage are now blocking (TEMP markers removed)
       - name: Run frontend tests
-        continue-on-error: true  # TEMP: Skip test failures for STORY-165 deployment
         run: |
           cd frontend
-          npm run test:ci || echo "⚠️ Frontend tests failed - continuing deployment"
+          npm run test:ci
 
       - name: Check frontend coverage
-        continue-on-error: true  # TEMP: Skip coverage check for STORY-165 deployment
         run: |
           cd frontend
-          echo "⚠️ Coverage check skipped for STORY-165 deployment"
+          npm run test:coverage
 
       - name: Build frontend
         env:

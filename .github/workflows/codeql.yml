@@ -88,9 +88,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      # DEBT-123 AC8: Dependency review — BLOCKING (security-critical)
       - name: Dependency Review
         uses: actions/dependency-review-action@v4
         with:
           fail-on-severity: high
           deny-licenses: GPL-3.0, AGPL-3.0
-        continue-on-error: true

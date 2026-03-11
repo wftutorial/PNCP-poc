@@ -44,13 +44,14 @@ jobs:
           severity: 'CRITICAL'
           exit-code: '1'
 
+      # DEBT-123 AC9: HIGH-level pip-audit — intentionally non-blocking (CRITICAL already blocking via Trivy above)
       - name: Security scan (HIGH — warning only)
         run: |
           cd backend
           echo "⚠️ Running pip-audit for advisory-level vulnerabilities (non-blocking)..."
           pip install pip-audit --quiet
           pip-audit --desc on || echo "⚠️ Vulnerabilities found — review recommended"
-        continue-on-error: true
+        continue-on-error: true  # DEBT-123 AC9: intentional — CRITICAL already blocking via Trivy, HIGH is advisory
 
       - name: Run mypy type checking
         run: |

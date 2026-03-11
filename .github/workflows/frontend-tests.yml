@@ -43,13 +43,19 @@ jobs:
           npm test -- --coverage --ci --no-cache
           echo "✅ All frontend tests passed with coverage thresholds met"
 
-      # DEBT-007 CROSS-007: Vulnerability scanning — fail on HIGH+
-      - name: Vulnerability scan (npm audit)
+      # DEBT-123 AC2: Vulnerability scanning — BLOCKING for critical
+      - name: Vulnerability scan (npm audit — CRITICAL, blocking)
         run: |
           cd frontend
-          npm audit --audit-level=high 2>&1 | tee audit-output.txt || true
-          echo "✅ npm audit scan complete"
-        continue-on-error: true
+          npm audit --audit-level=critical
+          echo "✅ npm audit: no critical vulnerabilities"
+
+      # DEBT-123 AC9: HIGH vulnerabilities — intentionally non-blocking (dev deps may have known HiGH advisories)
+      - name: Vulnerability scan (npm audit — HIGH, advisory)
+        run: |
+          cd frontend
+          npm audit --audit-level=high || echo "⚠️ HIGH vulnerabilities found — review recommended"
+        continue-on-error: true  # DEBT-123 AC9: intentional — HIGH vulns in dev deps are advisory
 
       # DEBT-108 AC10/AC11: Bundle size budget — 250 KB gzipped first load JS
       - name: Build for bundle analysis

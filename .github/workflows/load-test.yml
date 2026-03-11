@@ -71,6 +71,7 @@ jobs:
           cat backend.log
           exit 1
 
+      # DEBT-123 AC9: Smoke test — intentionally non-blocking (warmup before main load test)
       - name: Run smoke test (5 users, 30s)
         run: |
           cd backend
@@ -83,7 +84,7 @@ jobs:
             --headless \
             --only-summary \
             --csv=results/smoke-test
-        continue-on-error: true
+        continue-on-error: true  # DEBT-123 AC9: intentional — warmup smoke test, main test follows
 
       - name: Run load test (configurable)
         run: |
@@ -199,7 +200,7 @@ jobs:
       - name: Comment PR with results
         uses: actions/github-script@v8
         if: always() && github.event_name == 'pull_request'
-        continue-on-error: true
+        continue-on-error: true  # DEBT-123 AC9: intentional — PR comment is informational, not a gate
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |

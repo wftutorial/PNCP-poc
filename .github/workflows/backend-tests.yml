@@ -90,29 +90,25 @@ jobs:
           print('✅ OpenAPI schema matches snapshot')
           "
 
-      # DEBT-007 CROSS-007: Vulnerability scanning — fail on HIGH+
+      # DEBT-123 AC1: Vulnerability scanning — BLOCKING (security-critical)
       - name: Vulnerability scan (pip-audit)
         run: |
           cd backend
-          pip-audit -r requirements.txt --desc --fix --dry-run || true
-          pip-audit -r requirements.txt --ignore-vuln PYSEC-2024-* 2>&1 | tee audit-output.txt
-          if grep -q "found [1-9]" audit-output.txt; then
-            echo "⚠️ Vulnerabilities found — review above"
-          fi
-          echo "✅ pip-audit scan complete"
-        continue-on-error: true
+          pip-audit -r requirements.txt
+          echo "✅ pip-audit: no known vulnerabilities"
 
-      # DEBT-007 SYS-035: Linting — non-blocking initially
+      # DEBT-123 AC9: Linting — intentionally non-blocking (advisory, not security)
       - name: Lint (ruff check)
         run: |
           cd backend
           ruff check . --output-format=github 2>&1 | head -50
           echo "ℹ️ Ruff lint complete (non-blocking)"
-        continue-on-error: true
+        continue-on-error: true  # DEBT-123 AC9: intentional — linting is advisory, not security-critical
 
+      # DEBT-123 AC9: Type checking — intentionally non-blocking (advisory, not security)
       - name: Type check (mypy)
         run: |
           cd backend
           mypy . --ignore-missing-imports --check-untyped-defs 2>&1 | tail -20
           echo "ℹ️ Mypy type check complete (non-blocking)"
-        continue-on-error: true
+        continue-on-error: true  # DEBT-123 AC9: intentional — type checking is advisory, not security-critical

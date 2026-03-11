@@ -1,3 +1,7 @@
+# DEBT-123 AC7: This workflow runs the FULL test matrix (Python 3.11 + 3.12, frontend,
+# integration, E2E). It complements backend-tests.yml which runs single-Python backend
+# tests PLUS quality tools (pip-audit, ruff, mypy, schema validation, per-module coverage).
+# Both are needed: this for cross-version + E2E, backend-tests.yml for quality gates.
 name: Tests
 
 on:
@@ -64,6 +68,7 @@ jobs:
           check_name: Backend Test Results
           comment_title: Backend Test Results
 
+      # DEBT-123 AC9: Codecov upload — intentionally non-blocking (external service, not security)
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         if: matrix.python-version == '3.11'
@@ -71,7 +76,7 @@ jobs:
           file: ./backend/coverage.xml
           flags: backend
           name: backend-coverage
-        continue-on-error: true
+        continue-on-error: true  # DEBT-123 AC9: intentional — external upload service may be unavailable
 
       - name: Check coverage threshold
         if: matrix.python-version == '3.11'
@@ -129,12 +134,13 @@ jobs:
           echo "🔒 Checking for CRITICAL vulnerabilities (blocking)..."
           npm audit --audit-level=critical
 
+      # DEBT-123 AC9: HIGH audit — intentionally non-blocking (CRITICAL is already blocking above)
       - name: Security audit (HIGH — warning only)
         run: |
           cd frontend
           echo "⚠️ Checking for HIGH vulnerabilities (non-blocking)..."
           npm audit --audit-level=high || echo "⚠️ HIGH vulnerabilities found — review recommended"
-        continue-on-error: true
+        continue-on-error: true  # DEBT-123 AC9: intentional — CRITICAL already blocking, HIGH is advisory
 
       - name: Clear all caches
         run: |
@@ -171,11 +177,12 @@ jobs:
             npm test -- --coverage --ci --no-cache
           fi
 
+      # DEBT-123 AC9: Quarantined tests — intentionally non-blocking (known flaky tests under investigation)
       - name: Run quarantined tests (non-blocking)
         run: |
           cd frontend
           npm run test:quarantine -- --ci --no-cache || true
-        continue-on-error: true
+        continue-on-error: true  # DEBT-123 AC9: intentional — quarantined tests are known-flaky, tracked separately
 
       - name: Publish Frontend Test Results
         uses: dorny/test-reporter@v1
@@ -186,13 +193,14 @@ jobs:
           reporter: jest-junit
           fail-on-error: true
 
+      # DEBT-123 AC9: Codecov upload — intentionally non-blocking (external service, not security)
       - name: Upload coverage
         uses: codecov/codecov-action@v4
         with:
           file: ./frontend/coverage/coverage-final.json
           flags: frontend
           name: frontend-coverage
-        continue-on-error: true
+        continue-on-error: true  # DEBT-123 AC9: intentional — external upload service may be unavailable
 
   integration-tests:
     name: Integration Tests
@@ -400,10 +408,11 @@ jobs:
           path: frontend/test-results/
           retention-days: 30
 
+      # DEBT-123 AC9: PR comment — intentionally non-blocking (informational, not a gate)
       - name: Comment PR with E2E results
         uses: actions/github-script@v8
         if: always() && github.event_name == 'pull_request'
-        continue-on-error: true
+        continue-on-error: true  # DEBT-123 AC9: intentional — PR comment is informational
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |

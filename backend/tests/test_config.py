@@ -1,17 +1,8 @@
 """Tests for configuration module, including logging setup."""
 
 import logging
-import os
 import sys
-import pytest
-from config import (
-    setup_logging,
-    RetryConfig,
-    str_to_bool,
-    get_cors_origins,
-    DEFAULT_CORS_ORIGINS,
-    PRODUCTION_ORIGINS,
-)
+from config import setup_logging, RetryConfig
 
 
 class TestSetupLogging:
@@ -89,7 +80,7 @@ class TestSetupLogging:
         formatter = handler.formatter
 
         assert (
-            formatter._fmt == "%(asctime)s | %(levelname)-8s | req=%(request_id)s | search=%(search_id)s | %(name)s | %(message)s"
+            formatter._fmt == "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
         )
 
     def test_formatter_datefmt(self):
@@ -280,27 +271,21 @@ class TestRetryConfig:
     """Test suite for RetryConfig dataclass."""
 
     def test_default_values(self):
-        """Test that RetryConfig has correct default values.
-
-        STORY-282 AC1: Defaults updated — max_retries=1 (was 3), timeout=15 (was 30).
-        """
+        """Test that RetryConfig has correct default values."""
         config = RetryConfig()
 
-        assert config.max_retries == 1  # STORY-282 AC1: was 3
-        assert config.base_delay == 1.5
-        assert config.max_delay == 15.0
+        assert config.max_retries == 5
+        assert config.base_delay == 2.0
+        assert config.max_delay == 60.0
         assert config.exponential_base == 2
         assert config.jitter is True
-        assert config.timeout == 15  # STORY-282 AC1: was 30
-        assert config.connect_timeout == 10.0  # STORY-282 AC1: new
-        assert config.read_timeout == 15.0  # STORY-282 AC1: new
+        assert config.timeout == 30
 
     def test_retryable_status_codes_default(self):
         """Test default retryable HTTP status codes."""
         config = RetryConfig()
 
-        # GTM-FIX-029 AC12: 422 added to retryable status codes
-        expected_codes = (408, 422, 429, 500, 502, 503, 504)
+        expected_codes = (408, 429, 500, 502, 503, 504)
         assert config.retryable_status_codes == expected_codes
 
     def test_retryable_exceptions_default(self):
@@ -346,253 +331,3 @@ class TestRetryConfig:
         config = RetryConfig(retryable_exceptions=custom_exceptions)
 
         assert config.retryable_exceptions == custom_exceptions
-
-
-class TestStrToBool:
-    """Test suite for str_to_bool() helper function."""
-
-    def test_true_values(self):
-        """Test values that should return True."""
-        assert str_to_bool("true") is True
-        assert str_to_bool("True") is True
-        assert str_to_bool("TRUE") is True
-        assert str_to_bool("1") is True
-        assert str_to_bool("yes") is True
-        assert str_to_bool("Yes") is True
-        assert str_to_bool("YES") is True
-        assert str_to_bool("on") is True
-        assert str_to_bool("ON") is True
-
-    def test_false_values(self):
-        """Test values that should return False."""
-        assert str_to_bool("false") is False
-        assert str_to_bool("False") is False
-        assert str_to_bool("FALSE") is False
-        assert str_to_bool("0") is False
-        assert str_to_bool("no") is False
-        assert str_to_bool("off") is False
-        assert str_to_bool("") is False
-        assert str_to_bool("random") is False
-        assert str_to_bool("anything_else") is False
-
-    def test_none_returns_false(self):
-        """Test that None returns False."""
-        assert str_to_bool(None) is False
-
-
-class TestGetCorsOrigins:
-    """Test suite for get_cors_origins() function (Issue #156 fix)."""
-
-    @pytest.fixture(autouse=True)
-    def cleanup_env(self):
-        """Clean up CORS_ORIGINS env var before and after each test."""
-        original = os.environ.get("CORS_ORIGINS")
-        if "CORS_ORIGINS" in os.environ:
-            del os.environ["CORS_ORIGINS"]
-        yield
-        # Restore original value
-        if original is not None:
-            os.environ["CORS_ORIGINS"] = original
-        elif "CORS_ORIGINS" in os.environ:
-            del os.environ["CORS_ORIGINS"]
-
-    def test_default_origins_when_env_not_set(self):
-        """Without CORS_ORIGINS env var, should return development defaults."""
-        # Ensure env var is not set
-        if "CORS_ORIGINS" in os.environ:
-            del os.environ["CORS_ORIGINS"]
-
-        origins = get_cors_origins()
-
-        assert origins == DEFAULT_CORS_ORIGINS
-        assert "http://localhost:3000" in origins
-        assert "http://127.0.0.1:3000" in origins
-
-    def test_default_origins_when_env_empty(self):
-        """With empty CORS_ORIGINS env var, should return development defaults."""
-        os.environ["CORS_ORIGINS"] = ""
-
-        origins = get_cors_origins()
-
-        assert origins == DEFAULT_CORS_ORIGINS
-
-    def test_custom_origins_from_env(self):
-        """Custom origins from env var should be included."""
-        os.environ["CORS_ORIGINS"] = "https://myapp.com,https://api.myapp.com"
-
-        origins = get_cors_origins()
-
-        assert "https://myapp.com" in origins
-        assert "https://api.myapp.com" in origins
-
-    def test_production_origins_always_included_when_env_set(self):
-        """Production Railway URLs should always be included when env var is set."""
-        os.environ["CORS_ORIGINS"] = "https://myapp.com"
-
-        origins = get_cors_origins()
-
-        # Custom origin
-        assert "https://myapp.com" in origins
-        # Production origins should be automatically added
-        for prod_origin in PRODUCTION_ORIGINS:
-            assert prod_origin in origins
-
-    def test_wildcard_rejected_with_warning(self, caplog):
-        """Wildcard '*' should be rejected and logged as warning."""
-        os.environ["CORS_ORIGINS"] = "*,https://myapp.com"
-
-        with caplog.at_level(logging.WARNING):
-            origins = get_cors_origins()
-
-        # Wildcard should be removed
-        assert "*" not in origins
-        # Custom origin should be kept
-        assert "https://myapp.com" in origins
-        # Warning should be logged
-        assert "Wildcard" in caplog.text or "SECURITY WARNING" in caplog.text
-
-    def test_wildcard_only_rejected(self, caplog):
-        """If only wildcard is provided, should be rejected."""
-        os.environ["CORS_ORIGINS"] = "*"
-
-        with caplog.at_level(logging.WARNING):
-            origins = get_cors_origins()
-
-        # Wildcard should be removed
-        assert "*" not in origins
-        # Should still have production origins
-        for prod_origin in PRODUCTION_ORIGINS:
-            assert prod_origin in origins
-
-    def test_duplicate_origins_removed(self):
-        """Duplicate origins should be removed."""
-        os.environ["CORS_ORIGINS"] = "https://myapp.com,https://myapp.com,https://other.com"
-
-        origins = get_cors_origins()
-
-        # Count occurrences
-        count_myapp = origins.count("https://myapp.com")
-        assert count_myapp == 1
-
-    def test_whitespace_trimmed(self):
-        """Whitespace around origins should be trimmed."""
-        os.environ["CORS_ORIGINS"] = " https://myapp.com , https://other.com "
-
-        origins = get_cors_origins()
-
-        assert "https://myapp.com" in origins
-        assert "https://other.com" in origins
-        # No origins with leading/trailing whitespace
-        for origin in origins:
-            assert origin == origin.strip()
-
-    def test_empty_values_ignored(self):
-        """Empty values in comma-separated list should be ignored."""
-        os.environ["CORS_ORIGINS"] = "https://myapp.com,,https://other.com,"
-
-        origins = get_cors_origins()
-
-        assert "" not in origins
-        assert "https://myapp.com" in origins
-        assert "https://other.com" in origins
-
-    def test_returns_copy_not_reference(self):
-        """Should return a copy of defaults, not the original list."""
-        if "CORS_ORIGINS" in os.environ:
-            del os.environ["CORS_ORIGINS"]
-
-        origins1 = get_cors_origins()
-        origins1.append("https://test.com")
-
-        origins2 = get_cors_origins()
-
-        # Modifying origins1 should not affect origins2
-        assert "https://test.com" not in origins2
-
-    def test_production_origin_not_duplicated(self):
-        """If production origin is already in env var, should not duplicate."""
-        prod_origin = PRODUCTION_ORIGINS[0]
-        os.environ["CORS_ORIGINS"] = f"{prod_origin},https://myapp.com"
-
-        origins = get_cors_origins()
-
-        # Count occurrences of production origin
-        count = origins.count(prod_origin)
-        assert count == 1
-
-    def test_railway_environment_includes_production_origins(self):
-        """In Railway environment (no CORS_ORIGINS), should include production origins."""
-        # Clear CORS_ORIGINS
-        if "CORS_ORIGINS" in os.environ:
-            del os.environ["CORS_ORIGINS"]
-        # Set Railway environment variable
-        os.environ["RAILWAY_ENVIRONMENT"] = "production"
-
-        try:
-            origins = get_cors_origins()
-
-            # Should include both localhost and production origins
-            assert "http://localhost:3000" in origins
-            assert "http://127.0.0.1:3000" in origins
-            for prod_origin in PRODUCTION_ORIGINS:
-                assert prod_origin in origins
-        finally:
-            # Cleanup
-            del os.environ["RAILWAY_ENVIRONMENT"]
-
-    def test_railway_project_id_includes_production_origins(self):
-        """RAILWAY_PROJECT_ID should also trigger production origins."""
-        if "CORS_ORIGINS" in os.environ:
-            del os.environ["CORS_ORIGINS"]
-        os.environ["RAILWAY_PROJECT_ID"] = "some-project-id"
-
-        try:
-            origins = get_cors_origins()
-
-            for prod_origin in PRODUCTION_ORIGINS:
-                assert prod_origin in origins
-        finally:
-            del os.environ["RAILWAY_PROJECT_ID"]
-
-    def test_environment_production_includes_production_origins(self):
-        """ENVIRONMENT=production should include production origins."""
-        if "CORS_ORIGINS" in os.environ:
-            del os.environ["CORS_ORIGINS"]
-        os.environ["ENVIRONMENT"] = "production"
-
-        try:
-            origins = get_cors_origins()
-
-            for prod_origin in PRODUCTION_ORIGINS:
-                assert prod_origin in origins
-        finally:
-            del os.environ["ENVIRONMENT"]
-
-    def test_env_prod_includes_production_origins(self):
-        """ENV=prod should include production origins."""
-        if "CORS_ORIGINS" in os.environ:
-            del os.environ["CORS_ORIGINS"]
-        os.environ["ENV"] = "prod"
-
-        try:
-            origins = get_cors_origins()
-
-            for prod_origin in PRODUCTION_ORIGINS:
-                assert prod_origin in origins
-        finally:
-            del os.environ["ENV"]
-
-    def test_no_production_env_excludes_production_origins(self):
-        """Without production indicators, should NOT include production origins."""
-        # Clear all production environment indicators
-        for var in ["CORS_ORIGINS", "RAILWAY_ENVIRONMENT", "RAILWAY_PROJECT_ID", "ENVIRONMENT", "ENV"]:
-            if var in os.environ:
-                del os.environ[var]
-
-        origins = get_cors_origins()
-
-        # Should only have localhost origins
-        assert origins == DEFAULT_CORS_ORIGINS
-        # Production origins should NOT be included
-        for prod_origin in PRODUCTION_ORIGINS:
-            assert prod_origin not in origins

@@ -118,9 +118,13 @@ def _normalize_recommendation(rec: str) -> str:
     return rec
 
 
-def _validate_json(data: dict) -> list[str]:
-    """Validate the input JSON and return list of warnings."""
+def _validate_json(data: dict) -> tuple[list[str], list[str]]:
+    """Validate the input JSON. Returns (warnings, errors).
+
+    Errors are blocking — PDF generation MUST NOT proceed if errors exist.
+    """
     warnings = []
+    errors = []
     if "empresa" not in data:
         warnings.append("Campo 'empresa' ausente")
     else:
@@ -135,11 +139,23 @@ def _validate_json(data: dict) -> list[str]:
             warnings.append(f"edital[{i}].objeto ausente")
         if not ed.get("orgao"):
             warnings.append(f"edital[{i}].orgao ausente")
+        # Justificativa é OBRIGATÓRIA para toda recomendação (ERRO BLOQUEANTE)
+        rec = (ed.get("recomendacao") or "").upper()
+        status = ed.get("status_edital", "")
+        if rec and status != "ENCERRADO" and not ed.get("justificativa"):
+            errors.append(
+                f"edital[{i}].justificativa ausente — recomendação '{rec}' "
+                f"para \"{(ed.get('objeto') or 'sem título')[:60]}\" não tem fundamentação"
+            )
     if warnings:
         print(f"⚠ Validação JSON: {len(warnings)} avisos")
-        for w in warnings[:5]:
+        for w in warnings[:10]:
             print(f"  - {w}")
-    return warnings
+    if errors:
+        print(f"\n❌ Validação JSON: {len(errors)} ERROS BLOQUEANTES")
+        for e in errors:
+            print(f"  - {e}")
+    return warnings, errors
 
 
 def _get_source_badge(source: dict | str | None) -> tuple[str, Any, str]:
@@ -510,7 +526,7 @@ def _build_executive_summary(data: dict, styles: dict) -> list:
     col_w = avail / 4
     metrics = Table(
         [[
-            _metric_cell(str(total), "Editais Encontrados", styles),
+            _metric_cell(str(total), "Oportunidades", styles),
             _metric_cell(str(participar), "Recomendados", styles),
             _metric_cell(str(cautela), "Avaliar", styles),
             _metric_cell(_currency_short(valor_total), "Valor Total", styles),
@@ -567,15 +583,8 @@ def _build_executive_summary(data: dict, styles: dict) -> list:
     return el
 
 
-def _build_opportunities_overview(data: dict, styles: dict) -> list:
-    el = []
-    editais = data.get("editais", [])
-    if not editais:
-        return el
-
-    el.append(Paragraph("3. Panorama de Oportunidades", styles["h1"]))
-    el.append(Spacer(1, 2 * mm))
-
+def _build_overview_table(editais_list: list, styles: dict, start_idx: int = 1) -> list:
+    """Build an overview table for a list of editais."""
     avail = PAGE_WIDTH - 2 * MARGIN
     col_widths = [
         avail * 0.04,  # #
@@ -593,7 +602,7 @@ def _build_opportunities_overview(data: dict, styles: dict) -> list:
     ]]
     rows = [header]
 
-    for idx, ed in enumerate(editais, 1):
+    for idx, ed in enumerate(editais_list, start_idx):
         rec = _normalize_recommendation(_s(ed.get("recomendacao", "")))
         rec_color = REC_COLORS.get(rec, RED)
 
@@ -604,16 +613,6 @@ def _build_opportunities_overview(data: dict, styles: dict) -> list:
 
         dias = ed.get("dias_restantes")
         prazo = f"{_safe_int(dias)}d" if dias is not None else _date(ed.get("data_encerramento"))
-
-        # Show ENCERRADO status
-        status = ed.get("status_edital", "")
-        if status == "ENCERRADO":
-            rec = "ENCERRADO"
-            rec_color = colors.HexColor("#94A3B8")
-            rec_style = ParagraphStyle(
-                f"rec_enc_{idx}", parent=styles["cell_center"],
-                fontName="Helvetica-Bold", textColor=rec_color,
-            )
 
         rows.append([
             Paragraph(str(idx), styles["cell_center"]),
@@ -639,7 +638,27 @@ def _build_opportunities_overview(data: dict, styles: dict) -> list:
     for i in range(2, len(rows), 2):
         base_styles.append(("BACKGROUND", (0, i), (-1, i), TABLE_ALT_ROW))
     t.setStyle(TableStyle(base_styles))
-    el.append(t)
+    return [t]
+
+
+def _build_opportunities_overview(data: dict, styles: dict) -> list:
+    el = []
+    editais = data.get("editais", [])
+    if not editais:
+        return el
+
+    el.append(Paragraph("3. Panorama de Oportunidades", styles["h1"]))
+    el.append(Spacer(1, 2 * mm))
+
+    if editais:
+        el.extend(_build_overview_table(editais, styles, start_idx=1))
+        el.append(Spacer(1, 4 * mm))
+    else:
+        el.append(Paragraph(
+            "<i>Nenhuma oportunidade aberta encontrada no período consultado.</i>",
+            styles["body"],
+        ))
+        el.append(Spacer(1, 4 * mm))
 
     el.append(PageBreak())
     return el
@@ -711,16 +730,16 @@ def _build_detailed_analysis(data: dict, styles: dict) -> list:
         if rec:
             badge_color = REC_COLORS.get(rec, RED)
 
-            # Override for ENCERRADO
-            if ed.get("status_edital") == "ENCERRADO":
-                rec = "ENCERRADO"
-                badge_color = colors.HexColor("#94A3B8")
-
             badge_style = ParagraphStyle(
                 f"badge_{idx}", parent=styles["body"],
                 fontName="Helvetica-Bold", fontSize=11, textColor=badge_color,
             )
             section.append(Paragraph(f"Recomendação: {rec}", badge_style))
+
+            # Justificativa — OBRIGATÓRIA (validação bloqueia PDF se ausente)
+            justificativa = _s(ed.get("justificativa", ""))
+            if justificativa:
+                section.append(Paragraph(f"<b>Justificativa:</b> {justificativa}", styles["body"]))
             section.append(Spacer(1, 2 * mm))
 
         # Analysis sections
@@ -1071,11 +1090,24 @@ def _sanitize_links(data: dict) -> dict:
 
 
 def generate_report_b2g(data: dict) -> BytesIO:
-    """Generate the full B2G report PDF from structured data."""
-    # Validate input data and warn about issues
-    _validate_json(data)
+    """Generate the full B2G report PDF from structured data.
+
+    Raises ValueError if blocking validation errors are found
+    (e.g. recommendations without justificativa).
+    """
+    warnings, errors = _validate_json(data)
+    if errors:
+        raise ValueError(
+            f"Geração do PDF bloqueada — {len(errors)} edital(is) com recomendação "
+            f"sem justificativa. Preencha 'justificativa' em cada edital antes de gerar.\n"
+            + "\n".join(f"  • {e}" for e in errors)
+        )
 
     data = _sanitize_links(data)
+
+    # Drop ENCERRADO editais — they don't belong in an opportunities report
+    data["editais"] = [e for e in data.get("editais", []) if e.get("status_edital") != "ENCERRADO"]
+
     gen_date = _today()
     styles = _build_styles()
     buffer = BytesIO()

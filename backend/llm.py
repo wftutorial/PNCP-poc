@@ -10,89 +10,25 @@ actionable summaries of filtered procurement opportunities. It includes:
 
 Usage:
     from llm import gerar_resumo
-    from schemas import ResumoEstrategico
+    from schemas import ResumoLicitacoes
 
     licitacoes = [...]  # List of filtered bids
     resumo = gerar_resumo(licitacoes)
     print(resumo.resumo_executivo)
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
-import hashlib
 import json
-import logging
 import os
 
 from openai import OpenAI
 
-from schemas import ResumoEstrategico, Recomendacao
+from schemas import ResumoLicitacoes
 from excel import parse_datetime
-from middleware import request_id_var
-
-logger = logging.getLogger(__name__)
-
-# ============================================================================
-# DEBT-110 AC3: Redis L2 cache for LLM summaries (cross-worker sharing)
-# ============================================================================
-_SUMMARY_CACHE_PREFIX = "smartlic:summary:"
-_SUMMARY_CACHE_TTL = int(os.getenv("LLM_SUMMARY_CACHE_TTL", "86400"))  # 24h default
 
 
-def _summary_cache_key(licitacoes: list[dict], sector_name: str, termos_busca: str | None) -> str:
-    """Build content-based cache key for LLM summaries.
-
-    Key is MD5 of sorted bid IDs + sector + terms, so identical searches
-    across workers share the same cached summary.
-    """
-    bid_ids = sorted(
-        lic.get("numeroCompra") or lic.get("id") or (lic.get("objetoCompra") or "")[:50]
-        for lic in licitacoes[:50]
-    )
-    payload = json.dumps({"bids": bid_ids, "sector": sector_name, "terms": termos_busca}, sort_keys=True)
-    return hashlib.md5(payload.encode()).hexdigest()
-
-
-def _summary_cache_get(cache_key: str) -> ResumoEstrategico | None:
-    """Read summary from Redis L2 cache. Returns None on miss/error."""
-    try:
-        from redis_pool import get_sync_redis
-        redis = get_sync_redis()
-        if not redis:
-            return None
-        data = redis.get(f"{_SUMMARY_CACHE_PREFIX}{cache_key}")
-        if data:
-            from metrics import LLM_SUMMARY_CACHE_HITS
-            LLM_SUMMARY_CACHE_HITS.inc()
-            parsed = json.loads(data)
-            return ResumoEstrategico(**parsed)
-    except Exception as e:
-        logger.debug(f"DEBT-110: Summary cache read failed: {e}")
-    return None
-
-
-def _summary_cache_set(cache_key: str, resumo: ResumoEstrategico) -> None:
-    """Write summary to Redis L2 cache. Fire-and-forget on error."""
-    try:
-        from redis_pool import get_sync_redis
-        redis = get_sync_redis()
-        if not redis:
-            return
-        data = json.dumps(resumo.model_dump(), default=str)
-        redis.setex(f"{_SUMMARY_CACHE_PREFIX}{cache_key}", _SUMMARY_CACHE_TTL, data)
-    except Exception as e:
-        logger.debug(f"DEBT-110: Summary cache write failed: {e}")
-
-
-def _format_brl_full(value: float) -> str:
-    """Format value as 'R$ 1.234.567,89' (pt-BR full format)."""
-    formatted = f"{value:,.2f}"
-    # Swap US separators to pt-BR: comma↔dot
-    formatted = formatted.replace(",", "X").replace(".", ",").replace("X", ".")
-    return f"R$ {formatted}"
-
-
-def gerar_resumo(licitacoes: list[dict[str, Any]], sector_name: str = "uniformes e fardamentos", termos_busca: str | None = None) -> ResumoEstrategico:
+def gerar_resumo(licitacoes: list[dict[str, Any]]) -> ResumoLicitacoes:
     """
     Generate AI-powered executive summary of procurement bids using GPT-4.1-nano.
 
@@ -106,15 +42,12 @@ def gerar_resumo(licitacoes: list[dict[str, Any]], sector_name: str = "uniformes
                    municipio, valorTotalEstimado, dataAberturaProposta
 
     Returns:
-        ResumoEstrategico: Strategic summary containing:
-            - resumo_executivo: 1-2 sentence consultive overview
+        ResumoLicitacoes: Structured summary containing:
+            - resumo_executivo: 1-2 sentence overview
             - total_oportunidades: Count of opportunities
             - valor_total: Sum of all bid values in BRL
             - destaques: 2-5 key highlights
-            - alerta_urgencia: Optional time-sensitive alert (legacy)
-            - recomendacoes: Prioritized actionable recommendations
-            - alertas_urgencia: Multiple urgency alerts
-            - insight_setorial: Sector-level market context
+            - alerta_urgencia: Optional time-sensitive alert
 
     Raises:
         ValueError: If OPENAI_API_KEY environment variable is not set
@@ -134,31 +67,14 @@ def gerar_resumo(licitacoes: list[dict[str, Any]], sector_name: str = "uniformes
         >>> resumo.total_oportunidades
         1
     """
-    # DEBT-110 AC3: Check Redis L2 cache before calling OpenAI
-    _cache_key = _summary_cache_key(licitacoes, sector_name, termos_busca)
-    cached = _summary_cache_get(_cache_key)
-    if cached is not None:
-        logger.info(f"DEBT-110: Summary cache HIT for {sector_name} ({len(licitacoes)} bids)")
-        return cached
-    else:
-        try:
-            from metrics import LLM_SUMMARY_CACHE_MISSES
-            LLM_SUMMARY_CACHE_MISSES.inc()
-        except Exception:
-            pass
-
     # Handle empty input
     if not licitacoes:
-        _ctx_label = f"para '{termos_busca}'" if termos_busca else f"de {sector_name}"
-        return ResumoEstrategico(
-            resumo_executivo=f"Nenhuma licitação {_ctx_label} encontrada no período selecionado.",
+        return ResumoLicitacoes(
+            resumo_executivo="Nenhuma licitação de uniformes encontrada no período selecionado.",
             total_oportunidades=0,
             valor_total=0.0,
             destaques=[],
             alerta_urgencia=None,
-            recomendacoes=[],
-            alertas_urgencia=[],
-            insight_setorial=f"Não foram encontradas oportunidades {_ctx_label} nos filtros selecionados. Considere ampliar o período ou os estados da análise.",
         )
 
     # Validate API key
@@ -170,19 +86,8 @@ def gerar_resumo(licitacoes: list[dict[str, Any]], sector_name: str = "uniformes
         )
 
     # Prepare data for LLM (limit to 50 bids to avoid token overflow)
-    # Use UTC for correct timestamp; strip tzinfo for comparison with naive
-    # datetimes from parse_datetime() (which strips tz for Excel compatibility)
-    hoje = datetime.now(timezone.utc).replace(tzinfo=None)
     dados_resumidos = []
     for lic in licitacoes[:50]:
-        # Calculate days remaining for urgency classification
-        dias_restantes = None
-        data_abertura_str = lic.get("dataAberturaProposta") or ""
-        if data_abertura_str:
-            abertura_dt = parse_datetime(data_abertura_str)
-            if abertura_dt:
-                dias_restantes = (abertura_dt - hoje).days
-
         dados_resumidos.append(
             {
                 "objeto": (lic.get("objetoCompra") or "")[
@@ -192,93 +97,44 @@ def gerar_resumo(licitacoes: list[dict[str, Any]], sector_name: str = "uniformes
                 "uf": lic.get("uf") or "",
                 "municipio": lic.get("municipio") or "",
                 "valor": lic.get("valorTotalEstimado") or 0,
-                "abertura": data_abertura_str,
-                "dias_restantes": dias_restantes,
+                "abertura": lic.get("dataAberturaProposta") or "",
             }
         )
 
     # Initialize OpenAI client
     client = OpenAI(api_key=api_key)
 
-    # System prompt with strategic consultant persona (STORY-245)
-    # GTM-FIX-041: Use search terms in prompt when available
-    _especialidade = f"análises de '{termos_busca}'" if termos_busca else sector_name
-    system_prompt = f"""Você é um CONSULTOR ESTRATÉGICO de licitações especializado em {_especialidade}.
-Seu papel NÃO é apenas descrever — é RECOMENDAR AÇÕES CONCRETAS para o usuário.
+    # System prompt with expert persona and rules
+    system_prompt = """Você é um analista de licitações especializado em uniformes e fardamentos.
+Analise as licitações fornecidas e gere um resumo executivo.
 
-PERSONA: Consultor sênior com 15 anos de experiência em licitações públicas{"" if termos_busca else f" no setor de {sector_name}"}. Você ajuda empresas a decidir em quais licitações participar e como se preparar.
-
-REGRAS DE RECOMENDAÇÃO:
-1. Para cada oportunidade relevante, forneça uma AÇÃO CONCRETA e uma JUSTIFICATIVA
-2. Priorize por combinação de valor + urgência + viabilidade
-3. Recomende no máximo 5 oportunidades (as mais relevantes)
-
-REGRAS DE URGÊNCIA (campo "dias_restantes" nos dados):
-- "alta": dias_restantes < 3 (ação IMEDIATA necessária)
-- "media": dias_restantes entre 3 e 7 (preparar documentação esta semana)
-- "baixa": dias_restantes > 7 (tempo para análise detalhada)
-
-REGRAS CRÍTICAS DE TERMINOLOGIA:
-1. NUNCA use estes termos ambíguos:
-   - ❌ "prazo de abertura"
-   - ❌ "abertura em [data]"
-   - ❌ "prazo em [data]" (sem contexto claro)
-
-2. SEMPRE use estes termos claros para datas:
-   - ✅ "recebe propostas a partir de [data_início]"
-   - ✅ "prazo final para propostas em [data_fim]"
-   - ✅ "você tem X dias para enviar proposta até [data_fim]"
-   - ✅ "encerra em [data_fim]"
-
-FORMATO DO RESUMO EXECUTIVO:
-- Tom consultivo: "Recomendamos atenção a X oportunidades..."
-- Destaque valor total e distribuição geográfica
-- Mencione a oportunidade de maior valor
-- Para prazos urgentes (< 3 dias): "encerra em X dias — ação imediata necessária"
+REGRAS:
+- Seja direto e objetivo
+- Destaque as maiores oportunidades por valor
+- Alerte sobre prazos próximos (< 7 dias)
+- Mencione a distribuição geográfica
+- Use linguagem profissional, não técnica demais
 - Valores sempre em reais (R$) formatados
-
-INSIGHT SETORIAL:
-- Contextualize as oportunidades no mercado de {_especialidade}
-- Mencione concentração geográfica se houver padrão
-- Se possível, compare com expectativas do setor
-
-ALERTAS DE URGÊNCIA (lista):
-- Gere um alerta para cada situação crítica encontrada
-- Inclua prazos curtos, exigências documentais, valores atípicos
 """
 
-    # User prompt with context (GTM-FIX-041: use terms when available)
-    _ctx_user = f"para '{termos_busca}'" if termos_busca else f"de {sector_name}"
-    user_prompt = f"""Analise estas {len(licitacoes)} licitações {_ctx_user} como consultor estratégico.
+    # User prompt with context
+    user_prompt = f"""Analise estas {len(licitacoes)} licitações de uniformes/fardamentos e gere um resumo:
 
-Para cada oportunidade relevante, forneça:
-1. Ação concreta que o usuário deve tomar
-2. Justificativa de por que vale a pena participar
-3. Classificação de urgência baseada nos dias_restantes
-
-Dados das licitações:
 {json.dumps(dados_resumidos, ensure_ascii=False, indent=2)}
 
-Data atual: {hoje.strftime("%d/%m/%Y")}
+Data atual: {datetime.now().strftime("%d/%m/%Y")}
 """
 
-    # STORY-226 AC23: Forward X-Request-ID for distributed tracing
-    req_id = request_id_var.get("-")
-    extra_headers = {}
-    if req_id and req_id != "-":
-        extra_headers["X-Request-ID"] = req_id
-
-    # Call OpenAI API with structured output (STORY-245: max_tokens 500→1200 for recommendations)
+    # Call OpenAI API with structured output
     response = client.beta.chat.completions.parse(
-        model="gpt-4.1-nano",
+        model="gpt-4o-mini",  # Using gpt-4o-mini as gpt-4.1-nano doesn't exist
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
-        response_format=ResumoEstrategico,
+        response_format=ResumoLicitacoes,
         temperature=0.3,
-        max_tokens=1200,
-        extra_headers=extra_headers if extra_headers else None,
+        max_tokens=500,
     )
 
     # Extract parsed response
@@ -287,47 +143,109 @@ Data atual: {hoje.strftime("%d/%m/%Y")}
     if not resumo:
         raise ValueError("OpenAI API returned empty response")
 
-    # DEBT-110 AC3: Cache the result in Redis L2
-    _summary_cache_set(_cache_key, resumo)
-
-    # CRITICAL: Validate that ambiguous deadline terminology is not present
-    forbidden_terms = [
-        "prazo de abertura",
-        "abertura em",
-        "abertura:",
-    ]
-    resumo_text = resumo.resumo_executivo.lower()
-    for term in forbidden_terms:
-        if term in resumo_text:
-            # Log the error for monitoring
-            import logging
-            logging.warning(
-                f"LLM generated ambiguous term '{term}' in summary: {resumo.resumo_executivo}"
-            )
-            # Fail fast to prevent user confusion
-            raise ValueError(
-                f"LLM output contains ambiguous deadline terminology: '{term}'. "
-                "This violates UX clarity rules. Please regenerate summary."
-            )
-
     return resumo
 
 
-def gerar_resumo_fallback(licitacoes: list[dict[str, Any]], sector_name: str = "uniformes", termos_busca: str | None = None) -> ResumoEstrategico:
+def format_resumo_html(resumo: ResumoLicitacoes) -> str:
     """
-    Generate strategic summary without using LLM (fallback for OpenAI failures).
+    Format executive summary as HTML for frontend display.
 
-    This function provides a heuristic-based strategic summary using pure Python logic
-    when the OpenAI API is unavailable. It generates actionable recommendations based
-    on value and urgency heuristics, maintaining the same ResumoEstrategico schema
-    as gerar_resumo() for seamless fallback integration.
+    Converts the structured ResumoLicitacoes object into styled HTML with:
+    - Executive summary paragraph
+    - Statistics cards (count and total value)
+    - Urgency alert (if present)
+    - Highlights list
+
+    Args:
+        resumo: Structured summary from gerar_resumo()
+
+    Returns:
+        str: HTML string ready for frontend rendering
+
+    Examples:
+        >>> resumo = ResumoLicitacoes(
+        ...     resumo_executivo="Encontradas 15 licitações.",
+        ...     total_oportunidades=15,
+        ...     valor_total=2300000.00,
+        ...     destaques=["3 urgentes"],
+        ...     alerta_urgencia="⚠️ 5 encerram em 24h"
+        ... )
+        >>> html = format_resumo_html(resumo)
+        >>> "resumo-container" in html
+        True
+    """
+    # Build urgency alert HTML if present
+    alerta_html = ""
+    if resumo.alerta_urgencia:
+        alerta_html = f'<div class="alerta-urgencia">⚠️ {resumo.alerta_urgencia}</div>'
+
+    # Build highlights list HTML
+    destaques_html = ""
+    if resumo.destaques:
+        destaques_items = "".join(f"<li>{d}</li>" for d in resumo.destaques)
+        destaques_html = f"""
+        <div class="destaques">
+            <h4>Destaques:</h4>
+            <ul>
+                {destaques_items}
+            </ul>
+        </div>
+        """
+
+    # Assemble complete HTML
+    html = f"""
+    <div class="resumo-container">
+        <p class="resumo-executivo">{resumo.resumo_executivo}</p>
+
+        <div class="resumo-stats">
+            <div class="stat">
+                <span class="stat-value">{resumo.total_oportunidades}</span>
+                <span class="stat-label">Licitações</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value">R$ {resumo.valor_total:,.2f}</span>
+                <span class="stat-label">Valor Total</span>
+            </div>
+        </div>
+
+        {alerta_html}
+
+        {destaques_html}
+    </div>
+    """
+
+    return html
+
+
+def gerar_resumo_fallback(licitacoes: list[dict[str, Any]]) -> ResumoLicitacoes:
+    """
+    Generate basic executive summary without using LLM (fallback for OpenAI failures).
+
+    This function provides a statistical summary using pure Python logic when the
+    OpenAI API is unavailable due to network issues, rate limits, missing API key,
+    or any other errors. It maintains the same ResumoLicitacoes schema as gerar_resumo()
+    for seamless fallback integration.
+
+    Features:
+    - Calculates total opportunities and total value
+    - Computes UF distribution (state-wise breakdown)
+    - Highlights top 3 bids by value
+    - Detects urgent bids (deadline < 7 days)
+    - No external dependencies (works offline)
 
     Args:
         licitacoes: List of filtered procurement bid dictionaries from PNCP API.
-        sector_name: Name of the sector for context.
+                   Each dict should contain keys: objetoCompra, nomeOrgao, uf,
+                   valorTotalEstimado, dataAberturaProposta
 
     Returns:
-        ResumoEstrategico: Strategic summary with heuristic recommendations.
+        ResumoLicitacoes: Structured summary containing:
+            - resumo_executivo: Basic sentence with count and total value
+            - total_oportunidades: Count of opportunities
+            - valor_total: Sum of all bid values in BRL
+            - destaques: Top 3 bids by value
+            - alerta_urgencia: Alert if any bid closes within 7 days
+            - distribuicao_uf: Dict mapping UF codes to bid counts
 
     Examples:
         >>> licitacoes = [
@@ -336,24 +254,28 @@ def gerar_resumo_fallback(licitacoes: list[dict[str, Any]], sector_name: str = "
         ...         "uf": "SP",
         ...         "valorTotalEstimado": 150000.0,
         ...         "dataAberturaProposta": "2025-03-01T10:00:00"
+        ...     },
+        ...     {
+        ...         "nomeOrgao": "Prefeitura do RJ",
+        ...         "uf": "RJ",
+        ...         "valorTotalEstimado": 200000.0,
+        ...         "dataAberturaProposta": "2025-03-15T14:00:00"
         ...     }
         ... ]
         >>> resumo = gerar_resumo_fallback(licitacoes)
         >>> resumo.total_oportunidades
-        1
+        2
+        >>> resumo.valor_total
+        350000.0
     """
-    # Handle empty input (GTM-FIX-041: use terms when available)
-    _fb_label = f"para '{termos_busca}'" if termos_busca else f"de {sector_name}"
+    # Handle empty input
     if not licitacoes:
-        return ResumoEstrategico(
+        return ResumoLicitacoes(
             resumo_executivo="Nenhuma licitação encontrada.",
             total_oportunidades=0,
             valor_total=0.0,
             destaques=[],
             alerta_urgencia=None,
-            recomendacoes=[],
-            alertas_urgencia=[],
-            insight_setorial=f"Não foram encontradas oportunidades {_fb_label} nos filtros selecionados.",
         )
 
     # Calculate basic statistics
@@ -376,91 +298,29 @@ def gerar_resumo_fallback(licitacoes: list[dict[str, Any]], sector_name: str = "
         for lic in top_valor
     ]
 
-    # Build recommendations and urgency alerts from heuristics
-    hoje = datetime.now(timezone.utc).replace(tzinfo=None)
-    recomendacoes: list[Recomendacao] = []
-    alertas_urgencia: list[str] = []
-    alerta_legacy = None  # backward compat single alert
-
+    # Check for urgency (deadline < 7 days)
+    alerta = None
+    hoje = datetime.now()
     for lic in licitacoes:
         data_abertura_str = lic.get("dataAberturaProposta")
-        dias_restantes = None
-        if data_abertura_str:
-            abertura = parse_datetime(data_abertura_str)
-            if abertura:
-                dias_restantes = (abertura - hoje).days
+        if not data_abertura_str:
+            continue
 
-        valor = lic.get("valorTotalEstimado") or 0
-        orgao = lic.get("nomeOrgao", "Órgão não informado")
-        objeto = (lic.get("objetoCompra") or "")[:100]
+        abertura = parse_datetime(data_abertura_str)
+        if abertura:
+            dias_restantes = (abertura - hoje).days
+            if dias_restantes < 7:
+                orgao = lic.get("nomeOrgao", "Órgão não informado")
+                alerta = f"Licitação com prazo em menos de 7 dias: {orgao}"
+                break  # First urgent bid found
 
-        # Classify urgency (GTM-FIX-042 AC3: skip expired bids)
-        if dias_restantes is not None and dias_restantes < 0:
-            urgencia = "baixa"  # expired — no action needed
-        elif dias_restantes is not None and dias_restantes < 3:
-            urgencia = "alta"
-            alerta_msg = f"⚠️ {orgao}: encerra em {dias_restantes} dia(s) — ação imediata necessária"
-            alertas_urgencia.append(alerta_msg)
-            if alerta_legacy is None:
-                alerta_legacy = alerta_msg
-        elif dias_restantes is not None and dias_restantes < 7:
-            urgencia = "media"
-            alerta_msg = f"📋 {orgao}: encerra em {dias_restantes} dia(s) — prepare documentação"
-            alertas_urgencia.append(alerta_msg)
-            if alerta_legacy is None:
-                alerta_legacy = alerta_msg
-        else:
-            urgencia = "baixa"
-
-        # Build recommendation for top bids (max 5)
-        if len(recomendacoes) < 5 and (valor > 0 or urgencia != "baixa"):
-            if urgencia == "alta":
-                acao = f"Ação imediata: prepare e envie proposta nos próximos {dias_restantes} dia(s)."
-            elif urgencia == "media":
-                acao = f"Prepare documentação esta semana. Prazo final em {dias_restantes} dias."
-            else:
-                acao = "Analise o edital com calma e avalie requisitos técnicos antes de participar."
-
-            justificativa = f"Valor de R$ {valor:,.2f}"
-            if lic.get("uf"):
-                justificativa += f" em {lic['uf']}"
-            if objeto:
-                justificativa += f" — {objeto}"
-
-            recomendacoes.append(Recomendacao(
-                oportunidade=f"{orgao}" + (f" — {objeto[:60]}" if objeto else ""),
-                valor=valor,
-                urgencia=urgencia,
-                acao_sugerida=acao,
-                justificativa=justificativa,
-            ))
-
-    # Sort recommendations: alta first, then media, then by value desc
-    urgencia_order = {"alta": 0, "media": 1, "baixa": 2}
-    recomendacoes.sort(key=lambda r: (urgencia_order[r.urgencia], -r.valor))
-
-    # Generate insight setorial from data (GTM-FIX-041: use terms when available)
-    ufs_str = ", ".join(sorted(dist_uf.keys()))
-    if termos_busca:
-        insight = f"Análise de '{termos_busca}': {total} oportunidade(s) distribuída(s) em {len(dist_uf)} estado(s) ({ufs_str}), totalizando {_format_brl_full(valor_total)}."
-    else:
-        insight = f"Setor de {sector_name}: {total} oportunidades distribuídas em {len(dist_uf)} estado(s) ({ufs_str}), totalizando {_format_brl_full(valor_total)}."
-
-    # Consultive resumo executivo (GTM-FIX-041)
-    urgentes = sum(1 for r in recomendacoes if r.urgencia == "alta")
-    resumo_exec = f"Encontradas {total} licitações {_fb_label} totalizando {_format_brl_full(valor_total)}."
-    if urgentes > 0:
-        resumo_exec += f" Recomendamos atenção imediata a {urgentes} oportunidade(s) com prazo curto."
-    elif recomendacoes:
-        resumo_exec += f" Destacamos {len(recomendacoes)} oportunidade(s) para análise."
-
-    return ResumoEstrategico(
-        resumo_executivo=resumo_exec,
+    return ResumoLicitacoes(
+        resumo_executivo=(
+            f"Encontradas {total} licitações de uniformes "
+            f"totalizando R$ {valor_total:,.2f}."
+        ),
         total_oportunidades=total,
         valor_total=valor_total,
         destaques=destaques,
-        alerta_urgencia=alerta_legacy,
-        recomendacoes=recomendacoes,
-        alertas_urgencia=alertas_urgencia,
-        insight_setorial=insight,
+        alerta_urgencia=alerta,
     )

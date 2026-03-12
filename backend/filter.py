@@ -1,242 +1,334 @@
-"""Keyword matching engine for uniform/apparel procurement filtering.
+"""Keyword matching engine for uniform/apparel procurement filtering."""
 
-DEBT-110 AC4 + DEBT-118 AC10-AC13: This file is a FACADE that re-exports
-all filter functions from decomposed sub-modules:
-  - filter_keywords.py  — keyword constants, matching, normalization, red flags
-  - filter_density.py   — sector context, proximity, co-occurrence
-  - filter_status.py    — status, modalidade, esfera, prazo filtering
-  - filter_value.py     — value range, pagination
-  - filter_uf.py        — single-bid filter, batch, orgao, municipio
-  - filter_basic.py     — basic filters, keyword matching, density, deadline (DEBT-118)
-  - filter_llm.py       — LLM zero-match + arbiter classification (DEBT-118)
-  - filter_recovery.py  — synonym recovery pipeline / FLUXO 2 (DEBT-118)
-  - filter_utils.py     — shared value parsing helpers (DEBT-118)
-
-The orchestrator function aplicar_todos_filtros() remains in this file
-as pure orchestration, delegating all logic to sub-modules.
-All existing imports from 'filter' continue to work unchanged.
-"""
-
-import logging
-from typing import Callable, Set, Tuple, List, Dict, Optional
-
-logger = logging.getLogger(__name__)
-
-# ============================================================================
-# DEBT-110 AC4: Re-exports from decomposed sub-modules
-# ============================================================================
-
-from filter_keywords import (  # noqa: F401 — re-export
-    STOPWORDS_PT,
-    validate_terms,
-    remove_stopwords,
-    KEYWORDS_UNIFORMES,
-    KEYWORDS_EXCLUSAO,
-    normalize_text,
-    _strip_org_context,
-    _strip_org_context_with_detail,
-    GLOBAL_EXCLUSIONS,
-    GLOBAL_EXCLUSIONS_NORMALIZED,
-    GLOBAL_EXCLUSION_OVERRIDES,
-    RED_FLAGS_MEDICAL,
-    RED_FLAGS_ADMINISTRATIVE,
-    RED_FLAGS_INFRASTRUCTURE,
-    RED_FLAGS_PER_SECTOR,
-    has_sector_red_flags,
-    has_red_flags,
-    match_keywords,
-    _get_tracker,
-    _INFRA_EXEMPT_SECTORS,
-    _MEDICAL_EXEMPT_SECTORS,
-    _ADMIN_EXEMPT_SECTORS,
-)
-
-from filter_density import (  # noqa: F401
-    SETOR_VOCABULARIOS,
-    analisar_contexto_setor,
-    obter_setor_dominante,
-    check_proximity_context,
-    check_co_occurrence,
-)
-
-from filter_status import (  # noqa: F401
-    filtrar_por_status,
-    filtrar_por_modalidade,
-    filtrar_por_esfera,
-    filtrar_por_prazo_aberto,
-)
-
-from filter_value import (  # noqa: F401
-    filtrar_por_valor,
-    paginar_resultados,
-)
-
-from filter_uf import (  # noqa: F401
-    filter_licitacao,
-    filter_batch,
-    filtrar_por_orgao,
-    filtrar_por_municipio,
-)
-
-# STORY-248 AC9: Lazy import to avoid circular dependency at module load time.
-_filter_stats_tracker = None
+import re
+import unicodedata
+from datetime import datetime
+from typing import Set, Tuple, List, Dict, Optional
 
 
-def aplicar_todos_filtros(
-    licitacoes: List[dict],
-    ufs_selecionadas: Set[str],
-    status: str = "todos",
-    modalidades: List[int] | None = None,
-    valor_min: float | None = None,
-    valor_max: float | None = None,
-    esferas: List[str] | None = None,
-    municipios: List[str] | None = None,
-    orgaos: List[str] | None = None,
-    keywords: Set[str] | None = None,
-    exclusions: Set[str] | None = None,
-    context_required: Dict[str, Set[str]] | None = None,
-    min_match_floor: Optional[int] = None,
-    setor: Optional[str] = None,
-    modo_busca: str = "publicacao",
-    custom_terms: Optional[List[str]] = None,
-    on_progress: Optional[Callable[[int, int, str], None]] = None,
-    pncp_degraded: bool = False,
-) -> Tuple[List[dict], Dict[str, int]]:
-    """Aplica todos os filtros em sequência otimizada (fail-fast).
+# Primary keywords for uniform/apparel procurement (PRD Section 4.1)
+KEYWORDS_UNIFORMES: Set[str] = {
+    # Primary terms (high precision)
+    "uniforme",
+    "uniformes",
+    "fardamento",
+    "fardamentos",
+    # Specific pieces
+    "jaleco",
+    "jalecos",
+    "guarda-pó",
+    "guarda-pós",
+    "avental",
+    "aventais",
+    "colete",
+    "coletes",
+    "camiseta",
+    "camisetas",
+    "camisa polo",
+    "camisas polo",
+    "calça",
+    "calças",
+    "bermuda",
+    "bermudas",
+    "saia",
+    "saias",
+    "agasalho",
+    "agasalhos",
+    "jaqueta",
+    "jaquetas",
+    "boné",
+    "bonés",
+    "chapéu",
+    "chapéus",
+    "meia",
+    "meias",
+    # Specific contexts
+    "uniforme escolar",
+    "uniforme hospitalar",
+    "uniforme administrativo",
+    "fardamento militar",
+    "fardamento escolar",
+    "roupa profissional",
+    "vestuário profissional",
+    "vestimenta",
+    "vestimentas",
+    # Common compositions in procurement notices
+    "kit uniforme",
+    "conjunto uniforme",
+    "confecção de uniforme",
+    "aquisição de uniforme",
+    "fornecimento de uniforme",
+    "bota",
+    "botas",
+    "sapato",
+    "sapatos",
+}
+
+
+# Exclusion keywords (prevent false positives - PRD Section 4.1)
+KEYWORDS_EXCLUSAO: Set[str] = {
+    "uniformização de procedimento",
+    "uniformização de entendimento",
+    "uniforme de trânsito",  # traffic signs/signals
+    "padrão uniforme",  # technical/engineering context
+}
+
+
+def normalize_text(text: str) -> str:
+    """
+    Normalize text for keyword matching.
+
+    Normalization steps:
+    - Convert to lowercase
+    - Remove accents (NFD + remove combining characters)
+    - Remove excessive punctuation
+    - Normalize whitespace
+
+    Args:
+        text: Input text to normalize
 
     Returns:
-        Tuple of (approved_bids, stats_dict).
-    """
-    from filter_basic import (
-        apply_basic_filters,
-        apply_keyword_filters,
-        apply_item_inspection,
-        apply_density_decision,
-        apply_deadline_safety_net,
-    )
-    from filter_llm import classify_zero_match_pool, run_arbiter
-    from filter_recovery import run_synonym_recovery
+        Normalized text (lowercase, no accents, clean whitespace)
 
+    Examples:
+        >>> normalize_text("Jáleco Médico")
+        'jaleco medico'
+        >>> normalize_text("UNIFORME-ESCOLAR!!!")
+        'uniforme escolar'
+        >>> normalize_text("  múltiplos   espaços  ")
+        'multiplos espacos'
+    """
+    if not text:
+        return ""
+
+    # Lowercase
+    text = text.lower()
+
+    # Remove accents using NFD normalization
+    # NFD = Canonical Decomposition (separates base chars from combining marks)
+    text = unicodedata.normalize("NFD", text)
+    # Remove combining characters (category "Mn" = Mark, nonspacing)
+    text = "".join(c for c in text if unicodedata.category(c) != "Mn")
+
+    # Remove punctuation (keep only word characters and spaces)
+    # Replace non-alphanumeric with spaces
+    text = re.sub(r"[^\w\s]", " ", text)
+
+    # Normalize multiple spaces to single space
+    text = re.sub(r"\s+", " ", text)
+
+    return text.strip()
+
+
+def match_keywords(
+    objeto: str, keywords: Set[str], exclusions: Set[str] | None = None
+) -> Tuple[bool, List[str]]:
+    """
+    Check if procurement object description contains uniform-related keywords.
+
+    Uses word boundary matching to prevent partial matches:
+    - "uniforme" matches "Aquisição de uniformes"
+    - "uniforme" does NOT match "uniformemente" or "uniformização"
+
+    Args:
+        objeto: Procurement object description (objetoCompra from PNCP API)
+        keywords: Set of keywords to search for (KEYWORDS_UNIFORMES)
+        exclusions: Optional set of exclusion keywords (KEYWORDS_EXCLUSAO)
+
+    Returns:
+        Tuple containing:
+        - bool: True if at least one keyword matched (and no exclusions found)
+        - List[str]: List of matched keywords (original form, not normalized)
+
+    Examples:
+        >>> match_keywords("Aquisição de uniformes escolares", KEYWORDS_UNIFORMES)
+        (True, ['uniformes', 'uniforme escolar'])
+
+        >>> match_keywords("Uniformização de procedimento", KEYWORDS_UNIFORMES, KEYWORDS_EXCLUSAO)
+        (False, [])
+
+        >>> match_keywords("Software de gestão", KEYWORDS_UNIFORMES)
+        (False, [])
+    """
+    objeto_norm = normalize_text(objeto)
+
+    # Check exclusions first (fail-fast optimization)
+    if exclusions:
+        for exc in exclusions:
+            exc_norm = normalize_text(exc)
+            # Use word boundary for exclusions too
+            pattern = rf"\b{re.escape(exc_norm)}\b"
+            if re.search(pattern, objeto_norm):
+                return False, []
+
+    # Search for matching keywords
+    matched: List[str] = []
+    for kw in keywords:
+        kw_norm = normalize_text(kw)
+
+        # Match by complete word (word boundary)
+        # \b ensures we don't match partial words
+        pattern = rf"\b{re.escape(kw_norm)}\b"
+        if re.search(pattern, objeto_norm):
+            matched.append(kw)
+
+    return len(matched) > 0, matched
+
+
+def filter_licitacao(
+    licitacao: dict,
+    ufs_selecionadas: Set[str],
+    valor_min: float = 50_000.0,
+    valor_max: float = 5_000_000.0,
+) -> Tuple[bool, Optional[str]]:
+    """
+    Apply all filters to a single procurement bid (fail-fast sequential filtering).
+
+    Filter order (fastest to slowest for optimization):
+    1. UF check (O(1) set lookup)
+    2. Value range check (simple numeric comparison)
+    3. Keyword matching (regex - most expensive)
+    4. Status/deadline validation (datetime parsing)
+
+    Args:
+        licitacao: PNCP procurement bid dictionary
+        ufs_selecionadas: Set of selected Brazilian state codes (e.g., {'SP', 'RJ'})
+        valor_min: Minimum bid value in BRL (default: R$ 50,000)
+        valor_max: Maximum bid value in BRL (default: R$ 5,000,000)
+
+    Returns:
+        Tuple containing:
+        - bool: True if bid passes all filters, False otherwise
+        - Optional[str]: Rejection reason if rejected, None if approved
+
+    Examples:
+        >>> bid = {
+        ...     "uf": "SP",
+        ...     "valorTotalEstimado": 150000.0,
+        ...     "objetoCompra": "Aquisição de uniformes escolares",
+        ...     "dataAberturaProposta": "2026-12-31T10:00:00Z"
+        ... }
+        >>> filter_licitacao(bid, {"SP"})
+        (True, None)
+
+        >>> bid_rejected = {"uf": "RJ", "valorTotalEstimado": 100000.0}
+        >>> filter_licitacao(bid_rejected, {"SP"})
+        (False, "UF 'RJ' não selecionada")
+    """
+    # 1. UF Filter (fastest check)
+    uf = licitacao.get("uf", "")
+    if uf not in ufs_selecionadas:
+        return False, f"UF '{uf}' não selecionada"
+
+    # 2. Value Range Filter
+    valor = licitacao.get("valorTotalEstimado")
+    if valor is None:
+        return False, "Valor não informado"
+
+    if not (valor_min <= valor <= valor_max):
+        return False, f"Valor R$ {valor:,.2f} fora da faixa"
+
+    # 3. Keyword Filter (most expensive - regex matching)
+    objeto = licitacao.get("objetoCompra", "")
+    match, keywords_found = match_keywords(
+        objeto, KEYWORDS_UNIFORMES, KEYWORDS_EXCLUSAO
+    )
+
+    if not match:
+        return False, "Não contém keywords de uniformes"
+
+    # 4. Deadline Filter (check if bid is still open)
+    data_abertura_str = licitacao.get("dataAberturaProposta")
+    if data_abertura_str:
+        try:
+            # Parse ISO 8601 datetime (handle both 'Z' and '+00:00' formats)
+            data_abertura = datetime.fromisoformat(
+                data_abertura_str.replace("Z", "+00:00")
+            )
+            # Compare with current time (use timezone from parsed datetime)
+            if data_abertura < datetime.now(data_abertura.tzinfo):
+                return False, "Prazo encerrado"
+        except (ValueError, TypeError):
+            # If date parsing fails, skip this filter (don't reject bid)
+            pass
+
+    return True, None
+
+
+def filter_batch(
+    licitacoes: List[dict],
+    ufs_selecionadas: Set[str],
+    valor_min: float = 50_000.0,
+    valor_max: float = 5_000_000.0,
+) -> Tuple[List[dict], Dict[str, int]]:
+    """
+    Filter a batch of procurement bids and return statistics.
+
+    Applies filter_licitacao() to each bid and tracks rejection reasons
+    for observability and debugging.
+
+    Args:
+        licitacoes: List of PNCP procurement bid dictionaries
+        ufs_selecionadas: Set of selected Brazilian state codes
+        valor_min: Minimum bid value in BRL (default: R$ 50,000)
+        valor_max: Maximum bid value in BRL (default: R$ 5,000,000)
+
+    Returns:
+        Tuple containing:
+        - List[dict]: Approved bids (passed all filters)
+        - Dict[str, int]: Statistics dictionary with rejection counts
+
+    Statistics Keys:
+        - total: Total number of bids processed
+        - aprovadas: Number of bids that passed all filters
+        - rejeitadas_uf: Rejected due to UF not selected
+        - rejeitadas_valor: Rejected due to value outside range
+        - rejeitadas_keyword: Rejected due to missing uniform keywords
+        - rejeitadas_prazo: Rejected due to deadline passed
+        - rejeitadas_outros: Rejected for other reasons
+
+    Examples:
+        >>> bids = [
+        ...     {"uf": "SP", "valorTotalEstimado": 100000, "objetoCompra": "Uniformes"},
+        ...     {"uf": "RJ", "valorTotalEstimado": 100000, "objetoCompra": "Uniformes"}
+        ... ]
+        >>> aprovadas, stats = filter_batch(bids, {"SP"})
+        >>> stats["total"]
+        2
+        >>> stats["aprovadas"]
+        1
+        >>> stats["rejeitadas_uf"]
+        1
+    """
+    aprovadas: List[dict] = []
     stats: Dict[str, int] = {
-        "total": len(licitacoes), "aprovadas": 0,
-        "rejeitadas_uf": 0, "rejeitadas_status": 0, "rejeitadas_esfera": 0,
-        "esfera_indeterminada": 0, "rejeitadas_modalidade": 0,
-        "rejeitadas_municipio": 0, "rejeitadas_orgao": 0,
-        "rejeitadas_valor": 0, "rejeitadas_valor_alto": 0,
-        "rejeitadas_keyword": 0, "rejeitadas_min_match": 0,
-        "rejeitadas_prazo": 0, "rejeitadas_prazo_aberto": 0,
-        "rejeitadas_outros": 0, "aprovadas_alta_densidade": 0,
-        "rejeitadas_baixa_densidade": 0, "duvidosas_llm_arbiter": 0,
+        "total": len(licitacoes),
+        "aprovadas": 0,
+        "rejeitadas_uf": 0,
+        "rejeitadas_valor": 0,
+        "rejeitadas_keyword": 0,
+        "rejeitadas_prazo": 0,
+        "rejeitadas_outros": 0,
     }
 
-    logger.debug(f"aplicar_todos_filtros: iniciando com {len(licitacoes)} licitações")
+    for lic in licitacoes:
+        aprovada, motivo = filter_licitacao(lic, ufs_selecionadas, valor_min, valor_max)
 
-    # Phase 1: Basic filters
-    resultado_valor = apply_basic_filters(
-        licitacoes, ufs_selecionadas, status, modalidades, valor_min,
-        valor_max, esferas, municipios, orgaos, setor, modo_busca,
-        custom_terms, stats,
-    )
-
-    # Phase 2: Keyword matching + proximity + co-occurrence
-    resultado_keyword = apply_keyword_filters(
-        resultado_valor, keywords, exclusions, context_required, setor,
-        custom_terms, on_progress, stats,
-    )
-
-    # Phase 2B: LLM Zero-Match Classification
-    resultado_llm_zero, resultado_pending_review = classify_zero_match_pool(
-        zero_match_pool=[],
-        resultado_valor=resultado_valor,
-        resultado_keyword=resultado_keyword,
-        setor=setor,
-        custom_terms=custom_terms,
-        on_progress=on_progress,
-        stats=stats,
-    )
-
-    # Phase 2C: Item Inspection (Camada 1C)
-    resultado_item_accepted = apply_item_inspection(
-        resultado_keyword, setor, keywords, stats,
-    )
-
-    # Phase 2A: Density Decision + Red Flags
-    kw = keywords if keywords is not None else KEYWORDS_UNIFORMES
-    resultado_densidade, resultado_llm_candidates = apply_density_decision(
-        resultado_keyword, setor, stats,
-    )
-
-    # Phase 3A: LLM Arbiter
-    run_arbiter(
-        resultado_llm_candidates=resultado_llm_candidates,
-        setor=setor,
-        custom_terms=custom_terms,
-        resultado_densidade=resultado_densidade,
-        stats=stats,
-    )
-
-    # Merge results
-    resultado_keyword = resultado_densidade
-
-    if resultado_llm_zero:
-        resultado_keyword.extend(resultado_llm_zero)
-        logger.info(
-            f"GTM-FIX-028: Merged {len(resultado_llm_zero)} LLM zero-match bids "
-            f"into resultado_keyword (total now: {len(resultado_keyword)})"
-        )
-
-    if resultado_pending_review:
-        resultado_keyword.extend(resultado_pending_review)
-        logger.info(
-            f"STORY-354: Merged {len(resultado_pending_review)} PENDING_REVIEW bids "
-            f"into resultado_keyword (total now: {len(resultado_keyword)})"
-        )
-
-    if resultado_item_accepted:
-        resultado_keyword.extend(resultado_item_accepted)
-        logger.info(
-            f"D-01: Merged {len(resultado_item_accepted)} item-inspection bids "
-            f"into resultado_keyword (total now: {len(resultado_keyword)})"
-        )
-
-    # Min match floor (STORY-178 AC2.2)
-    if min_match_floor is not None and min_match_floor > 1:
-        from relevance import should_include, count_phrase_matches
-        resultado_min_match: List[dict] = []
-        for lic in resultado_keyword:
-            matched_terms = lic.get("_matched_terms", [])
-            if should_include(len(matched_terms), len(kw), count_phrase_matches(matched_terms) > 0):
-                resultado_min_match.append(lic)
+        if aprovada:
+            aprovadas.append(lic)
+            stats["aprovadas"] += 1
+        else:
+            # Categorize rejection reason for statistics
+            motivo_lower = (motivo or "").lower()
+            if "uf" in motivo_lower and "não selecionada" in motivo_lower:
+                stats["rejeitadas_uf"] += 1
+            elif "valor" in motivo_lower and "fora da faixa" in motivo_lower:
+                stats["rejeitadas_valor"] += 1
+            elif "keyword" in motivo_lower:
+                stats["rejeitadas_keyword"] += 1
+            elif "prazo" in motivo_lower:
+                stats["rejeitadas_prazo"] += 1
             else:
-                stats["rejeitadas_min_match"] += 1
-        resultado_keyword = resultado_min_match
-
-    logger.debug(
-        f"  Após filtro Keywords: {len(resultado_keyword)} "
-        f"(rejeitadas_keyword: {stats['rejeitadas_keyword']}, "
-        f"rejeitadas_min_match: {stats['rejeitadas_min_match']})"
-    )
-
-    # Deadline safety net (Etapa 9)
-    aprovadas = apply_deadline_safety_net(resultado_keyword, status, stats)
-
-    # FLUXO 2: Synonym Recovery
-    aprovadas = run_synonym_recovery(
-        aprovadas=aprovadas,
-        resultado_valor=resultado_valor,
-        setor=setor,
-        custom_terms=custom_terms,
-        stats=stats,
-        llm_zero_match_active=stats.get("llm_zero_match_calls", 0) > 0,
-    )
-
-    # Final stats
-    stats["aprovadas"] = len(aprovadas)
-    logger.info(
-        f"aplicar_todos_filtros: concluído - {stats['aprovadas']}/{stats['total']} aprovadas "
-        f"(FLUXO 1: {stats.get('aprovadas_llm_arbiter', 0)} via LLM arbiter, "
-        f"FLUXO 2: {stats.get('recuperadas_llm_fn', 0)} recuperadas)"
-    )
-    logger.debug(f"  Estatísticas completas: {stats}")
+                stats["rejeitadas_outros"] += 1
 
     return aprovadas, stats

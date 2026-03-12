@@ -1,704 +1,18 @@
 """Resilient HTTP client for PNCP API."""
 
-# TIMEOUT CHAIN (strict decreasing, validated at startup):
-# FE Proxy(480s) > Pipeline(360s) > Consolidation(300s) > PerSource(180s)
-#   > PerUF(30s) > PerModality(20s) > HTTP(10s)
-# Invariants:
-#   - Each level must be strictly greater than the next
-#   - PerUF - PerModality >= 10s (margin for parallel modality completion)
-#   - PerSource > 2 * PerUF (margin for multi-UF batches)
-
-import asyncio
-import json
 import logging
 import random
 import time
-from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
-from typing import Any, Callable, Dict, Generator, List, Optional
+from typing import Any, Callable, Dict, Generator
 
-import httpx
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
-from config import (
-    RetryConfig,
-    DEFAULT_MODALIDADES,
-    MODALIDADES_EXCLUIDAS,
-    # DEBT-118: Circuit breaker & batching config (moved from this file to config/pncp.py)
-    PNCP_CIRCUIT_BREAKER_THRESHOLD,
-    PNCP_CIRCUIT_BREAKER_COOLDOWN,
-    PCP_CIRCUIT_BREAKER_THRESHOLD,
-    PCP_CIRCUIT_BREAKER_COOLDOWN,
-    COMPRASGOV_CIRCUIT_BREAKER_THRESHOLD,
-    COMPRASGOV_CIRCUIT_BREAKER_COOLDOWN,
-    PNCP_TIMEOUT_PER_MODALITY,
-    PNCP_MODALITY_RETRY_BACKOFF,
-    PNCP_TIMEOUT_PER_UF,
-    PNCP_TIMEOUT_PER_UF_DEGRADED,
-    PNCP_BATCH_SIZE,
-    PNCP_BATCH_DELAY_S,
-    PNCP_MAX_PAGE_SIZE,
-    USE_REDIS_CIRCUIT_BREAKER,
-    CB_REDIS_TTL,
-)
+from config import RetryConfig
 from exceptions import PNCPAPIError
-from middleware import request_id_var
-from metrics import CIRCUIT_BREAKER_STATE
 
 logger = logging.getLogger(__name__)
-
-
-# ============================================================================
-# PNCP Degraded Error (STORY-252 AC8)
-# ============================================================================
-
-class PNCPDegradedError(PNCPAPIError):
-    """Raised when PNCP circuit breaker is in degraded state."""
-    pass
-
-
-# ============================================================================
-# Circuit Breaker (STORY-252 AC8)
-# ============================================================================
-
-# DEBT-118: All circuit breaker, timeout, and batching constants moved to config/pncp.py.
-# They are imported above from config and re-exported as module-level names for
-# backward compatibility (tests and other modules import from pncp_client).
-
-# ============================================================================
-# Startup Timeout Chain Validation (GTM-RESILIENCE-F03 AC7-AC12)
-# ============================================================================
-
-_SAFE_PER_MODALITY = 20.0
-_SAFE_PER_UF = 30.0
-
-
-def validate_timeout_chain() -> None:
-    """Validate timeout hierarchy at startup. Prevents misconfigurations.
-
-    If PerModality >= PerUF, logs critical and forces safe defaults.
-    If PerModality > 80% of PerUF, logs warning.
-    Never raises — always falls back to safe values on misconfiguration.
-    """
-    global PNCP_TIMEOUT_PER_MODALITY, PNCP_TIMEOUT_PER_UF
-
-    if PNCP_TIMEOUT_PER_MODALITY >= PNCP_TIMEOUT_PER_UF:
-        logger.critical(
-            "TIMEOUT MISCONFIGURATION: PerModality(%.0fs) >= PerUF(%.0fs). "
-            "Modality timeout must be strictly less than UF timeout. "
-            "Falling back to safe defaults: PerModality=%.0fs, PerUF=%.0fs.",
-            PNCP_TIMEOUT_PER_MODALITY, PNCP_TIMEOUT_PER_UF,
-            _SAFE_PER_MODALITY, _SAFE_PER_UF,
-        )
-        PNCP_TIMEOUT_PER_MODALITY = _SAFE_PER_MODALITY
-        PNCP_TIMEOUT_PER_UF = _SAFE_PER_UF
-        return
-
-    threshold_80 = PNCP_TIMEOUT_PER_UF * 0.8
-    if PNCP_TIMEOUT_PER_MODALITY > threshold_80:
-        recommended = PNCP_TIMEOUT_PER_UF * 0.67
-        logger.warning(
-            "TIMEOUT NEAR-INVERSION: PerModality(%.0fs) > 80%% of PerUF(%.0fs). "
-            "Recommend PerModality <= %.0fs for safe margin.",
-            PNCP_TIMEOUT_PER_MODALITY, PNCP_TIMEOUT_PER_UF, recommended,
-        )
-
-
-# Run validation at import time (AC8)
-validate_timeout_chain()
-
-
-# UFs ordered by population for degraded priority (STORY-257A AC1)
-UFS_BY_POPULATION = ["SP", "RJ", "MG", "BA", "PR", "RS", "PE", "CE", "SC", "GO",
-                      "PA", "MA", "AM", "ES", "PB", "RN", "MT", "AL", "PI", "DF",
-                      "MS", "SE", "RO", "TO", "AC", "AP", "RR"]
-
-
-@dataclass
-class ParallelFetchResult:
-    """Structured return from buscar_todas_ufs_paralelo with per-UF metadata."""
-    items: List[Dict[str, Any]]
-    succeeded_ufs: List[str]
-    failed_ufs: List[str]
-    truncated_ufs: List[str] = field(default_factory=list)  # GTM-FIX-004: UFs that hit max_pages limit
-    canary_result: Optional[Dict[str, Any]] = field(default=None)  # CRIT-052 AC4: canary telemetry
-
-
-class PNCPCircuitBreaker:
-    """Circuit breaker for API sources to prevent cascading failures.
-
-    After ``threshold`` consecutive timeouts, the circuit breaker marks the
-    source as *degraded* for ``cooldown_seconds``. While degraded, callers
-    should skip that source and use alternatives.
-
-    Each source (PNCP, PCP, etc.) gets its own named instance so failures
-    in one source don't cascade to others (GTM-FIX-005 AC9).
-
-    Thread-safety: asyncio.Lock around state mutations.
-
-    Attributes:
-        name: Identifier for this circuit breaker instance (e.g. "pncp", "pcp").
-        consecutive_failures: Running count of consecutive timeout failures.
-        degraded_until: Unix timestamp until which source is considered degraded.
-        threshold: Number of consecutive failures before tripping.
-        cooldown_seconds: Duration in seconds to stay degraded after tripping.
-    """
-
-    def __init__(
-        self,
-        name: str = "pncp",
-        threshold: int = PNCP_CIRCUIT_BREAKER_THRESHOLD,
-        cooldown_seconds: int = PNCP_CIRCUIT_BREAKER_COOLDOWN,
-    ):
-        self.name = name
-        self.threshold = threshold
-        self.cooldown_seconds = cooldown_seconds
-        self.consecutive_failures: int = 0
-        self.degraded_until: Optional[float] = None
-        self._lock = asyncio.Lock()
-
-    @property
-    def is_degraded(self) -> bool:
-        """Return True if the circuit breaker is currently in degraded state.
-
-        Read-only check — no side effects. Use try_recover() to actually reset.
-        """
-        if self.degraded_until is None:
-            return False
-        if time.time() >= self.degraded_until:
-            return False  # Cooldown expired, but don't mutate here
-        return True
-
-    async def record_failure(self) -> None:
-        """Record a timeout/failure. Trips the breaker after ``threshold`` consecutive failures."""
-        async with self._lock:
-            self.consecutive_failures += 1
-            if self.consecutive_failures >= self.threshold and not self.is_degraded:
-                self.degraded_until = time.time() + self.cooldown_seconds
-                CIRCUIT_BREAKER_STATE.labels(source=self.name).set(1)
-                logger.warning(
-                    f"Circuit breaker [{self.name}] TRIPPED after {self.consecutive_failures} "
-                    f"consecutive failures — degraded for {self.cooldown_seconds}s"
-                )
-                # STORY-305 AC13: Sentry breadcrumb on state transition
-                try:
-                    import sentry_sdk
-                    sentry_sdk.add_breadcrumb(
-                        category="circuit_breaker",
-                        message=f"CB [{self.name}] OPEN after {self.consecutive_failures} failures",
-                        level="warning",
-                        data={"source": self.name, "failures": self.consecutive_failures, "cooldown_s": self.cooldown_seconds},
-                    )
-                except Exception:
-                    pass
-
-    async def record_success(self) -> None:
-        """Record a successful request. Resets the failure counter."""
-        async with self._lock:
-            self.consecutive_failures = 0
-
-    async def try_recover(self) -> bool:
-        """Check if cooldown has expired and reset if so. Must be called with await.
-
-        Returns True if the breaker was reset (recovered), False if still degraded.
-        """
-        if self.degraded_until is None:
-            return True  # Already healthy
-
-        if time.time() < self.degraded_until:
-            return False  # Still in cooldown
-
-        try:
-            await asyncio.wait_for(self._lock.acquire(), timeout=1.0)
-            try:
-                # Double-check under lock
-                if self.degraded_until is not None and time.time() >= self.degraded_until:
-                    self.degraded_until = None
-                    self.consecutive_failures = 0
-                    CIRCUIT_BREAKER_STATE.labels(source=self.name).set(0)
-                    logger.info(
-                        f"Circuit breaker [{self.name}] cooldown expired — resetting to healthy"
-                    )
-                    # STORY-305 AC13: Sentry breadcrumb on state transition
-                    try:
-                        import sentry_sdk
-                        sentry_sdk.add_breadcrumb(
-                            category="circuit_breaker",
-                            message=f"CB [{self.name}] CLOSED (recovered)",
-                            level="info",
-                            data={"source": self.name},
-                        )
-                    except Exception:
-                        pass
-                    return True
-            finally:
-                self._lock.release()
-        except asyncio.TimeoutError:
-            logger.warning(
-                f"Circuit breaker [{self.name}] lock timeout in try_recover — "
-                f"proceeding with current state"
-            )
-
-        return not self.is_degraded
-
-    async def initialize(self) -> None:
-        """Initialize circuit breaker (no-op for base class).
-
-        RedisCircuitBreaker overrides this to restore state from Redis.
-        Base class has no persistent state to restore.
-        """
-        pass
-
-    def reset(self) -> None:
-        """Manually reset the circuit breaker (for testing or admin use)."""
-        self.consecutive_failures = 0
-        self.degraded_until = None
-
-
-class RedisCircuitBreaker(PNCPCircuitBreaker):
-    """Circuit breaker with Redis-backed shared state (B-06).
-
-    Extends PNCPCircuitBreaker to share state across Gunicorn workers via Redis.
-    Falls back to per-worker local state when Redis is unavailable.
-
-    All public methods and properties remain backward-compatible with
-    PNCPCircuitBreaker — callers don't need any changes (AC11).
-
-    Redis keys (per source):
-        circuit_breaker:{name}:failures       → INT  (INCR atomic)
-        circuit_breaker:{name}:degraded_until → STRING (unix timestamp)
-    """
-
-    # Lua script for atomic record_failure (AC3)
-    # Keys: [1] failures, [2] degraded_until
-    # Args: [1] threshold, [2] cooldown, [3] now (timestamp), [4] key TTL
-    _FAILURE_SCRIPT = """
-local failures = redis.call('INCR', KEYS[1])
-redis.call('EXPIRE', KEYS[1], tonumber(ARGV[4]))
-if failures >= tonumber(ARGV[1]) then
-    local existing = redis.call('GET', KEYS[2])
-    if not existing then
-        local until_ts = tonumber(ARGV[3]) + tonumber(ARGV[2])
-        redis.call('SET', KEYS[2], tostring(until_ts))
-        redis.call('EXPIRE', KEYS[2], tonumber(ARGV[2]))
-        return {failures, 1}
-    end
-end
-return {failures, 0}
-"""
-
-    def __init__(
-        self,
-        name: str = "pncp",
-        threshold: int = PNCP_CIRCUIT_BREAKER_THRESHOLD,
-        cooldown_seconds: int = PNCP_CIRCUIT_BREAKER_COOLDOWN,
-    ):
-        super().__init__(name, threshold, cooldown_seconds)
-        self._key_failures = f"circuit_breaker:{name}:failures"
-        self._key_degraded = f"circuit_breaker:{name}:degraded_until"
-        self._ttl = CB_REDIS_TTL
-
-    async def _get_redis(self):
-        """Get Redis pool (delegates to redis_pool module caching)."""
-        from redis_pool import get_redis_pool
-        return await get_redis_pool()
-
-    async def record_failure(self) -> None:
-        """Record failure atomically via Redis Lua script (AC3).
-
-        Falls back to local state if Redis is unavailable.
-        """
-        redis = await self._get_redis()
-        if redis:
-            try:
-                result = await redis.eval(
-                    self._FAILURE_SCRIPT,
-                    2,
-                    self._key_failures,
-                    self._key_degraded,
-                    str(self.threshold),
-                    str(self.cooldown_seconds),
-                    str(time.time()),
-                    str(self._ttl),
-                )
-                # Sync local state for sync property access
-                self.consecutive_failures = int(result[0])
-                if int(result[1]) == 1:
-                    self.degraded_until = time.time() + self.cooldown_seconds
-                    CIRCUIT_BREAKER_STATE.labels(source=self.name).set(1)
-                    logger.warning(
-                        f"Circuit breaker [{self.name}] TRIPPED after "
-                        f"{self.consecutive_failures} consecutive failures "
-                        f"— degraded for {self.cooldown_seconds}s"
-                    )
-                return
-            except Exception as e:
-                logger.debug(f"Redis CB record_failure fallback: {e}")
-        await super().record_failure()
-
-    async def record_success(self) -> None:
-        """Reset failure counter in Redis (AC4).
-
-        Falls back to local state if Redis is unavailable.
-        """
-        redis = await self._get_redis()
-        if redis:
-            try:
-                pipe = redis.pipeline()
-                pipe.set(self._key_failures, 0)
-                pipe.expire(self._key_failures, self._ttl)
-                pipe.delete(self._key_degraded)
-                await pipe.execute()
-                self.consecutive_failures = 0
-                self.degraded_until = None
-                return
-            except Exception as e:
-                logger.debug(f"Redis CB record_success fallback: {e}")
-        await super().record_success()
-
-    async def try_recover(self) -> bool:
-        """Check Redis for cooldown expiry and reset if expired (AC5).
-
-        Falls back to local state if Redis is unavailable.
-        """
-        redis = await self._get_redis()
-        if redis:
-            try:
-                val = await redis.get(self._key_degraded)
-                if val is None:
-                    self.degraded_until = None
-                    self.consecutive_failures = 0
-                    return True
-                degraded_until = float(val)
-                if time.time() >= degraded_until:
-                    pipe = redis.pipeline()
-                    pipe.delete(self._key_degraded)
-                    pipe.set(self._key_failures, 0)
-                    pipe.expire(self._key_failures, self._ttl)
-                    await pipe.execute()
-                    self.degraded_until = None
-                    self.consecutive_failures = 0
-                    CIRCUIT_BREAKER_STATE.labels(source=self.name).set(0)
-                    logger.info(
-                        f"Circuit breaker [{self.name}] cooldown expired "
-                        f"— resetting to healthy"
-                    )
-                    return True
-                self.degraded_until = degraded_until
-                return False
-            except Exception as e:
-                logger.debug(f"Redis CB try_recover fallback: {e}")
-        return await super().try_recover()
-
-    async def is_degraded_async(self) -> bool:
-        """Async check of degraded state from Redis (AC2, AC9).
-
-        Unlike the sync ``is_degraded`` property (which reads local state),
-        this method queries Redis for the authoritative cross-worker state.
-        """
-        redis = await self._get_redis()
-        if redis:
-            try:
-                val = await redis.get(self._key_degraded)
-                if val is None:
-                    return False
-                return time.time() < float(val)
-            except Exception as e:
-                logger.debug(f"Redis CB fallback (is_degraded_async): {e}")
-        return self.is_degraded
-
-    async def get_state(self) -> dict:
-        """Get full circuit breaker state for health endpoint (AC9)."""
-        redis = await self._get_redis()
-        if redis:
-            try:
-                pipe = redis.pipeline()
-                pipe.get(self._key_failures)
-                pipe.get(self._key_degraded)
-                results = await pipe.execute()
-                failures = int(results[0]) if results[0] else 0
-                degraded_until = float(results[1]) if results[1] else None
-                is_degraded = (
-                    degraded_until is not None and time.time() < degraded_until
-                )
-                return {
-                    "status": "degraded" if is_degraded else "healthy",
-                    "failures": failures,
-                    "degraded": is_degraded,
-                    "degraded_until": degraded_until,
-                    "backend": "redis",
-                }
-            except Exception as e:
-                logger.debug(f"Redis CB fallback (get_state): {e}")
-        return {
-            "status": "degraded" if self.is_degraded else "healthy",
-            "failures": self.consecutive_failures,
-            "degraded": self.is_degraded,
-            "degraded_until": self.degraded_until,
-            "backend": "local",
-        }
-
-    async def initialize(self) -> None:
-        """Initialize circuit breaker by restoring state from Redis (GTM-CRIT-005 AC5).
-
-        Should be called once at application startup to sync local state with
-        the authoritative Redis state. This ensures that after a worker restart,
-        the circuit breaker reflects any degraded state persisted by other workers.
-
-        If Redis is unavailable, local state remains at defaults (healthy).
-        """
-        redis = await self._get_redis()
-        if redis:
-            try:
-                pipe = redis.pipeline()
-                pipe.get(self._key_failures)
-                pipe.get(self._key_degraded)
-                results = await pipe.execute()
-
-                # Restore failure count
-                if results[0]:
-                    self.consecutive_failures = int(results[0])
-                    logger.debug(
-                        f"Circuit breaker [{self.name}] restored {self.consecutive_failures} "
-                        f"failures from Redis"
-                    )
-
-                # Restore degraded state if still active
-                if results[1]:
-                    degraded_until = float(results[1])
-                    if time.time() < degraded_until:
-                        self.degraded_until = degraded_until
-                        CIRCUIT_BREAKER_STATE.labels(source=self.name).set(1)
-                        logger.warning(
-                            f"Circuit breaker [{self.name}] restored DEGRADED state "
-                            f"from Redis — degraded until {degraded_until:.0f}"
-                        )
-                    else:
-                        # Cooldown expired in Redis — clean up
-                        logger.info(
-                            f"Circuit breaker [{self.name}] found expired degraded state "
-                            f"in Redis — resetting to healthy"
-                        )
-                        await self.try_recover()
-            except Exception as e:
-                logger.debug(f"Circuit breaker [{self.name}] initialize fallback: {e}")
-
-    async def reset_async(self) -> None:
-        """Reset both local and Redis state."""
-        super().reset()
-        redis = await self._get_redis()
-        if redis:
-            try:
-                pipe = redis.pipeline()
-                pipe.delete(self._key_failures)
-                pipe.delete(self._key_degraded)
-                await pipe.execute()
-            except Exception as e:
-                logger.debug(f"Redis CB fallback (reset_async): {e}")
-
-
-# Module-level singletons — one per data source (GTM-FIX-005 AC9)
-# B-06: Use RedisCircuitBreaker for shared state across workers when enabled.
-# Fallback to PNCPCircuitBreaker (per-worker) when USE_REDIS_CIRCUIT_BREAKER=false
-# or when Redis is unavailable at runtime.
-_CBClass = RedisCircuitBreaker if USE_REDIS_CIRCUIT_BREAKER else PNCPCircuitBreaker
-_circuit_breaker = _CBClass(
-    name="pncp",
-    threshold=PNCP_CIRCUIT_BREAKER_THRESHOLD,
-    cooldown_seconds=PNCP_CIRCUIT_BREAKER_COOLDOWN,
-)
-_pcp_circuit_breaker = _CBClass(
-    name="pcp",
-    threshold=PCP_CIRCUIT_BREAKER_THRESHOLD,
-    cooldown_seconds=PCP_CIRCUIT_BREAKER_COOLDOWN,
-)
-# STORY-305 AC1/AC2: ComprasGov circuit breaker — same class, same CB implementation
-_comprasgov_circuit_breaker = _CBClass(
-    name="comprasgov",
-    threshold=COMPRASGOV_CIRCUIT_BREAKER_THRESHOLD,
-    cooldown_seconds=COMPRASGOV_CIRCUIT_BREAKER_COOLDOWN,
-)
-
-
-def get_circuit_breaker(source: str = "pncp") -> PNCPCircuitBreaker:
-    """Return the circuit breaker singleton for a given data source.
-
-    Args:
-        source: "pncp" (default), "pcp", or "comprasgov".
-    """
-    if source == "pcp":
-        return _pcp_circuit_breaker
-    if source == "comprasgov":
-        return _comprasgov_circuit_breaker
-    return _circuit_breaker
-
-
-# ============================================================================
-# Status Mapping for PNCP API
-# ============================================================================
-
-# Mapping from StatusLicitacao enum values to PNCP API parameter values
-# Note: Import StatusLicitacao at runtime to avoid circular imports
-STATUS_PNCP_MAP = {
-    "recebendo_proposta": "recebendo_proposta",
-    "em_julgamento": "propostas_encerradas",
-    "encerrada": "encerrada",
-    "todos": None,  # Don't send status parameter - return all
-}
-
-
-# ============================================================================
-# UX-336: Multi-format date handling for PNCP 422 recovery
-# ============================================================================
-
-class DateFormat:
-    """Supported PNCP date formats for 422 retry rotation."""
-    YYYYMMDD = "YYYYMMDD"       # 20260218 (only format accepted by PNCP)
-    ISO_DASH = "YYYY-MM-DD"     # 2026-02-18 (NOT accepted by PNCP)
-    BR_SLASH = "DD/MM/YYYY"     # 18/02/2026 (NOT accepted by PNCP)
-    BR_DASH = "DD-MM-YYYY"      # 18-02-2026 (NOT accepted by PNCP)
-
-    # PNCP API only accepts yyyyMMdd. Format rotation to other formats
-    # wastes retries and guarantees failure. Confirmed in production
-    # 2026-02-25: rotating to ISO_DASH/BR_SLASH/BR_DASH always returns
-    # "Data Inicial inválida". Keep only the correct format.
-    ALL = [YYYYMMDD]
-
-
-# UX-336 AC3: In-memory cache of accepted date format (TTL 24h)
-_accepted_date_format: Optional[str] = None
-_accepted_date_format_ts: float = 0.0
-_DATE_FORMAT_CACHE_TTL = 86400.0  # 24 hours
-
-
-def _get_cached_date_format() -> Optional[str]:
-    """Return cached accepted format if still valid, else None."""
-    global _accepted_date_format, _accepted_date_format_ts
-    if _accepted_date_format and (time.time() - _accepted_date_format_ts) < _DATE_FORMAT_CACHE_TTL:
-        return _accepted_date_format
-    return None
-
-
-def _set_cached_date_format(fmt: str) -> None:
-    """Cache the accepted date format."""
-    global _accepted_date_format, _accepted_date_format_ts
-    _accepted_date_format = fmt
-    _accepted_date_format_ts = time.time()
-    logger.debug(f"pncp_date_format_cached format={fmt}")
-
-
-def format_date(iso_date: str, fmt: str) -> str:
-    """Convert YYYY-MM-DD date string to the specified format.
-
-    Args:
-        iso_date: Date in YYYY-MM-DD format
-        fmt: Target format from DateFormat constants
-
-    Returns:
-        Formatted date string
-    """
-    parts = iso_date.split("-")
-    if len(parts) != 3:
-        raise ValueError(f"Invalid ISO date: '{iso_date}'")
-    yyyy, mm, dd = parts
-
-    if fmt == DateFormat.YYYYMMDD:
-        return f"{yyyy}{mm}{dd}"
-    elif fmt == DateFormat.ISO_DASH:
-        return iso_date  # Already in this format
-    elif fmt == DateFormat.BR_SLASH:
-        return f"{dd}/{mm}/{yyyy}"
-    elif fmt == DateFormat.BR_DASH:
-        return f"{dd}-{mm}-{yyyy}"
-    else:
-        raise ValueError(f"Unknown date format: '{fmt}'")
-
-
-def _get_format_rotation() -> List[str]:
-    """Return date formats to try, with cached format first if available."""
-    cached = _get_cached_date_format()
-    if cached:
-        # Put cached format first, then the rest
-        return [cached] + [f for f in DateFormat.ALL if f != cached]
-    return list(DateFormat.ALL)
-
-
-def _validate_date_params(
-    data_inicial: str, data_inicial_fmt: str,
-    data_final: str, data_final_fmt: str,
-) -> None:
-    """GTM-FIX-032 AC2: Pre-flight date validation before sending to PNCP."""
-    if len(data_inicial_fmt) != 8 or not data_inicial_fmt.isdigit():
-        raise ValueError(f"Malformed data_inicial: '{data_inicial}' → '{data_inicial_fmt}'")
-    if len(data_final_fmt) != 8 or not data_final_fmt.isdigit():
-        raise ValueError(f"Malformed data_final: '{data_final}' → '{data_final_fmt}'")
-
-
-def _handle_422_response(
-    response_text: str,
-    params: dict,
-    data_inicial: str,
-    data_final: str,
-    attempt: int,
-    max_retries: int = 1,
-) -> str | dict:
-    """GTM-FIX-032 AC1+AC4+AC6: Shared 422 handling for sync and async clients.
-
-    Returns:
-        "retry" — caller should retry (same format)
-        "retry_format" — caller should retry with next date format (UX-336)
-        dict — empty result (graceful skip for date-related 422s)
-        "raise" — caller should raise PNCPAPIError
-    """
-    body_preview = response_text[:500] if response_text else "(empty)"
-    uf_param = params.get("uf", "?")
-    mod_param = params.get("codigoModalidadeContratacao", "?")
-    pagina = params.get("pagina", 1)
-
-    # UX-336 AC4: Detailed logging of each attempt
-    logger.warning(
-        f"PNCP 422 for UF={uf_param} mod={mod_param} "
-        f"(attempt {attempt + 1}/{max_retries + 1}). Body: {body_preview}. "
-        f"Params: {params}. Raw dates: {data_inicial} → {data_final}."
-    )
-
-    # UX-336: Always signal format rotation — the outer loop tracks format exhaustion
-    if attempt < max_retries:
-        return "retry_format"
-
-    # Retry exhausted — categorize (called explicitly when formats are exhausted)
-    logger.warning(
-        f"PNCP 422 persisted for UF={uf_param} mod={mod_param} "
-        f"after {max_retries} retry. Body: {body_preview}. "
-        f"Params: {params}. Raw dates: {data_inicial} → {data_final}"
-    )
-
-    # AC4.1: NO circuit breaker for 422 (transient validation, not API down)
-    # AC4.2: Categorize and handle gracefully
-    _422_type = "unknown"
-    if "Data Inicial" in body_preview:
-        _422_type = "date_swap"
-    elif "365 dias" in body_preview:
-        _422_type = "date_range"
-
-    # AC4.4 + UX-336 AC5: Sentry-style metric tag with format info
-    logger.debug(
-        f"pncp_422_count uf={uf_param} modality={mod_param} type={_422_type}"
-    )
-
-    if _422_type != "unknown":
-        # AC4.3: Return empty instead of crashing
-        logger.debug(
-            f"pncp_422_date_skip uf={uf_param} modality={mod_param} type={_422_type}"
-        )
-        return {
-            "data": [],
-            "totalRegistros": 0,
-            "totalPaginas": 0,
-            "paginaAtual": pagina,
-            "temProximaPagina": False,
-        }
-
-    return "raise"
 
 
 def calculate_delay(attempt: int, config: RetryConfig) -> float:
@@ -745,35 +59,38 @@ class PNCPClient:
             config: Retry configuration (uses defaults if not provided)
         """
         self.config = config or RetryConfig()
-        self.client = self._create_session()
-        self._request_count = 0  # Per-session counter; reset not needed as each client instance is short-lived
+        self.session = self._create_session()
+        self._request_count = 0
         self._last_request_time = 0.0
 
-    def _create_session(self) -> httpx.Client:
-        """Create HTTP client with timeout configuration.
-
-        DEBT-107: Migrated from requests.Session to httpx.Client.
-        STORY-282 AC1: Uses aggressive timeout defaults from config.
+    def _create_session(self) -> requests.Session:
+        """
+        Create HTTP session with automatic retry strategy.
 
         Returns:
-            Configured httpx.Client
+            Configured requests.Session with retry adapter
         """
-        transport = httpx.HTTPTransport(retries=self.config.max_retries)
-        client = httpx.Client(
-            transport=transport,
-            timeout=httpx.Timeout(
-                connect=self.config.connect_timeout,
-                read=self.config.read_timeout,
-                write=30.0,
-                pool=30.0,
-            ),
-            headers={
-                "User-Agent": "SmartLic/1.0 (procurement-search; contato@smartlic.tech)",
-                "Accept": "application/json",
-            },
-            follow_redirects=True,
+        session = requests.Session()
+
+        # Configure retry strategy using urllib3
+        retry_strategy = Retry(
+            total=self.config.max_retries,
+            backoff_factor=self.config.base_delay,
+            status_forcelist=self.config.retryable_status_codes,
+            allowed_methods=["GET"],
+            raise_on_status=False,  # We'll handle status codes manually
         )
-        return client
+
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        session.mount("https://", adapter)
+        session.mount("http://", adapter)
+
+        # Set default headers
+        session.headers.update(
+            {"User-Agent": "BidIQ-POC/0.2", "Accept": "application/json"}
+        )
+
+        return session
 
     def _rate_limit(self) -> None:
         """
@@ -796,10 +113,9 @@ class PNCPClient:
         self,
         data_inicial: str,
         data_final: str,
-        modalidade: int,
         uf: str | None = None,
         pagina: int = 1,
-        tamanho: int = 50,  # PNCP API max (reduced from 500 to 50 by PNCP ~Feb 2026)
+        tamanho: int = 500,
     ) -> Dict[str, Any]:
         """
         Fetch a single page of procurement data from PNCP API.
@@ -807,10 +123,9 @@ class PNCPClient:
         Args:
             data_inicial: Start date in YYYY-MM-DD format
             data_final: End date in YYYY-MM-DD format
-            modalidade: Modality code (codigoModalidadeContratacao), e.g., 6 for Pregão Eletrônico
             uf: Optional state code (e.g., "SP", "RJ")
             pagina: Page number (1-indexed)
-            tamanho: Page size (default 50, PNCP API max as of Feb 2026)
+            tamanho: Page size (max 500)
 
         Returns:
             API response as dictionary containing:
@@ -821,38 +136,14 @@ class PNCPClient:
                 - temProximaPagina: Boolean indicating if more pages exist
 
         Raises:
-            ValueError: If modalidade is missing (PNCP API requires codigoModalidadeContratacao)
             PNCPAPIError: On non-retryable errors or after max retries
             PNCPRateLimitError: If rate limit persists after retries
         """
-        # CRIT-FLT-008 AC1: Guard — PNCP API requires codigoModalidadeContratacao (HTTP 400 without it)
-        if not modalidade:
-            raise ValueError(
-                "codigoModalidadeContratacao is required by PNCP API. "
-                "Sending a request without it will return HTTP 400."
-            )
-
-        # DEBT-102 AC6: Server-side validation — reject tamanhoPagina > PNCP_MAX_PAGE_SIZE
-        if tamanho > PNCP_MAX_PAGE_SIZE:
-            raise ValueError(
-                f"tamanhoPagina={tamanho} exceeds PNCP API maximum of {PNCP_MAX_PAGE_SIZE}. "
-                f"PNCP silently returns HTTP 400 for values > {PNCP_MAX_PAGE_SIZE} (changed Feb 2026)."
-            )
-
         self._rate_limit()
 
-        # GTM-FIX-032 AC2: Pre-flight date validation + formatting
-        data_inicial_fmt = data_inicial.replace("-", "")
-        data_final_fmt = data_final.replace("-", "")
-        _validate_date_params(data_inicial, data_inicial_fmt, data_final, data_final_fmt)
-        if data_inicial_fmt > data_final_fmt:
-            logger.warning(f"Dates swapped: {data_inicial_fmt} > {data_final_fmt}. Auto-swapping.")
-            data_inicial_fmt, data_final_fmt = data_final_fmt, data_inicial_fmt
-
         params = {
-            "dataInicial": data_inicial_fmt,
-            "dataFinal": data_final_fmt,
-            "codigoModalidadeContratacao": modalidade,
+            "dataInicial": data_inicial,
+            "dataFinal": data_final,
             "pagina": pagina,
             "tamanhoPagina": tamanho,
         }
@@ -862,16 +153,6 @@ class PNCPClient:
 
         url = f"{self.BASE_URL}/contratacoes/publicacao"
 
-        # STORY-226 AC23: Forward X-Request-ID for distributed tracing
-        req_id = request_id_var.get("-")
-        headers = {}
-        if req_id and req_id != "-":
-            headers["X-Request-ID"] = req_id
-
-        # UX-336: Track format rotation for 422 recovery
-        format_rotation = _get_format_rotation()
-        format_idx = 0
-
         for attempt in range(self.config.max_retries + 1):
             try:
                 logger.debug(
@@ -879,15 +160,14 @@ class PNCPClient:
                     f"{self.config.max_retries + 1}"
                 )
 
-                response = self.client.get(
-                    url, params=params, timeout=self.config.timeout,
-                    headers=headers,
+                response = self.session.get(
+                    url, params=params, timeout=self.config.timeout
                 )
 
                 # Handle rate limiting specifically
                 if response.status_code == 429:
                     retry_after = int(response.headers.get("Retry-After", 60))
-                    logger.debug(
+                    logger.warning(
                         f"Rate limited (429). Waiting {retry_after}s "
                         f"(Retry-After header)"
                     )
@@ -896,120 +176,19 @@ class PNCPClient:
 
                 # Success case
                 if response.status_code == 200:
-                    # Validate Content-Type before parsing JSON
-                    content_type = response.headers.get("content-type", "")
-                    if "json" not in content_type.lower():
-                        logger.warning(
-                            f"PNCP returned non-JSON response (content-type: {content_type}). "
-                            f"Body preview: {response.text[:200]}. "
-                            f"Attempt {attempt + 1}/{self.config.max_retries + 1}"
-                        )
-                        if attempt < self.config.max_retries:
-                            delay = calculate_delay(attempt, self.config)
-                            time.sleep(delay)
-                            continue
-                        else:
-                            raise PNCPAPIError(
-                                f"PNCP returned non-JSON after {self.config.max_retries + 1} attempts. "
-                                f"Content-Type: {content_type}"
-                            )
-
-                    # Parse JSON with error handling
-                    try:
-                        data = response.json()
-                    except json.JSONDecodeError as e:
-                        logger.warning(
-                            f"PNCP returned invalid JSON: {e}. "
-                            f"Body preview: {response.text[:200]}. "
-                            f"Attempt {attempt + 1}/{self.config.max_retries + 1}"
-                        )
-                        if attempt < self.config.max_retries:
-                            delay = calculate_delay(attempt, self.config)
-                            time.sleep(delay)
-                            continue
-                        else:
-                            raise PNCPAPIError(
-                                f"PNCP returned invalid JSON after {self.config.max_retries + 1} attempts: {e}"
-                            ) from e
-
-                    # UX-336 AC3+AC5: Cache successful format + telemetry
-                    current_fmt = format_rotation[format_idx] if format_idx < len(format_rotation) else DateFormat.YYYYMMDD
-                    if current_fmt != DateFormat.YYYYMMDD or format_idx > 0:
-                        _set_cached_date_format(current_fmt)
-                        logger.debug(f"pncp_date_format_accepted format={current_fmt}")
-
                     logger.debug(
                         f"Success: fetched page {pagina} "
-                        f"({len(data.get('data', []))} items)"
+                        f"({len(response.json().get('data', []))} items)"
                     )
-                    return data
-
-                # No content - empty results (valid response)
-                if response.status_code == 204:
-                    logger.debug(f"No content (204) for page {pagina} - no results")
-                    return {
-                        "data": [],
-                        "totalRegistros": 0,
-                        "totalPaginas": 0,
-                        "paginaAtual": pagina,
-                        "temProximaPagina": False,
-                    }
-
-                # GTM-FIX-032 AC6 + UX-336 AC1: 422 handling with format rotation
-                if response.status_code == 422:
-                    # UX-336: Use format_idx to determine if more formats are available
-                    has_more_formats = (format_idx + 1) < len(format_rotation)
-                    effective_attempt = 0 if has_more_formats else 1
-                    result = _handle_422_response(
-                        response.text, params, data_inicial, data_final,
-                        attempt=effective_attempt, max_retries=1
-                    )
-                    if result == "retry_format" and has_more_formats:
-                        # UX-336: Try next date format
-                        format_idx += 1
-                        next_fmt = format_rotation[format_idx]
-                        logger.debug(
-                            f"UX-336: Retrying with format {next_fmt} "
-                            f"(attempt {format_idx + 1}/{len(format_rotation)})"
-                        )
-                        params["dataInicial"] = format_date(data_inicial, next_fmt)
-                        params["dataFinal"] = format_date(data_final, next_fmt)
-                        time.sleep(self.config.base_delay)
-                        continue
-                    if isinstance(result, dict):
-                        return result
-                    # UX-336 AC6: All formats failed
-                    raise PNCPAPIError(
-                        f"PNCP 422 after all {len(format_rotation)} date formats for "
-                        f"UF={params.get('uf', '?')} mod={params.get('codigoModalidadeContratacao', '?')}. "
-                        f"Reduza o período da análise."
-                    )
-
-                # CRIT-043 AC3+AC4: 400 on page>1 is expected (past last page)
-                if response.status_code == 400 and pagina > 1:
-                    logger.debug(
-                        f"CRIT-043: HTTP 400 at page {pagina} — past last page. "
-                        f"UF={params.get('uf', '?')}, mod={params.get('codigoModalidadeContratacao', '?')}"
-                    )
-                    return {
-                        "data": [],
-                        "totalRegistros": 0,
-                        "totalPaginas": pagina - 1,
-                        "paginaAtual": pagina,
-                        "temProximaPagina": False,
-                    }
+                    return response.json()
 
                 # Non-retryable errors - fail immediately
                 if response.status_code not in self.config.retryable_status_codes:
-                    logger.error(
-                        f"PNCP API error: status={response.status_code} "
-                        f"url={url} params={params} "
-                        f"body={response.text[:500]}"
-                    )
                     error_msg = (
                         f"API returned non-retryable status {response.status_code}: "
                         f"{response.text[:200]}"
                     )
+                    logger.error(error_msg)
                     raise PNCPAPIError(error_msg)
 
                 # Retryable errors - wait and retry
@@ -1033,7 +212,7 @@ class PNCPClient:
             except self.config.retryable_exceptions as e:
                 if attempt < self.config.max_retries:
                     delay = calculate_delay(attempt, self.config)
-                    logger.info(
+                    logger.warning(
                         f"Exception {type(e).__name__}: {e}. "
                         f"Attempt {attempt + 1}/{self.config.max_retries + 1}. "
                         f"Retrying in {delay:.1f}s"
@@ -1044,214 +223,109 @@ class PNCPClient:
                         f"Failed after {self.config.max_retries + 1} attempts. "
                         f"Last exception: {type(e).__name__}: {e}"
                     )
-                    logger.warning(error_msg)
+                    logger.error(error_msg)
                     raise PNCPAPIError(error_msg) from e
 
         # Should never reach here, but just in case
         raise PNCPAPIError("Unexpected: exhausted retries without raising exception")
-
-    @staticmethod
-    def _chunk_date_range(
-        data_inicial: str, data_final: str, max_days: int = 30
-    ) -> list[tuple[str, str]]:
-        """
-        Split a date range into chunks of max_days.
-
-        The PNCP API may return incomplete results for large date ranges.
-        This method splits the range into smaller windows to ensure
-        complete data retrieval.
-
-        Args:
-            data_inicial: Start date YYYY-MM-DD
-            data_final: End date YYYY-MM-DD
-            max_days: Maximum days per chunk (default 30)
-
-        Returns:
-            List of (start, end) date string tuples
-        """
-        d_start = date.fromisoformat(data_inicial)
-        d_end = date.fromisoformat(data_final)
-        chunks: list[tuple[str, str]] = []
-
-        current = d_start
-        while current <= d_end:
-            chunk_end = min(current + timedelta(days=max_days - 1), d_end)
-            chunks.append((current.isoformat(), chunk_end.isoformat()))
-            current = chunk_end + timedelta(days=1)
-
-        return chunks
 
     def fetch_all(
         self,
         data_inicial: str,
         data_final: str,
         ufs: list[str] | None = None,
-        modalidades: list[int] | None = None,
         on_progress: Callable[[int, int, int], None] | None = None,
     ) -> Generator[Dict[str, Any], None, None]:
         """
-        Fetch all procurement records with automatic pagination and date chunking.
+        Fetch all procurement records with automatic pagination.
 
-        Automatically splits date ranges > 30 days into 30-day chunks to avoid
-        PNCP API limitations with large ranges.
+        This generator yields individual procurement records across all pages,
+        handling pagination automatically. If specific UFs are provided, it
+        fetches data for each UF separately (more efficient for PNCP API).
 
         Args:
             data_inicial: Start date in YYYY-MM-DD format
             data_final: End date in YYYY-MM-DD format
             ufs: Optional list of state codes (e.g., ["SP", "RJ"])
-            modalidades: Optional list of modality codes
+                 If None, fetches all UFs
             on_progress: Optional callback(current_page, total_pages, items_fetched)
+                         Called after each page is fetched
 
         Yields:
             Dict[str, Any]: Individual procurement record
+
+        Example:
+            ```python
+            client = PNCPClient()
+
+            # Fetch all records for SP and RJ
+            for bid in client.fetch_all("2025-01-01", "2025-01-31", ufs=["SP", "RJ"]):
+                print(bid["codigoCompra"])
+
+            # With progress callback
+            def show_progress(page, total, items):
+                print(f"Page {page}/{total}: {items} items fetched")
+
+            bids = list(client.fetch_all(
+                "2025-01-01",
+                "2025-01-31",
+                ufs=["SP"],
+                on_progress=show_progress
+            ))
+            ```
         """
-        # Split large date ranges into 30-day chunks
-        date_chunks = self._chunk_date_range(data_inicial, data_final)
-        if len(date_chunks) > 1:
-            logger.debug(
-                f"Date range {data_inicial} to {data_final} split into "
-                f"{len(date_chunks)} chunks of up to 30 days"
-            )
-
-        # Use default modalities if not specified; always filter out excluded
-        modalidades_to_fetch = modalidades or DEFAULT_MODALIDADES
-        modalidades_to_fetch = [m for m in modalidades_to_fetch if m not in MODALIDADES_EXCLUIDAS]
-
-        # Track unique IDs to avoid duplicates across modalities and chunks
-        seen_ids: set[str] = set()
-
-        for chunk_idx, (chunk_start, chunk_end) in enumerate(date_chunks):
-            if len(date_chunks) > 1:
-                logger.debug(
-                    f"Processing date chunk {chunk_idx + 1}/{len(date_chunks)}: "
-                    f"{chunk_start} to {chunk_end}"
-                )
-
-            for modalidade in modalidades_to_fetch:
-                logger.debug(f"Fetching modality {modalidade}")
-
-                # If specific UFs provided, fetch each separately
-                if ufs:
-                    for uf in ufs:
-                        logger.debug(f"Fetching modalidade={modalidade}, UF={uf}")
-                        try:
-                            for item in self._fetch_by_uf(
-                                chunk_start, chunk_end, modalidade, uf, on_progress
-                            ):
-                                normalized = self._normalize_item(item)
-                                item_id = normalized.get("numeroControlePNCP", "")
-                                if item_id and item_id not in seen_ids:
-                                    seen_ids.add(item_id)
-                                    yield normalized
-                        except PNCPAPIError as e:
-                            logger.warning(
-                                f"Skipping modalidade={modalidade}, UF={uf}: {e}"
-                            )
-                            continue
-                else:
-                    logger.debug(f"Fetching modalidade={modalidade}, all UFs")
-                    try:
-                        for item in self._fetch_by_uf(
-                            chunk_start, chunk_end, modalidade, None, on_progress
-                        ):
-                            normalized = self._normalize_item(item)
-                            item_id = normalized.get("numeroControlePNCP", "")
-                            if item_id and item_id not in seen_ids:
-                                seen_ids.add(item_id)
-                                yield normalized
-                    except PNCPAPIError as e:
-                        logger.warning(
-                            f"Skipping modalidade={modalidade}, all UFs: {e}"
-                        )
-                        continue
-
-        logger.info(
-            f"Fetch complete: {len(seen_ids)} unique records across "
-            f"{len(modalidades_to_fetch)} modalities and {len(date_chunks)} date chunks"
-        )
-
-    @staticmethod
-    def _normalize_item(item: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Flatten nested PNCP API response into the flat format expected by
-        filter.py, excel.py and llm.py.
-
-        The PNCP API nests org/location data inside ``orgaoEntidade`` and
-        ``unidadeOrgao`` objects.  The rest of the codebase expects flat
-        top-level keys: ``uf``, ``municipio``, ``nomeOrgao``, ``codigoCompra``.
-
-        Also ensures linkSistemaOrigem is preserved for Excel hyperlinks.
-        Note: linkProcessoEletronico is always empty from PNCP API (CRIT-FLT-008).
-        """
-        unidade = item.get("unidadeOrgao") or {}
-        orgao = item.get("orgaoEntidade") or {}
-
-        item["uf"] = unidade.get("ufSigla", "")
-        item["municipio"] = unidade.get("municipioNome", "")
-        item["nomeOrgao"] = orgao.get("razaoSocial", "") or unidade.get("nomeUnidade", "")
-        item["codigoCompra"] = item.get("numeroControlePNCP", "")
-
-        # Preserve link fields (already in root level from API)
-        # CRIT-FLT-008: linkSistemaOrigem is the primary link (86% populated).
-        # linkProcessoEletronico is always empty from PNCP API but kept for other sources.
-
-        return item
+        # If specific UFs provided, fetch each separately
+        if ufs:
+            for uf in ufs:
+                logger.info(f"Fetching all pages for UF={uf}")
+                yield from self._fetch_by_uf(data_inicial, data_final, uf, on_progress)
+        else:
+            # Fetch all UFs together (no UF filter)
+            logger.info("Fetching all pages (all UFs)")
+            yield from self._fetch_by_uf(data_inicial, data_final, None, on_progress)
 
     def _fetch_by_uf(
         self,
         data_inicial: str,
         data_final: str,
-        modalidade: int,
         uf: str | None,
         on_progress: Callable[[int, int, int], None] | None,
-        max_pages: int | None = None,  # STORY-282 AC2: Defaults to PNCP_MAX_PAGES (5)
     ) -> Generator[Dict[str, Any], None, None]:
         """
-        Fetch all pages for a specific modality and UF combination.
+        Fetch all pages for a specific UF (or all UFs if uf=None).
 
-        This helper method handles pagination for a single modality/UF by following
+        This helper method handles pagination for a single UF by following
         the API's `temProximaPagina` flag. It continues fetching pages
-        until no more pages are available OR max_pages is reached.
+        until no more pages are available.
 
         Args:
             data_inicial: Start date in YYYY-MM-DD format
             data_final: End date in YYYY-MM-DD format
-            modalidade: Modality code (codigoModalidadeContratacao)
             uf: State code (e.g., "SP") or None for all states
             on_progress: Optional progress callback
-            max_pages: Maximum number of pages to fetch (prevents timeouts, default 500)
 
         Yields:
             Dict[str, Any]: Individual procurement record
         """
-        from config import PNCP_MAX_PAGES
-        if max_pages is None:
-            max_pages = PNCP_MAX_PAGES
         pagina = 1
         items_fetched = 0
         total_pages = None
 
-        while pagina <= max_pages:
+        while True:
             logger.debug(
-                f"Fetching page {pagina} for modalidade={modalidade}, UF={uf or 'ALL'} "
+                f"Fetching page {pagina} for UF={uf or 'ALL'} "
                 f"(date range: {data_inicial} to {data_final})"
             )
 
             response = self.fetch_page(
-                data_inicial=data_inicial,
-                data_final=data_final,
-                modalidade=modalidade,
-                uf=uf,
-                pagina=pagina,
+                data_inicial=data_inicial, data_final=data_final, uf=uf, pagina=pagina
             )
 
             # Extract pagination metadata
-            # PNCP API uses: numeroPagina, totalPaginas, paginasRestantes, empty
             data = response.get("data", [])
             total_pages = response.get("totalPaginas", 1)
             total_registros = response.get("totalRegistros", 0)
-            paginas_restantes = response.get("paginasRestantes", 0)
-            tem_proxima = paginas_restantes > 0
+            tem_proxima = response.get("temProximaPagina", False)
 
             # Log page info
             logger.info(
@@ -1271,20 +345,8 @@ class PNCPClient:
             # Check if there are more pages
             if not tem_proxima:
                 logger.info(
-                    f"[SUCCESS] Fetch complete for modalidade={modalidade}, UF={uf or 'ALL'}: "
+                    f"Finished fetching UF={uf or 'ALL'}: "
                     f"{items_fetched} total items across {pagina} pages"
-                )
-                break
-
-            # HOTFIX STORY-183: Enhanced warning when max_pages limit reached
-            if pagina >= max_pages:
-                logger.warning(
-                    f"[WARN] MAX_PAGES ({max_pages}) ATINGIDO! "
-                    f"UF={uf or 'ALL'}, modalidade={modalidade}. "
-                    f"Fetched {items_fetched} items out of {total_registros} total. "
-                    f"Remaining pages: {paginas_restantes}. "
-                    f"Resultados podem estar incompletos. "
-                    f"Considere aumentar max_pages ou otimizar filtros."
                 )
                 break
 
@@ -1292,8 +354,8 @@ class PNCPClient:
             pagina += 1
 
     def close(self) -> None:
-        """Close the HTTP client and cleanup resources."""
-        self.client.close()
+        """Close the HTTP session and cleanup resources."""
+        self.session.close()
         logger.debug(f"Session closed. Total requests made: {self._request_count}")
 
     def __enter__(self):
@@ -1303,1239 +365,3 @@ class PNCPClient:
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit - close session."""
         self.close()
-
-
-# ============================================================================
-# Async Parallel Search Client
-# ============================================================================
-
-class AsyncPNCPClient:
-    """
-    Async HTTP client for PNCP API with parallel UF fetching.
-
-    Uses httpx for async HTTP requests and asyncio.Semaphore for
-    concurrency control. This enables fetching multiple UFs in parallel
-    while respecting rate limits.
-
-    Example:
-        >>> async with AsyncPNCPClient() as client:
-        ...     results = await client.buscar_todas_ufs_paralelo(
-        ...         ufs=["SP", "RJ", "MG"],
-        ...         data_inicial="2026-01-01",
-        ...         data_final="2026-01-31"
-        ...     )
-    """
-
-    BASE_URL = "https://pncp.gov.br/api/consulta/v1"
-
-    def __init__(
-        self,
-        config: RetryConfig | None = None,
-        max_concurrent: int = 10
-    ):
-        """
-        Initialize async PNCP client.
-
-        Args:
-            config: Retry configuration (uses defaults if not provided)
-            max_concurrent: Maximum concurrent requests (default 10)
-        """
-        self.config = config or RetryConfig()
-        self.max_concurrent = max_concurrent
-        self._semaphore: asyncio.Semaphore | None = None
-        self._client: httpx.AsyncClient | None = None
-        self._request_count = 0  # Per-session counter; reset not needed as each client instance is short-lived
-        self._last_request_time = 0.0
-
-    async def __aenter__(self) -> "AsyncPNCPClient":
-        """Async context manager entry.
-
-        STORY-282 AC1: Uses split connect/read timeouts for fail-fast behavior.
-        STORY-296 AC2: Isolated connection pool via httpx.Limits.
-        """
-        self._semaphore = asyncio.Semaphore(self.max_concurrent)
-        self._client = httpx.AsyncClient(
-            timeout=httpx.Timeout(
-                connect=self.config.connect_timeout,
-                read=self.config.read_timeout,
-                write=self.config.read_timeout,
-                pool=self.config.connect_timeout,
-            ),
-            limits=httpx.Limits(
-                max_connections=self.max_concurrent + 2,
-                max_keepalive_connections=self.max_concurrent,
-            ),
-            headers={
-                "User-Agent": "SmartLic/1.0 (procurement-search; contato@smartlic.tech)",
-                "Accept": "application/json",
-            },
-            follow_redirects=True,
-        )
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Async context manager exit."""
-        if self._client:
-            await self._client.aclose()
-        logger.debug(f"Async session closed. Total requests made: {self._request_count}")
-
-    async def health_canary(self) -> dict:
-        """Run a lightweight probe to verify PNCP API is responsive (STORY-252 AC10, CRIT-052).
-
-        Sends a single request for UF=SP, modality 6 (Pregao Eletronico),
-        page 1 only, with adaptive timeout based on cron canary status.
-
-        CRIT-052: Returns rich result instead of bare bool.
-        - If cron status=degraded (but responding), uses extended timeout (15s)
-        - If cron status=healthy, uses standard timeout (10s)
-
-        Returns:
-            dict with keys: ok (bool), latency_ms (float|None), cron_status (str)
-        """
-        from config import PNCP_CANARY_TIMEOUT_S, PNCP_CANARY_TIMEOUT_EXTENDED_S
-        from cron_jobs import get_pncp_cron_status
-
-        cron_status = get_pncp_cron_status()
-        cron_pncp_status = cron_status["status"]
-        cron_latency = cron_status["latency_ms"]
-
-        # CRIT-052 AC1: Adaptive timeout based on cron canary
-        if cron_pncp_status == "degraded":
-            canary_timeout = PNCP_CANARY_TIMEOUT_EXTENDED_S
-        else:
-            canary_timeout = PNCP_CANARY_TIMEOUT_S
-
-        result = {"ok": False, "latency_ms": None, "cron_status": cron_pncp_status}
-
-        if self._client is None:
-            raise RuntimeError("Client not initialized. Use async context manager.")
-
-        start_time = time.monotonic()
-        try:
-            params = {
-                "dataInicial": date.today().strftime("%Y%m%d"),
-                "dataFinal": date.today().strftime("%Y%m%d"),
-                "codigoModalidadeContratacao": 6,
-                "pagina": 1,
-                "tamanhoPagina": 50,
-                "uf": "SP",
-            }
-            url = f"{self.BASE_URL}/contratacoes/publicacao"
-
-            response = await asyncio.wait_for(
-                self._client.get(url, params=params),
-                timeout=canary_timeout,
-            )
-
-            elapsed_ms = (time.monotonic() - start_time) * 1000
-            result["latency_ms"] = round(elapsed_ms, 1)
-
-            if response.status_code in (200, 204):
-                logger.info(
-                    "PNCP health canary: OK (%.0fms, timeout=%.0fs, cron=%s)",
-                    elapsed_ms, canary_timeout, cron_pncp_status,
-                )
-                await _circuit_breaker.record_success()
-                result["ok"] = True
-                return result
-
-            # Distinguish 4xx from 5xx
-            if 400 <= response.status_code < 500:
-                logger.warning(
-                    f"PNCP health canary: client error {response.status_code} "
-                    f"body={response.text[:200]} — NOT tripping circuit breaker"
-                )
-                result["ok"] = True
-                return result
-
-            logger.warning(
-                f"PNCP health canary: server error {response.status_code}"
-            )
-        except (asyncio.TimeoutError, httpx.TimeoutException):
-            elapsed_ms = (time.monotonic() - start_time) * 1000
-            result["latency_ms"] = round(elapsed_ms, 1)
-            # CRIT-052 AC4: Honest log with cron context
-            logger.warning(
-                "PNCP health canary: timeout after %.1fs "
-                "(cron status: %s, cron_latency: %sms, canary_timeout: %.0fs)",
-                elapsed_ms / 1000, cron_pncp_status, cron_latency, canary_timeout,
-            )
-        except (httpx.HTTPError, Exception) as exc:
-            elapsed_ms = (time.monotonic() - start_time) * 1000
-            result["latency_ms"] = round(elapsed_ms, 1)
-            logger.warning(
-                "PNCP health canary: %s: %s (cron status: %s)",
-                type(exc).__name__, exc, cron_pncp_status,
-            )
-
-        # Canary failed — trip circuit breaker
-        await _circuit_breaker.record_failure()
-        logger.warning(
-            "PNCP circuit breaker failure recorded due to health canary failure"
-        )
-        return result
-
-    async def fetch_bid_items(
-        self,
-        cnpj: str,
-        ano: str,
-        sequencial: str,
-    ) -> List[Dict[str, Any]]:
-        """Fetch individual items for a bid from PNCP API (GTM-RESILIENCE-D01 AC1).
-
-        Endpoint: GET /v1/orgaos/{cnpj}/compras/{ano}/{sequencial}/itens
-
-        Args:
-            cnpj: CNPJ of the contracting entity (digits only).
-            ano: Year of the procurement (e.g., "2026").
-            sequencial: Sequential number of the procurement.
-
-        Returns:
-            List of item dicts with keys: descricao, codigoNcm, unidadeMedida,
-            quantidade, valorUnitario. Returns empty list on 404 or timeout.
-        """
-        from config import ITEM_INSPECTION_TIMEOUT
-
-        if self._client is None:
-            raise RuntimeError("Client not initialized. Use async context manager.")
-
-        # Clean CNPJ — digits only
-        cnpj_clean = "".join(c for c in cnpj if c.isdigit())
-        url = f"{self.BASE_URL}/orgaos/{cnpj_clean}/compras/{ano}/{sequencial}/itens"
-
-        for attempt in range(2):  # 1 initial + 1 retry
-            try:
-                response = await asyncio.wait_for(
-                    self._client.get(url),
-                    timeout=ITEM_INSPECTION_TIMEOUT,
-                )
-
-                if response.status_code == 200:
-                    data = response.json()
-                    # API may return list directly or nested
-                    items = data if isinstance(data, list) else data.get("itens", data.get("data", []))
-                    return [
-                        {
-                            "descricao": item.get("descricao", ""),
-                            "codigoNcm": item.get("materialOuServico", {}).get("codigoNcm", "")
-                                if isinstance(item.get("materialOuServico"), dict)
-                                else item.get("codigoNcm", ""),
-                            "unidadeMedida": item.get("unidadeMedida", ""),
-                            "quantidade": item.get("quantidade", 0),
-                            "valorUnitario": item.get("valorUnitarioEstimado", 0)
-                                or item.get("valorUnitario", 0),
-                        }
-                        for item in items
-                    ]
-
-                if response.status_code == 404:
-                    logger.debug(
-                        f"PNCP items 404 for {cnpj_clean}/{ano}/{sequencial} — no items available"
-                    )
-                    return []
-
-                # Retryable: 429/5xx
-                if attempt == 0 and response.status_code in (429, 500, 502, 503, 504):
-                    retry_after = float(response.headers.get("Retry-After", "1"))
-                    logger.debug(
-                        f"PNCP items {response.status_code} — retrying in {retry_after}s"
-                    )
-                    await asyncio.sleep(min(retry_after, 3.0))
-                    continue
-
-                logger.debug(
-                    f"PNCP items unexpected {response.status_code} for "
-                    f"{cnpj_clean}/{ano}/{sequencial}"
-                )
-                return []
-
-            except (asyncio.TimeoutError, httpx.TimeoutException):
-                if attempt == 0:
-                    logger.debug("PNCP items timeout — retrying once")
-                    continue
-                logger.debug(
-                    f"PNCP items timeout (2nd attempt) for {cnpj_clean}/{ano}/{sequencial}"
-                )
-                return []
-            except (httpx.HTTPError, Exception) as exc:
-                logger.debug(f"PNCP items fetch error: {type(exc).__name__}: {exc}")
-                return []
-
-        return []
-
-    async def _rate_limit(self) -> None:
-        """Enforce rate limiting — shared Redis when available, local fallback.
-
-        B-06 AC7: Uses RedisRateLimiter for cross-worker coordination.
-        Local sleep-based limiter always runs as baseline.
-        """
-        # Shared rate limiter (Redis-backed, cross-worker) — AC7
-        from rate_limiter import pncp_rate_limiter
-        await pncp_rate_limiter.acquire(timeout=5.0)
-
-        # Local rate limiter (per-worker baseline, always active)
-        MIN_INTERVAL = 0.1  # 100ms
-
-        current_time = asyncio.get_running_loop().time()
-        elapsed = current_time - self._last_request_time
-        if elapsed < MIN_INTERVAL:
-            await asyncio.sleep(MIN_INTERVAL - elapsed)
-
-        self._last_request_time = asyncio.get_running_loop().time()
-        self._request_count += 1
-
-    async def _fetch_page_async(
-        self,
-        data_inicial: str,
-        data_final: str,
-        modalidade: int,
-        uf: str | None = None,
-        pagina: int = 1,
-        tamanho: int = 50,  # PNCP API max (reduced from 500 to 50 by PNCP ~Feb 2026)
-        status: str | None = None,
-    ) -> Dict[str, Any]:
-        """
-        Fetch a single page of procurement data asynchronously.
-
-        Args:
-            data_inicial: Start date in YYYY-MM-DD format
-            data_final: End date in YYYY-MM-DD format
-            modalidade: Modality code
-            uf: Optional state code
-            pagina: Page number
-            tamanho: Page size (default 50, PNCP API max as of Feb 2026)
-            status: Optional status filter (PNCP API value)
-
-        Returns:
-            API response dictionary
-
-        Raises:
-            ValueError: If modalidade is missing (PNCP API requires codigoModalidadeContratacao)
-        """
-        # CRIT-FLT-008 AC1: Guard — PNCP API requires codigoModalidadeContratacao (HTTP 400 without it)
-        if not modalidade:
-            raise ValueError(
-                "codigoModalidadeContratacao is required by PNCP API. "
-                "Sending a request without it will return HTTP 400."
-            )
-
-        # DEBT-102 AC6: Server-side validation — reject tamanhoPagina > PNCP_MAX_PAGE_SIZE
-        if tamanho > PNCP_MAX_PAGE_SIZE:
-            raise ValueError(
-                f"tamanhoPagina={tamanho} exceeds PNCP API maximum of {PNCP_MAX_PAGE_SIZE}. "
-                f"PNCP silently returns HTTP 400 for values > {PNCP_MAX_PAGE_SIZE} (changed Feb 2026)."
-            )
-
-        if self._client is None:
-            raise RuntimeError("Client not initialized. Use async context manager.")
-
-        await self._rate_limit()
-
-        # GTM-FIX-032 AC2: Pre-flight date validation + formatting
-        data_inicial_fmt = data_inicial.replace("-", "")
-        data_final_fmt = data_final.replace("-", "")
-        _validate_date_params(data_inicial, data_inicial_fmt, data_final, data_final_fmt)
-        if data_inicial_fmt > data_final_fmt:
-            logger.warning(f"Dates swapped: {data_inicial_fmt} > {data_final_fmt}. Auto-swapping.")
-            data_inicial_fmt, data_final_fmt = data_final_fmt, data_inicial_fmt
-
-        params = {
-            "dataInicial": data_inicial_fmt,
-            "dataFinal": data_final_fmt,
-            "codigoModalidadeContratacao": modalidade,
-            "pagina": pagina,
-            "tamanhoPagina": tamanho,
-        }
-
-        if uf:
-            params["uf"] = uf
-
-        # Add status parameter if provided (not "todos")
-        if status:
-            params["situacaoCompra"] = status
-
-        url = f"{self.BASE_URL}/contratacoes/publicacao"
-
-        # UX-336: Track format rotation for 422 recovery
-        format_rotation = _get_format_rotation()
-        format_idx = 0
-
-        for attempt in range(self.config.max_retries + 1):
-            try:
-                logger.debug(
-                    f"Async request {url} params={params} attempt={attempt + 1}/"
-                    f"{self.config.max_retries + 1}"
-                )
-
-                # STORY-226 AC23: Forward X-Request-ID for distributed tracing
-                req_id = request_id_var.get("-")
-                extra_headers = {}
-                if req_id and req_id != "-":
-                    extra_headers["X-Request-ID"] = req_id
-
-                response = await self._client.get(
-                    url, params=params, headers=extra_headers
-                )
-
-                # Handle rate limiting
-                if response.status_code == 429:
-                    retry_after = int(response.headers.get("Retry-After", 60))
-                    logger.debug(f"Rate limited (429). Waiting {retry_after}s")
-                    await asyncio.sleep(retry_after)
-                    continue
-
-                # Success
-                if response.status_code == 200:
-                    # Validate Content-Type before parsing JSON
-                    content_type = response.headers.get("content-type", "")
-                    if "json" not in content_type.lower():
-                        logger.warning(
-                            f"PNCP returned non-JSON response (content-type: {content_type}). "
-                            f"Body preview: {response.text[:200]}. "
-                            f"Attempt {attempt + 1}/{self.config.max_retries + 1}"
-                        )
-                        if attempt < self.config.max_retries:
-                            delay = min(
-                                self.config.base_delay * (self.config.exponential_base ** attempt),
-                                self.config.max_delay
-                            )
-                            if self.config.jitter:
-                                delay *= random.uniform(0.5, 1.5)
-                            await asyncio.sleep(delay)
-                            continue
-                        else:
-                            raise PNCPAPIError(
-                                f"PNCP returned non-JSON after {self.config.max_retries + 1} attempts. "
-                                f"Content-Type: {content_type}"
-                            )
-
-                    # Parse JSON with error handling
-                    try:
-                        data = response.json()
-                    except json.JSONDecodeError as e:
-                        logger.warning(
-                            f"PNCP returned invalid JSON: {e}. "
-                            f"Body preview: {response.text[:200]}. "
-                            f"Attempt {attempt + 1}/{self.config.max_retries + 1}"
-                        )
-                        if attempt < self.config.max_retries:
-                            delay = min(
-                                self.config.base_delay * (self.config.exponential_base ** attempt),
-                                self.config.max_delay
-                            )
-                            if self.config.jitter:
-                                delay *= random.uniform(0.5, 1.5)
-                            await asyncio.sleep(delay)
-                            continue
-                        else:
-                            raise PNCPAPIError(
-                                f"PNCP returned invalid JSON after {self.config.max_retries + 1} attempts: {e}"
-                            ) from e
-
-                    # UX-336 AC3+AC5: Cache successful format + telemetry
-                    current_fmt = format_rotation[format_idx] if format_idx < len(format_rotation) else DateFormat.YYYYMMDD
-                    if current_fmt != DateFormat.YYYYMMDD or format_idx > 0:
-                        _set_cached_date_format(current_fmt)
-                        logger.debug(f"pncp_date_format_accepted format={current_fmt}")
-
-                    return data
-
-                # No content
-                if response.status_code == 204:
-                    return {
-                        "data": [],
-                        "totalRegistros": 0,
-                        "totalPaginas": 0,
-                        "paginaAtual": pagina,
-                        "temProximaPagina": False,
-                    }
-
-                # GTM-FIX-032 AC1+AC4 + UX-336 AC1: 422 handling with format rotation
-                if response.status_code == 422:
-                    # UX-336: Use format_idx to determine if more formats are available
-                    has_more_formats = (format_idx + 1) < len(format_rotation)
-                    effective_attempt = 0 if has_more_formats else 1
-                    result = _handle_422_response(
-                        response.text, params, data_inicial, data_final,
-                        attempt=effective_attempt, max_retries=1
-                    )
-                    if result == "retry_format" and has_more_formats:
-                        # UX-336: Try next date format
-                        format_idx += 1
-                        next_fmt = format_rotation[format_idx]
-                        logger.debug(
-                            f"UX-336: Retrying with format {next_fmt} "
-                            f"(attempt {format_idx + 1}/{len(format_rotation)})"
-                        )
-                        params["dataInicial"] = format_date(data_inicial, next_fmt)
-                        params["dataFinal"] = format_date(data_final, next_fmt)
-                        await asyncio.sleep(self.config.base_delay)
-                        continue
-                    if isinstance(result, dict):
-                        # AC4.3: Return empty instead of crashing for date-related 422s
-                        return result
-                    # UX-336 AC6: All formats failed
-                    raise PNCPAPIError(
-                        f"PNCP 422 after all {len(format_rotation)} date formats for "
-                        f"UF={params.get('uf', '?')} mod={params.get('codigoModalidadeContratacao', '?')}. "
-                        f"Reduza o período da análise."
-                    )
-
-                # CRIT-043 AC2: 400 on page>1 = past last page, return empty
-                if response.status_code == 400 and pagina > 1:
-                    logger.debug(
-                        f"CRIT-043: HTTP 400 at page {pagina} — past last page, "
-                        f"returning empty result"
-                    )
-                    return {
-                        "data": [],
-                        "totalRegistros": 0,
-                        "totalPaginas": pagina - 1,
-                        "paginaAtual": pagina,
-                        "paginasRestantes": 0,
-                        "temProximaPagina": False,
-                    }
-
-                # Non-retryable error
-                if response.status_code not in self.config.retryable_status_codes:
-                    raise PNCPAPIError(
-                        f"API returned non-retryable status {response.status_code}"
-                    )
-
-                # Retryable error - wait and retry
-                if attempt < self.config.max_retries:
-                    delay = min(
-                        self.config.base_delay * (self.config.exponential_base ** attempt),
-                        self.config.max_delay
-                    )
-                    if self.config.jitter:
-                        delay *= random.uniform(0.5, 1.5)
-                    logger.debug(
-                        f"Error {response.status_code}. Retrying in {delay:.1f}s"
-                    )
-                    await asyncio.sleep(delay)
-                else:
-                    raise PNCPAPIError(
-                        f"Failed after {self.config.max_retries + 1} attempts"
-                    )
-
-            except httpx.TimeoutException as e:
-                if attempt < self.config.max_retries:
-                    delay = min(
-                        self.config.base_delay * (self.config.exponential_base ** attempt),
-                        self.config.max_delay
-                    )
-                    logger.debug(f"Timeout. Retrying in {delay:.1f}s")
-                    await asyncio.sleep(delay)
-                else:
-                    raise PNCPAPIError(f"Timeout after {self.config.max_retries + 1} attempts") from e
-
-            except httpx.HTTPError as e:
-                if attempt < self.config.max_retries:
-                    delay = min(
-                        self.config.base_delay * (self.config.exponential_base ** attempt),
-                        self.config.max_delay
-                    )
-                    logger.debug(f"HTTP error: {e}. Retrying in {delay:.1f}s")
-                    await asyncio.sleep(delay)
-                else:
-                    raise PNCPAPIError(f"HTTP error after retries: {e}") from e
-
-        raise PNCPAPIError("Unexpected: exhausted retries without result")
-
-    async def _fetch_single_modality(
-        self,
-        uf: str,
-        data_inicial: str,
-        data_final: str,
-        modalidade: int,
-        status: str | None = None,
-        max_pages: int | None = None,
-    ) -> tuple[List[Dict[str, Any]], bool]:
-        """Fetch all pages for a single UF + single modality.
-
-        This is the inner loop extracted from ``_fetch_uf_all_pages`` so that
-        each modality can be wrapped with its own timeout (STORY-252 AC6).
-
-        STORY-282 AC2: Default max_pages reduced from 500 to PNCP_MAX_PAGES (5).
-        SP/mod6 has 1463 items (30 pages) — 5 pages = 250 items covers the most recent.
-
-        Args:
-            uf: State code (e.g. "SP").
-            data_inicial: Start date YYYY-MM-DD.
-            data_final: End date YYYY-MM-DD.
-            modalidade: Modality code.
-            status: Optional PNCP status filter value.
-            max_pages: Maximum pages per modality (default from PNCP_MAX_PAGES env).
-
-        Returns:
-            Tuple of (items, was_truncated). was_truncated is True when
-            max_pages was hit while more pages remained (GTM-FIX-004).
-        """
-        from config import PNCP_MAX_PAGES
-        if max_pages is None:
-            max_pages = PNCP_MAX_PAGES
-        items: List[Dict[str, Any]] = []
-        seen_ids: set[str] = set()
-        pagina = 1
-        was_truncated = False
-
-        while pagina <= max_pages:
-            try:
-                response = await self._fetch_page_async(
-                    data_inicial=data_inicial,
-                    data_final=data_final,
-                    modalidade=modalidade,
-                    uf=uf,
-                    pagina=pagina,
-                    tamanho=50,  # PNCP API max reduced from 500→50 (~Feb 2026)
-                    status=status,
-                )
-
-                await _circuit_breaker.record_success()
-
-                data = response.get("data", [])
-                paginas_restantes = response.get("paginasRestantes", 0)
-
-                for item in data:
-                    item_id = item.get("numeroControlePNCP", "")
-                    if item_id and item_id not in seen_ids:
-                        seen_ids.add(item_id)
-                        normalized = PNCPClient._normalize_item(item)
-                        items.append(normalized)
-
-                if paginas_restantes <= 0:
-                    break
-
-                # STORY-282 AC2 + GTM-FIX-004: Detect truncation when max_pages reached
-                total_records = response.get("totalRegistros", 0)
-                if pagina >= max_pages and paginas_restantes > 0:
-                    was_truncated = True
-                    logger.warning(
-                        f"STORY-282: MAX_PAGES ({max_pages}) reached for UF={uf}, "
-                        f"modalidade={modalidade}. Fetched {len(items)}/{total_records} items. "
-                        f"Remaining pages: {paginas_restantes}. "
-                        f"Truncating to cap latency (set PNCP_MAX_PAGES to increase)."
-                    )
-
-                pagina += 1
-
-            except PNCPAPIError as e:
-                # CRIT-043 AC1+AC4: Distinguish expected 400 (page>1) from real errors (page 1)
-                error_str = str(e)
-                is_expected_400 = "status 400" in error_str and pagina > 1
-                if is_expected_400:
-                    # AC1: Expected — past last page. No CB failure, DEBUG log.
-                    logger.debug(
-                        f"CRIT-043: Expected 400 at page {pagina} for UF={uf}, "
-                        f"modalidade={modalidade} (past last page). Stopping pagination."
-                    )
-                else:
-                    # AC4: Real error (page 1 or non-400). Record CB failure, WARNING.
-                    await _circuit_breaker.record_failure()
-                    logger.warning(
-                        f"Error fetching UF={uf}, modalidade={modalidade}, "
-                        f"page={pagina}: {e}"
-                    )
-                break
-
-        return items, was_truncated
-
-    async def _fetch_modality_with_timeout(
-        self,
-        uf: str,
-        data_inicial: str,
-        data_final: str,
-        modalidade: int,
-        status: str | None = None,
-        max_pages: int | None = None,
-    ) -> tuple[List[Dict[str, Any]], bool]:
-        """Fetch a single modality with per-modality timeout and 1 retry (STORY-252 AC6/AC9).
-
-        Wraps ``_fetch_single_modality`` with:
-        - ``PNCP_TIMEOUT_PER_MODALITY`` second timeout (default 15s, AC6)
-        - 1 retry after ``PNCP_MODALITY_RETRY_BACKOFF`` seconds on timeout (AC9)
-
-        On final timeout the circuit breaker records a failure but other
-        modalities continue independently.
-
-        Returns:
-            Tuple of (items, was_truncated). Empty list + False if timed out.
-        """
-        per_modality_timeout = PNCP_TIMEOUT_PER_MODALITY
-        retry_backoff = PNCP_MODALITY_RETRY_BACKOFF
-
-        for attempt in range(2):  # 0 = first try, 1 = retry
-            try:
-                result = await asyncio.wait_for(
-                    self._fetch_single_modality(
-                        uf=uf,
-                        data_inicial=data_inicial,
-                        data_final=data_final,
-                        modalidade=modalidade,
-                        status=status,
-                        max_pages=max_pages,
-                    ),
-                    timeout=per_modality_timeout,
-                )
-                return result
-            except asyncio.TimeoutError:
-                await _circuit_breaker.record_failure()
-                if attempt == 0:
-                    logger.info(
-                        f"UF={uf} modalidade={modalidade} timed out after "
-                        f"{per_modality_timeout}s — retrying in {retry_backoff}s "
-                        f"(attempt 1/1)"
-                    )
-                    await asyncio.sleep(retry_backoff)
-                else:
-                    logger.info(
-                        f"UF={uf} modalidade={modalidade} timed out after retry "
-                        f"— skipping this modality"
-                    )
-        return [], False
-
-    async def _fetch_uf_all_pages(
-        self,
-        uf: str,
-        data_inicial: str,
-        data_final: str,
-        modalidades: List[int],
-        status: str | None = None,
-        max_pages: int | None = None,  # STORY-282 AC2: Defaults to PNCP_MAX_PAGES (5)
-    ) -> tuple[List[Dict[str, Any]], bool]:
-        """Fetch all pages for a single UF across all modalities in parallel.
-
-        STORY-252 AC6: Each modality runs with its own timeout so that one
-        hanging modality does not block the others.
-
-        Args:
-            uf: State code.
-            data_inicial: Start date.
-            data_final: End date.
-            modalidades: List of modality codes.
-            status: Optional status filter.
-            max_pages: Maximum pages to fetch per modality.
-
-        Returns:
-            Tuple of (items, was_truncated). was_truncated is True when any
-            modality hit max_pages (GTM-FIX-004).
-        """
-        async with self._semaphore:
-            # Launch all modalities in parallel with individual timeouts (AC6)
-            modality_tasks = [
-                self._fetch_modality_with_timeout(
-                    uf=uf,
-                    data_inicial=data_inicial,
-                    data_final=data_final,
-                    modalidade=mod,
-                    status=status,
-                    max_pages=max_pages,
-                )
-                for mod in modalidades
-            ]
-
-            modality_results = await asyncio.gather(
-                *modality_tasks, return_exceptions=True
-            )
-
-            # Merge and deduplicate across modalities
-            all_items: List[Dict[str, Any]] = []
-            seen_ids: set[str] = set()
-            uf_was_truncated = False
-
-            for mod, result in zip(modalidades, modality_results):
-                if isinstance(result, Exception):
-                    logger.warning(
-                        f"UF={uf} modalidade={mod} failed: {result}"
-                    )
-                    continue
-                # GTM-FIX-004: result is now (items, was_truncated)
-                items, was_truncated = result
-                if was_truncated:
-                    uf_was_truncated = True
-                for item in items:
-                    item_id = item.get("codigoCompra", "") or item.get(
-                        "numeroControlePNCP", ""
-                    )
-                    if item_id and item_id not in seen_ids:
-                        seen_ids.add(item_id)
-                        all_items.append(item)
-
-            logger.debug(f"Fetched {len(all_items)} items for UF={uf} (truncated={uf_was_truncated})")
-            return all_items, uf_was_truncated
-
-    async def buscar_todas_ufs_paralelo(
-        self,
-        ufs: List[str],
-        data_inicial: str,
-        data_final: str,
-        modalidades: List[int] | None = None,
-        status: str | None = None,
-        max_pages_per_uf: int | None = None,  # STORY-282 AC2: Defaults to PNCP_MAX_PAGES (5)
-        on_uf_complete: Callable[[str, int], Any] | None = None,
-        on_uf_status: Callable[..., Any] | None = None,
-    ) -> List[Dict[str, Any]]:
-        """
-        Busca licitações em múltiplas UFs em paralelo com limite de concorrência.
-
-        This is the main method for parallel UF fetching. It creates one task
-        per UF and executes them concurrently (up to max_concurrent).
-
-        Args:
-            ufs: List of state codes (e.g., ["SP", "RJ", "MG"])
-            data_inicial: Start date in YYYY-MM-DD format
-            data_final: End date in YYYY-MM-DD format
-            modalidades: List of modality codes (default: [6] - Pregão Eletrônico)
-            status: Status filter (StatusLicitacao value or None)
-            max_pages_per_uf: Maximum pages to fetch per UF/modality
-
-        Returns:
-            List of all procurement records (deduplicated)
-
-        Example:
-            >>> async with AsyncPNCPClient(max_concurrent=10) as client:
-            ...     results = await client.buscar_todas_ufs_paralelo(
-            ...         ufs=["SP", "RJ", "MG", "BA", "RS"],
-            ...         data_inicial="2026-01-01",
-            ...         data_final="2026-01-15",
-            ...         status="recebendo_proposta"
-            ...     )
-            >>> len(results)
-            1523
-        """
-        import time as sync_time
-        from config import PNCP_MAX_PAGES
-        start_time = sync_time.time()
-
-        # STORY-282 AC2: Resolve default page limit
-        if max_pages_per_uf is None:
-            max_pages_per_uf = PNCP_MAX_PAGES
-
-        # Use default modalities if not specified; always filter out excluded
-        modalidades = modalidades or DEFAULT_MODALIDADES
-        modalidades = [m for m in modalidades if m not in MODALIDADES_EXCLUIDAS]
-
-        # Map status to PNCP API value
-        pncp_status = STATUS_PNCP_MAP.get(status) if status else None
-
-        logger.info(
-            f"Starting parallel fetch for {len(ufs)} UFs "
-            f"(max_concurrent={self.max_concurrent}, status={status})"
-        )
-
-        # Try to recover before checking degraded state (STORY-257A AC4)
-        await _circuit_breaker.try_recover()
-
-        # STORY-257A AC1: Degraded mode tries with reduced concurrency
-        if _circuit_breaker.is_degraded:
-            logger.warning(
-                "PNCP circuit breaker degraded — trying with reduced concurrency "
-                f"(3 UFs, {PNCP_TIMEOUT_PER_UF_DEGRADED}s timeout)"
-            )
-            # Reorder UFs by population priority
-            ufs_ordered = sorted(ufs, key=lambda u: UFS_BY_POPULATION.index(u) if u in UFS_BY_POPULATION else 99)
-            # Reduce concurrency
-            self._semaphore = asyncio.Semaphore(3)
-            # GTM-FIX-029 AC2: 120s in degraded mode (was 45s)
-            PER_UF_TIMEOUT = PNCP_TIMEOUT_PER_UF_DEGRADED
-        else:
-            # STORY-252 AC10 + CRIT-052 AC2: Health canary — probe before full search
-            canary_result = await self.health_canary()
-            # Store canary result for search_complete telemetry (CRIT-052 AC4)
-            self._last_canary_result = canary_result
-
-            if not canary_result["ok"]:
-                # CRIT-052 AC2: Canary failure does NOT block — try normal fetch
-                # with extended per-UF timeout (30s) instead of returning empty
-                logger.warning(
-                    "PNCP skipped by canary (timeout after %.1fms, cron status: %s, "
-                    "cron_latency: %sms) — trying normal fetch with extended timeout",
-                    canary_result.get("latency_ms") or 0,
-                    canary_result.get("cron_status", "unknown"),
-                    canary_result.get("cron_latency_ms"),
-                )
-                PER_UF_TIMEOUT = PNCP_TIMEOUT_PER_UF  # Normal timeout still applied
-            else:
-                PER_UF_TIMEOUT = PNCP_TIMEOUT_PER_UF
-
-            # Normal mode
-            ufs_ordered = ufs
-
-        # Helper to safely call async/sync callbacks
-        async def _safe_callback(cb, *args, **kwargs):
-            if cb is None:
-                return
-            try:
-                maybe_coro = cb(*args, **kwargs)
-                if asyncio.iscoroutine(maybe_coro):
-                    await maybe_coro
-            except Exception as cb_err:
-                logger.warning(f"Callback error: {cb_err}")
-
-        # Create tasks for each UF with optional progress callback
-        # GTM-FIX-004: returns (items, was_truncated) tuple
-        async def _fetch_with_callback(uf: str) -> tuple[List[Dict[str, Any]], bool]:
-            # STORY-257A AC6: Emit "fetching" status when UF starts
-            await _safe_callback(on_uf_status, uf, "fetching")
-            try:
-                items, was_truncated = await asyncio.wait_for(
-                    self._fetch_uf_all_pages(
-                        uf=uf,
-                        data_inicial=data_inicial,
-                        data_final=data_final,
-                        modalidades=modalidades,
-                        status=pncp_status,
-                        max_pages=max_pages_per_uf,
-                    ),
-                    timeout=PER_UF_TIMEOUT,
-                )
-            except asyncio.TimeoutError:
-                await _circuit_breaker.record_failure()
-                logger.info(f"UF={uf} timed out after {PER_UF_TIMEOUT}s — skipping")
-                # AC6: Emit "failed" status
-                await _safe_callback(on_uf_status, uf, "failed", reason="timeout")
-                items, was_truncated = [], False
-            else:
-                # AC6: Emit "success" status with count
-                await _safe_callback(on_uf_status, uf, "success", count=len(items))
-            if on_uf_complete:
-                await _safe_callback(on_uf_complete, uf, len(items))
-            return items, was_truncated
-
-        # GTM-FIX-031: Phased UF batching — execute in batches of PNCP_BATCH_SIZE
-        # with PNCP_BATCH_DELAY_S between batches to reduce API pressure
-        batch_size = PNCP_BATCH_SIZE
-        batch_delay = PNCP_BATCH_DELAY_S
-        all_items: List[Dict[str, Any]] = []
-        errors = 0
-        succeeded_ufs = []
-        failed_ufs = []
-        truncated_ufs = []  # GTM-FIX-004
-        total_batches = (len(ufs_ordered) + batch_size - 1) // batch_size
-
-        for batch_idx in range(0, len(ufs_ordered), batch_size):
-            batch = ufs_ordered[batch_idx:batch_idx + batch_size]
-            batch_num = batch_idx // batch_size + 1
-
-            logger.debug(
-                f"Batch {batch_num}/{total_batches}: fetching {len(batch)} UFs: {batch}"
-            )
-
-            # Emit batch progress via SSE
-            await _safe_callback(
-                on_uf_status, batch[0], "batch_info",
-                batch_num=batch_num, total_batches=total_batches,
-                ufs_in_batch=batch,
-            )
-
-            batch_tasks = [_fetch_with_callback(uf) for uf in batch]
-            batch_results = await asyncio.gather(*batch_tasks, return_exceptions=True)
-
-            for uf, result in zip(batch, batch_results):
-                if isinstance(result, Exception):
-                    logger.warning(f"Error fetching UF={uf}: {result}")
-                    errors += 1
-                    failed_ufs.append(uf)
-                elif isinstance(result, tuple):
-                    items, was_truncated = result
-                    if was_truncated:
-                        truncated_ufs.append(uf)
-                    if len(items) == 0:
-                        succeeded_ufs.append(uf)  # No data ≠ failure
-                    else:
-                        all_items.extend(items)
-                        succeeded_ufs.append(uf)
-                else:
-                    # Backward compat: plain list (shouldn't happen with new code)
-                    all_items.extend(result)
-                    succeeded_ufs.append(uf)
-
-            # Inter-batch delay (skip after last batch)
-            if batch_idx + batch_size < len(ufs_ordered):
-                logger.debug(f"Batch {batch_num} complete, waiting {batch_delay}s before next batch")
-                await asyncio.sleep(batch_delay)
-
-        # STORY-257A AC7: Auto-retry failed UFs (1 round, 5s delay)
-        # GTM-FIX-029: Retry timeout matches degraded per-UF timeout (120s)
-        if failed_ufs and succeeded_ufs:
-            logger.debug(
-                f"AC7: {len(failed_ufs)} UFs failed, {len(succeeded_ufs)} succeeded — "
-                f"retrying failed UFs in 5s with {PNCP_TIMEOUT_PER_UF_DEGRADED}s timeout"
-            )
-            await asyncio.sleep(5)
-
-            RETRY_TIMEOUT = PNCP_TIMEOUT_PER_UF_DEGRADED
-
-            async def _retry_uf(uf: str) -> tuple[List[Dict[str, Any]], bool]:
-                await _safe_callback(on_uf_status, uf, "retrying", attempt=2, max=2)
-                try:
-                    items, was_truncated = await asyncio.wait_for(
-                        self._fetch_uf_all_pages(
-                            uf=uf,
-                            data_inicial=data_inicial,
-                            data_final=data_final,
-                            modalidades=modalidades,
-                            status=pncp_status,
-                            max_pages=max_pages_per_uf,
-                        ),
-                        timeout=RETRY_TIMEOUT,
-                    )
-                    return items, was_truncated
-                except (asyncio.TimeoutError, Exception) as e:
-                    logger.warning(f"AC7: Retry for UF={uf} failed: {e}")
-                    return [], False
-
-            retry_tasks = [_retry_uf(uf) for uf in failed_ufs]
-            retry_results = await asyncio.gather(*retry_tasks, return_exceptions=True)
-
-            recovered_ufs = []
-            for uf, result in zip(failed_ufs, retry_results):
-                if isinstance(result, Exception):
-                    await _safe_callback(on_uf_status, uf, "failed", reason="retry_failed")
-                elif isinstance(result, tuple):
-                    items, was_truncated = result
-                    if not items:
-                        await _safe_callback(on_uf_status, uf, "failed", reason="retry_failed")
-                    else:
-                        all_items.extend(items)
-                        recovered_ufs.append(uf)
-                        if was_truncated and uf not in truncated_ufs:
-                            truncated_ufs.append(uf)
-                        await _safe_callback(on_uf_status, uf, "recovered", count=len(items))
-                        logger.debug(f"AC7: UF={uf} recovered with {len(items)} items")
-                else:
-                    await _safe_callback(on_uf_status, uf, "failed", reason="retry_failed")
-
-            if recovered_ufs:
-                # Move recovered UFs from failed to succeeded
-                for uf in recovered_ufs:
-                    failed_ufs.remove(uf)
-                    succeeded_ufs.append(uf)
-                logger.info(f"AC7: Recovered {len(recovered_ufs)} UFs: {recovered_ufs}")
-
-        elapsed = sync_time.time() - start_time
-        if truncated_ufs:
-            logger.warning(
-                f"GTM-FIX-004: Truncated UFs: {truncated_ufs}. "
-                f"Results may be incomplete for these states."
-            )
-        logger.info(
-            f"Parallel fetch complete: {len(all_items)} items from {len(ufs)} UFs "
-            f"in {elapsed:.2f}s ({errors} errors, {len(truncated_ufs)} truncated)"
-        )
-
-        return ParallelFetchResult(
-            items=all_items,
-            succeeded_ufs=succeeded_ufs,
-            failed_ufs=failed_ufs,
-            truncated_ufs=truncated_ufs,
-            canary_result=getattr(self, "_last_canary_result", None),
-        )
-
-
-# ============================================================================
-# PNCPLegacyAdapter — SourceAdapter wrapper for ConsolidationService (AC6)
-# ============================================================================
-
-class PNCPLegacyAdapter:
-    """Wraps existing PNCPClient as a SourceAdapter for multi-source consolidation.
-
-    STORY-216 AC6: Moved from inline class inside buscar_licitacoes() to module level.
-    Accepts constructor parameters instead of capturing enclosing scope variables.
-
-    This class conforms to the SourceAdapter interface (clients.base) but the import
-    is deferred to avoid making pncp_client.py depend on clients.base at module level.
-    The consolidation service only checks for the required methods at runtime.
-    """
-
-    def __init__(
-        self,
-        ufs: List[str],
-        modalidades: List[int] | None = None,
-        status: str | None = None,
-        on_uf_complete: Callable | None = None,
-        on_uf_status: Callable | None = None,
-    ):
-        self._ufs = ufs
-        self._modalidades = modalidades
-        self._status = status
-        self._on_uf_complete = on_uf_complete
-        self._on_uf_status = on_uf_status
-        # GTM-FIX-004: Truncation detection for PNCP in multi-source mode
-        self.was_truncated: bool = False
-        self.truncated_ufs: List[str] = []
-
-    @property
-    def metadata(self):
-        from clients.base import SourceMetadata, SourceCapability
-        return SourceMetadata(
-            name="PNCP", code="PNCP",
-            base_url="https://pncp.gov.br/api/consulta/v1",
-            capabilities={SourceCapability.PAGINATION, SourceCapability.DATE_RANGE, SourceCapability.FILTER_BY_UF},
-            rate_limit_rps=10.0, priority=1,
-        )
-
-    @property
-    def name(self) -> str:
-        """Human-readable source name (GTM-FIX-024 T1)."""
-        return self.metadata.name
-
-    @property
-    def code(self) -> str:
-        """Short code for logs/metrics (GTM-FIX-024 T1)."""
-        return self.metadata.code
-
-    async def health_check(self):
-        from clients.base import SourceStatus
-        if _circuit_breaker.is_degraded:
-            return SourceStatus.DEGRADED
-        return SourceStatus.AVAILABLE
-
-    async def fetch(self, data_inicial, data_final, ufs=None, **kwargs):
-        from clients.base import UnifiedProcurement
-        _ufs = list(ufs) if ufs else self._ufs
-        if len(_ufs) > 1:
-            fetch_result = await buscar_todas_ufs_paralelo(
-                ufs=_ufs, data_inicial=data_inicial, data_final=data_final,
-                modalidades=self._modalidades, status=self._status,
-                max_concurrent=10, on_uf_complete=self._on_uf_complete,
-                on_uf_status=self._on_uf_status,
-            )
-            if isinstance(fetch_result, ParallelFetchResult):
-                results = fetch_result.items
-                # GTM-FIX-004: Capture truncation state for multi-source propagation
-                if fetch_result.truncated_ufs:
-                    self.was_truncated = True
-                    self.truncated_ufs = fetch_result.truncated_ufs
-            else:
-                results = fetch_result
-        else:
-            # GTM-INFRA-001 AC1/AC3: Wrap sync PNCPClient in asyncio.to_thread()
-            # to prevent blocking the event loop with requests.Session + time.sleep()
-            client = PNCPClient()
-            results = await asyncio.to_thread(
-                lambda: list(client.fetch_all(
-                    data_inicial=data_inicial, data_final=data_final,
-                    ufs=_ufs, modalidades=self._modalidades,
-                ))
-            )
-        for item in results:
-            # GTM-FIX-017: Parse date fields from PNCP response
-            data_pub = None
-            if item.get("dataPublicacaoPncp"):
-                try:
-                    data_pub = datetime.fromisoformat(item["dataPublicacaoPncp"].replace("Z", "+00:00"))
-                except (ValueError, AttributeError):
-                    pass
-
-            data_enc = None
-            if item.get("dataEncerramentoProposta"):
-                try:
-                    data_enc = datetime.fromisoformat(item["dataEncerramentoProposta"].replace("Z", "+00:00"))
-                except (ValueError, AttributeError):
-                    pass
-
-            data_abertura = None
-            if item.get("dataAberturaProposta"):
-                try:
-                    data_abertura = datetime.fromisoformat(item["dataAberturaProposta"].replace("Z", "+00:00"))
-                except (ValueError, AttributeError):
-                    pass
-
-            yield UnifiedProcurement(
-                source_id=item.get("codigoCompra", ""),
-                source_name="PNCP",
-                objeto=item.get("objetoCompra", ""),
-                valor_estimado=item.get("valorTotalEstimado", 0) or 0,
-                orgao=item.get("nomeOrgao", ""),
-                cnpj_orgao=item.get("cnpjOrgao", ""),
-                uf=item.get("uf", ""),
-                municipio=item.get("municipio", ""),
-                data_publicacao=data_pub,
-                data_abertura=data_abertura,
-                data_encerramento=data_enc,
-                numero_edital=item.get("numeroEdital", ""),
-                ano=item.get("anoCompra", ""),
-                esfera=item.get("esferaId", ""),
-                modalidade=item.get("modalidadeNome", ""),
-                modalidade_id=item.get("modalidadeId"),
-                situacao=item.get("situacaoCompraNome", ""),
-                link_edital=self._build_link_edital(item),
-                link_portal=item.get("linkProcessoEletronico", ""),
-                raw_data=item,
-            )
-
-    @staticmethod
-    def _build_link_edital(item: Dict[str, Any]) -> str:
-        """Build link_edital with fallback from PNCP fields (UX-400 AC1).
-
-        Priority: linkSistemaOrigem > constructed URL from orgaoCnpj/anoCompra/sequencialCompra.
-        Returns empty string only if all fields are missing (downstream _build_pncp_link
-        has additional fallback from numeroControlePNCP).
-        """
-        link = item.get("linkSistemaOrigem") or ""
-        if link:
-            return link
-
-        cnpj = item.get("cnpjOrgao", "")
-        ano = item.get("anoCompra", "")
-        seq = item.get("sequencialCompra", "")
-        if cnpj and ano and seq:
-            return f"https://pncp.gov.br/app/editais/{cnpj}/{ano}/{seq}"
-
-        return ""
-
-    def normalize(self, raw_record):
-        pass
-
-    async def close(self):
-        pass
-
-
-async def buscar_todas_ufs_paralelo(
-    ufs: List[str],
-    data_inicial: str,
-    data_final: str,
-    modalidades: List[int] | None = None,
-    status: str | None = None,
-    max_concurrent: int = 10,
-    on_uf_complete: Callable[[str, int], Any] | None = None,
-    on_uf_status: Callable[..., Any] | None = None,
-) -> List[Dict[str, Any]]:
-    """
-    Convenience function for parallel UF search.
-
-    Creates an AsyncPNCPClient and performs parallel search in a single call.
-    Use this for simple cases where you don't need to reuse the client.
-
-    Args:
-        ufs: List of state codes
-        data_inicial: Start date YYYY-MM-DD
-        data_final: End date YYYY-MM-DD
-        modalidades: Optional modality codes
-        status: Optional status filter
-        max_concurrent: Maximum concurrent requests (default 10)
-        on_uf_complete: Optional async callback(uf, items_count) called per UF
-        on_uf_status: Optional async callback(uf, status, **detail) for per-UF status events
-
-    Returns:
-        List of procurement records
-
-    Example:
-        >>> results = await buscar_todas_ufs_paralelo(
-        ...     ufs=["SP", "RJ"],
-        ...     data_inicial="2026-01-01",
-        ...     data_final="2026-01-15"
-        ... )
-    """
-    async with AsyncPNCPClient(max_concurrent=max_concurrent) as client:
-        return await client.buscar_todas_ufs_paralelo(
-            ufs=ufs,
-            data_inicial=data_inicial,
-            data_final=data_final,
-            modalidades=modalidades,
-            status=status,
-            on_uf_complete=on_uf_complete,
-            on_uf_status=on_uf_status,
-        )

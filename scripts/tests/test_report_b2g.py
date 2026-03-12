@@ -207,15 +207,16 @@ class TestValidateJson:
         self._validate = _validate_json
 
     def test_valid(self, minimal_data):
-        warnings = self._validate(minimal_data)
+        warnings, errors = self._validate(minimal_data)
         assert len(warnings) == 0
+        assert len(errors) == 0
 
     def test_missing_empresa(self):
-        warnings = self._validate({"editais": []})
+        warnings, _errors = self._validate({"editais": []})
         assert any("empresa" in w for w in warnings)
 
     def test_missing_cnpj(self):
-        warnings = self._validate({"empresa": {"razao_social": "X"}, "editais": []})
+        warnings, _errors = self._validate({"empresa": {"razao_social": "X"}, "editais": []})
         assert any("cnpj" in w for w in warnings)
 
     def test_missing_objeto(self):
@@ -223,8 +224,43 @@ class TestValidateJson:
             "empresa": {"cnpj": "123", "razao_social": "X"},
             "editais": [{"orgao": "Pref X"}],
         }
-        warnings = self._validate(data)
+        warnings, _errors = self._validate(data)
         assert any("objeto" in w for w in warnings)
+
+    def test_missing_justificativa_blocks(self):
+        """Recomendação without justificativa is a blocking error."""
+        data = {
+            "empresa": {"cnpj": "123", "razao_social": "X"},
+            "editais": [{
+                "objeto": "Obra X",
+                "orgao": "Prefeitura Y",
+                "recomendacao": "NÃO RECOMENDADO",
+            }],
+        }
+        _warnings, errors = self._validate(data)
+        assert len(errors) == 1
+        assert "justificativa" in errors[0]
+
+    def test_encerrado_does_not_require_justificativa(self):
+        """ENCERRADO editais don't need justificativa."""
+        data = {
+            "empresa": {"cnpj": "123", "razao_social": "X"},
+            "editais": [{
+                "objeto": "Obra X",
+                "orgao": "Prefeitura Y",
+                "recomendacao": "NÃO RECOMENDADO",
+                "status_edital": "ENCERRADO",
+            }],
+        }
+        _warnings, errors = self._validate(data)
+        assert len(errors) == 0
+
+    def test_pdf_blocked_without_justificativa(self, minimal_data):
+        """generate_report_b2g raises ValueError if justificativa missing."""
+        from generate_report_b2g_helpers import generate_report_b2g
+        del minimal_data["editais"][0]["justificativa"]
+        with pytest.raises(ValueError, match="justificativa"):
+            generate_report_b2g(minimal_data)
 
 
 class TestGetSourceBadge:
@@ -287,10 +323,25 @@ class TestPdfGeneration:
         buf = generate_report_b2g(minimal_data)
         assert buf.read()[:5] == b"%PDF-"
 
-    def test_pdf_encerrado_status(self, minimal_data):
-        """ENCERRADO editais don't crash PDF generation."""
-        minimal_data["editais"][0]["data_encerramento"] = "2026-01-01"
-        minimal_data["editais"][0]["dias_restantes"] = -70
+    def test_pdf_encerrado_excluded(self, minimal_data):
+        """ENCERRADO editais are excluded from the PDF entirely."""
+        minimal_data["editais"][0]["status_edital"] = "ENCERRADO"
+        # Add one ABERTO edital so PDF has content
+        minimal_data["editais"].append({
+            "objeto": "Obra Y aberta",
+            "orgao": "Prefeitura Z",
+            "uf": "PR",
+            "recomendacao": "PARTICIPAR",
+            "justificativa": "Perfil compatível",
+            "_source": {"status": "API"},
+        })
+        from generate_report_b2g_helpers import generate_report_b2g
+        buf = generate_report_b2g(minimal_data)
+        assert buf.read()[:5] == b"%PDF-"
+
+    def test_pdf_all_encerrado_still_generates(self, minimal_data):
+        """PDF generates even if all editais are ENCERRADO (empty report)."""
+        minimal_data["editais"][0]["status_edital"] = "ENCERRADO"
         from generate_report_b2g_helpers import generate_report_b2g
         buf = generate_report_b2g(minimal_data)
         assert buf.read()[:5] == b"%PDF-"
@@ -337,14 +388,24 @@ class TestJsonSchemaFromFile:
         pytest.skip("No new-format JSON files with _source tags found")
 
     def test_all_json_files_generate_pdf(self):
-        """Every data JSON in docs/reports/ can generate a PDF without crashing."""
-        from generate_report_b2g_helpers import generate_report_b2g
+        """Every data JSON in docs/reports/ can generate a PDF without crashing.
+
+        Legacy files missing justificativa will raise ValueError (expected) —
+        the test verifies they are properly blocked, not silently broken.
+        """
+        from generate_report_b2g_helpers import generate_report_b2g, _validate_json
         files = list(self.DATA_DIR.glob("data-*.json"))
         if not files:
             pytest.skip("No data files found")
         for p in files:
             with open(p, "r", encoding="utf-8") as f:
                 d = json.load(f)
-            buf = generate_report_b2g(d)
-            content = buf.read()
-            assert content[:5] == b"%PDF-", f"Failed for {p.name}"
+            _warnings, errors = _validate_json(d)
+            if errors:
+                # Correctly blocked — legacy file without justificativa
+                with pytest.raises(ValueError, match="justificativa"):
+                    generate_report_b2g(d)
+            else:
+                buf = generate_report_b2g(d)
+                content = buf.read()
+                assert content[:5] == b"%PDF-", f"Failed for {p.name}"

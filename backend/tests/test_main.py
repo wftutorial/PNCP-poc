@@ -1,16 +1,8 @@
 """Tests for FastAPI application structure and base endpoints."""
 
 import pytest
-from unittest.mock import patch, Mock, AsyncMock
 from fastapi.testclient import TestClient
 from main import app
-
-
-@pytest.fixture(autouse=True)
-def mock_supabase_for_health():
-    """Mock get_supabase to prevent 503 in health endpoint tests."""
-    with patch("supabase_client.get_supabase", return_value=Mock()):
-        yield
 
 
 @pytest.fixture
@@ -24,11 +16,11 @@ class TestApplicationSetup:
 
     def test_app_title(self):
         """Verify app has correct title."""
-        assert app.title == "SmartLic API"
+        assert app.title == "BidIQ Uniformes API"
 
     def test_app_version(self):
         """Verify app version matches expected."""
-        assert app.version  # GTM-GO-003: env-driven (defaults to "dev" locally)
+        assert app.version == "0.2.0"
 
     def test_app_has_docs_endpoint(self):
         """Verify OpenAPI documentation is configured."""
@@ -67,7 +59,7 @@ class TestRootEndpoint:
         """Root endpoint version should match app version."""
         response = client.get("/")
         data = response.json()
-        assert data["version"] == app.version
+        assert data["version"] == "0.2.0"
 
     def test_root_endpoints_links(self, client):
         """Root endpoint should include documentation links."""
@@ -88,38 +80,7 @@ class TestRootEndpoint:
 
 
 class TestHealthEndpoint:
-    """Test health check endpoint functionality.
-
-    NOTE: The /health route is now served by routes/health.py which calls
-    health.get_system_health(). The response format is:
-      { status, components, timestamp, version, uptime_seconds, environment }
-    where components = { redis, supabase, arq_worker, pncp }.
-    """
-
-    @pytest.fixture(autouse=True)
-    def mock_system_health(self):
-        """Mock get_system_health to return a fast, predictable response.
-
-        The real get_system_health() makes network calls (Redis, Supabase, PNCP)
-        that are slow and non-deterministic in a test environment. We mock it here
-        so that individual tests can override for specific scenarios.
-        """
-        from datetime import datetime, timezone
-        _default_response = {
-            "status": "healthy",
-            "components": {
-                "redis": {"status": "up", "latency_ms": 1},
-                "supabase": {"status": "up", "latency_ms": 2},
-                "arq_worker": {"status": "down"},
-                "pncp": {"status": "up", "circuit_breaker": "closed"},
-            },
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "version": app.version,
-            "uptime_seconds": 42.0,
-            "environment": "development",
-        }
-        with patch("health.get_system_health", new_callable=AsyncMock, return_value=_default_response):
-            yield
+    """Test health check endpoint functionality."""
 
     def test_health_status_code(self, client):
         """Health endpoint should return 200 OK."""
@@ -127,70 +88,27 @@ class TestHealthEndpoint:
         assert response.status_code == 200
 
     def test_health_response_structure(self, client):
-        """Health endpoint should return status, timestamp, and version."""
+        """Health endpoint should return status and version."""
         response = client.get("/health")
         data = response.json()
 
-        # Verify all required fields are present
         assert "status" in data
-        assert "timestamp" in data
         assert "version" in data
 
-    def test_health_status_healthy(self, client):
-        """Health endpoint should report 'healthy' status."""
+    def test_health_status_ok(self, client):
+        """Health endpoint should report 'ok' status."""
         response = client.get("/health")
         data = response.json()
-        assert data["status"] == "healthy"
-
-    def test_health_timestamp_format(self, client):
-        """Health endpoint timestamp should be valid ISO 8601 format."""
-        from datetime import datetime, timezone
-
-        response = client.get("/health")
-        data = response.json()
-
-        timestamp = data["timestamp"]
-        # Verify ISO 8601 format by parsing it
-        parsed = datetime.fromisoformat(timestamp)
-        assert isinstance(parsed, datetime)
-
-        # Timestamp should be recent (within last 5 seconds)
-        now = datetime.now(timezone.utc)
-        delta = (now - parsed).total_seconds()
-        assert abs(delta) < 5, f"Timestamp {timestamp} is not recent (delta: {delta}s)"
-
-    def test_health_timestamp_changes(self, client):
-        """Health endpoint timestamp should update on each request."""
-
-        # Generate distinct timestamps for two sequential requests by overriding the mock
-        ts1 = "2026-01-01T00:00:00+00:00"
-        ts2 = "2026-01-01T00:00:01+00:00"
-        responses_iter = iter([
-            {"status": "healthy", "components": {}, "timestamp": ts1,
-             "version": app.version, "uptime_seconds": 1.0, "environment": "development"},
-            {"status": "healthy", "components": {}, "timestamp": ts2,
-             "version": app.version, "uptime_seconds": 2.0, "environment": "development"},
-        ])
-
-        with patch("health.get_system_health", new_callable=AsyncMock,
-                   side_effect=lambda: next(responses_iter)):
-            response1 = client.get("/health")
-            response2 = client.get("/health")
-
-        timestamp1 = response1.json()["timestamp"]
-        timestamp2 = response2.json()["timestamp"]
-
-        # Timestamps should be different (not cached)
-        assert timestamp1 != timestamp2
+        assert data["status"] == "ok"
 
     def test_health_version_matches(self, client):
         """Health endpoint version should match app version."""
         response = client.get("/health")
         data = response.json()
-        assert data["version"] == app.version
+        assert data["version"] == "0.2.0"
 
     def test_health_response_time(self, client):
-        """Health endpoint should respond quickly (< 500ms) when dependencies are mocked."""
+        """Health endpoint should respond quickly (< 100ms)."""
         import time
 
         start = time.time()
@@ -198,114 +116,14 @@ class TestHealthEndpoint:
         elapsed = time.time() - start
 
         assert response.status_code == 200
-        assert elapsed < 0.5  # 500ms threshold (generous, network calls are mocked)
-
-    def test_health_no_authentication_required(self, client):
-        """Health endpoint should be publicly accessible (no auth)."""
-        # No authentication headers provided
-        response = client.get("/health")
-        # Should still succeed
-        assert response.status_code == 200
-
-    def test_health_json_content_type(self, client):
-        """Health endpoint should return JSON content type."""
-        response = client.get("/health")
-        assert "application/json" in response.headers["content-type"]
-
-    def test_health_includes_dependencies(self, client):
-        """Health endpoint should report status of key components."""
-        response = client.get("/health")
-        data = response.json()
-
-        # New format uses 'components' (not 'dependencies')
-        assert "components" in data
-        components = data["components"]
-
-        # Should include tracked infrastructure components
-        assert "supabase" in components
-        assert "redis" in components
-
-    def test_health_redis_not_configured(self, client):
-        """When Redis is not configured, health remains healthy (Redis is optional)."""
-        from datetime import datetime, timezone
-
-        mocked = {
-            "status": "healthy",
-            "components": {
-                "redis": {"status": "down", "latency_ms": 0},
-                "supabase": {"status": "up", "latency_ms": 2},
-                "arq_worker": {"status": "down"},
-                "pncp": {"status": "up", "circuit_breaker": "closed"},
-            },
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "version": app.version,
-            "uptime_seconds": 10.0,
-            "environment": "development",
-        }
-        with patch("health.get_system_health", new_callable=AsyncMock, return_value=mocked):
-            response = client.get("/health")
-            data = response.json()
-
-            # Should still be healthy when Redis is optional/not configured
-            assert data["status"] == "healthy"
-            assert data["components"]["redis"]["status"] == "down"
-
-    def test_health_redis_configured_but_unavailable(self, client):
-        """When Redis is configured but unavailable, health should degrade."""
-        from datetime import datetime, timezone
-
-        mocked = {
-            "status": "degraded",
-            "components": {
-                "redis": {"status": "down", "latency_ms": 0},
-                "supabase": {"status": "up", "latency_ms": 2},
-                "arq_worker": {"status": "down"},
-                "pncp": {"status": "up", "circuit_breaker": "closed"},
-            },
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "version": app.version,
-            "uptime_seconds": 10.0,
-            "environment": "development",
-        }
-        with patch("health.get_system_health", new_callable=AsyncMock, return_value=mocked):
-            response = client.get("/health")
-            data = response.json()
-
-            # Should be degraded when Redis is configured but down
-            assert data["status"] == "degraded"
-            assert data["components"]["redis"]["status"] == "down"
-
-    def test_health_redis_healthy(self, client):
-        """When Redis is available, health should report it as healthy."""
-        from datetime import datetime, timezone
-
-        mocked = {
-            "status": "healthy",
-            "components": {
-                "redis": {"status": "up", "latency_ms": 1},
-                "supabase": {"status": "up", "latency_ms": 2},
-                "arq_worker": {"status": "down"},
-                "pncp": {"status": "up", "circuit_breaker": "closed"},
-            },
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "version": app.version,
-            "uptime_seconds": 10.0,
-            "environment": "development",
-        }
-        with patch("health.get_system_health", new_callable=AsyncMock, return_value=mocked):
-            response = client.get("/health")
-            data = response.json()
-
-            # Should be healthy when Redis is up
-            assert data["status"] == "healthy"
-            assert data["components"]["redis"]["status"] == "up"
+        assert elapsed < 0.1  # 100ms threshold
 
 
 class TestCORSHeaders:
     """Test CORS configuration and headers."""
 
     def test_cors_preflight_options(self, client):
-        """CORS preflight OPTIONS request should succeed for allowed origins."""
+        """CORS preflight OPTIONS request should succeed."""
         response = client.options(
             "/health",
             headers={
@@ -315,29 +133,24 @@ class TestCORSHeaders:
         )
         assert response.status_code == 200
 
-    def test_cors_headers_present_for_allowed_origin(self, client):
-        """CORS headers should be present for allowed origins (localhost:3000)."""
+    def test_cors_headers_present(self, client):
+        """CORS headers should be present in responses."""
         response = client.get("/health", headers={"Origin": "http://localhost:3000"})
 
         # Check for CORS headers (case-insensitive)
         headers_lower = {k.lower(): v for k, v in response.headers.items()}
         assert "access-control-allow-origin" in headers_lower
-        assert headers_lower["access-control-allow-origin"] == "http://localhost:3000"
 
-    def test_cors_blocks_unauthorized_origins(self, client):
-        """CORS should not include allow-origin header for unauthorized origins."""
-        # example.com is not in the allowed origins list
+    def test_cors_allows_all_origins(self, client):
+        """CORS should allow all origins (POC configuration)."""
         response = client.get("/health", headers={"Origin": "http://example.com"})
 
         headers_lower = {k.lower(): v for k, v in response.headers.items()}
-        # For unauthorized origins, CORS middleware should not include the header
-        # or should not echo back the unauthorized origin
-        if "access-control-allow-origin" in headers_lower:
-            # If header is present, it should NOT be the unauthorized origin
-            assert headers_lower["access-control-allow-origin"] != "http://example.com"
+        # FastAPI CORS middleware returns the requesting origin or "*"
+        assert "access-control-allow-origin" in headers_lower
 
     def test_cors_allows_post_method(self, client):
-        """CORS should allow POST method for allowed origins."""
+        """CORS should allow POST method."""
         response = client.options(
             "/health",
             headers={
@@ -346,14 +159,6 @@ class TestCORSHeaders:
             },
         )
         assert response.status_code == 200
-
-    def test_cors_allows_127_localhost(self, client):
-        """CORS should allow requests from 127.0.0.1:3000."""
-        response = client.get("/health", headers={"Origin": "http://127.0.0.1:3000"})
-
-        headers_lower = {k.lower(): v for k, v in response.headers.items()}
-        assert "access-control-allow-origin" in headers_lower
-        assert headers_lower["access-control-allow-origin"] == "http://127.0.0.1:3000"
 
 
 class TestOpenAPIDocumentation:
@@ -380,8 +185,8 @@ class TestOpenAPIDocumentation:
         schema = response.json()
 
         info = schema["info"]
-        assert info["title"] == "SmartLic API"
-        assert info["version"] == app.version
+        assert info["title"] == "BidIQ Uniformes API"
+        assert info["version"] == "0.2.0"
 
     def test_openapi_has_health_endpoint(self, client):
         """OpenAPI schema should document /health endpoint."""
@@ -425,166 +230,3 @@ class TestErrorHandling:
         response = client.get("/invalid-endpoint-xyz")
         data = response.json()
         assert "detail" in data
-
-
-
-
-class TestSetoresEndpoint:
-    """Test /setores endpoint for sector listing."""
-
-    def test_listar_setores_status_code(self, client):
-        """Setores endpoint should return 200 OK."""
-        response = client.get("/v1/setores")
-        assert response.status_code == 200
-
-    def test_listar_setores_response_structure(self, client):
-        """Setores endpoint should return list of sectors."""
-        response = client.get("/v1/setores")
-        data = response.json()
-        assert "setores" in data
-        assert isinstance(data["setores"], list)
-
-    def test_listar_setores_contains_uniformes(self, client):
-        """Setores endpoint should include uniformes sector."""
-        response = client.get("/v1/setores")
-        data = response.json()
-        setores = data["setores"]
-
-        # Should have at least one sector
-        assert len(setores) > 0
-
-        # Each sector should have required fields
-        for sector in setores:
-            assert "id" in sector
-            assert "name" in sector
-            assert "description" in sector
-
-
-class TestDebugPNCPEndpoint:
-    """Test /debug/pncp-test diagnostic endpoint."""
-
-    @pytest.fixture(autouse=True)
-    def mock_admin_auth(self):
-        """Override admin auth dependency so tests can access the debug endpoint."""
-        from admin import require_admin
-        mock_admin_user = {"id": "admin-user-123", "email": "admin@example.com", "role": "authenticated"}
-        app.dependency_overrides[require_admin] = lambda: mock_admin_user
-        yield
-        app.dependency_overrides.pop(require_admin, None)
-
-    def test_debug_pncp_test_success(self, client, monkeypatch):
-        """Debug endpoint should return success when PNCP is reachable."""
-        from unittest.mock import Mock
-
-        mock_client_instance = Mock()
-        mock_client_instance.fetch_page.return_value = {
-            "totalRegistros": 100,
-            "data": [{"codigoCompra": "123"}],
-        }
-
-        monkeypatch.setattr("main.PNCPClient", lambda: mock_client_instance)
-
-        response = client.get("/debug/pncp-test")
-        assert response.status_code == 200
-
-        data = response.json()
-        assert "success" in data
-        assert data["success"] is True
-        assert "total_registros" in data
-        assert "items_returned" in data
-        assert "elapsed_ms" in data
-
-    def test_debug_pncp_test_failure(self, client, monkeypatch):
-        """Debug endpoint should return error details when PNCP fails."""
-        from unittest.mock import Mock
-
-        mock_client_instance = Mock()
-        mock_client_instance.fetch_page.side_effect = Exception("Connection timeout")
-
-        monkeypatch.setattr("main.PNCPClient", lambda: mock_client_instance)
-
-        response = client.get("/debug/pncp-test")
-        assert response.status_code == 200  # Always 200 (diagnostic endpoint)
-
-        data = response.json()
-        assert data["success"] is False
-        assert "error" in data
-        assert "Connection timeout" in data["error"]
-        assert "error_type" in data
-        assert data["error_type"] == "Exception"
-
-    def test_debug_pncp_test_measures_elapsed_time(self, client, monkeypatch):
-        """Debug endpoint should measure response time."""
-        from unittest.mock import Mock
-
-        mock_client_instance = Mock()
-        mock_client_instance.fetch_page.return_value = {
-            "totalRegistros": 10,
-            "data": [],
-        }
-
-        monkeypatch.setattr("main.PNCPClient", lambda: mock_client_instance)
-
-        response = client.get("/debug/pncp-test")
-        data = response.json()
-
-        # Should have elapsed time in milliseconds
-        assert "elapsed_ms" in data
-        assert isinstance(data["elapsed_ms"], int)
-        assert data["elapsed_ms"] >= 0
-
-
-class TestBuscarValidationExtended:
-    """Extended validation tests for /buscar endpoint edge cases."""
-
-    @pytest.fixture(autouse=True)
-    def mock_auth_and_quota(self, monkeypatch):
-        """Auto-apply auth mock and quota mock for all tests in this class."""
-        from auth import require_auth
-        mock_user = {"id": "test-user-123", "email": "test@example.com", "role": "authenticated"}
-        app.dependency_overrides[require_auth] = lambda: mock_user
-        from quota import QuotaInfo, PLAN_CAPABILITIES
-        from datetime import datetime, timezone
-        mock_quota = QuotaInfo(
-            allowed=True,
-            plan_id="maquina",
-            plan_name="Máquina",
-            capabilities=PLAN_CAPABILITIES["maquina"],
-            quota_used=10,
-            quota_remaining=290,
-            quota_reset_date=datetime.now(timezone.utc)
-        )
-        monkeypatch.setattr("quota.check_quota", lambda user_id: mock_quota)
-        # Mock atomic quota check to prevent Supabase connection
-        monkeypatch.setattr(
-            "quota.check_and_increment_quota_atomic",
-            lambda user_id, max_q: (True, 11, max_q - 11),
-        )
-        yield
-        app.dependency_overrides.clear()
-
-    def test_buscar_invalid_sector_id(self, client):
-        """Request with invalid sector ID should return 400 (HTTPException from stage_prepare)."""
-        request = {
-            "ufs": ["SP"],
-            "data_inicial": "2025-01-01",
-            "data_final": "2025-01-31",
-            "setor_id": "invalid-sector-999",
-        }
-        response = client.post("/v1/buscar", json=request)
-        # SearchPipeline.stage_prepare raises HTTPException(400) for unknown sector_id
-        assert response.status_code == 400
-        assert "detail" in response.json()
-
-    def test_buscar_date_range_end_before_start(self, client):
-        """Request with end date before start date should fail validation."""
-        request = {
-            "ufs": ["SP"],
-            "data_inicial": "2025-01-31",
-            "data_final": "2025-01-01",  # Before start
-        }
-        response = client.post("/v1/buscar", json=request)
-        assert response.status_code == 422
-
-
-

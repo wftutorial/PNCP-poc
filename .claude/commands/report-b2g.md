@@ -24,6 +24,7 @@ Gera um PDF executivo e institucional com TODAS as oportunidades abertas relevan
 4. **Acentuação obrigatória.** Todo texto em português DEVE usar acentos corretos: "NÃO RECOMENDADO" (nunca "NAO"), "Concorrência" (nunca "Concorrencia"), etc.
 5. **Transparência de fontes.** Cada seção do relatório deve indicar a fonte dos dados (API, documento, análise Claude).
 6. **Se dados insuficientes, dizer.** "Dados insuficientes para análise" é preferível a qualquer estimativa sem fonte.
+7. **Toda recomendação DEVE ter justificativa.** NUNCA emitir PARTICIPAR, AVALIAR COM CAUTELA ou NÃO RECOMENDADO sem `justificativa` preenchida com motivo factual específico. Uma recomendação sem justificativa é inaceitável.
 
 ---
 
@@ -69,44 +70,18 @@ python scripts/collect-report-data.py \
 - `--skip-links` — Pular validação de links
 - `--skip-pcp` — Pular PCP v2
 - `--skip-qd` — Pular Querido Diário
+- `--skip-sicaf` — Pular verificação SICAF
 
 **IMPORTANTE:** Após execução, VERIFICAR o output do script:
 - Quantos editais foram encontrados?
 - Alguma API falhou? (verificar `_metadata.sources`)
 - Se PNCP retornou 0 editais, considerar ampliar `--dias` ou `--ufs`
 
-### Phase 1b: Verificação SICAF (Playwright semi-automático)
-
-Executar o coletor SICAF que abre o navegador para o usuário resolver o captcha:
-
-```bash
-python scripts/collect-sicaf.py \
-  --cnpj {CNPJ} \
-  --output docs/reports/sicaf-{CNPJ}-{YYYY-MM-DD}.json \
-  --skip-linhas
-```
-
-**O que coleta:**
-- **CRC (Certificado de Registro Cadastral)** — Status cadastral, CNAE, endereço, habilitações (PDF baixado e parseado)
-- **Restrição Contratar Administração Pública** — Verifica impedimentos/sanções no SICAF
-- **Linhas de Fornecimento** — (opcional, com `--skip-linhas` para pular)
-
-**Fluxo:**
-1. Navegador abre automaticamente no portal SICAF
-2. Usuário resolve o hCaptcha (~5 segundos por consulta)
-3. Script extrai dados automaticamente após captcha
-4. Cookies salvos em `.sicaf-cookies.json` para reuso entre consultas
-
-**Modo batch:** Para múltiplos CNPJs (prospecção), separar por vírgula:
-```bash
-python scripts/collect-sicaf.py --cnpj CNPJ1,CNPJ2,CNPJ3 --output sicaf-batch.json
-```
-
-**Após execução:** Incorporar dados SICAF no JSON do relatório:
-- `data.sicaf.status_cadastral` — CADASTRADO / NÃO CADASTRADO
-- `data.sicaf.crc` — Dados completos do CRC (razão social, CNAE, endereço, habilitações)
-- `data.sicaf.restricao` — Possui restrição? Detalhes
-- `data.sicaf._source.status` — API (sucesso) / API_PARTIAL / API_FAILED
+**SICAF integrado:** O script chama automaticamente `collect-sicaf.py` via subprocess:
+- Abre navegador para o usuário resolver o hCaptcha (~5s por consulta)
+- Coleta CRC (status cadastral, habilitações) + restrições
+- Dados SICAF são incorporados diretamente no JSON de saída (`data.sicaf`)
+- Use `--skip-sicaf` apenas se Playwright não estiver instalado
 
 ### Phase 2: Download e Análise Documental dos Editais (Claude direto)
 
@@ -175,7 +150,8 @@ Para CADA edital, cruzar dados do JSON (Phase 1) + análise documental (Phase 2)
    - Capital mínimo vs capital real
    - Atestados exigidos vs histórico de contratos
    - Se NÃO atende requisito crítico → NÃO RECOMENDADO com motivo
-7. **Recomendação** — PARTICIPAR / AVALIAR COM CAUTELA / NÃO RECOMENDADO (com motivo factual)
+7. **Recomendação** — PARTICIPAR / AVALIAR COM CAUTELA / NÃO RECOMENDADO
+8. **Justificativa (OBRIGATÓRIA)** — Motivo factual da recomendação. TODA recomendação DEVE ter justificativa. Para NÃO RECOMENDADO, explicar o motivo específico (ex: "Capital social R$X insuficiente para exigência de R$Y", "Distância 800km inviabiliza logística", "CNAE incompatível com objeto"). Para PARTICIPAR, explicar por que é viável. Para AVALIAR COM CAUTELA, explicar o risco específico.
 
 ### Phase 4: Inteligência Competitiva (Claude + API)
 
@@ -215,7 +191,7 @@ O JSON da Phase 1 deve ser enriquecido com as análises das Phases 2-5:
 - `resumo_executivo` — Métricas consolidadas
 - `editais[].analise_documental` — Ficha técnica, habilitação, red flags (Phase 2)
 - `editais[].recomendacao` — PARTICIPAR/AVALIAR COM CAUTELA/NÃO RECOMENDADO
-- `editais[].justificativa` — Motivo factual da recomendação
+- `editais[].justificativa` — **OBRIGATÓRIO.** Motivo factual da recomendação. NUNCA deixar vazio.
 - `editais[].analise_detalhada` — Texto analítico completo (Phases 3-4)
 - `inteligencia_mercado` — Panorama, tendências, nichos (Phase 5)
 - `proximos_passos` — Lista de ações priorizadas
@@ -272,13 +248,12 @@ Salvar versão markdown em `docs/reports/report-{CNPJ}-{nome-slug}-{YYYY-MM-DD}.
 ## Execution
 
 Quando invocado:
-1. **Phase 1:** Executar `collect-report-data.py` (coleta todas as APIs deterministicamente)
-2. **Phase 1b:** Executar `collect-sicaf.py` (SICAF via Playwright, captcha manual)
-3. **Phase 2:** Download + análise documental dos PDFs dos editais (Claude direto)
+1. **Phase 1:** Executar `collect-report-data.py` (coleta todas as APIs + SICAF via Playwright integrado)
+2. **Phase 2:** Download + análise documental dos PDFs dos editais (Claude direto)
 4. **Phase 3:** Análise estratégica cruzando perfil + edital + documento real
 5. **Phase 4:** Inteligência competitiva (PNCP histórico + OpenCNPJ concorrentes)
 6. **Phase 5:** Inteligência de mercado (panorama, tendências, nichos)
-7. **Phase 6:** Enriquecer JSON (merge SICAF data) + gerar PDF + gerar markdown
+7. **Phase 6:** Enriquecer JSON + gerar PDF + gerar markdown
 7. JSON final salvo em `docs/reports/data-{CNPJ}-{YYYY-MM-DD}.json`
 8. PDF gerado em `docs/reports/report-{CNPJ}-{nome-slug}-{YYYY-MM-DD}.pdf`
 9. Markdown em `docs/reports/report-{CNPJ}-{nome-slug}-{YYYY-MM-DD}.md`

@@ -1,123 +1,179 @@
-# Feature Flags Reference — SmartLic Backend
+# Feature Flags — SmartLic Backend
 
-Last updated: 2026-03-11
-
-This document catalogs all feature flags in the SmartLic backend, organized by lifecycle category. It serves as the single source of truth for flag purpose, defaults, ownership, and toggle guidance.
+This document is the source of truth for all feature flags in the SmartLic backend. Updated as part of DEBT-128 AC2, AC7, AC8.
 
 ---
 
-## Table of Contents
+## PERMANENT (Operational Toggles)
 
-- [Permanent (Operational Toggles)](#permanent-operational-toggles)
-- [Experimental (Default false, actively being tested)](#experimental-default-false-actively-being-tested)
-- [SHIP-002 Gates (Incomplete features, default false)](#ship-002-gates-incomplete-features-default-false)
-- [Removed in DEBT-128](#removed-in-debt-128)
-- [Adding New Feature Flags](#adding-new-feature-flags)
+These flags control infrastructure and operational behavior. They are expected to live indefinitely.
 
----
-
-## Permanent (Operational Toggles)
-
-These flags control operational behavior and should remain as toggleable configs. They are proven in production and expected to stay indefinitely.
-
-| Flag | Default | Purpose | When to Toggle | Owner |
-|------|---------|---------|----------------|-------|
-| `ENABLE_NEW_PRICING` | `true` | Controls billing/quota enforcement (STORY-165) | Set `false` to disable billing (emergency) | billing |
-| `LLM_ARBITER_ENABLED` | `true` | LLM classification for relevance scoring (STORY-179) | Set `false` if OpenAI API is down | ai-team |
-| `LLM_ZERO_MATCH_ENABLED` | `true` | Zero-match LLM classification for 0% keyword density bids | Set `false` to reduce LLM costs | ai-team |
-| `FILTER_DEBUG_MODE` | `false` | Verbose filter debug logging | Set `true` for debugging filter pipeline issues | dev |
-| `WARMUP_ENABLED` | `true` | Startup cache warm-up | Set `false` if API pressure too high at boot | ops |
-| `CACHE_WARMING_ENABLED` | `false` | Proactive cache warming on schedule | Set `true` when cache strategy stable | ops |
-| `CACHE_REFRESH_ENABLED` | `false` | Background cache refresh for stale entries | Set `true` when ready | ops |
-| `HEALTH_CANARY_ENABLED` | `true` | PNCP health canary checks | Set `false` if canary causes issues | ops |
-| `METRICS_ENABLED` | `true` | Prometheus metrics collection | Set `false` if metrics cause overhead | ops |
-| `DIGEST_ENABLED` | `false` | Email digests for users | Set `true` when feature ready | product |
-| `ALERTS_ENABLED` | `true` | Pipeline alert emails | Set `false` to stop emails | ops |
-| `ALERTS_SYSTEM_ENABLED` | `false` | Full alerts system (SHIP-002 gate) | Set `true` when alerts feature complete | product |
-| `RECONCILIATION_ENABLED` | `true` | Daily billing reconciliation | Set `false` if causing issues | billing |
-| `SEARCH_ASYNC_ENABLED` | varies | Async search via ARQ job queue | Controls sync vs async mode | ops |
-| `USER_FEEDBACK_ENABLED` | `true` | User feedback collection | Set `false` to disable feedback | product |
-| `BID_ANALYSIS_ENABLED` | `true` | Deep bid analysis with LLM | Set `false` to reduce LLM costs | ai-team |
-| `TRIAL_EMAILS_ENABLED` | `true` | Automated trial lifecycle emails | Set `false` to stop trial emails | product |
-| `TRIAL_PAYWALL_ENABLED` | `true` | Trial paywall after day 7 | Set `false` to remove paywall | product |
-| `COMPRASGOV_ENABLED` | `false` | ComprasGov v3 data source | Set `true` when API back online | ops |
-| `COMPRASGOV_CB_ENABLED` | `true` | ComprasGov circuit breaker | Set `false` to disable CB | ops |
-| `USE_REDIS_CIRCUIT_BREAKER` | `true` | Redis-backed circuit breaker | Set `false` for in-memory fallback | ops |
+| Flag | Default | File | Purpose | When to Toggle |
+|------|---------|------|---------|---------------|
+| `METRICS_ENABLED` | `true` | `config/features.py` | Prometheus metrics collection | Disable if metrics endpoint causes performance issues |
+| `FILTER_DEBUG_MODE` | `false` | `config/features.py` | Verbose filter debug logging | Enable temporarily when debugging filter behavior |
+| `HEALTH_CANARY_ENABLED` | `true` | `config/pipeline.py` | PNCP health canary checks every 5 min | Disable if canary causes PNCP rate limiting |
+| `WARMUP_ENABLED` | `true` | `config/pipeline.py` | Startup cache warm-up | Disable if warmup causes slow startup |
+| `CACHE_LEGACY_KEY_FALLBACK` | `true` | `config/pipeline.py` | Fallback to legacy cache key format | Disable after all caches have migrated to new keys |
+| `SHOW_CACHE_FALLBACK_BANNER` | `true` | `config/pipeline.py` | Show cache fallback banner in frontend | Disable when cache migration is complete |
+| `CACHE_WARMING_POST_DEPLOY_ENABLED` | `true` | `config/pipeline.py` | Cache warming after deploy | Disable if post-deploy warming causes startup issues |
+| `ALERTS_ENABLED` | `true` | `config/pipeline.py` | Alert notifications cron job | Disable to stop alert emails |
+| `RECONCILIATION_ENABLED` | `true` | `config/pipeline.py` | Reconciliation cron job | Disable to stop reconciliation |
+| `COMPRASGOV_ENABLED` | `false` | `config/pncp.py` | ComprasGov v3 data source (API down since 2026-03-03) | Enable when ComprasGov API is back online |
+| `COMPRASGOV_CB_ENABLED` | `true` | `config/pncp.py` | ComprasGov circuit breaker | Disable only to bypass CB for testing |
+| `USE_REDIS_CIRCUIT_BREAKER` | `true` | `config/pncp.py` | Redis-backed circuit breaker | Set to `false` to roll back to in-memory CB |
 
 ---
 
-## Experimental (Default false, actively being tested)
+## EXPERIMENTAL (Actively Being Tested)
 
-These flags gate features under active development or A/B testing. They default to `false` and should not be enabled in production without explicit validation.
+These flags gate features that are implemented but not yet validated for general use. Review periodically — if a flag has been `false` for 90+ days without activation, consider whether the feature is still planned.
+
+| Flag | Default | File | Purpose | When to Toggle |
+|------|---------|------|---------|---------------|
+| `ASYNC_ZERO_MATCH_ENABLED` | `false` | `config/features.py` | Async job queue for zero-match classification | Enable to test ARQ-based zero-match processing |
+| `SEARCH_ASYNC_ENABLED` | `false` | `config/pipeline.py` | Async search via ARQ job queue (202 pattern) | Enable for async-first search architecture |
+| `CACHE_WARMING_ENABLED` | `false` | `config/pipeline.py` | Proactive cache warming on schedule | Enable after performance validation |
+| `CACHE_REFRESH_ENABLED` | `false` | `config/pipeline.py` | Periodic cache refresh job | Enable after stability validation |
+| `TERM_SEARCH_LLM_AWARE` | `false` | `config/features.py` | LLM-aware term search quality parity | Enable when STORY-267 AC2 is ready |
+| `TERM_SEARCH_SYNONYMS` | `false` | `config/features.py` | Synonym expansion for term search | Enable when STORY-267 AC4 is ready |
+| `TERM_SEARCH_VIABILITY_GENERIC` | `false` | `config/features.py` | Generic viability scoring for term search | Enable when STORY-267 is ready |
+| `TERM_SEARCH_FILTER_CONTEXT` | `false` | `config/features.py` | Filter context propagation for term search | Enable when STORY-267 is ready |
+| `DIGEST_ENABLED` | `false` | `config/pipeline.py` | Email digest cron job | Enable when digest feature is complete |
+
+---
+
+## FEATURE GATES (Incomplete Features — SHIP-002)
+
+These flags gate features that are not yet shipped. They will be removed once each feature reaches production.
+
+| Flag | Default | File | Purpose |
+|------|---------|------|---------|
+| `ORGANIZATIONS_ENABLED` | `false` | `config/pipeline.py` | Organizations feature (SHIP-002) |
+| `MESSAGES_ENABLED` | `false` | `config/pipeline.py` | Messages feature (SHIP-002) |
+| `ALERTS_SYSTEM_ENABLED` | `false` | `config/pipeline.py` | Alerts system feature (SHIP-002) |
+| `PARTNERS_ENABLED` | `false` | `config/pipeline.py` | Partners feature (SHIP-002) |
+
+---
+
+## ALWAYS-ON (Candidates for Future Cleanup)
+
+These flags default to `true` and still have conditional `if` checks in the code, but are not being removed in this pass. If they remain `true` for 30+ consecutive days without being toggled, they are candidates for permanent removal: keep the `True` code path, delete the flag and the dead `False` branch.
 
 | Flag | Default | Purpose |
 |------|---------|---------|
-| `ASYNC_ZERO_MATCH_ENABLED` | `false` | Async background zero-match via ARQ jobs |
-| `TERM_SEARCH_LLM_AWARE` | `false` | LLM-aware term search quality parity |
-| `TERM_SEARCH_SYNONYMS` | `false` | Synonym expansion for term search |
-| `TERM_SEARCH_VIABILITY_GENERIC` | `false` | Generic viability for term search |
-| `TERM_SEARCH_FILTER_CONTEXT` | `false` | Filter context for term search |
+| `LLM_ZERO_MATCH_BATCH_ENABLED` | `true` | Batch processing for zero-match LLM calls |
+| `LLM_FALLBACK_PENDING_ENABLED` | `true` | Return fallback summary if LLM job is pending |
+| `PARTIAL_DATA_SSE_ENABLED` | `true` | Emit partial data via SSE before LLM completes |
+| `LLM_STRUCTURED_OUTPUT_ENABLED` | `true` | Use LLM structured output for summaries |
+| `TRIAL_14_DAYS_ENABLED` | `true` | 14-day free trial for new users |
+| `TRIAL_EMAILS_ENABLED` | `true` | Send trial reminder emails at day 7 |
+| `TRIAL_PAYWALL_ENABLED` | `true` | Enforce trial paywall after day 7 |
+| `ZERO_RESULTS_RELAXATION_ENABLED` | `true` | Auto-relax filters when zero results are returned |
+| `PROXIMITY_CONTEXT_ENABLED` | `true` | Proximity context for term matching |
+| `BID_ANALYSIS_ENABLED` | `true` | Bid analysis feature |
+| `CO_OCCURRENCE_RULES_ENABLED` | `true` | Keyword co-occurrence rules |
+| `RATE_LIMITING_ENABLED` | `true` | Redis token-bucket rate limiting |
+| `SECTOR_RED_FLAGS_ENABLED` | `true` | Sector-specific red flag detection |
 
 ---
 
-## SHIP-002 Gates (Incomplete features, default false)
+## REMOVED (DEBT-128)
 
-These flags protect incomplete features that are partially built but not ready for users. They must remain `false` until the corresponding SHIP-002 work items are completed.
+These flags were permanently enabled and removed on 2026-03-11. The `true` code path remains; the `false` branch and the flag itself have been deleted.
 
-| Flag | Default | Purpose |
-|------|---------|---------|
-| `ORGANIZATIONS_ENABLED` | `false` | Multi-org support |
-| `MESSAGES_ENABLED` | `false` | Messaging system |
-| `PARTNERS_ENABLED` | `false` | Partner program |
-
----
-
-## Removed in DEBT-128
-
-These flags were always-on shipped features with no real conditional logic. Their code paths have been simplified by inlining the `True` branch and deleting the `False` branch.
-
-| Flag | Was Default | Reason Removed | Commit |
-|------|-------------|----------------|--------|
-| `TRIAL_14_DAYS_ENABLED` | `true` | No conditional logic existed; purely decorative | DEBT-128 |
-| `SYNONYM_MATCHING_ENABLED` | `true` | Not used in any conditional; real control is `TERM_SEARCH_SYNONYMS` | DEBT-128 |
-| `LLM_STRUCTURED_OUTPUT_ENABLED` | `true` | Legacy binary mode dead code; structured output is standard | DEBT-128 |
-| `LLM_ZERO_MATCH_BATCH_ENABLED` | `true` | Individual fallback mode unused; batch is standard | DEBT-128 |
-| `VIABILITY_ASSESSMENT_ENABLED` | `true` | Always-on in pipeline; confidence-only fallback kept for simplified searches | DEBT-128 |
+| Flag | Removed Date | Reason |
+|------|-------------|--------|
+| `LLM_ZERO_MATCH_ENABLED` | 2026-03-11 | Stable since Feb 2026, promoted to core feature |
+| `LLM_ARBITER_ENABLED` | 2026-03-11 | Stable since Feb 2026, promoted to core feature |
+| `VIABILITY_ASSESSMENT_ENABLED` | 2026-03-11 | Stable since Feb 2026, promoted to core feature |
+| `SYNONYM_MATCHING_ENABLED` | 2026-03-11 | Was always `true`, conditional branch never exercised |
+| `ITEM_INSPECTION_ENABLED` | 2026-03-11 | Stable since Feb 2026, promoted to core feature |
+| `USER_FEEDBACK_ENABLED` | 2026-03-11 | Stable since Feb 2026, promoted to core feature |
+| `ENABLE_NEW_PRICING` | 2026-03-11 | Stable since STORY-165, core billing behavior |
 
 ---
 
-## Adding New Feature Flags
+## Adding a New Feature Flag
 
-### Naming Convention
+Follow these steps every time a new flag is introduced.
 
-- Use `SCREAMING_SNAKE_CASE`.
-- Boolean toggles: `FEATURE_NAME_ENABLED`
-- Configuration values: `FEATURE_NAME_VALUE`
+### 1. Naming
 
-### Required Steps
+Use `UPPER_SNAKE_CASE` with an `_ENABLED` suffix for boolean flags. Be specific — the name should make the purpose obvious without reading the code (e.g., `CACHE_REFRESH_ENABLED`, not `NEW_CACHE`).
 
-1. Add to `config/features.py` (or appropriate config module) with env var and default.
-2. Add to `_FEATURE_FLAG_REGISTRY` in `config/features.py` for runtime reload support.
-3. Add to `config/__init__.py` re-exports.
-4. Add description to `_FLAG_DESCRIPTIONS` in `routes/feature_flags.py`.
-5. Document in this file with category, purpose, and toggle guidance.
-6. Add tests covering both `True` and `False` paths.
+### 2. Definition
 
-### Lifecycle
+Add the flag to the appropriate config file:
 
-```
-EXPERIMENTAL (default false)
-    |
-    | proven stable in production
-    v
-PERMANENT (default true or false, toggleable)
-    |
-    | True for 30+ days with no toggles
-    v
-REMOVED — inline the True path, delete the False path
+- `config/features.py` — AI/LLM, search quality, UX feature flags
+- `config/pipeline.py` — pipeline orchestration, cron jobs, cache strategy flags
+- `config/pncp.py` — data source flags (PNCP, PCP, ComprasGov)
+
+```python
+# config/features.py (example)
+MY_FLAG_ENABLED: bool = Field(
+    default=False,
+    description="Short description of what this flag controls.",
+)
 ```
 
-- **New flags** start as EXPERIMENTAL (default `false`).
-- **Stable flags** are promoted to PERMANENT when proven in production.
-- **Shipped flags** (`true` for 30+ days with no toggles) should be REMOVED: inline the `True` path and delete the `False` path.
-- Review this file monthly for cleanup candidates.
+### 3. Default Value
+
+- New experimental features: default `false`
+- Operational toggles (infrastructure, safety nets): default `true`
+- Never default `true` for an incomplete feature that could break production
+
+### 4. Re-export
+
+Add the flag to `config/__init__.py` so existing `from config import MY_FLAG_ENABLED` imports continue to work:
+
+```python
+# config/__init__.py
+from config.features import MY_FLAG_ENABLED
+```
+
+### 5. Runtime Registry (if reloadable)
+
+If the flag should be reloadable at runtime without a deploy, add it to `_FEATURE_FLAG_REGISTRY` in `config/features.py`:
+
+```python
+_FEATURE_FLAG_REGISTRY["MY_FLAG_ENABLED"] = lambda: settings.MY_FLAG_ENABLED
+```
+
+### 6. Admin UI Description
+
+Add a human-readable description to `_FLAG_DESCRIPTIONS` in `routes/feature_flags.py` so the admin panel shows context:
+
+```python
+_FLAG_DESCRIPTIONS["MY_FLAG_ENABLED"] = "Enables X behavior. Safe to toggle without deploy."
+```
+
+### 7. Documentation
+
+Add the flag to this file under the correct category (Permanent, Experimental, or Feature Gate) with:
+- Default value
+- Config file
+- Purpose (one sentence)
+- When to toggle (for Permanent) or readiness condition (for Experimental)
+
+### 8. Lifecycle and Removal
+
+Set a review date in the PR description when adding the flag. Removal criteria:
+
+| Category | Removal trigger |
+|----------|----------------|
+| Experimental (`false`) | Flag has been `false` for 90+ days without activation — feature is no longer planned |
+| Experimental (`true`) | Flag has been `true` for 30+ days without being toggled — promote to permanent code |
+| Always-on (`true`) | Flag has been `true` for 30+ days without being toggled — delete flag and dead `false` branch |
+| Feature Gate | Feature ships to production — delete flag, keep `true` path |
+| Permanent | Operational concern no longer exists — confirm with team before removing |
+
+**Removal checklist:**
+1. Delete the flag constant from the config file
+2. Delete the `false` (dead) branch from all conditional checks
+3. Keep the `true` code path as unconditional code
+4. Remove from `config/__init__.py` re-exports
+5. Remove from `_FEATURE_FLAG_REGISTRY` and `_FLAG_DESCRIPTIONS`
+6. Move the flag to the REMOVED table in this file with the removal date and reason
+7. Search the codebase for any remaining references (`grep -r "MY_FLAG_ENABLED"`)

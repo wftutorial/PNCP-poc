@@ -644,14 +644,16 @@ def build_pdf(data, output_path, pacote_recomendado="semanal"):
 
     # Tendências do Mercado — from JSON
     story.append(Paragraph("Tendências do Mercado", S['H2']))
-    tendencias_txt = fix_accents(intel.get("tendencias", ""))
-    if tendencias_txt:
-        # Split on ". " to create bullet points
-        frases = [f.strip() for f in tendencias_txt.split(". ") if f.strip()]
-        for f in frases:
-            if not f.endswith("."):
-                f += "."
-            story.append(bullet(f))
+    tendencias_raw = intel.get("tendencias", "")
+    if isinstance(tendencias_raw, list):
+        frases = [fix_accents(t) for t in tendencias_raw if t.strip()]
+    else:
+        tendencias_txt = fix_accents(tendencias_raw)
+        frases = [f.strip() for f in tendencias_txt.split(". ") if f.strip()] if tendencias_txt else []
+    for f in frases:
+        if not f.endswith("."):
+            f += "."
+        story.append(bullet(f))
     story.append(PageBreak())
 
     # ==========================================================

@@ -951,22 +951,101 @@ def collect_pncp_documents(api: ApiClient, editais: list[dict]) -> None:
 
 
 # ============================================================
-# SICAF NOTE
+# SICAF COLLECTION (via collect-sicaf.py subprocess)
 # ============================================================
 
-def build_sicaf_note(cnpj14: str) -> dict:
-    """Build SICAF verification note (no public API available)."""
-    return {
-        "status": "VERIFICAÇÃO MANUAL NECESSÁRIA",
-        "url": f"https://sicaf.gov.br/",
-        "instrucao": (
-            f"Consultar status cadastral do CNPJ {_format_cnpj(cnpj14)} no SICAF. "
-            "O SICAF não possui API pública para consulta automatizada. "
-            "Verificar: (1) Cadastro ativo, (2) Nível de credenciamento, "
-            "(3) Documentação habilitatória vigente, (4) Certidões válidas."
-        ),
-        "_source": _source_tag("UNAVAILABLE", "SICAF não possui API pública"),
-    }
+def collect_sicaf(cnpj14: str, verbose: bool = True) -> dict:
+    """Collect SICAF data by invoking collect-sicaf.py as a subprocess.
+
+    Opens a headed browser for the user to solve the captcha,
+    then extracts CRC + restriction data automatically.
+    """
+    import subprocess
+    import tempfile
+
+    sicaf_script = Path(__file__).parent / "collect-sicaf.py"
+    if not sicaf_script.exists():
+        if verbose:
+            print("  ⚠ collect-sicaf.py não encontrado — pulando SICAF")
+        return {
+            "status": "NÃO CONSULTADO",
+            "_source": _source_tag("UNAVAILABLE", "collect-sicaf.py não encontrado"),
+        }
+
+    # Use a temp file for output
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w") as tmp:
+        tmp_path = tmp.name
+
+    try:
+        if verbose:
+            print("\n🔐 SICAF — Abrindo navegador para verificação cadastral")
+            print("   ➜ Resolva o captcha quando o navegador abrir (~5s por consulta)")
+
+        cmd = [
+            sys.executable,
+            str(sicaf_script),
+            "--cnpj", cnpj14,
+            "--output", tmp_path,
+            "--skip-linhas",
+        ]
+
+        result = subprocess.run(
+            cmd,
+            timeout=300,  # 5 min max (includes captcha wait time)
+            capture_output=not verbose,
+            text=True,
+        )
+
+        if result.returncode != 0:
+            detail = "Subprocess falhou"
+            if result.stderr:
+                detail += f": {result.stderr[:200]}"
+            if verbose:
+                print(f"  ⚠ SICAF falhou (exit code {result.returncode})")
+            return {
+                "status": "NÃO CONSULTADO",
+                "_source": _source_tag("API_FAILED", detail),
+            }
+
+        # Read the output JSON
+        tmp_file = Path(tmp_path)
+        if not tmp_file.exists() or tmp_file.stat().st_size == 0:
+            if verbose:
+                print("  ⚠ SICAF: arquivo de saída vazio")
+            return {
+                "status": "NÃO CONSULTADO",
+                "_source": _source_tag("API_FAILED", "Output file empty"),
+            }
+
+        with open(tmp_path, "r", encoding="utf-8") as f:
+            sicaf_data = json.load(f)
+
+        if verbose:
+            status = sicaf_data.get("status", "desconhecido")
+            print(f"  ✅ SICAF coletado: {status}")
+
+        return sicaf_data
+
+    except subprocess.TimeoutExpired:
+        if verbose:
+            print("  ⚠ SICAF: timeout (5 min) — captcha não resolvido?")
+        return {
+            "status": "NÃO CONSULTADO",
+            "_source": _source_tag("API_FAILED", "Timeout — captcha não resolvido em 5 min"),
+        }
+    except Exception as e:
+        if verbose:
+            print(f"  ⚠ SICAF erro: {e}")
+        return {
+            "status": "NÃO CONSULTADO",
+            "_source": _source_tag("API_FAILED", str(e)[:200]),
+        }
+    finally:
+        # Cleanup temp file
+        try:
+            Path(tmp_path).unlink(missing_ok=True)
+        except Exception:
+            pass
 
 
 # ============================================================
@@ -1072,6 +1151,7 @@ Examples:
     parser.add_argument("--skip-links", action="store_true", help="Pular validação de links PNCP")
     parser.add_argument("--skip-pcp", action="store_true", help="Pular busca PCP v2")
     parser.add_argument("--skip-qd", action="store_true", help="Pular busca Querido Diário")
+    parser.add_argument("--skip-sicaf", action="store_true", help="Pular verificação SICAF (Playwright)")
 
     args = parser.parse_args()
 
@@ -1173,7 +1253,13 @@ Examples:
             print("\n📍 Distâncias: cidade/UF da sede não disponível — pulando")
 
     # ---- SICAF ----
-    sicaf = build_sicaf_note(cnpj14)
+    if args.skip_sicaf:
+        sicaf = {
+            "status": "NÃO CONSULTADO",
+            "_source": _source_tag("UNAVAILABLE", "Skipped via --skip-sicaf"),
+        }
+    else:
+        sicaf = collect_sicaf(cnpj14, verbose=verbose)
 
     # ---- Assemble ----
     print(f"\n{'='*60}")

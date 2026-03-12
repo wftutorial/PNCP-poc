@@ -16,8 +16,8 @@ import os
 from unittest.mock import Mock, patch
 import pytest
 
-from llm import gerar_resumo
-from schemas import ResumoLicitacoes, ResumoEstrategico
+from llm import gerar_resumo, format_resumo_html
+from schemas import ResumoLicitacoes
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -104,10 +104,9 @@ def test_gerar_resumo_single_bid(mock_openai):
     # Verify API was called
     mock_client.beta.chat.completions.parse.assert_called_once()
     call_args = mock_client.beta.chat.completions.parse.call_args
-    assert call_args.kwargs["model"] == "gpt-4.1-nano"
+    assert call_args.kwargs["model"] == "gpt-4o-mini"
     assert call_args.kwargs["temperature"] == 0.3
-    assert call_args.kwargs["max_tokens"] == 1200
-    assert call_args.kwargs["response_format"] == ResumoEstrategico
+    assert call_args.kwargs["max_tokens"] == 500
 
 
 @patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test-key-12345"})
@@ -286,7 +285,82 @@ def test_gerar_resumo_empty_api_response(mock_openai):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 5. Integration Tests (with Real Schema Validation)
+# 5. HTML Formatting Tests
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_format_resumo_html_basic():
+    """Should format basic summary as HTML."""
+    resumo = ResumoLicitacoes(
+        resumo_executivo="Encontradas 15 licitações.",
+        total_oportunidades=15,
+        valor_total=2300000.00,
+        destaques=["3 urgentes", "Maior valor: R$ 500k"],
+        alerta_urgencia=None,
+    )
+
+    html = format_resumo_html(resumo)
+
+    assert "resumo-container" in html
+    assert "Encontradas 15 licitações" in html
+    assert "15" in html  # Total count
+    assert "2,300,000.00" in html  # Formatted value (Python default uses commas)
+    assert "3 urgentes" in html
+    assert "Maior valor: R$ 500k" in html
+
+
+def test_format_resumo_html_with_alerta():
+    """Should include urgency alert in HTML."""
+    resumo = ResumoLicitacoes(
+        resumo_executivo="Resumo",
+        total_oportunidades=5,
+        valor_total=100000.0,
+        destaques=[],
+        alerta_urgencia="⚠️ 5 licitações encerram em 24 horas",
+    )
+
+    html = format_resumo_html(resumo)
+
+    assert "alerta-urgencia" in html
+    assert "⚠️ 5 licitações encerram em 24 horas" in html
+
+
+def test_format_resumo_html_empty_destaques():
+    """Should handle empty destaques list."""
+    resumo = ResumoLicitacoes(
+        resumo_executivo="Resumo",
+        total_oportunidades=0,
+        valor_total=0.0,
+        destaques=[],
+        alerta_urgencia=None,
+    )
+
+    html = format_resumo_html(resumo)
+
+    assert "resumo-container" in html
+    assert "Resumo" in html
+    # Should not include destaques section when empty
+    assert "<li>" not in html or "Destaques" not in html
+
+
+def test_format_resumo_html_no_alerta():
+    """Should not include alerta HTML when None."""
+    resumo = ResumoLicitacoes(
+        resumo_executivo="Resumo",
+        total_oportunidades=10,
+        valor_total=500000.0,
+        destaques=["Destaque 1"],
+        alerta_urgencia=None,
+    )
+
+    html = format_resumo_html(resumo)
+
+    assert "resumo-container" in html
+    assert "alerta-urgencia" not in html
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 6. Integration Tests (with Real Schema Validation)
 # ─────────────────────────────────────────────────────────────────────────────
 
 

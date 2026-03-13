@@ -83,6 +83,111 @@ MARGIN = 2 * cm
 
 ILLEGAL_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
 
+# ============================================================
+# ACCENT RESTORATION (API data often lacks PT-BR diacritics)
+# ============================================================
+_ACCENT_MAP = {
+    "construcao": "construção", "construcoes": "construções",
+    "licitacao": "licitação", "licitacoes": "licitações",
+    "contratacao": "contratação", "contratacoes": "contratações",
+    "pavimentacao": "pavimentação", "habitacao": "habitação",
+    "edificacao": "edificação", "edificacoes": "edificações",
+    "ampliacao": "ampliação", "revitalizacao": "revitalização",
+    "execucao": "execução", "manutencao": "manutenção",
+    "atencao": "atenção", "educacao": "educação",
+    "implantacao": "implantação", "instalacao": "instalação",
+    "instalacoes": "instalações", "fundacao": "fundação",
+    "recreacao": "recreação", "recuperacao": "recuperação",
+    "reabilitacao": "reabilitação", "fiscalizacao": "fiscalização",
+    "sinalizacao": "sinalização", "urbanizacao": "urbanização",
+    "impermeabilizacao": "impermeabilização",
+    "adequacao": "adequação", "adequacoes": "adequações",
+    "operacao": "operação", "operacoes": "operações",
+    "medicao": "medição", "medicoes": "medições",
+    "informacao": "informação", "informacoes": "informações",
+    "situacao": "situação", "avaliacao": "avaliação",
+    "qualificacao": "qualificação", "habilitacao": "habilitação",
+    "documentacao": "documentação", "certificacao": "certificação",
+    "certificacoes": "certificações", "restricao": "restrição",
+    "restricoes": "restrições", "sancao": "sanção", "sancoes": "sanções",
+    "pregao": "pregão", "concorrencia": "concorrência",
+    "eletronica": "eletrônica", "eletronicas": "eletrônicas",
+    "eletrica": "elétrica", "eletricas": "elétricas",
+    "tecnico": "técnico", "tecnica": "técnica",
+    "tecnicas": "técnicas", "tecnicos": "técnicos",
+    "economico": "econômico", "economica": "econômica",
+    "municipio": "município", "municipios": "municípios",
+    "orgao": "órgão", "orgaos": "órgãos",
+    "publico": "público", "publica": "pública",
+    "publicos": "públicos", "publicas": "públicas",
+    "indice": "índice", "indices": "índices",
+    "area": "área", "areas": "áreas",
+    "agua": "água", "aguas": "águas",
+    "analise": "análise", "analises": "análises",
+    "registro": "registro", "minimo": "mínimo", "minima": "mínima",
+    "maximo": "máximo", "maxima": "máxima",
+    "necessario": "necessário", "necessaria": "necessária",
+    "necessarios": "necessários", "necessarias": "necessárias",
+    "especifico": "específico", "especifica": "específica",
+    "especificos": "específicos", "historico": "histórico",
+    "historica": "histórica", "obrigatorio": "obrigatório",
+    "obrigatoria": "obrigatória", "provisorio": "provisório",
+    "viavel": "viável", "responsavel": "responsável",
+    "compativel": "compatível", "acessivel": "acessível",
+    "gerenciavel": "gerenciável", "possivel": "possível",
+    "impossivel": "impossível", "provavel": "provável",
+    "disponivel": "disponível",
+    "nao": "não", "ja": "já", "tambem": "também",
+    "ate": "até", "apos": "após", "so": "só",
+    # NOTE: "e" → "é" REMOVED — too ambiguous (conjunction vs verb)
+    # NOTE: "nos" → "nós" REMOVED — too ambiguous (preposition vs pronoun)
+    "sera": "será", "serao": "serão",
+    "voce": "você",
+    "recomendacao": "recomendação",
+    "preco": "preço", "precos": "preços",
+    "orcamento": "orçamento", "orcamentos": "orçamentos",
+    "orcado": "orçado", "servico": "serviço", "servicos": "serviços",
+    "acervo": "acervo", "sessao": "sessão",
+    "competicao": "competição", "competicoes": "competições",
+    "reputacao": "reputação", "precificacao": "precificação",
+    "associacao": "associação",
+    "vigencia": "vigência", "exigencia": "exigência",
+    "exigencias": "exigências", "frequencia": "frequência",
+    "discrepancia": "discrepância",
+    "pratica": "prática", "praticas": "práticas",
+    "ceramico": "cerâmico", "ceramica": "cerâmica",
+    "metalica": "metálica", "metalico": "metálico",
+    "termoacustico": "termoacústico",
+    "logistica": "logística", "basica": "básica",
+    "estrategia": "estratégia",
+}
+
+# Build regex — match whole words, case-insensitive
+_ACCENT_PATTERN = re.compile(
+    r"\b(" + "|".join(re.escape(k) for k in sorted(_ACCENT_MAP.keys(), key=len, reverse=True)) + r")\b",
+    re.IGNORECASE,
+)
+
+
+def _restore_accents(text: str) -> str:
+    """Restore PT-BR diacritics to unaccented text from APIs."""
+    if not text:
+        return text
+
+    def _replace(m: re.Match) -> str:
+        word = m.group(0)
+        lower = word.lower()
+        replacement = _ACCENT_MAP.get(lower, word)
+        # Preserve original casing pattern
+        if word.isupper():
+            return replacement.upper()
+        if word[0].isupper():
+            return replacement[0].upper() + replacement[1:]
+        return replacement
+
+    return _ACCENT_PATTERN.sub(_replace, text)
+
+
 # Regex to detect broken PNCP links using hyphens instead of slashes
 # e.g. https://pncp.gov.br/app/editais/27142058000126-2026-85
 _PNCP_HYPHEN_LINK_RE = re.compile(
@@ -208,7 +313,8 @@ def _fix_pncp_link(link: str | None) -> str:
 def _s(value: Any) -> str:
     if value is None:
         return ""
-    return ILLEGAL_CHARS_RE.sub(" ", str(value))
+    text = ILLEGAL_CHARS_RE.sub(" ", str(value))
+    return _restore_accents(text)
 
 
 def _currency(value: Any) -> str:
@@ -272,6 +378,76 @@ def _safe_int(v: Any, d: int = 0) -> int:
         return int(v) if v is not None else d
     except (ValueError, TypeError):
         return d
+
+
+def _format_dias_restantes(dias: Any) -> str:
+    """Format remaining days for human display."""
+    if dias is None or dias == "None":
+        return "N/D"
+    d = _safe_int(dias)
+    if d < 0:
+        return f"Encerrado ({abs(d)}d atrás)"
+    if d == 0:
+        return "Hoje"
+    if d == 1:
+        return "Amanhã"
+    return f"{d} dias"
+
+
+def _format_prazo_short(dias: Any) -> str:
+    """Format days for table column (compact)."""
+    if dias is None or dias == "None":
+        return "—"
+    d = _safe_int(dias)
+    if d < 0:
+        return f"Enc."
+    if d == 0:
+        return "Hoje"
+    return f"{d}d"
+
+
+def _collapse_cnaes(cnaes: Any, max_show: int = 5) -> str:
+    """Collapse long CNAE lists into readable format."""
+    if not cnaes:
+        return ""
+    if isinstance(cnaes, str):
+        parts = [c.strip() for c in cnaes.replace(";", ",").split(",") if c.strip()]
+    elif isinstance(cnaes, list):
+        parts = [str(c).strip() for c in cnaes if c]
+    else:
+        return str(cnaes)
+    if len(parts) <= max_show:
+        return ", ".join(parts)
+    shown = ", ".join(parts[:max_show])
+    return f"{shown} (e mais {len(parts) - max_show})"
+
+
+# ============================================================
+# SECTION DIVIDER HELPER
+# ============================================================
+
+def _section_divider() -> Table:
+    """Create a thin accent-colored horizontal divider between sections."""
+    t = Table([[""]],  colWidths=[PAGE_WIDTH - 2 * MARGIN], rowHeights=[1])
+    t.setStyle(TableStyle([
+        ("LINEBELOW", (0, 0), (0, 0), 1.5, ACCENT_LINE_COLOR),
+        ("TOPPADDING", (0, 0), (0, 0), 0),
+        ("BOTTOMPADDING", (0, 0), (0, 0), 0),
+    ]))
+    return t
+
+
+def _section_heading(title: str, styles: dict) -> list:
+    """Create section heading elements that stay together (never orphaned at page bottom).
+
+    Returns a list of flowables: [divider, spacer, heading].
+    The heading has keepWithNext=True so it always has content below it on the same page.
+    """
+    divider = _section_divider()
+    divider.keepWithNext = True
+    h = Paragraph(title, styles["h1"])
+    h.keepWithNext = True
+    return [divider, Spacer(1, 2 * mm), h]
 
 
 # ============================================================
@@ -492,83 +668,102 @@ def _build_cover(data: dict, styles: dict, gen_date: str) -> list:
 
 
 def _build_decision_table(data: dict, styles: dict, sec: dict) -> list:
-    """Build 'Decisão em 30 Segundos' — traffic-light summary table on page 2."""
+    """Build 'Decisão em 30 Segundos' — traffic-light summary table on page 2.
+
+    Redesigned: wider justificativa, merged semáforo+objeto, readable layout.
+    """
     el = []
     editais = data.get("editais", [])
     if not editais:
         return el
 
     num = sec["next"]()
-    el.append(Paragraph(f"{num}. Decisão em 30 Segundos", styles["h1"]))
+    el.extend(_section_heading(f"{num}. Decisão em 30 Segundos", styles))
     el.append(Paragraph(
-        "Visão semáforo de todas as oportunidades — verde (participar), "
-        "amarelo (avaliar), vermelho (não recomendado).",
+        "Visão semáforo: <font color='#16A34A'><b>●</b></font> Participar  "
+        "<font color='#CA8A04'><b>●</b></font> Avaliar  "
+        "<font color='#DC2626'><b>●</b></font> Não recomendado",
         styles["body_small"],
     ))
     el.append(Spacer(1, 3 * mm))
 
     avail = PAGE_WIDTH - 2 * MARGIN
-    col_widths = [
-        avail * 0.04,   # #
-        avail * 0.04,   # semáforo
-        avail * 0.30,   # objeto
-        avail * 0.12,   # valor
-        avail * 0.07,   # prazo
-        avail * 0.08,   # score
-        avail * 0.35,   # justificativa 1-linha
-    ]
 
-    header = [Paragraph(f"<b>{h}</b>", styles["cell_header"]) for h in [
-        "#", "●", "Objeto", "Valor", "Prazo", "Score", "Justificativa",
-    ]]
-    rows = [header]
-
+    # One card per edital — more readable than a cramped table
     for idx, ed in enumerate(editais, 1):
         rec = _normalize_recommendation(_s(ed.get("recomendacao", "")))
         risk = ed.get("risk_score", {})
         score_val = _safe_int(risk.get("total") if isinstance(risk, dict) else risk)
 
-        # Semaphore
+        # Semaphore color
         if rec == "PARTICIPAR":
-            sem_style = styles["semaphore_green"]
-            sem_char = "●"
+            sem_color = GREEN
+            sem_bg = CARD_GREEN_BG
+            border_color = GREEN
         elif "CAUTELA" in rec or "AVALIAR" in rec:
-            sem_style = styles["semaphore_yellow"]
-            sem_char = "●"
+            sem_color = YELLOW
+            sem_bg = CARD_YELLOW_BG
+            border_color = YELLOW
         else:
-            sem_style = styles["semaphore_red"]
-            sem_char = "●"
+            sem_color = RED
+            sem_bg = CARD_RED_BG
+            border_color = RED
 
-        dias = ed.get("dias_restantes")
-        prazo = f"{_safe_int(dias)}d" if dias is not None else "N/I"
-        score_text = f"{score_val}" if score_val > 0 else "—"
-        justif = _trunc(_s(ed.get("justificativa", "")), 90)
+        objeto = _s(ed.get("objeto", ""))
+        valor = _currency_short(ed.get("valor_estimado"))
+        prazo = _format_prazo_short(ed.get("dias_restantes"))
+        score_text = f"{score_val}/100" if score_val > 0 else ""
+        justif = _s(ed.get("justificativa", ""))
 
-        rows.append([
-            Paragraph(str(idx), styles["cell_center"]),
-            Paragraph(sem_char, sem_style),
-            Paragraph(_trunc(_s(ed.get("objeto", "")), 70), styles["cell"]),
-            Paragraph(_currency_short(ed.get("valor_estimado")), styles["cell_right"]),
+        # Row 1: semáforo + objeto + valor + prazo
+        sem_style = ParagraphStyle(
+            f"dsem_{idx}", fontName="Helvetica-Bold", fontSize=12,
+            textColor=sem_color, alignment=TA_CENTER, leading=14,
+        )
+        rec_style = ParagraphStyle(
+            f"drec_{idx}", fontName="Helvetica-Bold", fontSize=8,
+            textColor=sem_color, alignment=TA_CENTER, leading=10,
+        )
+
+        row1 = [
+            Paragraph("●", sem_style),
+            Paragraph(f"<b>{idx}. {_trunc(objeto, 140)}</b>", styles["cell"]),
+            Paragraph(valor, ParagraphStyle(
+                f"dval_{idx}", parent=styles["cell_right"],
+                fontName="Helvetica-Bold", fontSize=9,
+            )),
             Paragraph(prazo, styles["cell_center"]),
-            Paragraph(score_text, styles["cell_center"]),
-            Paragraph(justif, styles["cell"]),
-        ])
+            Paragraph(rec.replace("NÃO RECOMENDADO", "NÃO REC."), rec_style),
+        ]
 
-    t = Table(rows, colWidths=col_widths, repeatRows=1)
-    base_styles = [
-        ("BACKGROUND", (0, 0), (-1, 0), TABLE_HEADER_BG),
-        ("GRID", (0, 0), (-1, -1), 0.5, TABLE_BORDER),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 0), (-1, -1), 2),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-        ("LEFTPADDING", (0, 0), (-1, -1), 2),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 2),
-    ]
-    for i in range(2, len(rows), 2):
-        base_styles.append(("BACKGROUND", (0, i), (-1, i), TABLE_ALT_ROW))
-    t.setStyle(TableStyle(base_styles))
-    el.append(t)
-    el.append(PageBreak())
+        card_data = [row1]
+        col_w = [avail * 0.05, avail * 0.48, avail * 0.15, avail * 0.10, avail * 0.22]
+
+        # Row 2: justificativa (spans full width)
+        if justif:
+            just_para = Paragraph(
+                f"<font color='#475569' size='7'>{_trunc(justif, 250)}</font>",
+                styles["cell"],
+            )
+            card_data.append(["", just_para, "", "", ""])
+
+        t = Table(card_data, colWidths=col_w)
+        card_styles = [
+            ("BACKGROUND", (0, 0), (-1, -1), sem_bg),
+            ("BOX", (0, 0), (-1, -1), 0.75, border_color),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("LEFTPADDING", (0, 0), (-1, -1), 4),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ]
+        if justif:
+            card_styles.append(("SPAN", (1, 1), (4, 1)))
+            card_styles.append(("TOPPADDING", (0, 1), (-1, 1), 0))
+        t.setStyle(TableStyle(card_styles))
+        el.append(KeepTogether([t, Spacer(1, 2 * mm)]))
+
+    el.append(Spacer(1, 4 * mm))
     return el
 
 
@@ -725,7 +920,7 @@ def _build_competitive_section(data: dict, styles: dict, sec: dict) -> list:
 
     el = []
     num = sec["next"]()
-    el.append(Paragraph(f"{num}. Mapa Competitivo", styles["h1"]))
+    el.extend(_section_heading(f"{num}. Mapa Competitivo", styles))
     el.append(Paragraph(
         "Contratos históricos identificados nos órgãos licitantes — "
         "indica incumbentes e valores praticados.",
@@ -769,7 +964,7 @@ def _build_competitive_section(data: dict, styles: dict, sec: dict) -> list:
     ] + [("BACKGROUND", (0, i), (-1, i), TABLE_ALT_ROW) for i in range(2, len(rows), 2)]))
     el.append(t)
 
-    el.append(PageBreak())
+    el.append(Spacer(1, 6 * mm))
     return el
 
 
@@ -789,68 +984,103 @@ def _build_company_profile(data: dict, styles: dict, sec: dict | None = None) ->
     emp = data.get("empresa", {})
 
     num = sec["next"]() if sec else 1
-    el.append(Paragraph(f"{num}. Perfil da Empresa", styles["h1"]))
+    el.extend(_section_heading(f"{num}. Perfil da Empresa", styles))
 
-    fields = [
+    # Build as structured table for clean alignment
+    avail = PAGE_WIDTH - 2 * MARGIN
+    info_rows = []
+
+    raw_fields = [
         ("Razão Social", emp.get("razao_social")),
         ("Nome Fantasia", emp.get("nome_fantasia")),
         ("CNPJ", emp.get("cnpj")),
         ("CNAE Principal", emp.get("cnae_principal")),
-        ("CNAEs Secundários", emp.get("cnaes_secundarios")),
+        ("CNAEs Secundários", _collapse_cnaes(emp.get("cnaes_secundarios"))),
         ("Porte", emp.get("porte")),
         ("Capital Social", _currency(emp.get("capital_social")) if emp.get("capital_social") else None),
         ("Sede", f"{emp.get('cidade_sede', '')} - {emp.get('uf_sede', '')}"),
         ("Situação Cadastral", emp.get("situacao_cadastral")),
     ]
-    for label, value in fields:
-        if value:
-            el.append(Paragraph(f"<b>{label}:</b> {_s(value)}", styles["body"]))
+    for label, value in raw_fields:
+        if value and str(value).strip() and value != " - ":
+            info_rows.append([
+                Paragraph(f"<b>{label}</b>", styles["cell"]),
+                Paragraph(_s(str(value)), styles["cell"]),
+            ])
+
+    if info_rows:
+        info_t = Table(info_rows, colWidths=[avail * 0.22, avail * 0.78])
+        info_t.setStyle(TableStyle([
+            ("GRID", (0, 0), (-1, -1), 0.5, TABLE_BORDER),
+            ("BACKGROUND", (0, 0), (0, -1), BRAND_LIGHT),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("LEFTPADDING", (0, 0), (-1, -1), 5),
+        ]))
+        el.append(info_t)
+        el.append(Spacer(1, 4 * mm))
 
     # QSA / Decisores
     qsa = emp.get("qsa", [])
     if qsa:
-        el.append(Spacer(1, 2 * mm))
-        el.append(Paragraph("Quadro Societário", styles["h2"]))
+        el.append(Paragraph("<b>Quadro Societário</b>", styles["h3"]))
         for socio in qsa[:5]:
             nome = _s(socio.get("nome", socio) if isinstance(socio, dict) else socio)
             qual = _s(socio.get("qualificacao", "")) if isinstance(socio, dict) else ""
             line = f"• {nome}" + (f" ({qual})" if qual else "")
             el.append(Paragraph(line, styles["bullet"]))
+        el.append(Spacer(1, 2 * mm))
 
-    # Sanções
+    # Sanções — as a visual card
     sancoes = emp.get("sancoes", {})
     if sancoes:
-        el.append(Spacer(1, 2 * mm))
-        el.append(Paragraph("Situação de Sanções", styles["h2"]))
         has_sanction = any(sancoes.get(k) for k in ["ceis", "cnep", "cepim", "ceaf"])
         if has_sanction:
-            el.append(Paragraph(
-                "<font color='#DC2626'><b>ATENÇÃO: Empresa possui sanção ativa.</b></font>",
-                styles["body"],
-            ))
+            card_bg = CARD_RED_BG
+            card_border = RED
+            card_text = "<font color='#DC2626'><b>ATENÇÃO: Empresa possui sanção ativa</b></font>"
+            details = []
             for k, label in [("ceis", "CEIS"), ("cnep", "CNEP"), ("cepim", "CEPIM"), ("ceaf", "CEAF")]:
                 if sancoes.get(k):
-                    el.append(Paragraph(f"• <font color='#DC2626'>{label}: Sancionada</font>", styles["bullet"]))
+                    details.append(f"<font color='#DC2626'>{label}: Sancionada</font>")
+            if details:
+                card_text += "<br/>" + " | ".join(details)
         else:
-            el.append(Paragraph(
-                "<font color='#16A34A'><b>Sem sanções ativas (CEIS, CNEP, CEPIM, CEAF)</b></font>",
-                styles["body"],
-            ))
+            card_bg = CARD_GREEN_BG
+            card_border = GREEN
+            card_text = "<font color='#16A34A'><b>Sem sanções ativas</b></font> (CEIS, CNEP, CEPIM, CEAF)"
+
+        sanc_t = Table(
+            [[Paragraph(card_text, styles["body"])]],
+            colWidths=[avail],
+        )
+        sanc_t.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), card_bg),
+            ("BOX", (0, 0), (-1, -1), 0.75, card_border),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ]))
+        el.append(sanc_t)
+        el.append(Spacer(1, 3 * mm))
 
     # Histórico de contratos governamentais
     historico = emp.get("historico_contratos", [])
     if historico:
-        el.append(Spacer(1, 2 * mm))
-        el.append(Paragraph("Histórico de Contratos Governamentais", styles["h2"]))
+        el.append(Paragraph("<b>Histórico de Contratos Governamentais</b>", styles["h3"]))
+        valor_hist = sum(_safe_float(c.get("valor")) for c in historico)
+        hist_text = f"Total: <b>{len(historico)}</b> contrato(s)"
+        if valor_hist > 0:
+            hist_text += f" | Valor total: <b>{_currency(valor_hist)}</b>"
+        el.append(Paragraph(hist_text, styles["body"]))
+    else:
         el.append(Paragraph(
-            f"Total de contratos no histórico federal: <b>{len(historico)}</b>",
+            "<font color='#CA8A04'><b>Sem histórico de contratos governamentais federais</b></font>",
             styles["body"],
         ))
-        valor_hist = sum(_safe_float(c.get("valor")) for c in historico)
-        if valor_hist > 0:
-            el.append(Paragraph(f"Valor total histórico: <b>{_currency(valor_hist)}</b>", styles["body"]))
 
-    el.append(PageBreak())
+    el.append(Spacer(1, 6 * mm))
     return el
 
 
@@ -860,7 +1090,7 @@ def _build_executive_summary(data: dict, styles: dict, sec: dict | None = None) 
     resumo = data.get("resumo_executivo", {})
 
     num = sec["next"]() if sec else 2
-    el.append(Paragraph(f"{num}. Resumo Executivo", styles["h1"]))
+    el.extend(_section_heading(f"{num}. Resumo Executivo", styles))
 
     # Summary text
     texto = _s(resumo.get("texto", ""))
@@ -872,6 +1102,7 @@ def _build_executive_summary(data: dict, styles: dict, sec: dict | None = None) 
     total = len(editais)
     participar = sum(1 for e in editais if (e.get("recomendacao") or "").upper().startswith("PARTICIPAR"))
     cautela = sum(1 for e in editais if "CAUTELA" in (e.get("recomendacao") or "").upper() or "AVALIAR" in (e.get("recomendacao") or "").upper())
+    nao_rec = total - participar - cautela
     valores = [_safe_float(e.get("valor_estimado")) for e in editais if e.get("valor_estimado")]
     valor_total = sum(valores)
 
@@ -880,7 +1111,7 @@ def _build_executive_summary(data: dict, styles: dict, sec: dict | None = None) 
     metrics = Table(
         [[
             _metric_cell(str(total), "Oportunidades", styles),
-            _metric_cell(str(participar), "Recomendados", styles),
+            _metric_cell(str(participar), "Participar", styles),
             _metric_cell(str(cautela), "Avaliar", styles),
             _metric_cell(_currency_short(valor_total), "Valor Total", styles),
         ]],
@@ -895,16 +1126,16 @@ def _build_executive_summary(data: dict, styles: dict, sec: dict | None = None) 
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
     ]))
     el.append(metrics)
-    el.append(Spacer(1, 6 * mm))
+    el.append(Spacer(1, 5 * mm))
 
-    # Distribution by UF
+    # Distribution by UF — compact inline if few UFs
     uf_counts: dict[str, int] = {}
     for e in editais:
         uf = e.get("uf", "N/I")
         if uf:
             uf_counts[uf] = uf_counts.get(uf, 0) + 1
-    if uf_counts:
-        el.append(Paragraph("Distribuição por UF", styles["h2"]))
+    if uf_counts and len(uf_counts) > 1:
+        el.append(Paragraph("<b>Distribuição por UF</b>", styles["h3"]))
         header = [Paragraph(f"<b>{h}</b>", styles["cell_header"]) for h in ["UF", "Qtd", "%"]]
         rows = [header]
         for uf, cnt in sorted(uf_counts.items(), key=lambda x: -x[1])[:8]:
@@ -914,7 +1145,9 @@ def _build_executive_summary(data: dict, styles: dict, sec: dict | None = None) 
                 Paragraph(str(cnt), styles["cell_center"]),
                 Paragraph(f"{pct:.0f}%", styles["cell_center"]),
             ])
-        t = Table(rows, colWidths=[avail * 0.3, avail * 0.35, avail * 0.35])
+        # Use half-width table when few UFs
+        tw = avail * 0.5 if len(uf_counts) <= 4 else avail
+        t = Table(rows, colWidths=[tw * 0.3, tw * 0.35, tw * 0.35])
         t.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), TABLE_HEADER_BG),
             ("GRID", (0, 0), (-1, -1), 0.5, TABLE_BORDER),
@@ -924,34 +1157,41 @@ def _build_executive_summary(data: dict, styles: dict, sec: dict | None = None) 
         ] + [("BACKGROUND", (0, i), (-1, i), TABLE_ALT_ROW) for i in range(2, len(rows), 2)]))
         el.append(t)
         el.append(Spacer(1, 4 * mm))
+    elif uf_counts:
+        # Single UF — just show inline
+        uf_name = list(uf_counts.keys())[0]
+        el.append(Paragraph(f"<b>UF:</b> {uf_name} ({total} editais)", styles["body"]))
+        el.append(Spacer(1, 3 * mm))
 
     # Destaques
     destaques = resumo.get("destaques", [])
     if destaques:
-        el.append(Paragraph("Destaques", styles["h2"]))
+        el.append(Paragraph("<b>Destaques</b>", styles["h3"]))
         for d in destaques:
             el.append(Paragraph(f"• {_s(d)}", styles["bullet"]))
 
-    el.append(PageBreak())
+    el.append(Spacer(1, 6 * mm))
     return el
 
 
 def _build_overview_table(editais_list: list, styles: dict, start_idx: int = 1) -> list:
-    """Build an overview table for a list of editais."""
+    """Build an overview table for a list of editais.
+
+    Redesigned: fewer columns, wider text, no truncation of key info.
+    Columns: #, Objeto+Órgão (merged for readability), UF, Valor, Prazo, Recomendação
+    """
     avail = PAGE_WIDTH - 2 * MARGIN
     col_widths = [
-        avail * 0.04,  # #
-        avail * 0.30,  # Objeto
-        avail * 0.14,  # Órgão
-        avail * 0.05,  # UF
-        avail * 0.13,  # Valor
-        avail * 0.11,  # Modalidade
-        avail * 0.08,  # Prazo
-        avail * 0.15,  # Recomendação
+        avail * 0.04,   # #
+        avail * 0.42,   # Objeto + Órgão (combined — no more truncation)
+        avail * 0.05,   # UF
+        avail * 0.15,   # Valor
+        avail * 0.12,   # Prazo
+        avail * 0.22,   # Recomendação
     ]
 
     header = [Paragraph(f"<b>{h}</b>", styles["cell_header"]) for h in [
-        "#", "Objeto", "Órgão", "UF", "Valor", "Modalidade", "Prazo", "Recomendação",
+        "#", "Objeto / Órgão", "UF", "Valor (R$)", "Prazo", "Recomendação",
     ]]
     rows = [header]
 
@@ -961,20 +1201,25 @@ def _build_overview_table(editais_list: list, styles: dict, start_idx: int = 1) 
 
         rec_style = ParagraphStyle(
             f"rec_{idx}", parent=styles["cell_center"],
-            fontName="Helvetica-Bold", textColor=rec_color,
+            fontName="Helvetica-Bold", textColor=rec_color, fontSize=7,
         )
 
-        dias = ed.get("dias_restantes")
-        prazo = f"{_safe_int(dias)}d" if dias is not None else _date(ed.get("data_encerramento"))
+        # Combined objeto + órgão for readability
+        objeto = _s(ed.get("objeto", ""))
+        orgao = _s(ed.get("orgao", ""))
+        objeto_orgao = f"<b>{objeto}</b><br/><font size='7' color='#64748B'>{orgao}</font>"
+
+        prazo = _format_prazo_short(ed.get("dias_restantes"))
+        if prazo == "—":
+            enc_date = _date(ed.get("data_encerramento"))
+            prazo = enc_date if enc_date != "N/I" else "—"
 
         rows.append([
             Paragraph(str(idx), styles["cell_center"]),
-            Paragraph(_trunc(ed.get("objeto", ""), 80), styles["cell"]),
-            Paragraph(_trunc(ed.get("orgao", ""), 40), styles["cell"]),
+            Paragraph(objeto_orgao, styles["cell"]),
             Paragraph(_s(ed.get("uf", "")), styles["cell_center"]),
-            Paragraph(_currency(_safe_float(ed.get("valor_estimado"))), styles["cell_right"]),
-            Paragraph(_trunc(ed.get("modalidade", ""), 25), styles["cell"]),
-            Paragraph(str(prazo), styles["cell_center"]),
+            Paragraph(_currency_short(ed.get("valor_estimado")), styles["cell_right"]),
+            Paragraph(prazo, styles["cell_center"]),
             Paragraph(rec, rec_style),
         ])
 
@@ -983,10 +1228,10 @@ def _build_overview_table(editais_list: list, styles: dict, start_idx: int = 1) 
         ("BACKGROUND", (0, 0), (-1, 0), TABLE_HEADER_BG),
         ("GRID", (0, 0), (-1, -1), 0.5, TABLE_BORDER),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ("LEFTPADDING", (0, 0), (-1, -1), 3),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
     ]
     for i in range(2, len(rows), 2):
         base_styles.append(("BACKGROUND", (0, i), (-1, i), TABLE_ALT_ROW))
@@ -1001,20 +1246,11 @@ def _build_opportunities_overview(data: dict, styles: dict, sec: dict | None = N
         return el
 
     num = sec["next"]() if sec else 3
-    el.append(Paragraph(f"{num}. Panorama de Oportunidades", styles["h1"]))
+    el.extend(_section_heading(f"{num}. Panorama de Oportunidades", styles))
     el.append(Spacer(1, 2 * mm))
 
-    if editais:
-        el.extend(_build_overview_table(editais, styles, start_idx=1))
-        el.append(Spacer(1, 4 * mm))
-    else:
-        el.append(Paragraph(
-            "<i>Nenhuma oportunidade aberta encontrada no período consultado.</i>",
-            styles["body"],
-        ))
-        el.append(Spacer(1, 4 * mm))
-
-    el.append(PageBreak())
+    el.extend(_build_overview_table(editais, styles, start_idx=1))
+    el.append(Spacer(1, 6 * mm))
     return el
 
 
@@ -1025,50 +1261,103 @@ def _build_detailed_analysis(data: dict, styles: dict, sec: dict | None = None) 
         return el
 
     num = sec["next"]() if sec else 4
-    el.append(Paragraph(f"{num}. Análise Detalhada por Edital", styles["h1"]))
+    el.extend(_section_heading(f"{num}. Análise Detalhada por Edital", styles))
     el.append(Spacer(1, 2 * mm))
 
+    avail = PAGE_WIDTH - 2 * MARGIN
+
     for idx, ed in enumerate(editais, 1):
-        section = []
+        # === HEADER BLOCK (KeepTogether: title + ficha + recommendation) ===
+        header_block = []
 
-        # Edital header
         objeto = _s(ed.get("objeto", "Sem título"))
-        section.append(Paragraph(f"{num}.{idx}. {_trunc(objeto, 120)}", styles["h2"]))
+        rec = _normalize_recommendation(_s(ed.get("recomendacao", "")))
+        badge_color = REC_COLORS.get(rec, RED)
 
-        # Basic info table
-        avail = PAGE_WIDTH - 2 * MARGIN
+        # Edital title with recommendation color bar on left
+        title_bg = CARD_GREEN_BG if rec == "PARTICIPAR" else CARD_YELLOW_BG if "CAUTELA" in rec else CARD_RED_BG
+        title_border = badge_color
+
+        title_row = Table(
+            [[Paragraph(f"<b>{num}.{idx}. {objeto}</b>", styles["h2"])]],
+            colWidths=[avail],
+        )
+        title_row.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), title_bg),
+            ("LINEBELOW", (0, 0), (-1, -1), 2, title_border),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        header_block.append(title_row)
+        header_block.append(Spacer(1, 2 * mm))
+
+        # Ficha técnica — cleaned up
         info_rows = []
-        fields = [
+        raw_fields = [
             ("Órgão", ed.get("orgao")),
             ("UF / Município", f"{ed.get('uf', 'N/I')} - {ed.get('municipio', 'N/I')}"),
             ("Modalidade", ed.get("modalidade")),
-            ("Valor Estimado", _currency(ed.get("valor_estimado")) if ed.get("valor_estimado") else "N/I"),
+            ("Valor Estimado", _currency(ed.get("valor_estimado")) if ed.get("valor_estimado") else None),
             ("Data de Abertura", _date(ed.get("data_abertura"))),
             ("Data de Encerramento", _date(ed.get("data_encerramento"))),
-            ("Dias Restantes", str(ed.get("dias_restantes", "N/I"))),
-            ("Fonte", ed.get("fonte", "N/I")),
-            ("Link", ed.get("link", "N/I")),
+            ("Situação", _format_dias_restantes(ed.get("dias_restantes"))),
+            ("Fonte", ed.get("fonte")),
         ]
-        for label, value in fields:
-            if value and value != "N/I" and value != " - N/I":
+        # Add link only if valid
+        link = ed.get("link", "")
+        if link and link != "N/I" and link.startswith("http"):
+            raw_fields.append(("Link", link))
+
+        for label, value in raw_fields:
+            if value and str(value).strip() and value != "N/I" and value != " - N/I" and str(value) != "None":
                 info_rows.append([
                     Paragraph(f"<b>{label}</b>", styles["cell"]),
                     Paragraph(_s(str(value)), styles["cell"]),
                 ])
         if info_rows:
-            info_t = Table(info_rows, colWidths=[avail * 0.25, avail * 0.75])
+            info_t = Table(info_rows, colWidths=[avail * 0.22, avail * 0.78])
             info_t.setStyle(TableStyle([
                 ("GRID", (0, 0), (-1, -1), 0.5, TABLE_BORDER),
                 ("BACKGROUND", (0, 0), (0, -1), BRAND_LIGHT),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                 ("TOPPADDING", (0, 0), (-1, -1), 3),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-                ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                ("LEFTPADDING", (0, 0), (-1, -1), 5),
             ]))
-            section.append(info_t)
-            section.append(Spacer(1, 3 * mm))
+            header_block.append(info_t)
+            header_block.append(Spacer(1, 3 * mm))
 
-        # Distance (from collect-report-data.py)
+        # Recommendation card
+        rec_text = f"Recomendação: <b>{rec}</b>"
+        justificativa = _s(ed.get("justificativa", ""))
+        if justificativa:
+            rec_text += f"<br/><font size='9'>{justificativa}</font>"
+
+        rec_card = Table(
+            [[Paragraph(rec_text, ParagraphStyle(
+                f"reccard_{idx}", parent=styles["body"],
+                fontName="Helvetica-Bold", fontSize=11, textColor=badge_color,
+            ))]],
+            colWidths=[avail],
+        )
+        rec_bg = CARD_GREEN_BG if rec == "PARTICIPAR" else CARD_YELLOW_BG if "CAUTELA" in rec else CARD_RED_BG
+        rec_card.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), rec_bg),
+            ("BOX", (0, 0), (-1, -1), 0.75, badge_color),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ]))
+        header_block.append(rec_card)
+        header_block.append(Spacer(1, 3 * mm))
+
+        # KeepTogether: title + ficha + recommendation never split
+        el.append(KeepTogether(header_block))
+
+        # === BODY (can flow across pages) ===
+
+        # Distance
         distancia = ed.get("distancia", {})
         if isinstance(distancia, dict) and distancia.get("km"):
             km = distancia["km"]
@@ -1078,42 +1367,25 @@ def _build_detailed_analysis(data: dict, styles: dict, sec: dict | None = None) 
             if hrs:
                 dist_text += f" (~{hrs}h de carro)"
             dist_text += f" <font color='{'#16A34A' if badge_char == '✓' else '#CA8A04'}'>[{badge_char} {badge_text}]</font>"
-            section.append(Paragraph(dist_text, styles["body"]))
+            el.append(Paragraph(dist_text, styles["body"]))
 
-        # Recommendation badge
-        rec = _normalize_recommendation(_s(ed.get("recomendacao", "")))
-        if rec:
-            badge_color = REC_COLORS.get(rec, RED)
-
-            badge_style = ParagraphStyle(
-                f"badge_{idx}", parent=styles["body"],
-                fontName="Helvetica-Bold", fontSize=11, textColor=badge_color,
-            )
-            section.append(Paragraph(f"Recomendação: {rec}", badge_style))
-
-            # Justificativa — OBRIGATÓRIA (validação bloqueia PDF se ausente)
-            justificativa = _s(ed.get("justificativa", ""))
-            if justificativa:
-                section.append(Paragraph(f"<b>Justificativa:</b> {justificativa}", styles["body"]))
-            section.append(Spacer(1, 2 * mm))
-
-        # Risk Score bar (from collect deterministic calculations)
+        # Risk Score bar
         risk = ed.get("risk_score", {})
         if isinstance(risk, dict) and risk.get("total"):
-            section.append(_draw_risk_bar(_safe_int(risk["total"]), styles))
-            section.append(Spacer(1, 2 * mm))
+            el.append(_draw_risk_bar(_safe_int(risk["total"]), styles))
+            el.append(Spacer(1, 2 * mm))
 
         # ROI Potential card
         roi = ed.get("roi_potential", {})
-        section.extend(_build_roi_card(roi, styles))
+        el.extend(_build_roi_card(roi, styles))
 
         # Reverse Chronogram
         cronograma = ed.get("cronograma", [])
-        section.extend(_build_chronogram_table(cronograma, styles))
+        el.extend(_build_chronogram_table(cronograma, styles))
 
-        # Analysis sections
+        # Analysis sections — in a light bordered box
         analise = ed.get("analise", {})
-
+        analysis_content = []
         analysis_fields = [
             ("Aderência ao Perfil", "aderencia"),
             ("Análise de Valor", "valor"),
@@ -1126,28 +1398,53 @@ def _build_detailed_analysis(data: dict, styles: dict, sec: dict | None = None) 
         for title, key in analysis_fields:
             text = _s(analise.get(key, ""))
             if text:
-                section.append(Paragraph(f"<b>{title}:</b> {text}", styles["body"]))
+                analysis_content.append(Paragraph(f"<b>{title}:</b> {text}", styles["body"]))
 
-        # Q&A section
+        if analysis_content:
+            # Wrap in a subtle bordered box
+            box_content = []
+            for item in analysis_content:
+                box_content.append([item])
+            box_t = Table(box_content, colWidths=[avail - 4 * mm])
+            box_t.setStyle(TableStyle([
+                ("BOX", (0, 0), (-1, -1), 0.5, TABLE_BORDER),
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FAFBFC")),
+                ("TOPPADDING", (0, 0), (-1, -1), 2),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ]))
+            el.append(box_t)
+            el.append(Spacer(1, 3 * mm))
+
+        # Q&A section — alternating background cards
         perguntas = ed.get("perguntas_decisor", {})
         if perguntas:
-            section.append(Spacer(1, 2 * mm))
-            section.append(Paragraph("Perguntas do Decisor", styles["h3"]))
-            for pergunta, resposta in perguntas.items():
+            el.append(Paragraph("<b>Perguntas do Decisor</b>", styles["h3"]))
+            qa_rows = []
+            for i, (pergunta, resposta) in enumerate(perguntas.items()):
                 if resposta:
-                    section.append(Paragraph(
-                        f"<b>{_s(pergunta)}</b>",
-                        styles["body"],
-                    ))
-                    section.append(Paragraph(f"{_s(resposta)}", styles["body_small"]))
-                    section.append(Spacer(1, 1 * mm))
+                    qa_rows.append([Paragraph(
+                        f"<b>{_s(pergunta)}</b><br/><font size='8' color='#475569'>{_s(resposta)}</font>",
+                        styles["cell"],
+                    )])
+            if qa_rows:
+                qa_t = Table(qa_rows, colWidths=[avail - 2 * mm])
+                qa_styles = [
+                    ("BOX", (0, 0), (-1, -1), 0.5, TABLE_BORDER),
+                    ("TOPPADDING", (0, 0), (-1, -1), 5),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                    ("LINEBELOW", (0, 0), (-1, -2), 0.25, TABLE_BORDER),
+                ]
+                for i in range(0, len(qa_rows), 2):
+                    qa_styles.append(("BACKGROUND", (0, i), (-1, i), colors.HexColor("#F8FAFC")))
+                qa_t.setStyle(TableStyle(qa_styles))
+                el.append(qa_t)
 
-        section.append(Spacer(1, 4 * mm))
+        el.append(Spacer(1, 8 * mm))
 
-        # Keep edital header + first few lines together
-        el.extend(section)
-
-    el.append(PageBreak())
     return el
 
 
@@ -1158,7 +1455,7 @@ def _build_market_intelligence(data: dict, styles: dict, sec: dict | None = None
         return el
 
     num = sec["next"]() if sec else 5
-    el.append(Paragraph(f"{num}. Inteligência de Mercado", styles["h1"]))
+    el.extend(_section_heading(f"{num}. Inteligência de Mercado", styles))
 
     for title, key in [
         ("Panorama Setorial", "panorama"),
@@ -1168,8 +1465,7 @@ def _build_market_intelligence(data: dict, styles: dict, sec: dict | None = None
     ]:
         text = _s(intel.get(key, ""))
         if text:
-            el.append(Paragraph(title, styles["h2"]))
-            # Split by newlines for better formatting
+            el.append(Paragraph(f"<b>{title}</b>", styles["h3"]))
             for paragraph in text.split("\n"):
                 paragraph = paragraph.strip()
                 if paragraph:
@@ -1178,7 +1474,7 @@ def _build_market_intelligence(data: dict, styles: dict, sec: dict | None = None
                     else:
                         el.append(Paragraph(paragraph, styles["body"]))
 
-    el.append(PageBreak())
+    el.append(Spacer(1, 6 * mm))
     return el
 
 
@@ -1189,22 +1485,57 @@ def _build_querido_diario(data: dict, styles: dict, sec: dict | None = None) -> 
         return el
 
     num = sec["next"]() if sec else 6
-    el.append(Paragraph(f"{num}. Menções em Diários Oficiais", styles["h1"]))
+    el.extend(_section_heading(f"{num}. Menções em Diários Oficiais", styles))
     el.append(Paragraph(
         "Publicações encontradas no Querido Diário (diários oficiais municipais).",
         styles["body_small"],
     ))
     el.append(Spacer(1, 3 * mm))
 
+    avail = PAGE_WIDTH - 2 * MARGIN
+
+    # Build as a structured table: # | Data - Município | Trecho
+    header = [Paragraph(f"<b>{h}</b>", styles["cell_header"]) for h in [
+        "#", "Data / Município", "Trecho Relevante",
+    ]]
+    rows = [header]
+
     for idx, m in enumerate(mencoes[:10], 1):
-        el.append(Paragraph(f"<b>{idx}. {_date(m.get('data'))} - {_s(m.get('territorio', ''))}</b>", styles["body"]))
+        data_str = _date(m.get("data"))
+        territorio = _s(m.get("territorio", ""))
+        local_info = f"<b>{data_str}</b><br/><font size='7' color='#64748B'>{territorio}</font>"
+
         excerpts = m.get("excerpts", [])
+        excerpt_texts = []
         for exc in excerpts[:2]:
             text = _s(exc.get("text", exc) if isinstance(exc, dict) else exc)
-            el.append(Paragraph(f"<i>\"{_trunc(text, 300)}\"</i>", styles["body_small"]))
-        el.append(Spacer(1, 2 * mm))
+            if text:
+                excerpt_texts.append(f"<i>\"{_trunc(text, 200)}\"</i>")
 
-    el.append(PageBreak())
+        trecho = "<br/>".join(excerpt_texts) if excerpt_texts else "<i>Sem trecho disponível</i>"
+
+        rows.append([
+            Paragraph(str(idx), styles["cell_center"]),
+            Paragraph(local_info, styles["cell"]),
+            Paragraph(f"<font size='7'>{trecho}</font>", styles["cell"]),
+        ])
+
+    t = Table(rows, colWidths=[avail * 0.05, avail * 0.22, avail * 0.73], repeatRows=1)
+    base_styles = [
+        ("BACKGROUND", (0, 0), (-1, 0), TABLE_HEADER_BG),
+        ("GRID", (0, 0), (-1, -1), 0.5, TABLE_BORDER),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+    ]
+    for i in range(2, len(rows), 2):
+        base_styles.append(("BACKGROUND", (0, i), (-1, i), TABLE_ALT_ROW))
+    t.setStyle(TableStyle(base_styles))
+    el.append(t)
+
+    el.append(Spacer(1, 6 * mm))
     return el
 
 
@@ -1213,22 +1544,45 @@ def _build_next_steps(data: dict, styles: dict, sec: dict | None = None) -> list
     proximos = data.get("proximos_passos", [])
 
     num = sec["next"]() if sec else 7
-    el.append(Paragraph(f"{num}. Próximos Passos", styles["h1"]))
+    el.extend(_section_heading(f"{num}. Próximos Passos", styles))
+
+    avail = PAGE_WIDTH - 2 * MARGIN
 
     if proximos:
+        # Build as a structured table: Ação | Prazo | Prioridade
+        header = [Paragraph(f"<b>{h}</b>", styles["cell_header"]) for h in [
+            "Ação", "Prazo", "Prioridade",
+        ]]
+        rows = [header]
         for step in proximos:
             if isinstance(step, dict):
                 acao = _s(step.get("acao", ""))
                 prazo = _s(step.get("prazo", ""))
                 prioridade = _s(step.get("prioridade", ""))
-                line = f"• <b>{acao}</b>"
-                if prazo:
-                    line += f" (Prazo: {prazo})"
-                if prioridade:
-                    line += f" [{prioridade}]"
-                el.append(Paragraph(line, styles["bullet"]))
+                prio_upper = prioridade.upper()
+                prio_color = "#DC2626" if "URGENTE" in prio_upper or "ALTA" in prio_upper else "#CA8A04" if "MEDIA" in prio_upper or "MÉDIA" in prio_upper else "#475569"
+                rows.append([
+                    Paragraph(acao, styles["cell"]),
+                    Paragraph(prazo, styles["cell_center"]),
+                    Paragraph(f"<font color='{prio_color}'><b>{prioridade}</b></font>", styles["cell_center"]),
+                ])
             else:
-                el.append(Paragraph(f"• {_s(step)}", styles["bullet"]))
+                rows.append([
+                    Paragraph(_s(step), styles["cell"]),
+                    Paragraph("—", styles["cell_center"]),
+                    Paragraph("—", styles["cell_center"]),
+                ])
+
+        t = Table(rows, colWidths=[avail * 0.60, avail * 0.22, avail * 0.18], repeatRows=1)
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), TABLE_HEADER_BG),
+            ("GRID", (0, 0), (-1, -1), 0.5, TABLE_BORDER),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("LEFTPADDING", (0, 0), (-1, -1), 5),
+        ] + [("BACKGROUND", (0, i), (-1, i), TABLE_ALT_ROW) for i in range(2, len(rows), 2)]))
+        el.append(t)
     else:
         el.append(Paragraph(
             "1. Revisar os editais marcados como PARTICIPAR e iniciar preparação documental",
@@ -1243,13 +1597,27 @@ def _build_next_steps(data: dict, styles: dict, sec: dict | None = None) -> list
             styles["bullet"],
         ))
 
-    el.append(Spacer(1, 10 * mm))
-    el.append(Paragraph(
-        "Para dúvidas ou acompanhamento, entre em contato:<br/>"
-        "<b>Tiago Sasaki</b> - (48)9 8834-4559",
-        styles["body"],
-    ))
+    el.append(Spacer(1, 8 * mm))
+    # Contact card
+    contact_t = Table(
+        [[Paragraph(
+            "Para dúvidas ou acompanhamento:<br/>"
+            "<b>Tiago Sasaki</b> — Consultor de Licitações<br/>"
+            "(48)9 8834-4559",
+            styles["body"],
+        )]],
+        colWidths=[avail],
+    )
+    contact_t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), BRAND_LIGHT),
+        ("BOX", (0, 0), (-1, -1), 0.5, BRAND_ACCENT),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10),
+    ]))
+    el.append(contact_t)
 
+    el.append(Spacer(1, 6 * mm))
     return el
 
 
@@ -1264,7 +1632,7 @@ def _build_sicaf_section(data: dict, styles: dict, sec: dict | None = None) -> l
         return el
 
     num = sec["next"]() if sec else 8
-    el.append(Paragraph(f"{num}. Verificação SICAF", styles["h1"]))
+    el.extend(_section_heading(f"{num}. Verificação SICAF", styles))
 
     badge_char, badge_color, badge_text = _get_source_badge(sicaf.get("_source"))
 
@@ -1371,7 +1739,7 @@ def _build_data_sources_section(data: dict, styles: dict, sec: dict | None = Non
         return el
 
     num = sec["next"]() if sec else 9
-    el.append(Paragraph(f"{num}. Fontes de Dados e Confiabilidade", styles["h1"]))
+    el.extend(_section_heading(f"{num}. Fontes de Dados e Confiabilidade", styles))
     el.append(Paragraph(
         "Cada dado neste relatório foi obtido de forma determinística via APIs públicas. "
         "A tabela abaixo indica o status de cada fonte no momento da coleta.",
@@ -1431,7 +1799,7 @@ def _build_data_sources_section(data: dict, styles: dict, sec: dict | None = Non
             styles["body_small"],
         ))
 
-    el.append(PageBreak())
+    el.append(Spacer(1, 6 * mm))
     return el
 
 

@@ -387,6 +387,26 @@ def _currency_short(value: Any) -> str:
     return _currency(v)
 
 
+def _pct(value: float, decimals: int = 0) -> str:
+    """Format a ratio (0.0-1.0) as Brazilian percentage: 0.125 → '12,5%'."""
+    try:
+        v = float(value) * 100
+    except (ValueError, TypeError):
+        return "N/I"
+    if decimals == 0:
+        return f"{v:.0f}%".replace(".", ",")
+    return f"{v:.{decimals}f}%".replace(".", ",")
+
+
+def _dec(value: float, decimals: int = 1) -> str:
+    """Format a float in Brazilian decimal: 12.5 → '12,5'."""
+    try:
+        v = float(value)
+    except (ValueError, TypeError):
+        return "N/I"
+    return f"{v:.{decimals}f}".replace(".", ",")
+
+
 def _date(value: str | None) -> str:
     if not value:
         return "N/I"
@@ -787,13 +807,13 @@ def _build_exclusive_intelligence(data: dict, styles: dict, sec: dict) -> list:
         prob = wp.get("probability", 0)
 
         if top_share > 0.60:
-            insight = f"Incumbente dominante (>{top_share:.0%} do mercado) — entrada difícil"
+            insight = f"Incumbente dominante (>{_pct(top_share)} do mercado) — entrada difícil"
         elif top_share > 0.40:
-            insight = f"Incumbente forte ({top_share:.0%}) — requer diferenciação"
+            insight = f"Incumbente forte ({_pct(top_share)}) — requer diferenciação"
         elif unique >= 6:
             insight = f"Mercado fragmentado ({unique} fornecedores) — oportunidade aberta"
         elif unique >= 2:
-            insight = f"Competição moderada ({unique} fornecedores, HHI {hhi:.2f})"
+            insight = f"Competição moderada ({unique} fornecedores, HHI {_dec(hhi, 2)})"
         else:
             insight = f"Sem histórico de fornecedores — mercado inexplorado"
 
@@ -814,7 +834,7 @@ def _build_exclusive_intelligence(data: dict, styles: dict, sec: dict) -> list:
                 Paragraph(orgao, styles["cell"]),
                 Paragraph(insight, styles["cell"]),
                 Paragraph(
-                    f"<b>{prob:.0%}</b>",
+                    f"<b>{_pct(prob)}</b>",
                     ParagraphStyle(f"inc_p_{idx}", parent=styles["cell_center"],
                                    fontName="Helvetica-Bold", textColor=prob_color),
                 ),
@@ -1102,7 +1122,7 @@ def _build_viability_text(risk: dict, styles: dict) -> list:
             }
             peso = weights.get(weight_key_map.get(key, key))
             if val is not None and peso is not None:
-                components.append(f"{label}: {_safe_int(val)} (peso {peso * 100:.0f}%)")
+                components.append(f"{label}: {_safe_int(val)} (peso {_pct(peso)})")
             elif val is not None:
                 components.append(f"{label}: {_safe_int(val)}")
 
@@ -1140,7 +1160,7 @@ def _build_viability_text(risk: dict, styles: dict) -> list:
                         "geo": "proximidade geográfica", "prazo": "prazo",
                         "comp": "competitividade"}
             for k in sorted(w, key=lambda x: w[x], reverse=True):
-                parts.append(f"{name_map.get(k, k)} ({w[k] * 100:.0f}%)")
+                parts.append(f"{name_map.get(k, k)} ({_pct(w[k])})")
             el.append(Paragraph(
                 f"Pesos calibrados para o setor da empresa: {', '.join(parts)}.",
                 styles["caption"],
@@ -1236,7 +1256,7 @@ def _build_roi_text(roi: dict, ed: dict, styles: dict) -> list:
         return []
 
     roi_text = f"{_currency_short(roi_min)} — {_currency_short(roi_max)}"
-    prob_text = f"{probability * 100:.1f}%" if probability else "N/I"
+    prob_text = _pct(probability, 1) if probability else "N/I"
     confidence = roi.get("confidence", "")
 
     conf_label = ""
@@ -1276,7 +1296,7 @@ def _build_roi_text(roi: dict, ed: dict, styles: dict) -> list:
         if valor_edital > 0:
             memo_parts.append(f"Valor: {_currency(valor_edital)}")
         if probability > 0:
-            memo_parts.append(f"Prob.: {probability:.4f}")
+            memo_parts.append(f"Prob.: {_dec(probability, 4)}")
         margin_range = roi.get("margin_range", "")
         if margin_range:
             memo_parts.append(f"Margem: {margin_range}")
@@ -1388,9 +1408,9 @@ def _build_competitive_section(data: dict, styles: dict, sec: dict) -> list:
             ds_rows.append([
                 Paragraph(_s(key.replace("_", " / ")), styles["cell"]),
                 Paragraph(str(total), styles["cell_center"]),
-                Paragraph(f"{avg_p:.1f}" if avg_p is not None else "—", styles["cell_center"]),
-                Paragraph(f"{avg_d:.1%}" if avg_d is not None else "—", styles["cell_center"]),
-                Paragraph(f"{adj_r:.0%}" if adj_r is not None else "—", styles["cell_center"]),
+                Paragraph(_dec(avg_p, 1) if avg_p is not None else "—", styles["cell_center"]),
+                Paragraph(_pct(avg_d, 1) if avg_d is not None else "—", styles["cell_center"]),
+                Paragraph(_pct(adj_r) if adj_r is not None else "—", styles["cell_center"]),
             ])
 
         if len(ds_rows) > 1:
@@ -1415,9 +1435,9 @@ def _build_competitive_section(data: dict, styles: dict, sec: dict) -> list:
 
             # Highlight competitive dynamics
             if share > 0.60:
-                indicator = f" <font color='{SIGNAL_RED.hexval()}'><b>[DOMINANTE {share:.0%}]</b></font>"
+                indicator = f" <font color='{SIGNAL_RED.hexval()}'><b>[DOMINANTE {_pct(share)}]</b></font>"
             elif share > 0.40:
-                indicator = f" <font color='{SIGNAL_AMBER.hexval()}'><b>[FORTE {share:.0%}]</b></font>"
+                indicator = f" <font color='{SIGNAL_AMBER.hexval()}'><b>[FORTE {_pct(share)}]</b></font>"
             else:
                 indicator = ""
 
@@ -1445,7 +1465,7 @@ def _build_competitive_section(data: dict, styles: dict, sec: dict) -> list:
         ))
         for idx, obj, prob in favorable[:5]:
             el.append(Paragraph(
-                f"  <b>{idx}.</b> {obj} — prob. vitória: {prob:.0%}",
+                f"  <b>{idx}.</b> {obj} — prob. vitória: {_pct(prob)}",
                 styles["body_small"],
             ))
         el.append(Spacer(1, 4 * mm))
@@ -1656,7 +1676,7 @@ def _build_executive_summary(data: dict, styles: dict, sec: dict | None = None) 
             rows.append([
                 Paragraph(uf, styles["cell_center"]),
                 Paragraph(str(cnt), styles["cell_center"]),
-                Paragraph(f"{pct:.0f}%", styles["cell_center"]),
+                Paragraph(f"{pct:.0f}%".replace(".", ","), styles["cell_center"]),
             ])
         tw = avail * 0.45 if len(uf_counts) <= 4 else avail * 0.6
         t = _three_rule_table(rows, [tw * 0.30, tw * 0.35, tw * 0.35])
@@ -1801,7 +1821,7 @@ def _build_detailed_analysis(data: dict, styles: dict, sec: dict | None = None) 
                 qualif = "Baixa"
             strategic_bar_parts.append(f"Viabilidade: {score}/100 ({qualif})")
         if isinstance(wp, dict) and wp.get("probability", 0) > 0:
-            strategic_bar_parts.append(f"Prob. vitória: {wp['probability']:.0%}")
+            strategic_bar_parts.append(f"Prob. vitória: {_pct(wp['probability'])}")
         if isinstance(roi, dict) and roi.get("roi_max", 0) > 0:
             strategic_bar_parts.append(f"Faturamento potencial: até {_currency_short(roi['roi_max'])}")
         if ed.get("strategic_category"):
@@ -1917,7 +1937,7 @@ def _build_detailed_analysis(data: dict, styles: dict, sec: dict | None = None) 
                 details.append(f"{organ_risk['similar_published']} contratação(ões) similar(es) no histórico")
             adj = organ_risk.get("adjudication_rate")
             if adj is not None:
-                details.append(f"Taxa de adjudicação: {adj:.0%}")
+                details.append(f"Taxa de adjudicação: {_pct(adj)}")
             timeline = organ_risk.get("timeline_assessment", "")
             if timeline and timeline != "INDETERMINADO":
                 rationale = _s(organ_risk.get("timeline_rationale", ""))
@@ -2532,7 +2552,7 @@ def _build_portfolio_section(data: dict, styles: dict, sec: dict | None = None) 
             valor = ed.get("valor_estimado", 0)
             obj = _s((ed.get("objeto") or "")[:100])
             el.append(Paragraph(
-                f"<b>{idx}.</b> {obj} — Prob. {prob:.0%}, Valor {_currency(valor)}",
+                f"<b>{idx}.</b> {obj} — Prob. {_pct(prob)}, Valor {_currency(valor)}",
                 styles["body_small"],
             ))
         el.append(Spacer(1, 3 * mm))
@@ -2615,7 +2635,7 @@ def _build_coverage_warning(data: dict, styles: dict) -> list:
     captured = cov.get("captured_count", 0)
     total = cov.get("total_estimated", 0)
     el.append(Paragraph(
-        f"Taxa de captura: <b>{rate:.0%}</b> ({captured} de {total} editais estimados). "
+        f"Taxa de captura: <b>{_pct(rate)}</b> ({captured} de {total} editais estimados). "
         f"Este relatório pode não representar a totalidade das oportunidades disponíveis. "
         f"A análise abaixo deve ser interpretada com essa limitação.",
         styles["body"],
@@ -2626,7 +2646,7 @@ def _build_coverage_warning(data: dict, styles: dict) -> list:
     low_ufs = [p for p in per_uf if p.get("rate", 1.0) < 0.70 and p.get("estimated_total", 0) > 0]
     if low_ufs:
         uf_detail = "; ".join(
-            f"{p['uf']}: {p['captured']}/{p['estimated_total']} ({p['rate']:.0%})"
+            f"{p['uf']}: {p['captured']}/{p['estimated_total']} ({_pct(p['rate'])})"
             for p in low_ufs
         )
         el.append(Paragraph(f"UFs com baixa cobertura: {uf_detail}", styles["caption"]))

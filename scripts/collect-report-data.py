@@ -1911,75 +1911,62 @@ def collect_competitive_intel(
 
     print(f"\n🏢 Inteligência competitiva — {len(orgao_map)} órgãos únicos")
 
-    data_fim = _today()
-    data_ini = data_fim - timedelta(days=meses * 30)
-
-    # PNCP requires codigoModalidadeContratacao — iterate over useful modalities
-    # 4=Concorrência, 5=Pregão Eletrônico, 6=Pregão Presencial, 8=Inexigibilidade
-    _MODALIDADES_COMPETITIVAS = [5, 4, 6, 8]
+    # Use /contratos endpoint with cnpjOrgao (more reliable than /contratacoes/publicacao)
+    # Max period: 365 days — split into yearly chunks for 24-month coverage
+    today = _today()
+    _windows = []
+    for i in range(0, meses, 12):
+        days_end = i * 30
+        days_start = min((i + 12) * 30, meses * 30)
+        w_end = today - timedelta(days=days_end)
+        w_start = today - timedelta(days=days_start)
+        _windows.append((_date_compact(w_start), _date_compact(w_end)))
 
     for cnpj_orgao, orgao_editais in orgao_map.items():
         orgao_nome = orgao_editais[0].get("orgao", cnpj_orgao)
         contracts: list[dict] = []
 
-        for modalidade_cod in _MODALIDADES_COMPETITIVAS:
-            for page in range(1, 3):  # Max 2 pages per modality
+        for data_ini_str, data_fim_str in _windows:
+            for page in range(1, 5):  # Max 4 pages per window
                 data, status = api.get(
-                    f"{PNCP_BASE}/contratacoes/publicacao",
+                    f"{PNCP_BASE}/contratos",
                     params={
-                        "dataInicial": _date_compact(data_ini),
-                        "dataFinal": _date_compact(data_fim),
+                        "dataInicial": data_ini_str,
+                        "dataFinal": data_fim_str,
                         "cnpjOrgao": cnpj_orgao,
-                        "codigoModalidadeContratacao": modalidade_cod,
                         "pagina": page,
                         "tamanhoPagina": PNCP_MAX_PAGE_SIZE,
                     },
-                    label=f"Competitiva: {orgao_nome[:30]}... mod{modalidade_cod} p{page}",
+                    label=f"Competitiva: {orgao_nome[:30]}... p{page}",
                 )
 
-                if status != "API" or not isinstance(data, list):
+                if status != "API":
                     break
 
-                for item in data:
-                    # Extract from contratos sub-array if present
-                    contratos_arr = item.get("contratos") or []
-                    found_contract = False
-                    if contratos_arr and isinstance(contratos_arr, list):
-                        for c in contratos_arr:
-                            fn = c.get("nomeRazaoSocialFornecedor", "")
-                            vl = _safe_float(c.get("valorFinal") or c.get("valorInicial"))
-                            if fn:
-                                contracts.append({
-                                    "fornecedor": fn,
-                                    "cnpj_fornecedor": c.get("cnpjCpfFornecedor", ""),
-                                    "objeto": (item.get("objetoCompra") or "")[:150],
-                                    "valor": vl,
-                                    "data": c.get("dataVigenciaInicio") or item.get("dataPublicacaoPncp") or "",
-                                })
-                                found_contract = True
+                # /contratos returns {"data": [...], "totalRegistros": N}
+                items = data.get("data", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
 
-                    # Fallback: extract procurement-level data even without contratos
-                    if not found_contract:
-                        obj = (item.get("objetoCompra") or "")[:150]
-                        val_est = _safe_float(item.get("valorTotalEstimado"))
-                        val_hom = _safe_float(item.get("valorTotalHomologado"))
-                        pub_date = (item.get("dataPublicacaoPncp") or "")[:10]
-                        if obj and (val_est > 0 or val_hom > 0):
-                            contracts.append({
-                                "fornecedor": "",  # Unknown winner
-                                "cnpj_fornecedor": "",
-                                "objeto": obj,
-                                "valor": val_hom if val_hom > 0 else val_est,
-                                "valor_estimado": val_est,
-                                "valor_homologado": val_hom,
-                                "data": pub_date,
-                            })
+                if not items:
+                    break
 
-                if len(data) < PNCP_MAX_PAGE_SIZE:
+                for c in items:
+                    fn = c.get("nomeRazaoSocialFornecedor", "")
+                    vl = _safe_float(c.get("valorGlobal") or c.get("valorInicial"))
+                    obj = (c.get("objetoContrato") or "")[:150]
+                    if fn or obj:
+                        contracts.append({
+                            "fornecedor": fn,
+                            "cnpj_fornecedor": c.get("niFornecedor", ""),
+                            "objeto": obj,
+                            "valor": vl,
+                            "data": c.get("dataAssinatura") or c.get("dataPublicacaoPncp", ""),
+                        })
+
+                if len(items) < PNCP_MAX_PAGE_SIZE:
                     break
                 time.sleep(0.3)
 
-            # Stop iterating modalities if we already have enough data
+            # Stop if we already have enough data
             if len(contracts) >= 40:
                 break
             time.sleep(0.3)

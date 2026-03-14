@@ -779,12 +779,12 @@ def _build_exclusive_intelligence(data: dict, styles: dict, sec: dict) -> list:
 
     el = []
     num = sec["next"]()
-    el.extend(_section_heading(f"{num}. Inteligência Exclusiva — O Que o PNCP Não Mostra", styles))
+    el.extend(_section_heading(f"{num}. Inteligência Exclusiva", styles))
 
     el.append(Paragraph(
         "Este relatório vai além da listagem de editais. Os quatro blocos abaixo "
         "representam análises que exigem cruzamento de dados históricos, perfil da empresa "
-        "e modelagem competitiva — informações que não estão disponíveis no portal público.",
+        "e modelagem competitiva — informações que não estão disponíveis em consultas individuais aos portais públicos.",
         styles["body"],
     ))
     el.append(Spacer(1, 5 * mm))
@@ -2328,8 +2328,8 @@ def _build_data_sources_section(data: dict, styles: dict, sec: dict | None = Non
     num = sec["next"]() if sec else 9
     el.extend(_section_heading(f"{num}. Fontes de Dados e Confiabilidade", styles))
     el.append(Paragraph(
-        "Cada dado neste relatório foi obtido de forma determinística via APIs públicas. "
-        "A tabela abaixo indica o status de cada fonte no momento da coleta.",
+        "Cada dado neste relatório foi obtido de fontes públicas oficiais. "
+        "A tabela abaixo indica o status de cada consulta no momento da coleta.",
         styles["body_small"],
     ))
     el.append(Spacer(1, 3 * mm))
@@ -2343,19 +2343,43 @@ def _build_data_sources_section(data: dict, styles: dict, sec: dict | None = Non
     rows = [header]
 
     source_labels = {
-        "opencnpj": "OpenCNPJ (perfil da empresa)",
-        "portal_transparencia_sancoes": "Portal Transparência (sanções)",
-        "portal_transparencia_contratos": "Portal Transparência (contratos)",
-        "pncp": "PNCP (editais)",
-        "pcp_v2": "PCP v2 (editais complementares)",
-        "querido_diario": "Querido Diário (diários oficiais)",
-        "sicaf": "SICAF (cadastro fornecedores)",
+        "opencnpj": "Receita Federal (perfil da empresa)",
+        "portal_transparencia_sancoes": "Portal da Transparência (sanções)",
+        "portal_transparencia_contratos": "Portal da Transparência (contratos)",
+        "pncp": "Portal Nacional de Contratações Públicas",
+        "pcp_v2": "Portal de Compras Públicas (complementar)",
+        "querido_diario": "Diários Oficiais Municipais",
+        "sicaf": "Sistema de Cadastro de Fornecedores",
     }
+
+    def _sanitize_detail(detail: str) -> str:
+        """Remove technical terms and English from source details."""
+        if not detail:
+            return ""
+        # Replace English/technical terms with Portuguese equivalents
+        replacements = [
+            ("raw", "brutos"), ("filtered", "filtrados"), ("pages", "páginas"),
+            ("errors", "erros"), ("via Playwright", ""), ("via playwright", ""),
+            ("SICAF completo", "Consulta realizada com sucesso"),
+            ("Sem chave API", "Consulta não realizada"),
+            ("Skipped", "Não consultado"), ("skipped", "não consultado"),
+            ("men\u00e7\u00f5es encontradas", "menções encontradas"),
+            ("mencoes encontradas", "menções encontradas"),
+        ]
+        for eng, pt in replacements:
+            detail = detail.replace(eng, pt)
+        # Remove leftover technical patterns (HTTP codes, etc.)
+        detail = re.sub(r'\b\d{3}\s*OK\b', 'consultado', detail)
+        detail = re.sub(r'\bhttpx?\b', '', detail, flags=re.IGNORECASE)
+        detail = re.sub(r'\bGET\b', '', detail)
+        detail = re.sub(r'\bPOST\b', '', detail)
+        return detail.strip().strip(",").strip()
 
     for key, src_label in source_labels.items():
         src = sources.get(key, {})
         label, label_color = _get_source_label(src)
         detail = src.get("detail", "") if isinstance(src, dict) else ""
+        detail = _sanitize_detail(detail)
 
         status_style = ParagraphStyle(
             f"src_{key}", parent=styles["cell"],
@@ -2372,10 +2396,9 @@ def _build_data_sources_section(data: dict, styles: dict, sec: dict | None = Non
 
     el.append(Spacer(1, 4 * mm))
     gen_at = _date(metadata.get("generated_at", ""))
-    gen_by = metadata.get("generator", "")
-    if gen_at or gen_by:
+    if gen_at:
         el.append(Paragraph(
-            f"Dados coletados em {gen_at} por {gen_by}.",
+            f"Dados coletados em {gen_at}.",
             styles["caption"],
         ))
 

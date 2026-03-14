@@ -593,6 +593,667 @@ _CNAE_TO_SECTOR_KEY: dict[str, str] = {
 }
 
 
+# Subcategories per sector for spectral object compatibility (P2)
+_SECTOR_SUBCATEGORIES: dict[str, dict[str, list[str]]] = {
+    "engenharia": {
+        "edificacoes": ["construção de edifício", "edificação", "reforma predial", "ampliação de prédio", "construção civil"],
+        "pavimentacao": ["pavimentação", "recapeamento", "cbuq", "asfalto", "bloquete", "intertravado", "calçamento"],
+        "drenagem_saneamento": ["drenagem", "esgoto", "saneamento", "rede de água", "adutora", "estação de tratamento"],
+        "projeto_executivo": ["projeto executivo", "projeto básico", "contratação integrada", "bim"],
+        "demolicao_terraplanagem": ["demolição", "terraplanagem", "terraplenagem", "sondagem", "fundação", "estaca"],
+        "instalacoes": ["instalação elétrica", "instalação hidráulica", "spda", "climatização", "cabeamento"],
+    },
+    "engenharia_rodoviaria": {
+        "rodovias": ["rodovia", "estrada", "pista", "acostamento", "sinalização viária"],
+        "pontes_viadutos": ["ponte", "viaduto", "passarela", "obra de arte especial"],
+        "urbanizacao": ["urbanização", "praça", "calçada", "acessibilidade", "paisagismo"],
+    },
+    "software": {
+        "desenvolvimento": ["desenvolvimento de sistema", "fábrica de software", "software sob demanda", "aplicativo", "portal"],
+        "licenciamento": ["licença de software", "subscription", "saas", "erp", "sistema pronto"],
+        "consultoria_ti": ["consultoria em ti", "análise de requisitos", "arquitetura de sistemas", "lgpd"],
+        "suporte_manutencao": ["suporte técnico", "manutenção de sistema", "sustentação", "help desk de sistema"],
+    },
+    "informatica": {
+        "equipamentos": ["computador", "notebook", "servidor", "storage", "switch", "rack"],
+        "impressao": ["impressora", "multifuncional", "outsourcing de impressão"],
+        "rede": ["rede de dados", "cabeamento estruturado", "fibra óptica", "wi-fi", "firewall"],
+        "manutencao": ["manutenção de equipamento", "reparo", "assistência técnica"],
+    },
+    "saude": {
+        "equipamentos_medicos": ["equipamento hospitalar", "equipamento médico", "aparelho", "raio-x", "tomógrafo"],
+        "medicamentos": ["medicamento", "fármaco", "insumo farmacêutico", "vacina", "soro"],
+        "servicos_medicos": ["serviço médico", "atendimento", "consulta", "exame", "cirurgia", "uti"],
+        "manutencao_equipamentos": ["manutenção de equipamento", "calibração", "reparo de equipamento médico"],
+        "materiais_hospitalares": ["material hospitalar", "descartável", "epi hospitalar", "luva", "seringa"],
+    },
+    "facilities": {
+        "limpeza": ["limpeza", "conservação", "higienização", "desinfecção"],
+        "manutencao_predial_geral": ["manutenção predial", "manutenção preventiva", "manutenção corretiva"],
+        "jardinagem": ["jardinagem", "paisagismo", "roçagem", "poda", "capina"],
+        "controle_pragas": ["controle de pragas", "desinsetização", "desratização", "dedetização"],
+    },
+    "vigilancia": {
+        "vigilancia_armada": ["vigilância armada", "segurança armada", "posto de vigilância armada"],
+        "vigilancia_desarmada": ["vigilância desarmada", "portaria", "controlador de acesso", "recepcionista"],
+        "monitoramento": ["monitoramento eletrônico", "cftv", "câmera", "alarme", "cerca elétrica"],
+        "transporte_valores": ["transporte de valores", "carro-forte", "custódia de numerário"],
+    },
+    "alimentos": {
+        "refeicao": ["refeição", "alimentação", "marmitex", "restaurante", "cozinha industrial", "self-service"],
+        "generos_alimenticios": ["gênero alimentício", "alimento", "hortifrúti", "cesta básica", "merenda"],
+        "agua_bebidas": ["água mineral", "café", "bebida", "galão"],
+    },
+    "vestuario": {
+        "uniformes": ["uniforme", "fardamento", "farda", "vestimenta profissional"],
+        "epi_vestuario": ["jaleco", "avental", "colete", "bota", "calçado de segurança"],
+        "confeccao": ["confecção", "camiseta", "camisa", "calça", "roupa"],
+    },
+    "transporte": {
+        "locacao_veiculos": ["locação de veículo", "aluguel de veículo", "frota", "veículo"],
+        "frete": ["frete", "transporte de carga", "mudança", "logística"],
+        "transporte_passageiros": ["transporte escolar", "transporte de passageiro", "ônibus", "van"],
+    },
+    "mobiliario": {
+        "moveis_escritorio": ["mesa", "cadeira", "armário", "estante", "gaveteiro", "móvel de escritório"],
+        "moveis_escolares": ["carteira escolar", "quadro", "lousa", "mesa escolar"],
+        "moveis_hospitalares": ["cama hospitalar", "maca", "mesa cirúrgica"],
+    },
+    "papelaria": {
+        "material_escritorio": ["papel", "caneta", "toner", "cartucho", "material de escritório"],
+        "impressos": ["impressão gráfica", "banner", "folder", "adesivo", "placa"],
+    },
+    "manutencao_predial": {
+        "eletrica": ["instalação elétrica", "quadro elétrico", "iluminação", "gerador"],
+        "hidraulica": ["instalação hidráulica", "encanamento", "bomba", "reservatório"],
+        "civil_menor": ["pintura", "revestimento", "forro", "piso", "alvenaria menor"],
+        "ar_condicionado": ["ar condicionado", "climatização", "split", "chiller"],
+    },
+    "materiais_eletricos": {
+        "cabos_fios": ["cabo elétrico", "fio", "condutor", "eletroduto"],
+        "iluminacao": ["lâmpada", "luminária", "refletor", "led"],
+        "equipamentos_eletricos": ["transformador", "disjuntor", "quadro de distribuição", "nobreak"],
+    },
+    "materiais_hidraulicos": {
+        "tubulacao": ["tubo", "conexão", "registro", "válvula", "flange"],
+        "equipamentos_hidraulicos": ["bomba d'água", "hidrômetro", "filtro", "pressurizador"],
+    },
+}
+
+# Typical habilitação requirements per sector (P3)
+_HABILITACAO_REQUIREMENTS: dict[str, dict] = {
+    "engenharia": {
+        "capital_minimo_pct": 0.10,
+        "atestados": ["Atestado técnico de execução de obra similar (acervo CREA/CAU)"],
+        "certifications": ["CREA (registro ativo)", "CAU (se arquitetura)"],
+        "fiscal": ["CND Federal/Previdenciária", "CND Estadual", "CND Municipal", "CRF FGTS", "CNDT Trabalhista"],
+    },
+    "engenharia_rodoviaria": {
+        "capital_minimo_pct": 0.10,
+        "atestados": ["Atestado técnico de pavimentação ou obra rodoviária similar"],
+        "certifications": ["CREA (registro ativo)"],
+        "fiscal": ["CND Federal/Previdenciária", "CND Estadual", "CND Municipal", "CRF FGTS", "CNDT Trabalhista"],
+    },
+    "software": {
+        "capital_minimo_pct": 0.05,
+        "atestados": ["Atestado técnico de desenvolvimento/implantação de sistema similar"],
+        "certifications": ["ISO 27001 (frequente)", "LGPD compliance (crescente)"],
+        "fiscal": ["CND Federal/Previdenciária", "CND Municipal", "CRF FGTS", "CNDT Trabalhista"],
+    },
+    "informatica": {
+        "capital_minimo_pct": 0.05,
+        "atestados": ["Atestado de fornecimento de equipamentos de TI similares"],
+        "certifications": ["Autorização de fabricante/distribuidor (quando exigido)"],
+        "fiscal": ["CND Federal/Previdenciária", "CND Municipal", "CRF FGTS", "CNDT Trabalhista"],
+    },
+    "saude": {
+        "capital_minimo_pct": 0.10,
+        "atestados": ["Atestado de fornecimento/serviço similar na área de saúde"],
+        "certifications": ["ANVISA (AFE — Autorização de Funcionamento)", "CRM (se serviço médico)", "CRF (se farmacêutico)"],
+        "fiscal": ["CND Federal/Previdenciária", "CND Estadual", "CND Municipal", "CRF FGTS", "CNDT Trabalhista"],
+    },
+    "facilities": {
+        "capital_minimo_pct": 0.05,
+        "atestados": ["Atestado de prestação de serviço continuado similar"],
+        "certifications": [],
+        "fiscal": ["CND Federal/Previdenciária", "CND Municipal", "CRF FGTS", "CNDT Trabalhista"],
+    },
+    "vigilancia": {
+        "capital_minimo_pct": 0.10,
+        "atestados": ["Atestado de prestação de serviço de vigilância similar"],
+        "certifications": ["Autorização de Funcionamento (Polícia Federal)", "Alvará de Funcionamento"],
+        "fiscal": ["CND Federal/Previdenciária", "CND Estadual", "CND Municipal", "CRF FGTS", "CNDT Trabalhista"],
+    },
+    "_default": {
+        "capital_minimo_pct": 0.10,
+        "atestados": ["Atestado técnico de execução de serviço similar"],
+        "certifications": [],
+        "fiscal": ["CND Federal/Previdenciária", "CND Municipal", "CRF FGTS", "CNDT Trabalhista"],
+    },
+}
+
+# Sector-specific systemic risk warnings (P5)
+_SECTOR_RISK_FLAGS: dict[str, list[str]] = {
+    "facilities": ["Subprecificação crônica em contratos de limpeza — margem real pode ser menor que estimada"],
+    "engenharia": ["Aditivos contratuais frequentes (25-50%) em obras públicas — considerar margem de segurança"],
+    "engenharia_rodoviaria": ["Obras rodoviárias frequentemente sofrem paralisações por questões ambientais ou orçamentárias"],
+    "vigilancia": ["Convenção coletiva pode impactar custos — verificar dissídio da categoria na região"],
+    "saude": ["Regulamentação ANVISA pode atrasar execução — verificar licenças necessárias"],
+    "software": ["Editais de TI frequentemente exigem quadro técnico com certificações proprietárias específicas"],
+    "alimentos": ["Contratos de alimentação têm reajuste atrelado a índices de preço — verificar cláusula de reequilíbrio"],
+}
+
+# Estimated participation cost per sector (P6)
+_PARTICIPATION_COST: dict[str, float] = {
+    "engenharia": 5000.0,
+    "engenharia_rodoviaria": 6000.0,
+    "software": 3000.0,
+    "informatica": 2000.0,
+    "saude": 3000.0,
+    "facilities": 2000.0,
+    "vigilancia": 2500.0,
+    "alimentos": 1500.0,
+    "vestuario": 1500.0,
+    "transporte": 2000.0,
+    "mobiliario": 1500.0,
+    "papelaria": 1000.0,
+    "manutencao_predial": 3000.0,
+    "materiais_eletricos": 1500.0,
+    "materiais_hidraulicos": 1500.0,
+    "_default": 3000.0,
+}
+
+
+def compute_object_compatibility(
+    edital_objeto: str,
+    empresa_cnaes: str,
+    sector_key: str,
+    historico_contratos: list[dict],
+) -> dict:
+    """Compute spectral compatibility between edital object and company profile.
+
+    Returns compatibility level (ALTA/MEDIA/BAIXA), detected subcategories,
+    and human-readable rationale.
+    """
+    subcats = _SECTOR_SUBCATEGORIES.get(sector_key, {})
+    if not subcats:
+        return {
+            "compatibility": "MEDIA",
+            "score": 0.5,
+            "edital_subcategory": None,
+            "company_subcategories": [],
+            "rationale": f"Setor '{sector_key}' sem subcategorias definidas — compatibilidade presumida",
+            "_source": _source_tag("CALCULATED"),
+        }
+
+    objeto_lower = edital_objeto.lower()
+
+    # Detect edital subcategory
+    edital_subcat = None
+    edital_subcat_score = 0
+    for subcat_name, keywords in subcats.items():
+        matches = sum(1 for kw in keywords if kw.lower() in objeto_lower)
+        if matches > edital_subcat_score:
+            edital_subcat_score = matches
+            edital_subcat = subcat_name
+
+    # Detect company subcategories from CNAEs + historical contracts
+    company_subcats: set[str] = set()
+    # From CNAE descriptions
+    cnaes_lower = empresa_cnaes.lower() if empresa_cnaes else ""
+    for subcat_name, keywords in subcats.items():
+        if any(kw.lower() in cnaes_lower for kw in keywords):
+            company_subcats.add(subcat_name)
+
+    # From historical contract objects
+    for contrato in historico_contratos:
+        obj = (contrato.get("objeto") or "").lower()
+        for subcat_name, keywords in subcats.items():
+            if any(kw.lower() in obj for kw in keywords):
+                company_subcats.add(subcat_name)
+
+    # Score calculation
+    if edital_subcat and edital_subcat in company_subcats:
+        score = 1.0
+        compatibility = "ALTA"
+        rationale = (
+            f"Objeto do edital corresponde à subcategoria '{edital_subcat}' "
+            f"onde a empresa tem experiência comprovada"
+        )
+    elif edital_subcat and company_subcats:
+        score = 0.6
+        compatibility = "MEDIA"
+        rationale = (
+            f"Edital na subcategoria '{edital_subcat}', empresa atua em "
+            f"{', '.join(sorted(company_subcats))} — mesmo setor, especialidade diferente"
+        )
+    elif edital_subcat and not company_subcats:
+        score = 0.3
+        compatibility = "BAIXA"
+        rationale = (
+            f"Edital na subcategoria '{edital_subcat}', "
+            f"sem evidência de atuação da empresa nesta especialidade"
+        )
+    else:
+        score = 0.5
+        compatibility = "MEDIA"
+        rationale = "Subcategoria do edital não identificada — compatibilidade avaliada no nível setorial"
+
+    return {
+        "compatibility": compatibility,
+        "score": round(score, 2),
+        "edital_subcategory": edital_subcat,
+        "company_subcategories": sorted(company_subcats),
+        "rationale": rationale,
+        "_source": _source_tag("CALCULATED"),
+    }
+
+
+def compute_habilitacao_analysis(
+    edital: dict,
+    empresa: dict,
+    sicaf: dict,
+    sector_key: str,
+) -> dict:
+    """Cross-reference company profile against typical habilitação requirements.
+
+    Returns per-dimension status and overall qualification assessment.
+    """
+    reqs = _HABILITACAO_REQUIREMENTS.get(sector_key, _HABILITACAO_REQUIREMENTS["_default"])
+    dimensions: list[dict] = []
+    gaps: list[str] = []
+    dim_scores: list[int] = []
+
+    # 1. Capital mínimo
+    capital = _safe_float(empresa.get("capital_social"))
+    valor = _safe_float(edital.get("valor_estimado"))
+    min_pct = reqs["capital_minimo_pct"]
+    if valor > 0 and capital > 0:
+        threshold = valor * min_pct
+        if capital >= threshold:
+            dimensions.append({
+                "dimension": "Capital Mínimo",
+                "status": "OK",
+                "detail": f"Capital R$ {capital:,.0f} >= {min_pct * 100:.0f}% do valor R$ {valor:,.0f}",
+            })
+            dim_scores.append(100)
+        elif capital >= threshold * 0.5:
+            dimensions.append({
+                "dimension": "Capital Mínimo",
+                "status": "ATENÇÃO",
+                "detail": f"Capital R$ {capital:,.0f} abaixo do mínimo típico R$ {threshold:,.0f} mas acima de 50%",
+            })
+            gaps.append(f"Capital social pode ser insuficiente (R$ {capital:,.0f} vs mínimo R$ {threshold:,.0f})")
+            dim_scores.append(50)
+        else:
+            dimensions.append({
+                "dimension": "Capital Mínimo",
+                "status": "CRÍTICO",
+                "detail": f"Capital R$ {capital:,.0f} muito abaixo do mínimo típico R$ {threshold:,.0f}",
+            })
+            gaps.append(f"Capital social insuficiente (R$ {capital:,.0f} vs mínimo R$ {threshold:,.0f})")
+            dim_scores.append(10)
+    else:
+        dimensions.append({
+            "dimension": "Capital Mínimo",
+            "status": "VERIFICAR",
+            "detail": "Valor estimado ou capital social indisponível para análise",
+        })
+        dim_scores.append(50)
+
+    # 2. Sanções
+    sancoes = empresa.get("sancoes", {})
+    active_sanctions = [k for k in ["ceis", "cnep", "cepim", "ceaf"] if sancoes.get(k)]
+    if active_sanctions:
+        dimensions.append({
+            "dimension": "Sanções",
+            "status": "CRÍTICO",
+            "detail": f"Sanção ativa: {', '.join(s.upper() for s in active_sanctions)} — INABILITAÇÃO AUTOMÁTICA",
+        })
+        gaps.append(f"Sanção ativa ({', '.join(s.upper() for s in active_sanctions)}) impede participação")
+        dim_scores.append(0)
+    else:
+        dimensions.append({
+            "dimension": "Sanções",
+            "status": "OK",
+            "detail": "Sem sanções (CEIS, CNEP, CEPIM, CEAF)",
+        })
+        dim_scores.append(100)
+
+    # 3. Regularidade fiscal (SICAF)
+    sicaf_status = sicaf.get("status", "NÃO CONSULTADO") if isinstance(sicaf, dict) else "NÃO CONSULTADO"
+    restricao = sicaf.get("restricao", {}) if isinstance(sicaf, dict) else {}
+    if restricao.get("possui_restricao"):
+        dimensions.append({
+            "dimension": "Regularidade Fiscal",
+            "status": "CRÍTICO",
+            "detail": "SICAF indica restrição cadastral — verificar pendências",
+        })
+        gaps.append("Restrição cadastral no SICAF — regularizar antes de licitar")
+        dim_scores.append(10)
+    elif sicaf_status == "NÃO CONSULTADO":
+        fiscal_reqs = ", ".join(reqs.get("fiscal", [])[:3])
+        dimensions.append({
+            "dimension": "Regularidade Fiscal",
+            "status": "VERIFICAR",
+            "detail": f"SICAF não consultado — verificar: {fiscal_reqs}",
+        })
+        dim_scores.append(50)
+    else:
+        dimensions.append({
+            "dimension": "Regularidade Fiscal",
+            "status": "OK",
+            "detail": "SICAF sem restrições identificadas",
+        })
+        dim_scores.append(100)
+
+    # 4. Qualificação técnica (certifications)
+    certs = reqs.get("certifications", [])
+    if certs:
+        # Check if sector-required certifications match CNAE profile
+        cnae_principal = empresa.get("cnae_principal", "")
+        has_compatible_cnae = any(
+            cnae_prefix in str(cnae_principal)
+            for cnae_prefix in _CNAE_TO_SECTOR_KEY
+            if _CNAE_TO_SECTOR_KEY[cnae_prefix] == sector_key
+        )
+        if has_compatible_cnae:
+            dimensions.append({
+                "dimension": "Qualificação Técnica",
+                "status": "ATENÇÃO",
+                "detail": f"CNAE compatível com setor. Verificar: {', '.join(certs)}",
+            })
+            dim_scores.append(70)
+        else:
+            dimensions.append({
+                "dimension": "Qualificação Técnica",
+                "status": "ATENÇÃO",
+                "detail": f"CNAE principal pode não cobrir exigências. Verificar: {', '.join(certs)}",
+            })
+            gaps.append(f"Verificar registros/certificações: {', '.join(certs)}")
+            dim_scores.append(40)
+    else:
+        dimensions.append({
+            "dimension": "Qualificação Técnica",
+            "status": "OK",
+            "detail": "Setor sem certificações específicas obrigatórias",
+        })
+        dim_scores.append(100)
+
+    # 5. Atestados técnicos
+    atestados = reqs.get("atestados", [])
+    if atestados:
+        dimensions.append({
+            "dimension": "Atestados Técnicos",
+            "status": "VERIFICAR",
+            "detail": f"Necessário: {'; '.join(atestados)}",
+        })
+        gaps.append(f"Verificar acervo: {atestados[0]}")
+        dim_scores.append(50)
+
+    # Overall status
+    statuses = [d["status"] for d in dimensions]
+    if "CRÍTICO" in statuses:
+        overall = "INAPTA"
+    elif "ATENÇÃO" in statuses:
+        overall = "PARCIALMENTE_APTA"
+    else:
+        overall = "APTA"
+
+    score = round(sum(dim_scores) / len(dim_scores)) if dim_scores else 50
+
+    return {
+        "status": overall,
+        "score": score,
+        "dimensions": dimensions,
+        "gaps": gaps,
+        "_source": _source_tag("CALCULATED"),
+    }
+
+
+def compute_risk_analysis(
+    edital: dict,
+    competitive_analysis: dict,
+    sector_key: str,
+) -> dict:
+    """Compute systemic risk flags per edital."""
+    flags: list[dict] = []
+
+    # 1. Valor sigiloso
+    valor = _safe_float(edital.get("valor_estimado"))
+    if valor <= 0:
+        flags.append({
+            "flag": "Valor estimado sigiloso ou não informado — impossível avaliar adequação financeira",
+            "severity": "ALTA",
+            "category": "valor",
+        })
+
+    # 2. Timeline
+    dias = edital.get("dias_restantes")
+    if dias is not None:
+        if dias < 7:
+            flags.append({
+                "flag": f"Prazo muito apertado ({dias} dias) — risco de proposta apressada",
+                "severity": "ALTA",
+                "category": "prazo",
+            })
+        elif dias < 15:
+            flags.append({
+                "flag": f"Prazo curto ({dias} dias) — preparação acelerada necessária",
+                "severity": "MEDIA",
+                "category": "prazo",
+            })
+
+    # 3. Organ concentration (if competitive data available)
+    hhi = competitive_analysis.get("hhi", 0)
+    if hhi > 0.5:
+        flags.append({
+            "flag": "Órgão com alta concentração de fornecedores (HHI > 0.5) — incumbente forte",
+            "severity": "MEDIA",
+            "category": "competitivo",
+        })
+
+    # 4. Sector-specific chronic risks
+    sector_risks = _SECTOR_RISK_FLAGS.get(sector_key, [])
+    for risk_text in sector_risks:
+        flags.append({
+            "flag": risk_text,
+            "severity": "BAIXA",
+            "category": "setor",
+        })
+
+    # 5. Concorrência presencial (travel cost)
+    modalidade = (edital.get("modalidade") or "").lower()
+    if "presencial" in modalidade:
+        dist = edital.get("distancia", {})
+        km = dist.get("km") if isinstance(dist, dict) else None
+        if km and km > 200:
+            flags.append({
+                "flag": f"Licitação presencial a {km:.0f}km — custo de deslocamento relevante",
+                "severity": "MEDIA",
+                "category": "logistica",
+            })
+
+    # Aggregate risk level
+    severities = [f["severity"] for f in flags]
+    if "ALTA" in severities:
+        risk_level = "ALTO"
+    elif "MEDIA" in severities:
+        risk_level = "MEDIO"
+    elif flags:
+        risk_level = "BAIXO"
+    else:
+        risk_level = "MÍNIMO"
+
+    # Risk score (inverted: more flags = lower score)
+    penalty = sum(30 if f["severity"] == "ALTA" else 15 if f["severity"] == "MEDIA" else 5 for f in flags)
+    risk_score = max(0, 100 - penalty)
+
+    return {
+        "risk_level": risk_level,
+        "risk_score": risk_score,
+        "flags": flags,
+        "_source": _source_tag("CALCULATED"),
+    }
+
+
+def compute_competitive_analysis(contracts: list[dict]) -> dict:
+    """Compute aggregate competitive landscape statistics from historical contracts."""
+    if not contracts:
+        return {
+            "unique_suppliers": 0,
+            "hhi": 0.0,
+            "top_3_share": 0.0,
+            "top_supplier": None,
+            "competition_level": "DESCONHECIDA",
+            "risk_signals": [],
+            "_source": _source_tag("CALCULATED", "Sem dados históricos"),
+        }
+
+    supplier_counts: dict[str, int] = {}
+    supplier_values: dict[str, float] = {}
+    supplier_names: dict[str, str] = {}
+    for c in contracts:
+        cnpj = (c.get("cnpj_fornecedor") or "").strip()
+        name = (c.get("fornecedor") or "").strip()
+        key = cnpj if len(cnpj) >= 11 else name.upper()
+        if not key:
+            continue
+        supplier_counts[key] = supplier_counts.get(key, 0) + 1
+        supplier_values[key] = supplier_values.get(key, 0) + _safe_float(c.get("valor"))
+        if name:
+            supplier_names[key] = name
+
+    n_suppliers = len(supplier_counts)
+    n_contracts = sum(supplier_counts.values())
+
+    if n_contracts == 0:
+        return {
+            "unique_suppliers": 0, "hhi": 0.0, "top_3_share": 0.0,
+            "top_supplier": None, "competition_level": "DESCONHECIDA",
+            "risk_signals": [],
+            "_source": _source_tag("CALCULATED", "Sem dados históricos"),
+        }
+
+    # HHI
+    shares = sorted([count / n_contracts for count in supplier_counts.values()], reverse=True)
+    hhi = sum(s ** 2 for s in shares)
+    top_3_share = sum(shares[:3])
+
+    # Top supplier
+    top_key = max(supplier_counts, key=lambda k: supplier_counts[k])
+    top_supplier = {
+        "nome": supplier_names.get(top_key, top_key),
+        "cnpj": top_key if len(top_key) >= 11 else "",
+        "share": round(shares[0], 3),
+        "n_contracts": supplier_counts[top_key],
+        "valor_total": round(supplier_values.get(top_key, 0), 2),
+    }
+
+    # Competition level
+    if n_suppliers <= 2:
+        level = "BAIXA"
+    elif n_suppliers <= 5:
+        level = "MEDIA"
+    elif n_suppliers <= 10:
+        level = "ALTA"
+    else:
+        level = "MUITO_ALTA"
+
+    # Risk signals
+    risk_signals = []
+    if n_suppliers == 1:
+        risk_signals.append(f"Fornecedor único nos últimos 24 meses ({supplier_names.get(top_key, top_key)})")
+    if hhi > 0.5:
+        risk_signals.append(f"HHI = {hhi:.2f} — concentração excessiva de mercado")
+    if shares[0] > 0.6:
+        risk_signals.append(f"Fornecedor dominante com {shares[0] * 100:.0f}% dos contratos")
+
+    return {
+        "unique_suppliers": n_suppliers,
+        "hhi": round(hhi, 4),
+        "top_3_share": round(top_3_share, 3),
+        "top_supplier": top_supplier,
+        "competition_level": level,
+        "risk_signals": risk_signals,
+        "_source": _source_tag("CALCULATED", f"{n_contracts} contratos, {n_suppliers} fornecedores"),
+    }
+
+
+def compute_portfolio_analysis(
+    editais: list[dict],
+    empresa: dict,
+    sector_key: str,
+) -> dict:
+    """Portfolio-level strategic analysis across all editais."""
+    capital = _safe_float(empresa.get("capital_social"))
+    quick_wins = []
+    investments = []
+    opportunities = []
+    inaccessible = 0
+    low_priority = 0
+
+    for i, ed in enumerate(editais):
+        prob = ed.get("win_probability", {}).get("probability", 0)
+        risk = ed.get("risk_score", {}).get("total", 50)
+        hab_status = ed.get("habilitacao_analysis", {}).get("status", "DADOS_INSUFICIENTES")
+        valor = _safe_float(ed.get("valor_estimado"))
+        obj = (ed.get("objeto") or "")[:80]
+        roi_max = ed.get("roi_potential", {}).get("roi_max", 0)
+
+        summary = {
+            "index": i + 1,
+            "objeto": obj,
+            "valor": valor,
+            "probability": prob,
+            "roi_max": roi_max,
+        }
+
+        if hab_status == "INAPTA":
+            ed["strategic_category"] = "INACESSÍVEL"
+            inaccessible += 1
+        elif prob >= 0.15 and risk >= 50:
+            ed["strategic_category"] = "QUICK_WIN"
+            quick_wins.append(summary)
+        elif prob < 0.10 and valor > 0:
+            ed["strategic_category"] = "INVESTIMENTO"
+            investments.append(summary)
+        elif prob >= 0.08 and risk >= 30:
+            ed["strategic_category"] = "OPORTUNIDADE"
+            opportunities.append(summary)
+        else:
+            ed["strategic_category"] = "BAIXA_PRIORIDADE"
+            low_priority += 1
+
+    # Aggregate metrics
+    participation_cost = _PARTICIPATION_COST.get(sector_key, _PARTICIPATION_COST["_default"])
+    viable_count = len(quick_wins) + len(opportunities)
+    total_cost = viable_count * participation_cost
+    total_revenue = sum(e["roi_max"] for e in quick_wins + opportunities)
+
+    # Organ priority map — group by organ, rank by opportunity count
+    organ_map: dict[str, int] = {}
+    for ed in editais:
+        if ed.get("strategic_category") in ("QUICK_WIN", "OPORTUNIDADE", "INVESTIMENTO"):
+            orgao = ed.get("orgao", "")
+            if orgao:
+                organ_map[orgao] = organ_map.get(orgao, 0) + 1
+    top_organs = sorted(organ_map.items(), key=lambda x: x[1], reverse=True)[:3]
+
+    return {
+        "quick_wins": quick_wins,
+        "strategic_investments": investments,
+        "opportunities": opportunities,
+        "inaccessible": inaccessible,
+        "low_priority": low_priority,
+        "total_potential_revenue": round(total_revenue),
+        "estimated_participation_cost": round(total_cost),
+        "participation_cost_per_edital": participation_cost,
+        "organ_priority_map": [{"orgao": o, "count": c} for o, c in top_organs],
+        "_source": _source_tag("CALCULATED"),
+    }
+
+
 # ============================================================
 # PHASE 2a: PNCP SEARCH
 # ============================================================
@@ -1113,10 +1774,9 @@ def collect_competitive_intel(
                 break
 
             for item in data:
-                fornecedor = ""
-                valor_contrato = 0.0
-                # Extract from contratos array if present
+                # Extract from contratos sub-array if present
                 contratos_arr = item.get("contratos") or []
+                found_contract = False
                 if contratos_arr and isinstance(contratos_arr, list):
                     for c in contratos_arr:
                         fn = c.get("nomeRazaoSocialFornecedor", "")
@@ -1129,6 +1789,26 @@ def collect_competitive_intel(
                                 "valor": vl,
                                 "data": c.get("dataVigenciaInicio") or item.get("dataPublicacaoPncp") or "",
                             })
+                            found_contract = True
+
+                # Fallback: extract procurement-level data even without contratos
+                # This gives us at least the estimated vs homologated values for analysis
+                if not found_contract:
+                    obj = (item.get("objetoCompra") or "")[:150]
+                    val_est = _safe_float(item.get("valorTotalEstimado"))
+                    val_hom = _safe_float(item.get("valorTotalHomologado"))
+                    pub_date = (item.get("dataPublicacaoPncp") or "")[:10]
+                    orgao_ent = item.get("orgaoEntidade") or {}
+                    if obj and (val_est > 0 or val_hom > 0):
+                        contracts.append({
+                            "fornecedor": "",  # Unknown winner
+                            "cnpj_fornecedor": "",
+                            "objeto": obj,
+                            "valor": val_hom if val_hom > 0 else val_est,
+                            "valor_estimado": val_est,
+                            "valor_homologado": val_hom,
+                            "data": pub_date,
+                        })
 
             if len(data) < PNCP_MAX_PAGE_SIZE:
                 break
@@ -1172,16 +1852,76 @@ _SECTOR_MARGINS: dict[str, tuple[float, float]] = {
     "materiais_hidraulicos": (0.10, 0.20),
 }
 
+# Sector-specific viability weight profiles (must sum to 1.0)
+# Rationale: weights reflect what matters most for each sector's competitive dynamics
+_SECTOR_WEIGHT_PROFILES: dict[str, dict[str, float]] = {
+    # Construction: capital-intensive, on-site, fewer bidders per municipality
+    "engenharia": {"hab": 0.25, "fin": 0.30, "geo": 0.25, "prazo": 0.15, "comp": 0.05},
+    "engenharia_rodoviaria": {"hab": 0.25, "fin": 0.30, "geo": 0.25, "prazo": 0.15, "comp": 0.05},
+    # IT/Software: remote execution, commoditized, many bidders
+    "software": {"hab": 0.15, "fin": 0.15, "geo": 0.05, "prazo": 0.25, "comp": 0.40},
+    "informatica": {"hab": 0.15, "fin": 0.20, "geo": 0.10, "prazo": 0.20, "comp": 0.35},
+    # Facilities/Security: local presence needed, moderate competition
+    "facilities": {"hab": 0.25, "fin": 0.20, "geo": 0.20, "prazo": 0.15, "comp": 0.20},
+    "vigilancia": {"hab": 0.25, "fin": 0.20, "geo": 0.20, "prazo": 0.15, "comp": 0.20},
+    # Health: regulatory-heavy (ANVISA, CRM, certifications dominate)
+    "saude": {"hab": 0.30, "fin": 0.20, "geo": 0.15, "prazo": 0.15, "comp": 0.20},
+    # Food/Transport: logistics matter, moderate barriers
+    "alimentos": {"hab": 0.25, "fin": 0.20, "geo": 0.20, "prazo": 0.20, "comp": 0.15},
+    "transporte": {"hab": 0.20, "fin": 0.25, "geo": 0.15, "prazo": 0.15, "comp": 0.25},
+    # Commerce/Supply: lower barriers, more competition
+    "vestuario": {"hab": 0.20, "fin": 0.25, "geo": 0.10, "prazo": 0.20, "comp": 0.25},
+    "mobiliario": {"hab": 0.20, "fin": 0.25, "geo": 0.10, "prazo": 0.20, "comp": 0.25},
+    "papelaria": {"hab": 0.20, "fin": 0.25, "geo": 0.10, "prazo": 0.20, "comp": 0.25},
+    # Maintenance: on-site, moderate capital
+    "manutencao_predial": {"hab": 0.25, "fin": 0.20, "geo": 0.25, "prazo": 0.15, "comp": 0.15},
+    # Materials: supply chain, moderate geography importance
+    "materiais_eletricos": {"hab": 0.20, "fin": 0.25, "geo": 0.15, "prazo": 0.20, "comp": 0.20},
+    "materiais_hidraulicos": {"hab": 0.20, "fin": 0.25, "geo": 0.15, "prazo": 0.20, "comp": 0.20},
+    # Default fallback — preserves original behavior
+    "_default": {"hab": 0.30, "fin": 0.25, "geo": 0.20, "prazo": 0.15, "comp": 0.10},
+}
 
-def compute_risk_score(edital: dict, empresa: dict, sicaf: dict) -> dict:
+# Sector-typical base win rates (derived from average number of bidders per procurement)
+_SECTOR_BASE_WIN_RATES: dict[str, float] = {
+    "engenharia": 0.15,              # ~7 bidders typical
+    "engenharia_rodoviaria": 0.12,   # ~8 bidders, larger contracts
+    "software": 0.08,                # ~12 bidders, commoditized
+    "informatica": 0.10,             # ~10 bidders
+    "facilities": 0.06,              # ~15+ bidders, very competitive
+    "vigilancia": 0.08,              # ~12 bidders
+    "saude": 0.10,                   # ~10 bidders, regulatory barriers
+    "vestuario": 0.10,               # ~10 bidders
+    "alimentos": 0.08,               # ~12 bidders
+    "transporte": 0.10,              # ~10 bidders
+    "mobiliario": 0.12,              # ~8 bidders
+    "papelaria": 0.08,               # ~12 bidders, commodity
+    "manutencao_predial": 0.12,      # ~8 bidders
+    "materiais_eletricos": 0.10,     # ~10 bidders
+    "materiais_hidraulicos": 0.10,   # ~10 bidders
+    "_default": 0.10,
+}
+
+# Modality multipliers for win probability — adjusts base rate by competition intensity
+_MODALITY_MULTIPLIERS: dict[str, float] = {
+    "pregão eletrônico": 0.80,       # Most bidders (electronic = easy access)
+    "pregão presencial": 0.90,       # Slightly fewer (travel barrier)
+    "concorrência eletrônica": 1.00, # Moderate
+    "concorrência": 1.00,
+    "concorrência presencial": 1.10, # Fewer (complex + travel)
+    "inexigibilidade": 1.50,         # Much fewer (pre-qualified)
+    "credenciamento": 1.30,          # Limited pool
+    "dispensa": 1.20,                # Small value, fewer bidders
+    "dispensa eletrônica": 1.10,
+    "dispensa de licitação": 1.20,
+}
+
+
+def compute_risk_score(edital: dict, empresa: dict, sicaf: dict, sector_key: str = "") -> dict:
     """Compute composite opportunity risk score 0-100 (higher = better opportunity).
 
-    Components:
-    - habilitacao (30%): sanctions, SICAF status, capital adequacy
-    - financeiro (25%): valor_estimado vs company capacity (capital × 10)
-    - geografico (20%): distance from sede
-    - prazo (15%): days remaining to deadline
-    - competitivo (10%): default 50 (can be overridden by Claude analysis)
+    Uses sector-specific weight profiles from _SECTOR_WEIGHT_PROFILES.
+    Components: habilitacao, financeiro, geografico, prazo, competitivo.
     """
     # Habilitação (30%)
     hab_score = 100
@@ -1250,15 +1990,18 @@ def compute_risk_score(edital: dict, empresa: dict, sicaf: dict) -> dict:
     else:
         prazo_score = 10
 
-    # Competitivo (10%) — default, overridden by Claude later
+    # Competitivo — default, refined by competitive analysis later
     comp_score = 50
 
+    # Use sector-specific weight profile
+    weights = _SECTOR_WEIGHT_PROFILES.get(sector_key, _SECTOR_WEIGHT_PROFILES["_default"])
+
     total = (
-        hab_score * 0.30
-        + fin_score * 0.25
-        + geo_score * 0.20
-        + prazo_score * 0.15
-        + comp_score * 0.10
+        hab_score * weights["hab"]
+        + fin_score * weights["fin"]
+        + geo_score * weights["geo"]
+        + prazo_score * weights["prazo"]
+        + comp_score * weights["comp"]
     )
 
     return {
@@ -1268,15 +2011,123 @@ def compute_risk_score(edital: dict, empresa: dict, sicaf: dict) -> dict:
         "geografico": geo_score,
         "prazo": prazo_score,
         "competitivo": comp_score,
+        "weights": weights,
         "_source": _source_tag("CALCULATED"),
     }
 
 
-def compute_roi_potential(edital: dict, sector_key: str, risk_score: int) -> dict:
+def compute_win_probability(
+    edital: dict,
+    empresa: dict,
+    competitive_intel: list[dict],
+    sector_key: str,
+    risk_score: int,
+) -> dict:
+    """Compute Bayesian-inspired win probability based on competitive landscape.
+
+    Factors:
+    1. Base rate: sector-typical competition density
+    2. Competition level: unique suppliers in organ's history
+    3. Concentration: HHI and top-supplier share
+    4. Incumbency: company's own history with organ
+    5. Modality adjustment: pregão (more bidders) vs inexigibilidade (fewer)
+    6. Viability discount: risk_score adjusts final probability
+
+    Returns dict with probability (0.0-1.0), confidence, and decomposition.
+    """
+    base_rate = _SECTOR_BASE_WIN_RATES.get(sector_key, _SECTOR_BASE_WIN_RATES["_default"])
+
+    # Analyze competitive landscape from historical contracts
+    unique_suppliers: set[str] = set()
+    supplier_counts: dict[str, int] = {}
+    for c in competitive_intel:
+        cnpj = (c.get("cnpj_fornecedor") or "").strip()
+        name = (c.get("fornecedor") or "").strip().upper()
+        key = cnpj if len(cnpj) >= 11 else name
+        if key:
+            unique_suppliers.add(key)
+            supplier_counts[key] = supplier_counts.get(key, 0) + 1
+
+    n_suppliers = len(unique_suppliers)
+    n_contracts = len(competitive_intel)
+
+    # HHI (Herfindahl-Hirschman Index) — 0=perfect competition, 1=monopoly
+    hhi = 0.0
+    top_share = 0.0
+    if n_contracts > 0 and supplier_counts:
+        shares = [count / n_contracts for count in supplier_counts.values()]
+        hhi = sum(s ** 2 for s in shares)
+        top_share = max(shares)
+
+    # Competition-adjusted probability
+    if n_suppliers == 0:
+        # No data — use sector base rate
+        competition_prob = base_rate
+        confidence = "baixa"
+    elif n_suppliers == 1:
+        # Single supplier = incumbent monopoly, very hard to break in
+        competition_prob = 0.05
+        confidence = "media"
+    elif n_suppliers <= 3:
+        # Low competition
+        competition_prob = 0.25
+        confidence = "media"
+    elif n_suppliers <= 7:
+        # Moderate — fair share estimate
+        competition_prob = 1.0 / n_suppliers
+        confidence = "alta"
+    else:
+        # High competition
+        competition_prob = 1.0 / n_suppliers
+        confidence = "alta"
+
+    # Incumbency bonus — does the company already supply this organ?
+    empresa_cnpj = re.sub(r"[^0-9]", "", empresa.get("cnpj", ""))
+    incumbency_bonus = 0.0
+    if empresa_cnpj and len(empresa_cnpj) >= 11:
+        for c in competitive_intel:
+            c_cnpj = re.sub(r"[^0-9]", "", c.get("cnpj_fornecedor", ""))
+            if c_cnpj == empresa_cnpj:
+                incumbency_bonus = 0.10  # 10pp bonus for existing relationship
+                break
+
+    # Modality adjustment
+    modalidade = (edital.get("modalidade") or "").lower()
+    mod_mult = 1.0
+    for key, mult in _MODALITY_MULTIPLIERS.items():
+        if key in modalidade:
+            mod_mult = mult
+            break
+
+    # Viability discount — risk_score tempers probability
+    # Floor at 0.3 so viability doesn't crush probability to zero
+    viability_factor = max(risk_score / 100.0, 0.3)
+
+    # Final probability with bounds
+    raw_prob = competition_prob * mod_mult + incumbency_bonus
+    final_prob = raw_prob * viability_factor
+    final_prob = max(0.02, min(0.85, final_prob))  # Clamp [2%, 85%]
+
+    return {
+        "probability": round(final_prob, 3),
+        "confidence": confidence,
+        "base_rate": base_rate,
+        "n_unique_suppliers": n_suppliers,
+        "n_contracts_analyzed": n_contracts,
+        "hhi": round(hhi, 4),
+        "top_supplier_share": round(top_share, 3),
+        "incumbency_bonus": incumbency_bonus,
+        "modality_multiplier": mod_mult,
+        "viability_factor": round(viability_factor, 2),
+        "_source": _source_tag("CALCULATED", f"{n_contracts} contratos, {n_suppliers} fornecedores"),
+    }
+
+
+def compute_roi_potential(edital: dict, sector_key: str, win_prob: dict) -> dict:
     """Calculate ROI potential per edital.
 
     Formula: valor × probability × margin_range
-    - probability = risk_score / 100
+    - probability from win_probability engine (Bayesian-inspired)
     - margin varies by sector
     """
     valor = _safe_float(edital.get("valor_estimado"))
@@ -1284,17 +2135,19 @@ def compute_roi_potential(edital: dict, sector_key: str, risk_score: int) -> dic
         return {
             "roi_min": 0, "roi_max": 0, "probability": 0.0,
             "margin_range": "N/A",
+            "confidence": win_prob.get("confidence", "baixa"),
             "_source": _source_tag("CALCULATED", "Valor estimado indisponível"),
         }
 
     margin_min, margin_max = _SECTOR_MARGINS.get(sector_key, (0.08, 0.15))
-    probability = risk_score / 100.0
+    probability = win_prob.get("probability", 0.10)
 
     return {
         "roi_min": round(valor * probability * margin_min),
         "roi_max": round(valor * probability * margin_max),
-        "probability": round(probability, 2),
+        "probability": round(probability, 3),
         "margin_range": f"{margin_min * 100:.0f}%-{margin_max * 100:.0f}%",
+        "confidence": win_prob.get("confidence", "baixa"),
         "_source": _source_tag("CALCULATED"),
     }
 
@@ -1392,18 +2245,71 @@ def compute_all_deterministic(
     sicaf: dict,
     sector_key: str,
 ) -> None:
-    """Compute risk_score, roi_potential, and cronograma for all editais. Mutates in place."""
-    print(f"\n📊 Calculando risk score, ROI e cronograma ({len(editais)} editais)")
+    """Compute all deterministic intelligence for editais. Mutates in place.
+
+    Chain: risk_score → win_probability → roi_potential → chronogram
+           + object_compatibility, habilitacao, competitive_analysis, risk_analysis
+    Portfolio analysis runs after per-edital loop (needs aggregate view).
+    """
+    print(f"\n📊 Calculando inteligência estratégica ({len(editais)} editais)")
+
+    empresa_cnaes = empresa.get("cnaes_secundarios", "")
+    if isinstance(empresa_cnaes, list):
+        empresa_cnaes = " ".join(str(c) for c in empresa_cnaes)
+    historico = empresa.get("historico_contratos", [])
+
     for ed in editais:
-        rs = compute_risk_score(ed, empresa, sicaf)
+        # --- Core scoring chain ---
+        rs = compute_risk_score(ed, empresa, sicaf, sector_key)
         ed["risk_score"] = rs
-        ed["roi_potential"] = compute_roi_potential(ed, sector_key, rs["total"])
+
+        win_prob = compute_win_probability(
+            ed, empresa, ed.get("competitive_intel", []), sector_key, rs["total"],
+        )
+        ed["win_probability"] = win_prob
+
+        ed["roi_potential"] = compute_roi_potential(ed, sector_key, win_prob)
         ed["cronograma"] = build_reverse_chronogram(ed)
+
+        # --- Object compatibility (spectral) ---
+        objeto = ed.get("objeto", ed.get("objetoCompra", ""))
+        ed["object_compatibility"] = compute_object_compatibility(
+            objeto, empresa_cnaes, sector_key, historico,
+        )
+
+        # --- Habilitação gap analysis ---
+        ed["habilitacao_analysis"] = compute_habilitacao_analysis(
+            ed, empresa, sicaf, sector_key,
+        )
+
+        # --- Competitive analysis (per-edital) ---
+        contracts = ed.get("competitive_intel", [])
+        ed["competitive_analysis"] = compute_competitive_analysis(contracts)
+
+        # --- Systemic risk flags ---
+        ed["risk_analysis"] = compute_risk_analysis(
+            ed, ed["competitive_analysis"], sector_key,
+        )
+
+    # --- Portfolio analysis (cross-edital, sets ed["strategic_category"]) ---
+    portfolio = compute_portfolio_analysis(editais, empresa, sector_key)
 
     # Summary
     scores = [ed["risk_score"]["total"] for ed in editais]
+    probs = [ed["win_probability"]["probability"] for ed in editais]
+    habs = [ed.get("habilitacao_analysis", {}).get("status", "?") for ed in editais]
+    comps = [ed.get("object_compatibility", {}).get("compatibility", "?") for ed in editais]
     if scores:
         print(f"  Risk scores: min={min(scores)}, max={max(scores)}, avg={sum(scores) / len(scores):.0f}")
+        print(f"  Win probs:   min={min(probs):.1%}, max={max(probs):.1%}, avg={sum(probs) / len(probs):.1%}")
+        hab_counts = {k: habs.count(k) for k in set(habs)}
+        comp_counts = {k: comps.count(k) for k in set(comps)}
+        print(f"  Habilitação: {hab_counts}")
+        print(f"  Compat.:     {comp_counts}")
+        qw = len(portfolio.get("quick_wins", []))
+        inv = len(portfolio.get("strategic_investments", []))
+        opp = len(portfolio.get("opportunities", []))
+        print(f"  Portfolio:   {qw} quick wins, {inv} investimentos, {opp} oportunidades")
 
 
 # ============================================================

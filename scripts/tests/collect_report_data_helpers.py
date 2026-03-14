@@ -73,8 +73,20 @@ except Exception:
 if _mod is not None:
     map_sector = _mod.map_sector
     compute_risk_score = _mod.compute_risk_score
+    compute_win_probability = _mod.compute_win_probability
     compute_roi_potential = _mod.compute_roi_potential
     build_reverse_chronogram = _mod.build_reverse_chronogram
     compute_all_deterministic = _mod.compute_all_deterministic
+    compute_object_compatibility = _mod.compute_object_compatibility
+    compute_habilitacao_analysis = _mod.compute_habilitacao_analysis
+    compute_competitive_analysis = _mod.compute_competitive_analysis
+    compute_risk_analysis = _mod.compute_risk_analysis
+    compute_portfolio_analysis = _mod.compute_portfolio_analysis
     _CNAE_TO_SECTOR_KEY = _mod._CNAE_TO_SECTOR_KEY
     _SECTOR_MARGINS = _mod._SECTOR_MARGINS
+    _SECTOR_WEIGHT_PROFILES = _mod._SECTOR_WEIGHT_PROFILES
+    _SECTOR_BASE_WIN_RATES = _mod._SECTOR_BASE_WIN_RATES
+    _SECTOR_SUBCATEGORIES = _mod._SECTOR_SUBCATEGORIES
+    _HABILITACAO_REQUIREMENTS = _mod._HABILITACAO_REQUIREMENTS
+    _SECTOR_RISK_FLAGS = _mod._SECTOR_RISK_FLAGS
+    _PARTICIPATION_COST = _mod._PARTICIPATION_COST

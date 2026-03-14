@@ -263,27 +263,26 @@ class TestValidateJson:
             generate_report_b2g(minimal_data)
 
 
-class TestGetSourceBadge:
+class TestGetSourceLabel:
     def setup_method(self):
-        from generate_report_b2g_helpers import _get_source_badge
-        self._badge = _get_source_badge
+        from generate_report_b2g_helpers import _get_source_label
+        self._label = _get_source_label
 
     def test_api_success(self):
-        char, color, text = self._badge({"status": "API"})
-        assert char == "✓"
+        text, color = self._label({"status": "API"})
         assert "Confirmado" in text
 
     def test_api_failed(self):
-        char, color, text = self._badge({"status": "API_FAILED"})
-        assert char == "✗"
+        text, color = self._label({"status": "API_FAILED"})
+        assert "Indisponível" in text
 
     def test_none(self):
-        char, color, text = self._badge(None)
-        assert char == "—"
+        text, color = self._label(None)
+        assert "N/D" in text
 
     def test_string_status(self):
-        char, color, text = self._badge("CALCULATED")
-        assert char == "✓"
+        text, color = self._label("CALCULATED")
+        assert "Calculado" in text
 
 
 # ============================================================
@@ -529,27 +528,31 @@ class TestComputeRoiPotential:
         except (ImportError, AttributeError):
             pytest.skip("collect_report_data module could not be imported")
 
+    @staticmethod
+    def _make_win_prob(probability: float, confidence: str = "media") -> dict:
+        return {"probability": probability, "confidence": confidence}
+
     def test_returns_dict_with_roi(self):
         edital = {"valor_estimado": 1000000}
-        result = self._compute(edital, "engenharia", 70)
+        result = self._compute(edital, "engenharia", self._make_win_prob(0.18))
         assert "roi_min" in result
         assert "roi_max" in result
         assert result["roi_max"] >= result["roi_min"]
 
     def test_zero_value_zero_roi(self):
         edital = {"valor_estimado": 0}
-        result = self._compute(edital, "engenharia", 50)
+        result = self._compute(edital, "engenharia", self._make_win_prob(0.15))
         assert result["roi_max"] == 0
 
-    def test_higher_score_higher_roi(self):
+    def test_higher_prob_higher_roi(self):
         edital = {"valor_estimado": 1000000}
-        low = self._compute(edital, "engenharia", 30)
-        high = self._compute(edital, "engenharia", 90)
+        low = self._compute(edital, "engenharia", self._make_win_prob(0.05))
+        high = self._compute(edital, "engenharia", self._make_win_prob(0.30))
         assert high["roi_max"] >= low["roi_max"]
 
     def test_unknown_sector_uses_default(self):
         edital = {"valor_estimado": 1000000}
-        result = self._compute(edital, "nonexistent_sector", 50)
+        result = self._compute(edital, "nonexistent_sector", self._make_win_prob(0.15))
         assert result["roi_max"] > 0
 
 
@@ -624,22 +627,6 @@ class TestSectionCounter:
         assert sec["current"]() == 2
 
 
-class TestDrawRiskBar:
-    def test_returns_table_for_positive_score(self):
-        from generate_report_b2g_helpers import _draw_risk_bar, _build_styles
-        styles = _build_styles()
-        result = _draw_risk_bar(72, styles)
-        # Should return a Table, not a Spacer
-        assert hasattr(result, '_cellvalues') or hasattr(result, 'width')
-
-    def test_zero_score_returns_spacer(self):
-        from generate_report_b2g_helpers import _draw_risk_bar, _build_styles
-        styles = _build_styles()
-        result = _draw_risk_bar(0, styles)
-        # Zero returns Spacer
-        assert not hasattr(result, '_cellvalues')
-
-
 class TestBuildChronogramTable:
     def test_returns_elements(self):
         from generate_report_b2g_helpers import _build_chronogram_table, _build_styles
@@ -657,23 +644,24 @@ class TestBuildChronogramTable:
         assert _build_chronogram_table([], styles) == []
 
 
-class TestBuildRoiCard:
+class TestBuildRoiText:
     def test_returns_elements(self):
-        from generate_report_b2g_helpers import _build_roi_card, _build_styles
+        from generate_report_b2g_helpers import _build_roi_text, _build_styles
         styles = _build_styles()
-        roi = {"roi_min": 100000, "roi_max": 300000, "probability": 65}
-        result = _build_roi_card(roi, styles)
+        roi = {"roi_min": 100000, "roi_max": 300000, "probability": 0.18, "confidence": "media"}
+        ed = {"valor_estimado": 1000000, "risk_score": {"total": 70}}
+        result = _build_roi_text(roi, ed, styles)
         assert len(result) > 0
 
     def test_zero_roi_returns_empty(self):
-        from generate_report_b2g_helpers import _build_roi_card, _build_styles
+        from generate_report_b2g_helpers import _build_roi_text, _build_styles
         styles = _build_styles()
-        assert _build_roi_card({"roi_min": 0, "roi_max": 0}, styles) == []
+        assert _build_roi_text({"roi_min": 0, "roi_max": 0}, {}, styles) == []
 
     def test_none_roi_returns_empty(self):
-        from generate_report_b2g_helpers import _build_roi_card, _build_styles
+        from generate_report_b2g_helpers import _build_roi_text, _build_styles
         styles = _build_styles()
-        assert _build_roi_card(None, styles) == []
+        assert _build_roi_text(None, {}, styles) == []
 
 
 class TestBuildDecisionTable:
@@ -741,3 +729,632 @@ class TestPdfWithPremiumFields:
         from generate_report_b2g_helpers import generate_report_b2g
         buf = generate_report_b2g(minimal_data)
         assert buf.read()[:5] == b"%PDF-"
+
+
+# ============================================================
+# SESSION 1: Win Probability + Sector Weight Profiles (P0+P1)
+# ============================================================
+
+
+class TestSectorWeightProfiles:
+    def setup_method(self):
+        try:
+            from collect_report_data_helpers import _SECTOR_WEIGHT_PROFILES
+            self._profiles = _SECTOR_WEIGHT_PROFILES
+        except (ImportError, AttributeError):
+            pytest.skip("collect_report_data module could not be imported")
+
+    def test_all_profiles_sum_to_1(self):
+        for sector, weights in self._profiles.items():
+            total = sum(weights.values())
+            assert abs(total - 1.0) < 0.001, (
+                f"Sector {sector} weights sum to {total}, expected 1.0"
+            )
+
+    def test_all_sectors_have_five_components(self):
+        required = {"hab", "fin", "geo", "prazo", "comp"}
+        for sector, weights in self._profiles.items():
+            assert set(weights.keys()) == required, (
+                f"Sector {sector} missing keys: {required - set(weights.keys())}"
+            )
+
+    def test_default_profile_exists(self):
+        assert "_default" in self._profiles
+
+    def test_engineering_geo_higher_than_software(self):
+        """Construction needs on-site presence; software is remote."""
+        assert self._profiles["engenharia"]["geo"] > self._profiles["software"]["geo"]
+
+    def test_software_comp_higher_than_engineering(self):
+        """Software is more commoditized, competition matters more."""
+        assert self._profiles["software"]["comp"] > self._profiles["engenharia"]["comp"]
+
+
+class TestWinProbability:
+    def setup_method(self):
+        try:
+            from collect_report_data_helpers import compute_win_probability
+            self._compute = compute_win_probability
+        except (ImportError, AttributeError):
+            pytest.skip("collect_report_data module could not be imported")
+
+    def _empresa(self, cnpj="12345678000190"):
+        return {"cnpj": cnpj, "capital_social": 2000000}
+
+    def test_bounds(self):
+        """Probability must always be between 2% and 85%."""
+        edital = {"modalidade": "Pregão Eletrônico"}
+        result = self._compute(edital, self._empresa(), [], "engenharia", 70)
+        assert 0.02 <= result["probability"] <= 0.85
+
+    def test_no_data_uses_base_rate(self):
+        """With empty competitive_intel, uses sector base rate with low confidence."""
+        edital = {"modalidade": "Concorrência"}
+        result = self._compute(edital, self._empresa(), [], "engenharia", 70)
+        assert result["confidence"] == "baixa"
+        assert result["n_unique_suppliers"] == 0
+
+    def test_monopoly_low_probability(self):
+        """Single supplier in history = very hard to break in."""
+        edital = {"modalidade": "Pregão Eletrônico"}
+        intel = [
+            {"fornecedor": "MONOPOLY INC", "cnpj_fornecedor": "99999999000100", "valor": 1000000},
+            {"fornecedor": "MONOPOLY INC", "cnpj_fornecedor": "99999999000100", "valor": 500000},
+        ]
+        result = self._compute(edital, self._empresa(), intel, "engenharia", 70)
+        assert result["probability"] <= 0.10
+        assert result["n_unique_suppliers"] == 1
+
+    def test_incumbency_bonus(self):
+        """Company already supplies this organ = bonus."""
+        edital = {"modalidade": "Concorrência"}
+        empresa = self._empresa("12345678000190")
+        intel = [
+            {"fornecedor": "OUR COMPANY", "cnpj_fornecedor": "12345678000190", "valor": 500000},
+            {"fornecedor": "COMPETITOR A", "cnpj_fornecedor": "98765432000111", "valor": 300000},
+        ]
+        result_with = self._compute(edital, empresa, intel, "engenharia", 70)
+        assert result_with["incumbency_bonus"] > 0
+
+        # Without incumbency
+        result_without = self._compute(edital, self._empresa("00000000000000"), intel, "engenharia", 70)
+        assert result_without["incumbency_bonus"] == 0
+        assert result_with["probability"] > result_without["probability"]
+
+    def test_hhi_calculation(self):
+        """HHI with 2 equal suppliers = 0.50."""
+        edital = {"modalidade": "Concorrência"}
+        intel = [
+            {"fornecedor": "A", "cnpj_fornecedor": "11111111000100", "valor": 100},
+            {"fornecedor": "B", "cnpj_fornecedor": "22222222000100", "valor": 100},
+        ]
+        result = self._compute(edital, self._empresa(), intel, "engenharia", 70)
+        assert abs(result["hhi"] - 0.50) < 0.01
+
+    def test_modality_adjustment(self):
+        """Inexigibilidade should yield higher probability than pregão eletrônico."""
+        intel = []  # No data — uses base rate
+        empresa = self._empresa()
+        inex = self._compute(
+            {"modalidade": "Inexigibilidade"}, empresa, intel, "engenharia", 70,
+        )
+        pregao = self._compute(
+            {"modalidade": "Pregão Eletrônico"}, empresa, intel, "engenharia", 70,
+        )
+        assert inex["probability"] > pregao["probability"]
+
+    def test_low_viability_reduces_probability(self):
+        """Risk score of 10 should yield lower probability than 90."""
+        edital = {"modalidade": "Concorrência"}
+        low = self._compute(edital, self._empresa(), [], "engenharia", 10)
+        high = self._compute(edital, self._empresa(), [], "engenharia", 90)
+        assert high["probability"] > low["probability"]
+
+
+class TestRiskScoreWithSectorWeights:
+    def setup_method(self):
+        try:
+            from collect_report_data_helpers import compute_risk_score
+            self._compute = compute_risk_score
+        except (ImportError, AttributeError):
+            pytest.skip("collect_report_data module could not be imported")
+
+    def test_returns_weights_in_result(self):
+        edital = {"valor_estimado": 500000, "dias_restantes": 20}
+        empresa = {"capital_social": 2000000}
+        result = self._compute(edital, empresa, {}, "engenharia")
+        assert "weights" in result
+        assert result["weights"]["geo"] == 0.25  # Engineering: high geo weight
+
+    def test_software_low_geo_weight(self):
+        edital = {
+            "valor_estimado": 500000, "dias_restantes": 20,
+            "distancia": {"km": 800},  # Very far
+        }
+        empresa = {"capital_social": 2000000}
+        eng = self._compute(edital, empresa, {}, "engenharia")
+        sw = self._compute(edital, empresa, {}, "software")
+        # Software should score higher because geo weight is only 5% vs 25%
+        assert sw["total"] > eng["total"]
+
+    def test_default_sector_backward_compat(self):
+        """No sector_key = default weights (30/25/20/15/10)."""
+        edital = {"valor_estimado": 500000, "dias_restantes": 20}
+        empresa = {"capital_social": 2000000}
+        result = self._compute(edital, empresa, {})
+        assert result["weights"]["hab"] == 0.30  # Default weight
+
+
+# ============================================================
+# SESSION 2: Object Compatibility + Habilitação
+# ============================================================
+
+
+class TestObjectCompatibility:
+    def setup_method(self):
+        try:
+            from collect_report_data_helpers import compute_object_compatibility
+            self._compute = compute_object_compatibility
+        except (ImportError, AttributeError):
+            pytest.skip("compute_object_compatibility not available")
+
+    def test_exact_subcategory_alta(self):
+        """Edital + company CNAEs matching same subcategory = ALTA."""
+        result = self._compute(
+            "Pavimentação asfáltica em vias urbanas",
+            "pavimentação recapeamento asfalto",  # CNAE text matching subcategory keywords
+            "engenharia",
+            [],
+        )
+        assert result["compatibility"] == "ALTA"
+        assert result["score"] >= 0.8
+
+    def test_same_sector_different_sub_media(self):
+        """Same sector, different subcategory = MEDIA."""
+        result = self._compute(
+            "Construção de drenagem pluvial e saneamento",
+            "construção de edifício edificação",  # edificacoes subcategory
+            "engenharia",
+            [],
+        )
+        assert result["compatibility"] == "MEDIA"
+        assert result["score"] >= 0.4
+
+    def test_no_company_subcats_baixa(self):
+        """Edital has subcategory but company has no matching keywords = BAIXA."""
+        result = self._compute(
+            "Pavimentação asfáltica em vias urbanas",
+            "servicos gerais administrativos",  # No engineering keywords
+            "engenharia",
+            [],
+        )
+        assert result["compatibility"] == "BAIXA"
+        assert result["score"] <= 0.4
+
+    def test_no_edital_subcat_media(self):
+        """When edital subcategory can't be detected = MEDIA (presumed)."""
+        result = self._compute(
+            "Serviços diversos sem especificação técnica",
+            "construção de edifício",
+            "engenharia",
+            [],
+        )
+        assert result["compatibility"] == "MEDIA"
+
+    def test_software_sector_keywords(self):
+        """Software sector subcategories detected correctly."""
+        result = self._compute(
+            "Desenvolvimento de sistema de gestão integrada",
+            "desenvolvimento de software fábrica de software",
+            "software",
+            [],
+        )
+        assert result["compatibility"] == "ALTA"
+        assert result["edital_subcategory"] is not None
+
+    def test_returns_required_fields(self):
+        """Result has all required fields."""
+        result = self._compute("Obra de pavimentação", "", "engenharia", [])
+        assert "compatibility" in result
+        assert "score" in result
+        assert "edital_subcategory" in result
+        assert "_source" in result
+
+    def test_historico_boosts_score(self):
+        """Historical contracts in same subcategory boost compatibility."""
+        no_hist = self._compute(
+            "Pavimentação asfáltica",
+            "servicos gerais",
+            "engenharia",
+            [],
+        )
+        with_hist = self._compute(
+            "Pavimentação asfáltica",
+            "servicos gerais",
+            "engenharia",
+            [{"objeto": "pavimentação de via pública"}],
+        )
+        assert with_hist["score"] >= no_hist["score"]
+
+    def test_unknown_sector_returns_media(self):
+        """Unknown sector (no subcategories defined) returns MEDIA."""
+        result = self._compute("Qualquer objeto", "qualquer cnae", "desconhecido_xyz", [])
+        assert result["compatibility"] == "MEDIA"
+        assert result["score"] == 0.5
+
+
+class TestHabilitacaoAnalysis:
+    def setup_method(self):
+        try:
+            from collect_report_data_helpers import compute_habilitacao_analysis
+            self._compute = compute_habilitacao_analysis
+        except (ImportError, AttributeError):
+            pytest.skip("compute_habilitacao_analysis not available")
+
+    def _empresa(self, capital=5000000, sancoes=None, cnae="4120400"):
+        return {
+            "capital_social": capital,
+            "cnae_principal": cnae,
+            "sancoes": sancoes or {},
+        }
+
+    def test_apta_with_sufficient_capital(self):
+        """Company with sufficient capital and no sanctions = APTA."""
+        edital = {"valor_estimado": 1000000}
+        result = self._compute(edital, self._empresa(capital=5000000), {}, "engenharia")
+        assert result["status"] in ("APTA", "PARCIALMENTE_APTA")
+        assert result["score"] >= 50
+
+    def test_inapta_with_active_sanction(self):
+        """Active CEIS sanction = INAPTA."""
+        edital = {"valor_estimado": 1000000}
+        empresa = self._empresa(sancoes={"ceis": True})
+        result = self._compute(edital, empresa, {}, "engenharia")
+        assert result["status"] == "INAPTA"
+
+    def test_critico_capital_insufficient(self):
+        """Capital way below required = CRÍTICO dimension."""
+        edital = {"valor_estimado": 50000000}
+        empresa = self._empresa(capital=100000)
+        result = self._compute(edital, empresa, {}, "engenharia")
+        dims = {d["dimension"]: d["status"] for d in result["dimensions"]}
+        assert dims["Capital Mínimo"] == "CRÍTICO"
+
+    def test_verificar_when_sicaf_not_consulted(self):
+        """SICAF not consulted = VERIFICAR for fiscal dimension."""
+        edital = {"valor_estimado": 500000}
+        result = self._compute(edital, self._empresa(), {"status": "NÃO CONSULTADO"}, "engenharia")
+        dims = {d["dimension"]: d["status"] for d in result["dimensions"]}
+        assert dims["Regularidade Fiscal"] == "VERIFICAR"
+
+    def test_sicaf_restriction_critico(self):
+        """SICAF with restriction = CRÍTICO fiscal."""
+        edital = {"valor_estimado": 500000}
+        sicaf = {"status": "ATIVO", "restricao": {"possui_restricao": True}}
+        result = self._compute(edital, self._empresa(), sicaf, "engenharia")
+        dims = {d["dimension"]: d["status"] for d in result["dimensions"]}
+        assert dims["Regularidade Fiscal"] == "CRÍTICO"
+
+    def test_returns_gaps(self):
+        """Gaps list populated when issues found."""
+        edital = {"valor_estimado": 50000000}
+        empresa = self._empresa(capital=100000)
+        result = self._compute(edital, empresa, {}, "engenharia")
+        assert len(result["gaps"]) > 0
+
+    def test_score_range(self):
+        """Score is 0-100."""
+        edital = {"valor_estimado": 500000}
+        result = self._compute(edital, self._empresa(), {}, "engenharia")
+        assert 0 <= result["score"] <= 100
+
+    def test_multiple_sanctions_all_flagged(self):
+        """Multiple sanctions all mentioned in gap detail."""
+        edital = {"valor_estimado": 500000}
+        empresa = self._empresa(sancoes={"ceis": True, "cnep": True})
+        result = self._compute(edital, empresa, {}, "engenharia")
+        assert result["status"] == "INAPTA"
+        sanction_dim = [d for d in result["dimensions"] if d["dimension"] == "Sanções"][0]
+        assert "CEIS" in sanction_dim["detail"]
+        assert "CNEP" in sanction_dim["detail"]
+
+
+# ============================================================
+# SESSION 3: Competitive Analysis + Risk Analysis
+# ============================================================
+
+
+class TestCompetitiveAnalysis:
+    def setup_method(self):
+        try:
+            from collect_report_data_helpers import compute_competitive_analysis
+            self._compute = compute_competitive_analysis
+        except (ImportError, AttributeError):
+            pytest.skip("compute_competitive_analysis not available")
+
+    def test_empty_contracts_desconhecida(self):
+        """No contracts = DESCONHECIDA competition level."""
+        result = self._compute([])
+        assert result["competition_level"] == "DESCONHECIDA"
+        assert result["unique_suppliers"] == 0
+        assert result["hhi"] == 0.0
+
+    def test_single_supplier_monopoly(self):
+        """Single supplier = BAIXA competition, high HHI."""
+        contracts = [
+            {"cnpj_fornecedor": "12345678000100", "fornecedor": "Empresa X", "valor": 1000000},
+            {"cnpj_fornecedor": "12345678000100", "fornecedor": "Empresa X", "valor": 500000},
+        ]
+        result = self._compute(contracts)
+        assert result["unique_suppliers"] == 1
+        assert result["competition_level"] == "BAIXA"
+        assert result["hhi"] == 1.0  # Full concentration
+
+    def test_multiple_suppliers(self):
+        """Multiple suppliers = higher competition level."""
+        contracts = [
+            {"cnpj_fornecedor": f"1234567800010{i}", "fornecedor": f"Emp {i}", "valor": 100000}
+            for i in range(6)
+        ]
+        result = self._compute(contracts)
+        assert result["unique_suppliers"] == 6
+        assert result["competition_level"] in ("ALTA", "MUITO_ALTA")
+        assert result["hhi"] < 0.5
+
+    def test_hhi_calculation_correctness(self):
+        """HHI with known inputs produces correct result."""
+        # Two suppliers with equal share → HHI = 0.5
+        contracts = [
+            {"cnpj_fornecedor": "11111111000100", "fornecedor": "A", "valor": 500000},
+            {"cnpj_fornecedor": "22222222000100", "fornecedor": "B", "valor": 500000},
+        ]
+        result = self._compute(contracts)
+        assert abs(result["hhi"] - 0.5) < 0.01
+
+    def test_top_supplier_populated(self):
+        """Top supplier info is populated."""
+        contracts = [
+            {"cnpj_fornecedor": "11111111000100", "fornecedor": "Big Corp", "valor": 900000},
+            {"cnpj_fornecedor": "22222222000100", "fornecedor": "Small Co", "valor": 100000},
+        ]
+        result = self._compute(contracts)
+        assert result["top_supplier"] is not None
+        assert result["top_supplier"]["nome"] == "Big Corp"
+
+    def test_risk_signals_monopoly(self):
+        """Monopoly scenario should flag risk signals."""
+        contracts = [
+            {"cnpj_fornecedor": "11111111000100", "fornecedor": "Monopolist", "valor": 5000000},
+        ]
+        result = self._compute(contracts)
+        assert len(result.get("risk_signals", [])) > 0
+
+
+class TestRiskAnalysis:
+    def setup_method(self):
+        try:
+            from collect_report_data_helpers import compute_risk_analysis
+            self._compute = compute_risk_analysis
+        except (ImportError, AttributeError):
+            pytest.skip("compute_risk_analysis not available")
+
+    def test_valor_sigiloso_alta(self):
+        """Zero estimated value = ALTA risk flag."""
+        edital = {"valor_estimado": 0, "dias_restantes": 30}
+        result = self._compute(edital, {"competition_level": "DESCONHECIDA"}, "engenharia")
+        flags = result["flags"]
+        sigiloso = [f for f in flags if "sigilo" in f.get("flag", "").lower()]
+        assert len(sigiloso) > 0
+        assert sigiloso[0]["severity"] == "ALTA"
+
+    def test_tight_timeline_alta(self):
+        """Very short deadline = ALTA risk flag."""
+        edital = {"valor_estimado": 500000, "dias_restantes": 3}
+        result = self._compute(edital, {"competition_level": "DESCONHECIDA"}, "engenharia")
+        flags = result["flags"]
+        timeline = [f for f in flags if "prazo" in f.get("flag", "").lower()]
+        assert len(timeline) > 0
+        assert timeline[0]["severity"] == "ALTA"
+
+    def test_moderate_timeline_media(self):
+        """Moderate deadline = MEDIA risk flag."""
+        edital = {"valor_estimado": 500000, "dias_restantes": 10}
+        result = self._compute(edital, {"competition_level": "DESCONHECIDA"}, "engenharia")
+        flags = result["flags"]
+        timeline = [f for f in flags if "prazo" in f.get("flag", "").lower()]
+        if timeline:
+            assert timeline[0]["severity"] == "MEDIA"
+
+    def test_comfortable_timeline_no_flag(self):
+        """Comfortable deadline (30+ days) = no timeline risk flag."""
+        edital = {"valor_estimado": 500000, "dias_restantes": 45}
+        result = self._compute(edital, {"competition_level": "DESCONHECIDA"}, "engenharia")
+        flags = result["flags"]
+        timeline = [f for f in flags if "prazo" in f.get("flag", "").lower()]
+        assert len(timeline) == 0
+
+    def test_returns_flags_list(self):
+        """Result contains flags list."""
+        edital = {"valor_estimado": 500000, "dias_restantes": 30}
+        result = self._compute(edital, {"competition_level": "DESCONHECIDA"}, "engenharia")
+        assert "flags" in result
+        assert isinstance(result["flags"], list)
+
+    def test_sector_specific_risks(self):
+        """Sector-specific risk flags appear for relevant sectors."""
+        edital = {"valor_estimado": 500000, "dias_restantes": 30}
+        result = self._compute(edital, {"competition_level": "DESCONHECIDA"}, "facilities")
+        # facilities should have subprecificação risk
+        sector_flags = [f for f in result["flags"] if f.get("category") == "setor"]
+        assert len(sector_flags) > 0
+
+
+# ============================================================
+# SESSION 4: Portfolio Analysis + Integration
+# ============================================================
+
+
+class TestPortfolioAnalysis:
+    def setup_method(self):
+        try:
+            from collect_report_data_helpers import compute_portfolio_analysis
+            self._compute = compute_portfolio_analysis
+        except (ImportError, AttributeError):
+            pytest.skip("compute_portfolio_analysis not available")
+
+    def _make_edital(self, prob=0.15, risk=60, hab_status="APTA", valor=500000, roi_max=50000):
+        return {
+            "win_probability": {"probability": prob},
+            "risk_score": {"total": risk},
+            "habilitacao_analysis": {"status": hab_status},
+            "valor_estimado": valor,
+            "objeto": "Teste de edital",
+            "roi_potential": {"roi_max": roi_max},
+            "orgao": "Prefeitura Teste",
+        }
+
+    def test_quick_win_classification(self):
+        """High probability + high viability = QUICK_WIN."""
+        editais = [self._make_edital(prob=0.20, risk=70)]
+        empresa = {"capital_social": 5000000}
+        result = self._compute(editais, empresa, "engenharia")
+        assert len(result["quick_wins"]) == 1
+        assert editais[0]["strategic_category"] == "QUICK_WIN"
+
+    def test_inaccessible_classification(self):
+        """INAPTA habilitação = INACESSÍVEL."""
+        editais = [self._make_edital(prob=0.20, risk=70, hab_status="INAPTA")]
+        empresa = {"capital_social": 5000000}
+        result = self._compute(editais, empresa, "engenharia")
+        assert result["inaccessible"] == 1
+        assert editais[0]["strategic_category"] == "INACESSÍVEL"
+
+    def test_investment_classification(self):
+        """Low probability but positive value = INVESTIMENTO."""
+        editais = [self._make_edital(prob=0.05, risk=40, valor=1000000)]
+        empresa = {"capital_social": 5000000}
+        result = self._compute(editais, empresa, "engenharia")
+        assert len(result["strategic_investments"]) == 1
+
+    def test_portfolio_metrics(self):
+        """Portfolio returns aggregate metrics."""
+        editais = [
+            self._make_edital(prob=0.20, risk=70, roi_max=100000),
+            self._make_edital(prob=0.12, risk=50, roi_max=80000),
+        ]
+        empresa = {"capital_social": 5000000}
+        result = self._compute(editais, empresa, "engenharia")
+        assert "total_potential_revenue" in result
+        assert "estimated_participation_cost" in result
+        assert "participation_cost_per_edital" in result
+        assert "organ_priority_map" in result
+
+    def test_empty_editais(self):
+        """Empty list produces valid portfolio."""
+        result = self._compute([], {"capital_social": 0}, "engenharia")
+        assert result["quick_wins"] == []
+        assert result["inaccessible"] == 0
+
+    def test_mixed_portfolio(self):
+        """Mixed editais correctly classified."""
+        editais = [
+            self._make_edital(prob=0.25, risk=80),   # QUICK_WIN
+            self._make_edital(prob=0.05, risk=40),    # INVESTIMENTO
+            self._make_edital(prob=0.20, risk=70, hab_status="INAPTA"),  # INACESSÍVEL
+        ]
+        empresa = {"capital_social": 5000000}
+        result = self._compute(editais, empresa, "engenharia")
+        categories = [ed["strategic_category"] for ed in editais]
+        assert "QUICK_WIN" in categories
+        assert "INACESSÍVEL" in categories
+
+
+class TestComputeAllDeterministicIntegration:
+    """Integration test: compute_all_deterministic chains all scoring functions."""
+
+    def setup_method(self):
+        try:
+            from collect_report_data_helpers import compute_all_deterministic
+            self._compute = compute_all_deterministic
+        except (ImportError, AttributeError):
+            pytest.skip("compute_all_deterministic not available")
+
+    def test_full_chain_produces_all_fields(self):
+        """All deterministic fields populated after compute_all_deterministic."""
+        editais = [{
+            "valor_estimado": 1000000,
+            "dias_restantes": 20,
+            "modalidade": "Pregão Eletrônico",
+            "objeto": "Construção de quadra poliesportiva",
+            "data_encerramento": "2026-04-15",
+            "orgao": "Prefeitura Municipal",
+        }]
+        empresa = {"capital_social": 5000000, "cnae_principal": "4120400", "sancoes": {}}
+        sicaf = {"status": "NÃO CONSULTADO"}
+
+        self._compute(editais, empresa, sicaf, "engenharia")
+
+        ed = editais[0]
+        assert "risk_score" in ed
+        assert "win_probability" in ed
+        assert "roi_potential" in ed
+        assert "cronograma" in ed
+        assert "object_compatibility" in ed
+        assert "habilitacao_analysis" in ed
+        assert "competitive_analysis" in ed
+        assert "risk_analysis" in ed
+        assert "strategic_category" in ed
+
+    def test_backward_compat_minimal_edital(self):
+        """Minimal edital (no optional fields) doesn't crash."""
+        editais = [{"valor_estimado": 0, "objeto": "Teste"}]
+        empresa = {"capital_social": 0}
+        sicaf = {}
+
+        self._compute(editais, empresa, sicaf, "")
+
+        ed = editais[0]
+        assert "risk_score" in ed
+        assert "win_probability" in ed
+
+
+class TestSectorSubcategories:
+    """Validate _SECTOR_SUBCATEGORIES structure."""
+
+    def setup_method(self):
+        try:
+            from collect_report_data_helpers import _SECTOR_SUBCATEGORIES
+            self._subcats = _SECTOR_SUBCATEGORIES
+        except (ImportError, AttributeError):
+            pytest.skip("_SECTOR_SUBCATEGORIES not available")
+
+    def test_all_sectors_have_subcategories(self):
+        """Every sector has at least 2 subcategories."""
+        for sector, subs in self._subcats.items():
+            assert len(subs) >= 2, f"{sector} has only {len(subs)} subcategories"
+
+    def test_subcategories_have_keywords(self):
+        """Each subcategory has at least 1 keyword."""
+        for sector, subs in self._subcats.items():
+            for sub_name, keywords in subs.items():
+                assert len(keywords) >= 1, f"{sector}/{sub_name} has no keywords"
+
+
+class TestHabilitacaoRequirements:
+    """Validate _HABILITACAO_REQUIREMENTS structure."""
+
+    def setup_method(self):
+        try:
+            from collect_report_data_helpers import _HABILITACAO_REQUIREMENTS
+            self._reqs = _HABILITACAO_REQUIREMENTS
+        except (ImportError, AttributeError):
+            pytest.skip("_HABILITACAO_REQUIREMENTS not available")
+
+    def test_default_exists(self):
+        assert "_default" in self._reqs
+
+    def test_all_have_required_keys(self):
+        for sector, reqs in self._reqs.items():
+            assert "capital_minimo_pct" in reqs, f"{sector} missing capital_minimo_pct"
+            assert "atestados" in reqs, f"{sector} missing atestados"
+            assert "fiscal" in reqs, f"{sector} missing fiscal"

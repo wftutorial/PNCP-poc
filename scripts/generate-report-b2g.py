@@ -755,7 +755,7 @@ _viability_shown = False
 
 
 def _build_viability_text(risk: dict, styles: dict) -> list:
-    """Build viability indicator with score decomposition."""
+    """Build viability indicator with score decomposition using sector-specific weights."""
     global _viability_shown
     score = _safe_int(risk.get("total") if isinstance(risk, dict) else risk)
     if score <= 0:
@@ -773,20 +773,31 @@ def _build_viability_text(risk: dict, styles: dict) -> list:
         styles["body"],
     )]
 
-    # Score decomposition — show component breakdown when available
+    # Score decomposition — use actual weights from risk dict (sector-specific)
     if isinstance(risk, dict):
-        components = []
-        weight_map = {
-            "habilitacao": ("Habilitação", 30),
-            "financeiro": ("Financeiro", 25),
-            "geografico": ("Geográfico", 20),
-            "prazo": ("Prazo", 15),
-            "competitivo": ("Competitivo", 10),
+        weights = risk.get("weights", {})
+        label_map = {
+            "habilitacao": "Habilitação",
+            "financeiro": "Financeiro",
+            "geografico": "Geográfico",
+            "prazo": "Prazo",
+            "competitivo": "Competitivo",
         }
-        for key, (label, peso) in weight_map.items():
+        components = []
+        for key, label in label_map.items():
             val = risk.get(key)
-            if val is not None:
-                components.append(f"{label}: {_safe_int(val)} (peso {peso}%)")
+            peso = weights.get(key[0:3] if key == "habilitacao" else key[:3],
+                              weights.get(key))
+            # Map full key names to weight keys
+            weight_key_map = {
+                "habilitacao": "hab", "financeiro": "fin",
+                "geografico": "geo", "prazo": "prazo", "competitivo": "comp",
+            }
+            peso = weights.get(weight_key_map.get(key, key))
+            if val is not None and peso is not None:
+                components.append(f"{label}: {_safe_int(val)} (peso {peso * 100:.0f}%)")
+            elif val is not None:
+                components.append(f"{label}: {_safe_int(val)}")
 
         if components:
             el.append(Paragraph(
@@ -795,11 +806,25 @@ def _build_viability_text(risk: dict, styles: dict) -> list:
             ))
 
     if not _viability_shown:
-        el.append(Paragraph(
-            "Índice calculado com base em habilitação (30%), prazo (15%), "
-            "valor vs. capacidade (25%), proximidade geográfica (20%) e competitividade (10%).",
-            styles["caption"],
-        ))
+        # Dynamic explanation based on weights
+        if isinstance(risk, dict) and risk.get("weights"):
+            w = risk["weights"]
+            parts = []
+            name_map = {"hab": "habilitação", "fin": "valor vs. capacidade",
+                        "geo": "proximidade geográfica", "prazo": "prazo",
+                        "comp": "competitividade"}
+            for k in sorted(w, key=lambda x: w[x], reverse=True):
+                parts.append(f"{name_map.get(k, k)} ({w[k] * 100:.0f}%)")
+            el.append(Paragraph(
+                f"Pesos calibrados para o setor da empresa: {', '.join(parts)}.",
+                styles["caption"],
+            ))
+        else:
+            el.append(Paragraph(
+                "Índice calculado com base em habilitação, prazo, "
+                "valor vs. capacidade, proximidade geográfica e competitividade.",
+                styles["caption"],
+            ))
         _viability_shown = True
 
     return el
@@ -852,7 +877,7 @@ _roi_shown = False
 
 
 def _build_roi_text(roi: dict, ed: dict, styles: dict) -> list:
-    """Build ROI indicator with calculation rationale."""
+    """Build ROI indicator with Bayesian probability rationale."""
     global _roi_shown
     if not roi or not isinstance(roi, dict):
         return []
@@ -863,27 +888,55 @@ def _build_roi_text(roi: dict, ed: dict, styles: dict) -> list:
         return []
 
     roi_text = f"{_currency_short(roi_min)} — {_currency_short(roi_max)}"
-    prob_text = f"{probability:.0f}%" if probability else "N/I"
+    prob_text = f"{probability * 100:.1f}%" if probability else "N/I"
+    confidence = roi.get("confidence", "")
+
+    # Confidence indicator
+    conf_label = ""
+    if confidence == "alta":
+        conf_label = " (confiança alta)"
+    elif confidence == "media":
+        conf_label = " (confiança média)"
+    elif confidence == "baixa":
+        conf_label = " (base setorial)"
 
     el = [Paragraph(
         f"<b>Faturamento Potencial:</b> {roi_text}  |  "
-        f"Probabilidade de vitória: {prob_text}",
+        f"Probabilidade de vitória: {prob_text}{conf_label}",
         styles["body"],
     )]
 
-    # Calculation rationale
+    # Calculation rationale — now uses win_probability decomposition
     valor_edital = _safe_float(ed.get("valor_estimado"))
-    risk = ed.get("risk_score", {})
-    score_total = _safe_int(risk.get("total") if isinstance(risk, dict) else risk)
+    win_prob = ed.get("win_probability", {})
     memo_parts = []
     if valor_edital > 0:
         memo_parts.append(f"Valor do edital: {_currency(valor_edital)}")
     if roi_min > 0 and valor_edital > 0:
         margin_min = roi_min / valor_edital * 100
         margin_max = roi_max / valor_edital * 100
-        memo_parts.append(f"Margem estimada: {margin_min:.0f}%–{margin_max:.0f}%")
-    if probability and score_total:
-        memo_parts.append(f"Probabilidade derivada do índice de viabilidade ({score_total}/100)")
+        memo_parts.append(f"Margem estimada: {margin_min:.1f}%–{margin_max:.1f}%")
+
+    # Win probability derivation
+    if win_prob:
+        n_sup = win_prob.get("n_unique_suppliers", 0)
+        n_con = win_prob.get("n_contracts_analyzed", 0)
+        if n_con > 0 and n_sup > 0:
+            memo_parts.append(
+                f"Probabilidade baseada em análise competitiva "
+                f"({n_sup} fornecedores, {n_con} contratos históricos)"
+            )
+        else:
+            base = win_prob.get("base_rate", 0)
+            memo_parts.append(
+                f"Probabilidade baseada na taxa setorial ({base * 100:.0f}% base)"
+            )
+        mod = win_prob.get("modality_multiplier", 1.0)
+        if mod != 1.0:
+            direction = "maior" if mod > 1.0 else "menor"
+            memo_parts.append(f"Modalidade ajusta competição ({direction})")
+        if win_prob.get("incumbency_bonus", 0) > 0:
+            memo_parts.append("Bônus de incumbência (+10pp por relacionamento existente)")
 
     if memo_parts:
         el.append(Paragraph(
@@ -893,8 +946,9 @@ def _build_roi_text(roi: dict, ed: dict, styles: dict) -> list:
 
     if not _roi_shown:
         el.append(Paragraph(
-            "Faturamento potencial = valor do edital x margem típica do setor. "
-            "Probabilidade de vitória baseada no índice de viabilidade e perfil competitivo.",
+            "Faturamento potencial = valor do edital × probabilidade × margem do setor. "
+            "Probabilidade calculada via modelo competitivo (fornecedores históricos, "
+            "modalidade, incumbência) ajustado pelo índice de viabilidade.",
             styles["caption"],
         ))
         _roi_shown = True
@@ -1270,6 +1324,8 @@ def _build_detailed_analysis(data: dict, styles: dict, sec: dict | None = None) 
             ("Data de Abertura", _date(ed.get("data_abertura"))),
             ("Data de Encerramento", _date(ed.get("data_encerramento"))),
             ("Situação", _format_dias_restantes(ed.get("dias_restantes"))),
+            ("Compatibilidade", ed.get("object_compatibility", {}).get("compatibility")),
+            ("Categoria Estratégica", ed.get("strategic_category")),
             ("Fonte", ed.get("fonte")),
         ]
         link = _fix_pncp_link(ed.get("link", ""))
@@ -1340,6 +1396,14 @@ def _build_detailed_analysis(data: dict, styles: dict, sec: dict | None = None) 
 
         if metric_block:
             el.append(KeepTogether(metric_block))
+
+        # Habilitação gap analysis
+        hab = ed.get("habilitacao_analysis", {})
+        el.extend(_build_habilitacao_table(hab, styles))
+
+        # Systemic risk flags
+        risk_an = ed.get("risk_analysis", {})
+        el.extend(_build_risk_flags(risk_an, styles))
 
         # Chronogram
         cronograma = ed.get("cronograma", [])
@@ -1722,6 +1786,194 @@ def _build_data_sources_section(data: dict, styles: dict, sec: dict | None = Non
 
 
 # ============================================================
+# SESSION 2-4 PDF SECTIONS
+# ============================================================
+
+_HAB_STATUS_COLORS = {
+    "OK": colors.HexColor("#2D7D46"),
+    "ATENÇÃO": colors.HexColor("#B8860B"),
+    "CRÍTICO": colors.HexColor("#B5342A"),
+    "VERIFICAR": colors.HexColor("#5A6577"),
+}
+
+_HAB_OVERALL_LABELS = {
+    "APTA": ("Apta a Participar", colors.HexColor("#2D7D46")),
+    "PARCIALMENTE_APTA": ("Parcialmente Apta — Verificações Necessárias", colors.HexColor("#B8860B")),
+    "INAPTA": ("Inapta — Impedimentos Identificados", colors.HexColor("#B5342A")),
+}
+
+
+def _build_habilitacao_table(hab: dict, styles: dict) -> list:
+    """Render habilitação gap analysis as a status-colored table."""
+    if not hab or not hab.get("dimensions"):
+        return []
+
+    el = []
+    overall = hab.get("status", "?")
+    label, label_color = _HAB_OVERALL_LABELS.get(overall, (overall, TEXT_SECONDARY))
+
+    el.append(Paragraph(
+        f"<b>Habilitação:</b> <font color='{label_color.hexval()}'>{label}</font>",
+        ParagraphStyle("hab_title", parent=styles["body"], fontName="Helvetica-Bold", fontSize=9),
+    ))
+
+    avail = PAGE_WIDTH - 2 * MARGIN
+    rows = [[
+        Paragraph("<b>Dimensão</b>", styles["cell_header"]),
+        Paragraph("<b>Status</b>", styles["cell_header"]),
+        Paragraph("<b>Detalhe</b>", styles["cell_header"]),
+    ]]
+
+    for dim in hab["dimensions"]:
+        status = dim.get("status", "?")
+        status_color = _HAB_STATUS_COLORS.get(status, TEXT_SECONDARY)
+        rows.append([
+            Paragraph(dim.get("dimension", ""), styles["cell"]),
+            Paragraph(f"<b>{status}</b>", ParagraphStyle(
+                f"hab_s_{status[:3]}", parent=styles["cell"],
+                fontName="Helvetica-Bold", textColor=status_color,
+            )),
+            Paragraph(_s(dim.get("detail", "")), styles["cell"]),
+        ])
+
+    t = _three_rule_table(rows, [avail * 0.18, avail * 0.12, avail * 0.70])
+    el.append(t)
+    el.append(Spacer(1, 2 * mm))
+    return el
+
+
+def _build_risk_flags(risk_analysis: dict, styles: dict) -> list:
+    """Render systemic risk flags as colored bullets."""
+    if not risk_analysis or not risk_analysis.get("flags"):
+        return []
+
+    el = []
+    severity_markers = {
+        "ALTA": f"<font color='{SIGNAL_RED.hexval()}'><b>[ALTO]</b></font>",
+        "MEDIA": f"<font color='{colors.HexColor('#B8860B').hexval()}'><b>[MÉDIO]</b></font>",
+        "BAIXA": f"<font color='{TEXT_SECONDARY.hexval()}'>[BAIXO]</font>",
+    }
+
+    risk_level = risk_analysis.get("risk_level", "")
+    el.append(Paragraph(
+        f"<b>Riscos Sistêmicos</b> — Nível geral: {risk_level}",
+        ParagraphStyle("risk_title", parent=styles["body"], fontName="Helvetica-Bold", fontSize=9),
+    ))
+
+    for flag in risk_analysis["flags"]:
+        marker = severity_markers.get(flag.get("severity", ""), "")
+        el.append(Paragraph(
+            f"  {marker}  {_s(flag.get('flag', ''))}",
+            ParagraphStyle("risk_bullet", parent=styles["body_small"], leftIndent=8),
+        ))
+
+    el.append(Spacer(1, 2 * mm))
+    return el
+
+
+def _build_portfolio_section(data: dict, styles: dict, sec: dict | None = None) -> list:
+    """Render portfolio strategic matrix — new section between competitive and market intel."""
+    editais = data.get("editais", [])
+    if not editais:
+        return []
+
+    # Check if any edital has strategic_category
+    if not any(ed.get("strategic_category") for ed in editais):
+        return []
+
+    el = []
+    num = sec["next"]() if sec else 7
+    el.extend(_section_heading(f"{num}. Matriz Estratégica de Portfólio", styles))
+
+    el.append(Paragraph(
+        "Classificação das oportunidades por potencial estratégico, "
+        "combinando probabilidade de vitória, viabilidade técnica e valor de investimento.",
+        styles["body_small"],
+    ))
+    el.append(Spacer(1, 3 * mm))
+
+    # Categorize
+    categories = {
+        "QUICK_WIN": {"label": "Quick Wins", "color": colors.HexColor("#2D7D46"), "editais": []},
+        "OPORTUNIDADE": {"label": "Oportunidades", "color": colors.HexColor("#2563EB"), "editais": []},
+        "INVESTIMENTO": {"label": "Investimentos Estratégicos", "color": colors.HexColor("#B8860B"), "editais": []},
+        "INACESSÍVEL": {"label": "Inacessíveis", "color": SIGNAL_RED, "editais": []},
+        "BAIXA_PRIORIDADE": {"label": "Baixa Prioridade", "color": TEXT_MUTED, "editais": []},
+    }
+
+    for idx, ed in enumerate(editais, 1):
+        cat = ed.get("strategic_category", "BAIXA_PRIORIDADE")
+        if cat in categories:
+            categories[cat]["editais"].append((idx, ed))
+
+    avail = PAGE_WIDTH - 2 * MARGIN
+
+    # Summary counts row
+    summary_rows = [[
+        Paragraph("<b>Categoria</b>", styles["cell_header"]),
+        Paragraph("<b>Qtd</b>", styles["cell_header"]),
+        Paragraph("<b>Descrição</b>", styles["cell_header"]),
+    ]]
+
+    cat_descriptions = {
+        "QUICK_WIN": "Alta probabilidade + alta viabilidade — prioridade máxima",
+        "OPORTUNIDADE": "Probabilidade moderada — vale a preparação cuidadosa",
+        "INVESTIMENTO": "Baixa probabilidade imediata, alto valor para acervo e relacionamento",
+        "INACESSÍVEL": "Impedimentos de habilitação — não participar",
+        "BAIXA_PRIORIDADE": "Baixo retorno esperado para o perfil atual",
+    }
+
+    for cat_key, cat_info in categories.items():
+        n = len(cat_info["editais"])
+        if n == 0:
+            continue
+        summary_rows.append([
+            Paragraph(
+                f"<b>{cat_info['label']}</b>",
+                ParagraphStyle(f"port_{cat_key[:4]}", parent=styles["cell"],
+                               fontName="Helvetica-Bold", textColor=cat_info["color"]),
+            ),
+            Paragraph(str(n), styles["cell"]),
+            Paragraph(cat_descriptions.get(cat_key, ""), styles["cell"]),
+        ])
+
+    if len(summary_rows) > 1:
+        t = _three_rule_table(summary_rows, [avail * 0.25, avail * 0.08, avail * 0.67])
+        el.append(t)
+        el.append(Spacer(1, 4 * mm))
+
+    # Quick Wins detail
+    qw = categories["QUICK_WIN"]["editais"]
+    if qw:
+        el.append(Paragraph("<b>Quick Wins — Ação Imediata Recomendada</b>", styles["h3"]))
+        for idx, ed in qw:
+            prob = ed.get("win_probability", {}).get("probability", 0)
+            valor = ed.get("valor_estimado", 0)
+            obj = _s((ed.get("objeto") or "")[:100])
+            el.append(Paragraph(
+                f"<b>{idx}.</b> {obj} — Prob. {prob:.0%}, Valor {_currency(valor)}",
+                styles["body_small"],
+            ))
+        el.append(Spacer(1, 3 * mm))
+
+    # Investments detail
+    inv = categories["INVESTIMENTO"]["editais"]
+    if inv:
+        el.append(Paragraph("<b>Investimentos Estratégicos — Construção de Acervo</b>", styles["h3"]))
+        for idx, ed in inv:
+            obj = _s((ed.get("objeto") or "")[:100])
+            orgao = _s((ed.get("orgao") or "")[:60])
+            el.append(Paragraph(
+                f"<b>{idx}.</b> {obj} — {orgao}",
+                styles["body_small"],
+            ))
+        el.append(Spacer(1, 3 * mm))
+
+    el.append(Spacer(1, 6 * mm))
+    return el
+
+
+# ============================================================
 # MAIN
 # ============================================================
 
@@ -1802,6 +2054,7 @@ def generate_report_b2g(data: dict) -> BytesIO:
     elements.extend(_build_opportunities_overview(data, styles, sec))
     elements.extend(_build_detailed_analysis(data, styles, sec))
     elements.extend(_build_competitive_section(data, styles, sec))
+    elements.extend(_build_portfolio_section(data, styles, sec))
     elements.extend(_build_market_intelligence(data, styles, sec))
     elements.extend(_build_querido_diario(data, styles, sec))
     elements.extend(_build_next_steps(data, styles, sec))

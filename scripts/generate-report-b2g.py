@@ -1320,16 +1320,31 @@ def _build_roi_text(roi: dict, ed: dict, styles: dict) -> list:
 
 def _build_competitive_section(data: dict, styles: dict, sec: dict) -> list:
     entries = []
+    seen_orgaos = set()
     for ed in data.get("editais", []):
-        ci = ed.get("competitive_intel", [])
-        if ci:
-            orgao = _s(ed.get("orgao", ""))
+        ci = ed.get("competitive_intel", {})
+        orgao = _s(ed.get("orgao", ""))
+        if orgao in seen_orgaos:
+            continue
+        if isinstance(ci, dict) and ci.get("top_fornecedores"):
+            seen_orgaos.add(orgao)
+            for c in ci["top_fornecedores"][:5]:
+                objs = c.get("objetos", [])
+                obj_str = _trunc(_s(objs[0] if objs else ""), 60)
+                entries.append({
+                    "orgao": orgao,
+                    "fornecedor": _s(c.get("nome", "")),
+                    "objeto": obj_str,
+                    "valor": c.get("valor_total"),
+                    "data": "",
+                })
+        elif isinstance(ci, list):
             for c in ci[:5]:
                 entries.append({
                     "orgao": orgao,
-                    "fornecedor": _s(c.get("fornecedor", "")),
+                    "fornecedor": _s(c.get("fornecedor", c.get("nome", ""))),
                     "objeto": _trunc(_s(c.get("objeto", "")), 60),
-                    "valor": c.get("valor"),
+                    "valor": c.get("valor", c.get("valor_total")),
                     "data": c.get("data", ""),
                 })
     if not entries:
@@ -2083,10 +2098,30 @@ def _build_querido_diario(data: dict, styles: dict, sec: dict | None = None) -> 
     if not mencoes:
         return el
 
+    # Filter QD: keep only mentions from UFs where editais exist or empresa is based
+    empresa = data.get("empresa", {})
+    uf_sede = (empresa.get("uf_sede", "") or "").upper()
+    editais_ufs = {(e.get("uf", "") or "").upper() for e in data.get("editais", [])}
+    relevant_ufs = editais_ufs | ({uf_sede} if uf_sede else set())
+
+    if relevant_ufs:
+        filtered = []
+        for m in mencoes:
+            territorio = (m.get("territorio", "") or "").upper()
+            # Check if any relevant UF appears in territorio string
+            if any(uf in territorio for uf in relevant_ufs if uf):
+                filtered.append(m)
+        if not filtered:
+            filtered = mencoes[:3]  # Keep top 3 even if no UF match
+        mencoes = filtered
+
+    if not mencoes:
+        return el
+
     num = sec["next"]() if sec else 6
     el.extend(_section_heading(f"{num}. Menções em Diários Oficiais", styles))
     el.append(Paragraph(
-        "Publicações encontradas no Querido Diário (diários oficiais municipais).",
+        "Publicações em diários oficiais de municípios relevantes para o perfil da empresa.",
         styles["body_small"],
     ))
     el.append(Spacer(1, 3 * mm))
@@ -2123,6 +2158,155 @@ def _build_querido_diario(data: dict, styles: dict, sec: dict | None = None) -> 
     t = _three_rule_table(rows, [avail * 0.05, avail * 0.22, avail * 0.73])
     el.append(t)
     el.append(Spacer(1, 8 * mm))
+    return el
+
+
+def _build_prioritization(data: dict, styles: dict, sec: dict | None = None) -> list:
+    """Consolidated ranking of PARTICIPAR editais — hierarchized for the decision-maker."""
+    editais = data.get("editais", [])
+    participar = []
+    for idx, ed in enumerate(editais, 1):
+        rec = _normalize_recommendation(_s(ed.get("recomendacao", "")))
+        if rec != "PARTICIPAR":
+            continue
+        risk = ed.get("risk_score", {})
+        roi = ed.get("roi_potential", {})
+        wp = ed.get("win_probability", {})
+        score = _safe_int(risk.get("total")) if isinstance(risk, dict) else 0
+        roi_max = _safe_float(roi.get("roi_max", 0))
+        prob = _safe_float(wp.get("probability", 0))
+        # Composite ranking: weighted by ROI, viability, and probability
+        rank_score = roi_max * 0.4 + score * prob * 100 * 0.6
+        participar.append((idx, ed, score, roi_max, prob, rank_score))
+
+    if len(participar) < 2:
+        return []  # No need to prioritize 0-1 editais
+
+    participar.sort(key=lambda x: x[5], reverse=True)
+
+    el = []
+    num = sec["next"]() if sec else 12
+    el.extend(_section_heading(f"{num}. Priorização Consolidada", styles))
+    el.append(Paragraph(
+        f"Ranking dos {len(participar)} editais recomendados para participação, "
+        f"ordenados por retorno esperado ajustado à viabilidade. "
+        f"A empresa deve focar nos primeiros da lista e descer conforme capacidade operacional.",
+        styles["body_small"],
+    ))
+    el.append(Spacer(1, 3 * mm))
+
+    avail = PAGE_WIDTH - 2 * MARGIN
+    header = [
+        Paragraph("Rank", styles["cell_header_center"]),
+        Paragraph("Edital", styles["cell_header"]),
+        Paragraph("Viab.", styles["cell_header_center"]),
+        Paragraph("Prob.", styles["cell_header_center"]),
+        Paragraph("Resultado", styles["cell_header_right"]),
+        Paragraph("Ação Imediata", styles["cell_header"]),
+    ]
+    rows = [header]
+
+    for rank, (idx, ed, score, roi_max, prob, _) in enumerate(participar, 1):
+        obj = _trunc(_s(ed.get("objeto", "")), 60)
+        dias = ed.get("dias_restantes")
+        urgency = f"({_format_prazo_short(dias)})" if dias is not None else ""
+
+        if rank <= 3:
+            action = f"Preparar proposta imediatamente {urgency}"
+        elif rank <= 6:
+            action = f"Preparar se houver capacidade {urgency}"
+        else:
+            action = f"Avaliar custo-benefício {urgency}"
+
+        score_color = SIGNAL_GREEN if score >= 60 else (SIGNAL_AMBER if score >= 30 else SIGNAL_RED)
+
+        rows.append([
+            Paragraph(f"<b>{rank}º</b>", styles["cell_center"]),
+            Paragraph(f"<b>{idx}.</b> {obj}", styles["cell"]),
+            Paragraph(
+                f"<b>{score}</b>",
+                ParagraphStyle(f"pri_v_{rank}", parent=styles["cell_center"],
+                               fontName="Helvetica-Bold", textColor=score_color),
+            ),
+            Paragraph(_pct(prob), styles["cell_center"]),
+            Paragraph(_currency_short(roi_max), styles["cell_right"]),
+            Paragraph(action, styles["cell"]),
+        ])
+
+    t = _three_rule_table(rows, [
+        avail * 0.06, avail * 0.30, avail * 0.08, avail * 0.08, avail * 0.14, avail * 0.34,
+    ])
+    el.append(t)
+    el.append(Spacer(1, 6 * mm))
+    return el
+
+
+def _build_development_path(data: dict, styles: dict, sec: dict | None = None) -> list:
+    """For NÃO RECOMENDADO editais — what the company needs to build in 24 months to compete."""
+    editais = data.get("editais", [])
+    nao_rec = []
+    for idx, ed in enumerate(editais, 1):
+        rec = _normalize_recommendation(_s(ed.get("recomendacao", "")))
+        if rec != "NÃO RECOMENDADO":
+            continue
+        nao_rec.append((idx, ed))
+
+    if not nao_rec:
+        return []
+
+    el = []
+    num = sec["next"]() if sec else 13
+    el.extend(_section_heading(f"{num}. Caminho de Desenvolvimento (24 meses)", styles))
+    el.append(Paragraph(
+        "Editais não recomendados no momento atual — mas que representam mercados acessíveis "
+        "com investimento em capacitação. Abaixo, o que a empresa precisa construir para "
+        "participar dessas oportunidades em futuras janelas.",
+        styles["body_small"],
+    ))
+    el.append(Spacer(1, 3 * mm))
+
+    avail = PAGE_WIDTH - 2 * MARGIN
+
+    for idx, ed in nao_rec[:8]:  # Top 8
+        obj = _trunc(_s(ed.get("objeto", "")), 80)
+        justif = _s(ed.get("justificativa", ""))
+        valor = _currency_short(ed.get("valor_estimado"))
+
+        # Derive what's needed from qualification gaps and risk factors
+        qual_gap = ed.get("qualification_gap", {})
+        risk_an = ed.get("risk_analysis", {})
+        gaps = qual_gap.get("operational_gaps", [])
+        flags = risk_an.get("flags", []) if isinstance(risk_an, dict) else []
+
+        actions = []
+        for g in gaps:
+            if g.get("addressable") and g.get("gap_type") != "ACERVO_EXISTENTE":
+                actions.append(f"{g['gap_type']}: {_trunc(_s(g.get('description', '')), 60)}")
+        for f in flags:
+            if f.get("severity") == "ALTA":
+                actions.append(f"Resolver: {_trunc(_s(f.get('flag', '')), 60)}")
+
+        if not actions:
+            # Infer from justificativa
+            if justif:
+                actions.append(f"Superar: {_trunc(justif, 80)}")
+            else:
+                actions.append("Avaliar requisitos específicos do edital")
+
+        el.append(Paragraph(
+            f"<b>{idx}.</b> {obj} — {valor}",
+            styles["body"],
+        ))
+        if justif:
+            el.append(Paragraph(
+                f"<i>Motivo atual: {_trunc(justif, 120)}</i>",
+                styles["caption"],
+            ))
+        for action in actions[:3]:
+            el.append(Paragraph(f"  → {action}", styles["body_small"]))
+        el.append(Spacer(1, 2 * mm))
+
+    el.append(Spacer(1, 6 * mm))
     return el
 
 
@@ -2718,18 +2902,42 @@ def _build_regional_analysis(data: dict, styles: dict, sec: dict | None = None) 
             styles["body_small"],
         ))
 
-        # List editais in cluster
+        # List editais in cluster with viability analysis
         indices = cl.get("editais_indices", [])
+        cluster_editais = []
+        cluster_roi_sum = 0
+        cluster_mobilization_cost = 0
         for idx in indices:
             if idx < len(editais):
                 ed = editais[idx]
+                cluster_editais.append(ed)
                 obj = _s((ed.get("objeto") or "")[:80])
                 mun = _s(ed.get("municipio", ""))
                 valor = _currency_short(_safe_float(ed.get("valor_estimado", 0)))
+                roi = ed.get("roi_potential", {})
+                roi_max = _safe_float(roi.get("roi_max", 0))
+                cluster_roi_sum += roi_max
+                participation_cost = roi.get("calculation_memory", {}).get("custo_participacao", 0)
+                cluster_mobilization_cost += _safe_float(participation_cost)
                 el.append(Paragraph(
                     f"  — {obj} ({mun}) — {valor}",
                     styles["body_small"],
                 ))
+
+        # Joint viability analysis
+        if cluster_editais:
+            # Shared mobilization savings: only 1 trip, not N
+            n_cluster = len(cluster_editais)
+            shared_savings = cluster_mobilization_cost * (1 - 1.0 / max(n_cluster, 1))
+            net_roi_cluster = cluster_roi_sum + shared_savings
+            viability = "VIÁVEL" if net_roi_cluster > 0 else "INVIÁVEL"
+            viab_color = SIGNAL_GREEN if net_roi_cluster > 0 else SIGNAL_RED
+            el.append(Paragraph(
+                f"<b>Viabilidade conjunta:</b> <font color='{viab_color.hexval()}'><b>{viability}</b></font>"
+                f" — Resultado conjunto: {_currency_short(net_roi_cluster)}"
+                f" (economia de mobilização compartilhada: {_currency_short(shared_savings)})",
+                styles["body_small"],
+            ))
 
         rec = _s(cl.get("recommendation", ""))
         if rec:
@@ -2982,6 +3190,10 @@ def generate_report_b2g(data: dict) -> BytesIO:
     # 11. Querido Diário
     elements.extend(_build_querido_diario(data, styles, sec))
     # 12. Próximos Passos
+    # Consolidated prioritization of PARTICIPAR editais
+    elements.extend(_build_prioritization(data, styles, sec))
+    # Development path for NÃO RECOMENDADO editais
+    elements.extend(_build_development_path(data, styles, sec))
     elements.extend(_build_next_steps(data, styles, sec))
     # Panorama de Oportunidades removed — redundant with Decisão em 30 Segundos
     # SICAF

@@ -1175,17 +1175,52 @@ def compute_risk_analysis(
             "category": "setor",
         })
 
-    # 5. Concorrência presencial (travel cost)
+    # 5. Concorrência presencial (travel cost + regional preference)
     modalidade = (edital.get("modalidade") or "").lower()
     if "presencial" in modalidade:
         dist = edital.get("distancia", {})
         km = dist.get("km") if isinstance(dist, dict) else None
         if km and km > 200:
+            travel_cost = km * 6  # R$6/km round trip estimate
             flags.append({
-                "flag": f"Licitação presencial a {km:.0f}km — custo de deslocamento relevante",
+                "flag": (
+                    f"Licitação presencial a {km:.0f}km — custo estimado de deslocamento "
+                    f"R$ {travel_cost:,.0f} por sessão".replace(",", ".")
+                ),
                 "severity": "MEDIA",
                 "category": "logistica",
+                "margin_impact_pct": round(travel_cost / valor * 100, 1) if valor > 0 else 0,
             })
+        # Regional preference penalty for distant companies
+        if km and km > 300:
+            flags.append({
+                "flag": "Licitação presencial com possível preferência regional — empresas locais têm vantagem logística e de relacionamento",
+                "severity": "MEDIA",
+                "category": "competitivo",
+            })
+
+    # 6. Long contract without price adjustment (margin erosion)
+    objeto = (edital.get("objeto") or "").lower()
+    # Check for multi-year indicators
+    for duration_marker, months in [
+        ("12 meses", 12), ("18 meses", 18), ("24 meses", 24), ("36 meses", 36),
+        ("1 ano", 12), ("2 anos", 24), ("3 anos", 36),
+    ]:
+        if duration_marker in objeto:
+            if months >= 12:
+                # Estimate inflation erosion: ~5% annual
+                erosion_pct = round(months / 12 * 5, 1)
+                flags.append({
+                    "flag": (
+                        f"Contrato de {months} meses sem garantia de reajuste — "
+                        f"erosão estimada de {erosion_pct}% na margem "
+                        f"(inflação acumulada projetada)"
+                    ),
+                    "severity": "MEDIA" if months <= 18 else "ALTA",
+                    "category": "financeiro",
+                    "margin_impact_pct": erosion_pct,
+                })
+            break
 
     # Aggregate risk level
     severities = [f["severity"] for f in flags]
@@ -1648,8 +1683,9 @@ def collect_querido_diario(
     keywords: list[str],
     empresa_nome: str,
     dias: int = 30,
+    ufs: list[str] | None = None,
 ) -> tuple[list[dict], dict]:
-    """Search municipal gazettes via Querido Diário."""
+    """Search municipal gazettes via Querido Diário. Filters by UFs if provided."""
     print(f"\n🔍 Phase 2a-3: Querido Diário — Diários oficiais")
 
     since = _date_iso(_today() - timedelta(days=dias))
@@ -1663,17 +1699,23 @@ def collect_querido_diario(
         queries.append(f'"{empresa_nome}"')
 
     for q in queries:
+        params = {
+            "querystring": q,
+            "published_since": since,
+            "published_until": until,
+            "excerpt_size": 500,
+            "number_of_excerpts": 3,
+            "size": 20,
+            "sort_by": "descending_date",
+        }
+        # Filter by UFs to reduce noise from unrelated municipalities
+        if ufs:
+            # QD API accepts state_code (2-letter UF)
+            for uf in ufs[:3]:  # Max 3 UFs per query
+                params["state_code"] = uf.upper()
         data, status = api.get(
             QD_BASE,
-            params={
-                "querystring": q,
-                "published_since": since,
-                "published_until": until,
-                "excerpt_size": 500,
-                "number_of_excerpts": 3,
-                "size": 20,
-                "sort_by": "descending_date",
-            },
+            params=params,
             label=f"Querido Diário: {q[:40]}",
         )
         if status == "API" and data:
@@ -2091,19 +2133,28 @@ def compute_risk_score(edital: dict, empresa: dict, sicaf: dict, sector_key: str
         else:
             fin_score = 10
 
-    # Geográfico (20%)
+    # Geográfico (20%) — continuous decay, not discrete bands
     dist = edital.get("distancia", {})
     km = dist.get("km") if isinstance(dist, dict) else None
     if km is None:
         geo_score = 50
     elif km <= 50:
         geo_score = 100
-    elif km <= 200:
-        geo_score = 70
-    elif km <= 500:
-        geo_score = 40
+    elif km <= 100:
+        geo_score = 90 - (km - 50) * 0.4  # 90→70
+    elif km <= 300:
+        geo_score = 70 - (km - 100) * 0.2  # 70→30
+    elif km <= 800:
+        geo_score = 30 - (km - 300) * 0.04  # 30→10
     else:
-        geo_score = 10
+        geo_score = max(5, 10 - (km - 800) * 0.005)  # Slow decay below 10, floor at 5
+
+    # Presencial penalty: presencial editais far away get extra penalty
+    modalidade = (edital.get("modalidade") or "").lower()
+    if "presencial" in modalidade and km is not None and km > 200:
+        geo_score = max(5, geo_score - 15)  # -15 penalty for presencial >200km
+
+    geo_score = round(max(5, min(100, geo_score)))
 
     # Prazo (15%)
     dias = edital.get("dias_restantes")
@@ -2118,8 +2169,24 @@ def compute_risk_score(edital: dict, empresa: dict, sicaf: dict, sector_key: str
     else:
         prazo_score = 10
 
-    # Competitivo — default, refined by competitive analysis later
-    comp_score = 50
+    # Competitivo — derived from competitive_intel if available
+    ci = edital.get("competitive_intel", [])
+    n_sup = len(set(
+        (c.get("cnpj_fornecedor") or c.get("fornecedor", ""))[:20]
+        for c in ci if c.get("cnpj_fornecedor") or c.get("fornecedor")
+    ))
+    if n_sup == 0:
+        comp_score = 50  # No data — neutral
+    elif n_sup == 1:
+        comp_score = 15  # Monopoly incumbent — hard to enter
+    elif n_sup <= 3:
+        comp_score = 35  # Oligopoly
+    elif n_sup <= 6:
+        comp_score = 65  # Moderate competition — fair chance
+    elif n_sup <= 10:
+        comp_score = 80  # Fragmented — good odds
+    else:
+        comp_score = 90  # Very fragmented — open market
 
     # Use sector-specific weight profile
     weights = _SECTOR_WEIGHT_PROFILES.get(sector_key, _SECTOR_WEIGHT_PROFILES["_default"])
@@ -2187,27 +2254,43 @@ def compute_win_probability(
         hhi = sum(s ** 2 for s in shares)
         top_share = max(shares)
 
-    # Competition-adjusted probability
+    # Competition-adjusted probability — varies by supplier count AND concentration
     if n_suppliers == 0:
         # No data — use sector base rate
         competition_prob = base_rate
         confidence = "baixa"
     elif n_suppliers == 1:
-        # Single supplier = incumbent monopoly, very hard to break in
+        # Single supplier monopoly — difficulty depends on contract age
         competition_prob = 0.05
         confidence = "media"
-    elif n_suppliers <= 3:
-        # Low competition
-        competition_prob = 0.25
+    elif n_suppliers == 2:
+        # Duopoly — hard but possible
+        competition_prob = 0.15
         confidence = "media"
-    elif n_suppliers <= 7:
-        # Moderate — fair share estimate
-        competition_prob = 1.0 / n_suppliers
+    elif n_suppliers <= 5:
+        # Moderate competition — fair share with HHI adjustment
+        fair_share = 1.0 / (n_suppliers + 1)  # +1 for entrant
+        # HHI penalty: concentrated market reduces probability
+        hhi_adj = 1.0 - (hhi * 0.3) if hhi > 0.25 else 1.0
+        competition_prob = fair_share * hhi_adj
+        confidence = "media" if hhi > 0.4 else "alta"
+    elif n_suppliers <= 10:
+        # Good competition — fragmented market favors new entrants
+        competition_prob = 1.0 / (n_suppliers + 1)
+        # Low concentration bonus
+        if hhi < 0.15:
+            competition_prob *= 1.2
         confidence = "alta"
     else:
-        # High competition
-        competition_prob = 1.0 / n_suppliers
+        # Very competitive — many bidders, price pressure
+        competition_prob = 1.0 / (n_suppliers + 2)  # Harder with many competitors
         confidence = "alta"
+
+    # Top supplier dominance penalty
+    if top_share > 0.60:
+        competition_prob *= 0.6  # Dominant incumbent reduces chances significantly
+    elif top_share > 0.40:
+        competition_prob *= 0.8
 
     # Incumbency bonus — does the company already supply this organ?
     empresa_cnpj = re.sub(r"[^0-9]", "", empresa.get("cnpj", ""))
@@ -2283,8 +2366,19 @@ def compute_roi_potential(edital: dict, sector_key: str, win_prob: dict) -> dict
     margin_min, margin_max = _SECTOR_MARGINS.get(sector_key, (0.08, 0.15))
     probability = win_prob.get("probability", 0.10)
 
-    roi_min = round(valor * probability * margin_min)
-    roi_max = round(valor * probability * margin_max)
+    # Estimated participation cost (proposal preparation, travel, RT, certifications)
+    dist_info = edital.get("distancia", {})
+    km = dist_info.get("km", 0) if isinstance(dist_info, dict) else 0
+    mobilization_cost = 2000 + (km or 0) * 3  # Base R$2K + R$3/km travel
+    proposal_cost = min(valor * 0.005, 15000)  # 0.5% of value, capped at R$15K
+    participation_cost = round(mobilization_cost + proposal_cost)
+
+    gross_min = round(valor * probability * margin_min)
+    gross_max = round(valor * probability * margin_max)
+    # Expected value = (probability × net profit) - ((1-probability) × participation cost)
+    # Net ROI = gross ROI - participation cost (always incurred)
+    roi_min = round(gross_min - participation_cost)
+    roi_max = round(gross_max - participation_cost)
 
     # Auditable calculation memory — every factor explicit for manual reproduction
     def _fmt_brl(v: float) -> str:
@@ -2295,9 +2389,18 @@ def compute_roi_potential(edital: dict, sector_key: str, win_prob: dict) -> dict
         "probabilidade_vitoria": round(probability, 4),
         "margem_min_pct": f"{margin_min * 100:.0f}%",
         "margem_max_pct": f"{margin_max * 100:.0f}%",
-        "formula": "valor × probabilidade × margem",
-        "roi_min_calc": f"{_fmt_brl(valor)} × {probability:.4f} × {margin_min:.2f} = {_fmt_brl(roi_min)}",
-        "roi_max_calc": f"{_fmt_brl(valor)} × {probability:.4f} × {margin_max:.2f} = {_fmt_brl(roi_max)}",
+        "custo_participacao": participation_cost,
+        "custo_mobilizacao": mobilization_cost,
+        "custo_proposta": proposal_cost,
+        "formula": "(valor × probabilidade × margem) − custo de participação",
+        "roi_min_calc": (
+            f"({_fmt_brl(valor)} × {probability:.4f} × {margin_min:.2f}) − {_fmt_brl(participation_cost)}"
+            f" = {_fmt_brl(roi_min)}"
+        ),
+        "roi_max_calc": (
+            f"({_fmt_brl(valor)} × {probability:.4f} × {margin_max:.2f}) − {_fmt_brl(participation_cost)}"
+            f" = {_fmt_brl(roi_max)}"
+        ),
     }
 
     # Auto-reclassification: marginal ROI on substantial contracts
@@ -2679,48 +2782,65 @@ def compute_qualification_gap_analysis(
             "action_required": f"Obter ou renovar {cert}",
         })
 
-    # Atestado gaps — cross-reference edital object with historical contracts
+    # Atestado gaps — semantic cross-reference edital vs historical contracts
     historico = empresa.get("historico_contratos", [])
     historico_list = historico if isinstance(historico, list) else []
 
-    # Build set of keywords from historical contract objects (implicit acervo)
-    acervo_keywords: set[str] = set()
-    for c in historico_list:
-        obj_hist = (c.get("objeto", "") or "").lower()
-        for word in obj_hist.split():
-            if len(word) >= 5:  # Skip short words
-                acervo_keywords.add(word.rstrip(".,;:"))
+    # Stop words: generic terms that don't indicate technical similarity
+    _ACERVO_STOP = {
+        "contratação", "contratacao", "empresa", "serviço", "servico", "serviços",
+        "servicos", "execução", "execucao", "objeto", "municipal", "município",
+        "municipio", "prefeitura", "estado", "federal", "governo", "público",
+        "publica", "publico", "valor", "prazo", "conforme", "mediante", "através",
+        "forma", "acordo", "termo", "referência", "referencia", "edital",
+        "fornecimento", "material", "diversos", "demais", "necessário", "necessario",
+    }
 
     obj_edital = (edital.get("objeto", "") or "").lower()
-    obj_edital_words = {w.rstrip(".,;:") for w in obj_edital.split() if len(w) >= 5}
+    obj_edital_words = {
+        w.rstrip(".,;:()") for w in obj_edital.split()
+        if len(w) >= 6 and w.rstrip(".,;:()") not in _ACERVO_STOP
+    }
 
-    # Check if any historical contract overlaps with edital object
-    acervo_overlap = acervo_keywords & obj_edital_words
-    has_similar_attestation = len(acervo_overlap) >= 2  # At least 2 matching keywords
+    best_match_info = None
+    best_score = 0
+    for c in historico_list:
+        obj_hist = (c.get("objeto", "") or "").lower()
+        hist_words = {
+            w.rstrip(".,;:()") for w in obj_hist.split()
+            if len(w) >= 6 and w.rstrip(".,;:()") not in _ACERVO_STOP
+        }
+        if not hist_words or not obj_edital_words:
+            continue
+        overlap = hist_words & obj_edital_words
+        jaccard = len(overlap) / len(hist_words | obj_edital_words)
+        score = len(overlap) * (1 + jaccard)
+        # Require ≥3 meaningful keywords AND ≥15% Jaccard similarity
+        if score > best_score and len(overlap) >= 3 and jaccard >= 0.15:
+            best_score = score
+            best_match_info = {
+                "orgao": c.get("orgao", "")[:50],
+                "esfera": c.get("esfera", ""),
+                "valor": c.get("valor", 0),
+                "objeto": (c.get("objeto", "") or "")[:80],
+                "overlap": sorted(overlap)[:5],
+                "jaccard": round(jaccard, 2),
+            }
 
-    if has_similar_attestation and historico_list:
-        # Find the most similar historical contract
-        best_match = ""
-        best_score = 0
-        for c in historico_list:
-            obj_hist = (c.get("objeto", "") or "").lower()
-            hist_words = {w.rstrip(".,;:") for w in obj_hist.split() if len(w) >= 5}
-            score = len(hist_words & obj_edital_words)
-            if score > best_score:
-                best_score = score
-                orgao = c.get("orgao", "")[:50]
-                valor_c = c.get("valor", 0)
-                esfera = c.get("esfera", "")
-                best_match = f"{orgao} ({esfera}, R$ {_safe_float(valor_c):,.0f})".replace(",", ".")
-        if best_match:
-            gaps.append({
-                "gap_type": "ACERVO_EXISTENTE",
-                "description": f"Acervo técnico inferido: contrato similar identificado em {best_match}",
-                "addressable": False,  # Not a gap — it's a strength
-                "estimated_timeline": "Já disponível",
-                "action_required": "Solicitar atestado de capacidade técnica ao órgão contratante se ainda não emitido",
-            })
-    elif not has_similar_attestation:
+    if best_match_info:
+        val_fmt = f"R$ {_safe_float(best_match_info['valor']):,.0f}".replace(",", ".")
+        gaps.append({
+            "gap_type": "ACERVO_EXISTENTE",
+            "description": (
+                f"Acervo técnico inferido: \"{best_match_info['objeto']}\" em "
+                f"{best_match_info['orgao']} ({best_match_info['esfera']}, {val_fmt}). "
+                f"Termos em comum: {', '.join(best_match_info['overlap'])}"
+            ),
+            "addressable": False,
+            "estimated_timeline": "Já disponível",
+            "action_required": "Solicitar atestado de capacidade técnica ao órgão contratante se ainda não emitido",
+        })
+    else:
         for atestado in reqs.get("atestados", []):
             gaps.append({
                 "gap_type": "ATESTADO",
@@ -3594,7 +3714,7 @@ Examples:
     qd_source = _source_tag("UNAVAILABLE", "Skipped")
     if not args.skip_qd:
         nome_empresa = empresa.get("nome_fantasia") or empresa.get("razao_social") or ""
-        qd_mencoes, qd_source = collect_querido_diario(api, keywords, nome_empresa, args.dias)
+        qd_mencoes, qd_source = collect_querido_diario(api, keywords, nome_empresa, args.dias, ufs=ufs)
 
     # ---- Filter: remove expired editais BEFORE expensive API calls ----
     all_editais = editais_pncp + editais_pcp

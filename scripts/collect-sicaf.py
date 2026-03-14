@@ -52,7 +52,8 @@ RESTRICAO_URL = f"{SICAF_BASE}/public/pages/consultas/consultarRestricaoContrata
 LINHAS_URL = f"{SICAF_BASE}/public/pages/consultas/consultarLinhaFornecimento.jsf"
 
 COOKIES_PATH = Path(__file__).parent.parent / ".sicaf-cookies.json"
-CAPTCHA_TIMEOUT = 120  # seconds to wait for user to solve captcha
+CAPTCHA_TIMEOUT = 120  # seconds to wait for user to solve captcha (headed)
+CAPTCHA_TIMEOUT_HEADLESS = 5  # seconds in headless — just enough to check if cookies work
 NAVIGATION_TIMEOUT = 15000  # ms
 
 
@@ -84,14 +85,15 @@ def _source_tag(status: str, detail: str = "") -> dict:
 # CAPTCHA HANDLING
 # ============================================================
 
-def _wait_for_captcha(page: Page, quiet: bool = False) -> bool:
+def _wait_for_captcha(page: Page, quiet: bool = False, timeout: int | None = None) -> bool:
     """Wait for user to solve hCaptcha. Returns True if solved."""
+    max_wait = timeout if timeout is not None else CAPTCHA_TIMEOUT
     if not quiet:
-        print("\n  ⏳ Resolva o hCaptcha no navegador que abriu...")
+        print(f"\n  ⏳ Resolva o hCaptcha no navegador que abriu... (timeout: {max_wait}s)")
         print("     (clique no checkbox 'Sou humano' e complete o desafio)")
 
     start = time.time()
-    while time.time() - start < CAPTCHA_TIMEOUT:
+    while time.time() - start < max_wait:
         try:
             # Check if captcha iframe has the response token set
             # hCaptcha sets a textarea[name="h-captcha-response"] with the token
@@ -169,7 +171,7 @@ def _fill_cnpj(page: Page, cnpj14: str) -> None:
     cnpj_input.fill(cnpj_fmt)
 
 
-def _collect_crc(page: Page, cnpj14: str, quiet: bool = False) -> dict:
+def _collect_crc(page: Page, cnpj14: str, quiet: bool = False, captcha_timeout: int | None = None) -> dict:
     """Collect CRC (Certificado de Registro Cadastral) data.
 
     The CRC page has a "Relatório" button that triggers a PDF download.
@@ -191,7 +193,7 @@ def _collect_crc(page: Page, cnpj14: str, quiet: bool = False) -> dict:
 
         # Handle captcha
         if _is_captcha_present(page):
-            if not _wait_for_captcha(page, quiet):
+            if not _wait_for_captcha(page, quiet, timeout=captcha_timeout):
                 result["_source"] = _source_tag("API_FAILED", "Captcha não resolvido")
                 return result
 
@@ -399,7 +401,7 @@ def _parse_crc_text(text: str) -> dict:
 # RESTRIÇÃO EXTRACTION
 # ============================================================
 
-def _collect_restricao(page: Page, cnpj14: str, quiet: bool = False) -> dict:
+def _collect_restricao(page: Page, cnpj14: str, quiet: bool = False, captcha_timeout: int | None = None) -> dict:
     """Collect restriction data (Restrição Contratar Administração Pública)."""
     result = {
         "tipo": "RESTRICAO",
@@ -416,7 +418,7 @@ def _collect_restricao(page: Page, cnpj14: str, quiet: bool = False) -> dict:
 
         # Handle captcha
         if _is_captcha_present(page):
-            if not _wait_for_captcha(page, quiet):
+            if not _wait_for_captcha(page, quiet, timeout=captcha_timeout):
                 result["_source"] = _source_tag("API_FAILED", "Captcha não resolvido")
                 return result
 
@@ -635,6 +637,14 @@ def _extract_linhas(page: Page) -> list[dict]:
 # MAIN COLLECTION
 # ============================================================
 
+def _cookies_are_fresh(max_age_hours: int = 48) -> bool:
+    """Check if saved cookies exist and are less than max_age_hours old."""
+    if not COOKIES_PATH.exists():
+        return False
+    age = time.time() - COOKIES_PATH.stat().st_mtime
+    return age < max_age_hours * 3600
+
+
 def collect_sicaf(
     cnpjs: list[str],
     output: str | None = None,
@@ -644,14 +654,18 @@ def collect_sicaf(
     """
     Collect SICAF data for one or more CNPJs.
 
-    Opens a headed browser, waits for user to solve captcha once,
-    then reuses cookies for subsequent queries.
+    Strategy:
+    1. If fresh cookies exist (<48h), try HEADLESS first (no user interaction needed).
+    2. If headless fails (captcha or error), fall back to HEADED for captcha.
+    3. If no cookies, go straight to headed.
     """
     results = []
 
+    # Determine initial mode: headless if we have fresh cookies
+    use_headless = _cookies_are_fresh()
+
     with sync_playwright() as p:
-        # Launch headed browser so user can solve captcha
-        browser = p.chromium.launch(headless=False)
+        browser = p.chromium.launch(headless=use_headless)
         context = browser.new_context(
             viewport={"width": 1280, "height": 800},
             locale="pt-BR",
@@ -660,12 +674,14 @@ def collect_sicaf(
         # Try loading saved cookies
         cookies_loaded = _load_cookies(context)
         if cookies_loaded and not quiet:
-            print("  ℹ Cookies de sessão anterior carregados")
+            mode = "headless" if use_headless else "headed"
+            print(f"  ℹ Cookies de sessão anterior carregados (modo {mode})")
 
         page = context.new_page()
         page.set_default_timeout(NAVIGATION_TIMEOUT)
 
         captcha_solved_once = False
+        needs_headed_retry = False
 
         for i, cnpj_raw in enumerate(cnpjs):
             cnpj14 = _clean_cnpj(cnpj_raw)
@@ -682,20 +698,29 @@ def collect_sicaf(
                 "consulta_timestamp": _now_iso(),
             }
 
+            # In headless mode, use short captcha timeout (5s) — just enough to check cookies
+            ct = CAPTCHA_TIMEOUT_HEADLESS if use_headless else None
+
             # 1. CRC
             if not quiet:
                 print("\n  1/3 Certificado de Registro Cadastral (CRC)...")
-            crc = _collect_crc(page, cnpj14, quiet)
+            crc = _collect_crc(page, cnpj14, quiet, captcha_timeout=ct)
             sicaf_data["crc"] = crc
 
             if crc["_source"]["status"] == "API":
                 captcha_solved_once = True
                 _save_cookies(context)
+            elif use_headless and "captcha" in crc["_source"].get("detail", "").lower():
+                # Headless failed due to captcha — need to retry with headed browser
+                needs_headed_retry = True
+                if not quiet:
+                    print("  ⚠ Captcha detectado em modo headless — vai reabrir em modo headed")
+                break
 
             # 2. Restrição
             if not quiet:
                 print("  2/3 Restrição Contratar Administração Pública...")
-            restricao = _collect_restricao(page, cnpj14, quiet)
+            restricao = _collect_restricao(page, cnpj14, quiet, captcha_timeout=ct)
             sicaf_data["restricao"] = restricao
 
             if restricao["_source"]["status"] == "API":
@@ -736,9 +761,87 @@ def collect_sicaf(
             if not quiet:
                 print(f"\n  ✅ SICAF {cnpj_fmt}: {sicaf_data['status']}")
 
-        # Cleanup
+        # Cleanup first browser
         _save_cookies(context)
         browser.close()
+
+    # ---- Headed retry if headless failed on captcha ----
+    if needs_headed_retry:
+        if not quiet:
+            print("\n🔄 Reabrindo navegador em modo headed para captcha...")
+            print("   ➜ Resolva o captcha quando o navegador abrir")
+        results.clear()
+
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=False)
+            context = browser.new_context(
+                viewport={"width": 1280, "height": 800},
+                locale="pt-BR",
+            )
+            _load_cookies(context)
+            page = context.new_page()
+            page.set_default_timeout(NAVIGATION_TIMEOUT)
+
+            for i, cnpj_raw in enumerate(cnpjs):
+                cnpj14 = _clean_cnpj(cnpj_raw)
+                cnpj_fmt = _format_cnpj(cnpj14)
+
+                if not quiet:
+                    print(f"\n{'='*60}")
+                    print(f"📋 SICAF (headed retry) — {cnpj_fmt} ({i+1}/{len(cnpjs)})")
+                    print(f"{'='*60}")
+
+                sicaf_data = {
+                    "cnpj": cnpj_fmt,
+                    "cnpj_limpo": cnpj14,
+                    "consulta_timestamp": _now_iso(),
+                }
+
+                if not quiet:
+                    print("\n  1/3 CRC...")
+                crc = _collect_crc(page, cnpj14, quiet)
+                sicaf_data["crc"] = crc
+                if crc["_source"]["status"] == "API":
+                    _save_cookies(context)
+
+                if not quiet:
+                    print("  2/3 Restrição...")
+                restricao = _collect_restricao(page, cnpj14, quiet)
+                sicaf_data["restricao"] = restricao
+                if restricao["_source"]["status"] == "API":
+                    _save_cookies(context)
+
+                if not skip_linhas:
+                    if not quiet:
+                        print("  3/3 Linhas de Fornecimento...")
+                    linhas = _collect_linhas(page, cnpj14, quiet)
+                    sicaf_data["linhas_fornecimento"] = linhas
+                else:
+                    sicaf_data["linhas_fornecimento"] = {
+                        "tipo": "LINHAS_FORNECIMENTO",
+                        "_source": _source_tag("UNAVAILABLE", "Skipped"),
+                    }
+
+                all_sources = [crc["_source"]["status"], restricao["_source"]["status"]]
+                if not skip_linhas:
+                    all_sources.append(sicaf_data["linhas_fornecimento"]["_source"]["status"])
+
+                if all(s == "API" for s in all_sources):
+                    sicaf_data["_source"] = _source_tag("API", "SICAF completo via Playwright")
+                    sicaf_data["status"] = _build_status_summary(crc, restricao)
+                elif any(s == "API" for s in all_sources):
+                    sicaf_data["_source"] = _source_tag("API_PARTIAL", "SICAF parcial")
+                    sicaf_data["status"] = _build_status_summary(crc, restricao)
+                else:
+                    sicaf_data["_source"] = _source_tag("API_FAILED", "SICAF não consultado")
+                    sicaf_data["status"] = "NÃO CONSULTADO"
+
+                results.append(sicaf_data)
+                if not quiet:
+                    print(f"\n  ✅ SICAF {cnpj_fmt}: {sicaf_data['status']}")
+
+            _save_cookies(context)
+            browser.close()
 
     # Save output
     if output:

@@ -215,6 +215,24 @@ def _normalize_recommendation(rec: str) -> str:
     return rec
 
 
+def _summarize_discard_reasons(descartados: list[dict]) -> str:
+    """Build a human-readable summary of why editais were discarded."""
+    if not descartados:
+        return ""
+    reasons: dict[str, int] = {}
+    for e in descartados:
+        justif = e.get("justificativa", "").strip()
+        if not justif:
+            justif = "Sem aderência aos CNAEs da empresa"
+        # Group similar justifications by first clause
+        key = justif.split(".")[0].strip()
+        if len(key) > 80:
+            key = key[:77] + "..."
+        reasons[key] = reasons.get(key, 0) + 1
+    parts = [f"{reason} ({count})" if count > 1 else reason for reason, count in reasons.items()]
+    return "; ".join(parts)
+
+
 def _validate_json(data: dict) -> tuple[list[str], list[str]]:
     warnings = []
     errors = []
@@ -234,7 +252,7 @@ def _validate_json(data: dict) -> tuple[list[str], list[str]]:
             warnings.append(f"edital[{i}].orgao ausente")
         rec = (ed.get("recomendacao") or "").upper()
         status = ed.get("status_edital", "")
-        if rec and status != "ENCERRADO" and not ed.get("justificativa"):
+        if rec and rec != "DESCARTADO" and status != "ENCERRADO" and not ed.get("justificativa"):
             errors.append(
                 f"edital[{i}].justificativa ausente — recomendação '{rec}' "
                 f"para \"{(ed.get('objeto') or 'sem título')[:60]}\" não tem fundamentação"
@@ -679,7 +697,7 @@ def _build_decision_table(data: dict, styles: dict, sec: dict) -> list:
     el.append(Spacer(1, 3 * mm))
 
     avail = PAGE_WIDTH - 2 * MARGIN
-    col_w = [avail * 0.04, avail * 0.46, avail * 0.14, avail * 0.10, avail * 0.26]
+    col_w = [avail * 0.06, avail * 0.44, avail * 0.14, avail * 0.10, avail * 0.26]
 
     # Header
     header = [
@@ -706,7 +724,7 @@ def _build_decision_table(data: dict, styles: dict, sec: dict) -> list:
         )
 
         rows.append([
-            Paragraph(str(idx), styles["cell_center"]),
+            Paragraph(f"<b>{idx}</b>", styles["cell_center"]),
             Paragraph(objeto, styles["cell"]),
             Paragraph(valor, styles["cell_right"]),
             Paragraph(prazo, styles["cell_center"]),
@@ -1090,6 +1108,26 @@ def _build_executive_summary(data: dict, styles: dict, sec: dict | None = None) 
     el.append(metrics)
     el.append(Spacer(1, 5 * mm))
 
+    # Discard note — inform reader that irrelevant editais were filtered out
+    n_desc = data.get("_descartados_count", 0)
+    if n_desc > 0:
+        motivos = data.get("_descartados_motivos", "")
+        nota = (
+            f"{n_desc} licitação(ões) identificada(s) na busca foi(ram) descartada(s) por falta de "
+            f"aderência aos CNAEs ou perfil da empresa"
+        )
+        if motivos:
+            nota += f": {motivos}"
+        nota += "."
+        el.append(Paragraph(
+            f"<i>{nota}</i>",
+            ParagraphStyle(
+                "discard_note", parent=styles["caption"],
+                textColor=colors.HexColor("#888888"), fontSize=7.5,
+                spaceAfter=4 * mm,
+            ),
+        ))
+
     # UF distribution
     uf_counts: dict[str, int] = {}
     for e in editais:
@@ -1134,8 +1172,8 @@ def _build_executive_summary(data: dict, styles: dict, sec: dict | None = None) 
 def _build_overview_table(editais_list: list, styles: dict, start_idx: int = 1) -> list:
     avail = PAGE_WIDTH - 2 * MARGIN
     col_widths = [
-        avail * 0.04,   # #
-        avail * 0.42,   # Objeto + Órgão
+        avail * 0.06,   # #
+        avail * 0.40,   # Objeto + Órgão
         avail * 0.06,   # UF
         avail * 0.14,   # Valor
         avail * 0.10,   # Prazo
@@ -1171,7 +1209,7 @@ def _build_overview_table(editais_list: list, styles: dict, start_idx: int = 1) 
             prazo = enc_date if enc_date != "N/I" else "—"
 
         rows.append([
-            Paragraph(str(idx), styles["cell_center"]),
+            Paragraph(f"<b>{idx}</b>", styles["cell_center"]),
             Paragraph(objeto_orgao, styles["cell"]),
             Paragraph(_s(ed.get("uf", "")), styles["cell_center"]),
             Paragraph(_currency_short(ed.get("valor_estimado")), styles["cell_right"]),
@@ -1444,7 +1482,7 @@ def _build_querido_diario(data: dict, styles: dict, sec: dict | None = None) -> 
         trecho = "<br/>".join(excerpt_texts) if excerpt_texts else "<i>Sem trecho disponível</i>"
 
         rows.append([
-            Paragraph(str(idx), styles["cell_center"]),
+            Paragraph(f"<b>{idx}</b>", styles["cell_center"]),
             Paragraph(local_info, styles["cell"]),
             Paragraph(f"<font size='7'>{trecho}</font>", styles["cell"]),
         ])
@@ -1724,6 +1762,16 @@ def generate_report_b2g(data: dict) -> BytesIO:
 
     # Drop ENCERRADO editais
     data["editais"] = [e for e in data.get("editais", []) if e.get("status_edital") != "ENCERRADO"]
+
+    # Separate discarded editais (irrelevant to company profile) before rendering
+    all_editais = data.get("editais", [])
+    descartados = [e for e in all_editais if e.get("recomendacao", "").upper() == "DESCARTADO" or e.get("relevante") is False]
+    data["editais"] = [e for e in all_editais if e.get("recomendacao", "").upper() != "DESCARTADO" and e.get("relevante") is not False]
+    data["_descartados_count"] = len(descartados)
+    data["_descartados_motivos"] = _summarize_discard_reasons(descartados)
+    if descartados:
+        print(f"  Descartados: {len(descartados)} editais sem aderência ao perfil (excluídos do relatório)")
+    print(f"  Relatório: {len(data['editais'])} editais incluídos")
 
     gen_date = _today()
     styles = _build_styles()

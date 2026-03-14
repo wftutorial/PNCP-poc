@@ -2772,8 +2772,17 @@ def compute_qualification_gap_analysis(
             "action_required": f"Integralizar capital adicional de {_fmt(deficit)}",
         })
 
-    # Certification gaps
+    # Certification gaps — skip CREA/CAU if company has engineering contracts (implies active registration)
+    historico_pre = empresa.get("historico_contratos", [])
+    has_gov_contracts = len(historico_pre) > 0 if isinstance(historico_pre, list) else False
+    cnae_principal = (empresa.get("cnae_principal", "") or "").lower()
+    is_engineering = any(k in cnae_principal for k in ["4120", "4211", "4213", "4221", "4222", "4291", "4292", "4299", "4311", "4312", "4321", "4329", "4330", "4391", "4399", "7112"])
+
     for cert in reqs.get("certifications", []):
+        cert_lower = cert.lower()
+        # If company has contracts + engineering CNAE, CREA/CAU registration is implicit
+        if (has_gov_contracts or is_engineering) and ("crea" in cert_lower or "cau" in cert_lower):
+            continue  # Skip — active CREA/CAU implied by operational history
         gaps.append({
             "gap_type": "CERTIFICAÇÃO",
             "description": f"Verificar se possui: {cert}",

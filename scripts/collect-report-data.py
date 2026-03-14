@@ -2841,7 +2841,10 @@ def compute_qualification_gap_analysis(
                 "jaccard": round(jaccard, 2),
             }
 
+    n_historico = len(historico_list)
+
     if best_match_info:
+        # Semantic match found — cite the specific contract
         val_fmt = f"R$ {_safe_float(best_match_info['valor']):,.0f}".replace(",", ".")
         gaps.append({
             "gap_type": "ACERVO_EXISTENTE",
@@ -2852,9 +2855,27 @@ def compute_qualification_gap_analysis(
             ),
             "addressable": False,
             "estimated_timeline": "Já disponível",
-            "action_required": "Solicitar atestado de capacidade técnica ao órgão contratante se ainda não emitido",
+            "action_required": "Confirmar que atestados e CATs estão disponíveis para juntada célere na habilitação",
+        })
+    elif n_historico >= 10:
+        # Extensive contract history (≥10) — company is clearly established in the sector.
+        # Listing "sem acervo" is absurd for a company with dozens/hundreds of contracts.
+        # Assume fully qualified; just remind to have docs ready.
+        gaps.append({
+            "gap_type": "ACERVO_PRESUMIDO",
+            "description": (
+                f"Empresa com {n_historico} contrato(s) governamental(is) no histórico — "
+                f"acervo técnico e atestados presumidos pela experiência acumulada"
+            ),
+            "addressable": False,
+            "estimated_timeline": "Já disponível",
+            "action_required": (
+                "Confirmar disponibilidade dos atestados de capacidade técnica e CATs "
+                "dos responsáveis técnicos para juntada célere na fase de habilitação"
+            ),
         })
     else:
+        # Few or no contracts — flag specific missing attestations
         for atestado in reqs.get("atestados", []):
             gaps.append({
                 "gap_type": "ATESTADO",

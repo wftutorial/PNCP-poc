@@ -2679,12 +2679,14 @@ def compute_historical_dispute_stats(all_contracts: list[dict]) -> dict:
             "sample_size": n,
         }
 
-    # Recurring suppliers (3+ contracts)
+    # Recurring suppliers (3+ contracts) with market_share
+    total_supplier_contracts = sum(v["n"] for v in supplier_counts.values())
     recurring = [
         {
             "nome_ou_cnpj": k,
             "n_contracts": v["n"],
             "ufs": sorted(v["ufs"]),
+            "market_share": round(v["n"] / total_supplier_contracts, 3) if total_supplier_contracts > 0 else 0,
         }
         for k, v in sorted(supplier_counts.items(), key=lambda x: x[1]["n"], reverse=True)
         if v["n"] >= 3
@@ -3265,7 +3267,7 @@ Examples:
   python scripts/collect-report-data.py --cnpj 12345678000190 --output custom.json --quiet
         """,
     )
-    parser.add_argument("--cnpj", required=True, help="CNPJ da empresa (com ou sem formatação)")
+    parser.add_argument("--cnpj", required=False, help="CNPJ da empresa (com ou sem formatação). Obrigatório exceto com --re-enrich.")
     parser.add_argument("--dias", type=int, default=30, help="Período de busca em dias (default: 30)")
     parser.add_argument("--ufs", default="", help="UFs para filtrar, separadas por vírgula (default: UF da sede)")
     parser.add_argument("--output", help="Caminho do JSON de saída (default: auto)")
@@ -3276,8 +3278,85 @@ Examples:
     parser.add_argument("--skip-pcp", action="store_true", help="Pular busca PCP v2")
     parser.add_argument("--skip-qd", action="store_true", help="Pular busca Querido Diário")
     parser.add_argument("--skip-competitive", action="store_true", help="Pular coleta de inteligência competitiva")
+    parser.add_argument("--re-enrich", help=(
+        "Re-enriquecer um JSON existente sem re-coletar APIs. "
+        "Recalcula: risk_score, win_probability, roi_potential, cronograma, "
+        "portfolio, maturity, dispute_stats, regional_clusters, organ_risk, "
+        "qualification_gap, habilitacao_analysis, object_compatibility, risk_analysis. "
+        "Uso: --re-enrich docs/reports/data-XXX.json"
+    ))
 
     args = parser.parse_args()
+
+    # ---- RE-ENRICH MODE: reprocess existing JSON without API calls ----
+    if args.re_enrich:
+        input_path = Path(args.re_enrich)
+        if not input_path.exists():
+            print(f"ERROR: Arquivo não encontrado: {input_path}")
+            sys.exit(1)
+
+        print(f"{'='*60}")
+        print(f"🔄 Re-enriquecimento de JSON existente")
+        print(f"   Input: {input_path}")
+        print(f"{'='*60}")
+
+        with open(input_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        empresa = data.get("empresa", {})
+        sicaf = data.get("sicaf", {})
+
+        # Detect sector from existing data or re-map from CNAE
+        sector_key = data.get("_sector_key", "")
+        if not sector_key:
+            cnae = empresa.get("cnae_principal", "")
+            if cnae:
+                _, _, sector_key = map_sector(cnae)
+                print(f"  Setor mapeado: {sector_key}")
+            else:
+                sector_key = "engineering"  # Safe default
+                print(f"  Setor: usando default ({sector_key})")
+
+        editais = data.get("editais", [])
+        print(f"  Editais: {len(editais)}")
+
+        # Run all deterministic computations
+        analysis_results = compute_all_deterministic(editais, empresa, sicaf, sector_key)
+
+        # Store results
+        data["portfolio"] = analysis_results["portfolio"]
+        data["maturity_profile"] = analysis_results["maturity_profile"]
+        data["dispute_stats"] = analysis_results["dispute_stats"]
+        data["regional_clusters"] = analysis_results["regional_clusters"]
+        data["_sector_key"] = sector_key
+
+        # Coverage diagnostic: compute from local data (no API needed)
+        if not data.get("coverage_diagnostic"):
+            data["coverage_diagnostic"] = {
+                "coverage_rate": 1.0,
+                "captured_count": len(editais),
+                "total_estimated": len(editais),
+                "per_uf": [],
+                "warning": None,
+                "methodology": "Re-enriquecimento local — cobertura estimada dos editais existentes no JSON.",
+                "_source": _source_tag("CALCULATED", "re-enrich mode, sem consulta PNCP"),
+            }
+            print("  Coverage diagnostic: estimado localmente (sem consulta PNCP)")
+
+        # Output
+        output_path = Path(args.output) if args.output else input_path
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+
+        print(f"\n✅ JSON re-enriquecido salvo em: {output_path}")
+        print(f"   Campos atualizados: risk_score, win_probability, roi_potential, portfolio,")
+        print(f"   maturity_profile, dispute_stats, regional_clusters, organ_risk,")
+        print(f"   qualification_gap, habilitacao_analysis, object_compatibility, risk_analysis")
+        sys.exit(0)
+
+    if not args.cnpj:
+        print("ERROR: --cnpj é obrigatório (exceto com --re-enrich)")
+        sys.exit(1)
 
     cnpj14 = _clean_cnpj(args.cnpj)
     if len(cnpj14) != 14:

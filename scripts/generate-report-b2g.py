@@ -55,6 +55,8 @@ except ImportError:
 INK = colors.HexColor("#1B2A3D")           # Charcoal navy — headings, emphasis
 ACCENT = colors.HexColor("#8B7355")        # Warm bronze — subtle accents
 SIGNAL_RED = colors.HexColor("#B5342A")    # Muted red — critical alerts only
+SIGNAL_GREEN = colors.HexColor("#1B7A3D")  # Muted green — positive recommendations
+SIGNAL_AMBER = colors.HexColor("#B8860B")  # Dark goldenrod — cautionary recommendations
 
 TEXT_COLOR = colors.HexColor("#2D3748")    # Body text
 TEXT_SECONDARY = colors.HexColor("#5A6577")  # Subtitles, labels
@@ -71,11 +73,11 @@ MARGIN = 2.2 * cm
 
 ILLEGAL_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
 
-# Recommendation styling — typographic, no colored badges
+# Recommendation styling — color-coded for instant visual parsing
 REC_STYLES = {
-    "PARTICIPAR": {"color": INK, "weight": "bold"},
-    "AVALIAR": {"color": TEXT_SECONDARY, "weight": "bold"},
-    "AVALIAR COM CAUTELA": {"color": TEXT_SECONDARY, "weight": "bold"},
+    "PARTICIPAR": {"color": SIGNAL_GREEN, "weight": "bold"},
+    "AVALIAR": {"color": SIGNAL_AMBER, "weight": "bold"},
+    "AVALIAR COM CAUTELA": {"color": SIGNAL_AMBER, "weight": "bold"},
     "NÃO RECOMENDADO": {"color": SIGNAL_RED, "weight": "bold"},
 }
 
@@ -746,6 +748,217 @@ def _build_cover(data: dict, styles: dict, gen_date: str) -> list:
     return el
 
 
+def _build_exclusive_intelligence(data: dict, styles: dict, sec: dict) -> list:
+    """Build 'Inteligência Exclusiva' — 1-page executive summary of what PNCP alone can't provide.
+
+    Four differentials: incumbency mapping, calibrated viability, strategic acervo, regional clusters.
+    """
+    editais = data.get("editais", [])
+    if not editais:
+        return []
+
+    el = []
+    num = sec["next"]()
+    el.extend(_section_heading(f"{num}. Inteligência Exclusiva — O Que o PNCP Não Mostra", styles))
+
+    el.append(Paragraph(
+        "Este relatório vai além da listagem de editais. Os quatro blocos abaixo "
+        "representam análises que exigem cruzamento de dados históricos, perfil da empresa "
+        "e modelagem competitiva — informações que não estão disponíveis no portal público.",
+        styles["body"],
+    ))
+    el.append(Spacer(1, 5 * mm))
+
+    avail = PAGE_WIDTH - 2 * MARGIN
+    empresa = data.get("empresa", {})
+
+    # --- 1. Incumbency Intelligence ---
+    el.append(Paragraph("<b>1. Mapeamento de Incumbência</b>", styles["h3"]))
+    incumbent_insights = []
+    for idx, ed in enumerate(editais, 1):
+        ci = ed.get("competitive_intel", [])
+        wp = ed.get("win_probability", {})
+        if not ci and not wp:
+            continue
+        orgao = _s(ed.get("orgao", ""))[:60]
+        hhi = wp.get("hhi", 0)
+        top_share = wp.get("top_supplier_share", 0)
+        unique = wp.get("n_unique_suppliers", wp.get("unique_suppliers", 0))
+        prob = wp.get("probability", 0)
+
+        if top_share > 0.60:
+            insight = f"Incumbente dominante (>{top_share:.0%} do mercado) — entrada difícil"
+        elif top_share > 0.40:
+            insight = f"Incumbente forte ({top_share:.0%}) — requer diferenciação"
+        elif unique >= 6:
+            insight = f"Mercado fragmentado ({unique} fornecedores) — oportunidade aberta"
+        elif unique >= 2:
+            insight = f"Competição moderada ({unique} fornecedores, HHI {hhi:.2f})"
+        else:
+            insight = f"Sem histórico de fornecedores — mercado inexplorado"
+
+        incumbent_insights.append((idx, orgao, insight, prob))
+
+    if incumbent_insights:
+        inc_header = [
+            Paragraph("#", styles["cell_header_center"]),
+            Paragraph("Órgão", styles["cell_header"]),
+            Paragraph("Dinâmica Competitiva", styles["cell_header"]),
+            Paragraph("Prob.", styles["cell_header_center"]),
+        ]
+        inc_rows = [inc_header]
+        for idx, orgao, insight, prob in incumbent_insights[:8]:
+            prob_color = SIGNAL_GREEN if prob >= 0.20 else (SIGNAL_AMBER if prob >= 0.10 else SIGNAL_RED)
+            inc_rows.append([
+                Paragraph(f"<b>{idx}</b>", styles["cell_center"]),
+                Paragraph(orgao, styles["cell"]),
+                Paragraph(insight, styles["cell"]),
+                Paragraph(
+                    f"<b>{prob:.0%}</b>",
+                    ParagraphStyle(f"inc_p_{idx}", parent=styles["cell_center"],
+                                   fontName="Helvetica-Bold", textColor=prob_color),
+                ),
+            ])
+        t = _three_rule_table(inc_rows, [avail * 0.06, avail * 0.30, avail * 0.50, avail * 0.14])
+        el.append(t)
+    else:
+        el.append(Paragraph(
+            "Dados de incumbência não disponíveis para os editais analisados.",
+            styles["body_small"],
+        ))
+    el.append(Spacer(1, 5 * mm))
+
+    # --- 2. Calibrated Viability ---
+    el.append(Paragraph("<b>2. Viabilidade Calibrada ao Perfil</b>", styles["h3"]))
+
+    maturity = data.get("maturity_profile") or empresa.get("maturity_profile", {})
+    profile_name = maturity.get("profile", "N/I") if maturity else "N/I"
+    profile_labels = {
+        "ENTRANTE": "Entrante (0-2 contratos federais)",
+        "REGIONAL": "Regional (3-10 contratos, até 3 UFs)",
+        "ESTABELECIDO": "Estabelecido (10+ contratos ou 4+ UFs)",
+    }
+    el.append(Paragraph(
+        f"Perfil de maturidade: <b>{profile_labels.get(profile_name, profile_name)}</b> — "
+        f"os pesos de viabilidade foram ajustados para refletir este perfil.",
+        styles["body"],
+    ))
+
+    # Viability ranking
+    scored = [(idx, ed) for idx, ed in enumerate(editais, 1)
+              if isinstance(ed.get("risk_score"), dict) and ed["risk_score"].get("total", 0) > 0]
+    scored.sort(key=lambda x: x[1]["risk_score"]["total"], reverse=True)
+
+    if scored:
+        via_header = [
+            Paragraph("#", styles["cell_header_center"]),
+            Paragraph("Edital", styles["cell_header"]),
+            Paragraph("Score", styles["cell_header_center"]),
+            Paragraph("Fator Decisivo", styles["cell_header"]),
+        ]
+        via_rows = [via_header]
+        for idx, ed in scored[:6]:
+            risk = ed["risk_score"]
+            score = _safe_int(risk.get("total"))
+            # Find weakest and strongest factor
+            components = {
+                "Habilitação": risk.get("habilitacao", 50),
+                "Financeiro": risk.get("financeiro", 50),
+                "Geográfico": risk.get("geografico", 50),
+                "Prazo": risk.get("prazo", 50),
+                "Competitivo": risk.get("competitivo", 50),
+            }
+            weakest = min(components, key=lambda k: _safe_int(components[k]))
+            strongest = max(components, key=lambda k: _safe_int(components[k]))
+            factor = f"Forte: {strongest} ({_safe_int(components[strongest])}) | Fraco: {weakest} ({_safe_int(components[weakest])})"
+
+            score_color = SIGNAL_GREEN if score >= 60 else (SIGNAL_AMBER if score >= 30 else SIGNAL_RED)
+            via_rows.append([
+                Paragraph(f"<b>{idx}</b>", styles["cell_center"]),
+                Paragraph(_trunc(_s(ed.get("objeto", "")), 80), styles["cell"]),
+                Paragraph(
+                    f"<b>{score}/100</b>",
+                    ParagraphStyle(f"via_s_{idx}", parent=styles["cell_center"],
+                                   fontName="Helvetica-Bold", textColor=score_color),
+                ),
+                Paragraph(factor, styles["cell"]),
+            ])
+        t = _three_rule_table(via_rows, [avail * 0.06, avail * 0.38, avail * 0.12, avail * 0.44])
+        el.append(t)
+    el.append(Spacer(1, 5 * mm))
+
+    # --- 3. Strategic Acervo Sequence ---
+    el.append(Paragraph("<b>3. Sequência Estratégica de Acervo</b>", styles["h3"]))
+
+    acervo_items = []
+    for idx, ed in enumerate(editais, 1):
+        roi = ed.get("roi_potential", {})
+        cat = ed.get("strategic_category", "")
+        if roi.get("strategic_reclassification") == "INVESTIMENTO_ESTRATEGICO_ACERVO" or cat == "INVESTIMENTO":
+            acervo_items.append((idx, ed))
+
+    participar_items = [(idx, ed) for idx, ed in enumerate(editais, 1)
+                        if _normalize_recommendation(_s(ed.get("recomendacao", ""))) == "PARTICIPAR"]
+
+    if acervo_items:
+        el.append(Paragraph(
+            f"<b>{len(acervo_items)}</b> edital(is) classificado(s) como <b>Investimento Estratégico em Acervo</b> — "
+            f"o retorno imediato é marginal, mas a execução constrói atestados e relacionamento "
+            f"que desbloqueiam mercados futuros de maior valor.",
+            styles["body"],
+        ))
+        for idx, ed in acervo_items:
+            obj = _trunc(_s(ed.get("objeto", "")), 100)
+            valor = _currency_short(ed.get("valor_estimado"))
+            orgao = _s(ed.get("orgao", ""))[:50]
+            el.append(Paragraph(
+                f"  <b>{idx}.</b> {obj} ({orgao}) — {valor}",
+                styles["body_small"],
+            ))
+    elif participar_items:
+        el.append(Paragraph(
+            "Nenhum edital classificado como investimento em acervo. "
+            f"Os {len(participar_items)} edital(is) recomendados para participação "
+            f"contribuem para o acervo técnico de forma orgânica.",
+            styles["body"],
+        ))
+    else:
+        el.append(Paragraph(
+            "Nenhuma oportunidade estratégica de construção de acervo identificada nesta janela.",
+            styles["body"],
+        ))
+    el.append(Spacer(1, 5 * mm))
+
+    # --- 4. Regional Clusters ---
+    el.append(Paragraph("<b>4. Clusters Geográficos</b>", styles["h3"]))
+    clusters_data = data.get("regional_clusters", {})
+    clusters = clusters_data.get("clusters", [])
+    if clusters:
+        el.append(Paragraph(
+            f"<b>{len(clusters)}</b> cluster(s) de mobilização compartilhada identificado(s). "
+            f"Uma única base operacional pode servir múltiplos editais no mesmo raio.",
+            styles["body"],
+        ))
+        for cl in clusters[:4]:
+            center = f"{_s(cl.get('center_municipio', ''))}/{_s(cl.get('center_uf', ''))}"
+            n = cl.get("n_editais", 0)
+            valor = _currency_short(cl.get("total_valor", 0))
+            overlap = "prazos sobrepostos" if cl.get("timeline_overlap") else "prazos independentes"
+            el.append(Paragraph(
+                f"  — <b>{center}:</b> {n} editais, {valor}, {overlap}",
+                styles["body_small"],
+            ))
+    else:
+        el.append(Paragraph(
+            "Editais dispersos geograficamente — sem oportunidade de mobilização compartilhada.",
+            styles["body"],
+        ))
+
+    el.append(Spacer(1, 8 * mm))
+    el.append(PageBreak())
+    return el
+
+
 def _build_decision_table(data: dict, styles: dict, sec: dict) -> list:
     """Build 'Decisão em 30 Segundos' — clean three-rule summary table."""
     el = []
@@ -758,7 +971,7 @@ def _build_decision_table(data: dict, styles: dict, sec: dict) -> list:
     el.append(Spacer(1, 3 * mm))
 
     avail = PAGE_WIDTH - 2 * MARGIN
-    col_w = [avail * 0.06, avail * 0.44, avail * 0.14, avail * 0.10, avail * 0.26]
+    col_w = [avail * 0.05, avail * 0.33, avail * 0.11, avail * 0.08, avail * 0.15, avail * 0.28]
 
     # Header
     header = [
@@ -767,6 +980,7 @@ def _build_decision_table(data: dict, styles: dict, sec: dict) -> list:
         Paragraph("Valor", styles["cell_header_right"]),
         Paragraph("Prazo", styles["cell_header_center"]),
         Paragraph("Recomendação", styles["cell_header"]),
+        Paragraph("Diferencial Estratégico", styles["cell_header"]),
     ]
     rows = [header]
 
@@ -775,7 +989,7 @@ def _build_decision_table(data: dict, styles: dict, sec: dict) -> list:
         rec_style_info = REC_STYLES.get(rec, REC_STYLES["NÃO RECOMENDADO"])
         rec_color = rec_style_info["color"]
 
-        objeto = _trunc(_s(ed.get("objeto", "")), 120)
+        objeto = _trunc(_s(ed.get("objeto", "")), 90)
         valor = _currency_short(ed.get("valor_estimado"))
         prazo = _format_prazo_short(ed.get("dias_restantes"))
 
@@ -784,12 +998,40 @@ def _build_decision_table(data: dict, styles: dict, sec: dict) -> list:
             textColor=rec_color, alignment=TA_LEFT, leading=10,
         )
 
+        # Build strategic differential insight
+        diff_parts = []
+        wp = ed.get("win_probability", {})
+        risk = ed.get("risk_score", {})
+        roi = ed.get("roi_potential", {})
+        cat = ed.get("strategic_category", "")
+
+        if isinstance(wp, dict) and wp.get("top_supplier_share", 0) < 0.20 and wp.get("n_unique_suppliers", wp.get("unique_suppliers", 0)) >= 2:
+            diff_parts.append("Sem incumbente dominante")
+        elif isinstance(wp, dict) and wp.get("top_supplier_share", 0) > 0.60:
+            diff_parts.append("Incumbente forte")
+
+        if isinstance(risk, dict) and risk.get("total", 0) >= 60:
+            diff_parts.append(f"Viab. {risk['total']}/100")
+        elif isinstance(risk, dict) and risk.get("total", 0) > 0:
+            diff_parts.append(f"Viab. {risk['total']}/100")
+
+        if roi.get("strategic_reclassification") == "INVESTIMENTO_ESTRATEGICO_ACERVO" or cat == "INVESTIMENTO":
+            diff_parts.append("Acervo estratégico")
+        elif cat == "QUICK_WIN":
+            diff_parts.append("Quick Win")
+
+        differential = " · ".join(diff_parts) if diff_parts else "—"
+
         rows.append([
             Paragraph(f"<b>{idx}</b>", styles["cell_center"]),
             Paragraph(objeto, styles["cell"]),
             Paragraph(valor, styles["cell_right"]),
             Paragraph(prazo, styles["cell_center"]),
             Paragraph(rec, rec_ps),
+            Paragraph(differential, ParagraphStyle(
+                f"ddiff_{idx}", parent=styles["cell"],
+                fontName="Helvetica", fontSize=7, textColor=TEXT_SECONDARY,
+            )),
         ])
 
     t = _three_rule_table(rows, col_w)
@@ -871,6 +1113,8 @@ def _build_viability_text(risk: dict, styles: dict) -> list:
         adj = risk["maturity_adjustment"]
         adj_parts = []
         for comp_key, delta in adj.items():
+            if not isinstance(delta, (int, float)):
+                continue
             if delta != 0:
                 sign = "+" if delta > 0 else ""
                 comp_label = {"hab": "Habilitação", "fin": "Financeiro", "geo": "Geográfico",
@@ -1152,16 +1396,52 @@ def _build_competitive_section(data: dict, styles: dict, sec: dict) -> list:
             el.append(ds_t)
             el.append(Spacer(1, 4 * mm))
 
-    # E5: Recurring suppliers
+    # E5: Recurring suppliers with advantage highlighting
     recurring = dispute_stats.get("recurring_suppliers", [])
     if recurring:
-        el.append(Paragraph("<b>Fornecedores Recorrentes</b>", styles["h3"]))
+        el.append(Paragraph("<b>Fornecedores Recorrentes (Incumbentes)</b>", styles["h3"]))
+        # Compute market_share from contract counts if not provided
+        total_contracts = sum(sup.get("n_contracts", sup.get("contract_count", 0)) for sup in recurring)
         for sup in recurring[:10]:
-            name = _s(sup.get("fornecedor", ""))
-            count = sup.get("contract_count", 0)
+            name = _s(sup.get("nome_ou_cnpj", sup.get("fornecedor", "")))
+            count = sup.get("n_contracts", sup.get("contract_count", 0))
             region = _s(sup.get("region", ""))
+            # Derive share from contract count proportion
+            share = sup.get("market_share", count / total_contracts if total_contracts > 0 else 0)
+
+            # Highlight competitive dynamics
+            if share > 0.60:
+                indicator = f" <font color='{SIGNAL_RED.hexval()}'><b>[DOMINANTE {share:.0%}]</b></font>"
+            elif share > 0.40:
+                indicator = f" <font color='{SIGNAL_AMBER.hexval()}'><b>[FORTE {share:.0%}]</b></font>"
+            else:
+                indicator = ""
+
             el.append(Paragraph(
-                f"  {name} — {count} contrato(s){f' ({region})' if region else ''}",
+                f"  {name} — {count} contrato(s){f' ({region})' if region else ''}{indicator}",
+                styles["body_small"],
+            ))
+        el.append(Spacer(1, 4 * mm))
+
+    # Competitive advantage summary
+    editais = data.get("editais", [])
+    favorable = []
+    for idx, ed in enumerate(editais, 1):
+        wp = ed.get("win_probability", {})
+        if isinstance(wp, dict) and wp.get("top_supplier_share", 1) < 0.20 and wp.get("n_unique_suppliers", wp.get("unique_suppliers", 0)) >= 3:
+            favorable.append((idx, _trunc(_s(ed.get("objeto", "")), 60), wp.get("probability", 0)))
+    if favorable:
+        el.append(Paragraph(
+            f"<font color='{SIGNAL_GREEN.hexval()}'><b>Mercados Favoráveis à Entrada</b></font>",
+            styles["h3"],
+        ))
+        el.append(Paragraph(
+            f"{len(favorable)} edital(is) sem incumbente dominante (HHI baixo, nenhum fornecedor >20% do mercado):",
+            styles["body_small"],
+        ))
+        for idx, obj, prob in favorable[:5]:
+            el.append(Paragraph(
+                f"  <b>{idx}.</b> {obj} — prob. vitória: {prob:.0%}",
                 styles["body_small"],
             ))
         el.append(Spacer(1, 4 * mm))
@@ -1485,6 +1765,54 @@ def _build_detailed_analysis(data: dict, styles: dict, sec: dict | None = None) 
             styles["h2"],
         ))
 
+        # INSIGHT-FIRST: Lead with strategic rationale before technical data
+        justificativa = _s(ed.get("justificativa", ""))
+        rec_info_block = REC_STYLES.get(rec, REC_STYLES["NÃO RECOMENDADO"])
+        if justificativa:
+            header_block.append(Paragraph(
+                f"<font color='{rec_info_block['color'].hexval()}'><b>{rec}</b></font>"
+                f"<font size='9' color='{TEXT_SECONDARY.hexval()}'> — {justificativa}</font>",
+                ParagraphStyle(
+                    f"insight_{idx}", parent=styles["body"],
+                    fontName="Times-Bold", fontSize=10, textColor=rec_info_block["color"],
+                    spaceBefore=1 * mm, spaceAfter=2 * mm,
+                ),
+            ))
+
+        # Key strategic metrics bar (viability + probability + differential)
+        wp = ed.get("win_probability", {})
+        risk = ed.get("risk_score", {})
+        roi = ed.get("roi_potential", {})
+        strategic_bar_parts = []
+        if isinstance(risk, dict) and risk.get("total", 0) > 0:
+            score = _safe_int(risk.get("total"))
+            if score >= 60:
+                qualif = "Alta"
+            elif score >= 30:
+                qualif = "Moderada"
+            else:
+                qualif = "Baixa"
+            strategic_bar_parts.append(f"Viabilidade: {score}/100 ({qualif})")
+        if isinstance(wp, dict) and wp.get("probability", 0) > 0:
+            strategic_bar_parts.append(f"Prob. vitória: {wp['probability']:.0%}")
+        if isinstance(roi, dict) and roi.get("roi_max", 0) > 0:
+            strategic_bar_parts.append(f"Faturamento potencial: até {_currency_short(roi['roi_max'])}")
+        if ed.get("strategic_category"):
+            cat_labels = {"QUICK_WIN": "Quick Win", "OPORTUNIDADE": "Oportunidade",
+                          "INVESTIMENTO": "Investimento Estratégico", "INACESSÍVEL": "Inacessível",
+                          "BAIXA_PRIORIDADE": "Baixa Prioridade"}
+            strategic_bar_parts.append(f"Categoria: {cat_labels.get(ed['strategic_category'], ed['strategic_category'])}")
+
+        if strategic_bar_parts:
+            header_block.append(Paragraph(
+                " &nbsp;|&nbsp; ".join(strategic_bar_parts),
+                ParagraphStyle(
+                    f"stbar_{idx}", parent=styles["body_small"],
+                    fontName="Helvetica-Bold", fontSize=8, textColor=INK,
+                    spaceBefore=0, spaceAfter=3 * mm,
+                ),
+            ))
+
         # Ficha técnica — minimal key-value
         info_rows = []
         raw_fields = [
@@ -1528,18 +1856,8 @@ def _build_detailed_analysis(data: dict, styles: dict, sec: dict | None = None) 
             header_block.append(info_t)
             header_block.append(Spacer(1, 3 * mm))
 
-        # Recommendation — typographic, no colored card
-        rec_info = REC_STYLES.get(rec, REC_STYLES["NÃO RECOMENDADO"])
-        rec_text = f"<b>Recomendação: {rec}</b>"
-        justificativa = _s(ed.get("justificativa", ""))
-        if justificativa:
-            rec_text += f"<br/><font size='9' color='{TEXT_SECONDARY.hexval()}'>{justificativa}</font>"
-
-        header_block.append(Paragraph(rec_text, ParagraphStyle(
-            f"recline_{idx}", parent=styles["body"],
-            fontName="Times-Bold", fontSize=11, textColor=rec_info["color"],
-        )))
-        header_block.append(Spacer(1, 3 * mm))
+        # Recommendation already shown at top via insight-first block
+        # (justificativa + strategic bar rendered before ficha técnica)
 
         el.append(KeepTogether(header_block))
 
@@ -2212,17 +2530,52 @@ def _build_portfolio_section(data: dict, styles: dict, sec: dict | None = None) 
             ))
         el.append(Spacer(1, 3 * mm))
 
-    # Investments detail
+    # Investments detail — with acervo unlock information
     inv = categories["INVESTIMENTO"]["editais"]
     if inv:
         el.append(Paragraph("<b>Investimentos Estratégicos — Construção de Acervo</b>", styles["h3"]))
+        el.append(Paragraph(
+            "Contratos cujo valor principal não é o retorno financeiro imediato, "
+            "mas os atestados técnicos e relacionamentos que desbloqueiam mercados futuros.",
+            styles["body_small"],
+        ))
+        el.append(Spacer(1, 2 * mm))
+
+        inv_header = [
+            Paragraph("#", styles["cell_header_center"]),
+            Paragraph("Edital / Órgão", styles["cell_header"]),
+            Paragraph("Valor", styles["cell_header_right"]),
+            Paragraph("Acervo Desbloqueado", styles["cell_header"]),
+        ]
+        inv_rows = [inv_header]
         for idx, ed in inv:
-            obj = _s((ed.get("objeto") or "")[:100])
-            orgao = _s((ed.get("orgao") or "")[:60])
-            el.append(Paragraph(
-                f"<b>{idx}.</b> {obj} — {orgao}",
-                styles["body_small"],
-            ))
+            obj = _trunc(_s(ed.get("objeto") or ""), 70)
+            orgao = _trunc(_s(ed.get("orgao") or ""), 40)
+            valor = _currency_short(ed.get("valor_estimado"))
+            # Derive acervo unlock from object keywords and qualification gaps
+            acervo_parts = []
+            qual_gap = ed.get("qualification_gap", {})
+            for gap in qual_gap.get("operational_gaps", []):
+                desc = _s(gap.get("description", ""))
+                if desc:
+                    acervo_parts.append(_trunc(desc, 50))
+            roi = ed.get("roi_potential", {})
+            rationale = _s(roi.get("reclassification_rationale", ""))
+            if not acervo_parts and rationale:
+                acervo_parts.append(_trunc(rationale, 80))
+            if not acervo_parts:
+                # Infer from object
+                acervo_parts.append(f"Atestado: {_trunc(obj, 60)}")
+
+            inv_rows.append([
+                Paragraph(f"<b>{idx}</b>", styles["cell_center"]),
+                Paragraph(f"<b>{obj}</b><br/><font size='7' color='{TEXT_MUTED.hexval()}'>{orgao}</font>", styles["cell"]),
+                Paragraph(valor, styles["cell_right"]),
+                Paragraph("; ".join(acervo_parts[:2]), styles["cell"]),
+            ])
+
+        t = _three_rule_table(inv_rows, [avail * 0.06, avail * 0.36, avail * 0.14, avail * 0.44])
+        el.append(t)
         el.append(Spacer(1, 3 * mm))
 
     el.append(Spacer(1, 6 * mm))
@@ -2412,33 +2765,70 @@ def _build_development_plan(data: dict, styles: dict, sec: dict | None = None) -
 # E10: REPORT VALIDATION
 # ============================================================
 
-def validate_report_completeness(data: dict) -> list[str]:
-    """Validate report data completeness. Returns list of warnings."""
+def validate_report_completeness(data: dict) -> tuple[list[str], list[str]]:
+    """Validate report data completeness.
+
+    Returns (blocking_errors, warnings).
+    Blocking errors prevent PDF generation — the JSON must be re-enriched first.
+    Warnings are informational (printed to console but don't block).
+    """
+    errors = []
     warnings = []
 
-    for i, ed in enumerate(data.get("editais", []), 1):
-        # Every edital must have recommendation + justification
+    editais = data.get("editais", [])
+
+    for i, ed in enumerate(editais, 1):
+        obj = _trunc(_s(ed.get("objeto", "")), 50)
+
+        # BLOCKING: Every edital must have recommendation + justification
         rec = ed.get("recomendacao") or ed.get("recommendation")
         justif = ed.get("justificativa") or ed.get("recommendation_justification")
-        if not justif:
-            warnings.append(f"Edital {i}: recomendação sem justificativa")
+        if not justif and rec:
+            errors.append(f"Edital {i} ({obj}): recomendação '{rec}' sem justificativa")
 
-        # ROI must have calculation memory
+        # BLOCKING: risk_score required for viability section
+        if not ed.get("risk_score"):
+            errors.append(f"Edital {i} ({obj}): risk_score ausente — execute --re-enrich")
+
+        # BLOCKING: win_probability required for incumbency/competitive sections
+        if not ed.get("win_probability"):
+            errors.append(f"Edital {i} ({obj}): win_probability ausente — execute --re-enrich")
+
+        # BLOCKING: strategic_category required for portfolio matrix
+        if not ed.get("strategic_category"):
+            errors.append(f"Edital {i} ({obj}): strategic_category ausente — execute --re-enrich")
+
+        # WARNING: ROI calculation memory (desirable but not blocking)
         roi = ed.get("roi_potential", {})
         if roi and not roi.get("calculation_memory"):
-            warnings.append(f"Edital {i}: ROI sem memória de cálculo")
+            warnings.append(f"Edital {i}: ROI sem memória de cálculo (auditabilidade reduzida)")
 
-    # Coverage diagnostic must be present
+        # WARNING: organ_risk (desirable)
+        if not ed.get("organ_risk"):
+            warnings.append(f"Edital {i}: organ_risk ausente (seção de risco do órgão incompleta)")
+
+    # BLOCKING: top-level computed fields
+    if not data.get("maturity_profile") and not data.get("empresa", {}).get("maturity_profile"):
+        errors.append("maturity_profile ausente — execute --re-enrich no JSON")
+
+    if not data.get("dispute_stats"):
+        errors.append("dispute_stats ausente — execute --re-enrich no JSON")
+
+    # WARNING: coverage_diagnostic (desirable)
     if not data.get("coverage_diagnostic"):
-        warnings.append("Diagnóstico de cobertura ausente")
+        warnings.append("Diagnóstico de cobertura ausente — seção E3 será omitida")
 
-    # SICAF must not be UNAVAILABLE (E2)
+    # WARNING: regional_clusters (desirable)
+    if not data.get("regional_clusters"):
+        warnings.append("regional_clusters ausente — seção E7 será omitida")
+
+    # WARNING: SICAF must not be UNAVAILABLE (E2)
     sicaf = data.get("sicaf", {})
     src = sicaf.get("_source", {})
     if isinstance(src, dict) and src.get("status") == "UNAVAILABLE":
         warnings.append("SICAF marcado como UNAVAILABLE — deve ser FALHA_COLETA ou coletado")
 
-    return warnings
+    return errors, warnings
 
 
 # ============================================================
@@ -2520,32 +2910,57 @@ def generate_report_b2g(data: dict) -> BytesIO:
     # E3: Coverage warning (before any analysis if coverage < 70%)
     elements.extend(_build_coverage_warning(data, styles))
 
+    # NEW ORDER: Intelligence-first narrative
+    # 1. Inteligência Exclusiva — the 4 differentials PNCP can't provide
+    elements.extend(_build_exclusive_intelligence(data, styles, sec))
+    # 2. Decisão em 30 Segundos — actionable summary
     elements.extend(_build_decision_table(data, styles, sec))
+    # 3. Perfil da Empresa
     elements.extend(_build_company_profile(data, styles, sec))
+    # 4. Resumo Executivo
     elements.extend(_build_executive_summary(data, styles, sec))
-    elements.extend(_build_opportunities_overview(data, styles, sec))
+    # 5. Análise Detalhada (insight-first per edital)
     elements.extend(_build_detailed_analysis(data, styles, sec))
+    # 6. Mapa Competitivo (incumbency deep-dive)
     elements.extend(_build_competitive_section(data, styles, sec))
+    # 7. Matriz Estratégica de Portfólio
     elements.extend(_build_portfolio_section(data, styles, sec))
-
-    # E7: Regional cluster analysis (after portfolio, before market intel)
+    # 8. Regional clusters
     elements.extend(_build_regional_analysis(data, styles, sec))
-
-    # E4: Consolidated development plan (after regional, before market intel)
+    # 9. Development plan
     elements.extend(_build_development_plan(data, styles, sec))
-
+    # 10. Market intelligence
     elements.extend(_build_market_intelligence(data, styles, sec))
+    # 11. Querido Diário
     elements.extend(_build_querido_diario(data, styles, sec))
+    # 12. Próximos Passos
     elements.extend(_build_next_steps(data, styles, sec))
+    # Appendix: Panorama de Oportunidades (raw table — moved to end)
+    elements.extend(_build_opportunities_overview(data, styles, sec))
+    # SICAF
     elements.extend(_build_sicaf_section(data, styles, sec))
+    # Data sources
     elements.extend(_build_data_sources_section(data, styles, sec))
 
-    # E10: Validate report completeness
-    validation_warnings = validate_report_completeness(data)
+    # E10: Validate report completeness (blocking errors + warnings)
+    validation_errors, validation_warnings = validate_report_completeness(data)
+    if validation_errors:
+        print(f"\n  BLOQUEIO: {len(validation_errors)} campo(s) critico(s) ausente(s)")
+        for e in validation_errors[:10]:
+            print(f"    - {e}")
+        if len(validation_errors) > 10:
+            print(f"    ... e mais {len(validation_errors) - 10}")
+        print(f"\n  Para corrigir, execute:")
+        print(f"    python scripts/collect-report-data.py --re-enrich <caminho-do-json>")
+        raise ValueError(
+            f"PDF bloqueado — {len(validation_errors)} campo(s) crítico(s) ausente(s) no JSON. "
+            f"Execute --re-enrich para recalcular campos determinísticos sem re-coletar APIs.\n"
+            + "\n".join(f"  - {e}" for e in validation_errors[:15])
+        )
     if validation_warnings:
-        print(f"  ⚠ Validação: {len(validation_warnings)} item(s) requerem atenção")
+        print(f"  Validacao: {len(validation_warnings)} aviso(s) — seções opcionais podem estar incompletas")
         for w in validation_warnings:
-            print(f"    — {w}")
+            print(f"    - {w}")
 
     doc.build(elements, onFirstPage=_draw_footer, onLaterPages=_draw_footer,
               canvasmaker=_NumberedCanvas)

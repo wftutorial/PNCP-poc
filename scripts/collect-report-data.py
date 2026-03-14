@@ -342,7 +342,7 @@ def collect_portal_transparencia(api: ApiClient, cnpj14: str, pt_key: str) -> di
         headers=headers,
         label="Portal Transparência — contratos",
     )
-    if status == "API" and data:
+    if status == "API" and data is not None:
         items = data if isinstance(data, list) else data.get("data", data.get("contratos", []))
         if isinstance(items, list):
             for c in items[:20]:
@@ -352,7 +352,9 @@ def collect_portal_transparencia(api: ApiClient, cnpj14: str, pt_key: str) -> di
                     "data": c.get("dataInicioVigencia") or c.get("dataAssinatura") or "",
                     "objeto": c.get("objeto", "")[:200],
                 })
-        result["historico_source"] = _source_tag("API")
+        n = len(result["historico_contratos"])
+        detail = f"{n} contrato(s) federal(is) identificado(s)" if n > 0 else "Nenhum contrato federal identificado"
+        result["historico_source"] = _source_tag("API", detail)
     elif status == "API_FAILED":
         result["historico_source"] = _source_tag("API_FAILED", "Consulta de contratos falhou")
 

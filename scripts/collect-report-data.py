@@ -497,7 +497,7 @@ def collect_pncp_contratos_fornecedor(api: ApiClient, cnpj14: str) -> tuple[list
                     "municipio": unidade.get("municipioNome", ""),
                     "valor": _safe_float(c.get("valorGlobal") or c.get("valorInicial")),
                     "data": c.get("dataAssinatura", ""),
-                    "objeto": (c.get("objetoContrato") or c.get("informacaoComplementar") or "")[:200],
+                    "objeto": (c.get("objetoContrato") or c.get("informacaoComplementar") or "")[:300],
                     "numero_contrato": c.get("numeroContratoEmpenho", ""),
                     "vigencia_fim": c.get("dataVigenciaFim", ""),
                     "fonte": "PNCP",
@@ -545,6 +545,93 @@ def collect_pncp_contratos_fornecedor(api: ApiClient, cnpj14: str) -> tuple[list
 # ============================================================
 # SECTOR MAPPING
 # ============================================================
+
+def extract_keywords_from_contracts(contratos: list[dict], min_freq: int = 2, max_keywords: int = 30) -> list[str]:
+    """Extract high-frequency keywords from historical contract descriptions.
+
+    Analyzes the 'objeto' field of past contracts to identify what the company
+    ACTUALLY delivers (vs what their CNAE says). Keywords that appear in ≥min_freq
+    contracts are returned, sorted by frequency descending.
+
+    This addresses the insight that companies often win bids outside their CNAE —
+    their contract history is a better signal of actual competency than CNAE codes.
+    """
+    if not contratos:
+        return []
+
+    # Portuguese stop words for government contract descriptions
+    _STOP_WORDS = {
+        "para", "com", "dos", "das", "nos", "nas", "por", "uma", "num", "numa",
+        "que", "como", "mais", "este", "esta", "estes", "estas", "esse", "essa",
+        "aquele", "aquela", "entre", "cada", "todo", "toda", "todos", "todas",
+        "sobre", "sob", "sem", "seu", "sua", "seus", "suas", "não", "nao",
+        "muito", "mais", "menos", "bem", "mal", "sim", "mas", "porém", "porem",
+        "ainda", "também", "tambem", "então", "entao", "quando", "onde", "porque",
+        "contrato", "contratação", "contratacao", "aquisição", "aquisicao",
+        "fornecimento", "prestação", "prestacao", "serviço", "servico", "serviços",
+        "servicos", "execução", "execucao", "objeto", "referente", "relativo",
+        "conforme", "mediante", "decorrente", "processo", "pregão", "pregao",
+        "licitação", "licitacao", "dispensa", "inexigibilidade", "concorrência",
+        "concorrencia", "empresa", "ltda", "eireli", "cnpj", "cpf",
+        "valor", "prazo", "vigência", "vigencia", "pagamento", "parcela",
+        "municipal", "prefeitura", "governo", "estado", "federal", "secretaria",
+        "ministério", "ministerio", "departamento", "diretoria",
+        "janeiro", "fevereiro", "março", "marco", "abril", "maio", "junho",
+        "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
+        "2024", "2025", "2026", "2023", "2022", "2021",
+    }
+
+    # Count word/bigram frequency across contract descriptions
+    word_freq: dict[str, int] = {}
+    bigram_freq: dict[str, int] = {}
+
+    for c in contratos:
+        obj = (c.get("objeto") or "").lower()
+        obj = re.sub(r"[^a-záàâãéêíóôõúüç\s]", " ", obj)
+        words = [w for w in obj.split() if len(w) >= 4 and w not in _STOP_WORDS]
+
+        # Count unique words per contract (not total occurrences)
+        seen_words: set[str] = set()
+        for w in words:
+            if w not in seen_words:
+                word_freq[w] = word_freq.get(w, 0) + 1
+                seen_words.add(w)
+
+        # Bigrams (consecutive meaningful words)
+        for i in range(len(words) - 1):
+            bg = f"{words[i]} {words[i+1]}"
+            if bg not in seen_words:
+                bigram_freq[bg] = bigram_freq.get(bg, 0) + 1
+                seen_words.add(bg)
+
+    # Filter by minimum frequency and sort by relevance
+    frequent_words = [
+        (word, freq) for word, freq in word_freq.items()
+        if freq >= min_freq
+    ]
+    frequent_bigrams = [
+        (bg, freq) for bg, freq in bigram_freq.items()
+        if freq >= min_freq
+    ]
+
+    # Bigrams get priority (more specific), then single words
+    all_terms = sorted(frequent_bigrams, key=lambda x: -x[1]) + sorted(frequent_words, key=lambda x: -x[1])
+
+    # Deduplicate: if a bigram contains a word, the word is redundant
+    result: list[str] = []
+    used_words: set[str] = set()
+    for term, _freq in all_terms:
+        if len(result) >= max_keywords:
+            break
+        term_words = set(term.split())
+        # Skip single words already covered by a bigram
+        if len(term_words) == 1 and term in used_words:
+            continue
+        result.append(term)
+        used_words.update(term_words)
+
+    return result
+
 
 def map_sector(cnae_principal: str, sectors_path: str | None = None) -> tuple[str, list[str], str]:
     """Map CNAE to sector name, keywords, and sector_key from sectors_data.yaml.
@@ -4233,11 +4320,63 @@ Examples:
     # Merge sanctions into empresa for downstream
     empresa["sancoes"] = transparencia["sancoes"]
 
-    # ---- Sector Mapping ----
+    # ---- Phase 1b: Contract History FIRST (before sector mapping) ----
+    # RATIONALE: Companies often win bids outside their CNAE classification.
+    # By fetching actual contract history first, we extract keywords from what
+    # the company REALLY does, then use those keywords (enriched with CNAE)
+    # to search for open bids. This produces results aligned with the company's
+    # actual field of work, not just their registered CNAE.
+    print("\n📋 Phase 1b: Histórico de contratos (ANTES do mapeamento de setor)")
+    pncp_contratos, pncp_contratos_source = collect_pncp_contratos_fornecedor(api, cnpj14)
+
+    # Merge PT federal + PNCP all-spheres into empresa.historico_contratos
+    pt_contratos = transparencia.get("historico_contratos", [])
+    merged_contratos = list(pncp_contratos)  # PNCP as base (all spheres)
+    pncp_orgao_dates = {(c["orgao"][:30], c["data"][:10]) for c in pncp_contratos}
+    for c in pt_contratos:
+        key = (c.get("orgao", "")[:30], c.get("data", "")[:10])
+        if key not in pncp_orgao_dates:
+            c["esfera"] = "Federal"
+            c["fonte"] = "Portal da Transparência"
+            merged_contratos.append(c)
+    transparencia["historico_contratos"] = merged_contratos
+    n_pncp = len(pncp_contratos)
+    n_pt = len(pt_contratos)
+    n_merged = len(merged_contratos)
+    transparencia["historico_source"] = _source_tag(
+        "API",
+        f"{n_merged} contrato(s): {n_pncp} via PNCP (todas as esferas) + {n_pt} via Portal da Transparência (federal)"
+    )
+    print(f"  Histórico consolidado: {n_merged} contratos ({n_pncp} PNCP + {n_pt} PT)")
+
+    # ---- Extract keywords from contract history ----
+    contract_keywords = extract_keywords_from_contracts(merged_contratos)
+    if contract_keywords:
+        print(f"  Keywords extraídas do histórico ({len(contract_keywords)}): {', '.join(contract_keywords[:10])}{'...' if len(contract_keywords) > 10 else ''}")
+    else:
+        print("  Sem histórico de contratos — keywords serão derivadas apenas do CNAE")
+
+    # ---- Sector Mapping (CNAE) ----
     print("\n📋 Mapeando setor via CNAE")
-    setor, keywords, sector_key = map_sector(empresa.get("cnae_principal", ""))
+    setor, cnae_keywords, sector_key = map_sector(empresa.get("cnae_principal", ""))
     print(f"  Setor: {setor}")
-    print(f"  Keywords: {', '.join(keywords[:8])}{'...' if len(keywords) > 8 else ''}")
+    print(f"  Keywords CNAE: {', '.join(cnae_keywords[:8])}{'...' if len(cnae_keywords) > 8 else ''}")
+
+    # ---- Merge keywords: Contract history (primary) + CNAE (secondary) ----
+    # Contract-derived keywords go first (higher relevance), then CNAE keywords
+    # that aren't already covered by contract keywords.
+    if contract_keywords:
+        existing_lower = {kw.lower() for kw in contract_keywords}
+        # Add CNAE keywords that aren't already represented
+        for kw in cnae_keywords:
+            if kw.lower() not in existing_lower:
+                contract_keywords.append(kw)
+                existing_lower.add(kw.lower())
+        keywords = contract_keywords
+        print(f"  Keywords finais ({len(keywords)} = {len(contract_keywords) - len(cnae_keywords) + len([k for k in cnae_keywords if k.lower() in existing_lower])} histórico + CNAE complementar): {', '.join(keywords[:10])}...")
+    else:
+        keywords = cnae_keywords
+        print(f"  Keywords finais: CNAE apenas ({len(keywords)} termos)")
 
     # ---- UFs ----
     if args.ufs:
@@ -4250,7 +4389,7 @@ Examples:
     else:
         print("  UFs: todas (sem filtro)")
 
-    # ---- Phase 2a: Edital Search ----
+    # ---- Phase 2a: Edital Search (using contract-enriched keywords) ----
     editais_pncp, pncp_source = collect_pncp(api, keywords, ufs, args.dias)
 
     editais_pcp = []
@@ -4328,30 +4467,8 @@ Examples:
     # ---- SICAF (obrigatório — E2) ----
     sicaf = collect_sicaf(cnpj14, verbose=verbose)
 
-    # ---- PNCP Contract History (all spheres) ----
-    pncp_contratos, pncp_contratos_source = collect_pncp_contratos_fornecedor(api, cnpj14)
-
-    # Merge PT federal + PNCP all-spheres into empresa.historico_contratos
-    # PNCP has broader coverage; PT may have additional federal detail
-    pt_contratos = transparencia.get("historico_contratos", [])
-    merged_contratos = list(pncp_contratos)  # PNCP as base (all spheres)
-    pncp_orgao_dates = {(c["orgao"][:30], c["data"][:10]) for c in pncp_contratos}
-    for c in pt_contratos:
-        key = (c.get("orgao", "")[:30], c.get("data", "")[:10])
-        if key not in pncp_orgao_dates:
-            c["esfera"] = "Federal"
-            c["fonte"] = "Portal da Transparência"
-            merged_contratos.append(c)
-    transparencia["historico_contratos"] = merged_contratos
-    # Update source to reflect merged data
-    n_pncp = len(pncp_contratos)
-    n_pt = len(pt_contratos)
-    n_merged = len(merged_contratos)
-    transparencia["historico_source"] = _source_tag(
-        "API",
-        f"{n_merged} contrato(s): {n_pncp} via PNCP (todas as esferas) + {n_pt} via Portal da Transparência (federal)"
-    )
-    print(f"  Histórico consolidado: {n_merged} contratos ({n_pncp} PNCP + {n_pt} PT, {n_merged - n_pncp - n_pt + len(set())} novos do PT)")
+    # NOTE: Contract history (PNCP + PT) already collected in Phase 1b (before edital search)
+    # and merged into transparencia["historico_contratos"]. No need to repeat here.
 
     # ---- Competitive Intelligence ----
     if not args.skip_competitive:

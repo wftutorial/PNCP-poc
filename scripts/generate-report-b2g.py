@@ -893,9 +893,13 @@ def _build_exclusive_intelligence(data: dict, styles: dict, sec: dict) -> list:
             factor = f"Forte: {strongest} ({_safe_int(components[strongest])}) | Fraco: {weakest} ({_safe_int(components[weakest])})"
 
             score_color = SIGNAL_GREEN if score >= 60 else (SIGNAL_AMBER if score >= 30 else SIGNAL_RED)
+            obj_text = _trunc(_s(ed.get("objeto", "")), 80)
+            via_link = _fix_pncp_link(ed.get("link", ""))
+            if via_link and via_link.startswith("http"):
+                obj_text = f'<a href="{via_link}" color="{INK.hexval()}">{obj_text}</a>'
             via_rows.append([
                 Paragraph(f"<b>{idx}</b>", styles["cell_center"]),
-                Paragraph(_trunc(_s(ed.get("objeto", "")), 80), styles["cell"]),
+                Paragraph(obj_text, styles["cell"]),
                 Paragraph(
                     f"<b>{score}/100</b>",
                     ParagraphStyle(f"via_s_{idx}", parent=styles["cell_center"],
@@ -1010,6 +1014,9 @@ def _build_decision_table(data: dict, styles: dict, sec: dict) -> list:
         rec_color = rec_style_info["color"]
 
         objeto = _trunc(_s(ed.get("objeto", "")), 90)
+        link = _fix_pncp_link(ed.get("link", ""))
+        if link and link.startswith("http"):
+            objeto = f'<a href="{link}" color="{INK.hexval()}">{objeto}</a>'
         valor = _currency_short(ed.get("valor_estimado"))
         prazo = _format_prazo_short(ed.get("dias_restantes"))
 
@@ -1331,6 +1338,12 @@ def _build_competitive_section(data: dict, styles: dict, sec: dict) -> list:
             for c in ci["top_fornecedores"][:5]:
                 objs = c.get("objetos", [])
                 obj_str = _trunc(_s(objs[0] if objs else ""), 60)
+                aditivo = _safe_float(c.get("valor_aditivos"))
+                situacao = c.get("situacao_contrato", "")
+                if aditivo > 0:
+                    obj_str += f" [aditivos: +{_currency_short(aditivo)}]"
+                if situacao == "3":  # rescindido
+                    obj_str += " [RESCINDIDO]"
                 entries.append({
                     "orgao": orgao,
                     "fornecedor": _s(c.get("nome", "")),
@@ -1340,10 +1353,17 @@ def _build_competitive_section(data: dict, styles: dict, sec: dict) -> list:
                 })
         elif isinstance(ci, list):
             for c in ci[:5]:
+                obj_str = _trunc(_s(c.get("objeto", "")), 60)
+                aditivo = _safe_float(c.get("valor_aditivos"))
+                situacao = c.get("situacao_contrato", "")
+                if aditivo > 0:
+                    obj_str += f" [aditivos: +{_currency_short(aditivo)}]"
+                if situacao == "3":  # rescindido
+                    obj_str += " [RESCINDIDO]"
                 entries.append({
                     "orgao": orgao,
                     "fornecedor": _s(c.get("fornecedor", c.get("nome", ""))),
-                    "objeto": _trunc(_s(c.get("objeto", "")), 60),
+                    "objeto": obj_str,
                     "valor": c.get("valor", c.get("valor_total")),
                     "data": c.get("data", ""),
                 })
@@ -1498,12 +1518,10 @@ def _section_counter() -> dict:
     return {"next": _next, "current": lambda: state["n"]}
 
 
-def _build_company_profile(data: dict, styles: dict, sec: dict | None = None) -> list:
+def _build_company_profile_content(data: dict, styles: dict) -> list:
+    """Render company profile content without section heading."""
     el = []
     emp = data.get("empresa", {})
-
-    num = sec["next"]() if sec else 1
-    el.extend(_section_heading(f"{num}. Perfil da Empresa", styles))
 
     avail = PAGE_WIDTH - 2 * MARGIN
 
@@ -1520,6 +1538,19 @@ def _build_company_profile(data: dict, styles: dict, sec: dict | None = None) ->
         ("Sede", f"{emp.get('cidade_sede', '')} — {emp.get('uf_sede', '')}"),
         ("Situação Cadastral", emp.get("situacao_cadastral")),
     ]
+    # Simples Nacional / MEI
+    simples = emp.get("simples_nacional")
+    mei = emp.get("mei")
+    if simples is not None or mei is not None:
+        regime_parts = []
+        if mei:
+            regime_parts.append("MEI")
+        elif simples:
+            data_opcao = emp.get("data_opcao_simples", "")
+            regime_parts.append(f"Simples Nacional{' (desde ' + str(data_opcao)[:10] + ')' if data_opcao else ''}")
+        else:
+            regime_parts.append("Regime Geral")
+        raw_fields.append(("Regime Tributário", " · ".join(regime_parts)))
     for label, value in raw_fields:
         if value and str(value).strip() and value != " — ":
             info_rows.append([
@@ -1606,6 +1637,15 @@ def _build_company_profile(data: dict, styles: dict, sec: dict | None = None) ->
         ))
 
     el.append(Spacer(1, 8 * mm))
+    return el
+
+
+def _build_company_profile(data: dict, styles: dict, sec: dict | None = None) -> list:
+    """Build company profile section with heading + content."""
+    el = []
+    num = sec["next"]() if sec else 1
+    el.extend(_section_heading(f"{num}. Perfil da Empresa", styles))
+    el.extend(_build_company_profile_content(data, styles))
     return el
 
 
@@ -1794,14 +1834,22 @@ def _build_detailed_analysis(data: dict, styles: dict, sec: dict | None = None) 
     avail = PAGE_WIDTH - 2 * MARGIN
 
     for idx, ed in enumerate(editais, 1):
+        rec = _normalize_recommendation(_s(ed.get("recomendacao", "")))
+        # Skip NÃO RECOMENDADO — they go to Annex A
+        if rec == "NÃO RECOMENDADO":
+            continue
+
         header_block = []
 
         objeto = _s(ed.get("objeto", "Sem título"))
-        rec = _normalize_recommendation(_s(ed.get("recomendacao", "")))
 
-        # Edital title — clean serif, no colored background
+        # Edital title — clean serif, no colored background; clickable if link exists
+        link = _fix_pncp_link(ed.get("link", ""))
+        title_text = f"<b>{num}.{idx}.</b>  {objeto}"
+        if link and link.startswith("http"):
+            title_text = f'<b>{num}.{idx}.</b>  <a href="{link}" color="{INK.hexval()}">{objeto}</a>'
         header_block.append(Paragraph(
-            f"<b>{num}.{idx}.</b>  {objeto}",
+            title_text,
             styles["h2"],
         ))
 
@@ -1867,6 +1915,27 @@ def _build_detailed_analysis(data: dict, styles: dict, sec: dict | None = None) 
             ("Categoria Estratégica", ed.get("strategic_category")),
             ("Fonte", ed.get("fonte")),
         ]
+        # IBGE municipal data
+        ibge = ed.get("ibge", {})
+        if ibge.get("populacao") or ibge.get("pib_mil_reais"):
+            ibge_parts = []
+            if ibge.get("populacao"):
+                pop = ibge["populacao"]
+                if pop >= 1_000_000:
+                    ibge_parts.append(f"Pop. {pop/1_000_000:.1f}M")
+                elif pop >= 1_000:
+                    ibge_parts.append(f"Pop. {pop/1_000:.0f}k")
+                else:
+                    ibge_parts.append(f"Pop. {pop}")
+            if ibge.get("pib_mil_reais"):
+                pib = ibge["pib_mil_reais"]
+                if pib >= 1_000_000:
+                    ibge_parts.append(f"PIB R${pib/1_000_000:.1f}B")
+                elif pib >= 1_000:
+                    ibge_parts.append(f"PIB R${pib/1_000:.0f}M")
+                else:
+                    ibge_parts.append(f"PIB R${pib:.0f}k")
+            raw_fields.append(("Município (IBGE)", " · ".join(ibge_parts)))
         link = _fix_pncp_link(ed.get("link", ""))
         if link and link != "N/I" and link.startswith("http"):
             raw_fields.append(("Link", f'<a href="{link}" color="{TEXT_SECONDARY.hexval()}">{link}</a>'))
@@ -1900,6 +1969,17 @@ def _build_detailed_analysis(data: dict, styles: dict, sec: dict | None = None) 
         # (justificativa + strategic bar rendered before ficha técnica)
 
         el.append(KeepTogether(header_block))
+
+        # IBGE fiscal capacity red flag
+        ibge = ed.get("ibge", {})
+        pop = ibge.get("populacao")
+        valor_est = _safe_float(ed.get("valor_estimado"))
+        if pop and valor_est and pop < 10_000 and valor_est > 5_000_000:
+            el.append(Paragraph(
+                f"<font color='{SIGNAL_AMBER.hexval()}'><b>ALERTA</b></font> "
+                f"Município com {pop:,} habitantes licitando {_currency_short(valor_est)} — verificar capacidade fiscal",
+                styles["body_small"],
+            ))
 
         # Distance
         distancia = ed.get("distancia", {})
@@ -2092,7 +2172,8 @@ def _build_market_intelligence(data: dict, styles: dict, sec: dict | None = None
     return el
 
 
-def _build_querido_diario(data: dict, styles: dict, sec: dict | None = None) -> list:
+def _build_querido_diario_content(data: dict, styles: dict) -> list:
+    """Render Querido Diario mentions without section heading."""
     el = []
     mencoes = data.get("querido_diario", [])
     if not mencoes:
@@ -2108,18 +2189,15 @@ def _build_querido_diario(data: dict, styles: dict, sec: dict | None = None) -> 
         filtered = []
         for m in mencoes:
             territorio = (m.get("territorio", "") or "").upper()
-            # Check if any relevant UF appears in territorio string
             if any(uf in territorio for uf in relevant_ufs if uf):
                 filtered.append(m)
         if not filtered:
-            filtered = mencoes[:3]  # Keep top 3 even if no UF match
+            filtered = mencoes[:3]
         mencoes = filtered
 
     if not mencoes:
         return el
 
-    num = sec["next"]() if sec else 6
-    el.extend(_section_heading(f"{num}. Menções em Diários Oficiais", styles))
     el.append(Paragraph(
         "Publicações em diários oficiais de municípios relevantes para o perfil da empresa.",
         styles["body_small"],
@@ -2158,6 +2236,18 @@ def _build_querido_diario(data: dict, styles: dict, sec: dict | None = None) -> 
     t = _three_rule_table(rows, [avail * 0.05, avail * 0.22, avail * 0.73])
     el.append(t)
     el.append(Spacer(1, 8 * mm))
+    return el
+
+
+def _build_querido_diario(data: dict, styles: dict, sec: dict | None = None) -> list:
+    """Build Querido Diario section with heading + content."""
+    mencoes = data.get("querido_diario", [])
+    if not mencoes:
+        return []
+    el = []
+    num = sec["next"]() if sec else 6
+    el.extend(_section_heading(f"{num}. Menções em Diários Oficiais", styles))
+    el.extend(_build_querido_diario_content(data, styles))
     return el
 
 
@@ -2208,6 +2298,9 @@ def _build_prioritization(data: dict, styles: dict, sec: dict | None = None) -> 
 
     for rank, (idx, ed, score, roi_max, prob, _) in enumerate(participar, 1):
         obj = _trunc(_s(ed.get("objeto", "")), 60)
+        pri_link = _fix_pncp_link(ed.get("link", ""))
+        if pri_link and pri_link.startswith("http"):
+            obj = f'<a href="{pri_link}" color="{INK.hexval()}">{obj}</a>'
         dias = ed.get("dias_restantes")
         urgency = f"({_format_prazo_short(dias)})" if dias is not None else ""
 
@@ -2269,6 +2362,9 @@ def _build_development_path(data: dict, styles: dict, sec: dict | None = None) -
 
     for idx, ed in nao_rec[:8]:  # Top 8
         obj = _trunc(_s(ed.get("objeto", "")), 80)
+        dev_link = _fix_pncp_link(ed.get("link", ""))
+        if dev_link and dev_link.startswith("http"):
+            obj = f'<a href="{dev_link}" color="{INK.hexval()}">{obj}</a>'
         justif = _s(ed.get("justificativa", ""))
         valor = _currency_short(ed.get("valor_estimado"))
 
@@ -2384,14 +2480,12 @@ def _build_next_steps(data: dict, styles: dict, sec: dict | None = None) -> list
 # SICAF & SOURCE CONFIDENCE
 # ============================================================
 
-def _build_sicaf_section(data: dict, styles: dict, sec: dict | None = None) -> list:
+def _build_sicaf_content(data: dict, styles: dict) -> list:
+    """Render SICAF content without section heading."""
     el = []
     sicaf = data.get("sicaf", {})
     if not sicaf:
         return el
-
-    num = sec["next"]() if sec else 8
-    el.extend(_section_heading(f"{num}. Verificação SICAF", styles))
 
     label, label_color = _get_source_label(sicaf.get("_source"))
 
@@ -2502,15 +2596,26 @@ def _build_sicaf_section(data: dict, styles: dict, sec: dict | None = None) -> l
     return el
 
 
-def _build_data_sources_section(data: dict, styles: dict, sec: dict | None = None) -> list:
+def _build_sicaf_section(data: dict, styles: dict, sec: dict | None = None) -> list:
+    """Build SICAF section with heading + content."""
+    sicaf = data.get("sicaf", {})
+    if not sicaf:
+        return []
+    el = []
+    num = sec["next"]() if sec else 8
+    el.extend(_section_heading(f"{num}. Verificação SICAF", styles))
+    el.extend(_build_sicaf_content(data, styles))
+    return el
+
+
+def _build_data_sources_content(data: dict, styles: dict) -> list:
+    """Render data sources content without section heading."""
     el = []
     metadata = data.get("_metadata", {})
     sources = metadata.get("sources", {})
     if not sources:
         return el
 
-    num = sec["next"]() if sec else 9
-    el.extend(_section_heading(f"{num}. Fontes de Dados e Confiabilidade", styles))
     el.append(Paragraph(
         "Cada dado neste relatório foi obtido de fontes públicas oficiais. "
         "A tabela abaixo indica o status de cada consulta no momento da coleta.",
@@ -2540,7 +2645,6 @@ def _build_data_sources_section(data: dict, styles: dict, sec: dict | None = Non
         """Remove technical terms and English from source details."""
         if not detail:
             return ""
-        # Replace English/technical terms with Portuguese equivalents
         replacements = [
             ("raw", "brutos"), ("filtered", "filtrados"), ("pages", "páginas"),
             ("errors", "erros"), ("via Playwright", ""), ("via playwright", ""),
@@ -2552,7 +2656,6 @@ def _build_data_sources_section(data: dict, styles: dict, sec: dict | None = Non
         ]
         for eng, pt in replacements:
             detail = detail.replace(eng, pt)
-        # Remove leftover technical patterns (HTTP codes, etc.)
         detail = re.sub(r'\b\d{3}\s*OK\b', 'consultado', detail)
         detail = re.sub(r'\bhttpx?\b', '', detail, flags=re.IGNORECASE)
         detail = re.sub(r'\bGET\b', '', detail)
@@ -2587,6 +2690,19 @@ def _build_data_sources_section(data: dict, styles: dict, sec: dict | None = Non
         ))
 
     el.append(Spacer(1, 8 * mm))
+    return el
+
+
+def _build_data_sources_section(data: dict, styles: dict, sec: dict | None = None) -> list:
+    """Build data sources section with heading + content."""
+    metadata = data.get("_metadata", {})
+    sources = metadata.get("sources", {})
+    if not sources:
+        return []
+    el = []
+    num = sec["next"]() if sec else 9
+    el.extend(_section_heading(f"{num}. Fontes de Dados e Confiabilidade", styles))
+    el.extend(_build_data_sources_content(data, styles))
     return el
 
 
@@ -2756,6 +2872,9 @@ def _build_portfolio_section(data: dict, styles: dict, sec: dict | None = None) 
             prob = ed.get("win_probability", {}).get("probability", 0)
             valor = ed.get("valor_estimado", 0)
             obj = _s((ed.get("objeto") or "")[:100])
+            qw_link = _fix_pncp_link(ed.get("link", ""))
+            if qw_link and qw_link.startswith("http"):
+                obj = f'<a href="{qw_link}" color="{INK.hexval()}">{obj}</a>'
             el.append(Paragraph(
                 f"<b>{idx}.</b> {obj} — Prob. {_pct(prob)}, Valor {_currency(valor)}",
                 styles["body_small"],
@@ -3088,6 +3207,85 @@ def validate_report_completeness(data: dict) -> tuple[list[str], list[str]]:
 
 
 # ============================================================
+# ANNEXES (3-layer architecture: Camada 3)
+# ============================================================
+
+def _build_annex_nao_recomendado(data: dict, styles: dict, sec: dict) -> list:
+    """Annex A: Condensed table of non-recommended editais."""
+    editais = data.get("editais", [])
+    nr_editais = [(i, ed) for i, ed in enumerate(editais, 1)
+                  if _normalize_recommendation(_s(ed.get("recomendacao", ""))) == "NÃO RECOMENDADO"]
+    if not nr_editais:
+        return []
+
+    el = []
+    el.append(PageBreak())
+    num = sec["next"]()
+    el.extend(_section_heading(f"Anexo A — Editais Não Recomendados ({len(nr_editais)})", styles))
+
+    avail = PAGE_WIDTH - 2 * MARGIN
+    header = [
+        Paragraph("#", styles["cell_header_center"]),
+        Paragraph("Município / Objeto", styles["cell_header"]),
+        Paragraph("Valor", styles["cell_header_right"]),
+        Paragraph("Motivo", styles["cell_header"]),
+    ]
+    rows = [header]
+    for idx, ed in nr_editais:
+        mun = _s(ed.get("municipio", ""))
+        uf = _s(ed.get("uf", ""))
+        obj = _trunc(_s(ed.get("objeto", "")), 50)
+        valor = _currency_short(ed.get("valor_estimado"))
+        justif = _trunc(_s(ed.get("justificativa", "")), 80)
+        link = _fix_pncp_link(ed.get("link", ""))
+
+        # Make object clickable
+        obj_text = f'{mun}/{uf} — {obj}'
+        if link and link.startswith("http"):
+            obj_text = f'<a href="{link}" color="{TEXT_SECONDARY.hexval()}">{obj_text}</a>'
+
+        rows.append([
+            Paragraph(f"<b>{idx}</b>", styles["cell_center"]),
+            Paragraph(obj_text, styles["cell"]),
+            Paragraph(valor, styles["cell_right"]),
+            Paragraph(justif, styles["cell"]),
+        ])
+
+    t = _three_rule_table(rows, [avail * 0.06, avail * 0.34, avail * 0.12, avail * 0.48])
+    el.append(t)
+    el.append(Spacer(1, 8 * mm))
+    return el
+
+
+def _build_annex_company(data: dict, styles: dict, sec: dict) -> list:
+    """Annex B: Company profile + SICAF (reference material)."""
+    el = []
+    el.append(PageBreak())
+    num = sec["next"]()
+    el.extend(_section_heading(f"Anexo B — Perfil da Empresa", styles))
+    el.extend(_build_company_profile_content(data, styles))
+    el.append(Spacer(1, 5 * mm))
+    el.extend(_build_sicaf_content(data, styles))
+    return el
+
+
+def _build_annex_sources(data: dict, styles: dict, sec: dict) -> list:
+    """Annex C: Data sources + gazette mentions."""
+    el = []
+    el.append(PageBreak())
+    num = sec["next"]()
+    el.extend(_section_heading(f"Anexo C — Fontes de Dados e Metodologia", styles))
+    el.extend(_build_data_sources_content(data, styles))
+    el.append(Spacer(1, 5 * mm))
+    # Querido Diário — only if there are mentions
+    mencoes = data.get("querido_diario", [])
+    if mencoes:
+        el.append(Paragraph("<b>Menções em Diários Oficiais</b>", styles["h3"]))
+        el.extend(_build_querido_diario_content(data, styles))
+    return el
+
+
+# ============================================================
 # MAIN
 # ============================================================
 
@@ -3163,43 +3361,40 @@ def generate_report_b2g(data: dict) -> BytesIO:
     elements: list = []
     elements.extend(_build_cover(data, styles, gen_date))
 
-    # E3: Coverage warning (before any analysis if coverage < 70%)
+    # === CAMADA 1: DECISÃO EXECUTIVA ===
+    # Coverage warning (before any analysis if coverage < 70%)
     elements.extend(_build_coverage_warning(data, styles))
-
-    # NEW ORDER: Intelligence-first narrative
-    # 1. Inteligência Exclusiva — the 4 differentials PNCP can't provide
-    elements.extend(_build_exclusive_intelligence(data, styles, sec))
-    # 2. Decisão em 30 Segundos — actionable summary
-    elements.extend(_build_decision_table(data, styles, sec))
-    # 3. Perfil da Empresa
-    elements.extend(_build_company_profile(data, styles, sec))
-    # 4. Resumo Executivo
+    # 1. Resumo Executivo (condensed)
     elements.extend(_build_executive_summary(data, styles, sec))
-    # 5. Análise Detalhada (insight-first per edital)
+    # 2. Decisão em 30 Segundos (grouped summary table)
+    elements.extend(_build_decision_table(data, styles, sec))
+
+    # === CAMADA 2: INTELIGÊNCIA ESTRATÉGICA ===
+    # 3. Inteligência Exclusiva — 4 differentials PNCP can't provide
+    elements.extend(_build_exclusive_intelligence(data, styles, sec))
+    # 4. Análise Detalhada (ONLY PARTICIPAR + AVALIAR — NÃO RECOMENDADO goes to Annex A)
     elements.extend(_build_detailed_analysis(data, styles, sec))
-    # 6. Mapa Competitivo (incumbency deep-dive)
-    elements.extend(_build_competitive_section(data, styles, sec))
-    # 7. Matriz Estratégica de Portfólio
+    # 5. Matriz Estratégica + Regional (unified strategic view)
     elements.extend(_build_portfolio_section(data, styles, sec))
-    # 8. Regional clusters
     elements.extend(_build_regional_analysis(data, styles, sec))
-    # 9. Development plan
-    elements.extend(_build_development_plan(data, styles, sec))
-    # 10. Market intelligence
+    # 6. Mapa Competitivo (condensed incumbency deep-dive)
+    elements.extend(_build_competitive_section(data, styles, sec))
+    # 7. Market intelligence
     elements.extend(_build_market_intelligence(data, styles, sec))
-    # 11. Querido Diário
-    elements.extend(_build_querido_diario(data, styles, sec))
-    # 12. Próximos Passos
-    # Consolidated prioritization of PARTICIPAR editais
+    # 8. Development plan
+    elements.extend(_build_development_plan(data, styles, sec))
+    # 9. Consolidated prioritization of PARTICIPAR editais
     elements.extend(_build_prioritization(data, styles, sec))
-    # Development path for NÃO RECOMENDADO editais
-    elements.extend(_build_development_path(data, styles, sec))
+    # 10. Próximos Passos
     elements.extend(_build_next_steps(data, styles, sec))
-    # Panorama de Oportunidades removed — redundant with Decisão em 30 Segundos
-    # SICAF
-    elements.extend(_build_sicaf_section(data, styles, sec))
-    # Data sources
-    elements.extend(_build_data_sources_section(data, styles, sec))
+
+    # === CAMADA 3: ANEXOS ===
+    # Annex A: NÃO RECOMENDADO editais (condensed table)
+    elements.extend(_build_annex_nao_recomendado(data, styles, sec))
+    # Annex B: Company Profile + SICAF
+    elements.extend(_build_annex_company(data, styles, sec))
+    # Annex C: Data Sources + Querido Diário
+    elements.extend(_build_annex_sources(data, styles, sec))
 
     # E10: Validate report completeness (blocking errors + warnings)
     validation_errors, validation_warnings = validate_report_completeness(data)

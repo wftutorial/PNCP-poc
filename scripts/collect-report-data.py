@@ -61,6 +61,9 @@ OPENCNPJ_BASE = "https://api.opencnpj.org"
 PT_BASE = "https://api.portaldatransparencia.gov.br/api-de-dados"
 OSRM_BASE = "http://router.project-osrm.org/route/v1/driving"
 NOMINATIM_BASE = "https://nominatim.openstreetmap.org/search"
+BRASILAPI_BASE = "https://brasilapi.com.br/api/cnpj/v1"
+IBGE_LOCALIDADES = "https://servicodados.ibge.gov.br/api/v1/localidades"
+IBGE_SIDRA = "https://apisidra.ibge.gov.br/values"
 
 # PNCP modalidades relevantes para construção
 MODALIDADES = {
@@ -361,6 +364,83 @@ def collect_portal_transparencia(api: ApiClient, cnpj14: str, pt_key: str) -> di
     return result
 
 
+def collect_brasilapi(api: ApiClient, cnpj14: str) -> dict:
+    """Fetch Simples Nacional status + fallback company data from BrasilAPI."""
+    print("\n  BrasilAPI — Simples Nacional")
+    data, status = api.get(f"{BRASILAPI_BASE}/{cnpj14}", label=f"BrasilAPI {cnpj14}")
+    if not data or status != "API":
+        return {"_source": _source_tag("API_FAILED", "BrasilAPI indisponivel"), "simples_nacional": None, "mei": None}
+    return {
+        "_source": _source_tag("API"),
+        "simples_nacional": data.get("opcao_pelo_simples"),
+        "mei": data.get("opcao_pelo_mei"),
+        "data_opcao_simples": data.get("data_opcao_pelo_simples", ""),
+        "data_exclusao_simples": data.get("data_exclusao_do_simples", ""),
+        "porte_fallback": data.get("porte", ""),
+    }
+
+
+_ibge_cache: dict = {}  # UF -> {nome_normalizado: cod_ibge}
+
+
+def _normalize_municipio(nome: str) -> str:
+    import unicodedata
+    nome = unicodedata.normalize("NFD", nome.lower())
+    return "".join(c for c in nome if unicodedata.category(c) != "Mn").strip()
+
+
+def _get_cod_ibge(api: ApiClient, municipio: str, uf: str) -> int | None:
+    uf = uf.upper()
+    if uf not in _ibge_cache:
+        data, status = api.get(f"{IBGE_LOCALIDADES}/estados/{uf}/municipios", label=f"IBGE localidades {uf}")
+        if status == "API" and isinstance(data, list):
+            _ibge_cache[uf] = {_normalize_municipio(m.get("nome", "")): m.get("id") for m in data}
+        else:
+            _ibge_cache[uf] = {}
+    return _ibge_cache.get(uf, {}).get(_normalize_municipio(municipio))
+
+
+def collect_ibge_municipio(api: ApiClient, municipio: str, uf: str) -> dict:
+    """Fetch population + GDP for a municipality from IBGE SIDRA."""
+    cod = _get_cod_ibge(api, municipio, uf)
+    if not cod:
+        return {"_source": _source_tag("API_FAILED", f"Codigo IBGE nao encontrado: {municipio}/{uf}"), "populacao": None, "pib_mil_reais": None}
+
+    result: dict = {"cod_ibge": cod}
+
+    # Population (tabela 6579)
+    data, status = api.get(f"{IBGE_SIDRA}/t/6579/n6/{cod}/v/9324/p/last", label=f"IBGE pop {municipio}")
+    if status == "API" and isinstance(data, list) and len(data) > 1:
+        try:
+            result["populacao"] = int(data[1].get("V", 0))
+        except (ValueError, IndexError):
+            result["populacao"] = None
+    else:
+        result["populacao"] = None
+
+    time.sleep(0.3)
+
+    # GDP (tabela 5938)
+    data, status = api.get(f"{IBGE_SIDRA}/t/5938/n6/{cod}/v/37/p/last", label=f"IBGE PIB {municipio}")
+    if status == "API" and isinstance(data, list) and len(data) > 1:
+        try:
+            result["pib_mil_reais"] = float(data[1].get("V", 0))
+        except (ValueError, IndexError):
+            result["pib_mil_reais"] = None
+    else:
+        result["pib_mil_reais"] = None
+
+    # Derived
+    if result.get("populacao") and result.get("pib_mil_reais"):
+        result["pib_per_capita"] = round((result["pib_mil_reais"] * 1000) / result["populacao"], 2)
+    else:
+        result["pib_per_capita"] = None
+
+    has_any = result.get("populacao") or result.get("pib_mil_reais")
+    result["_source"] = _source_tag("API" if has_any else "API_FAILED", f"pop={'OK' if result.get('populacao') else 'N/A'}, pib={'OK' if result.get('pib_mil_reais') else 'N/A'}")
+    return result
+
+
 def collect_pncp_contratos_fornecedor(api: ApiClient, cnpj14: str) -> tuple[list[dict], dict]:
     """Fetch contract history from PNCP by supplier CNPJ.
 
@@ -421,6 +501,10 @@ def collect_pncp_contratos_fornecedor(api: ApiClient, cnpj14: str) -> tuple[list
                     "numero_contrato": c.get("numeroContratoEmpenho", ""),
                     "vigencia_fim": c.get("dataVigenciaFim", ""),
                     "fonte": "PNCP",
+                    "valor_aditivos": _safe_float(c.get("valorAcumuladoAditivos")),
+                    "tipo_contrato": c.get("tipoContratoNome", ""),
+                    "situacao_contrato": c.get("situacaoContratoCodigo", ""),
+                    "tem_subcontratacao": c.get("subcontratacao", False),
                 })
 
             # Pagination
@@ -3503,6 +3587,8 @@ def assemble_report_data(
     qd_source: dict,
     distancias: dict[str, dict],
     sicaf: dict,
+    brasilapi: dict | None = None,
+    ibge_data: dict | None = None,
 ) -> dict:
     """Assemble all collected data into the final JSON structure."""
 
@@ -3556,6 +3642,8 @@ def assemble_report_data(
     for ed in all_editais:
         ed.pop("_id", None)
 
+    _brasilapi = brasilapi or {}
+    _ibge_data = ibge_data or {}
     return {
         "_metadata": {
             "generated_at": _date_iso(_today()),
@@ -3568,6 +3656,8 @@ def assemble_report_data(
                 "pcp_v2": pcp_source,
                 "querido_diario": qd_source,
                 "sicaf": sicaf.get("_source", {}),
+                "brasilapi": _brasilapi.get("_source", _source_tag("UNAVAILABLE")),
+                "ibge": _source_tag("API", f"{len([d for d in _ibge_data.values() if d.get('populacao')])} municipios") if _ibge_data else _source_tag("UNAVAILABLE", "Skipped"),
             },
         },
         "empresa": empresa_full,
@@ -3605,6 +3695,8 @@ Examples:
     parser.add_argument("--skip-pcp", action="store_true", help="Pular busca PCP v2")
     parser.add_argument("--skip-qd", action="store_true", help="Pular busca Querido Diário")
     parser.add_argument("--skip-competitive", action="store_true", help="Pular coleta de inteligência competitiva")
+    parser.add_argument("--skip-ibge", action="store_true", help="Skip IBGE enrichment")
+    parser.add_argument("--skip-brasilapi", action="store_true", help="Skip BrasilAPI query")
     parser.add_argument("--re-enrich", help=(
         "Re-enriquecer um JSON existente sem re-coletar APIs. "
         "Recalcula: risk_score, win_probability, roi_potential, cronograma, "
@@ -3701,6 +3793,17 @@ Examples:
     # ---- Phase 1: Company Profile ----
     empresa = collect_opencnpj(api, cnpj14)
 
+    # BrasilAPI — Simples Nacional
+    if not (hasattr(args, 'skip_brasilapi') and args.skip_brasilapi):
+        brasilapi = collect_brasilapi(api, cnpj14)
+        empresa["simples_nacional"] = brasilapi.get("simples_nacional")
+        empresa["mei"] = brasilapi.get("mei")
+        empresa["data_opcao_simples"] = brasilapi.get("data_opcao_simples", "")
+        if not empresa.get("porte") and brasilapi.get("porte_fallback"):
+            empresa["porte"] = brasilapi["porte_fallback"]
+    else:
+        brasilapi = {"_source": _source_tag("UNAVAILABLE", "Skipped via --skip-brasilapi")}
+
     # Portal da Transparência
     pt_key = os.environ.get("PORTAL_TRANSPARENCIA_API_KEY", "")
     if not pt_key:
@@ -3791,6 +3894,27 @@ Examples:
         else:
             print("\n📍 Distâncias: cidade/UF da sede não disponível — pulando")
 
+    # ---- IBGE Municipal Data ----
+    ibge_data: dict = {}
+    if not (hasattr(args, 'skip_ibge') and args.skip_ibge):
+        print(f"\n  IBGE — Enriquecendo municipios")
+        municipios_unicos: set = set()
+        for ed in all_editais:
+            mun = ed.get("municipio", "")
+            uf_ed = ed.get("uf", "")
+            if mun and uf_ed:
+                municipios_unicos.add((mun, uf_ed))
+        for mun, uf_ed in sorted(municipios_unicos):
+            key = f"{mun}|{uf_ed}"
+            ibge_data[key] = collect_ibge_municipio(api, mun, uf_ed)
+            time.sleep(0.5)
+        for ed in all_editais:
+            mun = ed.get("municipio", "")
+            uf_ed = ed.get("uf", "")
+            key = f"{mun}|{uf_ed}"
+            if key in ibge_data:
+                ed["ibge"] = ibge_data[key]
+
     # ---- SICAF (obrigatório — E2) ----
     sicaf = collect_sicaf(cnpj14, verbose=verbose)
 
@@ -3840,6 +3964,8 @@ Examples:
         qd_source=qd_source,
         distancias=distancias,
         sicaf=sicaf,
+        brasilapi=brasilapi,
+        ibge_data=ibge_data,
     )
 
     # ---- Deterministic Calculations (risk score, ROI, chronogram, E4-E8) ----

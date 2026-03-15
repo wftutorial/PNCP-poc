@@ -2926,6 +2926,7 @@ def compute_qualification_gap_analysis(
             }
 
     n_historico = len(historico_list)
+    n_sector_relevant = empresa.get("_sector_relevant_contracts", 0)
 
     if best_match_info:
         # Semantic match found — cite the specific contract
@@ -2941,15 +2942,39 @@ def compute_qualification_gap_analysis(
             "estimated_timeline": "Já disponível",
             "action_required": "Confirmar que atestados e CATs estão disponíveis para juntada célere na habilitação",
         })
-    elif n_historico >= 10:
-        # Extensive contract history (≥10) — company is clearly established in the sector.
-        # Listing "sem acervo" is absurd for a company with dozens/hundreds of contracts.
-        # Assume fully qualified; just remind to have docs ready.
+    elif n_historico >= 10 and n_sector_relevant < 3:
+        # CRITICAL: Company has many contracts but very few/none in the target sector.
+        # This is NOT "acervo presumido" — it's a sector mismatch.
+        if n_sector_relevant == 0:
+            detail = "NENHUM no setor de atuação dos editais analisados"
+        else:
+            detail = f"apenas {n_sector_relevant} no setor (de {n_historico} total)"
+        gaps.append({
+            "gap_type": "ACERVO_SETOR_DIVERGENTE",
+            "description": (
+                f"ALERTA: CNAE inconsistente com histórico — verificar acervo. "
+                f"Empresa possui {n_historico} contrato(s) governamental(is), "
+                f"porém {detail}. "
+                f"O histórico registrado no PNCP indica atuação em segmento distinto. "
+                f"Acervo técnico no setor NÃO pode ser presumido."
+            ),
+            "addressable": True,
+            "estimated_timeline": "6-12 meses (execução de contrato no setor + obtenção de CAT)",
+            "action_required": (
+                "Verificar se a empresa possui contratos no setor não registrados no PNCP. "
+                "Se confirmada ausência, iniciar construção de acervo via obras de menor porte "
+                "ou consórcio com empresa que possua atestados no setor."
+            ),
+        })
+    elif n_historico >= 10 and n_sector_relevant >= 3:
+        # Extensive contract history WITH sector-relevant contracts.
+        # Safely presume acervo.
         gaps.append({
             "gap_type": "ACERVO_PRESUMIDO",
             "description": (
-                f"Empresa com {n_historico} contrato(s) governamental(is) no histórico — "
-                f"acervo técnico e atestados presumidos pela experiência acumulada"
+                f"Empresa com {n_historico} contrato(s) governamental(is) no histórico, "
+                f"dos quais {n_sector_relevant} no setor de atuação — "
+                f"acervo técnico e atestados presumidos pela experiência setorial acumulada"
             ),
             "addressable": False,
             "estimated_timeline": "Já disponível",
@@ -3319,6 +3344,7 @@ def compute_all_deterministic(
     empresa: dict,
     sicaf: dict,
     sector_key: str,
+    sector_keywords: list[str] | None = None,
 ) -> dict:
     """Compute all deterministic intelligence for editais. Mutates in place.
 
@@ -3334,6 +3360,28 @@ def compute_all_deterministic(
     maturity = detect_maturity_profile(empresa)
     empresa["maturity_profile"] = maturity
     print(f"  Perfil de maturidade: {maturity['profile']} ({maturity['rationale']})")
+
+    # Sector-relevant contract count — critical for acervo gap analysis
+    # Use word boundary matching (not substring) to avoid false positives
+    _sector_kw = [k.lower() for k in (sector_keywords or []) if len(k) >= 5]
+    import re as _re
+    _sector_pattern = _re.compile(
+        r"\b(" + "|".join(_re.escape(k) for k in _sector_kw) + r")", _re.IGNORECASE
+    ) if _sector_kw else None
+    historico = empresa.get("historico_contratos", [])
+    historico_list = historico if isinstance(historico, list) else []
+    sector_relevant_count = 0
+    if _sector_pattern and historico_list:
+        for c in historico_list:
+            obj = (c.get("objeto", "") or "")
+            if _sector_pattern.search(obj):
+                sector_relevant_count += 1
+    empresa["_sector_relevant_contracts"] = sector_relevant_count
+    if historico_list:
+        pct = round(100 * sector_relevant_count / len(historico_list), 1)
+        print(f"  Contratos setoriais: {sector_relevant_count}/{len(historico_list)} ({pct}%)")
+        if sector_relevant_count == 0 and len(historico_list) >= 10:
+            print(f"  ⚠ ALERTA: {len(historico_list)} contratos encontrados mas ZERO no setor — acervo NÃO presume experiência no setor")
 
     empresa_cnaes = empresa.get("cnaes_secundarios", "")
     if isinstance(empresa_cnaes, list):
@@ -3727,20 +3775,26 @@ Examples:
 
         # Detect sector from existing data or re-map from CNAE
         sector_key = data.get("_sector_key", "")
+        re_keywords: list[str] = []
         if not sector_key:
             cnae = empresa.get("cnae_principal", "")
             if cnae:
-                _, _, sector_key = map_sector(cnae)
+                _, re_keywords, sector_key = map_sector(cnae)
                 print(f"  Setor mapeado: {sector_key}")
             else:
                 sector_key = "engineering"  # Safe default
                 print(f"  Setor: usando default ({sector_key})")
+        else:
+            # Try to recover keywords from sector_key
+            cnae = empresa.get("cnae_principal", "")
+            if cnae:
+                _, re_keywords, _ = map_sector(cnae)
 
         editais = data.get("editais", [])
         print(f"  Editais: {len(editais)}")
 
         # Run all deterministic computations
-        analysis_results = compute_all_deterministic(editais, empresa, sicaf, sector_key)
+        analysis_results = compute_all_deterministic(editais, empresa, sicaf, sector_key, sector_keywords=re_keywords)
 
         # Store results
         data["portfolio"] = analysis_results["portfolio"]
@@ -3969,7 +4023,7 @@ Examples:
     )
 
     # ---- Deterministic Calculations (risk score, ROI, chronogram, E4-E8) ----
-    analysis_results = compute_all_deterministic(data["editais"], data["empresa"], sicaf, sector_key)
+    analysis_results = compute_all_deterministic(data["editais"], data["empresa"], sicaf, sector_key, sector_keywords=keywords)
 
     # Store cross-edital analysis at top level
     data["portfolio"] = analysis_results["portfolio"]

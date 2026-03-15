@@ -696,6 +696,70 @@ def extract_keywords_from_contracts(contratos: list[dict], max_keywords: int = 3
     return result
 
 
+def extract_ufs_from_contracts(
+    contratos: list[dict],
+    uf_sede: str = "",
+    max_ufs: int = 5,
+    min_contracts: int = 3,
+) -> tuple[list[str], dict]:
+    """Derive target UFs from contract history (geographic intelligence).
+
+    Same philosophy as extract_keywords_from_contracts: what the company
+    ACTUALLY does (where it operates) is a better signal than where its
+    headquarters is located.
+
+    Returns:
+        (ordered_ufs, metadata_dict) where:
+        - ordered_ufs: list of UF codes ordered by contract count (descending),
+          uf_sede always included even with 0 contracts there.
+          Capped at max_ufs.
+        - metadata_dict: {uf: count} for all UFs found, plus uf_sede entry.
+    """
+    if not contratos:
+        return ([uf_sede] if uf_sede else []), {"uf_sede": uf_sede, "counts": {uf_sede: 0} if uf_sede else {}, "source": "fallback_sede"}
+
+    # Count contracts per UF
+    uf_counts: dict[str, int] = {}
+    for c in contratos:
+        uf = (c.get("uf") or "").upper().strip()
+        if uf and len(uf) == 2:
+            uf_counts[uf] = uf_counts.get(uf, 0) + 1
+
+    if not uf_counts:
+        return ([uf_sede] if uf_sede else []), {"uf_sede": uf_sede, "counts": {uf_sede: 0} if uf_sede else {}, "source": "fallback_sede"}
+
+    # Adaptive min_contracts threshold (like keywords)
+    n_total = sum(uf_counts.values())
+    if n_total <= 5:
+        effective_min = 1
+    elif n_total <= 20:
+        effective_min = 2
+    else:
+        effective_min = max(min_contracts, n_total // 20)  # ~5% prevalence
+
+    # Filter UFs with enough contracts, sorted by count descending
+    qualified = sorted(
+        [(uf, cnt) for uf, cnt in uf_counts.items() if cnt >= effective_min],
+        key=lambda x: -x[1],
+    )
+
+    result_ufs = [uf for uf, _cnt in qualified[:max_ufs]]
+
+    # Ensure uf_sede is always included (even if 0 contracts there)
+    if uf_sede and uf_sede.upper() not in [u.upper() for u in result_ufs]:
+        result_ufs.append(uf_sede.upper())
+
+    meta = {
+        "uf_sede": uf_sede,
+        "counts": dict(sorted(uf_counts.items(), key=lambda x: -x[1])),
+        "effective_min": effective_min,
+        "total_contracts": n_total,
+        "source": "historico_contratos",
+    }
+
+    return result_ufs, meta
+
+
 def map_sector(cnae_principal: str, sectors_path: str | None = None) -> tuple[str, list[str], str]:
     """Map CNAE to sector name, keywords, and sector_key from sectors_data.yaml.
 
@@ -1646,6 +1710,40 @@ def compute_portfolio_analysis(
 # PHASE 2a: PNCP SEARCH
 # ============================================================
 
+
+def _compile_keyword_patterns(keywords: list[str]) -> list[re.Pattern]:
+    """Pre-compile word-boundary regex patterns for keyword matching.
+
+    Uses \\b (word boundary) to avoid false positives like "água" matching
+    "desaguamento" or "material" matching "imaterial".
+
+    For multi-word keywords (bigrams like "merenda escolar"), each word
+    must appear with word boundaries but not necessarily adjacent —
+    this handles word order variations in procurement text.
+    """
+    patterns: list[re.Pattern] = []
+    for kw in keywords:
+        kw_lower = kw.lower().strip()
+        if not kw_lower:
+            continue
+        words = kw_lower.split()
+        if len(words) == 1:
+            # Single word: exact word boundary match
+            try:
+                patterns.append(re.compile(rf"\b{re.escape(kw_lower)}\b"))
+            except re.error:
+                pass  # Skip invalid patterns
+        else:
+            # Multi-word (bigram): both words must appear with boundaries
+            # Use lookahead so order doesn't matter
+            try:
+                parts = [rf"(?=.*\b{re.escape(w)}\b)" for w in words]
+                patterns.append(re.compile("".join(parts), re.DOTALL))
+            except re.error:
+                pass
+    return patterns
+
+
 def collect_pncp(
     api: ApiClient,
     keywords: list[str],
@@ -1657,6 +1755,9 @@ def collect_pncp(
 
     data_inicial = _date_compact(_today() - timedelta(days=dias))
     data_final = _date_compact(_today())
+
+    # Pre-compile word-boundary regex patterns for keyword matching (performance)
+    keyword_patterns = _compile_keyword_patterns(keywords)
 
     all_editais = []
     seen_ids = set()
@@ -1688,7 +1789,7 @@ def collect_pncp(
             source_meta["total_raw"] += len(items)
 
             for item in items:
-                edital = _parse_pncp_item(item, keywords, ufs)
+                edital = _parse_pncp_item(item, keywords, ufs, keyword_patterns=keyword_patterns)
                 if edital:
                     eid = edital.get("_id", "")
                     if eid and eid not in seen_ids:
@@ -1710,7 +1811,8 @@ def collect_pncp(
     return all_editais, _source
 
 
-def _parse_pncp_item(item: dict, keywords: list[str], ufs: list[str]) -> dict | None:
+def _parse_pncp_item(item: dict, keywords: list[str], ufs: list[str],
+                     keyword_patterns: list[re.Pattern] | None = None) -> dict | None:
     """Parse a single PNCP result. Returns None if filtered out.
 
     PNCP response structure:
@@ -1732,9 +1834,15 @@ def _parse_pncp_item(item: dict, keywords: list[str], ufs: list[str]) -> dict | 
     if ufs and uf and uf not in ufs:
         return None
 
-    # Keyword filter (case-insensitive)
+    # Keyword filter: word-boundary matching (not substring)
+    # Uses pre-compiled regex patterns for performance.
+    # Requires at least 1 keyword match with word boundaries to pass.
     objeto_lower = objeto.lower()
-    if not any(kw.lower() in objeto_lower for kw in keywords):
+    if keyword_patterns:
+        if not any(p.search(objeto_lower) for p in keyword_patterns):
+            return None
+    elif not any(kw.lower() in objeto_lower for kw in keywords):
+        # Fallback to substring for backward compat if no patterns provided
         return None
 
     # Build PNCP link from orgaoEntidade.cnpj + anoCompra + sequencialCompra
@@ -1813,6 +1921,8 @@ def collect_pcp(
     data_inicial = _date_br(_today() - timedelta(days=dias))
     data_final = _date_br(_today())
 
+    keyword_patterns = _compile_keyword_patterns(keywords)
+
     all_editais = []
     source_meta = {"total_raw": 0, "total_filtered": 0, "pages": 0, "errors": 0}
 
@@ -1839,7 +1949,7 @@ def collect_pcp(
         source_meta["total_raw"] += len(items)
 
         for item in items:
-            edital = _parse_pcp_item(item, keywords, ufs)
+            edital = _parse_pcp_item(item, keywords, ufs, keyword_patterns=keyword_patterns)
             if edital:
                 all_editais.append(edital)
 
@@ -1860,7 +1970,8 @@ def collect_pcp(
     return all_editais, _source
 
 
-def _parse_pcp_item(item: dict, keywords: list[str], ufs: list[str]) -> dict | None:
+def _parse_pcp_item(item: dict, keywords: list[str], ufs: list[str],
+                    keyword_patterns: list[re.Pattern] | None = None) -> dict | None:
     """Parse a PCP v2 result."""
     resumo = item.get("resumo") or ""
     uc = item.get("unidadeCompradora") or {}
@@ -1870,7 +1981,10 @@ def _parse_pcp_item(item: dict, keywords: list[str], ufs: list[str]) -> dict | N
         return None
 
     resumo_lower = resumo.lower()
-    if not any(kw.lower() in resumo_lower for kw in keywords):
+    if keyword_patterns:
+        if not any(p.search(resumo_lower) for p in keyword_patterns):
+            return None
+    elif not any(kw.lower() in resumo_lower for kw in keywords):
         return None
 
     url_ref = item.get("urlReferencia") or ""
@@ -4143,6 +4257,7 @@ def assemble_report_data(
     sicaf: dict,
     brasilapi: dict | None = None,
     ibge_data: dict | None = None,
+    ufs_meta: dict | None = None,
 ) -> dict:
     """Assemble all collected data into the final JSON structure."""
 
@@ -4217,6 +4332,7 @@ def assemble_report_data(
         "empresa": empresa_full,
         "setor": setor,
         "keywords": keywords,
+        "ufs_busca": ufs_meta,
         "editais": all_editais,
         "querido_diario": querido_diario,
         "sicaf": sicaf,
@@ -4441,15 +4557,25 @@ Examples:
         keywords = cnae_keywords
         print(f"  Keywords finais: CNAE apenas ({len(keywords)} termos)")
 
-    # ---- UFs ----
+    # ---- UFs (contract-history-first, like keywords) ----
+    ufs_meta = {}
     if args.ufs:
         ufs = [u.strip().upper() for u in args.ufs.split(",") if u.strip()]
+        ufs_meta = {"source": "manual", "ufs": ufs}
+        print(f"  UFs: {', '.join(ufs)} (manual)")
     else:
         uf_sede = empresa.get("uf_sede", "")
-        ufs = [uf_sede] if uf_sede else []
-    if ufs:
-        print(f"  UFs: {', '.join(ufs)}")
-    else:
+        ufs, ufs_meta = extract_ufs_from_contracts(
+            merged_contratos,
+            uf_sede=uf_sede,
+        )
+        if ufs_meta.get("source") == "historico_contratos":
+            counts = ufs_meta.get("counts", {})
+            top_display = ", ".join(f"{u}({counts.get(u, 0)})" for u in ufs)
+            print(f"  UFs derivadas do histórico: {top_display}")
+        else:
+            print(f"  UFs: {', '.join(ufs)} (sede — sem histórico)")
+    if not ufs:
         print("  UFs: todas (sem filtro)")
 
     # ---- Phase 2a: Edital Search (using contract-enriched keywords) ----
@@ -4556,6 +4682,7 @@ Examples:
         sicaf=sicaf,
         brasilapi=brasilapi,
         ibge_data=ibge_data,
+        ufs_meta=ufs_meta,
     )
 
     # ---- Deterministic Calculations (risk score, ROI, chronogram, E4-E8) ----

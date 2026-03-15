@@ -178,8 +178,9 @@ Para CADA edital, cruzar dados do JSON (Phase 1) + análise documental (Phase 2)
    - Se NÃO atende requisito crítico → NÃO RECOMENDADO com motivo
 7. **Análise de aditivos** — Se `competitive_intel` mostra contratos com `valor_aditivos > 0` ou `situacao_contrato == "3" (rescindido)`, alertar sobre padrão do órgão. Aditivos frequentes = risco de escopo mal definido. Rescisões = red flag.
 8. **Divergência setorial** — Se `qualification_gap.gap_type == "ACERVO_SETOR_DIVERGENTE"`, a empresa tem CNAE no setor mas contratos históricos em segmento distinto. Neste caso: **NÃO invalidar o edital como NÃO RECOMENDADO**. Em vez disso, recomendar **AVALIAR COM CAUTELA** com justificativa "Participação depende de confirmação de acervo técnico no setor — verificar CATs e atestados reais da empresa". O alerta de divergência setorial já aparece no topo do relatório; a análise por edital deve complementar, não repetir.
-9. **Recomendação** — PARTICIPAR / AVALIAR COM CAUTELA / NÃO RECOMENDADO
-10. **Justificativa (OBRIGATÓRIA)** — Motivo factual da recomendação. TODA recomendação DEVE ter justificativa. Para NÃO RECOMENDADO, explicar o motivo específico (ex: "Capital social R$X insuficiente para exigência de R$Y", "Distância 800km inviabiliza logística", "CNAE incompatível com objeto"). Para PARTICIPAR, explicar por que é viável. Para AVALIAR COM CAUTELA, explicar o risco específico.
+9. **Análise de consórcio e subcontratação** — Se o edital permite consórcio (`permite_consorcio`) e a empresa tem barreiras de capital, acervo ou capacidade operacional, sugerir consórcio como alternativa viável. Se o edital permite subcontratação (`permite_subcontratacao`), identificar componentes fora do core que podem ser subcontratados. Definir `alternativa_participacao`: "INDIVIDUAL", "CONSORCIO_RECOMENDADO" (quando há barreiras superáveis via consórcio), ou "SUBCONTRATACAO_PARCIAL" (quando componentes específicos excedem a capacidade operacional). Incluir na justificativa quando aplicável.
+10. **Recomendação** — PARTICIPAR / AVALIAR COM CAUTELA / NÃO RECOMENDADO. **Editais VETADOS pelo script (sanção, capital insuficiente, limite MEI/Simples) já vêm com `risk_score.vetoed=true` e `risk_score.veto_reasons` — estes devem ser marcados como NÃO RECOMENDADO com justificativa citando o veto específico.**
+11. **Justificativa (OBRIGATÓRIA)** — Motivo factual da recomendação. TODA recomendação DEVE ter justificativa. Para NÃO RECOMENDADO, explicar o motivo específico (ex: "Capital social R$X insuficiente para exigência de R$Y", "Distância 800km inviabiliza logística", "CNAE incompatível com objeto"). Para PARTICIPAR, explicar por que é viável. Para AVALIAR COM CAUTELA, explicar o risco específico. **Para editais com risco fiscal ALTO (`risk_score.fiscal_risk.nivel == "ALTO"`), obrigatoriamente mencionar o risco fiscal na justificativa.** Para editais com `acervo_confirmado=false`, incluir nota sobre necessidade de verificação de atestados técnicos.
 
 ### Phase 4: Inteligência Competitiva (Claude + API)
 
@@ -337,6 +338,13 @@ Critério: **"Se eu fosse o leitor, ficaria absolutamente satisfeito com o conte
 - [ ] 14. Todos os números em formato brasileiro (vírgula decimal, ponto milhar)?
 - [ ] 15. Portal da Transparência consultado com chave (contratos + sanções)?
 - [ ] 16. Seção Inteligência Exclusiva presente com os 4 diferenciais?
+- [ ] 17. Editais VETADOS estão marcados como ELIMINATÓRIO com motivo explícito (veto gates)?
+- [ ] 18. Resumo Decisório presente na página 2 com "néctar" do relatório (top 3 + alertas + veredicto)?
+- [ ] 19. Editais com risco fiscal ALTO mencionam o risco fiscal na justificativa?
+- [ ] 20. Editais com `acervo_confirmado=false` incluem nota sobre verificação de atestados?
+- [ ] 21. Probabilidades de vitória mostram dispersão real (não comprimidas em 10-20%)?
+- [ ] 22. Custo de participação reflete setor × modalidade (não valor genérico)?
+- [ ] 23. Alternativa de consórcio/subcontratação avaliada quando há barreiras de capacidade?
 
 Se QUALQUER item = NÃO: revisar seção específica e re-gerar. Registrar `delivery_validation` no JSON.
 

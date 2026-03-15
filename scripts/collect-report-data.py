@@ -2157,40 +2157,189 @@ _MODALITY_MULTIPLIERS: dict[str, float] = {
     "dispensa de licitação": 1.20,
 }
 
+# CRÍTICA 6: Sector-specific keywords for filtering competitive_intel.
+# Only contracts whose objeto matches these keywords are considered "sector-relevant"
+# when calculating HHI, n_suppliers, and incumbency. Prevents noise from unrelated contracts.
+_SECTOR_COMPETITION_KEYWORDS: dict[str, list[str]] = {
+    "engenharia": ["obra", "construção", "construcao", "reforma", "pavimentação", "pavimentacao",
+                    "edificação", "edificacao", "engenharia", "drenagem", "terraplenagem",
+                    "saneamento", "infraestrutura", "ponte", "viaduto"],
+    "engenharia_rodoviaria": ["rodovia", "estrada", "pavimentação", "pavimentacao", "asfalto",
+                               "terraplenagem", "sinalização", "sinalizacao", "ponte", "viaduto",
+                               "drenagem", "engenharia rodoviária"],
+    "software": ["software", "sistema", "desenvolvimento", "tecnologia da informação",
+                  "informática", "informatica", "plataforma", "aplicativo", "licença"],
+    "informatica": ["informática", "informatica", "computador", "equipamento", "hardware",
+                     "impressora", "notebook", "servidor", "rede", "cabeamento"],
+    "facilities": ["limpeza", "conservação", "conservacao", "jardinagem", "portaria",
+                    "recepção", "recepcao", "facilities", "manutenção predial"],
+    "vigilancia": ["vigilância", "vigilancia", "segurança", "seguranca", "monitoramento",
+                    "alarme", "cftv", "controle de acesso"],
+    "saude": ["saúde", "saude", "medicamento", "hospitalar", "laborat", "clínic",
+              "ambulância", "ambulancia", "médic", "enferm"],
+    "vestuario": ["uniforme", "fardamento", "vestuário", "vestuario", "roupa", "camiseta",
+                   "calçado", "calcado", "epi", "proteção individual"],
+    "alimentos": ["alimentação", "alimentacao", "refeição", "refeicao", "merenda",
+                   "gênero alimentício", "cesta básica", "nutrição"],
+    "transporte": ["transporte", "veículo", "veiculo", "locação de veículo", "frete",
+                    "combustível", "combustivel", "ônibus", "onibus"],
+}
+
+
+def _compute_fiscal_risk(edital: dict, competitive_intel: list[dict]) -> dict:
+    """CRÍTICA 8: Estimate fiscal risk of the contracting municipality.
+
+    Uses IBGE population/GDP data + historical contract terminations to assess
+    whether the municipality has the fiscal capacity to honor the contract.
+    Returns {"nivel": "BAIXO"|"MEDIO"|"ALTO", "alertas": [...], "roi_discount": float}.
+
+    The roi_discount factor (0.0-1.0) is applied to ROI calculations:
+    - BAIXO: 1.0 (no discount)
+    - MEDIO: 0.85
+    - ALTO: 0.70
+    """
+    ibge = edital.get("ibge", {}) or {}
+    pop = ibge.get("populacao", 0) or 0
+    pib = ibge.get("pib_mil_reais", 0) or 0
+    valor = _safe_float(edital.get("valor_estimado"))
+
+    alertas: list[str] = []
+    risk_level = "BAIXO"
+
+    # Check 1: Contract value as % of municipal GDP
+    if pib > 0 and valor > 0 and valor / (pib * 1000) > 0.05:
+        risk_level = "ALTO"
+        alertas.append(
+            f"Valor do edital = {valor / (pib * 1000) * 100:.1f}% do PIB municipal "
+            f"— risco elevado de dependência orçamentária"
+        )
+
+    # Check 2: Small municipality + large contract
+    if 0 < pop < 10_000 and valor > 5_000_000:
+        risk_level = "ALTO"
+        alertas.append(
+            f"Município de {pop:,.0f} habitantes licitando R$ {valor:,.0f} "
+            f"— capacidade operacional e fiscal limitada"
+        )
+    elif 0 < pop < 20_000 and valor > 10_000_000:
+        if risk_level != "ALTO":
+            risk_level = "MEDIO"
+        alertas.append(
+            f"Município de {pop:,.0f} habitantes com edital de R$ {valor:,.0f} "
+            f"— atenção à capacidade fiscal"
+        )
+
+    # Check 3: Contract terminations in organ history
+    rescisoes = sum(1 for c in competitive_intel if str(c.get("situacao_contrato", "")) == "3")
+    if rescisoes >= 2:
+        if risk_level == "BAIXO":
+            risk_level = "MEDIO"
+        alertas.append(
+            f"{rescisoes} rescisão(ões) de contrato identificada(s) no histórico do órgão"
+        )
+    elif rescisoes == 1:
+        alertas.append("1 rescisão contratual no histórico do órgão — monitorar")
+
+    roi_discount = {"BAIXO": 1.0, "MEDIO": 0.85, "ALTO": 0.70}.get(risk_level, 1.0)
+
+    return {"nivel": risk_level, "alertas": alertas, "roi_discount": roi_discount}
+
 
 def compute_risk_score(edital: dict, empresa: dict, sicaf: dict, sector_key: str = "") -> dict:
     """Compute composite opportunity risk score 0-100 (higher = better opportunity).
 
     Uses sector-specific weight profiles from _SECTOR_WEIGHT_PROFILES.
     Components: habilitacao, financeiro, geografico, prazo, competitivo.
+
+    CRÍTICA 2: Veto gates — binary elimination for hard requirements.
+    CRÍTICA 4: Non-linear threshold gates — dimensions below critical
+               thresholds impose hard ceilings on total score.
+    CRÍTICA 5: Acervo confirmation flag — distinguishes volume from
+               proven technical capacity.
+    CRÍTICA 7: Operational viability — IBGE pop/PIB integrated into
+               geographic scoring for infrastructure adequacy.
+    CRÍTICA 8: Fiscal risk — municipality financial health discount.
     """
-    # Habilitação (30%)
-    hab_score = 100
+    capital = _safe_float(empresa.get("capital_social"))
+    valor = _safe_float(edital.get("valor_estimado"))
+
+    # ================================================================
+    # CRÍTICA 2: VETO GATES — binary elimination before any scoring
+    # Eliminatory requirements cannot be compensated by other dimensions.
+    # If ANY veto fires, total=0 and edital is flagged for NÃO RECOMENDADO (ELIMINATÓRIO).
+    # ================================================================
+    veto_gates: list[str] = []
+
+    # Gate 1: Active sanctions (CEIS/CNEP/CEPIM/CEAF) — absolute disqualification
     sancoes = empresa.get("sancoes", {})
     if any(sancoes.get(k) for k in ["ceis", "cnep", "cepim", "ceaf"]):
-        hab_score = 0  # Hard block — sanctioned company
+        veto_gates.append("Empresa possui sanção ativa (CEIS/CNEP/CEPIM/CEAF) — impedida de licitar")
 
+    # Gate 2: SICAF restriction — cadastral impediment
     sicaf_status = sicaf.get("status", "NÃO CONSULTADO") if isinstance(sicaf, dict) else "NÃO CONSULTADO"
     crc = sicaf.get("crc", {}) if isinstance(sicaf, dict) else {}
     restricao = sicaf.get("restricao", {}) if isinstance(sicaf, dict) else {}
-
     if restricao.get("possui_restricao"):
-        hab_score = min(hab_score, 30)
-    elif crc.get("status_cadastral") == "CADASTRADO":
-        hab_score = min(hab_score, 100)
-    elif sicaf_status == "NÃO CONSULTADO":
-        hab_score = min(hab_score, 60)  # Unknown = moderate risk
+        veto_gates.append("Restrição cadastral SICAF ativa — inabilitação provável")
 
-    capital = _safe_float(empresa.get("capital_social"))
-    valor = _safe_float(edital.get("valor_estimado"))
+    # Gate 3: Capital < 10% of contract value — insuficiente para habilitação econômico-financeira
+    if capital > 0 and valor > 0 and (capital / valor) < 0.10:
+        veto_gates.append(
+            f"Capital social insuficiente: R$ {capital:,.0f} = {capital/valor:.0%} do valor do edital "
+            f"(mínimo usual: 10%)"
+        )
+
+    # Gate 4: MEI + valor > R$81k — legal limit
+    is_mei = empresa.get("mei") or empresa.get("opcao_pelo_mei")
+    if is_mei and valor > 81_000:
+        veto_gates.append(
+            f"Limite MEI excedido: edital R$ {valor:,.0f} > R$ 81.000 (teto MEI)"
+        )
+
+    # Gate 5: Simples Nacional + valor > R$4.8M — legal limit
+    is_simples = empresa.get("simples_nacional") or empresa.get("opcao_pelo_simples")
+    if is_simples and valor > 4_800_000:
+        veto_gates.append(
+            f"Limite Simples Nacional excedido: edital R$ {valor:,.0f} > R$ 4.800.000"
+        )
+
+    if veto_gates:
+        weights = _SECTOR_WEIGHT_PROFILES.get(sector_key, _SECTOR_WEIGHT_PROFILES["_default"])
+        return {
+            "total": 0,
+            "vetoed": True,
+            "veto_reasons": veto_gates,
+            "habilitacao": 0,
+            "financeiro": 0,
+            "geografico": 0,
+            "prazo": 0,
+            "competitivo": 0,
+            "weights": weights,
+            "threshold_applied": None,
+            "acervo_confirmado": False,
+            "fiscal_risk": {"nivel": "N/A", "alertas": []},
+            "_source": _source_tag("CALCULATED", f"VETADO: {len(veto_gates)} impedimento(s)"),
+        }
+
+    # ================================================================
+    # HABILITAÇÃO (30%) — no veto, but penalties still apply
+    # ================================================================
+    hab_score = 100
+
+    if crc.get("status_cadastral") == "CADASTRADO":
+        hab_score = 100
+    elif sicaf_status == "NÃO CONSULTADO":
+        hab_score = 60  # Unknown = moderate risk
+
     if valor > 0 and capital > 0:
         ratio = capital / valor
-        if ratio < 0.1:  # Capital < 10% of contract
-            hab_score = min(hab_score, 40)
-        elif ratio < 0.3:
+        # Already passed veto (ratio >= 0.10), apply graduated penalty
+        if ratio < 0.3:
             hab_score = min(hab_score, 70)
 
-    # Financeiro (25%)
+    # ================================================================
+    # FINANCEIRO (25%)
+    # ================================================================
     if valor <= 0 or capital <= 0:
         fin_score = 50  # Unknown
     else:
@@ -2204,7 +2353,9 @@ def compute_risk_score(edital: dict, empresa: dict, sicaf: dict, sector_key: str
         else:
             fin_score = 10
 
-    # Geográfico (20%) — continuous decay, not discrete bands
+    # ================================================================
+    # GEOGRÁFICO (20%) — continuous decay + CRÍTICA 7: IBGE operational viability
+    # ================================================================
     dist = edital.get("distancia", {})
     km = dist.get("km") if isinstance(dist, dict) else None
     if km is None:
@@ -2225,9 +2376,22 @@ def compute_risk_score(edital: dict, empresa: dict, sicaf: dict, sector_key: str
     if "presencial" in modalidade and km is not None and km > 200:
         geo_score = max(5, geo_score - 15)  # -15 penalty for presencial >200km
 
+    # CRÍTICA 7: IBGE operational viability — municipality infrastructure adequacy
+    ibge = edital.get("ibge", {}) or {}
+    pop = ibge.get("populacao", 0) or 0
+    pib_pc = ibge.get("pib_per_capita", 0) or 0
+    if pop > 0 and pop < 5_000 and valor > 1_000_000:
+        geo_score *= 0.7  # Município muito pequeno para contrato grande — supply chain frágil
+    elif pop > 0 and pop < 15_000 and valor > 3_000_000:
+        geo_score *= 0.8  # Infraestrutura limitada para contratos de alta complexidade
+    if pib_pc > 0 and pib_pc < 15_000 and valor > 500_000:
+        geo_score *= 0.85  # Capacidade fiscal/infraestrutura frágil
+
     geo_score = round(max(5, min(100, geo_score)))
 
-    # Prazo (15%)
+    # ================================================================
+    # PRAZO (15%)
+    # ================================================================
     dias = edital.get("dias_restantes")
     if dias is None:
         prazo_score = 50
@@ -2240,7 +2404,9 @@ def compute_risk_score(edital: dict, empresa: dict, sicaf: dict, sector_key: str
     else:
         prazo_score = 10
 
-    # Competitivo — derived from competitive_intel if available
+    # ================================================================
+    # COMPETITIVO — derived from competitive_intel if available
+    # ================================================================
     ci = edital.get("competitive_intel", [])
     n_sup = len(set(
         (c.get("cnpj_fornecedor") or c.get("fornecedor", ""))[:20]
@@ -2259,7 +2425,14 @@ def compute_risk_score(edital: dict, empresa: dict, sicaf: dict, sector_key: str
     else:
         comp_score = 90  # Very fragmented — open market
 
-    # Use sector-specific weight profile
+    # ================================================================
+    # CRÍTICA 8: FISCAL RISK — municipality financial health
+    # ================================================================
+    fiscal_risk = _compute_fiscal_risk(edital, ci)
+
+    # ================================================================
+    # WEIGHTED TOTAL + CRÍTICA 4: NON-LINEAR THRESHOLD GATES
+    # ================================================================
     weights = _SECTOR_WEIGHT_PROFILES.get(sector_key, _SECTOR_WEIGHT_PROFILES["_default"])
 
     total = (
@@ -2270,14 +2443,41 @@ def compute_risk_score(edital: dict, empresa: dict, sicaf: dict, sector_key: str
         + comp_score * weights["comp"]
     )
 
+    # CRÍTICA 4: Threshold gates — dimensions below critical values impose hard ceilings.
+    # A linear model allows geo=100 to compensate prazo=10. These gates prevent that.
+    threshold_applied = None
+    if prazo_score <= 10:
+        # <7 days: impossible to prepare quality proposal regardless of other factors
+        total = min(total, 20)
+        threshold_applied = "prazo_critico"
+    if fin_score <= 10:
+        # Valor >2x capacity: financial disqualification likely
+        total = min(total, 25)
+        threshold_applied = threshold_applied or "financeiro_critico"
+    if hab_score <= 30:
+        # Severe qualification risk (SICAF restriction survived veto check = possible resolution)
+        total = min(total, 30)
+        threshold_applied = threshold_applied or "habilitacao_critica"
+
+    # ================================================================
+    # CRÍTICA 5: ACERVO CONFIRMATION FLAG
+    # Historical contract volume ≠ proven technical capacity.
+    # ================================================================
+    acervo_confirmado = False  # Default: NOT confirmed (requires manual verification)
+
     return {
         "total": round(total),
+        "vetoed": False,
+        "veto_reasons": [],
         "habilitacao": hab_score,
         "financeiro": fin_score,
         "geografico": geo_score,
         "prazo": prazo_score,
         "competitivo": comp_score,
         "weights": weights,
+        "threshold_applied": threshold_applied,
+        "acervo_confirmado": acervo_confirmado,
+        "fiscal_risk": fiscal_risk,
         "_source": _source_tag("CALCULATED"),
     }
 
@@ -2298,15 +2498,36 @@ def compute_win_probability(
     4. Incumbency: company's own history with organ
     5. Modality adjustment: pregão (more bidders) vs inexigibilidade (fewer)
     6. Viability discount: risk_score adjusts final probability
+    7. Contextual multipliers: per-edital adjustments (CRÍTICA 1)
+
+    CRÍTICA 1: Reduced floor on viability_factor (0.05 not 0.3) + contextual
+               multipliers per edital to increase probability dispersion.
+    CRÍTICA 6: Filter competitive_intel by sector keywords before HHI/supplier
+               analysis — incumbency in office supplies ≠ incumbency in construction.
 
     Returns dict with probability (0.0-1.0), confidence, and decomposition.
     """
     base_rate = _SECTOR_BASE_WIN_RATES.get(sector_key, _SECTOR_BASE_WIN_RATES["_default"])
 
-    # Analyze competitive landscape from historical contracts
+    # CRÍTICA 6: Filter competitive_intel by sector keyword relevance.
+    # An incumbent in office supplies is NOT an incumbent in construction.
+    sector_kw_list = _SECTOR_COMPETITION_KEYWORDS.get(sector_key, [])
+    filtered_intel = competitive_intel
+    sector_filtered = False
+    if sector_kw_list and competitive_intel:
+        relevant = [
+            c for c in competitive_intel
+            if any(kw in (c.get("objeto", "") or "").lower() for kw in sector_kw_list)
+        ]
+        # Use filtered set if we retain at least 20% of data (else too noisy to filter)
+        if len(relevant) >= max(1, len(competitive_intel) * 0.2):
+            filtered_intel = relevant
+            sector_filtered = True
+
+    # Analyze competitive landscape from sector-filtered historical contracts
     unique_suppliers: set[str] = set()
     supplier_counts: dict[str, int] = {}
-    for c in competitive_intel:
+    for c in filtered_intel:
         cnpj = (c.get("cnpj_fornecedor") or "").strip()
         name = (c.get("fornecedor") or "").strip().upper()
         key = cnpj if len(cnpj) >= 11 else name
@@ -2315,7 +2536,8 @@ def compute_win_probability(
             supplier_counts[key] = supplier_counts.get(key, 0) + 1
 
     n_suppliers = len(unique_suppliers)
-    n_contracts = len(competitive_intel)
+    n_contracts = len(filtered_intel)
+    n_contracts_raw = len(competitive_intel)
 
     # HHI (Herfindahl-Hirschman Index) — 0=perfect competition, 1=monopoly
     hhi = 0.0
@@ -2357,6 +2579,10 @@ def compute_win_probability(
         competition_prob = 1.0 / (n_suppliers + 2)  # Harder with many competitors
         confidence = "alta"
 
+    # Lower confidence when using unfiltered (noisy) data
+    if not sector_filtered and n_contracts_raw > 0:
+        confidence = "baixa"
+
     # Top supplier dominance penalty
     if top_share > 0.60:
         competition_prob *= 0.6  # Dominant incumbent reduces chances significantly
@@ -2367,7 +2593,7 @@ def compute_win_probability(
     empresa_cnpj = re.sub(r"[^0-9]", "", empresa.get("cnpj", ""))
     incumbency_bonus = 0.0
     if empresa_cnpj and len(empresa_cnpj) >= 11:
-        for c in competitive_intel:
+        for c in filtered_intel:
             c_cnpj = re.sub(r"[^0-9]", "", c.get("cnpj_fornecedor", ""))
             if c_cnpj == empresa_cnpj:
                 incumbency_bonus = 0.10  # 10pp bonus for existing relationship
@@ -2381,14 +2607,42 @@ def compute_win_probability(
             mod_mult = mult
             break
 
-    # Viability discount — risk_score tempers probability
-    # Floor at 0.3 so viability doesn't crush probability to zero
-    viability_factor = max(risk_score / 100.0, 0.3)
+    # CRÍTICA 1: Reduced viability floor (0.05 not 0.3) for real discrimination.
+    # A risk_score of 20 should produce meaningfully different probability than 70.
+    viability_factor = max(risk_score / 100.0, 0.05)
 
-    # Final probability with bounds
+    # CRÍTICA 1: Per-edital contextual multipliers — increase dispersion.
+    # These capture edital-specific conditions that the base model misses.
+    contextual_mult = 1.0
+
+    # Tight deadline reduces probability (hard to prepare quality proposal)
+    dias = edital.get("dias_restantes")
+    if dias is not None and dias < 7:
+        contextual_mult *= 0.5  # <7 days: halved chance
+    elif dias is not None and dias < 15:
+        contextual_mult *= 0.75  # <15 days: reduced chance
+
+    # Contract value >> company capacity = lower probability (financial disqualification risk)
+    capital = _safe_float(empresa.get("capital_social"))
+    valor = _safe_float(edital.get("valor_estimado"))
+    if capital > 0 and valor > 0:
+        cap_ratio = valor / (capital * 10)  # value vs capacity
+        if cap_ratio > 5:
+            contextual_mult *= 0.5  # Extreme financial stretch
+        elif cap_ratio > 2:
+            contextual_mult *= 0.7  # Significant stretch
+
+    # Presencial + distant = reduced chance (travel barrier)
+    if "presencial" in modalidade:
+        dist = edital.get("distancia", {})
+        km = dist.get("km") if isinstance(dist, dict) else None
+        if km is not None and km > 300:
+            contextual_mult *= 0.8
+
+    # Final probability with widened bounds (CRÍTICA 1)
     raw_prob = competition_prob * mod_mult + incumbency_bonus
-    final_prob = raw_prob * viability_factor
-    final_prob = max(0.02, min(0.85, final_prob))  # Clamp [2%, 85%]
+    final_prob = raw_prob * viability_factor * contextual_mult
+    final_prob = max(0.01, min(0.90, final_prob))  # Widened clamp [1%, 90%]
 
     return {
         "probability": round(final_prob, 3),
@@ -2396,23 +2650,70 @@ def compute_win_probability(
         "base_rate": base_rate,
         "n_unique_suppliers": n_suppliers,
         "n_contracts_analyzed": n_contracts,
+        "n_contracts_raw": n_contracts_raw,
+        "sector_filtered": sector_filtered,
         "hhi": round(hhi, 4),
         "top_supplier_share": round(top_share, 3),
         "incumbency_bonus": incumbency_bonus,
         "modality_multiplier": mod_mult,
         "viability_factor": round(viability_factor, 2),
-        "_source": _source_tag("CALCULATED", f"{n_contracts} contratos, {n_suppliers} fornecedores"),
+        "contextual_multiplier": round(contextual_mult, 2),
+        "_source": _source_tag("CALCULATED", f"{n_contracts} contratos{'(filtrados)' if sector_filtered else ''}, {n_suppliers} fornecedores"),
     }
+
+
+# CRÍTICA 3: Participation cost profiles by (sector × modality).
+# The cost of competing varies dramatically — a pregão eletrônico for commodity items
+# costs ~R$1.5K (online, no travel), while a concorrência presencial for construction
+# with mandatory site visit + BDI composition + detailed cost breakdown costs R$30K+.
+_PARTICIPATION_COST_PROFILES: dict[tuple[str, str], dict] = {
+    # Construction — concorrência (site visit, BDI, detailed budget, technical team)
+    ("engenharia", "concorrência"): {"base": 8000, "km_rate": 8, "value_pct": 0.015, "cap": 50000, "label": "engenharia/concorrência"},
+    ("engenharia", "concorrência presencial"): {"base": 10000, "km_rate": 10, "value_pct": 0.015, "cap": 50000, "label": "engenharia/concorrência_presencial"},
+    ("engenharia", "pregão eletrônico"): {"base": 3000, "km_rate": 0, "value_pct": 0.005, "cap": 15000, "label": "engenharia/pregão_eletrônico"},
+    ("engenharia_rodoviaria", "concorrência"): {"base": 12000, "km_rate": 10, "value_pct": 0.015, "cap": 60000, "label": "eng_rodoviária/concorrência"},
+    ("engenharia_rodoviaria", "concorrência presencial"): {"base": 15000, "km_rate": 12, "value_pct": 0.02, "cap": 80000, "label": "eng_rodoviária/concorrência_presencial"},
+    ("engenharia_rodoviaria", "pregão eletrônico"): {"base": 4000, "km_rate": 0, "value_pct": 0.008, "cap": 20000, "label": "eng_rodoviária/pregão_eletrônico"},
+    # Software — predominantly electronic, low travel
+    ("software", "pregão eletrônico"): {"base": 1500, "km_rate": 0, "value_pct": 0.003, "cap": 8000, "label": "software/pregão_eletrônico"},
+    ("software", "concorrência"): {"base": 3000, "km_rate": 2, "value_pct": 0.005, "cap": 15000, "label": "software/concorrência"},
+    ("informatica", "pregão eletrônico"): {"base": 1500, "km_rate": 0, "value_pct": 0.003, "cap": 8000, "label": "informatica/pregão_eletrônico"},
+    # Facilities/Security — moderate, local presence
+    ("facilities", "pregão eletrônico"): {"base": 2000, "km_rate": 2, "value_pct": 0.005, "cap": 10000, "label": "facilities/pregão_eletrônico"},
+    ("vigilancia", "pregão eletrônico"): {"base": 2500, "km_rate": 3, "value_pct": 0.005, "cap": 12000, "label": "vigilância/pregão_eletrônico"},
+    # Health — regulatory overhead
+    ("saude", "pregão eletrônico"): {"base": 2500, "km_rate": 2, "value_pct": 0.005, "cap": 12000, "label": "saúde/pregão_eletrônico"},
+}
+
+_DEFAULT_COST_PROFILE = {"base": 2000, "km_rate": 3, "value_pct": 0.005, "cap": 15000, "label": "default"}
+
+
+def _get_participation_cost_profile(sector_key: str, modalidade: str) -> dict:
+    """Get participation cost profile for (sector, modality) pair.
+
+    Falls back: exact match → sector + generic modality → default.
+    """
+    # Try exact (sector, modality) match
+    for key, profile in _PARTICIPATION_COST_PROFILES.items():
+        if key[0] == sector_key and key[1] in modalidade:
+            return profile
+
+    # Try sector with "pregão eletrônico" as most common default
+    for key, profile in _PARTICIPATION_COST_PROFILES.items():
+        if key[0] == sector_key:
+            return profile  # Return first match for sector
+
+    return _DEFAULT_COST_PROFILE
 
 
 def compute_roi_potential(edital: dict, sector_key: str, win_prob: dict) -> dict:
     """Calculate ROI potential per edital.
 
-    Formula: valor × probability × margin_range
-    - probability from win_probability engine (Bayesian-inspired)
-    - margin varies by sector
-    - Auto-reclassifies as "INVESTIMENTO_ESTRATEGICO_ACERVO" when ROI is
-      marginal (< R$10K) on contracts > R$100K.
+    Formula: (valor × probability × margin) − participation_cost, discounted by fiscal risk.
+
+    CRÍTICA 3: Participation cost now varies by (sector × modality) — a concorrência
+               presencial for construction has 5-8x the cost of a pregão eletrônico for software.
+    CRÍTICA 8: Fiscal risk discount applied to final ROI (municipality health).
     """
     valor = _safe_float(edital.get("valor_estimado"))
     if valor <= 0:
@@ -2437,40 +2738,53 @@ def compute_roi_potential(edital: dict, sector_key: str, win_prob: dict) -> dict
     margin_min, margin_max = _SECTOR_MARGINS.get(sector_key, (0.08, 0.15))
     probability = win_prob.get("probability", 0.10)
 
-    # Estimated participation cost (proposal preparation, travel, RT, certifications)
+    # CRÍTICA 3: Sector × modality participation cost profiles.
+    # Cost of competing in a pregão eletrônico for software is ~R$1.5K.
+    # Cost of competing in a concorrência presencial for construction is ~R$30K+.
+    modalidade = (edital.get("modalidade") or "").lower()
     dist_info = edital.get("distancia", {})
     km = dist_info.get("km", 0) if isinstance(dist_info, dict) else 0
-    mobilization_cost = 2000 + (km or 0) * 3  # Base R$2K + R$3/km travel
-    proposal_cost = min(valor * 0.005, 15000)  # 0.5% of value, capped at R$15K
+
+    cost_profile = _get_participation_cost_profile(sector_key, modalidade)
+    mobilization_cost = cost_profile["base"] + (km or 0) * cost_profile["km_rate"]
+    proposal_cost = min(valor * cost_profile["value_pct"], cost_profile["cap"])
     participation_cost = round(mobilization_cost + proposal_cost)
+
+    # CRÍTICA 8: Fiscal risk discount from risk_score output
+    fiscal_risk = edital.get("risk_score", {}).get("fiscal_risk", {})
+    fiscal_discount = fiscal_risk.get("roi_discount", 1.0) if isinstance(fiscal_risk, dict) else 1.0
 
     gross_min = round(valor * probability * margin_min)
     gross_max = round(valor * probability * margin_max)
-    # Expected value = (probability × net profit) - ((1-probability) × participation cost)
-    # Net ROI = gross ROI - participation cost (always incurred)
-    roi_min = round(gross_min - participation_cost)
-    roi_max = round(gross_max - participation_cost)
+    # Net ROI = (gross ROI × fiscal discount) - participation cost (always incurred)
+    roi_min = round(gross_min * fiscal_discount - participation_cost)
+    roi_max = round(gross_max * fiscal_discount - participation_cost)
 
     # Auditable calculation memory — every factor explicit for manual reproduction
     def _fmt_brl(v: float) -> str:
         return f"R$ {v:,.0f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
+    fiscal_note = f" × {fiscal_discount:.2f} risco fiscal" if fiscal_discount < 1.0 else ""
     calculation_memory = {
         "valor_edital": valor,
         "probabilidade_vitoria": round(probability, 4),
         "margem_min_pct": f"{margin_min * 100:.0f}%",
         "margem_max_pct": f"{margin_max * 100:.0f}%",
         "custo_participacao": participation_cost,
-        "custo_mobilizacao": mobilization_cost,
-        "custo_proposta": proposal_cost,
-        "formula": "(valor × probabilidade × margem) − custo de participação",
+        "custo_mobilizacao": round(mobilization_cost),
+        "custo_proposta": round(proposal_cost),
+        "cost_profile_used": cost_profile.get("label", "default"),
+        "fiscal_risk_discount": fiscal_discount,
+        "formula": f"(valor × probabilidade × margem{fiscal_note}) − custo de participação",
         "roi_min_calc": (
-            f"({_fmt_brl(valor)} × {probability:.4f} × {margin_min:.2f}) − {_fmt_brl(participation_cost)}"
-            f" = {_fmt_brl(roi_min)}"
+            f"({_fmt_brl(valor)} × {probability:.4f} × {margin_min:.2f}"
+            f"{f' × {fiscal_discount:.2f}' if fiscal_discount < 1.0 else ''}"
+            f") − {_fmt_brl(participation_cost)} = {_fmt_brl(roi_min)}"
         ),
         "roi_max_calc": (
-            f"({_fmt_brl(valor)} × {probability:.4f} × {margin_max:.2f}) − {_fmt_brl(participation_cost)}"
-            f" = {_fmt_brl(roi_max)}"
+            f"({_fmt_brl(valor)} × {probability:.4f} × {margin_max:.2f}"
+            f"{f' × {fiscal_discount:.2f}' if fiscal_discount < 1.0 else ''}"
+            f") − {_fmt_brl(participation_cost)} = {_fmt_brl(roi_max)}"
         ),
     }
 
@@ -3407,46 +3721,76 @@ def compute_all_deterministic(
         # --- Core scoring chain ---
         rs = compute_risk_score(ed, empresa, sicaf, sector_key)
 
-        # E8: Apply maturity adjustments
-        valor = _safe_float(ed.get("valor_estimado"))
-        mat_hab_delta = 0
-        mat_geo_delta = 0
-        if maturity["profile"] == "ENTRANTE" and valor > _MATURITY_HIGH_VALUE_THRESHOLD:
-            mat_hab_delta = -15
-            rs["habilitacao"] = max(0, rs["habilitacao"] + mat_hab_delta)
-        elif maturity["profile"] == "REGIONAL":
-            uf_sede = (empresa.get("uf", "") or "").upper()
-            uf_edital = (ed.get("uf", "") or "").upper()
-            if uf_sede and uf_edital and uf_sede == uf_edital:
-                mat_geo_delta = 10
-                rs["geografico"] = min(100, rs["geografico"] + mat_geo_delta)
-        elif maturity["profile"] == "ESTABELECIDO":
-            mat_hab_delta = 10
-            rs["habilitacao"] = min(100, rs["habilitacao"] + mat_hab_delta)
+        # CRÍTICA 2: If vetoed, skip maturity adjustments and set minimal outputs
+        if rs.get("vetoed"):
+            rs["maturity_adjustment"] = {"profile": maturity["profile"], "hab_delta": 0, "geo_delta": 0}
+            ed["risk_score"] = rs
+            ed["win_probability"] = {
+                "probability": 0.0, "confidence": "alta", "base_rate": 0,
+                "n_unique_suppliers": 0, "n_contracts_analyzed": 0, "n_contracts_raw": 0,
+                "sector_filtered": False, "hhi": 0, "top_supplier_share": 0,
+                "incumbency_bonus": 0, "modality_multiplier": 0, "viability_factor": 0,
+                "contextual_multiplier": 0,
+                "_source": _source_tag("CALCULATED", "VETADO — probabilidade zero"),
+            }
+            ed["roi_potential"] = {
+                "roi_min": 0, "roi_max": 0, "probability": 0.0,
+                "margin_range": "N/A", "confidence": "alta",
+                "strategic_reclassification": None, "reclassification_rationale": None,
+                "calculation_memory": {"formula": "VETADO — ROI não calculado"},
+                "_source": _source_tag("CALCULATED", "VETADO"),
+            }
+            ed["cronograma"] = build_reverse_chronogram(ed)
+        else:
+            # E8: Apply maturity adjustments (only for non-vetoed editais)
+            valor = _safe_float(ed.get("valor_estimado"))
+            mat_hab_delta = 0
+            mat_geo_delta = 0
+            if maturity["profile"] == "ENTRANTE" and valor > _MATURITY_HIGH_VALUE_THRESHOLD:
+                mat_hab_delta = -15
+                rs["habilitacao"] = max(0, rs["habilitacao"] + mat_hab_delta)
+            elif maturity["profile"] == "REGIONAL":
+                uf_sede = (empresa.get("uf", "") or "").upper()
+                uf_edital = (ed.get("uf", "") or "").upper()
+                if uf_sede and uf_edital and uf_sede == uf_edital:
+                    mat_geo_delta = 10
+                    rs["geografico"] = min(100, rs["geografico"] + mat_geo_delta)
+            elif maturity["profile"] == "ESTABELECIDO":
+                mat_hab_delta = 10
+                rs["habilitacao"] = min(100, rs["habilitacao"] + mat_hab_delta)
 
-        # Recompute total with maturity adjustments
-        weights = rs["weights"]
-        rs["total"] = round(
-            rs["habilitacao"] * weights["hab"]
-            + rs["financeiro"] * weights["fin"]
-            + rs["geografico"] * weights["geo"]
-            + rs["prazo"] * weights["prazo"]
-            + rs["competitivo"] * weights["comp"]
-        )
-        rs["maturity_adjustment"] = {
-            "profile": maturity["profile"],
-            "hab_delta": mat_hab_delta,
-            "geo_delta": mat_geo_delta,
-        }
-        ed["risk_score"] = rs
+            # Recompute total with maturity adjustments (respecting threshold gates)
+            weights = rs["weights"]
+            total_recomputed = round(
+                rs["habilitacao"] * weights["hab"]
+                + rs["financeiro"] * weights["fin"]
+                + rs["geografico"] * weights["geo"]
+                + rs["prazo"] * weights["prazo"]
+                + rs["competitivo"] * weights["comp"]
+            )
+            # Re-apply threshold gates after maturity adjustment
+            if rs.get("threshold_applied"):
+                if "prazo" in (rs.get("threshold_applied") or ""):
+                    total_recomputed = min(total_recomputed, 20)
+                if "financeiro" in (rs.get("threshold_applied") or ""):
+                    total_recomputed = min(total_recomputed, 25)
+                if "habilitacao" in (rs.get("threshold_applied") or ""):
+                    total_recomputed = min(total_recomputed, 30)
+            rs["total"] = total_recomputed
+            rs["maturity_adjustment"] = {
+                "profile": maturity["profile"],
+                "hab_delta": mat_hab_delta,
+                "geo_delta": mat_geo_delta,
+            }
+            ed["risk_score"] = rs
 
-        win_prob = compute_win_probability(
-            ed, empresa, ed.get("competitive_intel", []), sector_key, rs["total"],
-        )
-        ed["win_probability"] = win_prob
+            win_prob = compute_win_probability(
+                ed, empresa, ed.get("competitive_intel", []), sector_key, rs["total"],
+            )
+            ed["win_probability"] = win_prob
 
-        ed["roi_potential"] = compute_roi_potential(ed, sector_key, win_prob)
-        ed["cronograma"] = build_reverse_chronogram(ed)
+            ed["roi_potential"] = compute_roi_potential(ed, sector_key, win_prob)
+            ed["cronograma"] = build_reverse_chronogram(ed)
 
         # --- Object compatibility (spectral) ---
         objeto = ed.get("objeto", ed.get("objetoCompra", ""))

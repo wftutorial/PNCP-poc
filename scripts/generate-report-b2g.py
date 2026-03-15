@@ -768,6 +768,170 @@ def _build_cover(data: dict, styles: dict, gen_date: str) -> list:
     return el
 
 
+def _build_resumo_decisorio(data: dict, styles: dict) -> list:
+    """CRÍTICA 10B: Resumo Decisório — the 'nectar' of the report on page 2.
+
+    3-5 short paragraphs that give the reader immediate decision-making value
+    without reading the full report. Contains:
+    1. How many opportunities, total value at stake
+    2. Top 3 recommended opportunities with municipality, object, ROI
+    3. Critical alerts (vetos, tight deadlines, fiscal risks)
+    4. Final verdict with total estimated ROI
+    """
+    el: list = []
+    editais = data.get("editais", [])
+
+    if not editais:
+        return el
+
+    # Bronze accent rule
+    avail = PAGE_WIDTH - 2 * MARGIN
+    rule_t = Table([["", ""]], colWidths=[40 * mm, avail - 40 * mm])
+    rule_t.setStyle(TableStyle([("LINEBELOW", (0, 0), (0, 0), 0.8, ACCENT)]))
+    el.append(rule_t)
+    el.append(Spacer(1, 4 * mm))
+
+    el.append(Paragraph("O Que Realmente Importa", styles["h1"]))
+    el.append(Spacer(1, 3 * mm))
+
+    # Classify editais
+    participar = [e for e in editais if (e.get("recomendacao") or "").upper() == "PARTICIPAR"]
+    avaliar = [e for e in editais if "AVALIAR" in (e.get("recomendacao") or "").upper()]
+    nao_rec = [e for e in editais if (e.get("recomendacao") or "").upper() == "NÃO RECOMENDADO"]
+    vetados = [e for e in editais if (e.get("risk_score") or {}).get("vetoed")]
+
+    total_valor = sum(_safe_float_gen(e.get("valor_estimado")) for e in editais)
+    valor_participar = sum(_safe_float_gen(e.get("valor_estimado")) for e in participar)
+
+    # Paragraph 1: Overview
+    el.append(Paragraph(
+        f"Foram identificadas <b>{len(editais)} oportunidades</b> em licitações abertas, "
+        f"totalizando <b>{_currency_short(total_valor)}</b> em valor estimado. "
+        f"Destas, <b>{len(participar)}</b> são recomendadas para participação imediata"
+        f"{f' ({_currency_short(valor_participar)} em valor)' if valor_participar > 0 else ''}, "
+        f"<b>{len(avaliar)}</b> merecem avaliação com cautela"
+        f"{f' e <b>{len(vetados)}</b> foram eliminadas por impedimento legal' if vetados else ''}"
+        f"{f', e <b>{len(nao_rec)}</b> não são recomendadas' if nao_rec else ''}.",
+        styles["body"],
+    ))
+    el.append(Spacer(1, 2 * mm))
+
+    # Paragraph 2: Top 3 recommended (by ROI)
+    top_eds = sorted(
+        participar,
+        key=lambda e: (e.get("roi_potential") or {}).get("roi_max", 0),
+        reverse=True,
+    )[:3]
+
+    if top_eds:
+        lines = []
+        for idx, e in enumerate(top_eds, 1):
+            mun = _s(e.get("municipio", ""))
+            uf = _s(e.get("uf", ""))
+            obj_text = _trunc(_s(e.get("objeto", "")), 60)
+            roi = e.get("roi_potential", {})
+            roi_max = roi.get("roi_max", 0)
+            prob = (e.get("win_probability") or {}).get("probability", 0)
+            valor_e = _safe_float_gen(e.get("valor_estimado"))
+            loc = f"{mun}/{uf}" if mun and uf else (mun or uf or "Local N/I")
+            lines.append(
+                f"<b>{idx}.</b> <b>{loc}</b> — {obj_text} "
+                f"({_currency_short(valor_e)}, probabilidade {_pct(prob)}, "
+                f"retorno potencial até {_currency_short(max(roi_max, 0))})"
+            )
+        el.append(Paragraph(
+            "<b>Destaques para ação imediata:</b><br/>" + "<br/>".join(lines),
+            styles["body"],
+        ))
+        el.append(Spacer(1, 2 * mm))
+
+    # Paragraph 3: Critical alerts
+    alerts = []
+    # Veto alerts
+    for e in vetados:
+        reasons = (e.get("risk_score") or {}).get("veto_reasons", [])
+        if reasons:
+            alerts.append(f"ELIMINADO: {_trunc(_s(e.get('objeto', '')), 40)} — {reasons[0]}")
+    # Tight deadline alerts
+    for e in participar + avaliar:
+        dias = e.get("dias_restantes")
+        if dias is not None and dias <= 7:
+            alerts.append(
+                f"URGENTE: {_trunc(_s(e.get('objeto', '')), 40)} encerra em {dias} dia(s)"
+            )
+    # Fiscal risk alerts
+    for e in participar + avaliar:
+        fiscal = (e.get("risk_score") or {}).get("fiscal_risk", {})
+        if isinstance(fiscal, dict) and fiscal.get("nivel") == "ALTO":
+            fiscal_alerts = fiscal.get("alertas", [])
+            if fiscal_alerts:
+                alerts.append(
+                    f"RISCO FISCAL: {_trunc(_s(e.get('objeto', '')), 40)} — {fiscal_alerts[0]}"
+                )
+
+    if alerts:
+        alert_text = "<br/>".join(f"• {a}" for a in alerts[:5])
+        el.append(Paragraph(
+            f"<b>Alertas críticos:</b><br/>{alert_text}",
+            ParagraphStyle(
+                "alert_body", parent=styles["body"],
+                textColor=SIGNAL_RED, fontSize=9, leading=13,
+            ),
+        ))
+        el.append(Spacer(1, 2 * mm))
+
+    # Paragraph 4: Verdict
+    total_roi_max = sum(
+        max((e.get("roi_potential") or {}).get("roi_max", 0), 0)
+        for e in participar
+    )
+    acervo_note = ""
+    acervo_eds = [e for e in editais if (e.get("risk_score") or {}).get("acervo_confirmado") is False
+                  and (e.get("recomendacao") or "").upper() in ("PARTICIPAR", "AVALIAR COM CAUTELA")]
+    if acervo_eds:
+        acervo_note = (
+            f" <b>Atenção:</b> {len(acervo_eds)} edital(is) dependem de verificação prévia "
+            f"de atestados técnicos compatíveis com o objeto licitado."
+        )
+
+    if participar:
+        el.append(Paragraph(
+            f"<b>Veredicto:</b> Recomendamos priorizar <b>{len(participar)} edital(is)</b> "
+            f"com retorno potencial agregado de até <b>{_currency_short(max(total_roi_max, 0))}</b>. "
+            f"O restante do relatório detalha a análise de cada oportunidade, "
+            f"inteligência competitiva e plano de ação.{acervo_note}",
+            styles["body"],
+        ))
+    else:
+        el.append(Paragraph(
+            "<b>Veredicto:</b> Nenhuma oportunidade atende aos critérios mínimos para "
+            "participação imediata. As oportunidades listadas como AVALIAR COM CAUTELA "
+            "podem ser viáveis mediante verificação adicional de requisitos específicos.",
+            styles["body"],
+        ))
+
+    el.append(Spacer(1, 4 * mm))
+    # Light separator
+    sep = Table([["", ""]], colWidths=[avail * 0.3, avail * 0.7])
+    sep.setStyle(TableStyle([("LINEBELOW", (0, 0), (0, 0), 0.4, RULE_COLOR)]))
+    el.append(sep)
+    el.append(Spacer(1, 4 * mm))
+
+    return el
+
+
+def _safe_float_gen(v: Any) -> float:
+    """Safe float conversion for generator expressions."""
+    if v is None:
+        return 0.0
+    try:
+        if isinstance(v, str):
+            v = v.replace(",", ".")
+        return float(v)
+    except (ValueError, TypeError):
+        return 0.0
+
+
 def _build_exclusive_intelligence(data: dict, styles: dict, sec: dict) -> list:
     """Build 'Inteligência Exclusiva' — 1-page executive summary of what PNCP alone can't provide.
 
@@ -1010,8 +1174,18 @@ def _build_decision_table(data: dict, styles: dict, sec: dict) -> list:
 
     for idx, ed in enumerate(editais, 1):
         rec = _normalize_recommendation(_s(ed.get("recomendacao", "")))
-        rec_style_info = REC_STYLES.get(rec, REC_STYLES["NÃO RECOMENDADO"])
-        rec_color = rec_style_info["color"]
+        risk = ed.get("risk_score", {}) or {}
+        vetoed = risk.get("vetoed", False)
+
+        # CRÍTICA 2: Vetoed editais get distinct "ELIMINATÓRIO" label
+        if vetoed:
+            rec = "NÃO RECOMENDADO"
+            rec_display = "ELIMINATÓRIO"
+            rec_color = colors.HexColor("#7A1A1A")  # Darker red for elimination
+        else:
+            rec_style_info = REC_STYLES.get(rec, REC_STYLES["NÃO RECOMENDADO"])
+            rec_color = rec_style_info["color"]
+            rec_display = rec
 
         objeto = _trunc(_s(ed.get("objeto", "")), 90)
         link = _fix_pncp_link(ed.get("link", ""))
@@ -1026,29 +1200,34 @@ def _build_decision_table(data: dict, styles: dict, sec: dict) -> list:
             wordWrap="CJK",
         )
 
-        rec_display = rec
-
         # Build strategic differential insight
         diff_parts = []
         wp = ed.get("win_probability", {})
-        risk = ed.get("risk_score", {})
         roi = ed.get("roi_potential", {})
         cat = ed.get("strategic_category", "")
 
-        if isinstance(wp, dict) and wp.get("top_supplier_share", 0) < 0.20 and wp.get("n_unique_suppliers", wp.get("unique_suppliers", 0)) >= 2:
-            diff_parts.append("Sem incumbente dominante")
-        elif isinstance(wp, dict) and wp.get("top_supplier_share", 0) > 0.60:
-            diff_parts.append("Incumbente forte")
+        # Show veto reason as differential for eliminated editais
+        if vetoed:
+            veto_reasons = risk.get("veto_reasons", [])
+            if veto_reasons:
+                diff_parts.append(_trunc(veto_reasons[0], 60))
+            else:
+                diff_parts.append("Impedimento legal")
+        else:
+            if isinstance(wp, dict) and wp.get("top_supplier_share", 0) < 0.20 and wp.get("n_unique_suppliers", wp.get("unique_suppliers", 0)) >= 2:
+                diff_parts.append("Sem incumbente dominante")
+            elif isinstance(wp, dict) and wp.get("top_supplier_share", 0) > 0.60:
+                diff_parts.append("Incumbente forte")
 
-        if isinstance(risk, dict) and risk.get("total", 0) >= 60:
-            diff_parts.append(f"Viab. {risk['total']}/100")
-        elif isinstance(risk, dict) and risk.get("total", 0) > 0:
-            diff_parts.append(f"Viab. {risk['total']}/100")
+            if isinstance(risk, dict) and risk.get("total", 0) >= 60:
+                diff_parts.append(f"Viab. {risk['total']}/100")
+            elif isinstance(risk, dict) and risk.get("total", 0) > 0:
+                diff_parts.append(f"Viab. {risk['total']}/100")
 
-        if roi.get("strategic_reclassification") == "INVESTIMENTO_ESTRATEGICO_ACERVO" or cat == "INVESTIMENTO":
-            diff_parts.append("Acervo estratégico")
-        elif cat == "QUICK_WIN":
-            diff_parts.append("Quick Win")
+            if roi.get("strategic_reclassification") == "INVESTIMENTO_ESTRATEGICO_ACERVO" or cat == "INVESTIMENTO":
+                diff_parts.append("Acervo estratégico")
+            elif cat == "QUICK_WIN":
+                diff_parts.append("Quick Win")
 
         differential = " · ".join(diff_parts) if diff_parts else "—"
 
@@ -1835,8 +2014,11 @@ def _build_detailed_analysis(data: dict, styles: dict, sec: dict | None = None) 
 
     for idx, ed in enumerate(editais, 1):
         rec = _normalize_recommendation(_s(ed.get("recomendacao", "")))
-        # Skip NÃO RECOMENDADO — they go to Annex A
-        if rec == "NÃO RECOMENDADO":
+        risk = ed.get("risk_score", {}) or {}
+        vetoed = risk.get("vetoed", False)
+
+        # Skip NÃO RECOMENDADO and VETOED — they go to Annex A
+        if rec == "NÃO RECOMENDADO" or vetoed:
             continue
 
         header_block = []
@@ -1852,6 +2034,19 @@ def _build_detailed_analysis(data: dict, styles: dict, sec: dict | None = None) 
             title_text,
             styles["h2"],
         ))
+
+        # CRÍTICA 5: Acervo confirmation note — warn when technical capacity is unconfirmed
+        acervo_confirmado = risk.get("acervo_confirmado", False)
+        if not acervo_confirmado:
+            header_block.append(Paragraph(
+                "⚠ A participação efetiva depende de verificação prévia dos atestados técnicos "
+                "compatíveis com o objeto licitado.",
+                ParagraphStyle(
+                    f"acervo_warn_{idx}", parent=styles["body"],
+                    fontName="Helvetica-Oblique", fontSize=8, textColor=SIGNAL_AMBER,
+                    spaceBefore=1 * mm, spaceAfter=1 * mm,
+                ),
+            ))
 
         # INSIGHT-FIRST: Lead with strategic rationale before technical data
         justificativa = _s(ed.get("justificativa", ""))
@@ -3215,6 +3410,11 @@ def validate_report_completeness(data: dict) -> tuple[list[str], list[str]]:
     Returns (blocking_errors, warnings).
     Blocking errors prevent PDF generation — the JSON must be re-enriched first.
     Warnings are informational (printed to console but don't block).
+
+    CRÍTICA 10A: Enhanced consistency validation — detects:
+    - Recommendations inconsistent with risk_score
+    - Alerts identified but not reflected in score
+    - Empty sections that should have content
     """
     errors = []
     warnings = []
@@ -3231,7 +3431,8 @@ def validate_report_completeness(data: dict) -> tuple[list[str], list[str]]:
             errors.append(f"Edital {i} ({obj}): recomendação '{rec}' sem justificativa")
 
         # BLOCKING: risk_score required for viability section
-        if not ed.get("risk_score"):
+        rs = ed.get("risk_score", {})
+        if not rs:
             errors.append(f"Edital {i} ({obj}): risk_score ausente — execute --re-enrich")
 
         # BLOCKING: win_probability required for incumbency/competitive sections
@@ -3242,6 +3443,29 @@ def validate_report_completeness(data: dict) -> tuple[list[str], list[str]]:
         if not ed.get("strategic_category"):
             errors.append(f"Edital {i} ({obj}): strategic_category ausente — execute --re-enrich")
 
+        # CRÍTICA 10A: Consistency checks — recommendation vs score
+        rec_upper = (rec or "").upper()
+        score_total = rs.get("total", -1) if isinstance(rs, dict) else -1
+        vetoed = rs.get("vetoed", False) if isinstance(rs, dict) else False
+
+        if vetoed and rec_upper == "PARTICIPAR":
+            errors.append(
+                f"Edital {i} ({obj}): PARTICIPAR mas edital VETADO — "
+                f"motivo: {', '.join(rs.get('veto_reasons', ['?']))}"
+            )
+
+        if score_total >= 0 and score_total > 60 and rec_upper == "NÃO RECOMENDADO" and not vetoed:
+            warnings.append(
+                f"Edital {i} ({obj}): score alto ({score_total}) mas NÃO RECOMENDADO — "
+                f"verificar justificativa"
+            )
+
+        if score_total >= 0 and score_total < 30 and rec_upper == "PARTICIPAR" and not vetoed:
+            warnings.append(
+                f"Edital {i} ({obj}): score baixo ({score_total}) mas PARTICIPAR — "
+                f"verificar justificativa"
+            )
+
         # WARNING: ROI calculation memory (desirable but not blocking)
         roi = ed.get("roi_potential", {})
         if roi and not roi.get("calculation_memory"):
@@ -3250,6 +3474,14 @@ def validate_report_completeness(data: dict) -> tuple[list[str], list[str]]:
         # WARNING: organ_risk (desirable)
         if not ed.get("organ_risk"):
             warnings.append(f"Edital {i}: organ_risk ausente (seção de risco do órgão incompleta)")
+
+        # CRÍTICA 10A: Fiscal risk alerts identified but not in justificativa
+        fiscal = rs.get("fiscal_risk", {}) if isinstance(rs, dict) else {}
+        if isinstance(fiscal, dict) and fiscal.get("nivel") == "ALTO" and justif:
+            if "fiscal" not in (justif or "").lower() and "inadimplência" not in (justif or "").lower():
+                warnings.append(
+                    f"Edital {i}: risco fiscal ALTO identificado mas não mencionado na justificativa"
+                )
 
     # BLOCKING: top-level computed fields
     if not data.get("maturity_profile") and not data.get("empresa", {}).get("maturity_profile"):
@@ -3280,17 +3512,25 @@ def validate_report_completeness(data: dict) -> tuple[list[str], list[str]]:
 # ============================================================
 
 def _build_annex_nao_recomendado(data: dict, styles: dict, sec: dict) -> list:
-    """Annex A: Condensed table of non-recommended editais."""
+    """Annex A: Condensed table of non-recommended + vetoed editais."""
     editais = data.get("editais", [])
-    nr_editais = [(i, ed) for i, ed in enumerate(editais, 1)
-                  if _normalize_recommendation(_s(ed.get("recomendacao", ""))) == "NÃO RECOMENDADO"]
+    nr_editais = [
+        (i, ed) for i, ed in enumerate(editais, 1)
+        if _normalize_recommendation(_s(ed.get("recomendacao", ""))) == "NÃO RECOMENDADO"
+        or (ed.get("risk_score") or {}).get("vetoed", False)
+    ]
     if not nr_editais:
         return []
 
     el = []
     el.append(PageBreak())
     num = sec["next"]()
-    el.extend(_section_heading(f"Anexo A — Editais Não Recomendados ({len(nr_editais)})", styles))
+    # Count vetoed separately for clarity in heading
+    n_vetados = sum(1 for _, ed in nr_editais if (ed.get("risk_score") or {}).get("vetoed", False))
+    heading_detail = f"{len(nr_editais)}"
+    if n_vetados:
+        heading_detail += f", sendo {n_vetados} eliminatório(s)"
+    el.extend(_section_heading(f"Anexo A — Editais Não Recomendados ({heading_detail})", styles))
 
     avail = PAGE_WIDTH - 2 * MARGIN
     header = [
@@ -3305,8 +3545,16 @@ def _build_annex_nao_recomendado(data: dict, styles: dict, sec: dict) -> list:
         uf = _s(ed.get("uf", ""))
         obj = _trunc(_s(ed.get("objeto", "")), 50)
         valor = _currency_short(ed.get("valor_estimado"))
-        justif = _trunc(_s(ed.get("justificativa", "")), 80)
         link = _fix_pncp_link(ed.get("link", ""))
+
+        # For vetoed editais, show veto reason as motivo (more specific than justificativa)
+        risk = ed.get("risk_score", {}) or {}
+        if risk.get("vetoed"):
+            veto_reasons = risk.get("veto_reasons", [])
+            justif = "ELIMINATÓRIO: " + "; ".join(veto_reasons) if veto_reasons else "Impedimento legal"
+            justif = _trunc(justif, 100)
+        else:
+            justif = _trunc(_s(ed.get("justificativa", "")), 80)
 
         # Make object clickable
         obj_text = f'{mun}/{uf} — {obj}'
@@ -3429,6 +3677,9 @@ def generate_report_b2g(data: dict) -> BytesIO:
     sec = _section_counter()
     elements: list = []
     elements.extend(_build_cover(data, styles, gen_date))
+
+    # === CRÍTICA 10B: RESUMO DECISÓRIO (page 2 — immediate value delivery) ===
+    elements.extend(_build_resumo_decisorio(data, styles))
 
     # === CAMADA 1: DECISÃO EXECUTIVA ===
     # Coverage warning (before any analysis if coverage < 70%)

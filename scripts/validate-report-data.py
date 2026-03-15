@@ -148,9 +148,15 @@ def validate(data: dict) -> dict:
             if not dc_keywords:
                 continue
 
-            # Count editais that match this cluster's keywords
+            # Count editais that match this cluster — by origin tag OR by keyword in objeto
             matching = 0
             for ed in editais:
+                # Primary: check _cluster_origin (set by collector during multi-cluster search)
+                cluster_origin = (ed.get("_cluster_origin") or "").lower()
+                if dc_label and dc_label in cluster_origin:
+                    matching += 1
+                    continue
+                # Fallback: check keywords in objeto
                 obj = (ed.get("objeto") or "").lower()
                 if any(kw in obj for kw in dc_keywords):
                     matching += 1
@@ -181,14 +187,38 @@ def validate(data: dict) -> dict:
     if strategic_thesis:
         thesis = strategic_thesis.get("thesis")
         market_trend = strategic_thesis.get("signals", {}).get("trend", {})
-        growth = market_trend.get("growth_rate_pct", 0)
+        if isinstance(market_trend, str):
+            # trend is just the label (e.g. "EXPANSAO"), not a dict
+            growth = 0
+        else:
+            growth = market_trend.get("growth_rate_pct", 0) if isinstance(market_trend, dict) else 0
         if growth < -20:
             warnings.append(
                 f"MARKET_CONTRACTION: Mercado do setor mostra contração de {abs(growth):.0f}% "
                 f"— relatório deve alertar proeminentemente sobre cenário adverso."
             )
 
-    # 2c. Portfolio optimization coherence
+    # 2c. Nature profile coherence
+    nature_profile = data.get("nature_profile", {})
+    if nature_profile and editais:
+        nature_mismatches = 0
+        for ed in editais:
+            ed_nature = ed.get("_nature", "")
+            if ed_nature and ed_nature != "INDEFINIDO":
+                share = nature_profile.get(ed_nature, 0)
+                if share < 5.0:
+                    nature_mismatches += 1
+        if nature_mismatches > 0 and len(editais) > 0:
+            mismatch_pct = 100.0 * nature_mismatches / len(editais)
+            if mismatch_pct > 50:
+                warnings.append(
+                    f"NATURE_MISMATCH: {nature_mismatches}/{len(editais)} editais ({mismatch_pct:.0f}%) "
+                    f"têm natureza incompatível com o perfil histórico da empresa. "
+                    f"Perfil: {', '.join(f'{k}({v:.0f}%)' for k, v in nature_profile.items() if v >= 5)}. "
+                    f"Considerar re-executar coleta com filtro de natureza ativo."
+                )
+
+    # 2e. Portfolio optimization coherence
     portfolio = data.get("portfolio", {})
     optimal_set = portfolio.get("optimal_set", [])
     if isinstance(optimal_set, list) and len(optimal_set) == 0:

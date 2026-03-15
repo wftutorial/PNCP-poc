@@ -669,6 +669,118 @@ _ACTIVITY_CATEGORIES: dict[str, dict] = {
     },
 }
 
+# ============================================================
+# OBJECT NATURE CLASSIFICATION
+# ============================================================
+
+# Map cluster_key → default nature when text has no explicit signal
+_CLUSTER_DEFAULT_NATURE: dict[str, str] = {
+    "saude": "AQUISICAO",
+    "alimentacao": "AQUISICAO",
+    "limpeza_saneantes": "AQUISICAO",
+    "expediente_escolar": "AQUISICAO",
+    "informatica": "AQUISICAO",
+    "moveis_eletro": "AQUISICAO",
+    "veiculos": "AQUISICAO",
+    "vestuario": "AQUISICAO",
+    "engenharia": "OBRA",
+    "manutencao": "SERVICO",
+    "consultoria": "SERVICO",
+    "vigilancia": "SERVICO",
+    "comunicacao": "SERVICO",
+    "residuos": "SERVICO",
+    "eventos": "SERVICO",
+    "alienacao": "ALIENACAO",
+}
+
+# Explicit nature signals — checked on the FIRST 150 chars of objeto (lowered)
+_NATURE_SIGNALS: list[tuple[str, list[str]]] = [
+    ("OBRA", [
+        "construção", "construcao", "execução de obra", "execucao de obra",
+        "reforma d", "reforma e ", "reforma da ", "reforma do ",
+        "pavimentação", "pavimentacao", "implantação d", "implantacao d",
+        "edificação", "edificacao", "terraplanagem", "urbanização", "urbanizacao",
+        "drenagem", "recapeamento", "contenção", "contencao",
+    ]),
+    ("SERVICO", [
+        "prestação de serviço", "prestacao de servico",
+        "contratação de empresa especializada para a prestação",
+        "contratacao de empresa especializada para a prestacao",
+        "contratação de organização social", "contratacao de organizacao social",
+        "credenciamento para", "chamamento público", "chamamento publico",
+        "manutenção", "manutencao", "gerenciamento d", "assessoria",
+        "consultoria", "desenvolvimento de sistema", "desenvolvimento de software",
+    ]),
+    ("LOCACAO", [
+        "locação de imóvel", "locacao de imovel", "locação de imóv",
+        "aluguel de", "arrendamento",
+    ]),
+    ("ALIENACAO", [
+        "alienação", "alienacao", "mercadorias apreendida", "leilão", "leilao",
+    ]),
+    ("AQUISICAO", [
+        "aquisição de", "aquisicao de", "fornecimento de",
+        "compra de", "registro de preço", "registro de preco",
+        "chamada pública", "chamada publica",  # PPAIS = purchase from producers
+    ]),
+]
+
+# Nature threshold: minimum share (%) in history to accept editais of that nature
+NATURE_ACCEPTANCE_THRESHOLD_PCT = 5.0
+
+
+def classify_object_nature(objeto: str, cluster_key: str = "") -> str:
+    """Classify the nature of a procurement object (contract or edital).
+
+    Layer 1: Explicit signals in the first 150 chars of the text.
+    Layer 2: Default nature from the activity cluster (if no explicit signal).
+
+    Returns: AQUISICAO, OBRA, SERVICO, LOCACAO, ALIENACAO, or INDEFINIDO.
+    """
+    obj_lower = (objeto or "").lower().strip()[:150]
+
+    # Layer 1: Explicit signals (order matters — first match wins)
+    for nature, signals in _NATURE_SIGNALS:
+        if any(sig in obj_lower for sig in signals):
+            return nature
+
+    # Layer 2: Cluster default
+    if cluster_key and cluster_key in _CLUSTER_DEFAULT_NATURE:
+        return _CLUSTER_DEFAULT_NATURE[cluster_key]
+
+    return "INDEFINIDO"
+
+
+def build_company_nature_profile(clusters: list[dict], contratos: list[dict]) -> dict[str, float]:
+    """Build a nature profile from classified historical contracts.
+
+    Returns dict like {"AQUISICAO": 85.0, "OBRA": 10.0, "SERVICO": 5.0}
+    """
+    if not contratos:
+        return {}
+
+    nature_counts: dict[str, int] = {}
+    n = len(contratos)
+
+    # Build reverse map: contract → cluster_key
+    # (contracts are already classified in clusters by cluster_contract_activities)
+    for c in contratos:
+        cluster_key = c.get("_cluster_key", "")
+        nature = classify_object_nature(c.get("objeto", ""), cluster_key)
+        nature_counts[nature] = nature_counts.get(nature, 0) + 1
+
+    # Convert to percentages
+    return {k: round(100.0 * v / n, 1) for k, v in sorted(nature_counts.items(), key=lambda x: -x[1])}
+
+
+def is_nature_compatible(edital_nature: str, nature_profile: dict[str, float]) -> bool:
+    """Check if an edital's nature is compatible with the company's profile."""
+    if not nature_profile:
+        return True  # No profile = accept all
+    if edital_nature == "INDEFINIDO":
+        return True  # Can't classify = accept
+    return nature_profile.get(edital_nature, 0) >= NATURE_ACCEPTANCE_THRESHOLD_PCT
+
 
 def cluster_contract_activities(
     contratos: list[dict],
@@ -703,9 +815,11 @@ def cluster_contract_activities(
         for cat_key, cat_def in _ACTIVITY_CATEGORIES.items():
             if any(prefix in obj for prefix in cat_def["prefixes"]):
                 category_contracts[cat_key].append(c)
+                c["_cluster_key"] = cat_key  # Tag for nature classification
                 matched = True
                 break  # First match wins (categories ordered by specificity)
         if not matched:
+            c["_cluster_key"] = "_outros"
             unmatched.append(c)
 
     # Phase 2: Frequency extraction on unmatched (using FIXED min_freq)
@@ -730,6 +844,17 @@ def cluster_contract_activities(
         obj_counter = Counter(c.get("objeto", "")[:60] for c in contracts)
         samples = [obj for obj, _ in obj_counter.most_common(3)]
 
+        # Nature profile for this cluster's contracts
+        cluster_nature_counts: dict[str, int] = {}
+        for c in contracts:
+            nat = classify_object_nature(c.get("objeto", ""), cat_key)
+            cluster_nature_counts[nat] = cluster_nature_counts.get(nat, 0) + 1
+        cluster_nature_pct = {
+            k: round(100.0 * v / len(contracts), 1)
+            for k, v in sorted(cluster_nature_counts.items(), key=lambda x: -x[1])
+        }
+        dominant_nature = max(cluster_nature_counts, key=cluster_nature_counts.get) if cluster_nature_counts else "INDEFINIDO"
+
         clusters.append({
             "label": cat_def.get("label", cat_key),
             "category_key": cat_key,
@@ -737,6 +862,8 @@ def cluster_contract_activities(
             "share_pct": round(share, 1),
             "keywords": cat_def.get("search_keywords", unmatched_keywords if cat_key == "_outros" else []),
             "sample_objects": samples,
+            "nature_profile": cluster_nature_pct,
+            "dominant_nature": dominant_nature,
         })
 
     # Sort by count descending, cap at max_clusters
@@ -2271,6 +2398,7 @@ def _search_pncp_single(
     dias: int,
     keyword_patterns: list[re.Pattern] | None = None,
     label_prefix: str = "",
+    nature_profile: dict[str, float] | None = None,
 ) -> tuple[list[dict], dict]:
     """Core PNCP search loop for a set of keywords and modalidades.
 
@@ -2322,7 +2450,8 @@ def _search_pncp_single(
             source_meta["total_raw"] += len(items)
 
             for item in items:
-                edital = _parse_pncp_item(item, keywords, ufs, keyword_patterns=keyword_patterns)
+                edital = _parse_pncp_item(item, keywords, ufs, keyword_patterns=keyword_patterns,
+                                         nature_profile=nature_profile)
                 if edital:
                     eid = edital.get("_id", "")
                     if eid and eid not in seen_ids:
@@ -2344,12 +2473,14 @@ def collect_pncp(
     keywords: list[str],
     ufs: list[str],
     dias: int = 30,
+    nature_profile: dict[str, float] | None = None,
 ) -> tuple[list[dict], dict]:
     """Search PNCP for open editais (single-sector, backward compatible)."""
     print(f"\n\U0001f50d Phase 2a-1: PNCP \u2014 Varredura de editais ({dias} dias)")
 
     all_editais, source_meta = _search_pncp_single(
         api, keywords, MODALIDADES, ufs, dias,
+        nature_profile=nature_profile,
     )
 
     _source = _source_tag("API" if source_meta["errors"] == 0 else "API_PARTIAL",
@@ -2365,6 +2496,7 @@ def collect_pncp_multi_cluster(
     cluster_searches: list[dict],
     ufs: list[str],
     dias: int,
+    nature_profile: dict[str, float] | None = None,
 ) -> tuple[list[dict], dict]:
     """Search PNCP separately per activity cluster, then deduplicate.
 
@@ -2390,6 +2522,7 @@ def collect_pncp_multi_cluster(
             editais, meta = _search_pncp_single(
                 api, kws, mods, ufs, dias,
                 label_prefix=f"[{label[:15]}]",
+                nature_profile=nature_profile,
             )
         except Exception as exc:
             print(f"  [PNCP] ERRO no cluster '{label}': {exc} \u2014 continuando")
@@ -2452,7 +2585,8 @@ def collect_pncp_multi_cluster(
     return deduped_list, _source
 
 def _parse_pncp_item(item: dict, keywords: list[str], ufs: list[str],
-                     keyword_patterns: list[re.Pattern] | None = None) -> dict | None:
+                     keyword_patterns: list[re.Pattern] | None = None,
+                     nature_profile: dict[str, float] | None = None) -> dict | None:
     """Parse a single PNCP result. Returns None if filtered out.
 
     PNCP response structure:
@@ -2483,6 +2617,11 @@ def _parse_pncp_item(item: dict, keywords: list[str], ufs: list[str],
             return None
     elif not any(kw.lower() in objeto_lower for kw in keywords):
         # Fallback to substring for backward compat if no patterns provided
+        return None
+
+    # Nature filter: reject editais whose nature doesn't match the company's profile
+    edital_nature = classify_object_nature(objeto)
+    if nature_profile and not is_nature_compatible(edital_nature, nature_profile):
         return None
 
     # Build PNCP link from orgaoEntidade.cnpj + anoCompra + sequencialCompra
@@ -2542,6 +2681,7 @@ def _parse_pncp_item(item: dict, keywords: list[str], ufs: list[str],
         "ano_compra": str(ano),
         "sequencial_compra": str(seq),
         "status_edital": "ENCERRADO" if (dias_restantes is not None and dias_restantes < 0) else "ABERTO",
+        "_nature": edital_nature,
     }
 
 
@@ -5953,8 +6093,16 @@ Examples:
         # Flatten keywords for backward-compatible search
         contract_keywords = extract_keywords_from_contracts(merged_contratos)
         print(f"  Keywords extraídas dos clusters ({len(contract_keywords)}): {', '.join(contract_keywords[:10])}{'...' if len(contract_keywords) > 10 else ''}")
+        # Build company nature profile from classified contracts
+        company_nature_profile = build_company_nature_profile(contract_clusters, merged_contratos)
+        if company_nature_profile:
+            accepted = [f"{k}({v:.0f}%)" for k, v in company_nature_profile.items()
+                        if v >= NATURE_ACCEPTANCE_THRESHOLD_PCT]
+            print(f"  Perfil de natureza: {', '.join(f'{k}({v:.0f}%)' for k, v in company_nature_profile.items())}")
+            print(f"  Naturezas aceitas (≥{NATURE_ACCEPTANCE_THRESHOLD_PCT:.0f}%): {', '.join(accepted) or 'TODAS'}")
     else:
         contract_keywords = []
+        company_nature_profile = {}
         print("  Sem histórico de contratos — keywords serão derivadas apenas do CNAE")
 
     # ---- Sector Mapping (CNAE) ----
@@ -6009,10 +6157,12 @@ Examples:
         print(f"\n[SEARCH] Empresa diversificada — {len(cluster_searches)} clusters de atividade")
         for cs in cluster_searches:
             print(f"  • {cs['label']} ({cs['share_pct']:.0f}%) — {len(cs['keywords'])} keywords, modalidades {cs['modalidades']}")
-        editais_pncp, pncp_source = collect_pncp_multi_cluster(api, cluster_searches, ufs, args.dias)
+        editais_pncp, pncp_source = collect_pncp_multi_cluster(api, cluster_searches, ufs, args.dias,
+                                                               nature_profile=company_nature_profile)
     else:
         # Single-sector: use original search (backward compatible)
-        editais_pncp, pncp_source = collect_pncp(api, keywords, ufs, args.dias)
+        editais_pncp, pncp_source = collect_pncp(api, keywords, ufs, args.dias,
+                                                 nature_profile=company_nature_profile)
 
     editais_pcp = []
     pcp_source = _source_tag("UNAVAILABLE", "Skipped")
@@ -6142,6 +6292,7 @@ Examples:
     # Store activity clusters and keyword source metadata
     data["activity_clusters"] = contract_clusters if contract_clusters else []
     data["_keywords_source"] = "historico" if contract_clusters else "cnae_fallback"
+    data["nature_profile"] = company_nature_profile if company_nature_profile else {}
 
     # ---- Strategic Market Thesis ----
     if not args.skip_thesis:
@@ -6179,8 +6330,11 @@ Examples:
         api, data["editais"], keywords, ufs, sector_key,
     )
     cov = data["coverage_diagnostic"]
-    print(f"  Cobertura: {cov['coverage_rate']:.0%} ({cov['captured_count']}/{cov['total_estimated']})")
-    if cov["warning"]:
+    if cov.get("coverage_rate") is not None:
+        print(f"  Cobertura: {cov['coverage_rate']:.0%} ({cov['captured_count']}/{cov['total_estimated']})")
+    else:
+        print("  Cobertura: não verificável (APIs de cobertura indisponíveis)")
+    if cov.get("warning"):
         print(f"  ⚠ {cov['warning']}")
 
     # ---- Output ----

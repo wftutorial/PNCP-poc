@@ -103,12 +103,45 @@ def validate(data: dict) -> dict:
                 f"AÇÃO OBRIGATÓRIA: Re-executar coleta com keywords do setor real da empresa."
             )
         elif pct_parcial > 90:
-            warnings.append(
-                f"HABILITACAO_UNIVERSAL_PARCIAL: {parcial}/{total_avaliados} editais "
-                f"({pct_parcial:.0f}%) com habilitação PARCIALMENTE_APTA. Isso sugere que "
-                f"a empresa não tem acervo técnico completo no setor buscado. Rebaixar recomendações "
-                f"se os editais não corresponderem ao perfil."
+            # For materials/supplies companies, high partial habilitacao is EXPECTED
+            # (they don't have specific technical qualifications for each edital type).
+            # Only warn for specialized fields where qualifications are critical.
+            _MATERIALS_CLUSTERS = {
+                "saude", "materiais hospitalares", "saneantes", "produtos de limpeza",
+                "alimentacao", "generos alimenticios", "material de expediente",
+                "expediente e escolar", "moveis", "eletrodomesticos", "vestuario",
+                "uniformes", "eventos", "locacao",
+            }
+            _SPECIALIZED_CLUSTERS = {
+                "engenharia", "obras", "consultoria", "assessoria", "informatica",
+                "tecnologia", "vigilancia", "seguranca",
+            }
+            dominant_cluster_label = ""
+            if clusters:
+                dominant_cluster_label = (clusters[0].get("label") or "").lower()
+
+            is_materials_company = any(
+                mat in dominant_cluster_label for mat in _MATERIALS_CLUSTERS
             )
+            is_specialized_company = any(
+                spec in dominant_cluster_label for spec in _SPECIALIZED_CLUSTERS
+            )
+
+            if is_materials_company and not is_specialized_company:
+                info.append(
+                    f"HABILITACAO_UNIVERSAL_PARCIAL: {parcial}/{total_avaliados} editais "
+                    f"({pct_parcial:.0f}%) com habilitação PARCIALMENTE_APTA. "
+                    f"Esperado para empresas de materiais/suprimentos (cluster: "
+                    f"'{clusters[0].get('label', 'N/A')}') — qualificações técnicas "
+                    f"específicas não são o diferencial competitivo."
+                )
+            else:
+                warnings.append(
+                    f"HABILITACAO_UNIVERSAL_PARCIAL: {parcial}/{total_avaliados} editais "
+                    f"({pct_parcial:.0f}%) com habilitação PARCIALMENTE_APTA. Isso sugere que "
+                    f"a empresa não tem acervo técnico completo no setor buscado. Rebaixar recomendações "
+                    f"se os editais não corresponderem ao perfil."
+                )
         elif pct_parcial >= 70:
             warnings.append(
                 f"HABILITACAO_HIGH_PARTIAL: {pct_parcial:.0f}% dos editais com habilitação parcial "
@@ -281,7 +314,6 @@ def validate(data: dict) -> dict:
     sources = metadata.get("sources", {})
     for src_name, expected_status in [
         ("opencnpj", "API"),
-        ("portal_transparencia_sancoes", "API"),
         ("pncp", "API"),
     ]:
         src = sources.get(src_name, {})
@@ -291,6 +323,40 @@ def validate(data: dict) -> dict:
                 f"SOURCE_FAILED_{src_name.upper()}: Fonte obrigatória '{src_name}' "
                 f"com status '{status}'. Dados incompletos."
             )
+
+    # 2a-sanctions. Portal da Transparência sanctions — nuanced check.
+    # The API may return generic results; what matters is whether we could determine
+    # the sanctions status for this specific company.
+    sancoes_src = sources.get("portal_transparencia_sancoes", {})
+    sancoes_status = sancoes_src.get("status", "MISSING")
+    sancoes = empresa.get("sancoes", {})
+    has_sancoes_data = bool(sancoes) and any(k in sancoes for k in ["ceis", "cnep", "cepim", "ceaf"])
+    is_sancionada = sancoes.get("sancionada", any(sancoes.get(k) for k in ["ceis", "cnep", "cepim", "ceaf"]))
+
+    if is_sancionada:
+        # Sanctions found — always pass (report must include them regardless of source quality)
+        pass
+    elif sancoes_status in ("API", "API_PARTIAL") and has_sancoes_data and not is_sancionada:
+        # API returned data, we filtered it, company is clean — OK
+        if sancoes_status == "API_PARTIAL":
+            warnings.append(
+                "SANCOES_PARTIAL_VERIFY: Portal da Transparência retornou dados parciais "
+                "(API_PARTIAL). Sanções não detectadas, mas verificação pode estar incompleta."
+            )
+    elif sancoes_status in ("API_FAILED", "MISSING") and not has_sancoes_data:
+        # Genuinely failed — we don't know sanctions status at all
+        blocks.append(
+            f"SOURCE_FAILED_PORTAL_TRANSPARENCIA_SANCOES: Fonte obrigatória "
+            f"'portal_transparencia_sancoes' com status '{sancoes_status}'. "
+            f"Não é possível verificar sanções (CEIS/CNEP/CEPIM/CEAF)."
+        )
+    elif sancoes_status in ("API_FAILED", "MISSING") and has_sancoes_data:
+        # Source failed but we have cached/partial data — warn, don't block
+        warnings.append(
+            f"SANCOES_STALE_DATA: Fonte 'portal_transparencia_sancoes' com status "
+            f"'{sancoes_status}' mas dados de sanções presentes (possivelmente stale). "
+            f"Verificar manualmente se dados estão atualizados."
+        )
 
     # 2b. Editais vazios
     non_dispensa = [e for e in editais if "Dispensa" not in e.get("modalidade", "")]

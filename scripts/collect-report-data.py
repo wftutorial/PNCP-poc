@@ -49,6 +49,13 @@ except ImportError:
     print("ERROR: pyyaml not installed. Run: pip install pyyaml")
     sys.exit(1)
 
+import unicodedata
+
+
+def _strip_accents(s: str) -> str:
+    """Remove diacritical marks (accents) from a string. E.g. 'prestação' → 'prestacao'."""
+    return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
+
 
 # ============================================================
 # CONSTANTS
@@ -330,6 +337,9 @@ def collect_portal_transparencia(api: ApiClient, cnpj14: str, pt_key: str) -> di
     headers = {"chave-api-dados": pt_key}
 
     # Sanções
+    # The /pessoa-juridica endpoint may return paginated results for ALL companies,
+    # not filtered by the cnpj param. We must post-filter by target CNPJ.
+    cnpj_clean = cnpj14.replace(".", "").replace("/", "").replace("-", "")
     data, status = api.get(
         f"{PT_BASE}/pessoa-juridica",
         params={"cnpj": cnpj14},
@@ -341,14 +351,51 @@ def collect_portal_transparencia(api: ApiClient, cnpj14: str, pt_key: str) -> di
         for item in items:
             for key in ["ceis", "cnep", "cepim", "ceaf"]:
                 val = item.get(key) or item.get(key.upper())
-                if val and str(val).lower() not in ("false", "0", "none", "null", "[]", "{}"):
+                if not val or str(val).lower() in ("false", "0", "none", "null", "[]", "{}"):
+                    continue
+                # If val is a list of sanctions, filter to only those matching target CNPJ
+                if isinstance(val, list):
+                    matching = []
+                    for sanction in val:
+                        if not isinstance(sanction, dict):
+                            continue
+                        # Check multiple possible CNPJ field names in the sanction record
+                        sanc_cnpj = ""
+                        for field in ["cnpjFormatado", "codigoCnpjCpf", "cpfCnpjSancionado",
+                                      "cnpj", "cpfCnpj", "numeroCnpjCpf"]:
+                            candidate = str(sanction.get(field, ""))
+                            if candidate:
+                                sanc_cnpj = candidate.replace(".", "").replace("/", "").replace("-", "")
+                                break
+                        # Also check nested sancionado/pessoa objects
+                        if not sanc_cnpj:
+                            for nested_key in ["sancionado", "pessoa", "pessoaJuridica"]:
+                                nested = sanction.get(nested_key, {})
+                                if isinstance(nested, dict):
+                                    for field in ["cnpjFormatado", "codigoCnpjCpf", "cnpj",
+                                                  "cpfCnpj", "numeroCnpjCpf", "cpfCnpjSancionado"]:
+                                        candidate = str(nested.get(field, ""))
+                                        if candidate:
+                                            sanc_cnpj = candidate.replace(".", "").replace("/", "").replace("-", "")
+                                            break
+                                if sanc_cnpj:
+                                    break
+                        if sanc_cnpj == cnpj_clean:
+                            matching.append(sanction)
+                    if matching:
+                        result["sancoes"][key] = True
+                        print(f"  [PT] {key.upper()}: {len(matching)} sancao(oes) confirmada(s) para CNPJ {cnpj14}")
+                    # else: list had items but none matched our CNPJ -- not sanctioned
+                else:
+                    # Scalar truthy value (legacy format) -- trust it
                     result["sancoes"][key] = True
+        result["sancoes"]["sancionada"] = any(result["sancoes"][k] for k in ["ceis", "cnep", "cepim", "ceaf"])
         result["sancoes_source"] = _source_tag("API")
-        sancoes_ativas = [k for k, v in result["sancoes"].items() if v]
+        sancoes_ativas = [k for k, v in result["sancoes"].items() if v and k != "sancionada"]
         if sancoes_ativas:
             print(f"  [PT] SANCOES ENCONTRADAS: {', '.join(s.upper() for s in sancoes_ativas)}")
         else:
-            print(f"  [PT] Nenhuma sancao encontrada (CEIS/CNEP/CEPIM/CEAF)")
+            print(f"  [PT] Nenhuma sancao encontrada para CNPJ {cnpj14} (CEIS/CNEP/CEPIM/CEAF)")
     elif status == "API_FAILED":
         result["sancoes_source"] = _source_tag("API_FAILED", "Consulta de sanções falhou")
 
@@ -616,8 +663,11 @@ _ACTIVITY_CATEGORIES: dict[str, dict] = {
     "veiculos": {
         "label": "Veículos e Transporte",
         "prefixes": ["veícul", "veicul", "automotiv", "pneu", "combustív", "combustiv",
-                      "ambulânci", "ambulanci", "transporte", "frete", "locação veícul"],
-        "search_keywords": ["veículo", "pneu", "combustível", "ambulância", "transporte"],
+                      "ambulânci", "ambulanci", "transporte", "frete", "locação veícul",
+                      "lubrificant", "posto de combustív", "posto de combustiv",
+                      "logístic", "logistic"],
+        "search_keywords": ["veículo", "pneu", "combustível", "ambulância", "transporte",
+                           "lubrificante", "logística"],
     },
     "vestuario": {
         "label": "Vestuário e Uniformes",
@@ -646,8 +696,10 @@ _ACTIVITY_CATEGORIES: dict[str, dict] = {
     "comunicacao": {
         "label": "Comunicação e Publicidade",
         "prefixes": ["publicidad", "comunicaçã", "comunicaca", "gráfic", "grafic",
-                      "impressão gráfic", "banner", "sinaliz"],
-        "search_keywords": ["publicidade", "comunicação", "sinalização", "material gráfico"],
+                      "impressão gráfic", "banner", "sinaliz",
+                      "propagand", "marketing", "agência de publicidad", "agencia de publicidad"],
+        "search_keywords": ["publicidade", "comunicação", "sinalização", "material gráfico",
+                           "propaganda", "marketing"],
     },
     "residuos": {
         "label": "Resíduos e Meio Ambiente",
@@ -658,8 +710,12 @@ _ACTIVITY_CATEGORIES: dict[str, dict] = {
     "eventos": {
         "label": "Eventos e Locação",
         "prefixes": ["evento", "locação", "locacao", "tendas", "palco", "sonorizaç",
-                      "sonorizac", "buffet", "coffee"],
-        "search_keywords": ["evento", "locação", "tendas", "sonorização"],
+                      "sonorizac", "buffet", "coffee",
+                      "show artístic", "show artistic", "show musical",
+                      "apresentação artístic", "apresentacao artistic",
+                      "espetáculo", "espetaculo", "artístico", "artistico"],
+        "search_keywords": ["evento", "locação", "tendas", "sonorização",
+                           "show artístico", "apresentação artística"],
     },
     "alienacao": {
         "label": "Alienação e Leilão",
@@ -701,6 +757,12 @@ _NATURE_SIGNALS: list[tuple[str, list[str]]] = [
         "pavimentação", "pavimentacao", "implantação d", "implantacao d",
         "edificação", "edificacao", "terraplanagem", "urbanização", "urbanizacao",
         "drenagem", "recapeamento", "contenção", "contencao",
+        # Additional construction signals (catches "fornecimento de materiais e mão de obra")
+        "mão de obra", "mao de obra", "mão-de-obra", "mao-de-obra",
+        "empreitada", "empresa de engenharia", "ramo de engenharia",
+        "ramo de construção", "ramo de construcao",
+        "ampliação d", "ampliacao d",  # building expansion
+        "bloquetamento", "sinalização vi", "sinalizacao vi",
     ]),
     ("SERVICO", [
         "prestação de serviço", "prestacao de servico",
@@ -710,6 +772,10 @@ _NATURE_SIGNALS: list[tuple[str, list[str]]] = [
         "credenciamento para", "chamamento público", "chamamento publico",
         "manutenção", "manutencao", "gerenciamento d", "assessoria",
         "consultoria", "desenvolvimento de sistema", "desenvolvimento de software",
+        # Additional service signals (without "prestação" prefix)
+        "serviço de", "servico de", "serviços de", "servicos de",
+        "locação de veículo", "locacao de veiculo",
+        "locação de mão", "locacao de mao",
     ]),
     ("LOCACAO", [
         "locação de imóvel", "locacao de imovel", "locação de imóv",
@@ -722,6 +788,9 @@ _NATURE_SIGNALS: list[tuple[str, list[str]]] = [
         "aquisição de", "aquisicao de", "fornecimento de",
         "compra de", "registro de preço", "registro de preco",
         "chamada pública", "chamada publica",  # PPAIS = purchase from producers
+        "material de", "materiais para", "materiais de",
+        "medicamento", "equipamento", "mobiliário", "mobiliario",
+        "uniforme", "gênero alimentício", "genero alimenticio",
     ]),
 ]
 
@@ -737,7 +806,7 @@ def classify_object_nature(objeto: str, cluster_key: str = "") -> str:
 
     Returns: AQUISICAO, OBRA, SERVICO, LOCACAO, ALIENACAO, or INDEFINIDO.
     """
-    obj_lower = (objeto or "").lower().strip()[:150]
+    obj_lower = (objeto or "").lower().strip()[:250]
 
     # Layer 1: Explicit signals (order matters — first match wins)
     for nature, signals in _NATURE_SIGNALS:
@@ -918,11 +987,31 @@ def _extract_keywords_flat(contratos: list[dict], max_keywords: int = 30) -> lis
         "prefeitura", "governo", "secretaria", "ministerio", "departamento",
         # True filler (never useful as search keywords)
         "tipo", "diversos", "demais", "necessidades", "atender", "outros",
+        # Administrative/procurement procedural (appear in ALL contract types)
+        # Include BOTH accented and unaccented forms for robust matching
+        "prestacao", "prestação", "servicos", "serviços", "servico", "serviço",
+        "contratacao", "contratação", "aquisicao", "aquisição",
+        "fornecimento", "registro", "precos", "preços", "preco", "preço",
+        "item", "itens",
+        "solicitado", "requisicao", "requisição", "empenho", "empenha", "despesas",
+        "avulso", "nota", "fiscal", "importancia", "importância", "periodo", "período",
+        "show", "artistico", "artístico", "artisticos", "artísticos",
+        "artistica", "artística", "artisticas", "artísticas",
+        "apresentacao", "apresentação", "musical",
+        "credenciamento", "concessao", "concessão", "permissao", "permissão", "onerosa",
+        "praca", "praça", "festa", "evento", "eventos",
+        "publica", "pública", "publico", "público",
+        "fundacao", "fundação", "consorcio", "consórcio",
+        # Institutional (not product-specific)
+        "ufes", "propaes", "campus", "reitoria", "instituto", "autarquia",
         # Dates
         "janeiro", "fevereiro", "marco", "abril", "maio", "junho",
         "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
         "2024", "2025", "2026", "2023", "2022", "2021",
     }
+
+    # Normalize accents for stop word matching (e.g., "prestação" → "prestacao")
+    _STOP_NORMALIZED = {_strip_accents(w) for w in _STOP_WORDS}
 
     # Count word/bigram frequency across contract descriptions
     word_freq: dict[str, int] = {}
@@ -931,7 +1020,7 @@ def _extract_keywords_flat(contratos: list[dict], max_keywords: int = 30) -> lis
     for c in contratos:
         obj = (c.get("objeto") or "").lower()
         obj = re.sub(r"[^a-záàâãéêíóôõúüç\s]", " ", obj)
-        words = [w for w in obj.split() if len(w) >= 4 and w not in _STOP_WORDS]
+        words = [w for w in obj.split() if len(w) >= 4 and _strip_accents(w) not in _STOP_NORMALIZED]
 
         # Count unique words per contract (not total occurrences)
         seen_words: set[str] = set()
@@ -963,13 +1052,26 @@ def _extract_keywords_flat(contratos: list[dict], max_keywords: int = 30) -> lis
     # Solution: collect freq=1 words that are NOT procedural/generic — they represent
     # the product specificity of the company.
     _GENERIC_WORDS = {
-        "material", "materiais", "produtos", "itens", "compra", "aquisicao",
-        "fornecimento", "prestacao", "servicos", "registro", "precos",
-        "municipal", "estadual", "federal", "publica", "publico",
+        "material", "materiais", "produtos", "itens", "compra",
+        "aquisicao", "aquisição", "fornecimento",
+        "prestacao", "prestação", "servicos", "serviços", "servico", "serviço",
+        "registro", "precos", "preços",
+        "municipal", "estadual", "federal", "publica", "publico", "pública", "público",
+        "contratacao", "contratação", "empresa", "especializada", "especializado",
+        "atendimento", "demandas", "demanda", "secretaria",
+        "solicitado", "requisicao", "requisição", "empenho", "empenha",
+        "despesas", "importancia", "importância", "periodo", "período", "avulso",
+        "show", "artistico", "artístico", "artisticos", "artísticos",
+        "artistica", "artística", "artisticas", "artísticas",
+        "musical", "apresentacao", "apresentação",
+        "credenciamento", "concessao", "concessão", "permissao", "permissão",
+        "publica", "pública", "publico", "público",
+        "fundacao", "fundação", "consorcio", "consórcio", "praça", "praca",
     }
+    _GENERIC_NORMALIZED = {_strip_accents(w) for w in _GENERIC_WORDS}
     rare_but_specific = sorted(
         [(word, freq) for word, freq in word_freq.items()
-         if freq == 1 and word not in _GENERIC_WORDS and len(word) >= 5],
+         if freq == 1 and _strip_accents(word) not in _GENERIC_NORMALIZED and len(word) >= 5],
         key=lambda x: x[0],  # alphabetical for stability
     )
 
@@ -977,8 +1079,15 @@ def _extract_keywords_flat(contratos: list[dict], max_keywords: int = 30) -> lis
     result: list[str] = []
     seen_terms: set[str] = set()
 
+    # Filter bigrams: reject if BOTH words are generic/stopwords (e.g., "prestação serviços")
+    _ALL_GENERIC = _STOP_NORMALIZED | _GENERIC_NORMALIZED
+    filtered_bigrams = [
+        (bg, freq) for bg, freq in frequent_bigrams
+        if not all(_strip_accents(w) in _ALL_GENERIC for w in bg.split())
+    ]
+
     # Layer 1: Frequent bigrams (highest signal — e.g. "merenda escolar", "material limpeza")
-    for term, _freq in frequent_bigrams:
+    for term, _freq in filtered_bigrams:
         if len(result) >= max_keywords:
             break
         if term not in seen_terms:
@@ -1031,8 +1140,23 @@ def extract_keywords_from_contracts(contratos: list[dict], max_keywords: int = 3
     return result
 
 
-def _modalidades_for_cluster(cluster_label: str) -> set[int]:
-    """Select appropriate modalidades based on cluster activity type."""
+def _modalidades_for_cluster(cluster_label: str,
+                             nature_profile: dict[str, float] | None = None,
+                             cluster_nature: dict[str, float] | None = None,
+                             cluster_dominant: str = "") -> set[int]:
+    """Select appropriate modalidades based on cluster activity type.
+
+    For named clusters (e.g., "Saúde e Materiais Hospitalares"), uses indicator matching.
+    For generic clusters ("_outros", "Móveis e Eletrodomésticos" without clear signals),
+    uses the CLUSTER's own nature profile first (more accurate for mixed companies),
+    then falls back to the company's global nature profile.
+
+    Args:
+        cluster_label: Human-readable cluster name.
+        nature_profile: Company-wide nature profile (global fallback).
+        cluster_nature: This cluster's own nature_profile from cluster_contract_activities().
+        cluster_dominant: This cluster's dominant_nature (shortcut).
+    """
     label_lower = cluster_label.lower()
     # Materials/supplies clusters -> include Dispensa
     supply_indicators = [
@@ -1051,6 +1175,38 @@ def _modalidades_for_cluster(cluster_label: str) -> set[int]:
         return MODALIDADES_AQUISICAO
     if any(ind in label_lower for ind in obras_indicators):
         return MODALIDADES_OBRAS
+
+    # --- Nature-based fallback (cluster-level first, then global) ---
+    _NATURE_TO_MODALIDADES = {
+        "AQUISICAO": MODALIDADES_AQUISICAO,
+        "OBRA": MODALIDADES_OBRAS,
+        "SERVICO": MODALIDADES_SERVICOS,
+    }
+
+    # Priority 1: Use cluster's own nature profile (per-cluster accuracy)
+    if cluster_dominant and cluster_dominant in _NATURE_TO_MODALIDADES:
+        # If cluster has a clear dominant nature, use it directly
+        cluster_dom_pct = (cluster_nature or {}).get(cluster_dominant, 0)
+        if cluster_dom_pct >= 40:
+            return _NATURE_TO_MODALIDADES[cluster_dominant]
+
+    # Priority 2: Use cluster nature profile even below 40% — pick highest
+    if cluster_nature:
+        best_nature = max(cluster_nature, key=cluster_nature.get)
+        if best_nature in _NATURE_TO_MODALIDADES:
+            return _NATURE_TO_MODALIDADES[best_nature]
+
+    # Priority 3: Global nature profile (for clusters without own nature data)
+    if nature_profile:
+        dominant_nature = max(nature_profile, key=nature_profile.get)
+        dominant_pct = nature_profile.get(dominant_nature, 0)
+        # Lowered from 50% to 40%; if still no winner, pick dominant anyway
+        if dominant_pct >= 40 and dominant_nature in _NATURE_TO_MODALIDADES:
+            return _NATURE_TO_MODALIDADES[dominant_nature]
+        # Even below 40%, use dominant if it's a known nature type
+        if dominant_nature in _NATURE_TO_MODALIDADES:
+            return _NATURE_TO_MODALIDADES[dominant_nature]
+
     # Default: all modalidades
     return set(MODALIDADES.keys())
 
@@ -1059,6 +1215,7 @@ def extract_keywords_per_cluster(
     contratos: list[dict],
     max_per_cluster: int = 15,
     max_clusters: int = 5,
+    nature_profile: dict[str, float] | None = None,
 ) -> list[dict]:
     """Extract keywords grouped by activity cluster.
 
@@ -1076,7 +1233,13 @@ def extract_keywords_per_cluster(
         if not kws:
             continue
         label = cluster.get("label", "Outros")
-        mods = _modalidades_for_cluster(label)
+        # Pass cluster's own nature data for per-cluster modalidade selection
+        mods = _modalidades_for_cluster(
+            label,
+            nature_profile=nature_profile,
+            cluster_nature=cluster.get("nature_profile"),
+            cluster_dominant=cluster.get("dominant_nature", ""),
+        )
         result.append({
             "label": label,
             "share_pct": cluster.get("share_pct", 0),
@@ -6150,7 +6313,7 @@ Examples:
 
     # ---- Phase 2a: Edital Search (using contract-enriched keywords) ----
     # If company has multiple activity clusters, use per-cluster search
-    cluster_searches = extract_keywords_per_cluster(merged_contratos) if merged_contratos else []
+    cluster_searches = extract_keywords_per_cluster(merged_contratos, nature_profile=company_nature_profile) if merged_contratos else []
 
     if len(cluster_searches) >= 2:
         # Multi-sector company: search per cluster

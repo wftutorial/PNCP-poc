@@ -3654,6 +3654,47 @@
           "title": "MfaStatusResponse",
           "type": "object"
         },
+        "NewOpportunitiesResponse": {
+          "description": "DEBT-127 AC6-AC9: New opportunities since last search.",
+          "properties": {
+            "count": {
+              "title": "Count",
+              "type": "integer"
+            },
+            "days_since_last_search": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Days Since Last Search"
+            },
+            "has_previous_search": {
+              "title": "Has Previous Search",
+              "type": "boolean"
+            },
+            "last_search_at": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last Search At"
+            }
+          },
+          "required": [
+            "count",
+            "has_previous_search"
+          ],
+          "title": "NewOpportunitiesResponse",
+          "type": "object"
+        },
         "PanoramaStats": {
           "properties": {
             "avg_value": {
@@ -4003,6 +4044,19 @@
               "title": "Pncp Id",
               "type": "string"
             },
+            "search_id": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Search session that discovered this item (DEBT-120)",
+              "title": "Search Id"
+            },
             "stage": {
               "anyOf": [
                 {
@@ -4112,6 +4166,17 @@
             "pncp_id": {
               "title": "Pncp Id",
               "type": "string"
+            },
+            "search_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search Id"
             },
             "stage": {
               "title": "Stage",
@@ -5895,13 +5960,6 @@
         },
         "ValidationError": {
           "properties": {
-            "ctx": {
-              "title": "Context",
-              "type": "object"
-            },
-            "input": {
-              "title": "Input"
-            },
             "loc": {
               "items": {
                 "anyOf": [
@@ -6089,7 +6147,7 @@
       },
       "/health/ready": {
         "get": {
-          "description": "HARDEN-016 AC2: Readiness probe \u2014 checks Redis + Supabase.",
+          "description": "HARDEN-016 AC2: Readiness probe \u2014 checks Redis + Supabase.\n\nDEBT-124 AC6: Returns 503 during graceful shutdown drain phase.",
           "operationId": "health_ready_health_ready_get",
           "responses": {
             "200": {
@@ -7720,6 +7778,33 @@
           "summary": "Unsubscribe Alert",
           "tags": [
             "alerts"
+          ]
+        }
+      },
+      "/v1/analytics/new-opportunities": {
+        "get": {
+          "description": "Get count of opportunities from user's most recent search.\n\nDEBT-127 AC6-AC9: Drives users back to /buscar by showing how many\nopportunities were found in their latest search and how long ago it was.\nIf no previous search exists, returns has_previous_search=False for\nonboarding prompt (AC9).",
+          "operationId": "get_new_opportunities_v1_analytics_new_opportunities_get",
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/NewOpportunitiesResponse"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            }
+          },
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "summary": "Get New Opportunities",
+          "tags": [
+            "analytics"
           ]
         }
       },
@@ -10515,6 +10600,9 @@
           "security": [
             {
               "HTTPBearer": []
+            },
+            {
+              "HTTPBearer": []
             }
           ],
           "summary": "List Pipeline Items",
@@ -10568,7 +10656,7 @@
       },
       "/v1/pipeline/alerts": {
         "get": {
-          "description": "Get pipeline items with deadlines within 3 days (AC6).\n\nSTORY-265 AC3: Trial expired can view alerts (read-only).\nReturns items where data_encerramento < now() + 3 days\nand stage is NOT in ('enviada', 'resultado').",
+          "description": "Get pipeline items with deadlines within 7 days (DEBT-127 AC1).\n\nSTORY-265 AC3: Trial expired can view alerts (read-only).\nReturns items where data_encerramento < now() + 7 days\nand stage is NOT in ('enviada', 'resultado').",
           "operationId": "get_pipeline_alerts_v1_pipeline_alerts_get",
           "responses": {
             "200": {
@@ -10734,6 +10822,9 @@
           "security": [
             {
               "HTTPBearer": []
+            },
+            {
+              "HTTPBearer": []
             }
           ],
           "summary": "Get Alert Preferences",
@@ -10779,6 +10870,9 @@
           "security": [
             {
               "HTTPBearer": []
+            },
+            {
+              "HTTPBearer": []
             }
           ],
           "summary": "Update Alert Preferences",
@@ -10806,6 +10900,9 @@
           "security": [
             {
               "HTTPBearer": []
+            },
+            {
+              "HTTPBearer": []
             }
           ],
           "summary": "Get Profile Completeness",
@@ -10831,6 +10928,9 @@
             }
           },
           "security": [
+            {
+              "HTTPBearer": []
+            },
             {
               "HTTPBearer": []
             }
@@ -10876,6 +10976,9 @@
             }
           },
           "security": [
+            {
+              "HTTPBearer": []
+            },
             {
               "HTTPBearer": []
             }

@@ -776,6 +776,20 @@ _NATURE_SIGNALS: list[tuple[str, list[str]]] = [
         "serviço de", "servico de", "serviços de", "servicos de",
         "locação de veículo", "locacao de veiculo",
         "locação de mão", "locacao de mao",
+        # Credenciamento signals (typically service, not acquisition)
+        "credenciamento de pessoa",
+        "credenciamento de profission",
+        "credenciamento de prestador",
+        "credenciamento médic",
+        "credenciamento medic",
+        "credenciamento de serviço",
+        "credenciamento de servico",
+        "pessoa física para prest",
+        "pessoa fisica para prest",
+        "profissionais de saúde",
+        "profissionais de saude",
+        "prestação de serviço médic",
+        "prestacao de servico medic",
     ]),
     ("LOCACAO", [
         "locação de imóvel", "locacao de imovel", "locação de imóv",
@@ -806,7 +820,7 @@ def classify_object_nature(objeto: str, cluster_key: str = "") -> str:
 
     Returns: AQUISICAO, OBRA, SERVICO, LOCACAO, ALIENACAO, or INDEFINIDO.
     """
-    obj_lower = (objeto or "").lower().strip()[:250]
+    obj_lower = (objeto or "").lower().strip()[:350]
 
     # Layer 1: Explicit signals (order matters — first match wins)
     for nature, signals in _NATURE_SIGNALS:
@@ -853,8 +867,8 @@ def is_nature_compatible(edital_nature: str, nature_profile: dict[str, float]) -
 
 def cluster_contract_activities(
     contratos: list[dict],
-    max_clusters: int = 5,
-    min_share_pct: float = 3.0,
+    max_clusters: int = 16,
+    min_share_pct: float = 1.0,
 ) -> list[dict]:
     """Cluster historical contracts into thematic activity groups.
 
@@ -1214,7 +1228,7 @@ def _modalidades_for_cluster(cluster_label: str,
 def extract_keywords_per_cluster(
     contratos: list[dict],
     max_per_cluster: int = 15,
-    max_clusters: int = 5,
+    max_clusters: int = 16,
     nature_profile: dict[str, float] | None = None,
 ) -> list[dict]:
     """Extract keywords grouped by activity cluster.
@@ -1242,9 +1256,12 @@ def extract_keywords_per_cluster(
         )
         result.append({
             "label": label,
+            "category_key": cluster.get("category_key", ""),
             "share_pct": cluster.get("share_pct", 0),
             "keywords": kws,
             "modalidades": mods,
+            "nature_profile": cluster.get("nature_profile"),
+            "dominant_nature": cluster.get("dominant_nature", ""),
         })
 
     return result
@@ -1253,7 +1270,7 @@ def extract_keywords_per_cluster(
 def extract_ufs_from_contracts(
     contratos: list[dict],
     uf_sede: str = "",
-    max_ufs: int = 5,
+    max_ufs: int = 27,
     min_contracts: int = 3,
 ) -> tuple[list[str], dict]:
     """Derive target UFs from contract history (geographic intelligence).
@@ -2786,6 +2803,8 @@ def _search_pncp_single(
     keyword_patterns: list[re.Pattern] | None = None,
     label_prefix: str = "",
     nature_profile: dict[str, float] | None = None,
+    cluster_nature: str | None = None,
+    cluster_nature_profile: dict[str, float] | None = None,
 ) -> tuple[list[dict], dict]:
     """Core PNCP search loop for a set of keywords and modalidades.
 
@@ -2838,7 +2857,8 @@ def _search_pncp_single(
 
             for item in items:
                 edital = _parse_pncp_item(item, keywords, ufs, keyword_patterns=keyword_patterns,
-                                         nature_profile=nature_profile)
+                                         nature_profile=nature_profile, cluster_nature=cluster_nature,
+                                         cluster_nature_profile=cluster_nature_profile)
                 if edital:
                     eid = edital.get("_id", "")
                     if eid and eid not in seen_ids:
@@ -2878,6 +2898,74 @@ def collect_pncp(
     return all_editais, _source
 
 
+def _fetch_pncp_pages_cached(
+    api: ApiClient,
+    mod_code: int,
+    data_inicial: str,
+    data_final: str,
+    raw_cache: dict[tuple[int, int], list[dict] | None],
+) -> tuple[list[dict], int, int]:
+    """Fetch all pages for a single modalidade, using raw_cache to avoid duplicate API calls.
+
+    Cache key is (mod_code, page). PNCP doesn't filter by keyword or UF server-side,
+    so the same (mod, page) returns identical results regardless of which cluster requests it.
+
+    Returns (all_items, pages_fetched, errors).
+    A cached entry of None means the page was previously fetched and returned no/error data
+    (sentinel to avoid re-fetching).
+    """
+    all_items: list[dict] = []
+    pages_fetched = 0
+    errors = 0
+
+    for page in range(1, PNCP_MAX_PAGES + 1):
+        cache_key = (mod_code, page)
+
+        if cache_key in raw_cache:
+            cached = raw_cache[cache_key]
+            if cached is None:
+                # Previously fetched and got error/empty — stop pagination
+                break
+            all_items.extend(cached)
+            # Reproduce early-termination: if cached page was partial, stop
+            if len(cached) < PNCP_MAX_PAGE_SIZE:
+                break
+            continue
+
+        # Cache miss — call API
+        data, status = api.get(
+            f"{PNCP_BASE}/contratacoes/publicacao",
+            params={
+                "dataInicial": data_inicial,
+                "dataFinal": data_final,
+                "codigoModalidadeContratacao": mod_code,
+                "pagina": page,
+                "tamanhoPagina": PNCP_MAX_PAGE_SIZE,
+            },
+            label=f"PNCP mod={mod_code} p={page}",
+        )
+        if status != "API" or not data:
+            errors += 1
+            raw_cache[cache_key] = None  # Sentinel: don't retry
+            break
+
+        items = data if isinstance(data, list) else data.get("data", data.get("resultado", []))
+        if not isinstance(items, list) or not items:
+            raw_cache[cache_key] = None
+            break
+
+        raw_cache[cache_key] = items
+        pages_fetched += 1
+        all_items.extend(items)
+
+        if len(items) < PNCP_MAX_PAGE_SIZE:
+            break
+
+        time.sleep(0.5)  # Rate limiting
+
+    return all_items, pages_fetched, errors
+
+
 def collect_pncp_multi_cluster(
     api: ApiClient,
     cluster_searches: list[dict],
@@ -2887,14 +2975,55 @@ def collect_pncp_multi_cluster(
 ) -> tuple[list[dict], dict]:
     """Search PNCP separately per activity cluster, then deduplicate.
 
-    Each cluster gets its own search with cluster-specific keywords and modalidades.
+    Uses a raw fetch cache: PNCP has no keyword parameter, so the same
+    (modalidade, page) returns identical results regardless of cluster.
+    We fetch each unique (mod, page) ONCE, then apply cluster-specific
+    keyword + nature filtering locally.
+
     Results are tagged with _cluster_origin and _cluster_share_pct.
     Dedup: if same edital appears in multiple clusters, keep the one from higher-share cluster.
     """
     print(f"\n\U0001f50d Phase 2a-1: PNCP \u2014 Varredura multi-cluster ({dias} dias, {len(cluster_searches)} clusters)")
 
+    data_inicial = _date_compact(_today() - timedelta(days=dias))
+    data_final = _date_compact(_today())
+
+    # --- Phase 1: Union all unique modalidades across all clusters ---
+    all_mods: set[int] = set()
+    for cs in cluster_searches:
+        mods = cs["modalidades"]
+        if isinstance(mods, dict):
+            all_mods.update(mods.keys())
+        else:
+            all_mods.update(mods)
+
+    # --- Phase 2: Fetch each unique (mod, page) ONCE ---
+    raw_cache: dict[tuple[int, int], list[dict] | None] = {}
+    raw_by_mod: dict[int, list[dict]] = {}
+    total_pages_fetched = 0
+    total_errors = 0
+
+    print(f"\n  [CACHE] Fetching {len(all_mods)} unique modalidades (shared across {len(cluster_searches)} clusters)")
+
+    for mod_code in sorted(all_mods):
+        mod_name = MODALIDADES.get(mod_code, f"Mod {mod_code}")
+        print(f"    Modalidade {mod_code} ({mod_name}):")
+        items, pf, errs = _fetch_pncp_pages_cached(
+            api, mod_code, data_inicial, data_final, raw_cache,
+        )
+        raw_by_mod[mod_code] = items
+        total_pages_fetched += pf
+        total_errors += errs
+
+    total_raw = sum(len(items) for items in raw_by_mod.values())
+    cache_hits = sum(1 for k, v in raw_cache.items() if v is not None) - total_pages_fetched
+    print(f"\n  [CACHE] Raw fetch complete: {total_raw} items across {len(all_mods)} modalidades, "
+          f"{total_pages_fetched} API calls, {max(0, cache_hits)} cache hits saved")
+
+    # --- Phase 3: For each cluster, filter raw items with cluster-specific keywords + nature ---
     all_results: list[dict] = []
-    combined_meta = {"total_raw": 0, "total_filtered": 0, "pages_fetched": 0, "errors": 0, "clusters": []}
+    combined_meta = {"total_raw": total_raw, "total_filtered": 0, "pages_fetched": total_pages_fetched,
+                     "errors": total_errors, "clusters": []}
 
     for cluster in cluster_searches:
         label = cluster["label"]
@@ -2903,40 +3032,59 @@ def collect_pncp_multi_cluster(
         mods = cluster["modalidades"]
 
         print(f"\n  [PNCP] Cluster '{label}' ({share:.0f}%) \u2014 {len(kws)} keywords, "
-              f"modalidades {{{', '.join(str(m) for m in sorted(mods))}}}")
+              f"modalidades {{{', '.join(str(m) for m in sorted(mods if isinstance(mods, set) else mods.keys()))}}}")
+
+        cluster_key = cluster.get("category_key", "")
+        cluster_nat = _CLUSTER_DEFAULT_NATURE.get(cluster_key)
+        cluster_nat_profile = cluster.get("nature_profile")
+        keyword_patterns = _compile_keyword_patterns(kws)
+
+        # Normalize modalidades to set of codes
+        if isinstance(mods, dict):
+            mod_codes = set(mods.keys())
+        else:
+            mod_codes = set(mods)
+
+        cluster_filtered = 0
+        cluster_raw_seen = 0
+        seen_ids: set[str] = set()
 
         try:
-            editais, meta = _search_pncp_single(
-                api, kws, mods, ufs, dias,
-                label_prefix=f"[{label[:15]}]",
-                nature_profile=nature_profile,
-            )
+            for mod_code in sorted(mod_codes):
+                for raw_item in raw_by_mod.get(mod_code, []):
+                    cluster_raw_seen += 1
+                    edital = _parse_pncp_item(
+                        raw_item, kws, ufs,
+                        keyword_patterns=keyword_patterns,
+                        nature_profile=nature_profile,
+                        cluster_nature=cluster_nat,
+                        cluster_nature_profile=cluster_nat_profile,
+                    )
+                    if edital:
+                        eid = edital.get("_id", "")
+                        if eid and eid not in seen_ids:
+                            seen_ids.add(eid)
+                            edital["_cluster_origin"] = label
+                            edital["_cluster_share_pct"] = share
+                            all_results.append(edital)
+                            cluster_filtered += 1
         except Exception as exc:
             print(f"  [PNCP] ERRO no cluster '{label}': {exc} \u2014 continuando")
             combined_meta["errors"] += 1
             combined_meta["clusters"].append({
                 "label": label, "share_pct": share,
-                "raw": 0, "filtered": 0, "status": "FAILED",
+                "raw": cluster_raw_seen, "filtered": cluster_filtered, "status": "FAILED",
             })
             continue
 
-        # Tag each result with cluster origin
-        for ed in editais:
-            ed["_cluster_origin"] = label
-            ed["_cluster_share_pct"] = share
-
-        all_results.extend(editais)
-        combined_meta["total_raw"] += meta["total_raw"]
-        combined_meta["total_filtered"] += meta["total_filtered"]
-        combined_meta["pages_fetched"] += meta["pages_fetched"]
-        combined_meta["errors"] += meta["errors"]
+        combined_meta["total_filtered"] += cluster_filtered
         combined_meta["clusters"].append({
             "label": label, "share_pct": share,
-            "raw": meta["total_raw"], "filtered": meta["total_filtered"],
-            "status": "OK" if meta["errors"] == 0 else "PARTIAL",
+            "raw": cluster_raw_seen, "filtered": cluster_filtered,
+            "status": "OK",
         })
 
-        print(f"  [PNCP] Cluster '{label}': {meta['total_raw']} raw -> {meta['total_filtered']} filtrados")
+        print(f"  [PNCP] Cluster '{label}': {cluster_raw_seen} raw -> {cluster_filtered} filtrados")
 
     # Deduplicate: keep edital from highest-share cluster
     deduped: dict[str, dict] = {}  # key -> edital
@@ -2962,7 +3110,7 @@ def collect_pncp_multi_cluster(
         "API" if combined_meta["errors"] == 0 else "API_PARTIAL",
         f"{combined_meta['total_raw']} obtidos, {combined_meta['total_filtered']} pre-dedup, "
         f"{len(deduped_list)} apos dedup ({n_dupes} duplicatas removidas), "
-        f"{combined_meta['pages_fetched']} paginas, {len(cluster_searches)} clusters",
+        f"{combined_meta['pages_fetched']} paginas, {len(cluster_searches)} clusters (cached)",
     )
 
     print(f"\n  [PNCP] Multi-cluster: {combined_meta['total_raw']} raw -> "
@@ -2973,7 +3121,9 @@ def collect_pncp_multi_cluster(
 
 def _parse_pncp_item(item: dict, keywords: list[str], ufs: list[str],
                      keyword_patterns: list[re.Pattern] | None = None,
-                     nature_profile: dict[str, float] | None = None) -> dict | None:
+                     nature_profile: dict[str, float] | None = None,
+                     cluster_nature: str | None = None,
+                     cluster_nature_profile: dict[str, float] | None = None) -> dict | None:
     """Parse a single PNCP result. Returns None if filtered out.
 
     PNCP response structure:
@@ -3006,9 +3156,22 @@ def _parse_pncp_item(item: dict, keywords: list[str], ufs: list[str],
         # Fallback to substring for backward compat if no patterns provided
         return None
 
-    # Nature filter: reject editais whose nature doesn't match the company's profile
+    # Nature filter — two-level: cluster-specific then global
     edital_nature = classify_object_nature(objeto)
-    if nature_profile and not is_nature_compatible(edital_nature, nature_profile):
+
+    # Level 1: Cluster-specific nature gate (strongest signal)
+    if cluster_nature and edital_nature not in ("INDEFINIDO",) and edital_nature != cluster_nature:
+        # Allow through if this nature has meaningful presence (>=10%) in cluster history
+        if cluster_nature_profile and cluster_nature_profile.get(edital_nature, 0) >= 10:
+            pass  # Mixed cluster — tolerate secondary natures
+        else:
+            if os.environ.get("REPORT_DEBUG"):
+                obj_short = (objeto or "")[:80]
+                print(f"    [NATURE-REJECT] cluster={cluster_nature} vs edital={edital_nature}: {obj_short}")
+            return None
+
+    # Level 2: Global profile compatibility (fallback for non-cluster searches)
+    if not cluster_nature and nature_profile and not is_nature_compatible(edital_nature, nature_profile):
         return None
 
     # Build PNCP link from orgaoEntidade.cnpj + anoCompra + sequencialCompra
@@ -6729,7 +6892,11 @@ Examples:
                 municipios_unicos.add((mun, uf_ed))
         for mun, uf_ed in sorted(municipios_unicos):
             key = f"{mun}|{uf_ed}"
-            ibge_data[key] = collect_ibge_municipio(api, mun, uf_ed)
+            try:
+                ibge_data[key] = collect_ibge_municipio(api, mun, uf_ed)
+            except Exception as e:
+                print(f"  ⚠ IBGE falhou para {mun}/{uf_ed}: {e}")
+                ibge_data[key] = {"_source": _source_tag("API_FAILED", f"Exception: {e}"), "populacao": None, "pib_mil_reais": None}
             time.sleep(0.5)
         for ed in all_editais:
             mun = ed.get("municipio", "")

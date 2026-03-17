@@ -271,6 +271,12 @@ MAX_DETAILED_EDITAIS = 15
 # Hard cap: overview table rows before truncating to Excel companion
 MAX_OVERVIEW_ROWS = 30
 
+# Canonical recommendation ordering — single source of truth
+REC_ORDER = {"PARTICIPAR": 0, "AVALIAR COM CAUTELA": 1, "AVALIAR": 1, "NÃO RECOMENDADO": 2}
+
+# Footnote for corrupt currency values
+CURRENCY_CORRUPT_NOTE = "* Valor original não numérico no dado-fonte"
+
 # ============================================================
 # HELPERS
 # ============================================================
@@ -363,20 +369,23 @@ def _fix_pncp_link(link: str | None) -> str:
     return link
 
 
-def _s(value: Any) -> str:
+def _s(value: Any, restore_accents: bool = True) -> str:
+    """Sanitize text for PDF. restore_accents=False for structural fields (CNPJ, codes, links)."""
     if value is None:
         return ""
     text = ILLEGAL_CHARS_RE.sub(" ", str(value))
-    return _restore_accents(text)
+    if restore_accents:
+        text = _restore_accents(text)
+    return text
 
 
-def _currency(value: Any) -> str:
+def _currency(value: Any, default: str = "N/I") -> str:
     if value is None:
-        return "N/I"
+        return default
     try:
         v = float(value)
     except (ValueError, TypeError):
-        return "N/I"
+        return "N/I*"  # corrupt value marker — see CURRENCY_CORRUPT_NOTE
     if v == 0:
         return "R$ 0,00"
     formatted = f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -475,6 +484,17 @@ def _format_prazo_short(dias: Any) -> str:
     if d == 0:
         return "Hoje"
     return f"{d}d"
+
+
+def _fmt_pop(pop: int | float | None) -> str:
+    """Format population with exact thousand-separators for cities <1M."""
+    if pop is None:
+        return "N/I"
+    pop = int(pop)
+    if pop >= 1_000_000:
+        return f"{pop / 1_000_000:,.1f}M".replace(",", ".")
+    else:
+        return f"{pop:,}".replace(",", ".")  # exact with thousand separator
 
 
 def _collapse_cnaes(cnaes: Any, max_show: int = 5) -> str:
@@ -742,9 +762,9 @@ def _build_cover(data: dict, styles: dict, gen_date: str) -> list:
     el.append(Spacer(1, 12 * mm))
 
     # Metadata block — clean, sans-serif, left-aligned
-    cnpj = _s(empresa.get("cnpj", ""))
+    cnpj = _s(empresa.get("cnpj", ""), restore_accents=False)
     setor = _s(data.get("setor", ""))
-    uf_sede = _s(empresa.get("uf_sede", ""))
+    uf_sede = _s(empresa.get("uf_sede", ""), restore_accents=False)
     cidade = _s(empresa.get("cidade_sede", ""))
 
     meta_lines = []
@@ -1191,11 +1211,10 @@ def _build_decision_table(data: dict, styles: dict, sec: dict) -> list:
     rows = [header]
 
     # Sort: PARTICIPAR first, then AVALIAR, then NÃO RECOMENDADO; within each by score desc
-    _rec_order = {"PARTICIPAR": 0, "AVALIAR COM CAUTELA": 1, "NÃO RECOMENDADO": 2}
     editais_sorted = sorted(
         editais,
         key=lambda e: (
-            _rec_order.get(_normalize_recommendation(_s(e.get("recomendacao", ""))), 9),
+            REC_ORDER.get(_normalize_recommendation(_s(e.get("recomendacao", ""))), 9),
             -(e.get("risk_score", {}).get("total", 0)),
         ),
     )
@@ -1297,12 +1316,8 @@ def _build_decision_table(data: dict, styles: dict, sec: dict) -> list:
     return el
 
 
-_viability_shown = False
-
-
-def _build_viability_text(risk: dict, styles: dict) -> list:
+def _build_viability_text(risk: dict, styles: dict, _state: dict | None = None) -> list:
     """Build viability indicator with score decomposition using sector-specific weights."""
-    global _viability_shown
     score = _safe_int(risk.get("total") if isinstance(risk, dict) else risk)
     if score <= 0:
         return []
@@ -1370,7 +1385,7 @@ def _build_viability_text(risk: dict, styles: dict) -> list:
                 styles["caption"],
             ))
 
-    if not _viability_shown:
+    if _state is not None and not _state.get("viability_shown"):
         # Dynamic explanation based on weights
         if isinstance(risk, dict) and risk.get("weights"):
             w = risk["weights"]
@@ -1390,7 +1405,7 @@ def _build_viability_text(risk: dict, styles: dict) -> list:
                 "valor vs. capacidade, proximidade geográfica e competitividade.",
                 styles["caption"],
             ))
-        _viability_shown = True
+        _state["viability_shown"] = True
 
     return el
 
@@ -1438,12 +1453,8 @@ def _build_chronogram_table(cronograma: list, styles: dict) -> list:
     return el
 
 
-_roi_shown = False
-
-
-def _build_roi_text(roi: dict, ed: dict, styles: dict) -> list:
+def _build_roi_text(roi: dict, ed: dict, styles: dict, _state: dict | None = None) -> list:
     """Build ROI indicator with auditable calculation memory (E1)."""
-    global _roi_shown
     if not roi or not isinstance(roi, dict):
         return []
     roi_min = roi.get("roi_min", 0)
@@ -1525,14 +1536,14 @@ def _build_roi_text(roi: dict, ed: dict, styles: dict) -> list:
                 styles["caption"],
             ))
 
-    if not _roi_shown:
+    if _state is not None and not _state.get("roi_shown"):
         el.append(Paragraph(
             "Resultado potencial = valor do edital × probabilidade de vitória × margem líquida do setor. "
             "Probabilidade calculada via modelo competitivo (fornecedores históricos, "
             "modalidade, incumbência) ajustado pelo índice de viabilidade.",
             styles["caption"],
         ))
-        _roi_shown = True
+        _state["roi_shown"] = True
 
     el.append(Spacer(1, 2 * mm))
     return el
@@ -1691,6 +1702,15 @@ def _build_competitive_section(data: dict, styles: dict, sec: dict) -> list:
             el.append(Paragraph(
                 f"  {name} — {count} contrato(s){f' ({region})' if region else ''}{indicator}",
                 styles["body_small"],
+            ))
+        # F19: Note when supplier list was truncated
+        if len(recurring) > 10:
+            el.append(Paragraph(
+                f"Exibidos os 10 principais fornecedores de {len(recurring)} identificados.",
+                ParagraphStyle(
+                    "recurring_trunc", parent=styles["caption"],
+                    fontName="Helvetica-Oblique", textColor=TEXT_MUTED,
+                ),
             ))
         el.append(Spacer(1, 4 * mm))
 
@@ -1909,7 +1929,20 @@ def _build_executive_summary(data: dict, styles: dict, sec: dict | None = None) 
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
     ]))
     el.append(metrics)
-    el.append(Spacer(1, 5 * mm))
+    el.append(Spacer(1, 3 * mm))
+
+    # F41: Excel companion reference
+    n_editais = len(editais)
+    if n_editais > 0:
+        el.append(Paragraph(
+            f"<i>Este relatório acompanha planilha Excel com todos os {n_editais} editais "
+            f"para análise detalhada e filtragem personalizada.</i>",
+            ParagraphStyle(
+                "excel_ref", parent=styles["body_small"],
+                fontName="Helvetica-Oblique", fontSize=8, textColor=TEXT_MUTED,
+            ),
+        ))
+        el.append(Spacer(1, 3 * mm))
 
     # Discard note — inform reader that irrelevant editais were filtered out
     n_desc = data.get("_descartados_count", 0)
@@ -2209,11 +2242,10 @@ def _build_opportunities_overview(data: dict, styles: dict, sec: dict | None = N
     el.append(Spacer(1, 2 * mm))
 
     # Sort: PARTICIPAR first, then AVALIAR, then NÃO RECOMENDADO; within each, by score desc
-    rec_order = {"PARTICIPAR": 0, "AVALIAR COM CAUTELA": 1, "NÃO RECOMENDADO": 2}
     editais_sorted = sorted(
         editais,
         key=lambda e: (
-            rec_order.get(_normalize_recommendation(_s(e.get("recomendacao", ""))), 9),
+            REC_ORDER.get(_normalize_recommendation(_s(e.get("recomendacao", ""))), 9),
             -(e.get("risk_score", {}).get("total", 0)),
         ),
     )
@@ -2222,7 +2254,7 @@ def _build_opportunities_overview(data: dict, styles: dict, sec: dict | None = N
     return el
 
 
-def _build_detailed_analysis(data: dict, styles: dict, sec: dict | None = None) -> list:
+def _build_detailed_analysis(data: dict, styles: dict, sec: dict | None = None, _state: dict | None = None) -> list:
     el = []
     editais = data.get("editais", [])
     if not editais:
@@ -2248,8 +2280,23 @@ def _build_detailed_analysis(data: dict, styles: dict, sec: dict | None = None) 
 
     # Sort by risk_score.total descending and apply hard cap
     _detailed_candidates.sort(key=lambda x: x[2], reverse=True)
+    all_eligible = _detailed_candidates
     detailed_top = _detailed_candidates[:MAX_DETAILED_EDITAIS]
     detailed_overflow = _detailed_candidates[MAX_DETAILED_EDITAIS:]
+
+    # F18: Truncation warning when editals exceed detail limit
+    if len(all_eligible) > MAX_DETAILED_EDITAIS:
+        truncation_note = Paragraph(
+            f"<i>Análise detalhada dos {MAX_DETAILED_EDITAIS} editais prioritários. "
+            f"Os demais {len(all_eligible) - MAX_DETAILED_EDITAIS} editais estão disponíveis "
+            f"na planilha Excel anexa para análise complementar.</i>",
+            ParagraphStyle(
+                "truncation_note", parent=styles["body"],
+                fontName="Helvetica-Oblique", fontSize=9, textColor=TEXT_MUTED,
+            ),
+        )
+        el.append(truncation_note)
+        el.append(Spacer(1, 4 * mm))
 
     for idx, ed, _score in detailed_top:
         rec = _normalize_recommendation(_s(ed.get("recomendacao", "")))
@@ -2335,7 +2382,12 @@ def _build_detailed_analysis(data: dict, styles: dict, sec: dict | None = None) 
         info_rows = []
         raw_fields = [
             ("Órgão", ed.get("orgao")),
-            ("UF / Município", f"{ed.get('uf', 'N/I')} — {ed.get('municipio', 'N/I')}"),
+            ("UF / Município", (
+                f"{ed.get('uf')} — {ed.get('municipio')}" if ed.get("uf") and ed.get("municipio")
+                else f"{ed.get('uf')} — município não informado" if ed.get("uf")
+                else f"UF não informada — {ed.get('municipio')}" if ed.get("municipio")
+                else "Localização não informada"
+            )),
             ("Modalidade", ed.get("modalidade")),
             ("Valor Estimado", _currency(ed.get("valor_estimado")) if ed.get("valor_estimado") else None),
             ("Data de Abertura", _date(ed.get("data_abertura"))),
@@ -2350,13 +2402,7 @@ def _build_detailed_analysis(data: dict, styles: dict, sec: dict | None = None) 
         if ibge.get("populacao") or ibge.get("pib_mil_reais"):
             ibge_parts = []
             if ibge.get("populacao"):
-                pop = ibge["populacao"]
-                if pop >= 1_000_000:
-                    ibge_parts.append(f"Pop. {pop/1_000_000:.1f}M")
-                elif pop >= 1_000:
-                    ibge_parts.append(f"Pop. {pop/1_000:.0f}k")
-                else:
-                    ibge_parts.append(f"Pop. {pop}")
+                ibge_parts.append(f"Pop. {_fmt_pop(ibge['populacao'])}")
             if ibge.get("pib_mil_reais"):
                 pib = ibge["pib_mil_reais"]
                 if pib >= 1_000_000:
@@ -2427,11 +2473,11 @@ def _build_detailed_analysis(data: dict, styles: dict, sec: dict | None = None) 
         metric_block = []
         risk = ed.get("risk_score", {})
         if isinstance(risk, dict) and risk.get("total"):
-            metric_block.extend(_build_viability_text(risk, styles))
+            metric_block.extend(_build_viability_text(risk, styles, _state))
             metric_block.append(Spacer(1, 1 * mm))
 
         roi = ed.get("roi_potential", {})
-        metric_block.extend(_build_roi_text(roi, ed, styles))
+        metric_block.extend(_build_roi_text(roi, ed, styles, _state))
 
         if metric_block:
             el.append(KeepTogether(metric_block))
@@ -4269,7 +4315,7 @@ def _build_methodology_content(styles: dict) -> list:
 
 
 def _build_annex_sources(data: dict, styles: dict, sec: dict) -> list:
-    """Annex C: Data sources + methodology + gazette mentions."""
+    """Annex C: Data sources + methodology + gazette mentions + audit trail."""
     el = []
     el.append(PageBreak())
     num = sec["next"]()
@@ -4284,6 +4330,37 @@ def _build_annex_sources(data: dict, styles: dict, sec: dict) -> list:
     if mencoes:
         el.append(Paragraph("<b>Menções em Diários Oficiais</b>", styles["h3"]))
         el.extend(_build_querido_diario_content(data, styles))
+
+    # F36: Audit trail
+    import subprocess
+    import hashlib
+    try:
+        git_hash = subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=str(Path(__file__).parent.parent),
+            stderr=subprocess.DEVNULL,
+        ).decode().strip()
+    except Exception:
+        git_hash = "N/D"
+
+    gen_ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    json_hash = hashlib.sha256(
+        json.dumps(data, sort_keys=True, ensure_ascii=False).encode()
+    ).hexdigest()[:12]
+
+    audit_text = (
+        f"Gerado em {gen_ts} | Script v.{git_hash} | "
+        f"Dados SHA-256: {json_hash}"
+    )
+    el.append(Spacer(1, 5 * mm))
+    el.append(Paragraph(
+        _s(audit_text, restore_accents=False),
+        ParagraphStyle(
+            "audit_trail", parent=styles["caption"],
+            fontName="Helvetica", fontSize=7, textColor=TEXT_MUTED,
+        ),
+    ))
+
     return el
 
 
@@ -4376,23 +4453,31 @@ def generate_report_b2g(data: dict) -> BytesIO:
             + "\n".join(f"  - {e}" for e in errors)
         )
 
-    # Reset per-report state
-    global _viability_shown, _roi_shown
-    _viability_shown = False
-    _roi_shown = False
+    # Per-report state (passed to functions that need first-time-only rendering)
+    _state = {"viability_shown": False, "roi_shown": False}
 
     data = _sanitize_links(data)
 
     # Backfill recommendations if missing (for JSONs generated by older collector)
     _backfill_recommendations(data)
 
-    # Drop ENCERRADO editais
-    data["editais"] = [e for e in data.get("editais", []) if e.get("status_edital") != "ENCERRADO"]
+    # Drop ENCERRADO editais + missing status + explicitly irrelevant + expired
+    def _is_eligible(e: dict) -> bool:
+        status = e.get("status_edital")
+        if status in ("ENCERRADO", None, ""):
+            return False
+        if e.get("relevante") is False:
+            return False
+        dias = e.get("dias_restantes")
+        if dias is not None and _safe_int(dias) <= 0:
+            return False
+        return True
+    data["editais"] = [e for e in data.get("editais", []) if _is_eligible(e)]
 
     # Separate discarded editais (irrelevant to company profile) before rendering
     all_editais = data.get("editais", [])
-    descartados = [e for e in all_editais if e.get("recomendacao", "").upper() == "DESCARTADO" or e.get("relevante") is False]
-    data["editais"] = [e for e in all_editais if e.get("recomendacao", "").upper() != "DESCARTADO" and e.get("relevante") is not False]
+    descartados = [e for e in all_editais if e.get("recomendacao", "").upper() == "DESCARTADO"]
+    data["editais"] = [e for e in all_editais if e.get("recomendacao", "").upper() != "DESCARTADO"]
     data["_descartados_count"] = len(descartados)
     data["_descartados_motivos"] = _summarize_discard_reasons(descartados)
     if descartados:
@@ -4402,11 +4487,10 @@ def generate_report_b2g(data: dict) -> BytesIO:
     # CANONICAL SORT: establish a single, stable ordering for the entire report.
     # All sections reference editais by _display_idx instead of enumerate() position.
     # Order: PARTICIPAR first (by score desc), then AVALIAR, then NÃO RECOMENDADO.
-    _rec_order = {"PARTICIPAR": 0, "AVALIAR COM CAUTELA": 1, "NÃO RECOMENDADO": 2}
     data["editais"] = sorted(
         data["editais"],
         key=lambda e: (
-            _rec_order.get(_normalize_recommendation(_s(e.get("recomendacao", ""))), 9),
+            REC_ORDER.get(_normalize_recommendation(_s(e.get("recomendacao", ""))), 9),
             -(_safe_int((e.get("risk_score") or {}).get("total", 0))),
         ),
     )
@@ -4419,7 +4503,7 @@ def generate_report_b2g(data: dict) -> BytesIO:
 
     empresa = data.get("empresa", {})
     nome = _s(empresa.get("nome_fantasia") or empresa.get("razao_social", "Empresa"))
-    cnpj = _s(empresa.get("cnpj", ""))
+    cnpj = _s(empresa.get("cnpj", ""), restore_accents=False)
 
     doc = SimpleDocTemplate(
         buffer,
@@ -4456,7 +4540,7 @@ def generate_report_b2g(data: dict) -> BytesIO:
     # 3. Inteligência Exclusiva — 4 differentials PNCP can't provide
     elements.extend(_build_exclusive_intelligence(data, styles, sec))
     # 4. Análise Detalhada (ONLY PARTICIPAR + AVALIAR — NÃO RECOMENDADO goes to Annex A)
-    elements.extend(_build_detailed_analysis(data, styles, sec))
+    elements.extend(_build_detailed_analysis(data, styles, sec, _state))
     # 5. Matriz Estratégica + Regional (unified strategic view)
     elements.extend(_build_portfolio_section(data, styles, sec))
     elements.extend(_build_regional_analysis(data, styles, sec))
@@ -4499,8 +4583,30 @@ def generate_report_b2g(data: dict) -> BytesIO:
         for w in validation_warnings:
             print(f"    - {w}")
 
-    doc.build(elements, onFirstPage=_draw_footer, onLaterPages=_draw_footer,
-              canvasmaker=_NumberedCanvas)
+    # F38: LayoutError graceful handling
+    try:
+        doc.build(elements, onFirstPage=_draw_footer, onLaterPages=_draw_footer,
+                  canvasmaker=_NumberedCanvas)
+    except Exception as exc:
+        if "Flowable" in str(exc) or "too large" in str(exc).lower():
+            print(f"WARNING: LayoutError detected. Retrying with reduced content...")
+            # Truncate oversized flowables as safety net
+            for flowable in elements:
+                if hasattr(flowable, 'text') and len(getattr(flowable, 'text', '')) > 2000:
+                    flowable.text = flowable.text[:2000] + "..."
+            buffer2 = BytesIO()
+            doc2 = SimpleDocTemplate(
+                buffer2, pagesize=A4,
+                leftMargin=MARGIN, rightMargin=MARGIN,
+                topMargin=MARGIN, bottomMargin=MARGIN + 10 * mm,
+            )
+            doc2.build(elements, onFirstPage=_draw_footer, onLaterPages=_draw_footer,
+                       canvasmaker=_NumberedCanvas)
+            print("PDF generated with reduced content (LayoutError recovery)")
+            buffer2.seek(0)
+            return buffer2
+        else:
+            raise
     buffer.seek(0)
     return buffer
 
@@ -4549,8 +4655,9 @@ def generate_excel_companion(data: dict, output_path: str) -> None:
     }
 
     editais = data.get("editais", [])
-    # Editais are already canonically sorted; re-sort for Excel by score desc
-    editais_sorted = sorted(editais, key=lambda e: e.get("risk_score", {}).get("total", 0), reverse=True)
+    # Use the SAME canonical order as PDF (already sorted by recommendation type -> score desc)
+    # Do NOT re-sort — _display_idx must match row position in both PDF and Excel
+    editais_sorted = editais
 
     for excel_row, ed in enumerate(editais_sorted, 1):
         row = excel_row + 1
@@ -4559,7 +4666,7 @@ def generate_excel_companion(data: dict, output_path: str) -> None:
         dist = ed.get("distancia", {})
         dist_km = dist.get("distancia_km") if isinstance(dist, dict) else None
         wp = ed.get("win_probability", {})
-        prob = wp.get("probabilidade") if isinstance(wp, dict) else None
+        prob = (wp.get("probability") or wp.get("probabilidade", 0)) if isinstance(wp, dict) else None
         rec = ed.get("recomendacao", "")
 
         values = [
@@ -4650,8 +4757,17 @@ def main():
     with open(output_path, "wb") as f:
         f.write(buffer.getvalue())
 
-    print(f"PDF generated: {output_path}")
-    print(f"Size: {output_path.stat().st_size / 1024:.1f} KB")
+    # F37: Post-generation PDF validation
+    if not output_path.exists():
+        print(f"ERROR: PDF not generated at {output_path}")
+        sys.exit(1)
+    file_size = output_path.stat().st_size
+    if file_size < 10_000:
+        print(f"WARNING: PDF suspiciously small ({file_size} bytes). May be corrupt.")
+    n_recommended = len([e for e in data.get("editais", []) if e.get("recomendacao") != "NÃO RECOMENDADO"])
+    min_pages = max(5, n_recommended)
+    print(f"PDF generated: {output_path} ({file_size:,} bytes)")
+    print(f"Size: {file_size / 1024:.1f} KB")
 
     # Save enriched JSON back to input (preserves backfilled recommendations + justificativas)
     if args.save_json:

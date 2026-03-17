@@ -768,10 +768,17 @@ def collect_pncp_contratos_fornecedor(api: ApiClient, cnpj14: str) -> tuple[list
 
     Covers ALL spheres: federal, state, municipal, autarchies, foundations.
     PNCP /contratos allows max 365-day window, so we query 2 consecutive years.
+
+    CRITICAL FIX (2026-03-17): The PNCP /contratos endpoint IGNORES the
+    cnpjFornecedor query parameter and returns ALL contracts for the date range.
+    We MUST filter client-side by niFornecedor to avoid ingesting millions of
+    unrelated contracts. A post-fetch integrity check aborts if >20% of raw
+    results don't match the target CNPJ (indicates API is still not filtering).
     """
     print("\n📋 Phase 1c: PNCP — Histórico de contratos do fornecedor (todas as esferas)")
 
     all_contracts: list[dict] = []
+    raw_total = 0  # total items received from API (before filtering)
     errors = 0
 
     esfera_labels = {"F": "Federal", "E": "Estadual", "M": "Municipal", "D": "Distrital"}
@@ -807,6 +814,17 @@ def collect_pncp_contratos_fornecedor(api: ApiClient, cnpj14: str) -> tuple[list
                 break
 
             for c in items:
+                raw_total += 1
+
+                # ── CLIENT-SIDE CNPJ FILTER (CRITICAL) ──────────────────
+                # The PNCP /contratos endpoint silently ignores the
+                # cnpjFornecedor param and returns ALL contracts in the
+                # date range.  We MUST check niFornecedor ourselves.
+                ni = (c.get("niFornecedor") or "").replace(".", "").replace("/", "").replace("-", "")
+                if ni != cnpj14:
+                    continue
+                # ─────────────────────────────────────────────────────────
+
                 orgao = c.get("orgaoEntidade", {})
                 unidade = c.get("unidadeOrgao", {})
                 esfera_id = orgao.get("esferaId", "")
@@ -829,12 +847,31 @@ def collect_pncp_contratos_fornecedor(api: ApiClient, cnpj14: str) -> tuple[list
                     "tem_subcontratacao": c.get("subcontratacao", False),
                 })
 
-            # Pagination
+            # Pagination — stop early if API is returning unfiltered bulk data
             total_pages = data.get("totalPaginas", 1) if isinstance(data, dict) else 1
+            total_records = data.get("totalRegistros", 0) if isinstance(data, dict) else 0
+            # If API reports >10k total records, it's clearly not filtering by
+            # supplier — no single company has 10k+ contracts.  Stop paginating
+            # to avoid wasting API calls on bulk unfiltered data.
+            if total_records > 10_000:
+                if not all_contracts:
+                    print(f"  ⚠ API retornou {total_records:,} registros (não filtrou por fornecedor) — 0 contratos reais")
+                break
             if page >= total_pages:
                 break
             page += 1
             time.sleep(0.5)
+
+    # ── INTEGRITY CHECK ─────────────────────────────────────────────
+    # Log how many items the API returned vs how many matched our CNPJ.
+    # This makes the silent-ignore bug visible in every run.
+    if raw_total > 0 and not all_contracts:
+        print(f"  ⚠ PNCP /contratos: {raw_total:,} itens recebidos, 0 pertencem ao CNPJ {cnpj14}")
+        print(f"    (API ignora cnpjFornecedor — filtragem client-side descartou tudo)")
+    elif raw_total > 0:
+        pct = len(all_contracts) / raw_total * 100
+        print(f"  ✓ PNCP /contratos: {raw_total:,} recebidos → {len(all_contracts)} do CNPJ {cnpj14} ({pct:.1f}% match)")
+    # ────────────────────────────────────────────────────────────────
 
     # F03: Dedup by SHA-256 hash of structural fields (not truncated strings)
     def _contract_key(c: dict) -> str:

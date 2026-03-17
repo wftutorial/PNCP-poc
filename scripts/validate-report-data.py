@@ -51,6 +51,52 @@ def validate(data: dict) -> dict:
     kw_source = data.get("_keywords_source", "unknown")
 
     # ================================================================
+    # GATE 0: Integridade de dados (contratos são reais?)
+    # ================================================================
+
+    # 0a. Contract CNPJ integrity — detect PNCP /contratos silent-ignore bug.
+    # If the API returned contracts not belonging to the queried CNPJ, the
+    # entire historical analysis (clusters, keywords, UFs) is garbage.
+    historico = empresa.get("historico_contratos", [])
+    cnpj_empresa = (empresa.get("cnpj") or "").replace(".", "").replace("/", "").replace("-", "")
+    if historico and cnpj_empresa:
+        # Sample up to 20 contracts and check if any have a cnpj_fornecedor
+        # field that doesn't match the empresa CNPJ.  The collect script now
+        # filters client-side, but older JSONs may have poisoned data.
+        foreign = 0
+        checked = 0
+        for c in historico[:50]:
+            c_cnpj = (c.get("cnpj_fornecedor") or "").replace(".", "").replace("/", "").replace("-", "")
+            if c_cnpj and c_cnpj != cnpj_empresa:
+                foreign += 1
+            if c_cnpj:
+                checked += 1
+        if checked > 0 and foreign / checked > 0.2:
+            blocks.append(
+                f"CONTRACT_CNPJ_MISMATCH: {foreign}/{checked} contratos históricos pertencem "
+                f"a outro CNPJ (não {cnpj_empresa}). A API PNCP /contratos ignorou o filtro "
+                f"cnpjFornecedor e retornou contratos de terceiros. Toda a análise de clusters, "
+                f"keywords e UFs está comprometida. Ação: re-executar collect-report-data.py "
+                f"(versão >= 2026-03-17 com fix de filtragem client-side)."
+            )
+        elif foreign > 0:
+            warnings.append(
+                f"CONTRACT_CNPJ_MINOR: {foreign}/{checked} contratos históricos têm CNPJ divergente. "
+                f"Pode ser subcontratação legítima ou ruído residual da API."
+            )
+
+    # 0b. Implausible contract count — a single ME/EPP with >500 contracts
+    # in 2 years is suspicious (especially if capital is low).
+    capital = empresa.get("capital_social") or 0
+    n_contratos = len(historico)
+    if n_contratos > 500 and capital <= 100_000:
+        warnings.append(
+            f"IMPLAUSIBLE_CONTRACT_VOLUME: {n_contratos} contratos para empresa com capital "
+            f"de R${capital:,.0f}. Verificar se dados de contratos são genuínos. "
+            f"Se a API retornou contratos de terceiros, re-coletar com versão corrigida."
+        )
+
+    # ================================================================
     # GATE 1: Coerência semântica (dados fazem sentido?)
     # ================================================================
 

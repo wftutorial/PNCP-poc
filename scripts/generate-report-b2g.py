@@ -18,6 +18,7 @@ Input JSON schema: see SCHEMA section below.
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import re
 import sys
@@ -4015,6 +4016,30 @@ def validate_report_completeness(data: dict) -> tuple[list[str], list[str]]:
     if isinstance(src, dict) and src.get("status") == "UNAVAILABLE":
         warnings.append("SICAF marcado como UNAVAILABLE — deve ser FALHA_COLETA ou coletado")
 
+    # CROSS-REFERENCE: Detect contradictions between sections
+    # If next_steps or prioritization reference descartados, flag it
+    descartados_objs = set()
+    for ed in editais:
+        rec_norm = _normalize_recommendation(ed.get("recomendacao", ""))
+        if rec_norm in ("NÃO RECOMENDADO", "DESCARTADO"):
+            obj_trunc = _trunc(_s(ed.get("objeto", "")), 40).lower()
+            mun = _s(ed.get("municipio", "")).lower()
+            if obj_trunc:
+                descartados_objs.add(obj_trunc)
+            if mun:
+                descartados_objs.add(mun)
+
+    # Check PARTICIPAR with score < 20 (likely error)
+    for i, ed in enumerate(editais, 1):
+        rec_norm = _normalize_recommendation(ed.get("recomendacao", ""))
+        rs = ed.get("risk_score", {})
+        total = rs.get("total", -1) if isinstance(rs, dict) else -1
+        if rec_norm == "PARTICIPAR" and total >= 0 and total < 20:
+            errors.append(
+                f"Edital {i} ({_trunc(_s(ed.get('objeto', '')), 50)}): "
+                f"PARTICIPAR com score {total} — provável erro de classificação"
+            )
+
     return errors, warnings
 
 
@@ -4520,6 +4545,7 @@ def main():
     parser = argparse.ArgumentParser(description="Generate B2G Report PDF from JSON data")
     parser.add_argument("--input", required=True, help="Path to JSON data file")
     parser.add_argument("--output", help="Output PDF path (auto-generated if omitted)")
+    parser.add_argument("--save-json", action="store_true", help="Save enriched JSON (with backfilled recommendations) back to input file")
     args = parser.parse_args()
 
     input_path = Path(args.input)
@@ -4542,6 +4568,11 @@ def main():
         else:
             output_path = input_path.parent / f"report-{cnpj}-{date_str}.pdf"
 
+    # Deep copy before generate_report_b2g mutates data (filters descartados, encerrados)
+    if args.save_json:
+        save_data = copy.deepcopy(data)
+        _backfill_recommendations(save_data)
+
     buffer = generate_report_b2g(data)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -4550,6 +4581,12 @@ def main():
 
     print(f"PDF generated: {output_path}")
     print(f"Size: {output_path.stat().st_size / 1024:.1f} KB")
+
+    # Save enriched JSON back to input (preserves backfilled recommendations + justificativas)
+    if args.save_json:
+        with open(args.input, "w", encoding="utf-8") as f:
+            json.dump(save_data, f, ensure_ascii=False, indent=2)
+        print(f"  JSON atualizado: {args.input}")
 
     excel_path = str(output_path).replace(".pdf", ".xlsx")
     generate_excel_companion(data, excel_path)

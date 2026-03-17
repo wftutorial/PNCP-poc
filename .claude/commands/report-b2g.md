@@ -226,6 +226,26 @@ curl -s "https://api.opencnpj.org/${CNPJ_CONCORRENTE}"
 
 ### Phase 6: Montagem do JSON e Geração do PDF
 
+**6.0. CROSS-REFERENCE OBRIGATÓRIO (antes de gerar qualquer output)**
+
+Antes de gerar markdown ou PDF, executar verificação cruzada:
+
+1. **Descartados × Plano de Ação** — Para CADA edital mencionado em "Próximos Passos" ou "Plano de Ação":
+   - Verificar se foi DESCARTADO na análise detalhada (Phase 3)
+   - Verificar se a recomendação final é NÃO RECOMENDADO
+   - Se sim → REMOVER do Plano de Ação. Incluir edital descartado no plano é CONTRADIÇÃO GRAVE.
+
+2. **Condicionantes × Plano de Ação** — Para CADA edital com recomendação PARTICIPAR (condicionado):
+   - Verificar se a condição (ex: "condicionado a atestado de UBS") aparece como ação no Plano
+   - Se não → ADICIONAR a condição como ação prioritária
+
+3. **Contagem final** — Contar editais por recomendação no markdown e comparar com o JSON:
+   - PARTICIPAR no markdown == PARTICIPAR no JSON?
+   - NÃO RECOMENDADO no markdown == NÃO RECOMENDADO no JSON?
+   - Se divergir → corrigir antes de prosseguir
+
+Esta verificação é a ÚLTIMA barreira contra incoerências internas. Um relatório com plano de ação contradizendo a análise destrói a credibilidade do produto.
+
 **6.1. Montar/enriquecer o JSON de dados**
 
 O JSON da Phase 1 deve ser enriquecido com as análises das Phases 2-5:
@@ -236,6 +256,30 @@ O JSON da Phase 1 deve ser enriquecido com as análises das Phases 2-5:
 - `editais[].analise_detalhada` — Texto analítico completo (Phases 3-4)
 - `inteligencia_mercado` — Panorama, tendências, nichos (Phase 5)
 - `proximos_passos` — Lista de ações priorizadas
+
+**6.1.5. WRITE-BACK OBRIGATÓRIO — JSON como verdade canônica**
+
+Após as Phases 2-5, SALVAR o JSON atualizado com os campos enriquecidos pelo Claude:
+
+```python
+# Campos que DEVEM ser preenchidos no JSON ANTES de gerar PDF/markdown:
+editais[].recomendacao        # PARTICIPAR / AVALIAR COM CAUTELA / NÃO RECOMENDADO / DESCARTADO
+editais[].justificativa       # Motivo factual — NUNCA vazio
+editais[].analise_documental  # Ficha técnica + habilitação + red flags (Phase 2)
+editais[].analise_detalhada   # Texto analítico completo (Phases 3-4) — opcional mas recomendado
+```
+
+O JSON é o **artifact canônico** — se o PDF for regenerado pelo script, toda a inteligência das Phases 2-5 deve estar preservada no JSON, não apenas no markdown.
+
+Comando para salvar o JSON atualizado:
+```bash
+python -c "import json; d=json.load(open('INPUT')); ... ; json.dump(d, open('INPUT','w'), ensure_ascii=False, indent=2)"
+```
+
+Ou usar o flag `--save-json` ao gerar o PDF:
+```bash
+python scripts/generate-report-b2g.py --input data.json --output report.pdf --save-json
+```
 
 **6.2. Gerar o PDF**
 ```bash
@@ -367,9 +411,11 @@ O script verifica coerência semântica dos dados ANTES de gerar o relatório:
 
 **Se WARNINGS:** Listar cada alerta no início da Phase 2 e garantir que o relatório final endereça TODOS.
 
-### Phase 7: Gate Adversarial — Revisão com Persona do Leitor
+### Phase 7: CHECKPOINT OBRIGATÓRIO — Gate Adversarial
 
-**OBJETIVO:** O agente DEVE abandonar a perspectiva de quem gerou o relatório e assumir a persona do DONO DO CNPJ — o empresário que vai ler este documento para decidir onde investir tempo e dinheiro.
+**⛔ PARAR AQUI. O relatório NÃO está pronto até que este gate seja executado e `delivery_validation` esteja no JSON.**
+
+O agente DEVE abandonar a perspectiva de quem gerou o relatório e assumir a persona do DONO DO CNPJ — o empresário que vai ler este documento para decidir onde investir tempo e dinheiro.
 
 **COMO EXECUTAR:**
 

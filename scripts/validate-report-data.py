@@ -9,6 +9,11 @@ Analisa o JSON gerado por collect-report-data.py e emite:
 
 Usage:
     python scripts/validate-report-data.py docs/reports/data-CNPJ-DATE.json
+    python scripts/validate-report-data.py docs/reports/data-CNPJ-DATE.json --post-enrichment
+
+Modes:
+    Default:            Validates Phase 1 data (raw collection output)
+    --post-enrichment:  Validates Phases 2-7 data (after Claude enrichment, before PDF)
 
 Exit codes:
     0 = OK (pode gerar relatório)
@@ -440,12 +445,105 @@ def validate(data: dict) -> dict:
     }
 
 
-def main():
-    if len(sys.argv) < 2:
-        print("Usage: python scripts/validate-report-data.py <path-to-data.json>")
-        sys.exit(1)
+def validate_post_enrichment(data: dict) -> dict:
+    """Validate JSON after Claude enrichment (Phases 2-7).
 
-    path = Path(sys.argv[1])
+    Checks that Claude's analysis is internally consistent and complete.
+    Returns {blocks: [], warnings: [], info: [], verdict: str}.
+    """
+    blocks: list[str] = []
+    warnings: list[str] = []
+    info: list[str] = []
+
+    editais = data.get("editais", [])
+
+    # 1. Recommendation coverage — every edital must have recomendacao
+    no_rec = [i for i, e in enumerate(editais, 1) if not e.get("recomendacao")]
+    if no_rec:
+        blocks.append(f"{len(no_rec)} editais sem recomendação: #{', #'.join(str(x) for x in no_rec[:10])}")
+
+    # 2. Justificativa coverage — every edital with recomendacao must have justificativa
+    no_just = [i for i, e in enumerate(editais, 1) if e.get("recomendacao") and not e.get("justificativa")]
+    if no_just:
+        blocks.append(f"{len(no_just)} editais com recomendação mas sem justificativa: #{', #'.join(str(x) for x in no_just[:10])}")
+
+    # 3. Analise documental coverage — at least PARTICIPAR + AVALIAR should have it
+    participar_avaliar = [e for e in editais if e.get("recomendacao", "").upper() in ("PARTICIPAR", "AVALIAR COM CAUTELA")]
+    no_doc = [i for i, e in enumerate(editais, 1)
+              if e.get("recomendacao", "").upper() in ("PARTICIPAR", "AVALIAR COM CAUTELA")
+              and not e.get("analise_documental")]
+    if no_doc and len(participar_avaliar) > 0:
+        pct = len(no_doc) / len(participar_avaliar) * 100
+        if pct > 50:
+            warnings.append(f"{len(no_doc)}/{len(participar_avaliar)} editais PARTICIPAR/AVALIAR sem análise documental ({pct:.0f}%)")
+
+    # 4. delivery_validation must exist (Phase 7 gate)
+    dv = data.get("delivery_validation")
+    if not dv:
+        blocks.append("delivery_validation ausente — Phase 7 (gate adversarial) não foi executada")
+    else:
+        if not dv.get("gate_adversarial"):
+            blocks.append("delivery_validation.gate_adversarial não preenchido")
+        if not dv.get("reader_persona"):
+            warnings.append("delivery_validation.reader_persona não definida")
+
+    # 5. Cross-reference: NÃO RECOMENDADO editais should not be in recommended lists
+    nr_objects = set()
+    for e in editais:
+        rec = (e.get("recomendacao") or "").upper()
+        if rec in ("NÃO RECOMENDADO", "DESCARTADO"):
+            obj = (e.get("objeto") or "")[:40].lower().strip()
+            mun = (e.get("municipio") or "").lower().strip()
+            if obj:
+                nr_objects.add(obj)
+            if mun:
+                nr_objects.add(mun)
+
+    # Check PARTICIPAR editais don't share municipality+truncated object with DESCARTADOS
+    for e in editais:
+        rec = (e.get("recomendacao") or "").upper()
+        if rec == "PARTICIPAR":
+            mun = (e.get("municipio") or "").lower().strip()
+            obj = (e.get("objeto") or "")[:40].lower().strip()
+            # This is a heuristic — same municipality AND same truncated object = likely duplicate
+            if mun in nr_objects and obj in nr_objects:
+                warnings.append(f"Edital PARTICIPAR em {e.get('municipio')} com objeto similar a um NÃO RECOMENDADO/DESCARTADO — verificar duplicata")
+
+    # 6. Score-recommendation consistency (stricter than Phase 1)
+    for i, e in enumerate(editais, 1):
+        rec = (e.get("recomendacao") or "").upper()
+        rs = e.get("risk_score", {})
+        if isinstance(rs, dict):
+            total = rs.get("total", -1)
+            vetoed = rs.get("vetoed", False)
+
+            if vetoed and rec == "PARTICIPAR":
+                blocks.append(f"Edital {i}: PARTICIPAR mas VETADO — contradição fatal")
+
+            if total >= 0 and total < 20 and rec == "PARTICIPAR":
+                blocks.append(f"Edital {i}: PARTICIPAR com score {total} — provável erro")
+
+    # Build verdict
+    if blocks:
+        verdict = "BLOCKED"
+    elif warnings:
+        verdict = "WARNINGS"
+    else:
+        verdict = "OK"
+        info.append(f"Enriquecimento validado: {len(editais)} editais, {len(participar_avaliar)} recomendados")
+
+    return {"blocks": blocks, "warnings": warnings, "info": info, "verdict": verdict}
+
+
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Validação de dados do relatório B2G")
+    parser.add_argument("json_path", help="Caminho para o JSON de dados")
+    parser.add_argument("--post-enrichment", action="store_true",
+                        help="Validar JSON após enriquecimento Claude (Phases 2-7)")
+    args = parser.parse_args()
+
+    path = Path(args.json_path)
     if not path.exists():
         print(f"ERROR: File not found: {path}")
         sys.exit(1)
@@ -453,19 +551,24 @@ def main():
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    result = validate(data)
+    if args.post_enrichment:
+        result = validate_post_enrichment(data)
+    else:
+        result = validate(data)
 
+    mode_label = "Pós-Enriquecimento" if args.post_enrichment else "Dados"
     print(f"\n{'='*60}")
-    print(f"📋 Validação de Dados — {path.name}")
+    print(f"📋 Validação de {mode_label} — {path.name}")
     print(f"{'='*60}")
 
-    # Summary
-    s = result["summary"]
-    print(f"\n  Editais: {s['total_editais']} total | {s['participar']} PARTICIPAR | "
-          f"{s['avaliar']} AVALIAR | {s['nao_recomendado']} NR | {s['vetados']} vetados")
-    print(f"  Keywords: {s['keywords_source']} | Clusters: {s['activity_clusters']} "
-          f"(top: {s['top_cluster']})")
-    print(f"  Divergência setorial: {'SIM ⚠' if s['sector_divergence'] else 'NÃO'}")
+    # Summary (only available in Phase 1 validation)
+    s = result.get("summary")
+    if s:
+        print(f"\n  Editais: {s['total_editais']} total | {s['participar']} PARTICIPAR | "
+              f"{s['avaliar']} AVALIAR | {s['nao_recomendado']} NR | {s['vetados']} vetados")
+        print(f"  Keywords: {s['keywords_source']} | Clusters: {s['activity_clusters']} "
+              f"(top: {s['top_cluster']})")
+        print(f"  Divergência setorial: {'SIM ⚠' if s['sector_divergence'] else 'NÃO'}")
 
     # Blocks
     if result["blocks"]:

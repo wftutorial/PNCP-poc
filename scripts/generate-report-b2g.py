@@ -975,7 +975,8 @@ def _build_exclusive_intelligence(data: dict, styles: dict, sec: dict) -> list:
     # --- 1. Incumbency Intelligence ---
     el.append(Paragraph("<b>1. Mapeamento de Incumbência</b>", styles["h3"]))
     incumbent_insights = []
-    for idx, ed in enumerate(editais, 1):
+    for ed in editais:
+        idx = ed.get("_display_idx", 0)
         ci = ed.get("competitive_intel", [])
         wp = ed.get("win_probability", {})
         if not ci and not wp:
@@ -1045,7 +1046,7 @@ def _build_exclusive_intelligence(data: dict, styles: dict, sec: dict) -> list:
     ))
 
     # Viability ranking
-    scored = [(idx, ed) for idx, ed in enumerate(editais, 1)
+    scored = [(ed.get("_display_idx", i), ed) for i, ed in enumerate(editais, 1)
               if isinstance(ed.get("risk_score"), dict) and ed["risk_score"].get("total", 0) > 0]
     scored.sort(key=lambda x: x[1]["risk_score"]["total"], reverse=True)
 
@@ -1095,13 +1096,14 @@ def _build_exclusive_intelligence(data: dict, styles: dict, sec: dict) -> list:
     el.append(Paragraph("<b>3. Sequência Estratégica de Acervo</b>", styles["h3"]))
 
     acervo_items = []
-    for idx, ed in enumerate(editais, 1):
+    for ed in editais:
+        idx = ed.get("_display_idx", 0)
         roi = ed.get("roi_potential", {})
         cat = ed.get("strategic_category", "")
         if roi.get("strategic_reclassification") == "INVESTIMENTO_ESTRATEGICO_ACERVO" or cat == "INVESTIMENTO":
             acervo_items.append((idx, ed))
 
-    participar_items = [(idx, ed) for idx, ed in enumerate(editais, 1)
+    participar_items = [(ed.get("_display_idx", i), ed) for i, ed in enumerate(editais, 1)
                         if _normalize_recommendation(_s(ed.get("recomendacao", ""))) == "PARTICIPAR"]
 
     if acervo_items:
@@ -1200,7 +1202,8 @@ def _build_decision_table(data: dict, styles: dict, sec: dict) -> list:
     # Cap to 30 rows (rest goes to Excel)
     editais_display = editais_sorted[:MAX_OVERVIEW_ROWS]
 
-    for idx, ed in enumerate(editais_display, 1):
+    for table_row, ed in enumerate(editais_display, 1):
+        idx = ed.get("_display_idx", table_row)
         rec = _normalize_recommendation(_s(ed.get("recomendacao", "")))
         risk = ed.get("risk_score", {}) or {}
         vetoed = risk.get("vetoed", False)
@@ -1274,9 +1277,12 @@ def _build_decision_table(data: dict, styles: dict, sec: dict) -> list:
     t = _three_rule_table(rows, col_w)
     el.append(t)
 
-    # Justifications below the table — quieter, as footnotes
+    # Justifications below the table — footnotes aligned to the DISPLAYED rows.
+    # CRITICAL: must iterate editais_display (sorted+capped), not editais (original),
+    # so that footnote #N corresponds to table row #N.
     has_justif = False
-    for idx, ed in enumerate(editais, 1):
+    for table_row, ed in enumerate(editais_display, 1):
+        idx = ed.get("_display_idx", table_row)
         justif = _s(ed.get("justificativa", ""))
         if justif:
             if not has_justif:
@@ -1691,7 +1697,8 @@ def _build_competitive_section(data: dict, styles: dict, sec: dict) -> list:
     # Competitive advantage summary
     editais = data.get("editais", [])
     favorable = []
-    for idx, ed in enumerate(editais, 1):
+    for ed in editais:
+        idx = ed.get("_display_idx", 0)
         wp = ed.get("win_probability", {})
         if isinstance(wp, dict) and wp.get("top_supplier_share", 1) < 0.20 and wp.get("n_unique_suppliers", wp.get("unique_suppliers", 0)) >= 3:
             favorable.append((idx, _trunc(_s(ed.get("objeto", "")), 60), wp.get("probability", 0)))
@@ -2229,7 +2236,8 @@ def _build_detailed_analysis(data: dict, styles: dict, sec: dict | None = None) 
 
     # Collect PARTICIPAR + AVALIAR editais (NÃO RECOMENDADO / VETOED go to Annex A)
     _detailed_candidates = []
-    for idx, ed in enumerate(editais, 1):
+    for ed in editais:
+        idx = ed.get("_display_idx", 0)
         rec = _normalize_recommendation(_s(ed.get("recomendacao", "")))
         risk = ed.get("risk_score", {}) or {}
         vetoed = risk.get("vetoed", False)
@@ -2852,7 +2860,8 @@ def _build_prioritization(data: dict, styles: dict, sec: dict | None = None) -> 
     """Consolidated ranking of PARTICIPAR editais — hierarchized for the decision-maker."""
     editais = data.get("editais", [])
     participar = []
-    for idx, ed in enumerate(editais, 1):
+    for ed in editais:
+        idx = ed.get("_display_idx", 0)
         rec = _normalize_recommendation(_s(ed.get("recomendacao", "")))
         if rec != "PARTICIPAR":
             continue
@@ -2935,7 +2944,8 @@ def _build_development_path(data: dict, styles: dict, sec: dict | None = None) -
     """For NÃO RECOMENDADO editais — what the company needs to build in 24 months to compete."""
     editais = data.get("editais", [])
     nao_rec = []
-    for idx, ed in enumerate(editais, 1):
+    for ed in editais:
+        idx = ed.get("_display_idx", 0)
         rec = _normalize_recommendation(_s(ed.get("recomendacao", "")))
         if rec != "NÃO RECOMENDADO":
             continue
@@ -3420,7 +3430,8 @@ def _build_portfolio_section(data: dict, styles: dict, sec: dict | None = None) 
         "BAIXA_PRIORIDADE": {"label": "Baixa Prioridade", "color": TEXT_MUTED, "editais": []},
     }
 
-    for idx, ed in enumerate(editais, 1):
+    for ed in editais:
+        idx = ed.get("_display_idx", 0)
         cat = ed.get("strategic_category", "BAIXA_PRIORIDADE")
         if cat in categories:
             categories[cat]["editais"].append((idx, ed))
@@ -3969,22 +3980,23 @@ def validate_report_completeness(data: dict) -> tuple[list[str], list[str]]:
     editais = data.get("editais", [])
 
     for i, ed in enumerate(editais, 1):
+        idx = ed.get("_display_idx", i)
         obj = _trunc(_s(ed.get("objeto", "")), 50)
 
         # BLOCKING: Every edital must have recommendation + justification
         rec = ed.get("recomendacao") or ed.get("recommendation")
         justif = ed.get("justificativa") or ed.get("recommendation_justification")
         if not justif and rec:
-            errors.append(f"Edital {i} ({obj}): recomendação '{rec}' sem justificativa")
+            errors.append(f"Edital {idx} ({obj}): recomendação '{rec}' sem justificativa")
 
         # BLOCKING: risk_score required for viability section
         rs = ed.get("risk_score", {})
         if not rs:
-            errors.append(f"Edital {i} ({obj}): risk_score ausente — execute --re-enrich")
+            errors.append(f"Edital {idx} ({obj}): risk_score ausente — execute --re-enrich")
 
         # BLOCKING: win_probability required for incumbency/competitive sections
         if not ed.get("win_probability"):
-            errors.append(f"Edital {i} ({obj}): win_probability ausente — execute --re-enrich")
+            errors.append(f"Edital {idx} ({obj}): win_probability ausente — execute --re-enrich")
 
         # BLOCKING: strategic_category required for portfolio matrix
         if not ed.get("strategic_category"):
@@ -4065,13 +4077,14 @@ def validate_report_completeness(data: dict) -> tuple[list[str], list[str]]:
                 descartados_objs.add(mun)
 
     # Check PARTICIPAR with score < 20 (likely error)
-    for i, ed in enumerate(editais, 1):
+    for ed in editais:
+        idx = ed.get("_display_idx", 0)
         rec_norm = _normalize_recommendation(ed.get("recomendacao", ""))
         rs = ed.get("risk_score", {})
         total = rs.get("total", -1) if isinstance(rs, dict) else -1
         if rec_norm == "PARTICIPAR" and total >= 0 and total < 20:
             errors.append(
-                f"Edital {i} ({_trunc(_s(ed.get('objeto', '')), 50)}): "
+                f"Edital {idx} ({_trunc(_s(ed.get('objeto', '')), 50)}): "
                 f"PARTICIPAR com score {total} — provável erro de classificação"
             )
 
@@ -4086,7 +4099,7 @@ def _build_annex_nao_recomendado(data: dict, styles: dict, sec: dict) -> list:
     """Annex A: Condensed table of non-recommended + vetoed editais."""
     editais = data.get("editais", [])
     nr_editais = [
-        (i, ed) for i, ed in enumerate(editais, 1)
+        (ed.get("_display_idx", i), ed) for i, ed in enumerate(editais, 1)
         if _normalize_recommendation(_s(ed.get("recomendacao", ""))) == "NÃO RECOMENDADO"
         or (ed.get("risk_score") or {}).get("vetoed", False)
     ]
@@ -4386,6 +4399,20 @@ def generate_report_b2g(data: dict) -> BytesIO:
         print(f"  Descartados: {len(descartados)} editais sem aderência ao perfil (excluídos do relatório)")
     print(f"  Relatório: {len(data['editais'])} editais incluídos")
 
+    # CANONICAL SORT: establish a single, stable ordering for the entire report.
+    # All sections reference editais by _display_idx instead of enumerate() position.
+    # Order: PARTICIPAR first (by score desc), then AVALIAR, then NÃO RECOMENDADO.
+    _rec_order = {"PARTICIPAR": 0, "AVALIAR COM CAUTELA": 1, "NÃO RECOMENDADO": 2}
+    data["editais"] = sorted(
+        data["editais"],
+        key=lambda e: (
+            _rec_order.get(_normalize_recommendation(_s(e.get("recomendacao", ""))), 9),
+            -(_safe_int((e.get("risk_score") or {}).get("total", 0))),
+        ),
+    )
+    for _i, _ed in enumerate(data["editais"], 1):
+        _ed["_display_idx"] = _i
+
     gen_date = _today()
     styles = _build_styles()
     buffer = BytesIO()
@@ -4522,11 +4549,11 @@ def generate_excel_companion(data: dict, output_path: str) -> None:
     }
 
     editais = data.get("editais", [])
-    # Sort by risk_score.total descending
+    # Editais are already canonically sorted; re-sort for Excel by score desc
     editais_sorted = sorted(editais, key=lambda e: e.get("risk_score", {}).get("total", 0), reverse=True)
 
-    for idx, ed in enumerate(editais_sorted, 1):
-        row = idx + 1
+    for excel_row, ed in enumerate(editais_sorted, 1):
+        row = excel_row + 1
         rs = ed.get("risk_score", {})
         roi = ed.get("roi_potential", {})
         dist = ed.get("distancia", {})
@@ -4536,7 +4563,7 @@ def generate_excel_companion(data: dict, output_path: str) -> None:
         rec = ed.get("recomendacao", "")
 
         values = [
-            idx,
+            ed.get("_display_idx", excel_row),
             _clean_excel_str(rec or "N/A"),
             rs.get("total", 0),
             _clean_excel_str(ed.get("municipio", "")),

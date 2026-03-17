@@ -25,7 +25,13 @@ from __future__ import annotations
 import json
 import sys
 import io
+import unicodedata
 from pathlib import Path
+
+
+def _strip_accents(s: str) -> str:
+    """Remove diacritical marks from string. E.g. 'construção' → 'construcao'."""
+    return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
 
 if sys.platform == "win32":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
@@ -197,8 +203,8 @@ def validate(data: dict) -> dict:
                     matching += 1
                     continue
                 # Fallback: check keywords in objeto
-                obj = (ed.get("objeto") or "").lower()
-                if any(kw in obj for kw in dc_keywords):
+                obj = _strip_accents((ed.get("objeto") or "").lower())
+                if any(_strip_accents(kw) in obj for kw in dc_keywords):
                     matching += 1
 
             match_pct = (matching / len(editais) * 100) if editais else 0

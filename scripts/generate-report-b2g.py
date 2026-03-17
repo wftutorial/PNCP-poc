@@ -3685,7 +3685,7 @@ def _build_coverage_warning(data: dict, styles: dict) -> list:
 
     # Per-UF breakdown
     per_uf = cov.get("per_uf", [])
-    low_ufs = [p for p in per_uf if (p.get("rate") or 1.0) < 0.70 and (p.get("estimated_total") or 0) > 0]
+    low_ufs = [p for p in per_uf if (p.get("rate") if p.get("rate") is not None else 0.0) < 0.70 and (p.get("estimated_total") or 0) > 0]
     if low_ufs:
         uf_detail = "; ".join(
             f"{p['uf']}: {p['captured']}/{p['estimated_total']} ({_pct(p['rate'])})"

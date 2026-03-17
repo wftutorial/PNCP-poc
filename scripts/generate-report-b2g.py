@@ -4560,6 +4560,15 @@ def generate_excel_companion(data: dict, output_path: str) -> None:
             if rec in fills:
                 cell.fill = fills[rec]
 
+        # Make Link PNCP column (16) a clickable hyperlink
+        link_val = ed.get("link", "")
+        link_fixed = _fix_pncp_link(link_val)
+        if link_fixed and link_fixed.startswith("http"):
+            link_cell = ws.cell(row=row, column=16)
+            link_cell.hyperlink = link_fixed
+            link_cell.value = link_fixed
+            link_cell.font = Font(color="0563C1", underline="single", size=10)
+
         # Format currency column (7 = Valor Estimado)
         ws.cell(row=row, column=7).number_format = '#,##0.00'
 

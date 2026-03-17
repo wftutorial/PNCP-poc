@@ -61,6 +61,7 @@ SIGNAL_AMBER = colors.HexColor("#B8860B")  # Dark goldenrod — cautionary recom
 
 TEXT_COLOR = colors.HexColor("#2D3748")    # Body text
 TEXT_SECONDARY = colors.HexColor("#5A6577")  # Subtitles, labels
+LINK_BLUE = colors.HexColor("#1a56db")      # Visible link color — clickable elements
 TEXT_MUTED = colors.HexColor("#8896A6")    # Footnotes, metadata
 RULE_COLOR = colors.HexColor("#C8CDD3")   # Table inner rules (hairline)
 RULE_HEAVY = colors.HexColor("#4A5568")    # Table top rule (heavy)
@@ -862,11 +863,22 @@ def _build_resumo_decisorio(data: dict, styles: dict) -> list:
             roi = e.get("roi_potential", {})
             roi_max = roi.get("roi_max", 0)
             prob = (e.get("win_probability") or {}).get("probability", 0)
+            n_suppliers = (e.get("win_probability") or {}).get("n_unique_suppliers", 0)
             valor_e = _safe_float_gen(e.get("valor_estimado"))
             loc = f"{mun}/{uf}" if mun and uf else (mun or uf or "Local N/I")
+            if n_suppliers > 0:
+                competition_text = f"~{n_suppliers} concorrentes"
+            else:
+                prob_pct = prob * 100
+                if prob_pct < 5:
+                    competition_text = "Alta concorrência"
+                elif prob_pct < 15:
+                    competition_text = "Concorrência moderada"
+                else:
+                    competition_text = "Baixa concorrência"
             lines.append(
                 f"<b>{idx}.</b> <b>{loc}</b> — {obj_text} "
-                f"({_currency_short(valor_e)}, probabilidade {_pct(prob)}, "
+                f"({_currency_short(valor_e)}, {competition_text}, "
                 f"retorno potencial até {_currency_short(max(roi_max, 0))})"
             )
         el.append(Paragraph(
@@ -1074,7 +1086,7 @@ def _build_exclusive_intelligence(data: dict, styles: dict, sec: dict) -> list:
         via_header = [
             Paragraph("#", styles["cell_header_center"]),
             Paragraph("Edital", styles["cell_header"]),
-            Paragraph("Score", styles["cell_header_center"]),
+            Paragraph("Viabilidade", styles["cell_header_center"]),
             Paragraph("Fator Decisivo", styles["cell_header"]),
         ]
         via_rows = [via_header]
@@ -1097,7 +1109,7 @@ def _build_exclusive_intelligence(data: dict, styles: dict, sec: dict) -> list:
             obj_text = _trunc(_s(ed.get("objeto", "")), 150)
             via_link = _fix_pncp_link(ed.get("link", ""))
             if via_link and via_link.startswith("http"):
-                obj_text = f'<a href="{via_link}" color="{INK.hexval()}">{obj_text}</a>'
+                obj_text = f'<a href="{via_link}" color="{LINK_BLUE.hexval()}">{obj_text}</a>'
             via_rows.append([
                 Paragraph(f"<b>{idx}</b>", styles["cell_center"]),
                 Paragraph(obj_text, styles["cell"]),
@@ -1240,7 +1252,7 @@ def _build_decision_table(data: dict, styles: dict, sec: dict) -> list:
         objeto = _trunc(_s(ed.get("objeto", "")), 150)
         link = _fix_pncp_link(ed.get("link", ""))
         if link and link.startswith("http"):
-            objeto = f'<a href="{link}" color="{INK.hexval()}">{objeto}</a>'
+            objeto = f'<a href="{link}" color="{LINK_BLUE.hexval()}">{objeto}</a>'
         valor = _currency_short(ed.get("valor_estimado"))
         prazo = _format_prazo_short(ed.get("dias_restantes"))
 
@@ -2196,7 +2208,7 @@ def _build_overview_table(editais_list: list, styles: dict, start_idx: int = 1) 
         ov_link = _fix_pncp_link(ed.get("link", ""))
         if ov_link and ov_link.startswith("http"):
             objeto_orgao = (
-                f'<a href="{ov_link}" color="{INK.hexval()}"><b>{objeto}</b></a>'
+                f'<a href="{ov_link}" color="{LINK_BLUE.hexval()}"><b>{objeto}</b></a>'
                 f'<br/><font size=\'7\' color=\'{TEXT_MUTED.hexval()}\'>{orgao}</font>'
             )
         else:
@@ -2311,7 +2323,7 @@ def _build_detailed_analysis(data: dict, styles: dict, sec: dict | None = None, 
         link = _fix_pncp_link(ed.get("link", ""))
         title_text = f"<b>{num}.{idx}.</b>  {objeto}"
         if link and link.startswith("http"):
-            title_text = f'<b>{num}.{idx}.</b>  <a href="{link}" color="{INK.hexval()}">{objeto}</a>'
+            title_text = f'<b>{num}.{idx}.</b>  <a href="{link}" color="{LINK_BLUE.hexval()}">{objeto}</a>'
         header_block.append(Paragraph(
             title_text,
             styles["h2"],
@@ -2358,8 +2370,8 @@ def _build_detailed_analysis(data: dict, styles: dict, sec: dict | None = None, 
             else:
                 qualif = "Baixa"
             strategic_bar_parts.append(f"Viabilidade: {score}/100 ({qualif})")
-        if isinstance(wp, dict) and wp.get("probability", 0) > 0:
-            strategic_bar_parts.append(f"Prob. vitória: {_pct(wp['probability'])}")
+        if isinstance(wp, dict) and (wp.get("probability", 0) > 0 or wp.get("n_unique_suppliers", 0) > 0):
+            strategic_bar_parts.append(f"Concorrência: {_friendly_competition_text(wp.get('probability', 0), wp)}")
         if isinstance(roi, dict) and roi.get("roi_max", 0) > 0:
             strategic_bar_parts.append(f"Resultado potencial: até {_currency_short(roi['roi_max'])}")
         if ed.get("strategic_category"):
@@ -2414,7 +2426,7 @@ def _build_detailed_analysis(data: dict, styles: dict, sec: dict | None = None, 
             raw_fields.append(("Município (IBGE)", " · ".join(ibge_parts)))
         link = _fix_pncp_link(ed.get("link", ""))
         if link and link != "N/I" and link.startswith("http"):
-            raw_fields.append(("Link", f'<a href="{link}" color="{TEXT_SECONDARY.hexval()}">{link}</a>'))
+            raw_fields.append(("Link", f'<a href="{link}" color="{LINK_BLUE.hexval()}">{link}</a>'))
 
         for label, value in raw_fields:
             if value and str(value).strip() and value != "N/I" and value != " — N/I" and str(value) != "None":
@@ -2677,7 +2689,7 @@ def _build_detailed_analysis(data: dict, styles: dict, sec: dict | None = None, 
                 el.append(Paragraph(
                     f"<font color='{SIGNAL_GREEN.hexval()}'><b>ROBUSTA</b></font>"
                     f"<font size='8' color='{TEXT_SECONDARY.hexval()}'>"
-                    f" — Score {sensitivity.get('original_score', '')} "
+                    f" — Viabilidade {sensitivity.get('original_score', '')} "
                     f"(faixa {score_range[0]}–{score_range[1]})"
                     f"</font>",
                     styles["body_small"],
@@ -2690,7 +2702,7 @@ def _build_detailed_analysis(data: dict, styles: dict, sec: dict | None = None, 
                     f"<font color='{SIGNAL_AMBER.hexval()}'><b>FRÁGIL</b></font>"
                     f"<font size='8' color='{TEXT_SECONDARY.hexval()}'>"
                     f"{fragil_detail}"
-                    f" — Score {sensitivity.get('original_score', '')} "
+                    f" — Viabilidade {sensitivity.get('original_score', '')} "
                     f"(faixa {score_range[0]}–{score_range[1]})"
                     f"</font>",
                     styles["body_small"],
@@ -2754,7 +2766,7 @@ def _build_detailed_analysis(data: dict, styles: dict, sec: dict | None = None, 
             Paragraph("Objeto / Órgão", styles["cell_header"]),
             Paragraph("UF", styles["cell_header_center"]),
             Paragraph("Valor", styles["cell_header_right"]),
-            Paragraph("Score", styles["cell_header_center"]),
+            Paragraph("Viabilidade", styles["cell_header_center"]),
             Paragraph("Recomendação", styles["cell_header"]),
         ]
         ov_rows = [ov_header]
@@ -2766,7 +2778,7 @@ def _build_detailed_analysis(data: dict, styles: dict, sec: dict | None = None, 
             objeto_orgao_ov = f"<b>{_trunc(objeto_ov, 120)}</b><br/><font size='7' color='{TEXT_MUTED.hexval()}'>{_trunc(orgao_ov, 60)}</font>"
             link_ov = _fix_pncp_link(ed.get("link", ""))
             if link_ov and link_ov.startswith("http"):
-                objeto_orgao_ov = f'<a href="{link_ov}" color="{INK.hexval()}"><b>{_trunc(objeto_ov, 120)}</b></a><br/><font size=\'7\' color=\'{TEXT_MUTED.hexval()}\'>{_trunc(orgao_ov, 60)}</font>'
+                objeto_orgao_ov = f'<a href="{link_ov}" color="{LINK_BLUE.hexval()}"><b>{_trunc(objeto_ov, 120)}</b></a><br/><font size=\'7\' color=\'{TEXT_MUTED.hexval()}\'>{_trunc(orgao_ov, 60)}</font>'
             score_color = SIGNAL_GREEN if score >= 60 else (SIGNAL_AMBER if score >= 30 else SIGNAL_RED)
             ov_rows.append([
                 Paragraph(f"<b>{idx}</b>", styles["cell_center"]),
@@ -2942,7 +2954,7 @@ def _build_prioritization(data: dict, styles: dict, sec: dict | None = None) -> 
         Paragraph("Rank", styles["cell_header_center"]),
         Paragraph("Edital", styles["cell_header"]),
         Paragraph("Viab.", styles["cell_header_center"]),
-        Paragraph("Prob.", styles["cell_header_center"]),
+        Paragraph("Concorrência", styles["cell_header_center"]),
         Paragraph("Resultado", styles["cell_header_right"]),
         Paragraph("Ação Imediata", styles["cell_header"]),
     ]
@@ -2952,7 +2964,7 @@ def _build_prioritization(data: dict, styles: dict, sec: dict | None = None) -> 
         obj = _trunc(_s(ed.get("objeto", "")), 150)
         pri_link = _fix_pncp_link(ed.get("link", ""))
         if pri_link and pri_link.startswith("http"):
-            obj = f'<a href="{pri_link}" color="{INK.hexval()}">{obj}</a>'
+            obj = f'<a href="{pri_link}" color="{LINK_BLUE.hexval()}">{obj}</a>'
         dias = ed.get("dias_restantes")
         urgency = f"({_format_prazo_short(dias)})" if dias is not None else ""
 
@@ -2973,7 +2985,7 @@ def _build_prioritization(data: dict, styles: dict, sec: dict | None = None) -> 
                 ParagraphStyle(f"pri_v_{rank}", parent=styles["cell_center"],
                                fontName="Helvetica-Bold", textColor=score_color),
             ),
-            Paragraph(_pct(prob), styles["cell_center"]),
+            Paragraph(_friendly_competition_text(prob, wp), styles["cell_center"]),
             Paragraph(_currency_short(roi_max), styles["cell_right"]),
             Paragraph(action, styles["cell"]),
         ])
@@ -3017,7 +3029,7 @@ def _build_development_path(data: dict, styles: dict, sec: dict | None = None) -
         obj = _trunc(_s(ed.get("objeto", "")), 150)
         dev_link = _fix_pncp_link(ed.get("link", ""))
         if dev_link and dev_link.startswith("http"):
-            obj = f'<a href="{dev_link}" color="{INK.hexval()}">{obj}</a>'
+            obj = f'<a href="{dev_link}" color="{LINK_BLUE.hexval()}">{obj}</a>'
         justif = _s(ed.get("justificativa", ""))
         valor = _currency_short(ed.get("valor_estimado"))
 
@@ -3528,7 +3540,7 @@ def _build_portfolio_section(data: dict, styles: dict, sec: dict | None = None) 
             obj = _s((ed.get("objeto") or "")[:100])
             qw_link = _fix_pncp_link(ed.get("link", ""))
             if qw_link and qw_link.startswith("http"):
-                obj = f'<a href="{qw_link}" color="{INK.hexval()}">{obj}</a>'
+                obj = f'<a href="{qw_link}" color="{LINK_BLUE.hexval()}">{obj}</a>'
             el.append(Paragraph(
                 f"<b>{idx}.</b> {obj} — Prob. {_pct(prob)}, Valor {_currency(valor)}",
                 styles["body_small"],
@@ -4187,7 +4199,7 @@ def _build_annex_nao_recomendado(data: dict, styles: dict, sec: dict) -> list:
         # Make object clickable
         obj_text = f'{mun}/{uf} — {obj}'
         if link and link.startswith("http"):
-            obj_text = f'<a href="{link}" color="{TEXT_SECONDARY.hexval()}">{obj_text}</a>'
+            obj_text = f'<a href="{link}" color="{LINK_BLUE.hexval()}">{obj_text}</a>'
 
         rows.append([
             Paragraph(f"<b>{idx}</b>", styles["cell_center"]),
@@ -4610,6 +4622,28 @@ def generate_report_b2g(data: dict) -> BytesIO:
 
 
 
+def _friendly_cluster_label(raw):
+    """Translate internal cluster keys to user-friendly labels."""
+    if not raw or (isinstance(raw, str) and raw.startswith("_")):
+        return "Atividade Diversificada"
+    return raw
+
+
+def _friendly_competition_text(prob, wp):
+    """Convert probability + supplier count into a user-friendly competition label."""
+    n_suppliers = (wp.get("n_unique_suppliers", 0) if isinstance(wp, dict) else 0)
+    if n_suppliers > 0:
+        return f"~{n_suppliers} concorrentes"
+    prob_val = float(prob) if prob else 0
+    prob_pct = prob_val * 100
+    if prob_pct < 5:
+        return "Alta concorrência"
+    elif prob_pct < 15:
+        return "Concorrência moderada"
+    else:
+        return "Baixa concorrência"
+
+
 def _clean_excel_str(s: str) -> str:
     """Remove illegal XML characters that openpyxl rejects."""
     import re
@@ -4630,8 +4664,8 @@ def generate_excel_companion(data: dict, output_path: str) -> None:
     ws.title = "Oportunidades"
 
     # Headers
-    headers = ["#", "Recomendação", "Score", "Município", "UF", "Objeto",
-               "Valor Estimado", "Modalidade", "Prazo (dias)", "Probabilidade (%)",
+    headers = ["#", "Recomendação", "Viabilidade", "Município", "UF", "Objeto",
+               "Valor Estimado", "Modalidade", "Prazo (dias)", "Concorrência",
                "ROI Mín (R$)", "ROI Máx (R$)", "Distância (km)", "Cluster",
                "Justificativa", "Link PNCP"]
 
@@ -4677,11 +4711,11 @@ def generate_excel_companion(data: dict, output_path: str) -> None:
             ed.get("valor_estimado", 0),
             _clean_excel_str(ed.get("modalidade", "")),
             ed.get("dias_restantes", ""),
-            round(prob * 100, 1) if prob else "",
+            _friendly_competition_text(prob, wp),
             roi.get("roi_min", "") if isinstance(roi, dict) else "",
             roi.get("roi_max", "") if isinstance(roi, dict) else "",
             round(dist_km, 0) if dist_km else "",
-            _clean_excel_str(ed.get("_cluster_origin", "")),
+            _clean_excel_str(_friendly_cluster_label(ed.get("_cluster_origin", ""))),
             _clean_excel_str(ed.get("justificativa", "")),
             _clean_excel_str(ed.get("link", "")),
         ]

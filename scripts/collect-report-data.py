@@ -142,7 +142,7 @@ MODALIDADES_SERVICOS = {4, 5, 6, 7}            # Concorrências + Pregões (remo
 
 PNCP_MAX_PAGE_SIZE = 50
 PNCP_MAX_PAGES = 10
-PNCP_MAX_PAGES_UF = 20  # Per-UF queries: more pages since results are focused
+PNCP_MAX_PAGES_UF = 40  # Per-UF: 40 pages × 50 = 2000 items (exhaustive for single UF)
 PCP_PAGE_SIZE = 10
 PCP_MAX_PAGES = 20
 
@@ -1752,16 +1752,20 @@ def extract_ufs_from_contracts(
     if not uf_counts:
         return ([uf_sede] if uf_sede else []), {"uf_sede": uf_sede, "counts": {uf_sede: 0} if uf_sede else {}, "source": "fallback_sede"}
 
-    # Adaptive min_contracts threshold (like keywords)
+    # Include ALL UFs where the company ever operated (at least 1 contract).
+    # Only apply frequency threshold when there are many UFs to prevent scatter.
     n_total = sum(uf_counts.values())
-    if n_total <= 5:
+    if len(uf_counts) <= 10:
+        # 10 or fewer UFs — include ALL of them (every UF matters)
+        effective_min = 1
+    elif n_total <= 5:
         effective_min = 1
     elif n_total <= 20:
-        effective_min = 2
+        effective_min = 1  # Even 1 contract signals presence
     else:
-        effective_min = min(10, max(min_contracts, n_total // 100))  # ~1% prevalence, cap at 10
+        effective_min = min(3, max(1, n_total // 100))  # ~1% prevalence, floor at 1, cap at 3
 
-    # Filter UFs with enough contracts, sorted by count descending
+    # All UFs with at least effective_min contracts, sorted by count descending
     qualified = sorted(
         [(uf, cnt) for uf, cnt in uf_counts.items() if cnt >= effective_min],
         key=lambda x: -x[1],
@@ -3296,6 +3300,7 @@ def _search_pncp_single(
             if uf_filter:
                 print(f"      UF {uf_filter}:")
 
+            items = []  # Initialize for pagination exhaustion check after loop
             for page in range(1, max_pages + 1):
                 params = {
                     "dataInicial": data_inicial,
@@ -3340,6 +3345,16 @@ def _search_pncp_single(
 
                 time.sleep(0.5)  # Rate limiting
 
+            # After the page loop for this uf_filter, check if we hit the page cap
+            if page == max_pages and isinstance(items, list) and len(items) == PNCP_MAX_PAGE_SIZE:
+                uf_label_warn = f" UF={uf_filter}" if uf_filter else ""
+                print(f"    ⚠ PAGINAÇÃO EXAUSTIVA: Modalidade {mod_code}{uf_label_warn} atingiu "
+                      f"{max_pages} páginas ({max_pages * PNCP_MAX_PAGE_SIZE} items) — "
+                      f"podem existir editais não capturados. Considerar --dias menor ou UF mais específica.")
+                source_meta.setdefault("pagination_warnings", []).append(
+                    f"mod={mod_code}{uf_label_warn}: {max_pages} pages exhausted"
+                )
+
     source_meta["total_filtered"] = len(all_editais)
     return all_editais, source_meta
 
@@ -3374,7 +3389,7 @@ def _fetch_pncp_pages_cached(
     data_final: str,
     raw_cache: dict[tuple[int, int, str], list[dict] | None],
     uf_filter: str | None = None,
-) -> tuple[list[dict], int, int]:
+) -> tuple[list[dict], int, int, bool]:
     """Fetch all pages for a single modalidade (optionally per-UF), using raw_cache.
 
     Cache key is (mod_code, page, uf_filter or "ALL"). When uf_filter is set,
@@ -3382,7 +3397,7 @@ def _fetch_pncp_pages_cached(
     PNCP doesn't filter by keyword server-side, so results for the same
     (mod, page, uf) are identical regardless of which cluster requests them.
 
-    Returns (all_items, pages_fetched, errors).
+    Returns (all_items, pages_fetched, errors, pagination_exhausted).
     A cached entry of None means the page was previously fetched and returned no/error data
     (sentinel to avoid re-fetching).
     """
@@ -3453,7 +3468,9 @@ def _fetch_pncp_pages_cached(
 
         time.sleep(0.5)  # Rate limiting
 
-    return all_items, pages_fetched, errors
+    pagination_exhausted = (page == max_pages and len(all_items) > 0 and
+                            len(all_items) % PNCP_MAX_PAGE_SIZE == 0)
+    return all_items, pages_fetched, errors, pagination_exhausted
 
 
 def collect_pncp_multi_cluster(
@@ -3506,13 +3523,16 @@ def collect_pncp_multi_cluster(
         for uf_filter in uf_iterations:
             if uf_filter:
                 print(f"      UF {uf_filter}:")
-            items, pf, errs = _fetch_pncp_pages_cached(
+            items, pf, errs, exhausted = _fetch_pncp_pages_cached(
                 api, mod_code, data_inicial, data_final, raw_cache,
                 uf_filter=uf_filter,
             )
             mod_items.extend(items)
             total_pages_fetched += pf
             total_errors += errs
+            if exhausted:
+                uf_label_warn = f" UF={uf_filter}" if uf_filter else ""
+                print(f"    ⚠ PAGINAÇÃO: mod={mod_code}{uf_label_warn} atingiu limite de páginas")
         raw_by_mod[mod_code] = mod_items
 
     total_raw = sum(len(items) for items in raw_by_mod.values())
@@ -7793,6 +7813,10 @@ def assemble_report_data(
                 "brasilapi": _brasilapi.get("_source", _source_tag("UNAVAILABLE")),
                 "ibge": _source_tag("API", f"{len([d for d in _ibge_data.values() if d.get('populacao')])} municipios") if _ibge_data else _source_tag("UNAVAILABLE", "Skipped"),
             },
+            "coverage": {
+                "ufs_searched": ufs_meta.get("ufs", list(ufs_meta.get("counts", {}).keys())) if ufs_meta else [],
+                "ufs_source": ufs_meta.get("source", "unknown") if ufs_meta else "unknown",
+            },
         },
         "empresa": empresa_full,
         "setor": setor,
@@ -8124,6 +8148,10 @@ Examples:
             print(f"  UFs: {', '.join(ufs)} (sede — sem histórico)")
     if not ufs:
         print("  UFs: todas (sem filtro)")
+    else:
+        print(f"  📍 Cobertura geográfica: {len(ufs)} UF(s) — {', '.join(ufs)}")
+        if len(ufs) > 5:
+            print(f"     (>5 UFs: busca nacional com filtro client-side — considerar --ufs para focar)")
 
     # F40: Check global timeout before expensive phases
     if _TIMEOUT_REACHED:

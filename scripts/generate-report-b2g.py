@@ -34,6 +34,7 @@ try:
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.lib.units import cm, mm
     from reportlab.pdfgen import canvas as pdfgen_canvas
+    from reportlab.graphics.shapes import Drawing, Rect, String, Polygon
     from reportlab.platypus import (
         KeepTogether,
         PageBreak,
@@ -1379,6 +1380,230 @@ def _build_decision_table(data: dict, styles: dict, sec: dict) -> list:
     return el
 
 
+# ============================================================
+# GAP-1: SCORE DECOMPOSITION VISUAL (5D Horizontal Bars)
+# ============================================================
+
+def _build_score_decomposition(risk_score: dict) -> list:
+    """Build 5-dimension score decomposition as horizontal bars.
+
+    Shows: Habilitacao, Financeiro, Geografico, Prazo, Competitivo
+    Each as a labeled horizontal bar (0-100) with the score value.
+    Total score shown prominently above.
+
+    Returns list of reportlab flowables.
+    """
+    if not isinstance(risk_score, dict) or not risk_score.get("total"):
+        return []
+
+    total = _safe_int(risk_score.get("total", 0))
+    if total <= 0:
+        return []
+
+    dimensions = [
+        ("Habilitacao", "habilitacao", "hab", 0.30),
+        ("Financeiro", "financeiro", "fin", 0.25),
+        ("Geografico", "geografico", "geo", 0.20),
+        ("Prazo", "prazo", "prazo", 0.15),
+        ("Competitivo", "competitivo", "comp", 0.10),
+    ]
+
+    weights = risk_score.get("weights", {})
+
+    # Drawing dimensions
+    label_width = 110
+    bar_max_width = 200
+    value_width = 40
+    drawing_width = label_width + bar_max_width + value_width + 10
+    row_height = 14
+    row_gap = 3
+    total_header_height = 22
+    n_dims = len(dimensions)
+    drawing_height = total_header_height + n_dims * (row_height + row_gap) + 5
+
+    d = Drawing(drawing_width, drawing_height)
+
+    # Total score — large bold number at top
+    if total >= 60:
+        total_color = SIGNAL_GREEN
+    elif total >= 30:
+        total_color = SIGNAL_AMBER
+    else:
+        total_color = SIGNAL_RED
+
+    # Colored circle behind total score
+    from reportlab.graphics.shapes import Circle
+    d.add(Circle(15, drawing_height - 12, 10, fillColor=total_color, strokeColor=None, fillOpacity=0.15))
+    d.add(String(15, drawing_height - 17, str(total),
+                 fontSize=14, fontName="Helvetica-Bold", fillColor=total_color, textAnchor="middle"))
+    d.add(String(32, drawing_height - 14, "/100",
+                 fontSize=8, fontName="Helvetica", fillColor=TEXT_MUTED))
+    d.add(String(60, drawing_height - 14, "Compatibilidade",
+                 fontSize=8, fontName="Helvetica", fillColor=TEXT_SECONDARY))
+
+    # Dimension bars
+    y_start = drawing_height - total_header_height - row_height
+    for i, (label, key, weight_key, default_weight) in enumerate(dimensions):
+        y = y_start - i * (row_height + row_gap)
+        val = _safe_int(risk_score.get(key, 0))
+        peso = weights.get(weight_key, default_weight)
+        peso_pct = int(peso * 100) if peso else int(default_weight * 100)
+
+        # Label with weight
+        label_text = f"{_restore_accents(label)} ({peso_pct}%)"
+        d.add(String(0, y + 2, label_text,
+                     fontSize=7, fontName="Helvetica", fillColor=TEXT_SECONDARY))
+
+        # Bar background (light gray)
+        bar_x = label_width
+        d.add(Rect(bar_x, y, bar_max_width, row_height,
+                   fillColor=colors.HexColor("#ECEEF1"), strokeColor=None))
+
+        # Filled bar (colored by score)
+        if val >= 70:
+            bar_color = SIGNAL_GREEN
+        elif val >= 40:
+            bar_color = SIGNAL_AMBER
+        else:
+            bar_color = SIGNAL_RED
+
+        fill_width = max(1, (val / 100.0) * bar_max_width)
+        d.add(Rect(bar_x, y, fill_width, row_height,
+                   fillColor=bar_color, strokeColor=None, fillOpacity=0.7))
+
+        # Score value on the right
+        d.add(String(bar_x + bar_max_width + 5, y + 2, str(val),
+                     fontSize=8, fontName="Helvetica-Bold", fillColor=TEXT_COLOR))
+
+    return [d, Spacer(1, 2 * mm)]
+
+
+# ============================================================
+# GAP-6: RISK BAROMETER (Traffic Light Gauge)
+# ============================================================
+
+def _build_risk_barometer(risk_score: dict) -> list:
+    """Build a compact risk barometer (traffic light style).
+
+    Shows a horizontal gauge with 3 zones:
+    - Green (0-33%): 'Baixo Risco'
+    - Amber (34-66%): 'Risco Moderado'
+    - Red (67-100%): 'Alto Risco'
+
+    With a triangle marker showing the edital's inverted risk position.
+    risk_level = 100 - total_score (higher total = lower risk)
+
+    Returns list of reportlab flowables.
+    """
+    if not isinstance(risk_score, dict) or not risk_score.get("total"):
+        return []
+
+    total = _safe_int(risk_score.get("total", 0))
+    if total <= 0:
+        return []
+
+    risk_level = 100 - total  # invert: high score = low risk
+    gauge_width = 350
+    gauge_height = 12
+    drawing_height = 38
+    d = Drawing(gauge_width + 10, drawing_height)
+
+    zone_width = gauge_width / 3.0
+    y_bar = 16
+
+    # Three colored zones
+    d.add(Rect(0, y_bar, zone_width, gauge_height,
+               fillColor=colors.HexColor("#D4EDDA"), strokeColor=None))  # green zone
+    d.add(Rect(zone_width, y_bar, zone_width, gauge_height,
+               fillColor=colors.HexColor("#FFF3CD"), strokeColor=None))  # amber zone
+    d.add(Rect(zone_width * 2, y_bar, zone_width, gauge_height,
+               fillColor=colors.HexColor("#F8D7DA"), strokeColor=None))  # red zone
+
+    # Zone labels below bar
+    d.add(String(zone_width * 0.5, 4, "Baixo Risco",
+                 fontSize=6, fontName="Helvetica", fillColor=SIGNAL_GREEN, textAnchor="middle"))
+    d.add(String(zone_width * 1.5, 4, "Risco Moderado",
+                 fontSize=6, fontName="Helvetica", fillColor=SIGNAL_AMBER, textAnchor="middle"))
+    d.add(String(zone_width * 2.5, 4, "Alto Risco",
+                 fontSize=6, fontName="Helvetica", fillColor=SIGNAL_RED, textAnchor="middle"))
+
+    # Triangle marker at risk_level position
+    marker_x = (risk_level / 100.0) * gauge_width
+    marker_x = max(4, min(marker_x, gauge_width - 4))  # clamp
+    tri_size = 5
+    d.add(Polygon(
+        points=[marker_x, y_bar + gauge_height + tri_size + 1,
+                marker_x - tri_size, y_bar + gauge_height + tri_size * 2 + 1,
+                marker_x + tri_size, y_bar + gauge_height + tri_size * 2 + 1],
+        fillColor=INK, strokeColor=None,
+    ))
+
+    return [d, Spacer(1, 2 * mm)]
+
+
+# ============================================================
+# HARD-004: ALERT BADGES
+# ============================================================
+
+def _build_alert_badges(alertas: list, styles: dict) -> list:
+    """Build alert badges for an edital's critical alerts.
+
+    Each alert rendered as a colored inline badge:
+    - ALTA severity: Red marker + text
+    - MEDIA severity: Amber marker + text
+    - INFO/other: Muted marker + text
+
+    Returns list of reportlab flowables (Paragraph with inline markup).
+    """
+    if not alertas:
+        return []
+
+    badge_parts = []
+    for alerta in alertas[:4]:
+        tipo = alerta.get("tipo", "")
+        sev = alerta.get("severidade", "MEDIA")
+        desc = alerta.get("descricao", "")
+
+        if sev == "ALTA":
+            color = SIGNAL_RED
+            marker = "&#x25A0;"  # filled square
+        elif sev == "MEDIA":
+            color = SIGNAL_AMBER
+            marker = "&#x25A0;"
+        else:
+            color = TEXT_SECONDARY
+            marker = "&#x25A1;"  # hollow square
+
+        # Short label from tipo
+        label = {
+            "CAT_REQUIRED": "Requer CAT",
+            "CAPITAL_LIMITROFE": "Capital limítrofe",
+            "PRAZO_CRITICO": "Prazo crítico",
+            "CAPITAL_INSUFICIENTE": "Capital insuficiente",
+            "SANCAO_ATIVA": "Sancao ativa",
+            "ACERVO_PARCIAL": "Acervo parcial",
+            "CNAE_INCOMPATIVEL": "CNAE incompatível",
+            "FISCAL_RISCO": "Risco fiscal",
+        }.get(tipo, tipo.replace("_", " ").title() if tipo else _trunc(desc, 30))
+
+        badge_parts.append(
+            f"<font color='{color.hexval()}'>{marker}</font> "
+            f"<font color='{color.hexval()}'><b>{_restore_accents(label)}</b></font>"
+        )
+
+    if not badge_parts:
+        return []
+
+    return [Paragraph(
+        " &nbsp;&nbsp; ".join(badge_parts),
+        ParagraphStyle(
+            "alert_badges", parent=styles["body"],
+            fontName="Helvetica-Bold", fontSize=8,
+            spaceBefore=1 * mm, spaceAfter=1.5 * mm,
+        ),
+    )]
+
+
 def _build_viability_text(risk: dict, styles: dict, _state: dict | None = None) -> list:
     """Build Compatibilidade indicator with score decomposition using sector-specific weights."""
     score = _safe_int(risk.get("total") if isinstance(risk, dict) else risk)
@@ -1558,7 +1783,14 @@ def _build_roi_text(roi: dict, ed: dict, styles: dict, _state: dict | None = Non
         return []
 
     roi_text = f"{_currency_short(roi_min)} — {_currency_short(roi_max)}"
-    prob_text = _pct(probability, 1) if probability else "N/I"
+    # HARD-005: Show probability range if available
+    wp = ed.get("win_probability", {}) or {}
+    prob_low = _safe_float(wp.get("probability_low", probability * 0.6 if probability else 0))
+    prob_high = _safe_float(wp.get("probability_high", min(probability * 1.5, 0.45) if probability else 0))
+    if prob_low != prob_high and probability:
+        prob_text = f"{_pct(prob_low, 1)}\u2013{_pct(prob_high, 1)} (base: {_pct(probability, 1)})"
+    else:
+        prob_text = _pct(probability, 1) if probability else "N/I"
     confidence = roi.get("confidence", "")
 
     conf_label = ""
@@ -2475,8 +2707,15 @@ def _build_detailed_analysis(data: dict, styles: dict, sec: dict | None = None, 
             strategic_bar_parts.append(f"Compatibilidade: {score}/100 ({qualif})")
         if isinstance(wp, dict) and (wp.get("probability", 0) > 0 or wp.get("n_unique_suppliers", 0) > 0):
             prob_val = wp.get("probability", 0)
+            # HARD-005: Show range instead of point estimate
+            prob_low = _safe_float(wp.get("probability_low", prob_val * 0.6))
+            prob_high = _safe_float(wp.get("probability_high", min(prob_val * 1.5, 0.45)))
+            if prob_low != prob_high and prob_val > 0:
+                prob_display = f"{_pct(prob_low)}\u2013{_pct(prob_high)}"
+            else:
+                prob_display = _pct(prob_val)
             strategic_bar_parts.append(
-                f"Competitividade Est.: {_pct(prob_val)} | {_friendly_competition_text(prob_val, wp)}"
+                f"Competitividade Est.: {prob_display} | {_friendly_competition_text(prob_val, wp)}"
             )
         if isinstance(roi, dict) and roi.get("roi_max", 0) > 0:
             strategic_bar_parts.append(f"Resultado potencial: até {_currency_short(roi['roi_max'])}")
@@ -4628,6 +4867,12 @@ def _build_edital_fichas(data: dict, styles: dict, sec: dict | None = None, _sta
         line_t = Table([["", ""]], colWidths=[avail, 0])
         line_t.setStyle(TableStyle([("LINEBELOW", (0, 0), (0, 0), 1.5, rec_color)]))
         ficha_block.append(line_t)
+
+        # HARD-004: Alert badges at top of ficha
+        alertas_criticos = ed.get("alertas_criticos", [])
+        if alertas_criticos:
+            ficha_block.extend(_build_alert_badges(alertas_criticos, styles))
+
         ficha_block.append(Spacer(1, 3 * mm))
 
         # === 1. O QUE E? ===
@@ -4765,6 +5010,14 @@ def _build_edital_fichas(data: dict, styles: dict, sec: dict | None = None, _sta
                                textColor=SIGNAL_AMBER, fontName="Helvetica-Oblique"),
             ))
         ficha_block.append(Spacer(1, 2 * mm))
+
+        # GAP-1: Score decomposition visual (5D horizontal bars)
+        if isinstance(risk, dict) and risk.get("total", 0) > 0:
+            ficha_block.extend(_build_score_decomposition(risk))
+
+        # GAP-6: Risk barometer (traffic light gauge)
+        if isinstance(risk, dict) and risk.get("total", 0) > 0:
+            ficha_block.extend(_build_risk_barometer(risk))
 
         # === 5. QUAIS OS RISCOS? ===
         ficha_block.append(Paragraph("<b>5. QUAIS OS RISCOS?</b>", styles["h3"]))

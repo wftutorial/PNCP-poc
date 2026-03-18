@@ -364,6 +364,50 @@ def validate(data: dict) -> dict:
                 "não geração de receita. Relatório DEVE comunicar isso explicitamente."
             )
 
+    # --- ACERVO CLASSIFICATION ---
+    acervo_nao_verificado = sum(1 for e in editais if e.get("acervo_status") == "NAO_VERIFICADO")
+    acervo_total = len([e for e in editais if "acervo_status" in e])
+    if acervo_total > 0 and acervo_nao_verificado / acervo_total > 0.8:
+        warnings.append(
+            f"ACERVO_MOSTLY_UNVERIFIED: {acervo_nao_verificado}/{acervo_total} editais com acervo "
+            f"não verificado — relatório deve alertar sobre risco de habilitação técnica."
+        )
+
+    # --- PRICE BENCHMARK COVERAGE ---
+    with_benchmark = sum(1 for e in editais if e.get("price_benchmark"))
+    if len(editais) > 5 and with_benchmark / len(editais) < 0.3:
+        info.append(
+            f"LOW_PRICE_BENCHMARK_COVERAGE: Apenas {with_benchmark}/{len(editais)} editais com "
+            f"benchmark de preço — análise comparativa de valores será limitada."
+        )
+
+    # --- WIN PROBABILITY SPREAD ---
+    probs_spread = [e.get("win_probability", {}).get("probability", 0) for e in editais if e.get("win_probability")]
+    if probs_spread:
+        spread = max(probs_spread) - min(probs_spread)
+        if spread < 10:
+            warnings.append(
+                f"LOW_PROBABILITY_SPREAD: Spread de probabilidade de {spread:.1f}pp — modelo pode "
+                f"estar insensível a diferenças entre editais. Verificar calibração."
+            )
+
+    # --- ALERTS COVERAGE ---
+    editais_with_alerts = sum(1 for e in editais if e.get("alertas_criticos"))
+    if len(editais) > 0 and editais_with_alerts == 0:
+        info.append(
+            "NO_ALERTS_GENERATED: Nenhum edital tem alertas críticos — verificar se "
+            "build_alertas_criticos() foi executado corretamente."
+        )
+
+    # --- HABILITACAO CHECKLIST ---
+    checklists = [e.get("habilitacao_analysis", {}).get("habilitacao_checklist_25", {}) for e in editais]
+    avg_coverage = sum(c.get("cobertura_pct", 0) for c in checklists if c) / max(len(checklists), 1)
+    if avg_coverage < 20:
+        info.append(
+            f"LOW_HABILITACAO_COVERAGE: Cobertura média do checklist de habilitação: "
+            f"{avg_coverage:.0f}% — análise de habilitação pode estar incompleta."
+        )
+
     # INFO items for new fields
     if strategic_thesis:
         info.append(f"THESIS: Posicionamento recomendado = {strategic_thesis.get('thesis', 'N/A')}")
@@ -587,6 +631,21 @@ def validate_post_enrichment(data: dict) -> dict:
 
             if total >= 0 and total < 20 and rec == "PARTICIPAR":
                 blocks.append(f"Edital {i}: PARTICIPAR com score {total} — provável erro")
+
+    # --- ALERTS IN JUSTIFICATIVA ---
+    for e in editais:
+        alertas = e.get("alertas_criticos", [])
+        justificativa = e.get("justificativa", "")
+        criticos = [a for a in alertas if a.get("severidade") == "CRITICO"]
+        if criticos and e.get("recomendacao") == "PARTICIPAR":
+            mentioned = sum(1 for a in criticos if a.get("tipo", "").lower() in justificativa.lower())
+            if mentioned < len(criticos):
+                edital_id = e.get("_id") or e.get("numero_controle_pncp") or "?"
+                warnings.append(
+                    f"CRITICAL_ALERTS_NOT_IN_JUSTIFICATIVA: Edital {edital_id}: "
+                    f"{len(criticos) - mentioned} alertas críticos não mencionados na justificativa "
+                    f"de recomendação PARTICIPAR."
+                )
 
     # Build verdict
     if blocks:

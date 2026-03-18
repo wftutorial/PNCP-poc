@@ -32,6 +32,7 @@ import re
 import sys
 import threading
 import time
+import statistics as _statistics
 import uuid
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
@@ -1194,6 +1195,101 @@ def collect_pncp_contratos_fornecedor(
 
     print(f"  PNCP contratos: {n} encontrados ({', '.join(f'{v} {k}' for k, v in by_esfera.items())})")
     return all_contracts, source
+
+
+# ============================================================
+# HARD-003: Acervo 3-Tier Classification (standalone, pre-enrichment)
+# ============================================================
+
+def classify_acervo_similarity(contratos: list[dict], editais: list[dict]) -> None:
+    """Classify portfolio contracts by similarity to each edital (in-place mutation).
+
+    Uses Jaccard similarity on normalized object tokens.
+    ALTA: Jaccard >= 0.50 or prefix match (first 4 words identical)
+    MÉDIA: Jaccard 0.30-0.49
+    BAIXA: Jaccard < 0.30
+
+    Adds to each edital:
+      - acervo_status: CONFIRMADO (>=1 ALTA) | PARCIAL (>=1 MÉDIA, 0 ALTA) | NAO_VERIFICADO (0 contracts or all BAIXA)
+      - acervo_similares_alta: int count
+      - acervo_similares_media: int count
+      - acervo_detalhes: list[dict] top 5 by similarity (contrato_objeto, similarity, tier, contrato_valor, contrato_data)
+    """
+    if not contratos:
+        for ed in editais:
+            ed["acervo_status"] = "NAO_VERIFICADO"
+            ed["acervo_similares_alta"] = 0
+            ed["acervo_similares_media"] = 0
+            ed["acervo_detalhes"] = []
+        return
+
+    for ed in editais:
+        edital_obj = ed.get("objeto", ed.get("objetoCompra", ""))
+        if not edital_obj:
+            ed["acervo_status"] = "NAO_VERIFICADO"
+            ed["acervo_similares_alta"] = 0
+            ed["acervo_similares_media"] = 0
+            ed["acervo_detalhes"] = []
+            continue
+
+        edital_tokens = _normalize_for_dedup(edital_obj)
+        edital_words = edital_obj.lower().split()[:4]
+        edital_prefix = " ".join(edital_words)
+
+        alta_count = 0
+        media_count = 0
+        all_matches: list[dict] = []
+
+        for c in contratos:
+            c_obj = (c.get("objeto") or "")
+            if not c_obj:
+                continue
+
+            c_tokens = _normalize_for_dedup(c_obj)
+            sim = _jaccard_similarity(edital_tokens, c_tokens)
+
+            # Prefix match: first 4 words identical
+            c_words = c_obj.lower().split()[:4]
+            c_prefix = " ".join(c_words)
+            prefix_match = len(edital_words) >= 4 and len(c_words) >= 4 and edital_prefix == c_prefix
+
+            if prefix_match or sim >= 0.50:
+                tier = "ALTA"
+                alta_count += 1
+                effective_sim = max(sim, 0.50) if prefix_match else sim
+            elif sim >= 0.30:
+                tier = "MÉDIA"
+                media_count += 1
+                effective_sim = sim
+            else:
+                tier = "BAIXA"
+                effective_sim = sim
+
+            if tier in ("ALTA", "MÉDIA"):
+                all_matches.append({
+                    "contrato_objeto": c_obj[:120],
+                    "similarity": round(effective_sim, 2),
+                    "tier": tier,
+                    "contrato_valor": _safe_float(c.get("valor")) or 0.0,
+                    "contrato_data": c.get("data_inicio") or c.get("data_assinatura") or c.get("data", ""),
+                })
+
+        # Sort by similarity descending, take top 5
+        all_matches.sort(key=lambda x: -x["similarity"])
+        acervo_detalhes = all_matches[:5]
+
+        # Determine status
+        if alta_count >= 1:
+            acervo_status = "CONFIRMADO"
+        elif media_count >= 1:
+            acervo_status = "PARCIAL"
+        else:
+            acervo_status = "NAO_VERIFICADO"
+
+        ed["acervo_status"] = acervo_status
+        ed["acervo_similares_alta"] = alta_count
+        ed["acervo_similares_media"] = media_count
+        ed["acervo_detalhes"] = acervo_detalhes
 
 
 # ============================================================
@@ -2850,11 +2946,139 @@ def compute_habilitacao_analysis(
 
     score = round(sum(dim_scores) / len(dim_scores)) if dim_scores else 50
 
+    # ================================================================
+    # GAP-2: Expanded 25-item habilitação checklist
+    # ================================================================
+    # Derive statuses from available data
+    cnpj_ativo = empresa.get("situacao_cadastral", "").upper() in ("ATIVA", "02", "2", "")
+    cnpj_obj_compat = True  # Assume compatible unless we have specific info
+
+    # Sanções
+    sancoes = empresa.get("sancoes", {})
+    has_ceis = bool(sancoes.get("ceis")) if isinstance(sancoes, dict) else False
+    has_cnep = bool(sancoes.get("cnep")) if isinstance(sancoes, dict) else False
+
+    # SICAF
+    sicaf_status_val = sicaf.get("status", "") if isinstance(sicaf, dict) else ""
+    sicaf_crc = sicaf.get("crc", {}) if isinstance(sicaf, dict) else {}
+    sicaf_ok = sicaf_status_val in ("CADASTRADO", "ATIVO") or sicaf_crc.get("status_cadastral") == "CADASTRADO"
+    sicaf_falhou = sicaf_status_val == "FALHA_COLETA"
+
+    # Capital
+    cap_ok = capital > 0 and valor > 0 and capital >= valor * min_pct
+    cap_status = "OK" if cap_ok else ("PENDENTE" if (capital > 0 and valor > 0) else "NAO_VERIFICADO")
+
+    # Acervo (from edital-level data if available)
+    edital_acervo = edital.get("acervo_status", "NAO_VERIFICADO")
+    acervo_op_status = "OK" if edital_acervo == "CONFIRMADO" else ("PENDENTE" if edital_acervo == "PARCIAL" else "NAO_VERIFICADO")
+
+    # CAT check from habilitacao requirements
+    has_certs = bool(reqs.get("certifications"))
+    cat_status = "NAO_VERIFICADO"
+    if has_certs:
+        cnae_principal = empresa.get("cnae_principal", "")
+        has_compatible_cnae = any(
+            cnae_prefix in str(cnae_principal)
+            for cnae_prefix in _CNAE_TO_SECTOR_KEY
+            if _CNAE_TO_SECTOR_KEY[cnae_prefix] == sector_key
+        )
+        cat_status = "OK" if has_compatible_cnae else "PENDENTE"
+
+    # Fiscal items from SICAF
+    sicaf_fiscal_status = "OK" if sicaf_ok else ("PENDENTE" if sicaf_falhou else "NAO_VERIFICADO")
+
+    checklist_25 = {
+        "juridica": [
+            {"item": "CNPJ ativo com objeto social compatível", "status": "OK" if cnpj_ativo else "PENDENTE",
+             "detalhe": f"Situação: {empresa.get('situacao_cadastral', 'não informada')}"},
+            {"item": "Contrato/estatuto social atualizado", "status": "NAO_VERIFICADO",
+             "detalhe": "Verificar no SICAF ou junta comercial"},
+            {"item": "Procuração do representante legal", "status": "NAO_VERIFICADO",
+             "detalhe": "Necessária para assinatura de proposta"},
+            {"item": "Alvará de funcionamento", "status": "NAO_VERIFICADO",
+             "detalhe": "Emitido pela prefeitura do município sede"},
+        ],
+        "fiscal": [
+            {"item": "CND Conjunta RFB/PGFN (Federal)", "status": sicaf_fiscal_status,
+             "detalhe": "Via SICAF" if sicaf_ok else ("Coleta SICAF falhou" if sicaf_falhou else "Emitir no site da RFB")},
+            {"item": "CND Estadual (ICMS)", "status": "NAO_VERIFICADO",
+             "detalhe": "Emitir na Secretaria da Fazenda do estado sede"},
+            {"item": "CND Municipal (ISS)", "status": "NAO_VERIFICADO",
+             "detalhe": "Emitir na prefeitura do município sede"},
+            {"item": "CRF/FGTS", "status": sicaf_fiscal_status,
+             "detalhe": "Via SICAF" if sicaf_ok else ("Coleta SICAF falhou" if sicaf_falhou else "Emitir no site da CEF")},
+            {"item": "CNDT (Certidão Negativa Débitos Trabalhistas)", "status": sicaf_fiscal_status,
+             "detalhe": "Via SICAF" if sicaf_ok else ("Coleta SICAF falhou" if sicaf_falhou else "Emitir no portal do TST")},
+            {"item": "Inscrição no cadastro de contribuintes", "status": "NAO_VERIFICADO",
+             "detalhe": "Estadual e/ou municipal conforme atividade"},
+            {"item": "SICAF ativo e regular", "status": "OK" if sicaf_ok else ("PENDENTE" if sicaf_falhou else "NAO_VERIFICADO"),
+             "detalhe": f"Status: {sicaf_status_val}" if sicaf_status_val else "Não consultado"},
+        ],
+        "tecnica": [
+            {"item": "Atestado de capacidade técnica operacional", "status": acervo_op_status,
+             "detalhe": f"Acervo: {edital_acervo}" if edital_acervo != "NAO_VERIFICADO" else "Verificar atestados de obras/serviços similares"},
+            {"item": "Atestado de capacidade técnica profissional", "status": "NAO_VERIFICADO",
+             "detalhe": "RT com experiência comprovada no objeto"},
+            {"item": "CAT/CREA ou RRT/CAU registrados", "status": cat_status,
+             "detalhe": f"CNAE compatível com setor" if cat_status == "OK" else "Verificar registro profissional"},
+            {"item": "Registro no conselho profissional", "status": "NAO_VERIFICADO",
+             "detalhe": "CREA, CAU, CRM, CRO conforme atividade"},
+            {"item": "Declaração de equipe técnica disponível", "status": "NAO_VERIFICADO",
+             "detalhe": "Vínculo dos profissionais com a empresa"},
+        ],
+        "economico_financeira": [
+            {"item": "Balanço patrimonial último exercício", "status": "NAO_VERIFICADO",
+             "detalhe": "Registrado na junta comercial"},
+            {"item": "Demonstrações contábeis", "status": "NAO_VERIFICADO",
+             "detalhe": "DRE e balanço do último exercício social"},
+            {"item": "Certidão negativa falência/recuperação judicial", "status": "NAO_VERIFICADO",
+             "detalhe": "Emitir no fórum da comarca sede"},
+            {"item": "Capital social mínimo compatível", "status": cap_status,
+             "detalhe": f"Capital {_fmt_brl(capital)} vs mínimo {_fmt_brl(valor * min_pct)}" if (capital > 0 and valor > 0) else "Dados insuficientes"},
+            {"item": "Patrimônio líquido compatível", "status": cap_status,
+             "detalhe": f"Estimado a partir do capital social ({_fmt_brl(capital)})" if capital > 0 else "Capital social não disponível"},
+        ],
+        "declaracoes": [
+            {"item": "Consulta CEIS (CGU)", "status": "PENDENTE" if has_ceis else "OK",
+             "detalhe": "Sanção ativa no CEIS" if has_ceis else "Sem registros no CEIS"},
+            {"item": "Consulta CNEP (CGU)", "status": "PENDENTE" if has_cnep else "OK",
+             "detalhe": "Penalidade registrada no CNEP" if has_cnep else "Sem registros no CNEP"},
+            {"item": "Lista de inidôneas TCU", "status": "NAO_VERIFICADO",
+             "detalhe": "Consultar portal do TCU"},
+            {"item": "Consulta TCE estadual", "status": "NAO_VERIFICADO",
+             "detalhe": "Consultar tribunal de contas do estado"},
+            {"item": "Declaração art. 7° CF (trabalho infantil)", "status": "NAO_VERIFICADO",
+             "detalhe": "Declaratório — elaborar conforme modelo do edital"},
+        ],
+    }
+
+    # Count totals
+    total_ok = 0
+    total_pendente = 0
+    total_nao_verificado = 0
+    for category_items in checklist_25.values():
+        if not isinstance(category_items, list):
+            continue
+        for item in category_items:
+            s = item.get("status", "")
+            if s == "OK":
+                total_ok += 1
+            elif s == "PENDENTE":
+                total_pendente += 1
+            else:
+                total_nao_verificado += 1
+
+    checklist_25["total_ok"] = total_ok
+    checklist_25["total_pendente"] = total_pendente
+    checklist_25["total_nao_verificado"] = total_nao_verificado
+    checklist_25["cobertura_pct"] = round(total_ok / 25 * 100, 1)
+
     return {
         "status": overall,
         "score": score,
         "dimensions": dimensions,
         "gaps": gaps,
+        "habilitacao_checklist_25": checklist_25,
         "_source": _source_tag("CALCULATED"),
     }
 
@@ -5553,16 +5777,20 @@ def compute_win_probability(
     # HARD-005: Expanded contextual multipliers for wider probability dispersion.
     # Target: ≥20pp spread between best and worst editais in a typical report.
     contextual_mult = 1.0
+    multipliers_applied: list[str] = []
 
     # Timeline impact (amplified range)
     dias = edital.get("dias_restantes")
     if dias is not None:
         if dias < 7:
-            contextual_mult *= 0.3   # <7 days: severe urgency (was 0.5)
+            contextual_mult *= 0.3   # <7 days: severe urgency
+            multipliers_applied.append(f"prazo_critico(×0.3, {dias}d)")
         elif dias < 15:
-            contextual_mult *= 0.65  # <15 days: reduced (was 0.75)
+            contextual_mult *= 0.6
+            multipliers_applied.append(f"prazo_curto(×0.6, {dias}d)")
         elif dias > 30:
-            contextual_mult *= 1.25  # >30 days: time advantage (NEW)
+            contextual_mult *= 1.3   # Comfortable timeline
+            multipliers_applied.append(f"prazo_confortavel(×1.3, {dias}d)")
 
     # Financial capacity impact (amplified range)
     capital = _safe_float(empresa.get("capital_social")) or 0.0
@@ -5570,40 +5798,65 @@ def compute_win_probability(
     if capital > 0 and valor > 0:
         cap_ratio = valor / (capital * 5)
         if cap_ratio > 5:
-            contextual_mult *= 0.3   # Extreme stretch (was 0.5)
+            contextual_mult *= 0.3   # Extreme stretch
+            multipliers_applied.append(f"capacidade_extrema(×0.3, ratio={cap_ratio:.1f})")
         elif cap_ratio > 2:
-            contextual_mult *= 0.6   # Significant stretch (was 0.7)
+            contextual_mult *= 0.6   # Significant stretch
+            multipliers_applied.append(f"capacidade_alta(×0.6, ratio={cap_ratio:.1f})")
         elif cap_ratio < 0.3:
-            contextual_mult *= 1.3   # Very comfortable (NEW)
+            contextual_mult *= 1.3   # Very comfortable
+            multipliers_applied.append(f"capacidade_folgada(×1.3, ratio={cap_ratio:.1f})")
         elif cap_ratio < 0.5:
-            contextual_mult *= 1.15  # Comfortable (NEW)
+            contextual_mult *= 1.15  # Comfortable
+            multipliers_applied.append(f"capacidade_ok(×1.15, ratio={cap_ratio:.1f})")
 
-    # Distance impact (NEW: applies to ALL modalities, amplified for presencial)
+        # HARD-005: Value adequacy sweet spot
+        raw_ratio = valor / capital if capital > 0 else 999
+        if 0.5 <= raw_ratio <= 3.0:
+            contextual_mult *= 1.2   # Sweet spot
+            multipliers_applied.append(f"valor_ideal(×1.2, v/c={raw_ratio:.1f})")
+        elif raw_ratio > 10:
+            contextual_mult *= 0.4   # Way over capacity
+            multipliers_applied.append(f"valor_excessivo(×0.4, v/c={raw_ratio:.1f})")
+
+    # Distance impact (applies to ALL modalities, amplified for presencial)
     dist = edital.get("distancia", {})
     km = dist.get("km") if isinstance(dist, dict) else None
     if km is not None:
         if km < 50:
-            contextual_mult *= 1.35   # Local advantage (NEW)
-        elif km < 100:
-            contextual_mult *= 1.15   # Regional proximity (NEW)
+            contextual_mult *= 1.4    # Local advantage
+            multipliers_applied.append(f"local(×1.4, {km:.0f}km)")
+        elif km < 200:
+            contextual_mult *= 1.1    # Regional proximity
+            multipliers_applied.append(f"regional(×1.1, {km:.0f}km)")
         elif km > 500:
-            contextual_mult *= 0.5    # Long distance penalty (NEW)
+            contextual_mult *= 0.5    # Long distance penalty
+            multipliers_applied.append(f"distante(×0.5, {km:.0f}km)")
         elif km > 300:
             contextual_mult *= 0.7    # Moderate distance penalty
+            multipliers_applied.append(f"moderado(×0.7, {km:.0f}km)")
         # Extra penalty for presencial + distant
         if "presencial" in modalidade and km > 200:
             contextual_mult *= 0.8
+            multipliers_applied.append(f"presencial_distante(×0.8, {km:.0f}km)")
 
-    # Acervo impact (NEW: confirmed acervo = demonstrable technical advantage)
-    acervo_status = (edital.get("risk_score") or {}).get("acervo_status", "NAO_VERIFICADO")
+    # HARD-005: Acervo bonus (uses edital-level acervo_status from HARD-003)
+    # Check both edital-level field (from classify_acervo_similarity) and risk_score field
+    acervo_status = edital.get("acervo_status") or (edital.get("risk_score") or {}).get("acervo_status", "NAO_VERIFICADO")
     if acervo_status == "CONFIRMADO":
-        contextual_mult *= 1.2   # Proven technical portfolio
+        contextual_mult *= 1.3   # Proven technical portfolio
+        multipliers_applied.append("acervo_confirmado(×1.3)")
+    elif acervo_status == "PARCIAL":
+        contextual_mult *= 1.1   # Partial match
+        multipliers_applied.append("acervo_parcial(×1.1)")
     elif acervo_status == "NAO_VERIFICADO":
         contextual_mult *= 0.8   # Risk of disqualification
+        multipliers_applied.append("acervo_nao_verificado(×0.8)")
 
-    # Incumbency amplification (NEW: replace additive bonus with multiplicative)
+    # Incumbency amplification (replace additive bonus with multiplicative)
     if incumbency_bonus > 0:
         contextual_mult *= 1.4   # Strong relationship signal
+        multipliers_applied.append("incumbente(×1.4)")
         incumbency_bonus = 0.0   # Absorbed into contextual_mult (avoid double-counting)
 
     # Final probability with confidence band
@@ -5611,14 +5864,19 @@ def compute_win_probability(
     final_prob = raw_prob * viability_factor * contextual_mult
     final_prob = max(0.01, min(0.45, final_prob))  # Capped at 45% (no customer relationship data)
 
-    # HARD-005: Compute probability range for confidence band display
-    prob_low = max(0.01, final_prob * 0.6)   # Pessimistic: 60% of point estimate
-    prob_high = min(0.45, final_prob * 1.5)  # Optimistic: 150% of point estimate
+    # HARD-005: Confidence band: ±30% of point estimate
+    prob_pct = round(final_prob * 100, 1)
+    prob_min = max(1.0, prob_pct * 0.7)
+    prob_max = min(60.0, prob_pct * 1.3)
+    confidence_band = f"{prob_min:.0f}%-{prob_max:.0f}%"
 
     result = {
         "probability": round(final_prob, 3),
-        "probability_low": round(prob_low, 3),
-        "probability_high": round(prob_high, 3),
+        "prob_min": round(prob_min, 1),
+        "prob_max": round(prob_max, 1),
+        "confidence_band": confidence_band,
+        "probability_low": round(final_prob * 0.7, 3),
+        "probability_high": min(0.60, round(final_prob * 1.3, 3)),
         "confidence": confidence,
         "base_rate": base_rate,
         "n_unique_suppliers": n_suppliers,
@@ -5631,6 +5889,7 @@ def compute_win_probability(
         "modality_multiplier": mod_mult,
         "viability_factor": round(viability_factor, 2),
         "contextual_multiplier": round(contextual_mult, 2),
+        "multipliers_applied": multipliers_applied,
         "_source": _source_tag("CALCULATED", f"{n_contracts} contratos{'(filtrados)' if sector_filtered else ''}, {n_suppliers} fornecedores"),
     }
     # F09: Include confidence_reason when unfiltered fallback was used
@@ -7611,13 +7870,16 @@ _HAB_DOC_LABELS: dict[str, str] = {
 def generate_proximos_passos(editais: list[dict], empresa: dict) -> dict:
     """Generate deterministic action plan from PARTICIPAR/AVALIAR editais.
 
-    Must be called AFTER assign_recommendations() and _compute_alertas_criticos().
+    HARD-006: Maps each action item to specific editais that require it.
+    Priority scoring: count_affected_editais x urgency_factor.
+    Must be called AFTER assign_recommendations() and build_alertas_criticos().
 
     Returns:
         {
             "acao_imediata": [...],        # <=7 days remaining
             "medio_prazo": [...],          # 8-21 days
             "desenvolvimento_estrategico": [...],  # 22-30 days
+            "desenvolvimento_plan": [...], # HARD-006: grouped by action category
             "checklist_habilitacao": [...],
             "_source": {...},
         }
@@ -7626,11 +7888,14 @@ def generate_proximos_passos(editais: list[dict], empresa: dict) -> dict:
         {
             "acao": str,
             "edital_ref": str,
+            "editais_afetados": list[str],
+            "prioridade": int,
+            "prazo_sugerido": str,
+            "categoria": str,
             "orgao": str,
             "valor": float,
             "prazo_proposta": str (DD/MM/YYYY),
             "dias_restantes": int,
-            "prioridade": "ALTA" | "MEDIA" | "NORMAL",
             "documentos_necessarios": list[str],
         }
     """
@@ -7639,6 +7904,9 @@ def generate_proximos_passos(editais: list[dict], empresa: dict) -> dict:
     desenvolvimento_estrategico: list[dict] = []
 
     target_recs = {"PARTICIPAR", "AVALIAR COM CAUTELA"}
+
+    # HARD-006: Track action categories across all editais for development plan
+    action_categories: dict[str, dict] = {}  # category -> {editais, min_dias, acao, ...}
 
     for ed in editais:
         rec = (ed.get("recomendacao") or "").upper()
@@ -7685,11 +7953,19 @@ def generate_proximos_passos(editais: list[dict], empresa: dict) -> dict:
         loc = f"{municipio}/{uf}" if municipio and uf else (uf or municipio)
 
         if dias <= 7:
-            prioridade = "ALTA"
+            prioridade_label = "ALTA"
         elif dias <= 14:
-            prioridade = "MEDIA"
+            prioridade_label = "MEDIA"
         else:
-            prioridade = "NORMAL"
+            prioridade_label = "NORMAL"
+
+        # HARD-006: Urgency factor for priority scoring
+        if dias <= 7:
+            urgency_factor = 3
+        elif dias <= 15:
+            urgency_factor = 2
+        else:
+            urgency_factor = 1
 
         # ROI gate
         roi = ed.get("roi_potential") or {}
@@ -7709,12 +7985,12 @@ def generate_proximos_passos(editais: list[dict], empresa: dict) -> dict:
         if hab_chk.get("cat_required") and not hab_chk.get("cat_available"):
             alertas.append("Atestado técnico (CAT) exigido e não verificado")
 
-        # Downgrade priority if alerts exist
+        # Downgrade priority label if alerts exist
         if alertas:
-            if prioridade == "ALTA":
-                prioridade = "MEDIA"
-            elif prioridade == "MEDIA":
-                prioridade = "NORMAL"
+            if prioridade_label == "ALTA":
+                prioridade_label = "MEDIA"
+            elif prioridade_label == "MEDIA":
+                prioridade_label = "NORMAL"
 
         acao_str = (
             f"{'⚡ URGENTE: ' if dias <= 3 else ''}"
@@ -7723,20 +7999,37 @@ def generate_proximos_passos(editais: list[dict], empresa: dict) -> dict:
             f" — {objeto_resumo}"
         )
 
+        # HARD-006: Determine categoria
+        acervo_status = ed.get("acervo_status") or (ed.get("risk_score") or {}).get("acervo_status", "NAO_VERIFICADO")
+        if acervo_status != "CONFIRMADO" and hab_chk.get("cat_required"):
+            categoria = "DOCUMENTACAO_TECNICA"
+        elif not hab_chk.get("capital_minimo_ok", True):
+            categoria = "ADEQUACAO_FINANCEIRA"
+        elif dias <= 7:
+            categoria = "PROPOSTA_URGENTE"
+        elif dias <= 15:
+            categoria = "PROPOSTA_PLANEJADA"
+        else:
+            categoria = "PREPARACAO_ESTRATEGICA"
+
         item = {
             "acao": acao_str,
             "edital_ref": edital_ref,
+            "editais_afetados": [edital_ref],
             "orgao": orgao,
             "uf": uf,
             "municipio": municipio,
             "valor": valor,
             "prazo_proposta": prazo_br,
             "dias_restantes": dias,
-            "prioridade": prioridade,
+            "prioridade": urgency_factor,  # HARD-006: numeric priority
+            "prioridade_label": prioridade_label,
             "recomendacao": rec,
             "link": ed.get("link") or "",
             "documentos_necessarios": docs_necessarios,
             "alertas": alertas,
+            "categoria": categoria,
+            "prazo_sugerido": prazo_br if prazo_br else f"{dias} dias",
         }
 
         if dias <= 7:
@@ -7746,10 +8039,43 @@ def generate_proximos_passos(editais: list[dict], empresa: dict) -> dict:
         else:
             desenvolvimento_estrategico.append(item)
 
-    # Sort each bucket by priority (ALTA first) then valor descending
-    _priority_order = {"ALTA": 0, "MEDIA": 1, "NORMAL": 2}
+        # HARD-006: Aggregate by action category for development plan
+        if categoria not in action_categories:
+            action_categories[categoria] = {
+                "editais_afetados": [],
+                "min_dias": dias,
+                "count": 0,
+                "max_urgency": urgency_factor,
+            }
+        cat_data = action_categories[categoria]
+        cat_data["editais_afetados"].append(edital_ref)
+        cat_data["count"] += 1
+        cat_data["min_dias"] = min(cat_data["min_dias"], dias)
+        cat_data["max_urgency"] = max(cat_data["max_urgency"], urgency_factor)
+
+    # Sort each bucket by priority (highest numeric first) then valor descending
     for bucket in (acao_imediata, medio_prazo, desenvolvimento_estrategico):
-        bucket.sort(key=lambda x: (_priority_order.get(x["prioridade"], 9), -(x["valor"] or 0)))
+        bucket.sort(key=lambda x: (-x["prioridade"], -(x["valor"] or 0)))
+
+    # HARD-006: Build development plan grouped by category
+    _CATEGORY_LABELS = {
+        "DOCUMENTACAO_TECNICA": "Preparar documentação técnica (CAT/atestados)",
+        "ADEQUACAO_FINANCEIRA": "Adequar capacidade financeira (capital/garantias)",
+        "PROPOSTA_URGENTE": "Elaborar propostas urgentes",
+        "PROPOSTA_PLANEJADA": "Elaborar propostas com prazo adequado",
+        "PREPARACAO_ESTRATEGICA": "Preparação estratégica de longo prazo",
+    }
+    desenvolvimento_plan: list[dict] = []
+    for cat_key, cat_data in action_categories.items():
+        priority_score = cat_data["count"] * cat_data["max_urgency"]
+        desenvolvimento_plan.append({
+            "acao": _CATEGORY_LABELS.get(cat_key, cat_key),
+            "editais_afetados": cat_data["editais_afetados"],
+            "prioridade": priority_score,
+            "prazo_sugerido": f"{cat_data['min_dias']} dias (edital mais próximo)",
+            "categoria": cat_key,
+        })
+    desenvolvimento_plan.sort(key=lambda x: -x["prioridade"])
 
     # ─── Checklist de habilitação (company-level, not per-edital) ────────────
     sicaf = empresa.get("sicaf") or {}
@@ -7799,6 +8125,7 @@ def generate_proximos_passos(editais: list[dict], empresa: dict) -> dict:
         "acao_imediata": acao_imediata,
         "medio_prazo": medio_prazo,
         "desenvolvimento_estrategico": desenvolvimento_estrategico,
+        "desenvolvimento_plan": desenvolvimento_plan,
         "checklist_habilitacao": checklist_habilitacao,
         "_total_editais_acionaveis": total_actionable,
         "_source": _source_tag(
@@ -7809,58 +8136,142 @@ def generate_proximos_passos(editais: list[dict], empresa: dict) -> dict:
     }
 
 
-def _compute_alertas_criticos(editais: list[dict]) -> None:
-    """HARD-004: Compute per-edital critical alerts for actionable presentation.
+def build_alertas_criticos(editais: list[dict], empresa: dict) -> None:
+    """HARD-004: Build critical alerts linked to specific editais (in-place).
 
-    Mutates each edital dict to add 'alertas_criticos' list.
+    Adds alertas_criticos: list[dict] to each edital.
+    Each alert: {tipo, severidade (CRITICO/ALERTA/INFO), descricao, acao_requerida, prazo_sugerido}
+
+    Alert types:
+    - CAT_REQUIRED: If habilitacao_analysis shows technical requirement unmet
+    - CAPITAL_LIMITROFE: If valor_estimado > 3x capital_social
+    - PRAZO_CRITICO: If dias_restantes <= 7
+    - SANCAO_ATIVA: If empresa has active sanctions
+    - SIMPLES_LIMITE: If empresa.simples and valor_estimado implies revenue > R$4.8M/year
+    - SETOR_DIVERGENTE: If gap_type == "ACERVO_SETOR_DIVERGENTE"
+    - FISCAL_RISK: If risk_score.fiscal_risk.nivel == "ALTO"
+    - DISTANCIA_ELEVADA: If distancia_km > 500
     """
+    capital = _safe_float(empresa.get("capital_social")) or 0.0
+    is_simples = bool(empresa.get("simples_nacional"))
+    _sancoes_raw = empresa.get("sancoes") if isinstance(empresa.get("sancoes"), dict) else {}
+    has_sancoes = any(
+        v for k, v in _sancoes_raw.items()
+        if k != "sancionada" and isinstance(v, (bool, int)) and v
+    )
+
     for ed in editais:
         alertas: list[dict] = []
         risk = ed.get("risk_score", {})
         qual_gap = ed.get("qualification_gap", {})
         rec = (ed.get("recomendacao") or "").upper()
+        valor = _safe_float(ed.get("valor_estimado")) or 0.0
+        dias = ed.get("dias_restantes")
 
         # Alert 1: Acervo/CAT verification needed
-        acervo_status = risk.get("acervo_status", "NAO_VERIFICADO")
+        acervo_status = ed.get("acervo_status") or risk.get("acervo_status", "NAO_VERIFICADO")
         if acervo_status != "CONFIRMADO" and rec in ("PARTICIPAR", "AVALIAR COM CAUTELA"):
             alertas.append({
                 "tipo": "CAT_REQUIRED",
+                "severidade": "CRITICO" if acervo_status == "NAO_VERIFICADO" else "ALERTA",
                 "descricao": "Verificação de atestados técnicos necessária",
-                "acao": f"Verificar acervo técnico compatível com: {(ed.get('objeto') or '')[:80]}",
-                "severidade": "ALTA" if acervo_status == "NAO_VERIFICADO" else "MEDIA",
+                "acao_requerida": f"Verificar acervo técnico compatível com: {(ed.get('objeto') or '')[:80]}",
+                "prazo_sugerido": "Antes da data de encerramento do edital",
             })
 
-        # Alert 2: Capital insuficiente (limítrofe)
-        fin_score = risk.get("financeiro", 100)
-        if fin_score <= 40 and rec in ("PARTICIPAR", "AVALIAR COM CAUTELA"):
+        # Alert 2: Capital insuficiente (limítrofe) — 3x threshold
+        if capital > 0 and valor > 0 and valor > 3 * capital:
             alertas.append({
                 "tipo": "CAPITAL_LIMITROFE",
-                "descricao": "Capacidade financeira limítrofe para o valor do edital",
-                "acao": "Avaliar consórcio ou carta de fiança bancária",
-                "severidade": "ALTA" if fin_score <= 20 else "MEDIA",
+                "severidade": "CRITICO" if valor > 5 * capital else "ALERTA",
+                "descricao": f"Valor estimado ({_fmt_brl(valor)}) supera {valor/capital:.0f}× o capital social ({_fmt_brl(capital)})",
+                "acao_requerida": "Avaliar consórcio, carta de fiança bancária ou aumento de capital",
+                "prazo_sugerido": "Antes da habilitação",
             })
 
         # Alert 3: Prazo crítico
-        dias = ed.get("dias_restantes")
         if dias is not None and dias <= 7 and rec in ("PARTICIPAR", "AVALIAR COM CAUTELA"):
             alertas.append({
                 "tipo": "PRAZO_CRITICO",
+                "severidade": "CRITICO",
                 "descricao": f"Apenas {dias} dia(s) restante(s) para submissão",
-                "acao": "Mobilizar equipe imediatamente — risco de perda por prazo",
-                "severidade": "ALTA",
+                "acao_requerida": "Mobilizar equipe imediatamente — risco de perda por prazo",
+                "prazo_sugerido": f"{dias} dia(s)",
             })
 
-        # Alert 4: Qualification gaps
+        # Alert 4: Sanção ativa
+        if has_sancoes:
+            alertas.append({
+                "tipo": "SANCAO_ATIVA",
+                "severidade": "CRITICO",
+                "descricao": "Empresa possui sanção ativa (CEIS/CNEP) — impedimento legal à participação",
+                "acao_requerida": "Verificar situação junto aos órgãos competentes antes de qualquer participação",
+                "prazo_sugerido": "Imediato",
+            })
+
+        # Alert 5: Simples Nacional revenue limit
+        if is_simples and valor > 4_800_000:
+            alertas.append({
+                "tipo": "SIMPLES_LIMITE",
+                "severidade": "ALERTA",
+                "descricao": f"Contrato de {_fmt_brl(valor)} pode ultrapassar o teto do Simples Nacional (R$ 4,8M/ano)",
+                "acao_requerida": "Avaliar impacto tributário e possível desenquadramento antes de participar",
+                "prazo_sugerido": "Antes da proposta",
+            })
+
+        # Alert 6: Setor divergente (from qualification gap)
         for gap in qual_gap.get("operational_gaps", []):
-            if gap.get("addressable") and gap.get("gap_type") not in ("ACERVO_EXISTENTE",):
+            if gap.get("gap_type") == "ACERVO_SETOR_DIVERGENTE":
+                alertas.append({
+                    "tipo": "SETOR_DIVERGENTE",
+                    "severidade": "ALERTA",
+                    "descricao": (gap.get("description") or "Setor do edital diverge do histórico da empresa")[:120],
+                    "acao_requerida": (gap.get("action_required") or "Verificar compatibilidade do objeto social")[:120],
+                    "prazo_sugerido": "Antes da habilitação",
+                })
+                break  # One alert per type
+
+        # Alert 7: Fiscal risk
+        fiscal_risk = risk.get("fiscal_risk", {})
+        if isinstance(fiscal_risk, dict) and fiscal_risk.get("nivel") == "ALTO":
+            alertas.append({
+                "tipo": "FISCAL_RISK",
+                "severidade": "ALERTA",
+                "descricao": "Risco fiscal elevado do município — possível atraso em pagamentos",
+                "acao_requerida": "Verificar histórico de pagamentos do órgão e considerar cláusulas de reajuste",
+                "prazo_sugerido": "Antes da proposta",
+            })
+
+        # Alert 8: Distância elevada
+        dist = ed.get("distancia", {})
+        dist_km = dist.get("km") if isinstance(dist, dict) else None
+        if dist_km is not None and dist_km > 500:
+            alertas.append({
+                "tipo": "DISTANCIA_ELEVADA",
+                "severidade": "ALERTA" if dist_km <= 800 else "CRITICO",
+                "descricao": f"Distância de {dist_km:.0f}km da sede — logística desafiadora",
+                "acao_requerida": "Avaliar custos de mobilização, hospedagem e deslocamento na composição de preços",
+                "prazo_sugerido": "Antes da proposta comercial",
+            })
+
+        # Alert 9: Remaining qualification gaps (addressable)
+        for gap in qual_gap.get("operational_gaps", []):
+            if gap.get("addressable") and gap.get("gap_type") not in ("ACERVO_EXISTENTE", "ACERVO_SETOR_DIVERGENTE"):
                 alertas.append({
                     "tipo": gap.get("gap_type", "GAP"),
-                    "descricao": (gap.get("description") or "")[:100],
-                    "acao": (gap.get("action_required") or "Verificar requisito")[:100],
-                    "severidade": "MEDIA",
+                    "severidade": "ALERTA",
+                    "descricao": (gap.get("description") or "")[:120],
+                    "acao_requerida": (gap.get("action_required") or "Verificar requisito")[:120],
+                    "prazo_sugerido": "Antes da habilitação",
                 })
 
         ed["alertas_criticos"] = alertas
+
+
+# Keep backward-compatible alias
+def _compute_alertas_criticos(editais: list[dict]) -> None:
+    """Legacy wrapper — delegates to build_alertas_criticos with empty empresa."""
+    build_alertas_criticos(editais, {})
 
 
 # ============================================================
@@ -8336,6 +8747,98 @@ def collect_price_benchmarks(editais: list[dict]) -> dict:
     print(f"  Editais com benchmark: {len(insights)}/{len(editais)}")
     print(f"  Desconto médio estimado: {avg_br}%")
     return result
+
+
+def compute_price_benchmark(editais: list[dict]) -> None:
+    """GAP-3: Compute price benchmarks from competitive intelligence data (in-place).
+
+    For each edital that has competitive_intel or competitive_intel_filtered:
+    - Compute min, median, max, count of historical contract values
+    - Compute suggested_range (25th-75th percentile)
+    - Add price_benchmark dict to edital
+
+    Fields added to each edital:
+      price_benchmark: {
+        min: float, median: float, max: float, count: int,
+        p25: float, p75: float,
+        suggested_range: str,  # "R$ 150.000 - R$ 280.000"
+        vs_estimado: str,  # "ABAIXO" | "DENTRO" | "ACIMA" (valor_estimado vs range)
+        _source: str  # "competitive_intel_filtered" or "competitive_intel"
+      }
+    """
+    benchmarked = 0
+    for ed in editais:
+        # Prefer sector-filtered intel over raw intel
+        source_field = "competitive_intel_filtered"
+        contracts = ed.get("competitive_intel_filtered")
+        if not contracts:
+            source_field = "competitive_intel"
+            contracts = ed.get("competitive_intel", [])
+
+        if not contracts:
+            ed["price_benchmark"] = {
+                "_source": _source_tag("UNAVAILABLE", "Sem dados competitivos para benchmark"),
+            }
+            continue
+
+        # Extract valid values
+        valores = [
+            v for c in contracts
+            if (v := _safe_float(c.get("valor"))) is not None and v > 0
+        ]
+
+        if len(valores) < 2:
+            ed["price_benchmark"] = {
+                "_source": _source_tag("UNAVAILABLE", f"Apenas {len(valores)} valor(es) — mínimo 2 para benchmark"),
+            }
+            continue
+
+        valores.sort()
+        count = len(valores)
+        val_min = valores[0]
+        val_max = valores[-1]
+        val_median = _statistics.median(valores)
+
+        # Percentile calculation (linear interpolation)
+        def _percentile(sorted_vals: list[float], pct: float) -> float:
+            n = len(sorted_vals)
+            idx = (n - 1) * pct / 100.0
+            lo = int(idx)
+            hi = min(lo + 1, n - 1)
+            frac = idx - lo
+            return sorted_vals[lo] * (1 - frac) + sorted_vals[hi] * frac
+
+        p25 = _percentile(valores, 25)
+        p75 = _percentile(valores, 75)
+
+        suggested_range = f"R$ {_fmt_brl(p25)} - R$ {_fmt_brl(p75)}"
+
+        # Compare valor_estimado against range
+        valor_est = _safe_float(ed.get("valor_estimado")) or 0.0
+        if valor_est > 0:
+            if valor_est < p25:
+                vs_estimado = "ABAIXO"
+            elif valor_est > p75:
+                vs_estimado = "ACIMA"
+            else:
+                vs_estimado = "DENTRO"
+        else:
+            vs_estimado = "NAO_DISPONIVEL"
+
+        ed["price_benchmark"] = {
+            "min": round(val_min, 2),
+            "median": round(val_median, 2),
+            "max": round(val_max, 2),
+            "count": count,
+            "p25": round(p25, 2),
+            "p75": round(p75, 2),
+            "suggested_range": suggested_range,
+            "vs_estimado": vs_estimado,
+            "_source": _source_tag("CALCULATED", f"{count} contratos via {source_field}"),
+        }
+        benchmarked += 1
+
+    print(f"  [BENCHMARK] Price benchmark: {benchmarked}/{len(editais)} editais com dados suficientes")
 
 
 def calculate_market_hhi(dispute_stats: dict) -> dict:
@@ -8824,6 +9327,10 @@ Examples:
         editais = data.get("editais", [])
         print(f"  Editais: {len(editais)}")
 
+        # HARD-003: Acervo classification (re-enrich uses existing contratos)
+        re_contratos = data.get("transparencia", {}).get("historico_contratos", [])
+        classify_acervo_similarity(re_contratos, editais)
+
         # Run all deterministic computations
         skip_scen = getattr(args, "skip_scenarios", False)
         analysis_results = compute_all_deterministic(
@@ -8834,7 +9341,8 @@ Examples:
 
         # Assign recomendacao + justificativa after all scores are computed
         assign_recommendations(editais, empresa)
-        _compute_alertas_criticos(editais)  # HARD-004
+        compute_price_benchmark(editais)  # GAP-3
+        build_alertas_criticos(editais, empresa)  # HARD-004
 
         # Store results
         data["portfolio"] = analysis_results["portfolio"]
@@ -9338,6 +9846,11 @@ Examples:
         ufs_meta=ufs_meta,
     )
 
+    # ---- HARD-003: Acervo 3-Tier Classification (before deterministic scoring) ----
+    classify_acervo_similarity(merged_contratos, data["editais"])
+    acervo_counts = Counter(ed.get("acervo_status", "NAO_VERIFICADO") for ed in data["editais"])
+    print(f"  [ACERVO] Classificação: {dict(acervo_counts)}")
+
     # ---- Deterministic Calculations (risk score, ROI, chronogram, E4-E8) ----
     skip_opt = getattr(args, "skip_portfolio_optimization", False)
     skip_scen = getattr(args, "skip_scenarios", False)
@@ -9350,7 +9863,12 @@ Examples:
 
     # Assign recomendacao + justificativa after all scores are computed
     assign_recommendations(data["editais"], data["empresa"])
-    _compute_alertas_criticos(data["editais"])  # HARD-004
+
+    # ---- GAP-3: Price benchmark per edital ----
+    compute_price_benchmark(data["editais"])
+
+    # ---- HARD-004: Per-edital critical alerts ----
+    build_alertas_criticos(data["editais"], data["empresa"])
 
     # Store cross-edital analysis at top level
     data["portfolio"] = analysis_results["portfolio"]
@@ -9427,6 +9945,7 @@ Examples:
     print(f"  Ações imediatas (≤7 dias): {n_imediato}")
     print(f"  Médio prazo (8-21 dias): {n_medio}")
     print(f"  Estratégico (22-30 dias): {n_estrat}")
+    print(f"  Plano de desenvolvimento: {len(proximos_passos.get('desenvolvimento_plan', []))} categorias")
     print(f"  Checklist habilitação: {len(proximos_passos['checklist_habilitacao'])} itens")
 
     # ---- Output ----

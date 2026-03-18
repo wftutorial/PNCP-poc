@@ -43,6 +43,11 @@ Para CADA edital com recomendacao `PARTICIPAR`:
 | C9 | Se `risk_score.vetoed==true`, recomendacao é NÃO RECOMENDADO? | Veto do script ignorado |
 | C10 | Se `risk_score.fiscal_risk.nivel=="ALTO"`, justificativa menciona risco fiscal? | Risco fiscal alto ignorado |
 | C11 | Justificativa NÃO usa termos legais incorretos ("impedimento legal", "vedado", "proibido") para situações que são apenas alertas comerciais? | Linguagem jurídica incorreta para alertas não-legais |
+| C12 | Se `acervo_status == "NAO_VERIFICADO"` e rec == PARTICIPAR, flagrado como risco? | Acervo não verificado em recomendação GO |
+| C13 | Se `price_benchmark.vs_estimado == "ACIMA"`, mencionado na justificativa? | Oportunidade superfaturada ignorada |
+| C14 | `habilitacao_checklist_25.cobertura_pct < 30%` e rec == PARTICIPAR? | Cobertura de habilitação baixa em recomendação GO |
+| C15 | Se `alertas_criticos` tem itens CRITICO, todos mencionados na justificativa? | Alertas críticos ignorados na narrativa |
+| C16 | Se `prob_max - prob_min > 20`, sensibilidade do spread anotada? | Banda de probabilidade ampla sem reconhecimento |
 
 Para editais com recomendacao `AVALIAR COM CAUTELA`:
 - Aplicar checks C1, C7, C8, C11 apenas.
@@ -59,8 +64,9 @@ Para editais com recomendacao `AVALIAR COM CAUTELA`:
 
 ### Global:
 - Contar total de checks falhados em TODOS os editais
-- Se **3+ checks falham** no total (across all editais): **BLOCK** o relatório
-- Se <3 checks falham: **REVISED** (com rebaixamentos aplicados)
+- Se ANY check falha em PARTICIPAR → **REBAIXAR** para AVALIAR COM CAUTELA
+- Se **4+ checks falham** no total (across all editais): **BLOCK** o relatório (era 3+, ajustado para checklist expandido de 16 checks)
+- Se <4 checks falham: **REVISED** (com rebaixamentos aplicados)
 - Se 0 checks falham: **PASSED**
 
 ---
@@ -101,7 +107,7 @@ Escrever no JSON os seguintes campos:
   "delivery_validation": {
     "gate_deterministic": "{valor do gate anterior, preservar}",
     "gate_adversarial": "PASSED | REVISED | BLOCKED",
-    "checks_total": 0,
+    "checks_total": 16,
     "checks_failed": 0,
     "checks_detail": [
       {"edital_id": "...", "check": "C3", "status": "FAIL", "motivo": "..."}

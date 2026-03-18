@@ -18,6 +18,7 @@ Você NÃO gera o PDF final. Você NÃO audita seu próprio trabalho. Sua saída
 6. **Toda recomendação DEVE ter justificativa.** NUNCA emitir recomendação sem `justificativa` preenchida com motivo factual.
 7. **ZERO termos técnicos ou em inglês no output.** Na seção "Fontes de Dados", usar nomes institucionais: "Receita Federal", "Portal da Transparência", "Portal Nacional de Contratações Públicas". Nada de "API", "JSON", "Python", "raw", "GET", "POST".
 8. **NUNCA incluir editais encerrados ou descartados.** Editais com `dias_restantes <= 0`, `status_edital == "ENCERRADO"`, `recomendacao == "DESCARTADO"` ou `relevante == False` são excluídos.
+9. **NUNCA modificar campos computados pelo script:** `alertas_criticos`, `acervo_status`, `acervo_detalhes`, `price_benchmark`, `habilitacao_checklist_25`, `risk_score` são determinísticos. Referenciar na narrativa mas NUNCA alterar seus valores.
 
 ---
 
@@ -114,6 +115,10 @@ Para CADA edital, cruzar: JSON (Phase 1) + análise documental (Phase 2) + perfi
 11. **Justificativa (OBRIGATÓRIA)** — Motivo factual. Para risco fiscal ALTO: mencionar. Para `acervo_confirmado=false`: nota sobre verificação.
 12. **Cenários** — Base/Otimista/Pessimista com probabilidades e ROIs.
 13. **Sensibilidade** — ROBUSTA ou FRÁGIL? Qual dimensão a torna instável?
+- **Score de viabilidade 5D:** Reference the `risk_score` dimensions (habilitação, financeiro, geográfico, prazo, competitivo) with weights. The script already computes these — narrate the decomposition, explain which dimension drives the recommendation.
+- **Benchmarking de preços:** If `price_benchmark` exists, reference min/median/max and position the edital's `valor_estimado` within the range. Use `vs_estimado` field (ABAIXO/DENTRO/ACIMA).
+- **Acervo técnico:** Reference `acervo_status` (CONFIRMADO/PARCIAL/NAO_VERIFICADO). If CONFIRMADO, cite the top similar contract from `acervo_detalhes`. If NAO_VERIFICADO, note as risk factor.
+- **Alertas críticos:** Each edital has `alertas_criticos[]`. Reference them in the justificativa. Critical alerts MUST appear in the narrative.
 
 ---
 
@@ -165,6 +170,15 @@ proximos_passos                 # Ações priorizadas
 ```
 
 **NÃO alterar:** `risk_score`, campos `_source`, `distancia_km`, `roi_potential`, `cronograma` — estes são FINAIS do script.
+
+Os seguintes campos são computados deterministicamente pelo script — apenas REFERENCIAR na narrativa, NUNCA modificar:
+```
+editais[].alertas_criticos (from script — DO NOT modify, only reference in narrative)
+editais[].acervo_status (from script — DO NOT modify)
+editais[].acervo_detalhes (from script — DO NOT modify)
+editais[].price_benchmark (from script — DO NOT modify)
+editais[].habilitacao_checklist_25 (from script — DO NOT modify)
+```
 
 **CROSS-REFERENCE antes de salvar:**
 1. Editais DESCARTADOS na análise NÃO podem aparecer em `proximos_passos`

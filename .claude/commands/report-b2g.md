@@ -52,6 +52,13 @@ Argumentos: DATA_JSON path + lista de WARNINGS (se houver)
 
 O Analyst enriquece o JSON com: `analise_documental`, `analise_detalhada`, `recomendacao`, `justificativa`, `inteligencia_mercado`, `proximos_passos`, `resumo_executivo`.
 
+O Analyst recebe os seguintes campos pré-computados pelo script (somente referência — não modificar):
+- `editais[].acervo_status`, `acervo_detalhes` — Classificação do acervo técnico (CONFIRMADO/PARCIAL/NAO_VERIFICADO)
+- `editais[].alertas_criticos` — Alertas críticos por edital com severidade e ações requeridas
+- `editais[].price_benchmark` — Benchmarking histórico de preços (min/mediana/max/faixa sugerida)
+- `editais[].habilitacao_checklist_25` — Checklist de habilitação de 25 itens em 5 categorias
+- `editais[].win_probability.prob_min/prob_max` — Banda de confiança da probabilidade calibrada
+
 **Após retorno:** Verificar que o JSON foi salvo e contém os campos obrigatórios.
 
 ### Step 5 — Launch AUDITOR Agent (Phase 7)
@@ -65,6 +72,8 @@ Argumentos: DATA_JSON path (já enriquecido pelo Analyst)
 ```
 
 O Auditor executa checklist binário e escreve `delivery_validation` no JSON.
+
+**Nota:** O Auditor agora valida 16 checks (eram 11) — inclui verificação de acervo, benchmarking de preços, cobertura de habilitação, menção de alertas críticos na narrativa, e sensibilidade da banda de probabilidade.
 
 ### Step 6 — Handle Auditor Result
 

@@ -873,8 +873,184 @@ def collect_ibge_batch(api: ApiClient, municipios: list[tuple[str, str]]) -> dic
     return result
 
 
-def collect_pncp_contratos_fornecedor(api: ApiClient, cnpj14: str) -> tuple[list[dict], dict]:
+def _parse_pncp_contract_item(c: dict, cnpj14: str, source_label: str = "PNCP") -> dict | None:
+    """Parse a single PNCP contract item, filtering by niFornecedor.
+
+    Returns None if the item does not belong to the target CNPJ.
+    This is needed because PNCP /contratos ignores cnpjFornecedor server-side.
+    """
+    ni = (c.get("niFornecedor") or "").replace(".", "").replace("/", "").replace("-", "")
+    if ni and ni != cnpj14:
+        return None  # Belongs to a different supplier
+
+    orgao = c.get("orgaoEntidade", {})
+    unidade = c.get("unidadeOrgao", {})
+    esfera_labels = {"F": "Federal", "E": "Estadual", "M": "Municipal", "D": "Distrital"}
+    esfera_id = orgao.get("esferaId", "")
+    esfera = esfera_labels.get(esfera_id, esfera_id)
+
+    return {
+        "orgao": unidade.get("nomeUnidade", "") or orgao.get("razaoSocial", ""),
+        "esfera": esfera,
+        "uf": unidade.get("ufSigla", ""),
+        "municipio": unidade.get("municipioNome", ""),
+        "valor": _safe_float(c.get("valorGlobal") or c.get("valorInicial")) or 0.0,
+        "data": c.get("dataAssinatura", ""),
+        "objeto": (c.get("objetoContrato") or c.get("informacaoComplementar") or "")[:300],
+        "numero_contrato": c.get("numeroContratoEmpenho", ""),
+        "vigencia_fim": c.get("dataVigenciaFim", ""),
+        "fonte": source_label,
+        "valor_aditivos": _safe_float(c.get("valorAcumuladoAditivos")) or 0.0,
+        "tipo_contrato": c.get("tipoContratoNome", ""),
+        "situacao_contrato": c.get("situacaoContratoCodigo", ""),
+        "tem_subcontratacao": c.get("subcontratacao", False),
+    }
+
+
+def _collect_pncp_contratos_by_date_window(
+    api: "ApiClient",
+    cnpj14: str,
+    data_ini: str,
+    data_fim: str,
+    max_pages: int = 10,
+) -> tuple[list[dict], int, int]:
+    """Fetch contracts from PNCP /contratos endpoint for a date window.
+
+    FIX 4 — Strategy 1: /contratos with cnpjFornecedor (server-side filter
+    may work in future PNCP versions; we always apply client-side filter too).
+
+    Returns (contracts_matched, raw_total, errors).
+    """
+    matched: list[dict] = []
+    raw_total = 0
+    errors = 0
+
+    page = 1
+    while page <= max_pages:
+        data, status = api.get(
+            f"{PNCP_BASE}/contratos",
+            params={
+                "cnpjFornecedor": cnpj14,
+                "dataInicial": data_ini,
+                "dataFinal": data_fim,
+                "pagina": page,
+                "tamanhoPagina": 50,
+            },
+            label=f"PNCP contratos/date p={page}",
+        )
+        if status != "API" or not data:
+            if status == "API_FAILED":
+                errors += 1
+            break
+
+        items = data.get("data", data) if isinstance(data, dict) else data
+        if not isinstance(items, list) or not items:
+            break
+
+        total_records = data.get("totalRegistros", 0) if isinstance(data, dict) else 0
+        # Abort if API is clearly not filtering by supplier
+        if total_records > 10_000 and not matched:
+            break
+
+        for c in items:
+            raw_total += 1
+            parsed = _parse_pncp_contract_item(c, cnpj14, "PNCP")
+            if parsed:
+                matched.append(parsed)
+
+        total_pages = data.get("totalPaginas", 1) if isinstance(data, dict) else 1
+        if page >= total_pages or total_records > 10_000:
+            break
+        page += 1
+        time.sleep(0.3)
+
+    return matched, raw_total, errors
+
+
+def _collect_pncp_contratos_by_razao_social(
+    api: "ApiClient",
+    cnpj14: str,
+    razao_social: str,
+) -> tuple[list[dict], int]:
+    """FIX 4 — Strategy 2: Search PNCP contratações/publicacao by company name.
+
+    Searches PNCP procurement publications for the company's name, then
+    filters results that list the company as a supplier.
+    Returns (contracts, raw_total).
+    """
+    if not razao_social or len(razao_social) < 5:
+        return [], 0
+
+    matched: list[dict] = []
+    raw_total = 0
+
+    # Use first 30 chars of razao_social (more specific = fewer false positives)
+    query_name = razao_social[:30].strip()
+
+    data, status = api.get(
+        f"{PNCP_BASE}/contratacoes/publicacao",
+        params={
+            "q": query_name,
+            "pagina": 1,
+            "tamanhoPagina": 50,
+        },
+        label="PNCP contratos/razao-social",
+    )
+    if status != "API" or not data:
+        return [], 0
+
+    items = data if isinstance(data, list) else data.get("data", data.get("resultado", []))
+    if not isinstance(items, list):
+        return [], 0
+
+    for item in items:
+        raw_total += 1
+        # Only include if the item appears to reference this company as supplier/winner
+        # (PNCP publicacoes don't always have supplier CNPJ at this endpoint)
+        orgao = item.get("orgaoEntidade", {})
+        unidade = item.get("unidadeOrgao", {})
+        esfera_labels_rs = {"F": "Federal", "E": "Estadual", "M": "Municipal", "D": "Distrital"}
+
+        # Try to find supplier CNPJ in various fields
+        fornecedor_cnpj = (
+            re.sub(r"[^0-9]", "", str(item.get("cnpjFornecedor") or item.get("niFornecedor") or ""))
+        )
+        if fornecedor_cnpj and fornecedor_cnpj != cnpj14:
+            continue  # Different supplier
+
+        valor = _safe_float(item.get("valorTotalEstimado") or item.get("valorGlobal")) or 0.0
+        data_assinatura = (item.get("dataAssinatura") or item.get("dataPublicacaoPncp") or "")[:10]
+
+        matched.append({
+            "orgao": (orgao.get("razaoSocial") or unidade.get("nomeUnidade") or ""),
+            "esfera": esfera_labels_rs.get(orgao.get("esferaId", ""), ""),
+            "uf": unidade.get("ufSigla", ""),
+            "municipio": unidade.get("municipioNome", ""),
+            "valor": valor,
+            "data": data_assinatura,
+            "objeto": (item.get("objetoCompra") or item.get("objeto") or "")[:300],
+            "numero_contrato": item.get("numeroContratoEmpenho") or item.get("sequencialCompra") or "",
+            "vigencia_fim": item.get("dataEncerramentoProposta") or "",
+            "fonte": "PNCP_NOME",
+            "valor_aditivos": 0.0,
+            "tipo_contrato": item.get("modalidadeNome") or "",
+            "situacao_contrato": "",
+            "tem_subcontratacao": False,
+        })
+
+    return matched, raw_total
+
+
+def collect_pncp_contratos_fornecedor(
+    api: "ApiClient",
+    cnpj14: str,
+    razao_social: str = "",
+) -> tuple[list[dict], dict]:
     """Fetch contract history from PNCP by supplier CNPJ.
+
+    FIX 4: Multi-strategy contract collection:
+      Strategy 1 — PNCP /contratos with cnpjFornecedor (date-windowed, client-side filter)
+      Strategy 2 — PNCP /contratacoes/publicacao by razao_social (fallback)
 
     Covers ALL spheres: federal, state, municipal, autarchies, foundations.
     PNCP /contratos allows max 365-day window, so we query 2 consecutive years.
@@ -888,108 +1064,54 @@ def collect_pncp_contratos_fornecedor(api: ApiClient, cnpj14: str) -> tuple[list
     print("\n📋 Phase 1c: PNCP — Histórico de contratos do fornecedor (todas as esferas)")
 
     all_contracts: list[dict] = []
-    raw_total = 0  # total items received from API (before filtering)
-    errors = 0
+    total_raw = 0
+    total_errors = 0
 
-    esfera_labels = {"F": "Federal", "E": "Estadual", "M": "Municipal", "D": "Distrital"}
-
-    # Query 2 windows of 365 days each (covers ~2 years)
+    # FIX 4 — Strategy 1: PNCP /contratos endpoint (2-year window, date-windowed)
     today = _today()
     windows = [
         (_date_compact(today - timedelta(days=365)), _date_compact(today)),
         (_date_compact(today - timedelta(days=730)), _date_compact(today - timedelta(days=366))),
     ]
 
+    strat1_matched = 0
     for data_ini, data_fim in windows:
-        page = 1
-        while page <= 10:  # Max 10 pages per window
-            data, status = api.get(
-                f"{PNCP_BASE}/contratos",
-                params={
-                    "cnpjFornecedor": cnpj14,
-                    "dataInicial": data_ini,
-                    "dataFinal": data_fim,
-                    "pagina": page,
-                    "tamanhoPagina": 50,
-                },
-                label=f"PNCP contratos fornecedor p={page}",
-            )
-            if status != "API" or not data:
-                if status == "API_FAILED":
-                    errors += 1
-                break
+        matched, raw, errs = _collect_pncp_contratos_by_date_window(api, cnpj14, data_ini, data_fim)
+        all_contracts.extend(matched)
+        total_raw += raw
+        total_errors += errs
+        strat1_matched += len(matched)
 
-            items = data.get("data", data) if isinstance(data, dict) else data
-            if not isinstance(items, list) or not items:
-                break
-
-            for c in items:
-                raw_total += 1
-
-                # ── CLIENT-SIDE CNPJ FILTER (CRITICAL) ──────────────────
-                # The PNCP /contratos endpoint silently ignores the
-                # cnpjFornecedor param and returns ALL contracts in the
-                # date range.  We MUST check niFornecedor ourselves.
-                ni = (c.get("niFornecedor") or "").replace(".", "").replace("/", "").replace("-", "")
-                if ni != cnpj14:
-                    continue
-                # ─────────────────────────────────────────────────────────
-
-                orgao = c.get("orgaoEntidade", {})
-                unidade = c.get("unidadeOrgao", {})
-                esfera_id = orgao.get("esferaId", "")
-                esfera = esfera_labels.get(esfera_id, esfera_id)
-
-                all_contracts.append({
-                    "orgao": unidade.get("nomeUnidade", "") or orgao.get("razaoSocial", ""),
-                    "esfera": esfera,
-                    "uf": unidade.get("ufSigla", ""),
-                    "municipio": unidade.get("municipioNome", ""),
-                    "valor": _safe_float(c.get("valorGlobal") or c.get("valorInicial")) or 0.0,
-                    "data": c.get("dataAssinatura", ""),
-                    "objeto": (c.get("objetoContrato") or c.get("informacaoComplementar") or "")[:300],
-                    "numero_contrato": c.get("numeroContratoEmpenho", ""),
-                    "vigencia_fim": c.get("dataVigenciaFim", ""),
-                    "fonte": "PNCP",
-                    "valor_aditivos": _safe_float(c.get("valorAcumuladoAditivos")) or 0.0,
-                    "tipo_contrato": c.get("tipoContratoNome", ""),
-                    "situacao_contrato": c.get("situacaoContratoCodigo", ""),
-                    "tem_subcontratacao": c.get("subcontratacao", False),
-                })
-
-            # Pagination — stop early if API is returning unfiltered bulk data
-            total_pages = data.get("totalPaginas", 1) if isinstance(data, dict) else 1
-            total_records = data.get("totalRegistros", 0) if isinstance(data, dict) else 0
-            # If API reports >10k total records, it's clearly not filtering by
-            # supplier — no single company has 10k+ contracts.  Stop paginating
-            # to avoid wasting API calls on bulk unfiltered data.
-            if total_records > 10_000:
-                if not all_contracts:
-                    print(f"  ⚠ API retornou {total_records:,} registros (não filtrou por fornecedor) — 0 contratos reais")
-                break
-            if page >= total_pages:
-                break
-            page += 1
-            time.sleep(0.5)
-
-    # ── INTEGRITY CHECK ─────────────────────────────────────────────
-    # Log how many items the API returned vs how many matched our CNPJ.
-    # This makes the silent-ignore bug visible in every run.
-    if raw_total > 0 and not all_contracts:
-        print(f"  ⚠ PNCP /contratos: {raw_total:,} itens recebidos, 0 pertencem ao CNPJ {cnpj14}")
+    # ── INTEGRITY CHECK ──────────────────────────────────────────────────────
+    if total_raw > 0 and strat1_matched == 0:
+        print(f"  ⚠ PNCP /contratos: {total_raw:,} itens recebidos, 0 pertencem ao CNPJ {cnpj14}")
         print(f"    (API ignora cnpjFornecedor — filtragem client-side descartou tudo)")
-    elif raw_total > 0:
-        pct = len(all_contracts) / raw_total * 100
-        print(f"  ✓ PNCP /contratos: {raw_total:,} recebidos → {len(all_contracts)} do CNPJ {cnpj14} ({pct:.1f}% match)")
-    # ────────────────────────────────────────────────────────────────
+    elif total_raw > 0:
+        pct = strat1_matched / total_raw * 100
+        print(f"  ✓ PNCP /contratos strat1: {total_raw:,} recebidos → {strat1_matched} do CNPJ {cnpj14} ({pct:.1f}% match)")
+
+    # FIX 4 — Strategy 2: Search by razao_social as fallback when strat1 returns 0
+    strat2_matched = 0
+    if strat1_matched == 0 and razao_social:
+        print(f"  Strategy 2: buscando por nome '{razao_social[:30]}...'")
+        strat2_contracts, strat2_raw = _collect_pncp_contratos_by_razao_social(api, cnpj14, razao_social)
+        all_contracts.extend(strat2_contracts)
+        strat2_matched = len(strat2_contracts)
+        if strat2_matched:
+            print(f"  ✓ Strategy 2 (razao_social): {strat2_matched} contratos encontrados ({strat2_raw} raw)")
+        else:
+            print(f"  Strategy 2 (razao_social): {strat2_raw} raw, 0 contratos")
+
+    # FIX 4 — Derive UFs from contract history (side effect stored in contracts themselves)
+    # UF derivation happens downstream in extract_ufs_from_contracts() — no additional work needed here.
 
     # F03: Dedup by SHA-256 hash of structural fields (not truncated strings)
     def _contract_key(c: dict) -> str:
         raw = f"{c.get('orgao','')}\x00{c.get('numero_contrato','')}\x00{c.get('data','')}\x00{c.get('valor_contrato', c.get('valor',''))}"
         return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
-    seen = set()
-    unique = []
+    seen: set[str] = set()
+    unique: list[dict] = []
     for c in all_contracts:
         key = _contract_key(c)
         if key not in seen:
@@ -998,17 +1120,20 @@ def collect_pncp_contratos_fornecedor(api: ApiClient, cnpj14: str) -> tuple[list
     all_contracts = unique
 
     # Stats
-    by_esfera = {}
+    by_esfera: dict[str, int] = {}
     for c in all_contracts:
         e = c.get("esfera", "N/I")
         by_esfera[e] = by_esfera.get(e, 0) + 1
 
     n = len(all_contracts)
-    detail_parts = [f"{n} contrato(s) encontrado(s)"]
+    strategy_note = f"strat1={strat1_matched}"
+    if strat2_matched:
+        strategy_note += f" strat2={strat2_matched}"
+    detail_parts = [f"{n} contrato(s) encontrado(s) ({strategy_note})"]
     for esfera, count in sorted(by_esfera.items()):
         detail_parts.append(f"{count} {esfera.lower()}")
 
-    status_tag = "API" if errors == 0 else ("API_PARTIAL" if n > 0 else "API_FAILED")
+    status_tag = "API" if total_errors == 0 else ("API_PARTIAL" if n > 0 else "API_FAILED")
     source = _source_tag(status_tag, ", ".join(detail_parts))
 
     print(f"  PNCP contratos: {n} encontrados ({', '.join(f'{v} {k}' for k, v in by_esfera.items())})")
@@ -3218,6 +3343,78 @@ def optimize_portfolio(
 
 
 # ============================================================
+# FIX 2: 3-GATE SECTOR RELEVANCE FILTER
+# ============================================================
+
+# Hard exclusions for engenharia_civil sector (Gate 1).
+# If ANY of these phrases appears (case-insensitive) in the edital objeto,
+# the edital is IMMEDIATELY rejected regardless of keyword matches.
+HARD_EXCLUSIONS_ENGENHARIA: frozenset[str] = frozenset({
+    "buffet", "coffee break", "lavanderia", "limpeza predial", "limpeza hospitalar",
+    "alimentação escolar", "alimentacao escolar", "merenda", "catering",
+    "vigilância armada", "vigilancia armada",
+    "vigilância desarmada", "vigilancia desarmada",
+    "segurança patrimonial", "seguranca patrimonial",
+    "material de escritório", "material de escritorio",
+    "combustível", "abastecimento de combustivel", "recarga de toner", "cartuchos",
+    "locação de veículos", "locacao de veiculos",
+    "serviço de copa", "servico de copa",
+    "jardinagem", "paisagismo ornamental",
+    "coleta de lixo", "coleta de residuos solidos",
+    "transporte escolar",
+    "fornecimento de refeição", "fornecimento de refeicao",
+    "fornecimento de refeições", "fornecimento de refeicoes",
+    "quentinha", "marmitex",
+    "uniforme", "fardamento",
+    "material de limpeza",
+    "detergente", "desinfetante", "papel higiênico", "papel higienico",
+    "papel toalha",
+    "ar condicionado", "aparelho de ar condicionado",
+    "mobiliário", "mobiliario", "móveis", "moveis",
+    "equipamento de informática", "equipamento de informatica",
+    "computador", "notebook", "impressora",
+    "medicamento", "material hospitalar", "material médico", "material medico",
+    "ambulância", "ambulancia",
+    "serviço funerário", "servico funerario",
+    "seguro de vida", "plano de saúde", "plano de saude",
+})
+
+# Map from sector_key prefix → hard exclusion set
+_HARD_EXCLUSIONS_BY_SECTOR: dict[str, frozenset[str]] = {
+    "engenharia": HARD_EXCLUSIONS_ENGENHARIA,
+    "engenharia_civil": HARD_EXCLUSIONS_ENGENHARIA,
+    "engenharia_rodoviaria": HARD_EXCLUSIONS_ENGENHARIA,
+    "arquitetura": HARD_EXCLUSIONS_ENGENHARIA,
+}
+
+# Minimum keyword density required (Gate 2): fraction of words in objeto
+# that must match sector keywords for the edital to pass.
+_DENSITY_GATE_MIN_PCT = 0.02  # 2%
+
+
+def _check_hard_exclusions(objeto_lower: str, sector_key: str = "") -> str | None:
+    """Gate 1: Return the matched exclusion term if objeto contains a hard exclusion, else None."""
+    exclusions = _HARD_EXCLUSIONS_BY_SECTOR.get(sector_key, frozenset())
+    if not exclusions:
+        # Try prefix match (e.g. sector_key="engenharia_ambiental" → base "engenharia")
+        base = sector_key.split("_")[0] if sector_key else ""
+        exclusions = _HARD_EXCLUSIONS_BY_SECTOR.get(base, frozenset())
+    for term in exclusions:
+        if term in objeto_lower:
+            return term
+    return None
+
+
+def _compute_keyword_density(objeto_lower: str, keyword_patterns: list[re.Pattern]) -> float:
+    """Gate 2: Compute fraction of object words matched by keyword patterns."""
+    words = objeto_lower.split()
+    if not words:
+        return 0.0
+    matched = sum(1 for w in words if any(p.search(w) for p in keyword_patterns))
+    return matched / len(words)
+
+
+# ============================================================
 # PHASE 2a: PNCP SEARCH
 # ============================================================
 
@@ -3266,6 +3463,7 @@ def _search_pncp_single(
     nature_profile: dict[str, float] | None = None,
     cluster_nature: str | None = None,
     cluster_nature_profile: dict[str, float] | None = None,
+    sector_key: str = "",
 ) -> tuple[list[dict], dict]:
     """Core PNCP search loop for a set of keywords and modalidades.
 
@@ -3335,7 +3533,8 @@ def _search_pncp_single(
                 for item in items:
                     edital = _parse_pncp_item(item, keywords, ufs, keyword_patterns=keyword_patterns,
                                              nature_profile=nature_profile, cluster_nature=cluster_nature,
-                                             cluster_nature_profile=cluster_nature_profile)
+                                             cluster_nature_profile=cluster_nature_profile,
+                                             sector_key=sector_key)
                     if edital:
                         eid = edital.get("_id", "")
                         if eid and eid not in seen_ids:
@@ -3368,6 +3567,7 @@ def collect_pncp(
     ufs: list[str],
     dias: int = 30,
     nature_profile: dict[str, float] | None = None,
+    sector_key: str = "",
 ) -> tuple[list[dict], dict]:
     """Search PNCP for open editais (single-sector, backward compatible)."""
     print(f"\n\U0001f50d Phase 2a-1: PNCP \u2014 Varredura de editais ({dias} dias)")
@@ -3375,6 +3575,7 @@ def collect_pncp(
     all_editais, source_meta = _search_pncp_single(
         api, keywords, MODALIDADES, ufs, dias,
         nature_profile=nature_profile,
+        sector_key=sector_key,
     )
 
     _source = _source_tag("API" if source_meta["errors"] == 0 else "API_PARTIAL",
@@ -3482,6 +3683,7 @@ def collect_pncp_multi_cluster(
     ufs: list[str],
     dias: int,
     nature_profile: dict[str, float] | None = None,
+    sector_key: str = "",
 ) -> tuple[list[dict], dict]:
     """Search PNCP separately per activity cluster, then deduplicate.
 
@@ -3582,6 +3784,7 @@ def collect_pncp_multi_cluster(
                         nature_profile=nature_profile,
                         cluster_nature=cluster_nat,
                         cluster_nature_profile=cluster_nat_profile,
+                        sector_key=sector_key,
                     )
                     if edital:
                         eid = edital.get("_id", "")
@@ -3646,7 +3849,8 @@ def _parse_pncp_item(item: dict, keywords: list[str], ufs: list[str],
                      keyword_patterns: list[re.Pattern] | None = None,
                      nature_profile: dict[str, float] | None = None,
                      cluster_nature: str | None = None,
-                     cluster_nature_profile: dict[str, float] | None = None) -> dict | None:
+                     cluster_nature_profile: dict[str, float] | None = None,
+                     sector_key: str = "") -> dict | None:
     """Parse a single PNCP result. Returns None if filtered out.
 
     PNCP response structure:
@@ -3656,6 +3860,11 @@ def _parse_pncp_item(item: dict, keywords: list[str], ufs: list[str],
       - valorTotalEstimado: float
       - dataAberturaProposta, dataEncerramentoProposta: ISO datetime strings
       - anoCompra, sequencialCompra: for building PNCP link
+
+    FIX 2: Applies 3-gate filter before keyword matching:
+      Gate 1 - Hard exclusions (sector-specific blocklist)
+      Gate 2 - Keyword density threshold (>=2% of words)
+      Gate 3 - CNAE compatibility warning (non-blocking)
     """
     objeto = (item.get("objetoCompra") or item.get("objeto") or "").strip()
 
@@ -3668,16 +3877,37 @@ def _parse_pncp_item(item: dict, keywords: list[str], ufs: list[str],
     if ufs and uf and uf not in ufs:
         return None
 
+    objeto_lower = _strip_accents(objeto.lower())
+
+    # FIX 2 — Gate 1: Hard exclusions (reject immediately if objeto matches blocklist)
+    exclusion_hit = _check_hard_exclusions(objeto_lower, sector_key)
+    if exclusion_hit:
+        if os.environ.get("REPORT_DEBUG"):
+            print(f"    [GATE1-EXCL] sector={sector_key} excl='{exclusion_hit}': {objeto[:80]}")
+        return None
+
     # Keyword filter: word-boundary matching (not substring)
     # Uses pre-compiled regex patterns for performance.
     # Requires at least 1 keyword match with word boundaries to pass.
-    objeto_lower = objeto.lower()
     if keyword_patterns:
         if not any(p.search(objeto_lower) for p in keyword_patterns):
             return None
     elif not any(kw.lower() in objeto_lower for kw in keywords):
         # Fallback to substring for backward compat if no patterns provided
         return None
+
+    # FIX 2 — Gate 2: Keyword density threshold (>=2%)
+    # Only apply when we have compiled patterns (not fallback mode)
+    filter_gate = "passed"
+    rejection_reason = None
+    if keyword_patterns:
+        density = _compute_keyword_density(objeto_lower, keyword_patterns)
+        if density < _DENSITY_GATE_MIN_PCT:
+            if os.environ.get("REPORT_DEBUG"):
+                print(f"    [GATE2-DENSITY] density={density:.3f}<{_DENSITY_GATE_MIN_PCT}: {objeto[:80]}")
+            return None
+    else:
+        density = 0.0
 
     # Nature filter — two-level: cluster-specific then global
     edital_nature = classify_object_nature(objeto)
@@ -3759,6 +3989,9 @@ def _parse_pncp_item(item: dict, keywords: list[str], ufs: list[str],
             else "PRAZO_INDEFINIDO"
         ),
         "_nature": edital_nature,
+        # FIX 2: 3-gate filter metadata
+        "filter_gate_passed": True,
+        "rejection_reason": None,
     }
 
 
@@ -5681,6 +5914,237 @@ def detect_maturity_profile(empresa: dict) -> dict:
 
 
 # ============================================================
+# FIX 1: MULTI-DIMENSIONAL MATURITY SCORING
+# ============================================================
+
+# Target-sector keyword set used for Gate 3 CNAE check (market axis)
+_ENGENHARIA_CNAE_CODES: frozenset[str] = frozenset({
+    "4120", "4211", "4212", "4213", "4221", "4222", "4223", "4291", "4292", "4299",
+    "4311", "4312", "4313", "4319", "4321", "4322", "4329", "4330", "4391", "4399",
+    "7112", "7119",
+})
+
+
+def compute_maturity_score(empresa: dict, sector_key: str = "") -> dict:
+    """4-axis maturity scoring replacing the legacy 3-level contract-count model.
+
+    Axes:
+      - Financial capacity  (35%): capital_social + porte
+      - Government history  (25%): contract count from historico_contratos
+      - Operational maturity(25%): company age from data_inicio_atividade
+      - Market signals      (15%): CNAE specialization + QSA count + secondary CNAEs
+
+    Returns:
+        {
+            "profile": "ENTRANTE" | "CRESCIMENTO" | "ESTABELECIDO" | "CONSOLIDADO",
+            "score": 0-100,
+            "breakdown": {"financeiro": X, "historico": Y, "operacional": Z, "mercado": W},
+            "confidence": "LOW" | "MEDIUM" | "HIGH",
+            "nota": "explanation string",
+            # Legacy compat fields preserved from detect_maturity_profile():
+            "total_contract_count": int,
+            "esferas": dict,
+            "geographic_spread": int,
+            "max_contract_ratio": float,
+            "total_contract_value": float,
+            "acervo_objetos": list,
+            "federal_contract_count": int,
+            "_source": dict,
+        }
+    """
+    historico = empresa.get("historico_contratos", [])
+    historico_list = historico if isinstance(historico, list) else []
+    total_count = len(historico_list)
+
+    # --- Extract contract stats (also needed for legacy compat fields) ---
+    ufs_set: set[str] = set()
+    esferas: dict[str, int] = {}
+    max_contract_value = 0.0
+    total_contract_value = 0.0
+    acervo_objetos: list[str] = []
+    for c in historico_list:
+        uf = c.get("uf", "")
+        if uf:
+            ufs_set.add(uf)
+        esfera = c.get("esfera", "N/I")
+        esferas[esfera] = esferas.get(esfera, 0) + 1
+        val = _safe_float(c.get("valor", c.get("valorInicial", 0))) or 0.0
+        total_contract_value += val
+        if val > max_contract_value:
+            max_contract_value = val
+        obj = c.get("objeto", "")
+        if obj:
+            acervo_objetos.append(obj[:150])
+
+    geo_spread = len(ufs_set)
+    capital = _safe_float(empresa.get("capital_social")) or 0.0
+    max_ratio = max_contract_value / capital if capital > 0 else 0.0
+
+    # ─── AXIS 1: Financial capacity (35%) ───────────────────────────────────
+    if capital <= 0:
+        fin_raw = 5  # Unknown capital
+    elif capital < 100_000:
+        fin_raw = 10
+    elif capital < 500_000:
+        fin_raw = 40
+    elif capital < 1_000_000:
+        fin_raw = 60
+    elif capital < 2_000_000:
+        fin_raw = 75
+    elif capital < 5_000_000:
+        fin_raw = 85
+    else:
+        fin_raw = 100
+
+    # Small boost for EPP/ME (shows formal registration maturity)
+    porte = (empresa.get("porte") or "").upper()
+    if "EPP" in porte or "MICRO" in porte or "MEI" in porte:
+        fin_raw = min(fin_raw + 5, 100)
+
+    fin_score = round(fin_raw * 0.35, 2)
+
+    # ─── AXIS 2: Government history (25%) ───────────────────────────────────
+    if total_count == 0:
+        hist_raw = 0
+    elif total_count <= 2:
+        hist_raw = 30
+    elif total_count <= 5:
+        hist_raw = 60
+    elif total_count <= 10:
+        hist_raw = 80
+    else:
+        hist_raw = 100
+
+    hist_score = round(hist_raw * 0.25, 2)
+
+    # ─── AXIS 3: Operational maturity (25%) — age from data_inicio_atividade ─
+    op_raw = 10  # Default: unknown age
+    data_inicio_str = (empresa.get("data_inicio_atividade") or "").strip()
+    if data_inicio_str:
+        try:
+            # Handles YYYY-MM-DD and DD/MM/YYYY
+            if "/" in data_inicio_str:
+                dt_parts = data_inicio_str.split("/")
+                if len(dt_parts) == 3:
+                    data_inicio = datetime(int(dt_parts[2]), int(dt_parts[1]), int(dt_parts[0]))
+                else:
+                    data_inicio = None
+            else:
+                data_inicio = datetime.strptime(data_inicio_str[:10], "%Y-%m-%d")
+
+            if data_inicio:
+                age_years = (_today().replace(tzinfo=None) - data_inicio).days / 365.25
+                if age_years < 1:
+                    op_raw = 10
+                elif age_years < 3:
+                    op_raw = 30
+                elif age_years < 5:
+                    op_raw = 50
+                elif age_years < 10:
+                    op_raw = 80
+                else:
+                    op_raw = 100
+        except (ValueError, TypeError):
+            op_raw = 10  # Parse failure → unknown
+
+    op_score = round(op_raw * 0.25, 2)
+
+    # ─── AXIS 4: Market signals (15%) ──────────────────────────────────────
+    mkt_raw = 0
+
+    # CNAE specialization: does primary CNAE match target sector?
+    cnae_principal = str(empresa.get("cnae_principal") or "")
+    cnae_code_4 = re.sub(r"[^0-9]", "", cnae_principal)[:4]
+    target_cnaes = _ENGENHARIA_CNAE_CODES if ("engenharia" in sector_key or "arquitetura" in sector_key) else frozenset()
+    if target_cnaes and cnae_code_4 in target_cnaes:
+        mkt_raw += 50
+
+    # QSA count (management depth)
+    qsa = empresa.get("qsa") or []
+    qsa_count = len(qsa) if isinstance(qsa, list) else 0
+    if qsa_count > 3:
+        mkt_raw += 25
+    elif qsa_count > 1:
+        mkt_raw += 15
+
+    # Secondary CNAEs relevant to sector
+    cnaes_sec_raw = empresa.get("cnaes_secundarios", "")
+    if isinstance(cnaes_sec_raw, list):
+        cnaes_sec_str = " ".join(str(c) for c in cnaes_sec_raw)
+    else:
+        cnaes_sec_str = str(cnaes_sec_raw or "")
+    if target_cnaes:
+        sec_codes = re.findall(r"\d{4}", cnaes_sec_str)
+        if any(c in target_cnaes for c in sec_codes):
+            mkt_raw += 10
+
+    mkt_raw = min(mkt_raw, 100)
+    mkt_score = round(mkt_raw * 0.15, 2)
+
+    # ─── Composite score (0-100) ───────────────────────────────────────────
+    total_score = round(fin_score + hist_score + op_score + mkt_score)
+
+    # ─── Profile thresholds ────────────────────────────────────────────────
+    if total_score <= 25:
+        profile = "ENTRANTE"
+    elif total_score <= 55:
+        profile = "CRESCIMENTO"
+    elif total_score <= 80:
+        profile = "ESTABELECIDO"
+    else:
+        profile = "CONSOLIDADO"
+
+    # ─── Confidence: based on how many data sources contributed ─────────────
+    data_sources_ok = 0
+    if capital > 0:
+        data_sources_ok += 1  # Financial data present
+    if total_count > 0:
+        data_sources_ok += 1  # Contract history present
+    if data_inicio_str:
+        data_sources_ok += 1  # Age data present
+    if qsa_count > 0:
+        data_sources_ok += 1  # QSA data present
+
+    if data_sources_ok >= 3:
+        confidence = "HIGH"
+    elif data_sources_ok == 2:
+        confidence = "MEDIUM"
+    else:
+        confidence = "LOW"
+
+    # ─── Human-readable explanation ────────────────────────────────────────
+    nota_parts = [f"Score {total_score}/100 ({confidence})"]
+    nota_parts.append(f"Capital: R${capital:,.0f}" if capital > 0 else "Capital: não informado")
+    nota_parts.append(f"{total_count} contrato(s) gov.")
+    if data_inicio_str:
+        nota_parts.append(f"Atividade desde {data_inicio_str[:10]}")
+    nota = ". ".join(nota_parts)
+
+    return {
+        "profile": profile,
+        "score": total_score,
+        "breakdown": {
+            "financeiro": round(fin_raw),
+            "historico": round(hist_raw),
+            "operacional": round(op_raw),
+            "mercado": round(mkt_raw),
+        },
+        "confidence": confidence,
+        "nota": nota,
+        # Legacy compat fields from detect_maturity_profile()
+        "total_contract_count": total_count,
+        "esferas": esferas,
+        "geographic_spread": geo_spread,
+        "max_contract_ratio": round(max_ratio, 2),
+        "total_contract_value": round(total_contract_value, 2),
+        "acervo_objetos": acervo_objetos[:20],
+        "rationale": nota,
+        "federal_contract_count": esferas.get("Federal", 0),
+        "_source": _source_tag("CALCULATED", f"4-axis score: fin={round(fin_raw)} hist={round(hist_raw)} op={round(op_raw)} mkt={round(mkt_raw)}"),
+    }
+
+
+# ============================================================
 # E3: COVERAGE DIAGNOSTIC
 # ============================================================
 
@@ -7041,6 +7505,195 @@ def assign_recommendations(editais: list, empresa: dict) -> None:
         ed["justificativa"] = _build_rich_justificativa(ed, empresa)
 
 
+# ============================================================
+# FIX 3: DETERMINISTIC PRÓXIMOS PASSOS GENERATION
+# ============================================================
+
+_HAB_DOC_LABELS: dict[str, str] = {
+    "sicaf_ok": "Cadastro SICAF ativo e atualizado",
+    "fiscal_federal_verificado": "CND Federal (Receita Federal + Dívida Ativa da União)",
+    "fgts_verificado": "CRF FGTS (Caixa Econômica Federal)",
+    "fiscal_estadual_verificado": "CND Estadual",
+    "fiscal_municipal_verificado": "CND Municipal",
+    "trabalhista_verificado": "CNDT — Certidão Negativa de Débitos Trabalhistas",
+    "falencia_verificado": "Certidão Negativa de Falência e Concordata",
+    "crea_cau_verificado": "Registro CREA/CAU — profissional responsável técnico",
+    "cat_required": "Atestado de Capacidade Técnica (CAT) compatível com o objeto",
+    "capital_minimo_ok": "Balanço Patrimonial — capital mínimo de 10% do valor do edital",
+}
+
+
+def generate_proximos_passos(editais: list[dict], empresa: dict) -> dict:
+    """Generate deterministic action plan from PARTICIPAR/AVALIAR editais.
+
+    Must be called AFTER assign_recommendations() and _compute_alertas_criticos().
+
+    Returns:
+        {
+            "acao_imediata": [...],        # <=7 days remaining
+            "medio_prazo": [...],          # 8-21 days
+            "desenvolvimento_estrategico": [...],  # 22-30 days
+            "checklist_habilitacao": [...],
+            "_source": {...},
+        }
+
+    Each item:
+        {
+            "acao": str,
+            "edital_ref": str,
+            "orgao": str,
+            "valor": float,
+            "prazo_proposta": str (DD/MM/YYYY),
+            "dias_restantes": int,
+            "prioridade": "ALTA" | "MEDIA" | "NORMAL",
+            "documentos_necessarios": list[str],
+        }
+    """
+    acao_imediata: list[dict] = []
+    medio_prazo: list[dict] = []
+    desenvolvimento_estrategico: list[dict] = []
+
+    target_recs = {"PARTICIPAR", "AVALIAR COM CAUTELA"}
+
+    for ed in editais:
+        rec = (ed.get("recomendacao") or "").upper()
+        if rec not in target_recs:
+            continue
+
+        dias = ed.get("dias_restantes")
+        if dias is None or dias < 0:
+            continue  # Already expired
+
+        # Build required documents list from habilitacao_checklist
+        hab = ed.get("habilitacao_checklist") or {}
+        docs_necessarios: list[str] = []
+        for key, label in _HAB_DOC_LABELS.items():
+            val = hab.get(key)
+            # Include items that are False (not OK) or explicitly required (True for cat_required)
+            if key == "cat_required" and val is True:
+                docs_necessarios.append(label)
+            elif key not in ("cat_required",) and val is False:
+                docs_necessarios.append(label)
+
+        # Format prazo_proposta as DD/MM/YYYY
+        prazo_raw = ed.get("data_encerramento") or ""
+        try:
+            if prazo_raw:
+                dt_prazo = datetime.strptime(prazo_raw[:10], "%Y-%m-%d")
+                prazo_br = dt_prazo.strftime("%d/%m/%Y")
+            else:
+                prazo_br = ""
+        except ValueError:
+            prazo_br = prazo_raw[:10] if prazo_raw else ""
+
+        valor = _safe_float(ed.get("valor_estimado")) or 0.0
+        edital_ref = (
+            ed.get("numero_controle")
+            or ed.get("_id")
+            or ed.get("sequencial_compra")
+            or "—"
+        )
+        orgao = (ed.get("orgao") or "").strip()[:80]
+        objeto_resumo = (ed.get("objeto") or "")[:120]
+        uf = ed.get("uf") or ""
+        municipio = ed.get("municipio") or ""
+        loc = f"{municipio}/{uf}" if municipio and uf else (uf or municipio)
+
+        if dias <= 7:
+            prioridade = "ALTA"
+        elif dias <= 14:
+            prioridade = "MEDIA"
+        else:
+            prioridade = "NORMAL"
+
+        acao_str = (
+            f"{'⚡ URGENTE: ' if dias <= 3 else ''}"
+            f"Preparar proposta para {orgao}"
+            f"{f' ({loc})' if loc else ''}"
+            f" — {objeto_resumo}"
+        )
+
+        item = {
+            "acao": acao_str,
+            "edital_ref": edital_ref,
+            "orgao": orgao,
+            "uf": uf,
+            "municipio": municipio,
+            "valor": valor,
+            "prazo_proposta": prazo_br,
+            "dias_restantes": dias,
+            "prioridade": prioridade,
+            "recomendacao": rec,
+            "link": ed.get("link") or "",
+            "documentos_necessarios": docs_necessarios,
+        }
+
+        if dias <= 7:
+            acao_imediata.append(item)
+        elif dias <= 21:
+            medio_prazo.append(item)
+        else:
+            desenvolvimento_estrategico.append(item)
+
+    # Sort each bucket by priority (ALTA first) then valor descending
+    _priority_order = {"ALTA": 0, "MEDIA": 1, "NORMAL": 2}
+    for bucket in (acao_imediata, medio_prazo, desenvolvimento_estrategico):
+        bucket.sort(key=lambda x: (_priority_order.get(x["prioridade"], 9), -(x["valor"] or 0)))
+
+    # ─── Checklist de habilitação (company-level, not per-edital) ────────────
+    sicaf = empresa.get("sicaf") or {}
+    has_sancoes = bool((empresa.get("sancoes") or []))
+    is_simples = bool(empresa.get("simples_nacional"))
+    is_mei = "MEI" in (empresa.get("porte") or "").upper()
+
+    checklist_habilitacao: list[str] = []
+
+    sicaf_status = sicaf.get("status", "") if isinstance(sicaf, dict) else ""
+    if sicaf_status not in ("CADASTRADO", "ATIVO"):
+        checklist_habilitacao.append("Cadastro SICAF: verificar ou realizar cadastro no Portal de Compras do Governo Federal")
+
+    checklist_habilitacao.append("CND Federal: emitir no site da Receita Federal / PGFN (validade 180 dias)")
+    checklist_habilitacao.append("CRF FGTS: emitir no site da Caixa Econômica Federal (validade 30 dias)")
+    checklist_habilitacao.append("CND Estadual: emitir na Secretaria da Fazenda do estado sede")
+    checklist_habilitacao.append("CND Municipal: emitir na Prefeitura do município sede")
+    checklist_habilitacao.append("CNDT: emitir no portal do TST (validade 180 dias)")
+    checklist_habilitacao.append("Certidão Negativa de Falência: emitir no fórum da comarca sede")
+
+    # CREA/CAU if engineering/architecture sector (indicated by any edital requiring it)
+    any_crea = any(
+        ed.get("habilitacao_checklist", {}).get("crea_cau_verificado") is False
+        for ed in editais
+        if (ed.get("recomendacao") or "").upper() in target_recs
+    )
+    if any_crea:
+        checklist_habilitacao.append("Registro CREA/CAU: confirmar registro do responsável técnico")
+
+    any_cat = any(
+        ed.get("habilitacao_checklist", {}).get("cat_required") is True
+        for ed in editais
+        if (ed.get("recomendacao") or "").upper() in target_recs
+    )
+    if any_cat:
+        checklist_habilitacao.append("Atestado de Capacidade Técnica (CAT): reunir atestados de obras/serviços similares registrados em CREA/CAU")
+
+    if has_sancoes:
+        checklist_habilitacao.append("ATENÇÃO: sanções registradas — verificar situação junto ao CEIS/CNEP antes de participar")
+
+    total_actionable = len(acao_imediata) + len(medio_prazo) + len(desenvolvimento_estrategico)
+    return {
+        "acao_imediata": acao_imediata,
+        "medio_prazo": medio_prazo,
+        "desenvolvimento_estrategico": desenvolvimento_estrategico,
+        "checklist_habilitacao": checklist_habilitacao,
+        "_total_editais_acionaveis": total_actionable,
+        "_source": _source_tag(
+            "CALCULATED",
+            f"{total_actionable} editais acionáveis: {len(acao_imediata)} urgentes, "
+            f"{len(medio_prazo)} médio prazo, {len(desenvolvimento_estrategico)} estratégicos"
+        ),
+    }
+
+
 def _compute_alertas_criticos(editais: list[dict]) -> None:
     """HARD-004: Compute per-edital critical alerts for actionable presentation.
 
@@ -7119,10 +7772,12 @@ def compute_all_deterministic(
     """
     print(f"\n📊 Calculando inteligência estratégica ({len(editais)} editais)")
 
-    # E8: Detect maturity profile once for the company
-    maturity = detect_maturity_profile(empresa)
+    # E8: Compute multi-dimensional maturity profile (FIX 1)
+    # Uses compute_maturity_score (4 axes) instead of legacy contract-count-only model.
+    maturity = compute_maturity_score(empresa, sector_key=sector_key)
     empresa["maturity_profile"] = maturity
-    print(f"  Perfil de maturidade: {maturity['profile']} ({maturity['rationale']})")
+    score_info = f"score={maturity['score']}, conf={maturity['confidence']}"
+    print(f"  Perfil de maturidade: {maturity['profile']} ({score_info}) — {maturity['nota']}")
 
     # Sector-relevant contract count — critical for acervo gap analysis
     # Use word boundary matching (not substring) to avoid false positives
@@ -7216,7 +7871,7 @@ def compute_all_deterministic(
             valor = _safe_float(ed.get("valor_estimado"))
             mat_hab_delta = 0
             mat_geo_delta = 0
-            if maturity["profile"] == "ENTRANTE" and valor > _MATURITY_HIGH_VALUE_THRESHOLD:
+            if maturity["profile"] == "ENTRANTE" and (valor or 0) > _MATURITY_HIGH_VALUE_THRESHOLD:
                 mat_hab_delta = -15
                 rs["habilitacao"] = max(0, rs["habilitacao"] + mat_hab_delta)
             elif maturity["profile"] == "REGIONAL":
@@ -8178,7 +8833,11 @@ Examples:
     # to search for open bids. This produces results aligned with the company's
     # actual field of work, not just their registered CNAE.
     print("\n📋 Phase 1b: Histórico de contratos (ANTES do mapeamento de setor)")
-    pncp_contratos, pncp_contratos_source = collect_pncp_contratos_fornecedor(api, cnpj14)
+    # FIX 4: Pass razao_social so Strategy 2 (name search) can run as fallback
+    _razao_social_for_contracts = (empresa.get("razao_social") or empresa.get("nome_fantasia") or "")
+    pncp_contratos, pncp_contratos_source = collect_pncp_contratos_fornecedor(
+        api, cnpj14, razao_social=_razao_social_for_contracts
+    )
 
     # Merge PT federal + PNCP all-spheres into empresa.historico_contratos
     pt_contratos = transparencia.get("historico_contratos", [])
@@ -8321,11 +8980,13 @@ Examples:
         for cs in cluster_searches:
             print(f"  • {cs['label']} ({cs['share_pct']:.0f}%) — {len(cs['keywords'])} keywords, modalidades {cs['modalidades']}")
         editais_pncp, pncp_source = collect_pncp_multi_cluster(api, cluster_searches, ufs, args.dias,
-                                                               nature_profile=company_nature_profile)
+                                                               nature_profile=company_nature_profile,
+                                                               sector_key=sector_key)
     else:
         # Single-sector: use original search (backward compatible)
         editais_pncp, pncp_source = collect_pncp(api, keywords, ufs, args.dias,
-                                                 nature_profile=company_nature_profile)
+                                                 nature_profile=company_nature_profile,
+                                                 sector_key=sector_key)
 
     editais_pcp = []
     pcp_source = _source_tag("UNAVAILABLE", "Skipped")
@@ -8640,6 +9301,18 @@ Examples:
             "note": "Diagnóstico de cobertura desativado",
             "_source": _source_tag("UNAVAILABLE", "Use --coverage para habilitar"),
         }
+
+    # ---- FIX 3: Generate deterministic Próximos Passos ----
+    print("\n📋 Gerando plano de ação (próximos passos)...")
+    proximos_passos = generate_proximos_passos(data["editais"], data["empresa"])
+    data["proximos_passos"] = proximos_passos
+    n_imediato = len(proximos_passos["acao_imediata"])
+    n_medio = len(proximos_passos["medio_prazo"])
+    n_estrat = len(proximos_passos["desenvolvimento_estrategico"])
+    print(f"  Ações imediatas (≤7 dias): {n_imediato}")
+    print(f"  Médio prazo (8-21 dias): {n_medio}")
+    print(f"  Estratégico (22-30 dias): {n_estrat}")
+    print(f"  Checklist habilitação: {len(proximos_passos['checklist_habilitacao'])} itens")
 
     # ---- Output ----
     if args.output:

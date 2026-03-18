@@ -847,15 +847,14 @@ def _build_resumo_decisorio(data: dict, styles: dict) -> list:
     ))
     el.append(Spacer(1, 2 * mm))
 
-    # Paragraph 2: Top 3 recommended (by ROI)
-    top_eds = sorted(
-        participar,
-        key=lambda e: (e.get("roi_potential") or {}).get("roi_max", 0),
-        reverse=True,
-    )[:3]
+    # Paragraph 2: Top 3 recommended — selected by viability score + capital adequacy
+    empresa_data = data.get("empresa", {})
+    capital_social_val = _safe_float(empresa_data.get("capital_social")) if empresa_data else 0.0
+    top_eds = select_destaques(participar, capital_social_val, max_destaques=3)
 
     if top_eds:
         lines = []
+        capital_notes = []
         for idx, e in enumerate(top_eds, 1):
             mun = _s(e.get("municipio", ""))
             uf = _s(e.get("uf", ""))
@@ -866,6 +865,7 @@ def _build_resumo_decisorio(data: dict, styles: dict) -> list:
             n_suppliers = (e.get("win_probability") or {}).get("n_unique_suppliers", 0)
             valor_e = _safe_float_gen(e.get("valor_estimado"))
             loc = f"{mun}/{uf}" if mun and uf else (mun or uf or "Local N/I")
+            adequacao = e.get("_adequacao_porte", "ADEQUADO")
             if n_suppliers > 0:
                 competition_text = f"~{n_suppliers} concorrentes"
             else:
@@ -881,10 +881,29 @@ def _build_resumo_decisorio(data: dict, styles: dict) -> list:
                 f"({_currency_short(valor_e)}, {competition_text}, "
                 f"retorno potencial até {_currency_short(max(roi_max, 0))})"
             )
+            if adequacao == "REQUER_CONSORCIO":
+                capital_notes.append(
+                    f"#{idx} — Valor acima de 5x o capital social "
+                    f"(razão {e.get('_capital_ratio', '?')}x). "
+                    "Considerar consórcio ou comprovação complementar de capacidade financeira."
+                )
+            elif adequacao == "ATENCAO":
+                capital_notes.append(
+                    f"#{idx} — Valor acima de 3x o capital social "
+                    f"(razão {e.get('_capital_ratio', '?')}x). Verificar exigência de patrimônio líquido."
+                )
         el.append(Paragraph(
             "<b>Destaques para ação imediata:</b><br/>" + "<br/>".join(lines),
             styles["body"],
         ))
+        if capital_notes:
+            for note in capital_notes:
+                note_style = ParagraphStyle(
+                    "cap_note_rd", parent=styles["body"],
+                    fontName="Helvetica-Oblique", fontSize=8,
+                    textColor=SIGNAL_AMBER, leading=11, spaceAfter=1 * mm,
+                )
+                el.append(Paragraph(f"Atenção: {note}", note_style))
         el.append(Spacer(1, 2 * mm))
 
     # Paragraph 3: Critical alerts
@@ -985,6 +1004,33 @@ def _safe_float_gen(v: Any) -> float:
         return 0.0
 
 
+def select_destaques(editais_participar: list, capital_social: float, max_destaques: int = 3) -> list:
+    """Select highlights by viability_score, with capital adequacy flag.
+
+    Prefers ADEQUADO editais (valor <= 3x capital), then ATENCAO (3-5x),
+    then REQUER_CONSORCIO (>5x). Within each tier, sorts by viability score desc.
+    """
+    for e in editais_participar:
+        valor = e.get("valor_estimado") or 0
+        ratio = valor / capital_social if capital_social > 0 else float('inf')
+        e["_capital_ratio"] = round(ratio, 1)
+        e["_adequacao_porte"] = (
+            "ADEQUADO" if ratio <= 3.0
+            else "ATENCAO" if ratio <= 5.0
+            else "REQUER_CONSORCIO"
+        )
+
+    # Sort by: adequação ASC (prefer adequate), then viability_score DESC
+    sorted_editais = sorted(
+        editais_participar,
+        key=lambda e: (
+            {"ADEQUADO": 0, "ATENCAO": 1, "REQUER_CONSORCIO": 2}.get(e.get("_adequacao_porte", ""), 3),
+            -(e.get("risk_score", {}).get("total", 0) if isinstance(e.get("risk_score"), dict) else 0),
+        )
+    )
+    return sorted_editais[:max_destaques]
+
+
 def _build_exclusive_intelligence(data: dict, styles: dict, sec: dict) -> list:
     """Build 'Inteligência Exclusiva' — 1-page executive summary of what PNCP alone can't provide.
 
@@ -1042,7 +1088,7 @@ def _build_exclusive_intelligence(data: dict, styles: dict, sec: dict) -> list:
             Paragraph("#", styles["cell_header_center"]),
             Paragraph("Órgão", styles["cell_header"]),
             Paragraph("Dinâmica Competitiva", styles["cell_header"]),
-            Paragraph("Prob.", styles["cell_header_center"]),
+            Paragraph("Comp.Est.", styles["cell_header_center"]),
         ]
         inc_rows = [inc_header]
         for idx, orgao, insight, prob in incumbent_insights[:8]:
@@ -1091,7 +1137,7 @@ def _build_exclusive_intelligence(data: dict, styles: dict, sec: dict) -> list:
         via_header = [
             Paragraph("#", styles["cell_header_center"]),
             Paragraph("Edital", styles["cell_header"]),
-            Paragraph("Viabilidade", styles["cell_header_center"]),
+            Paragraph("Compatibilidade", styles["cell_header_center"]),
             Paragraph("Fator Decisivo", styles["cell_header"]),
         ]
         via_rows = [via_header]
@@ -1287,9 +1333,9 @@ def _build_decision_table(data: dict, styles: dict, sec: dict) -> list:
                 diff_parts.append("Incumbente forte")
 
             if isinstance(risk, dict) and risk.get("total", 0) >= 60:
-                diff_parts.append(f"Viab. {risk['total']}/100")
+                diff_parts.append(f"Comp. {risk['total']}/100")
             elif isinstance(risk, dict) and risk.get("total", 0) > 0:
-                diff_parts.append(f"Viab. {risk['total']}/100")
+                diff_parts.append(f"Comp. {risk['total']}/100")
 
             if roi.get("strategic_reclassification") == "INVESTIMENTO_ESTRATEGICO_ACERVO" or cat == "INVESTIMENTO":
                 diff_parts.append("Acervo estratégico")
@@ -1334,20 +1380,27 @@ def _build_decision_table(data: dict, styles: dict, sec: dict) -> list:
 
 
 def _build_viability_text(risk: dict, styles: dict, _state: dict | None = None) -> list:
-    """Build viability indicator with score decomposition using sector-specific weights."""
+    """Build Compatibilidade indicator with score decomposition using sector-specific weights."""
     score = _safe_int(risk.get("total") if isinstance(risk, dict) else risk)
     if score <= 0:
         return []
 
     if score >= 60:
-        qualif = "Viabilidade Alta"
+        qualif = "Alta"
+        score_color = SIGNAL_GREEN
     elif score >= 30:
-        qualif = "Viabilidade Moderada"
+        qualif = "Moderada"
+        score_color = SIGNAL_AMBER
     else:
-        qualif = "Viabilidade Baixa"
+        qualif = "Baixa"
+        score_color = SIGNAL_RED
 
     el = [Paragraph(
-        f"<b>Índice de Viabilidade:</b> {score}/100 — {qualif}",
+        f"<b>Compatibilidade:</b> "
+        f"<font color='{score_color.hexval()}'><b>{score}/100</b></font>"
+        f" — {qualif}"
+        f"  <font size='8' color='{TEXT_MUTED.hexval()}'>"
+        f"(Adequação da oportunidade ao perfil da empresa)</font>",
         styles["body"],
     )]
 
@@ -1419,8 +1472,9 @@ def _build_viability_text(risk: dict, styles: dict, _state: dict | None = None) 
             ))
         else:
             el.append(Paragraph(
-                "Índice calculado com base em habilitação, prazo, "
-                "valor vs. capacidade, proximidade geográfica e competitividade.",
+                "Compatibilidade calculada com base em habilitação, prazo, "
+                "valor vs. capacidade, proximidade geográfica e competitividade. "
+                "Reflete a adequação da oportunidade ao perfil da empresa.",
                 styles["caption"],
             ))
         _state["viability_shown"] = True
@@ -1517,7 +1571,7 @@ def _build_roi_text(roi: dict, ed: dict, styles: dict, _state: dict | None = Non
 
     el.append(Paragraph(
         f"<b>Resultado Potencial:</b> {roi_text}  |  "
-        f"Probabilidade de vitória: {prob_text}{conf_label}",
+        f"Competitividade Est.: {prob_text}{conf_label}",
         styles["body"],
     ))
 
@@ -1544,7 +1598,7 @@ def _build_roi_text(roi: dict, ed: dict, styles: dict, _state: dict | None = Non
         if valor_edital > 0:
             memo_parts.append(f"Valor: {_currency(valor_edital)}")
         if probability > 0:
-            memo_parts.append(f"Prob.: {_dec(probability, 4)}")
+            memo_parts.append(f"Comp.Est.: {_dec(probability, 4)}")
         margin_range = roi.get("margin_range", "")
         if margin_range:
             memo_parts.append(f"Margem: {margin_range}")
@@ -1556,9 +1610,9 @@ def _build_roi_text(roi: dict, ed: dict, styles: dict, _state: dict | None = Non
 
     if _state is not None and not _state.get("roi_shown"):
         el.append(Paragraph(
-            "Resultado potencial = valor do edital × probabilidade de vitória × margem líquida do setor. "
-            "Probabilidade calculada via modelo competitivo (fornecedores históricos, "
-            "modalidade, incumbência) ajustado pelo índice de viabilidade.",
+            "Resultado potencial = valor do edital × Competitividade Estimada × margem líquida do setor. "
+            "Competitividade Estimada calculada via modelo competitivo (fornecedores históricos, "
+            "modalidade, incumbência) ajustada pela Compatibilidade.",
             styles["caption"],
         ))
         _state["roi_shown"] = True
@@ -1751,7 +1805,7 @@ def _build_competitive_section(data: dict, styles: dict, sec: dict) -> list:
         ))
         for idx, obj, prob in favorable[:5]:
             el.append(Paragraph(
-                f"  <b>{idx}.</b> {obj} — prob. vitória: {_pct(prob)}",
+                f"  <b>{idx}.</b> {obj} — Comp.Est.: {_pct(prob)}",
                 styles["body_small"],
             ))
         el.append(Spacer(1, 4 * mm))
@@ -1948,6 +2002,24 @@ def _build_executive_summary(data: dict, styles: dict, sec: dict | None = None) 
     ]))
     el.append(metrics)
     el.append(Spacer(1, 3 * mm))
+
+    # Legend: explain Compatibilidade and Competitividade Estimada
+    legend_text = (
+        "<b>COMPATIBILIDADE (0–100):</b> Avalia se a oportunidade é adequada para sua empresa "
+        "considerando modalidade, prazo, valor e localização. Score alto = oportunidade alinhada ao perfil.  "
+        "<b>COMPETITIVIDADE ESTIMADA (%):</b> Estima a probabilidade de vencer com base na "
+        "densidade de concorrentes e concentração de mercado. Percentual baixo é normal "
+        "em licitações abertas com muitos participantes."
+    )
+    el.append(Paragraph(
+        legend_text,
+        ParagraphStyle(
+            "metrics_legend", parent=styles["body_small"],
+            fontName="Helvetica", fontSize=7.5, textColor=TEXT_MUTED,
+            leading=10, spaceAfter=2 * mm,
+        ),
+    ))
+    el.append(Spacer(1, 2 * mm))
 
     # F41: Excel companion reference
     n_editais = len(editais)
@@ -2400,9 +2472,12 @@ def _build_detailed_analysis(data: dict, styles: dict, sec: dict | None = None, 
                 qualif = "Moderada"
             else:
                 qualif = "Baixa"
-            strategic_bar_parts.append(f"Viabilidade: {score}/100 ({qualif})")
+            strategic_bar_parts.append(f"Compatibilidade: {score}/100 ({qualif})")
         if isinstance(wp, dict) and (wp.get("probability", 0) > 0 or wp.get("n_unique_suppliers", 0) > 0):
-            strategic_bar_parts.append(f"Concorrência: {_friendly_competition_text(wp.get('probability', 0), wp)}")
+            prob_val = wp.get("probability", 0)
+            strategic_bar_parts.append(
+                f"Competitividade Est.: {_pct(prob_val)} | {_friendly_competition_text(prob_val, wp)}"
+            )
         if isinstance(roi, dict) and roi.get("roi_max", 0) > 0:
             strategic_bar_parts.append(f"Resultado potencial: até {_currency_short(roi['roi_max'])}")
         if ed.get("strategic_category"):
@@ -2657,7 +2732,7 @@ def _build_detailed_analysis(data: dict, styles: dict, sec: dict | None = None, 
             ]
             sc_rows = [sc_header]
             sc_rows.append([
-                Paragraph("Probabilidade", styles["cell"]),
+                Paragraph("Competitividade Est.", styles["cell"]),
                 Paragraph(_prob_fmt(sc_pess), styles["cell_center"]),
                 Paragraph(_prob_fmt(sc_base), styles["cell_center"]),
                 Paragraph(_prob_fmt(sc_opt), styles["cell_center"]),
@@ -2797,7 +2872,7 @@ def _build_detailed_analysis(data: dict, styles: dict, sec: dict | None = None, 
             Paragraph("Objeto / Órgão", styles["cell_header"]),
             Paragraph("UF", styles["cell_header_center"]),
             Paragraph("Valor", styles["cell_header_right"]),
-            Paragraph("Viabilidade", styles["cell_header_center"]),
+            Paragraph("Compatibilidade", styles["cell_header_center"]),
             Paragraph("Recomendação", styles["cell_header"]),
         ]
         ov_rows = [ov_header]
@@ -2984,7 +3059,7 @@ def _build_prioritization(data: dict, styles: dict, sec: dict | None = None) -> 
     header = [
         Paragraph("Rank", styles["cell_header_center"]),
         Paragraph("Edital", styles["cell_header"]),
-        Paragraph("Viab.", styles["cell_header_center"]),
+        Paragraph("Comp.", styles["cell_header_center"]),
         Paragraph("Concorrência", styles["cell_header_center"]),
         Paragraph("Resultado", styles["cell_header_right"]),
         Paragraph("Ação Imediata", styles["cell_header"]),
@@ -3102,16 +3177,155 @@ def _build_development_path(data: dict, styles: dict, sec: dict | None = None) -
     return el
 
 
+def _build_next_steps_horizon_table(
+    steps: list, horizon_label: str, styles: dict, avail: float,
+    header_color: Any, header_bg: Any
+) -> list:
+    """Render a single horizon as a compact table."""
+    el = []
+    if not steps:
+        return el
+
+    el.append(Paragraph(f"<b>{horizon_label}</b>", ParagraphStyle(
+        f"ns_h_{horizon_label[:4]}", parent=styles["h3"],
+        fontName="Helvetica-Bold", fontSize=9, textColor=header_color,
+        spaceBefore=3 * mm, spaceAfter=1 * mm,
+    )))
+
+    header_row = [
+        Paragraph("Ação", styles["cell_header"]),
+        Paragraph("Edital Ref.", styles["cell_header_center"]),
+        Paragraph("Prazo Proposta", styles["cell_header_center"]),
+        Paragraph("Prioridade", styles["cell_header_center"]),
+    ]
+    rows = [header_row]
+
+    for step in steps:
+        if not isinstance(step, dict):
+            rows.append([
+                Paragraph(_s(step), styles["cell"]),
+                Paragraph("—", styles["cell_center"]),
+                Paragraph("—", styles["cell_center"]),
+                Paragraph("—", styles["cell_center"]),
+            ])
+            continue
+        acao = _s(step.get("acao", ""))
+        edital_ref = _s(step.get("edital_ref", step.get("orgao", "")))
+        prazo_str = _s(step.get("prazo_proposta", step.get("prazo", "")))
+        dias = step.get("dias_restantes")
+        if dias is not None:
+            try:
+                dias_int = int(dias)
+                if prazo_str:
+                    prazo_str = f"{prazo_str} ({dias_int}d)"
+                else:
+                    prazo_str = f"{dias_int} dias"
+            except (ValueError, TypeError):
+                pass
+        prioridade = _s(step.get("prioridade", ""))
+        prio_upper = prioridade.upper()
+        prio_color = SIGNAL_RED if "URGENTE" in prio_upper or "ALTA" in prio_upper else (
+            SIGNAL_AMBER if "MEDIA" in prio_upper or "MÉDIA" in prio_upper else TEXT_COLOR
+        )
+        # Include documentos_necessarios as sub-note if present
+        docs = step.get("documentos_necessarios", [])
+        if docs and isinstance(docs, list):
+            docs_text = ", ".join(str(d) for d in docs[:3])
+            acao = f"{acao}<br/><font size='7' color='{TEXT_MUTED.hexval()}'><i>Docs: {_trunc(docs_text, 80)}</i></font>"
+
+        rows.append([
+            Paragraph(acao, styles["cell"]),
+            Paragraph(_trunc(edital_ref, 50), styles["cell_center"]),
+            Paragraph(prazo_str, styles["cell_center"]),
+            Paragraph(
+                f"<font color='{prio_color.hexval()}'><b>{prioridade}</b></font>",
+                styles["cell_center"],
+            ),
+        ])
+
+    t = _three_rule_table(rows, [avail * 0.48, avail * 0.22, avail * 0.17, avail * 0.13])
+    # Highlight header row with subtle bg
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), header_bg),
+    ]))
+    el.append(t)
+    el.append(Spacer(1, 2 * mm))
+    return el
+
+
 def _build_next_steps(data: dict, styles: dict, sec: dict | None = None) -> list:
     el = []
-    proximos = data.get("proximos_passos", [])
+    proximos = data.get("proximos_passos")
 
     num = sec["next"]() if sec else 7
     el.extend(_section_heading(f"{num}. Próximos Passos", styles))
 
     avail = PAGE_WIDTH - 2 * MARGIN
 
-    if proximos:
+    # Detect new dict structure vs legacy list structure
+    if isinstance(proximos, dict):
+        # New structure: keys = acao_imediata, medio_prazo, desenvolvimento_estrategico, checklist_habilitacao
+        acao_imediata = proximos.get("acao_imediata", [])
+        medio_prazo = proximos.get("medio_prazo", [])
+        desenvolvimento = proximos.get("desenvolvimento_estrategico", [])
+        checklist = proximos.get("checklist_habilitacao", [])
+
+        has_content = any([acao_imediata, medio_prazo, desenvolvimento, checklist])
+        if not has_content:
+            el.append(Paragraph(
+                "Nenhuma ação pendente identificada.",
+                ParagraphStyle("ns_empty", parent=styles["body"],
+                               textColor=TEXT_MUTED, fontName="Helvetica-Oblique"),
+            ))
+        else:
+            # Ação Imediata — Red/urgent
+            el.extend(_build_next_steps_horizon_table(
+                acao_imediata, "Ação Imediata (0–7 dias)", styles, avail,
+                header_color=SIGNAL_RED,
+                header_bg=colors.HexColor("#FFF5F5"),
+            ))
+            # Médio Prazo — Yellow
+            el.extend(_build_next_steps_horizon_table(
+                medio_prazo, "Médio Prazo (8–21 dias)", styles, avail,
+                header_color=SIGNAL_AMBER,
+                header_bg=colors.HexColor("#FFFDF0"),
+            ))
+            # Desenvolvimento Estratégico — Blue
+            el.extend(_build_next_steps_horizon_table(
+                desenvolvimento, "Desenvolvimento Estratégico (22–30 dias)", styles, avail,
+                header_color=colors.HexColor("#1A5276"),
+                header_bg=colors.HexColor("#EBF5FB"),
+            ))
+            # Checklist de Habilitação — checkbox style
+            if checklist:
+                el.append(Paragraph("<b>Checklist de Habilitação</b>", ParagraphStyle(
+                    "ns_chk_h", parent=styles["h3"],
+                    fontName="Helvetica-Bold", fontSize=9, textColor=INK,
+                    spaceBefore=3 * mm, spaceAfter=1 * mm,
+                )))
+                for item in checklist:
+                    if isinstance(item, dict):
+                        acao = _s(item.get("acao", ""))
+                        docs = item.get("documentos_necessarios", [])
+                        doc_text = ""
+                        if docs and isinstance(docs, list):
+                            doc_text = f" — <i>{_trunc(', '.join(str(d) for d in docs[:3]), 80)}</i>"
+                        el.append(Paragraph(
+                            f"&#x25A1; {acao}{doc_text}",
+                            ParagraphStyle(
+                                f"chk_{acao[:8]}", parent=styles["body_small"],
+                                fontSize=9, leading=12, spaceAfter=1 * mm,
+                            ),
+                        ))
+                    else:
+                        el.append(Paragraph(
+                            f"&#x25A1; {_s(item)}",
+                            styles["body_small"],
+                        ))
+                el.append(Spacer(1, 2 * mm))
+
+    elif isinstance(proximos, list) and proximos:
+        # Legacy list structure
         header = [
             Paragraph("Ação", styles["cell_header"]),
             Paragraph("Prazo", styles["cell_header_center"]),
@@ -3136,16 +3350,15 @@ def _build_next_steps(data: dict, styles: dict, sec: dict | None = None) -> list
                     Paragraph("—", styles["cell_center"]),
                     Paragraph("—", styles["cell_center"]),
                 ])
-
         t = _three_rule_table(rows, [avail * 0.60, avail * 0.22, avail * 0.18])
         el.append(t)
     else:
-        for i, text in enumerate([
-            "Revisar os editais marcados como PARTICIPAR e iniciar preparação documental.",
-            "Avaliar os editais marcados como AVALIAR COM CAUTELA conforme capacidade operacional.",
-            "Monitorar novos editais semanalmente para oportunidades adicionais.",
-        ], 1):
-            el.append(Paragraph(f"{i}. {text}", styles["bullet"]))
+        # Empty / missing — fallback message
+        el.append(Paragraph(
+            "Nenhuma ação pendente identificada.",
+            ParagraphStyle("ns_empty2", parent=styles["body"],
+                           textColor=TEXT_MUTED, fontName="Helvetica-Oblique"),
+        ))
 
     el.append(Spacer(1, 8 * mm))
 
@@ -3505,7 +3718,7 @@ def _build_portfolio_section(data: dict, styles: dict, sec: dict | None = None) 
 
     el.append(Paragraph(
         "Classificação das oportunidades por potencial estratégico, "
-        "combinando probabilidade de vitória, viabilidade técnica e valor de investimento.",
+        "combinando Competitividade Estimada, Compatibilidade e valor de investimento.",
         styles["body_small"],
     ))
     el.append(Spacer(1, 3 * mm))
@@ -3535,8 +3748,8 @@ def _build_portfolio_section(data: dict, styles: dict, sec: dict | None = None) 
     ]]
 
     cat_descriptions = {
-        "QUICK_WIN": "Alta probabilidade + alta viabilidade — prioridade máxima",
-        "OPORTUNIDADE": "Probabilidade moderada — vale a preparação cuidadosa",
+        "QUICK_WIN": "Alta Competitividade + alta Compatibilidade — prioridade máxima",
+        "OPORTUNIDADE": "Competitividade moderada — vale a preparação cuidadosa",
         "INVESTIMENTO": "Baixa probabilidade imediata, alto valor para acervo e relacionamento",
         "INACESSÍVEL": "Impedimentos de habilitação — não participar",
         "BAIXA_PRIORIDADE": "Baixo retorno esperado para o perfil atual",
@@ -3573,7 +3786,7 @@ def _build_portfolio_section(data: dict, styles: dict, sec: dict | None = None) 
             if qw_link and qw_link.startswith("http"):
                 obj = f'<a href="{qw_link}" color="{LINK_BLUE.hexval()}">{obj}</a>'
             el.append(Paragraph(
-                f"<b>{idx}.</b> {obj} — Prob. {_pct(prob)}, Valor {_currency(valor)}",
+                f"<b>{idx}.</b> {obj} — Comp.Est. {_pct(prob)}, Valor {_currency(valor)}",
                 styles["body_small"],
             ))
         el.append(Spacer(1, 3 * mm))
@@ -4223,7 +4436,22 @@ def _build_executive_summary_v6(data: dict, styles: dict, sec: dict | None = Non
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
     ]))
     el.append(metrics)
-    el.append(Spacer(1, 3 * mm))
+    el.append(Spacer(1, 2 * mm))
+
+    # Metrics legend — explains Compatibilidade vs Competitividade Est.
+    legend_style = ParagraphStyle(
+        "metrics_legend_v6", parent=styles["caption"],
+        fontName="Helvetica", fontSize=7.5, textColor=TEXT_MUTED, leading=10,
+        spaceAfter=3 * mm,
+    )
+    el.append(Paragraph(
+        "<b>COMPATIBILIDADE (0–100):</b> Avalia se a oportunidade é adequada para sua empresa "
+        "considerando modalidade, prazo, valor e localização. Score alto = oportunidade alinhada. "
+        "<b>COMPETITIVIDADE ESTIMADA (%):</b> Estima a probabilidade de vencer com base na "
+        "densidade de concorrentes e concentração de mercado. Percentual baixo é normal "
+        "em licitações abertas com muitos participantes.",
+        legend_style,
+    ))
 
     # Discard note
     n_desc = data.get("_descartados_count", 0)
@@ -4473,8 +4701,8 @@ def _build_edital_fichas(data: dict, styles: dict, sec: dict | None = None, _sta
             ))
         ficha_block.append(Spacer(1, 2 * mm))
 
-        # === 3. TEMOS CHANCE? ===
-        ficha_block.append(Paragraph("<b>3. TEMOS CHANCE?</b>", styles["h3"]))
+        # === 3. COMPETITIVIDADE ===
+        ficha_block.append(Paragraph("<b>3. COMPETITIVIDADE ESTIMADA</b>", styles["h3"]))
         prob = _safe_float(wp.get("probability", 0))
         prob_low = _safe_float(wp.get("probability_low", prob * 0.6))
         prob_high = _safe_float(wp.get("probability_high", min(prob * 1.5, 0.45)))
@@ -4488,7 +4716,7 @@ def _build_edital_fichas(data: dict, styles: dict, sec: dict | None = None, _sta
             low_pct = prob_low * 100
             high_pct = prob_high * 100
             conf_label = {"alta": "alta", "media": "média", "baixa": "baixa"}.get(confidence, confidence)
-            chance_parts.append(f"Probabilidade: {low_pct:.0f}–{high_pct:.0f}% (confiança {conf_label})")
+            chance_parts.append(f"Competitividade Est.: {low_pct:.0f}–{high_pct:.0f}% (confiança {conf_label})")
         if n_suppliers > 0:
             chance_parts.append(f"Concorrentes: ~{n_suppliers}")
         else:
@@ -4520,7 +4748,7 @@ def _build_edital_fichas(data: dict, styles: dict, sec: dict | None = None, _sta
         if roi_max > 0:
             invest_parts.append(f"Retorno: {_currency_short(roi_min)} — {_currency_short(roi_max)}")
         if score_total > 0:
-            invest_parts.append(f"Score viabilidade: {score_total}/100")
+            invest_parts.append(f"Compatibilidade: {score_total}/100")
 
         if invest_parts:
             ficha_block.append(Paragraph(" &nbsp;|&nbsp; ".join(invest_parts), styles["body"]))
@@ -4919,14 +5147,14 @@ def generate_markdown(data: dict, output_path: str) -> None:
             wp = ed.get("win_probability", {}) or {}
             prob = _safe_float(wp.get("probability", 0))
             n_sup = _safe_int(wp.get("n_unique_suppliers", 0))
-            lines.append(f"**3. Temos chance?** Probabilidade: {_pct(prob)} | Concorrentes: ~{n_sup if n_sup else 'N/I'}")
+            lines.append(f"**3. Temos chance?** Competitividade Est.: {_pct(prob)} | Concorrentes: ~{n_sup if n_sup else 'N/I'}")
             lines.append("")
 
             # ROI
             roi = ed.get("roi_potential", {}) or {}
             roi_max = roi.get("roi_max", 0)
             score = _safe_int((ed.get("risk_score") or {}).get("total", 0))
-            lines.append(f"**4. Vale o investimento?** Retorno: ate {_currency_short(roi_max)} | Viabilidade: {score}/100")
+            lines.append(f"**4. Vale o investimento?** Retorno: ate {_currency_short(roi_max)} | Compatibilidade: {score}/100")
             lines.append("")
 
             # Risks
@@ -5171,12 +5399,12 @@ def _build_annex_sources_condensed(data: dict, styles: dict, sec: dict) -> list:
 
     # Methodology — 3 lines instead of full tables
     el.append(Paragraph(
-        "<b>Metodologia:</b> Indice de viabilidade = media ponderada de 5 dimensoes "
+        "<b>Metodologia:</b> Compatibilidade = media ponderada de 5 dimensoes "
         "(Habilitacao 30%, Financeiro 25%, Geografico 20%, Prazo 15%, Competitivo 10%) — "
-        "pesos sao estimativas setoriais; o peso real de cada fator varia conforme o edital. "
-        "Resultado potencial = valor x probabilidade x margem setorial - custo. "
-        "Probabilidade de vitoria e estimativa heuristica baseada em dados historicos "
-        "de contratacao do orgao (modelo heuristico inspirado em analise de frequencia).",
+        "reflete a adequacao da oportunidade ao perfil da empresa; pesos sao estimativas setoriais. "
+        "Competitividade Estimada = probabilidade heuristica baseada em historico de contratacao "
+        "do orgao (densidade de concorrentes e concentracao de mercado). "
+        "Resultado potencial = valor x competitividade x margem setorial - custo.",
         styles["body_small"],
     ))
     el.append(Spacer(1, 3 * mm))
@@ -5246,7 +5474,7 @@ def _build_methodology_content(styles: dict) -> list:
     el.append(Paragraph("<b>Metodologia de Análise</b>", styles["h3"]))
 
     el.append(Paragraph(
-        "O índice de viabilidade combina cinco dimensões com pesos estimados "
+        "O índice de Compatibilidade combina cinco dimensões com pesos estimados "
         "para refletir os fatores mais determinantes na decisão de participação. "
         "Os pesos são estimativas setoriais utilizadas como aproximação — o peso real de cada "
         "fator varia conforme o edital específico.",
@@ -5291,19 +5519,21 @@ def _build_methodology_content(styles: dict) -> list:
         alignment=TA_CENTER, spaceBefore=2 * mm, spaceAfter=2 * mm,
     )
     el.append(Paragraph(
-        "(Valor do edital × Probabilidade de vitória × Margem líquida setorial) "
+        "(Valor do edital × Competitividade Estimada × Margem líquida setorial) "
         "− Custo estimado de participação",
         roi_formula,
     ))
     el.append(Spacer(1, 3 * mm))
 
     # Probability calibration
-    el.append(Paragraph("<b>Estimativa de Probabilidade</b>", styles["h3"]))
+    el.append(Paragraph("<b>Competitividade Estimada</b>", styles["h3"]))
     el.append(Paragraph(
-        "A probabilidade de vitória é uma estimativa heurística baseada em dados históricos "
-        "de contratação do órgão licitante obtidos via Portal Nacional de Contratações Públicas. "
+        "A Competitividade Estimada é uma estimativa heurística da probabilidade de vitória "
+        "baseada em dados históricos de contratação do órgão licitante obtidos via Portal "
+        "Nacional de Contratações Públicas. "
         "O modelo heurístico inspirado em análise de frequência considera o número de "
         "contratos históricos disponíveis — NÃO é uma projeção estatística calibrada. "
+        "Percentual baixo é normal em licitações abertas com muitos participantes. "
         "O nível de confiança da estimativa varia conforme a amostra disponível:",
         styles["body_small"],
     ))
@@ -5340,9 +5570,9 @@ def _build_methodology_content(styles: dict) -> list:
         "Estadual, Municipal, FGTS, CNDT), certidão de falência e registro CREA/CAU NÃO são "
         "verificados automaticamente; (2) o percentual de capital mínimo/patrimônio líquido "
         "utilizado é uma estimativa setorial — o percentual real é definido em cada edital e "
-        "deve ser conferido antes de submeter proposta; (3) probabilidades de vitória são "
-        "estimativas heurísticas baseadas em dados históricos de contratação do órgão, NÃO são "
-        "projeções estatísticas calibradas; (4) a capacidade financeira estimada é uma "
+        "deve ser conferido antes de submeter proposta; (3) Competitividade Estimada é "
+        "heurística baseada em dados históricos de contratação do órgão — percentual baixo "
+        "é normal em licitações abertas, NÃO é projeção estatística calibrada; (4) a capacidade financeira estimada é uma "
         "aproximação — a capacidade real depende de patrimônio líquido, receita, linhas de "
         "crédito e contratos em andamento; (5) CNAE não é requisito legal de habilitação — "
         "a Lei 14.133/2021 exige qualificação técnica (atestados) e compatibilidade do objeto "
@@ -5682,8 +5912,8 @@ def generate_excel_companion(data: dict, output_path: str) -> None:
     ws.title = "Oportunidades"
 
     # Headers
-    headers = ["#", "Recomendação", "Viabilidade", "Município", "UF", "Objeto",
-               "Valor Estimado", "Modalidade", "Prazo (dias)", "Concorrência",
+    headers = ["#", "Recomendação", "Compatibilidade", "Município", "UF", "Objeto",
+               "Valor Estimado", "Modalidade", "Prazo (dias)", "Competitividade Est.",
                "ROI Mín (R$)", "ROI Máx (R$)", "Distância (km)", "Cluster",
                "Justificativa", "Link PNCP"]
 

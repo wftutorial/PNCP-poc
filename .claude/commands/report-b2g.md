@@ -61,6 +61,32 @@ O Analyst recebe os seguintes campos pré-computados pelo script (somente refer�
 
 **Após retorno:** Verificar que o JSON foi salvo e contém os campos obrigatórios.
 
+**Se Analyst FALHAR** (timeout, context overflow, ou erro irrecuperável):
+1. Tentar 1 re-lançamento com contexto reduzido.
+2. Se falhar novamente → **Fallback Determinístico (GAP-H):**
+   - Pular Steps 4.5, 5, 6 — ir direto ao Step 7 com flag `--deterministic-only`
+   - PDF será gerado usando apenas scores determinísticos (risk_score, roi_potential, cronograma)
+   - Banner "RELATÓRIO DETERMINÍSTICO" será incluído automaticamente
+   - Informar usuário que análise qualitativa não foi possível
+
+### Step 4.5 — Gate Pós-Enriquecimento (Programático)
+
+**NOVO:** Validação programática entre Analyst e Auditor. Roda checks determinísticos + schema Pydantic automaticamente.
+
+```bash
+cd D:/pncp-poc
+python scripts/validate-report-data.py {DATA_JSON} --post-enrichment
+```
+
+- **Exit 0 (OK):** Prosseguir para Step 5.
+- **Exit 2 (WARNINGS):** Anotar os alertas. Se houver falhas em checks determinísticos (C6/C9), executar auto-fix:
+  ```bash
+  python scripts/auditor_deterministic_checks.py {DATA_JSON} --fix
+  ```
+- **Exit 1 (BLOCKED):** Re-lançar ANALYST com feedback: "O gate pós-enriquecimento bloqueou. Motivos: {blocks}. Corrigir e re-salvar JSON."
+
+**Valor:** Captura erros óbvios (veto ignorado, MEI com valor alto, schema inválido) sem gastar tempo no Auditor LLM. ~2s vs ~60s.
+
 ### Step 5 — Launch AUDITOR Agent (Phase 7)
 
 Criar subagente isolado para auditoria adversarial (NUNCA viu o processo do Analyst):
@@ -98,6 +124,9 @@ python scripts/generate-report-b2g.py \
 ```
 
 Se flag `--partial-banner` ativo, adicionar: `--partial-banner`
+Se flag `--deterministic-only` ativo (fallback do Step 4), adicionar: `--deterministic-only`
+
+**Métricas:** O gerador grava automaticamente em `data/report_metrics.jsonl` (GAP-E).
 
 ### Step 8 — Gerar Markdown
 

@@ -9406,31 +9406,10 @@ Examples:
     _global_timer.start()
 
     # ---- Phase 0: SICAF (first — user resolves captcha, then pipeline runs hands-free) ----
-    print("\n🔐 SICAF: Resolva o captcha agora — o restante da coleta será automático.")
-    sicaf = collect_sicaf(cnpj14, verbose=verbose)
-    print("  ✅ SICAF concluído — pipeline automático a partir daqui.\n")
+    # GAP-G: While user resolves SICAF captcha, start independent API calls in parallel
+    print("\n\U0001f510 SICAF: Resolva o captcha agora — o restante da coleta será automático.")
 
-    # ---- Phase 1: Company Profile ----
-    empresa = collect_opencnpj(api, cnpj14)
-
-    # BrasilAPI — Simples Nacional
-    if not (hasattr(args, 'skip_brasilapi') and args.skip_brasilapi):
-        brasilapi = collect_brasilapi(api, cnpj14)
-        empresa["simples_nacional"] = brasilapi.get("simples_nacional")
-        empresa["mei"] = brasilapi.get("mei")
-        empresa["data_opcao_simples"] = brasilapi.get("data_opcao_simples", "")
-        if not empresa.get("porte") and brasilapi.get("porte_fallback"):
-            empresa["porte"] = brasilapi["porte_fallback"]
-        # Fallback: if OpenCNPJ didn't return cidade_sede, try BrasilAPI data
-        if not empresa.get("cidade_sede") and brasilapi:
-            empresa["cidade_sede"] = brasilapi.get("municipio", "")
-            empresa["uf_sede"] = brasilapi.get("uf", "")
-            if empresa["cidade_sede"]:
-                print(f"  [SEDE] Cidade obtida via BrasilAPI: {empresa['cidade_sede']}/{empresa['uf_sede']}")
-    else:
-        brasilapi = {"_source": _source_tag("UNAVAILABLE", "Skipped via --skip-brasilapi")}
-
-    # Portal da Transparência
+    # Pre-load Portal da Transparência API key (no API call, just env var)
     pt_key = os.environ.get("PORTAL_TRANSPARENCIA_API_KEY", "")
     if not pt_key:
         # Try loading from .env
@@ -9444,23 +9423,66 @@ Examples:
                         pt_key = line.split("=", 1)[1].strip().strip("'\"")
                         break
 
-    transparencia = collect_portal_transparencia(api, cnpj14, pt_key)
+    # GAP-G Group 1: SICAF + OpenCNPJ + BrasilAPI in parallel
+    # SICAF requires user interaction (captcha), while OpenCNPJ and BrasilAPI are pure API calls.
+    # Running them concurrently saves ~2-5s that would otherwise be wasted waiting for captcha.
+    print("  [parallel] Collecting SICAF + company profile concurrently...")
+    _skip_brasilapi = hasattr(args, 'skip_brasilapi') and args.skip_brasilapi
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as g1_pool:
+        future_sicaf = g1_pool.submit(collect_sicaf, cnpj14, verbose)
+        future_opencnpj = g1_pool.submit(collect_opencnpj, api, cnpj14)
+        if not _skip_brasilapi:
+            future_brasilapi = g1_pool.submit(collect_brasilapi, api, cnpj14)
+
+        # Wait for results — SICAF may take longest (user captcha)
+        empresa = future_opencnpj.result()
+        if not _skip_brasilapi:
+            brasilapi = future_brasilapi.result()
+        else:
+            brasilapi = {"_source": _source_tag("UNAVAILABLE", "Skipped via --skip-brasilapi")}
+        sicaf = future_sicaf.result()
+
+    print("  \u2705 SICAF concluído — pipeline automático a partir daqui.\n")
+
+    # Merge BrasilAPI data into empresa
+    if not _skip_brasilapi:
+        empresa["simples_nacional"] = brasilapi.get("simples_nacional")
+        empresa["mei"] = brasilapi.get("mei")
+        empresa["data_opcao_simples"] = brasilapi.get("data_opcao_simples", "")
+        if not empresa.get("porte") and brasilapi.get("porte_fallback"):
+            empresa["porte"] = brasilapi["porte_fallback"]
+        # Fallback: if OpenCNPJ didn't return cidade_sede, try BrasilAPI data
+        if not empresa.get("cidade_sede") and brasilapi:
+            empresa["cidade_sede"] = brasilapi.get("municipio", "")
+            empresa["uf_sede"] = brasilapi.get("uf", "")
+            if empresa["cidade_sede"]:
+                print(f"  [SEDE] Cidade obtida via BrasilAPI: {empresa['cidade_sede']}/{empresa['uf_sede']}")
+
+    # GAP-G Group 2: Portal Transparência + PNCP Contratos in parallel
+    # Both need CNPJ (available), contratos also needs razao_social from empresa (available now).
+    # These two are independent of each other.
+    print("  [parallel] Collecting transparency + contract history concurrently...")
+    _razao_social_for_contracts = (empresa.get("razao_social") or empresa.get("nome_fantasia") or "")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as g2_pool:
+        future_transparencia = g2_pool.submit(collect_portal_transparencia, api, cnpj14, pt_key)
+        future_contratos = g2_pool.submit(
+            collect_pncp_contratos_fornecedor, api, cnpj14,
+            razao_social=_razao_social_for_contracts
+        )
+
+        transparencia = future_transparencia.result()
+        pncp_contratos, pncp_contratos_source = future_contratos.result()
 
     # Merge sanctions into empresa for downstream
     empresa["sancoes"] = transparencia["sancoes"]
 
-    # ---- Phase 1b: Contract History FIRST (before sector mapping) ----
+    # ---- Phase 1b: Contract History merging (data already collected in Group 2) ----
     # RATIONALE: Companies often win bids outside their CNAE classification.
     # By fetching actual contract history first, we extract keywords from what
     # the company REALLY does, then use those keywords (enriched with CNAE)
     # to search for open bids. This produces results aligned with the company's
     # actual field of work, not just their registered CNAE.
-    print("\n📋 Phase 1b: Histórico de contratos (ANTES do mapeamento de setor)")
-    # FIX 4: Pass razao_social so Strategy 2 (name search) can run as fallback
-    _razao_social_for_contracts = (empresa.get("razao_social") or empresa.get("nome_fantasia") or "")
-    pncp_contratos, pncp_contratos_source = collect_pncp_contratos_fornecedor(
-        api, cnpj14, razao_social=_razao_social_for_contracts
-    )
+    print("\n\U0001f4cb Phase 1b: Histórico de contratos (ANTES do mapeamento de setor)")
 
     # Merge PT federal + PNCP all-spheres into empresa.historico_contratos
     pt_contratos = transparencia.get("historico_contratos", [])
@@ -9510,7 +9532,7 @@ Examples:
         print("  Sem histórico de contratos — keywords serão derivadas apenas do CNAE")
 
     # ---- Sector Mapping (CNAE) ----
-    print("\n📋 Mapeando setor via CNAE")
+    print("\n\U0001f4cb Mapeando setor via CNAE")
     setor, cnae_keywords, sector_key = map_sector(empresa.get("cnae_principal", ""))
     print(f"  Setor: {setor}")
     print(f"  Keywords CNAE: {', '.join(cnae_keywords[:8])}{'...' if len(cnae_keywords) > 8 else ''}")
@@ -9579,13 +9601,13 @@ Examples:
     if not ufs:
         print("  UFs: todas (sem filtro)")
     else:
-        print(f"  📍 Cobertura geográfica: {len(ufs)} UF(s) — {', '.join(ufs)}")
+        print(f"  \U0001f4cd Cobertura geográfica: {len(ufs)} UF(s) — {', '.join(ufs)}")
         if len(ufs) > 5:
             print(f"     (>5 UFs: busca nacional com filtro client-side — considerar --ufs para focar)")
 
     # F40: Check global timeout before expensive phases
     if _TIMEOUT_REACHED:
-        print("  ⚠ TIMEOUT: Pulando busca de editais")
+        print("  \u26a0 TIMEOUT: Pulando busca de editais")
         editais_pncp, pncp_source = [], _source_tag("UNAVAILABLE", "Global timeout reached")
         editais_pcp, pcp_source = [], _source_tag("UNAVAILABLE", "Global timeout reached")
         qd_mencoes, qd_source = [], _source_tag("UNAVAILABLE", "Global timeout reached")
@@ -9593,34 +9615,55 @@ Examples:
     else:
         pass  # Continue with search
 
-    # ---- Phase 2a: Edital Search (using contract-enriched keywords) ----
-    # If company has multiple activity clusters, use per-cluster search
+    # ---- GAP-G Group 3: Edital Search — PNCP + PCP + Querido Diário in parallel ----
+    # All three sources need keywords + UFs (available now) and are independent of each other.
+    # If company has multiple activity clusters, use per-cluster search for PNCP.
     cluster_searches = extract_keywords_per_cluster(active_contracts, nature_profile=company_nature_profile) if active_contracts else []
 
-    if len(cluster_searches) >= 2:
-        # Multi-sector company: search per cluster
-        print(f"\n[SEARCH] Empresa diversificada — {len(cluster_searches)} clusters de atividade")
-        for cs in cluster_searches:
-            print(f"  • {cs['label']} ({cs['share_pct']:.0f}%) — {len(cs['keywords'])} keywords, modalidades {cs['modalidades']}")
-        editais_pncp, pncp_source = collect_pncp_multi_cluster(api, cluster_searches, ufs, args.dias,
-                                                               nature_profile=company_nature_profile,
-                                                               sector_key=sector_key)
-    else:
-        # Single-sector: use original search (backward compatible)
-        editais_pncp, pncp_source = collect_pncp(api, keywords, ufs, args.dias,
-                                                 nature_profile=company_nature_profile,
-                                                 sector_key=sector_key)
-
-    editais_pcp = []
-    pcp_source = _source_tag("UNAVAILABLE", "Skipped")
-    if not args.skip_pcp:
-        editais_pcp, pcp_source = collect_pcp(api, keywords, ufs, args.dias)
-
-    qd_mencoes = []
-    qd_source = _source_tag("UNAVAILABLE", "Skipped")
-    if not args.skip_qd:
+    if not _TIMEOUT_REACHED:
+        print("  [parallel] Collecting edital sources concurrently...")
         nome_empresa = empresa.get("nome_fantasia") or empresa.get("razao_social") or ""
-        qd_mencoes, qd_source = collect_querido_diario(api, keywords, nome_empresa, args.dias, ufs=ufs)
+        _g3_workers = 1  # At least PNCP
+
+        # Define wrapper functions to handle skip flags and return defaults
+        def _g3_collect_pncp():
+            if len(cluster_searches) >= 2:
+                print(f"\n[SEARCH] Empresa diversificada — {len(cluster_searches)} clusters de atividade")
+                for cs in cluster_searches:
+                    print(f"  \u2022 {cs['label']} ({cs['share_pct']:.0f}%) — {len(cs['keywords'])} keywords, modalidades {cs['modalidades']}")
+                return collect_pncp_multi_cluster(api, cluster_searches, ufs, args.dias,
+                                                  nature_profile=company_nature_profile,
+                                                  sector_key=sector_key)
+            else:
+                return collect_pncp(api, keywords, ufs, args.dias,
+                                    nature_profile=company_nature_profile,
+                                    sector_key=sector_key)
+
+        def _g3_collect_pcp():
+            if args.skip_pcp:
+                return [], _source_tag("UNAVAILABLE", "Skipped")
+            return collect_pcp(api, keywords, ufs, args.dias)
+
+        def _g3_collect_qd():
+            if args.skip_qd:
+                return [], _source_tag("UNAVAILABLE", "Skipped")
+            return collect_querido_diario(api, keywords, nome_empresa, args.dias, ufs=ufs)
+
+        if not args.skip_pcp:
+            _g3_workers += 1
+        if not args.skip_qd:
+            _g3_workers += 1
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=_g3_workers) as g3_pool:
+            future_pncp = g3_pool.submit(_g3_collect_pncp)
+            future_pcp = g3_pool.submit(_g3_collect_pcp)
+            future_qd = g3_pool.submit(_g3_collect_qd)
+
+            editais_pncp, pncp_source = future_pncp.result()
+            editais_pcp, pcp_source = future_pcp.result()
+            qd_mencoes, qd_source = future_qd.result()
+
+
 
     # ---- Filter: remove expired editais BEFORE expensive API calls ----
     all_editais = editais_pncp + editais_pcp

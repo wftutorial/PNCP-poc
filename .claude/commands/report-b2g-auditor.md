@@ -26,6 +26,16 @@ Ler o JSON completo. Focar em: `empresa`, `editais[]` (especialmente os com `rec
 
 ---
 
+## Pre-Check Determinístico (já executado)
+
+**IMPORTANTE:** Antes de você ser invocado, o orchestrator já executou `auditor_deterministic_checks.py` que verificou programaticamente os checks C6, C8, C9, C12, C13, C14. Se houve falhas, auto-fixes já foram aplicados (rebaixamentos). Verificar `delivery_validation.deterministic_pre_check` no JSON.
+
+Checks que você NÃO precisa re-verificar (já validados programaticamente):
+- **C6** (MEI limit), **C8** (link valid), **C9** (veto respected) — HARD blocks, já corrigidos
+- **C12** (acervo unverified), **C13** (price above), **C14** (low habilitacao) — SOFT, já rebaixados
+
+Foque sua energia nos checks que requerem **julgamento qualitativo** (C1-C5, C7, C10, C11, C15, C16).
+
 ## Checklist Binário por Edital
 
 Para CADA edital com recomendacao `PARTICIPAR`:

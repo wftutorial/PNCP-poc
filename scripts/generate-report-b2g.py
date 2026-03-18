@@ -6257,6 +6257,11 @@ def main():
     parser.add_argument("--input", required=True, help="Path to JSON data file")
     parser.add_argument("--output", help="Output PDF path (auto-generated if omitted)")
     parser.add_argument("--save-json", action="store_true", help="Save enriched JSON (with backfilled recommendations) back to input file")
+    parser.add_argument("--partial-banner", action="store_true",
+                        help="Add 'ANALISE PARCIAL' banner (used when Auditor BLOCKED after retry)")
+    parser.add_argument("--deterministic-only", action="store_true",
+                        help="Generate report using only deterministic data (no LLM enrichment). "
+                             "Used as fallback when Analyst agent fails.")
     args = parser.parse_args()
 
     input_path = Path(args.input)
@@ -6278,6 +6283,53 @@ def main():
             output_path = input_path.parent / f"report-{cnpj}-{nome_slug}-{date_str}.pdf"
         else:
             output_path = input_path.parent / f"report-{cnpj}-{date_str}.pdf"
+
+    # Deterministic-only mode: backfill recommendations from risk_score if Analyst didn't run
+    if args.deterministic_only:
+        _backfill_recommendations(data)
+        # Inject banner into resumo_executivo
+        if not data.get("resumo_executivo"):
+            editais = data.get("editais", [])
+            participar = sum(1 for e in editais if e.get("recomendacao") == "PARTICIPAR")
+            avaliar = sum(1 for e in editais if (e.get("recomendacao") or "").startswith("AVALIAR"))
+            nr = sum(1 for e in editais if e.get("recomendacao") == "NÃO RECOMENDADO")
+            data["resumo_executivo"] = {
+                "texto": (
+                    "RELATORIO DETERMINÍSTICO — Este relatório foi gerado sem análise "
+                    "qualitativa por IA. As recomendações baseiam-se exclusivamente nos "
+                    "scores de viabilidade (5 dimensões) e dados coletados das APIs. "
+                    "A análise documental dos editais não foi realizada."
+                ),
+                "destaques": [
+                    f"{participar} editais recomendados para participação (score >= 70)",
+                    f"{avaliar} editais para avaliação (score 40-69)",
+                    f"{nr} editais não recomendados (score < 40 ou veto)",
+                ],
+                "participar": participar,
+                "avaliar": avaliar,
+                "nao_recomendado": nr,
+            }
+        if not data.get("inteligencia_mercado"):
+            data["inteligencia_mercado"] = {
+                "panorama": "Análise de inteligência de mercado não disponível (modo determinístico).",
+                "tendencias": "",
+                "vantagens": "",
+                "recomendacao_geral": "Consultar análise qualitativa para posicionamento estratégico.",
+            }
+        print("  [deterministic-only] Recomendações derivadas de risk_score (sem LLM)")
+
+    # Partial banner mode
+    if args.partial_banner:
+        resumo = data.get("resumo_executivo", {})
+        if isinstance(resumo, dict):
+            original = resumo.get("texto", "")
+            resumo["texto"] = (
+                "ANALISE PARCIAL — Cobertura documental incompleta. O gate adversarial "
+                "bloqueou o relatório após retry. As recomendações podem não refletir "
+                "todos os requisitos de habilitação dos editais.\n\n" + original
+            )
+            data["resumo_executivo"] = resumo
+        print("  [partial-banner] Banner de análise parcial adicionado")
 
     # Deep copy before generate_report_b2g mutates data (filters descartados, encerrados)
     if args.save_json:
@@ -6315,6 +6367,18 @@ def main():
     md_path = str(output_path).replace(".pdf", ".md")
     generate_markdown(data, md_path)
     print(f"Markdown generated: {md_path}")
+
+    # Record pipeline metrics (GAP-E: quality tracking over time)
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from report_metrics import record_metrics, append_metric
+        metric = record_metrics(data)
+        metric["deterministic_only"] = args.deterministic_only
+        metric["partial_banner"] = args.partial_banner
+        append_metric(metric)
+        print(f"Metrics recorded: data/report_metrics.jsonl")
+    except Exception as e:
+        print(f"  [metrics] Falha ao gravar métricas: {e}")
 
 
 if __name__ == "__main__":

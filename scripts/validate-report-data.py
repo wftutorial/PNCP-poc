@@ -555,10 +555,13 @@ def validate(data: dict) -> dict:
 
 
 def validate_post_enrichment(data: dict) -> dict:
-    """Validate JSON after Claude enrichment (Phases 2-7).
+    """Validate JSON after Claude enrichment (Phases 2-5, BEFORE Auditor).
 
-    Checks that Claude's analysis is internally consistent and complete.
-    Returns {blocks: [], warnings: [], info: [], verdict: str}.
+    Checks that the Analyst's output is internally consistent and complete.
+    Also runs deterministic auditor checks (C6, C8, C9, C12, C13, C14) so
+    obvious failures are caught programmatically before the LLM Auditor.
+
+    Returns {blocks: [], warnings: [], info: [], deterministic_checks: dict|None, verdict: str}.
     """
     blocks: list[str] = []
     warnings: list[str] = []
@@ -647,6 +650,63 @@ def validate_post_enrichment(data: dict) -> dict:
                     f"de recomendação PARTICIPAR."
                 )
 
+    # 7. Pydantic schema validation (non-blocking — warns on schema drift)
+    try:
+        from report_schema import validate_post_enrichment as _schema_validate
+        schema_errors = _schema_validate(data)
+        if schema_errors:
+            for err in schema_errors[:5]:
+                warnings.append(f"SCHEMA: {err}")
+            if len(schema_errors) > 5:
+                warnings.append(f"SCHEMA: ... e mais {len(schema_errors) - 5} erros de schema")
+    except ImportError:
+        info.append("SCHEMA_SKIP: report_schema.py não encontrado — validação Pydantic pulada")
+    except Exception as e:
+        info.append(f"SCHEMA_ERROR: Falha na validação Pydantic: {e}")
+
+    # 8. Deterministic auditor checks (C6, C8, C9, C12, C13, C14)
+    deterministic_result = None
+    try:
+        from auditor_deterministic_checks import run_deterministic_checks
+        deterministic_result = run_deterministic_checks(data)
+        n_failed = deterministic_result.get("checks_failed", 0)
+        if n_failed > 0:
+            for f in deterministic_result.get("failures", []):
+                check_id = f.get("check", "?")
+                motivo = f.get("motivo", "?")
+                edital_id = f.get("edital_id", "?")
+                warnings.append(f"DETERMINISTIC_{check_id}: Edital {edital_id} — {motivo}")
+            info.append(f"DETERMINISTIC_CHECKS: {n_failed} falhas em {deterministic_result.get('checks_run', 0)} checks")
+        else:
+            info.append(f"DETERMINISTIC_CHECKS: {deterministic_result.get('checks_run', 0)} checks — todos PASSED")
+    except ImportError:
+        info.append("DETERMINISTIC_SKIP: auditor_deterministic_checks.py não encontrado")
+    except Exception as e:
+        info.append(f"DETERMINISTIC_ERROR: {e}")
+
+    # 9. resumo_executivo should exist after enrichment
+    if not data.get("resumo_executivo"):
+        warnings.append("RESUMO_EXECUTIVO_MISSING: resumo_executivo ausente no JSON enriquecido")
+
+    # 10. proximos_passos should exist
+    if not data.get("proximos_passos"):
+        warnings.append("PROXIMOS_PASSOS_MISSING: proximos_passos ausente no JSON enriquecido")
+
+    # 11. Recommendation count consistency
+    rec_counts = {}
+    for e in editais:
+        rec = (e.get("recomendacao") or "INDEFINIDO").upper()
+        rec_counts[rec] = rec_counts.get(rec, 0) + 1
+    resumo = data.get("resumo_executivo", {})
+    if isinstance(resumo, dict) and resumo.get("participar") is not None:
+        expected_p = resumo.get("participar", 0)
+        actual_p = rec_counts.get("PARTICIPAR", 0)
+        if expected_p != actual_p:
+            warnings.append(
+                f"REC_COUNT_MISMATCH: resumo_executivo.participar={expected_p} "
+                f"mas editais reais com PARTICIPAR={actual_p}"
+            )
+
     # Build verdict
     if blocks:
         verdict = "BLOCKED"
@@ -656,7 +716,10 @@ def validate_post_enrichment(data: dict) -> dict:
         verdict = "OK"
         info.append(f"Enriquecimento validado: {len(editais)} editais, {len(participar_avaliar)} recomendados")
 
-    return {"blocks": blocks, "warnings": warnings, "info": info, "verdict": verdict}
+    result = {"blocks": blocks, "warnings": warnings, "info": info, "verdict": verdict}
+    if deterministic_result is not None:
+        result["deterministic_checks"] = deterministic_result
+    return result
 
 
 def main():

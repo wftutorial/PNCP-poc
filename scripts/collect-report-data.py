@@ -1102,6 +1102,62 @@ def collect_pncp_contratos_fornecedor(
         else:
             print(f"  Strategy 2 (razao_social): {strat2_raw} raw, 0 contratos")
 
+    # Strategy 3: ComprasGov v3 — módulo-contratos
+    def _collect_comprasgov_contratos(cnpj_digits: str) -> list[dict]:
+        """Query dadosabertos.compras.gov.br for supplier contracts."""
+        contratos: list[dict] = []
+        base = "https://dadosabertos.compras.gov.br"
+
+        # 3a: Formal contracts
+        try:
+            url = f"{base}/modulo-contratos/1_consultarContratos"
+            resp = httpx.get(url, params={"niFornecedor": cnpj_digits, "pagina": 1, "tamanhoPagina": 500}, timeout=30)
+            if resp.status_code == 200:
+                data = resp.json()
+                items = data.get("data", data.get("content", data)) if isinstance(data, dict) else data
+                if isinstance(items, list):
+                    for item in items:
+                        contratos.append({
+                            "orgao": (item.get("orgaoEntidade") or {}).get("razaoSocial", ""),
+                            "uf": (item.get("unidadeOrgao") or {}).get("ufSigla", ""),
+                            "objeto": (item.get("objetoContrato") or "")[:200],
+                            "valor": _safe_float(item.get("valorInicial")),
+                            "data": item.get("dataAssinatura", ""),
+                            "fonte": "COMPRASGOV_CONTRATOS",
+                        })
+            print(f"  ComprasGov contratos: {len(contratos)} encontrados")
+        except Exception as e:
+            print(f"  ⚠ ComprasGov contratos falhou: {e}")
+
+        # 3b: Procurement results (licitações ganhas)
+        n_before = len(contratos)
+        try:
+            url = f"{base}/modulo-contratacoes/3_consultarResultadoItensContratacoes_PNCP_14133"
+            resp = httpx.get(url, params={"niFornecedor": cnpj_digits, "pagina": 1, "tamanhoPagina": 500}, timeout=30)
+            if resp.status_code == 200:
+                data = resp.json()
+                items = data.get("data", data.get("content", data)) if isinstance(data, dict) else data
+                if isinstance(items, list):
+                    for item in items:
+                        contratos.append({
+                            "orgao": (item.get("orgaoEntidade") or {}).get("razaoSocial", ""),
+                            "uf": (item.get("unidadeOrgao") or {}).get("ufSigla", ""),
+                            "objeto": (item.get("descricao") or "")[:200],
+                            "valor": _safe_float(item.get("valorTotalHomologado")),
+                            "data": item.get("dataResultado", ""),
+                            "fonte": "COMPRASGOV_RESULTADOS",
+                        })
+            print(f"  ComprasGov resultados: {len(contratos) - n_before} encontrados")
+        except Exception as e:
+            print(f"  ⚠ ComprasGov resultados falhou: {e}")
+
+        return contratos
+
+    cgov_contracts = _collect_comprasgov_contratos(cnpj14)
+    if cgov_contracts:
+        all_contracts.extend(cgov_contracts)
+        print(f"  ✓ ComprasGov v3: {len(cgov_contracts)} contrato(s) adicionados")
+
     # FIX 4 — Derive UFs from contract history (side effect stored in contracts themselves)
     # UF derivation happens downstream in extract_ufs_from_contracts() — no additional work needed here.
 
@@ -3377,6 +3433,20 @@ HARD_EXCLUSIONS_ENGENHARIA: frozenset[str] = frozenset({
     "ambulância", "ambulancia",
     "serviço funerário", "servico funerario",
     "seguro de vida", "plano de saúde", "plano de saude",
+    # Odontologia/saúde
+    "material odontológico", "material odontologico",
+    "odontológico", "odontologico",
+    "cadeira odontológica", "cadeira odontologica",
+    # Gases
+    "gás argônio", "gas argonio",
+    "argônio", "argonio",
+    "gás medicinal", "gas medicinal",
+    "gases medicinais", "gases industriais",
+    # Hospitalar expandido
+    "material médico-hospitalar", "material medico-hospitalar",
+    "insumo hospitalar", "equipamento hospitalar",
+    "equipamento médico", "equipamento medico",
+    "órtese", "ortese", "prótese", "protese",
 })
 
 # Map from sector_key prefix → hard exclusion set
@@ -3393,14 +3463,19 @@ _DENSITY_GATE_MIN_PCT = 0.02  # 2%
 
 
 def _check_hard_exclusions(objeto_lower: str, sector_key: str = "") -> str | None:
-    """Gate 1: Return the matched exclusion term if objeto contains a hard exclusion, else None."""
+    """Gate 1: Return the matched exclusion term if objeto contains a hard exclusion, else None.
+
+    objeto_lower is expected to be already accent-stripped (via _strip_accents).
+    We also normalize each exclusion term so accented variants match correctly.
+    """
     exclusions = _HARD_EXCLUSIONS_BY_SECTOR.get(sector_key, frozenset())
     if not exclusions:
         # Try prefix match (e.g. sector_key="engenharia_ambiental" → base "engenharia")
         base = sector_key.split("_")[0] if sector_key else ""
         exclusions = _HARD_EXCLUSIONS_BY_SECTOR.get(base, frozenset())
     for term in exclusions:
-        if term in objeto_lower:
+        normalized_term = _strip_accents(term)
+        if normalized_term in objeto_lower:
             return term
     return None
 
@@ -6094,6 +6169,12 @@ def compute_maturity_score(empresa: dict, sector_key: str = "") -> dict:
     else:
         profile = "CONSOLIDADO"
 
+    # Hard cap: 0 government contracts → max CRESCIMENTO
+    profile_capped = False
+    if total_count == 0 and profile in ("ESTABELECIDO", "CONSOLIDADO"):
+        profile = "CRESCIMENTO"
+        profile_capped = True
+
     # ─── Confidence: based on how many data sources contributed ─────────────
     data_sources_ok = 0
     if capital > 0:
@@ -6116,6 +6197,8 @@ def compute_maturity_score(empresa: dict, sector_key: str = "") -> dict:
     nota_parts = [f"Score {total_score}/100 ({confidence})"]
     nota_parts.append(f"Capital: R${capital:,.0f}" if capital > 0 else "Capital: não informado")
     nota_parts.append(f"{total_count} contrato(s) gov.")
+    if profile_capped:
+        nota_parts.append("perfil limitado a CRESCIMENTO por ausência de contratos governamentais")
     if data_inicio_str:
         nota_parts.append(f"Atividade desde {data_inicio_str[:10]}")
     nota = ". ".join(nota_parts)
@@ -6140,6 +6223,7 @@ def compute_maturity_score(empresa: dict, sector_key: str = "") -> dict:
         "acervo_objetos": acervo_objetos[:20],
         "rationale": nota,
         "federal_contract_count": esferas.get("Federal", 0),
+        "profile_capped": profile_capped,
         "_source": _source_tag("CALCULATED", f"4-axis score: fin={round(fin_raw)} hist={round(hist_raw)} op={round(op_raw)} mkt={round(mkt_raw)}"),
     }
 
@@ -7277,10 +7361,11 @@ def _compute_habilitacao_checklist(editais: list, empresa: dict, sicaf: dict, se
     is_simples = bool(empresa.get("simples_nacional"))
     is_mei = bool(empresa.get("mei"))
     has_acervo = bool(empresa.get("maturity_profile", {}).get("acervo_objetos"))
+    _sancoes_raw = empresa.get("sancoes") if isinstance(empresa.get("sancoes"), dict) else {}
     has_sancoes = any(
-        v for v in (empresa.get("sancoes") or {}).values()
-        if isinstance(v, (bool, int)) and v
-    ) if isinstance(empresa.get("sancoes"), dict) else False
+        v for k, v in _sancoes_raw.items()
+        if k != "sancionada" and isinstance(v, (bool, int)) and v
+    )
     sicaf_status = sicaf.get("status_crc") if sicaf else None
 
     # Sector-specific capital minimum percentage (Lei 14.133, art. 69 §4: max 10%)
@@ -7606,6 +7691,31 @@ def generate_proximos_passos(editais: list[dict], empresa: dict) -> dict:
         else:
             prioridade = "NORMAL"
 
+        # ROI gate
+        roi = ed.get("roi_potential") or {}
+        roi_min = roi.get("roi_min") if isinstance(roi, dict) else None
+        roi_max = roi.get("roi_max") if isinstance(roi, dict) else None
+
+        # Skip if both min AND max ROI are negative (guaranteed loss)
+        if roi_min is not None and roi_max is not None and roi_max < 0:
+            continue
+
+        # Build alerts
+        alertas: list[str] = []
+        if roi_min is not None and roi_min < 0:
+            alertas.append("Retorno potencialmente negativo no cenário pessimista")
+
+        hab_chk = ed.get("habilitacao_checklist") or {}
+        if hab_chk.get("cat_required") and not hab_chk.get("cat_available"):
+            alertas.append("Atestado técnico (CAT) exigido e não verificado")
+
+        # Downgrade priority if alerts exist
+        if alertas:
+            if prioridade == "ALTA":
+                prioridade = "MEDIA"
+            elif prioridade == "MEDIA":
+                prioridade = "NORMAL"
+
         acao_str = (
             f"{'⚡ URGENTE: ' if dias <= 3 else ''}"
             f"Preparar proposta para {orgao}"
@@ -7626,6 +7736,7 @@ def generate_proximos_passos(editais: list[dict], empresa: dict) -> dict:
             "recomendacao": rec,
             "link": ed.get("link") or "",
             "documentos_necessarios": docs_necessarios,
+            "alertas": alertas,
         }
 
         if dias <= 7:
@@ -7642,7 +7753,11 @@ def generate_proximos_passos(editais: list[dict], empresa: dict) -> dict:
 
     # ─── Checklist de habilitação (company-level, not per-edital) ────────────
     sicaf = empresa.get("sicaf") or {}
-    has_sancoes = bool((empresa.get("sancoes") or []))
+    _pp_sancoes_raw = empresa.get("sancoes") if isinstance(empresa.get("sancoes"), dict) else {}
+    has_sancoes = any(
+        v for k, v in _pp_sancoes_raw.items()
+        if k != "sancionada" and isinstance(v, (bool, int)) and v
+    )
     is_simples = bool(empresa.get("simples_nacional"))
     is_mei = "MEI" in (empresa.get("porte") or "").upper()
 

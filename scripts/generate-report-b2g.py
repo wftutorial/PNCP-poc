@@ -4670,7 +4670,7 @@ def _build_edital_fichas(data: dict, styles: dict, sec: dict | None = None, _sta
             if is_inconclusive:
                 checks.append(("VERIFICAR", SIGNAL_AMBER, "Sanções (verificação pendente)"))
             elif has_sanction:
-                checks.append(("NÃO", SIGNAL_RED, "Sem sanções ativas"))
+                checks.append(("SIM", SIGNAL_RED, "Sanções ativas (CEIS/CNEP/CEPIM/CEAF)"))
             else:
                 checks.append(("SIM", SIGNAL_GREEN, "Sem sanções ativas"))
 

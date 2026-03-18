@@ -19,6 +19,8 @@ Extrair CNPJ dos argumentos. Aceita `12.345.678/0001-90` ou `12345678000190`. De
 
 ### Step 2 — Phase 1: Coleta Determinística
 
+**IMPORTANTE:** O script inicia pelo SICAF (captcha do navegador). Assim que o captcha for resolvido, o restante da coleta roda automaticamente sem interação.
+
 ```bash
 cd D:/pncp-poc
 python scripts/collect-report-data.py --cnpj {CNPJ} --dias 30 --output {DATA_JSON}

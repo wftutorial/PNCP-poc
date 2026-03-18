@@ -8127,6 +8127,11 @@ Examples:
     _global_timer.daemon = True
     _global_timer.start()
 
+    # ---- Phase 0: SICAF (first — user resolves captcha, then pipeline runs hands-free) ----
+    print("\n🔐 SICAF: Resolva o captcha agora — o restante da coleta será automático.")
+    sicaf = collect_sicaf(cnpj14, verbose=verbose)
+    print("  ✅ SICAF concluído — pipeline automático a partir daqui.\n")
+
     # ---- Phase 1: Company Profile ----
     empresa = collect_opencnpj(api, cnpj14)
 
@@ -8530,8 +8535,7 @@ Examples:
             except Exception as e:
                 print(f"  ❌ {name} falhou: {e}")
 
-    # ---- SICAF (obrigatório — E2, runs after pool) ----
-    sicaf = collect_sicaf(cnpj14, verbose=verbose)
+    # ---- SICAF: já coletado no Phase 0 (captcha-first UX) ----
 
     # NOTE: Contract history (PNCP + PT) already collected in Phase 1b (before edital search)
     # and merged into transparencia["historico_contratos"]. No need to repeat here.

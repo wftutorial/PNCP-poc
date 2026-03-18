@@ -269,8 +269,8 @@ _PNCP_SEARCH_LINK_RE = re.compile(
 
 # Hard cap: only Top N editais get full detailed rendering; the rest get a condensed row
 MAX_DETAILED_EDITAIS = 15
-# Hard cap: overview table rows before truncating to Excel companion
-MAX_OVERVIEW_ROWS = 30
+# Hard cap: overview table rows before truncating to Excel companion (V6: reduced from 30)
+MAX_OVERVIEW_ROWS = 15
 
 # Canonical recommendation ordering — single source of truth
 REC_ORDER = {"PARTICIPAR": 0, "AVALIAR COM CAUTELA": 1, "AVALIAR": 1, "NÃO RECOMENDADO": 2}
@@ -4148,6 +4148,716 @@ def validate_report_completeness(data: dict) -> tuple[list[str], list[str]]:
 
 
 # ============================================================
+# V6: SIMPLIFIED REPORT SECTIONS (Track C — 10 pages max)
+# ============================================================
+
+def _build_executive_summary_v6(data: dict, styles: dict, sec: dict | None = None) -> list:
+    """V6 Resumo Executivo: metrics + 3 destaques + tese em 1 linha. Max 1 page."""
+    el = []
+    editais = data.get("editais", [])
+    resumo = data.get("resumo_executivo", {})
+
+    num = sec["next"]() if sec else 1
+    el.extend(_section_heading(f"{num}. Resumo Executivo", styles))
+
+    texto = _s(resumo.get("texto", ""))
+    if texto:
+        el.append(Paragraph(texto, styles["body"]))
+        el.append(Spacer(1, 4 * mm))
+
+    # Metrics — 4 boxes
+    total = len(editais)
+    participar = sum(1 for e in editais if (e.get("recomendacao") or "").upper().startswith("PARTICIPAR"))
+    cautela = sum(1 for e in editais if "CAUTELA" in (e.get("recomendacao") or "").upper() or "AVALIAR" in (e.get("recomendacao") or "").upper())
+    valores = [_safe_float(e.get("valor_estimado")) for e in editais if e.get("valor_estimado")]
+    valor_total = sum(valores)
+
+    avail = PAGE_WIDTH - 2 * MARGIN
+    col_w = avail / 4
+    metrics = Table(
+        [[
+            _metric_cell(str(total), "Oportunidades", styles),
+            _metric_cell(str(participar), "Participar", styles),
+            _metric_cell(str(cautela), "Avaliar", styles),
+            _metric_cell(_currency_short(valor_total), "Valor Total", styles),
+        ]],
+        colWidths=[col_w] * 4, rowHeights=[20 * mm],
+    )
+    metrics.setStyle(TableStyle([
+        ("LINEABOVE", (0, 0), (-1, 0), 0.6, RULE_HEAVY),
+        ("LINEBELOW", (0, 0), (-1, 0), 0.4, RULE_COLOR),
+        ("LINEBEFORE", (1, 0), (1, 0), 0.3, RULE_COLOR),
+        ("LINEBEFORE", (2, 0), (2, 0), 0.3, RULE_COLOR),
+        ("LINEBEFORE", (3, 0), (3, 0), 0.3, RULE_COLOR),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+    ]))
+    el.append(metrics)
+    el.append(Spacer(1, 3 * mm))
+
+    # Discard note
+    n_desc = data.get("_descartados_count", 0)
+    if n_desc > 0:
+        motivos = data.get("_descartados_motivos", "")
+        nota = f"{n_desc} licitação(ões) descartada(s) por falta de aderência ao perfil"
+        if motivos:
+            nota += f": {motivos}"
+        el.append(Paragraph(
+            f"<i>{nota}.</i>",
+            ParagraphStyle(
+                "discard_note_v6", parent=styles["caption"],
+                textColor=colors.HexColor("#888888"), fontSize=7.5,
+                spaceAfter=3 * mm,
+            ),
+        ))
+
+    # Destaques (max 3)
+    destaques = resumo.get("destaques", [])
+    if destaques:
+        for d in destaques[:3]:
+            el.append(Paragraph(f"— {_s(d)}", styles["bullet"]))
+        el.append(Spacer(1, 3 * mm))
+
+    # Tese estratégica — condensed to 3 lines max, inline
+    thesis_data = data.get("strategic_thesis")
+    if thesis_data:
+        thesis = thesis_data.get("thesis", "")
+        rationale = _s(thesis_data.get("rationale", ""))
+        # Sanitize nonsensical discount mentions
+        rationale = re.sub(r'desconto médio de apenas -?\d{3,}[,.]?\d*%\s*—\s*margens comprimidas\.?\s*', '', rationale)
+        rationale = re.sub(r'desconto médio de apenas N/I%?\s*—\s*margens comprimidas\.?\s*', '', rationale)
+
+        if thesis:
+            thesis_colors = {
+                "EXPANDIR": SIGNAL_GREEN,
+                "MANTER": SIGNAL_AMBER,
+                "REDUZIR": SIGNAL_RED,
+            }
+            t_color = thesis_colors.get(thesis, INK)
+            # Truncate rationale to ~1 sentence
+            rationale_short = _trunc(rationale, 180)
+            el.append(Paragraph(
+                f"<b>Tese:</b> <font color='{t_color.hexval()}'><b>{thesis}</b></font>"
+                f" — {rationale_short}",
+                styles["body"],
+            ))
+            el.append(Spacer(1, 3 * mm))
+
+    # Excel companion reference
+    if editais:
+        el.append(Paragraph(
+            f"<i>Este relatório acompanha planilha Excel com todos os {len(editais)} editais.</i>",
+            ParagraphStyle(
+                "excel_ref_v6", parent=styles["body_small"],
+                fontName="Helvetica-Oblique", fontSize=8, textColor=TEXT_MUTED,
+            ),
+        ))
+
+    el.append(Spacer(1, 6 * mm))
+    return el
+
+
+def _get_top_fornecedores_for_edital(ed: dict) -> list[dict]:
+    """Extract top 3 recurring suppliers for an edital from competitive_intel."""
+    ci = ed.get("competitive_intel", {})
+    fornecedores = []
+    if isinstance(ci, dict) and ci.get("top_fornecedores"):
+        for c in ci["top_fornecedores"][:3]:
+            fornecedores.append({
+                "nome": _s(c.get("nome", "")),
+                "contratos": c.get("n_contracts", c.get("contract_count", 1)),
+                "valor": c.get("valor_total"),
+            })
+    elif isinstance(ci, list):
+        for c in ci[:3]:
+            fornecedores.append({
+                "nome": _s(c.get("fornecedor", c.get("nome", ""))),
+                "contratos": 1,
+                "valor": c.get("valor", c.get("valor_total")),
+            })
+    return fornecedores
+
+
+def _build_edital_fichas(data: dict, styles: dict, sec: dict | None = None, _state: dict | None = None) -> list:
+    """V6 per-edital fichas: 6-question compact format, ~1 page each. Max 5 fichas."""
+    el = []
+    editais = data.get("editais", [])
+    if not editais:
+        return el
+
+    num = sec["next"]() if sec else 3
+    el.extend(_section_heading(f"{num}. Fichas de Oportunidade", styles))
+    el.append(Spacer(1, 2 * mm))
+
+    avail = PAGE_WIDTH - 2 * MARGIN
+
+    # Collect PARTICIPAR + AVALIAR editais (max 5)
+    ficha_candidates = []
+    for ed in editais:
+        idx = ed.get("_display_idx", 0)
+        rec = _normalize_recommendation(_s(ed.get("recomendacao", "")))
+        risk = ed.get("risk_score", {}) or {}
+        vetoed = risk.get("vetoed", False)
+        if rec == "NÃO RECOMENDADO" or vetoed:
+            continue
+        score = _safe_int((ed.get("risk_score") or {}).get("total", 0))
+        ficha_candidates.append((idx, ed, score))
+
+    ficha_candidates.sort(key=lambda x: x[2], reverse=True)
+    ficha_top = ficha_candidates[:5]
+
+    if len(ficha_candidates) > 5:
+        el.append(Paragraph(
+            f"<i>As {len(ficha_candidates) - 5} oportunidades restantes estão na planilha Excel.</i>",
+            ParagraphStyle("ficha_trunc", parent=styles["body_small"],
+                           fontName="Helvetica-Oblique", textColor=TEXT_MUTED),
+        ))
+        el.append(Spacer(1, 3 * mm))
+
+    for idx, ed, _score in ficha_top:
+        rec = _normalize_recommendation(_s(ed.get("recomendacao", "")))
+        risk = ed.get("risk_score", {}) or {}
+        wp = ed.get("win_probability", {}) or {}
+        roi = ed.get("roi_potential", {}) or {}
+        empresa = data.get("empresa", {})
+
+        rec_info = REC_STYLES.get(rec, REC_STYLES["PARTICIPAR"])
+        rec_color = rec_info["color"]
+
+        # === HEADER BAR ===
+        objeto = _s(ed.get("objeto", "Sem titulo"))
+        municipio = _s(ed.get("municipio", ""))
+        uf = _s(ed.get("uf", ""))
+        loc = f"{municipio}/{uf}" if municipio and uf else (municipio or uf or "")
+        link = _fix_pncp_link(ed.get("link", ""))
+
+        header_text = f"<font color='{rec_color.hexval()}'><b>[{rec}]</b></font> "
+        if loc:
+            header_text += f"<b>{loc}</b> — "
+        if link and link.startswith("http"):
+            header_text += f'<a href="{link}" color="{LINK_BLUE.hexval()}">{_trunc(objeto, 120)}</a>'
+        else:
+            header_text += _trunc(objeto, 120)
+
+        header_para = Paragraph(header_text, ParagraphStyle(
+            f"ficha_h_{idx}", parent=styles["h2"],
+            fontName="Times-Bold", fontSize=11, textColor=INK,
+            spaceBefore=4 * mm, spaceAfter=1 * mm,
+        ))
+
+        # Sub-header: valor | modalidade | prazo
+        valor_str = _currency(ed.get("valor_estimado")) if ed.get("valor_estimado") else "N/I"
+        modalidade = _s(ed.get("modalidade", ""))
+        enc_date = _date(ed.get("data_encerramento"))
+        sub_parts = [valor_str]
+        if modalidade:
+            sub_parts.append(modalidade)
+        if enc_date and enc_date != "N/I":
+            sub_parts.append(f"Prazo: {enc_date}")
+        sub_header = Paragraph(
+            " &nbsp;|&nbsp; ".join(sub_parts),
+            ParagraphStyle(
+                f"ficha_sub_{idx}", parent=styles["body_small"],
+                fontName="Helvetica", fontSize=9, textColor=TEXT_SECONDARY,
+                spaceAfter=3 * mm,
+            ),
+        )
+
+        ficha_block = [header_para, sub_header]
+
+        # Thin colored line under header
+        line_t = Table([["", ""]], colWidths=[avail, 0])
+        line_t.setStyle(TableStyle([("LINEBELOW", (0, 0), (0, 0), 1.5, rec_color)]))
+        ficha_block.append(line_t)
+        ficha_block.append(Spacer(1, 3 * mm))
+
+        # === 1. O QUE E? ===
+        ficha_block.append(Paragraph("<b>1. O QUE E?</b>", styles["h3"]))
+        justif = _s(ed.get("justificativa", ""))
+        aderencia = _s(ed.get("analise", {}).get("aderencia", ""))
+        escopo = aderencia if aderencia else (justif if justif else _trunc(objeto, 200))
+        ficha_block.append(Paragraph(_trunc(escopo, 250), styles["body"]))
+        ficha_block.append(Spacer(1, 2 * mm))
+
+        # === 2. ATENDEMOS OS REQUISITOS? ===
+        ficha_block.append(Paragraph("<b>2. ATENDEMOS OS REQUISITOS?</b>", styles["h3"]))
+
+        # Build checklist from hab analysis, SICAF, sanctions
+        checks = []
+        # Capital social
+        emp_capital = _safe_float(empresa.get("capital_social"))
+        valor_est = _safe_float(ed.get("valor_estimado"))
+        if emp_capital > 0 and valor_est > 0:
+            capital_ok = emp_capital >= valor_est * 0.10  # 10% rule of thumb
+            mark = "SIM" if capital_ok else "VERIFICAR"
+            mark_color = SIGNAL_GREEN if capital_ok else SIGNAL_AMBER
+            checks.append((mark, mark_color,
+                           f"Capital mínimo ({_currency_short(emp_capital)} vs. edital {_currency_short(valor_est)})"))
+
+        # SICAF status
+        sicaf = data.get("sicaf", {})
+        crc = sicaf.get("crc", {})
+        if crc.get("status_cadastral"):
+            sicaf_ok = crc["status_cadastral"] == "CADASTRADO"
+            mark = "SIM" if sicaf_ok else "NÃO"
+            mark_color = SIGNAL_GREEN if sicaf_ok else SIGNAL_RED
+            checks.append((mark, mark_color, f"SICAF ({crc['status_cadastral']})"))
+
+        # Sanctions
+        sancoes = empresa.get("sancoes", {})
+        if sancoes:
+            has_sanction = any(sancoes.get(k) for k in ["ceis", "cnep", "cepim", "ceaf"])
+            is_inconclusive = sancoes.get("inconclusive", False)
+            if is_inconclusive:
+                checks.append(("VERIFICAR", SIGNAL_AMBER, "Sanções (verificação pendente)"))
+            elif has_sanction:
+                checks.append(("NÃO", SIGNAL_RED, "Sem sanções ativas"))
+            else:
+                checks.append(("SIM", SIGNAL_GREEN, "Sem sanções ativas"))
+
+        # Acervo / CAT
+        acervo_confirmado = risk.get("acervo_confirmado", False)
+        if acervo_confirmado:
+            checks.append(("SIM", SIGNAL_GREEN, "Acervo técnico compatível"))
+        else:
+            checks.append(("VERIFICAR", SIGNAL_AMBER, "CAT exigida (verificar acervo)"))
+
+        # Hab analysis dimensions
+        hab = ed.get("habilitacao_analysis", {})
+        if hab and hab.get("dimensions"):
+            for dim in hab["dimensions"]:
+                status = dim.get("status", "")
+                if status in ("CRÍTICO", "INCOMPLETO"):
+                    checks.append(("NÃO", SIGNAL_RED, _s(dim.get("dimension", "")) + ": " + _s(dim.get("detail", ""))))
+
+        for mark, mark_color, text in checks[:6]:
+            symbol = "&#x2611;" if mark == "SIM" else ("&#x2610;" if mark == "NÃO" else "&#x25A1;")
+            ficha_block.append(Paragraph(
+                f"<font color='{mark_color.hexval()}'><b>{symbol} {mark}</b></font> {text}",
+                ParagraphStyle(f"chk_{idx}_{len(checks)}", parent=styles["body_small"],
+                               fontSize=9, leading=12, spaceAfter=0.5 * mm),
+            ))
+        ficha_block.append(Spacer(1, 2 * mm))
+
+        # === 3. TEMOS CHANCE? ===
+        ficha_block.append(Paragraph("<b>3. TEMOS CHANCE?</b>", styles["h3"]))
+        prob = _safe_float(wp.get("probability", 0))
+        n_suppliers = _safe_int(wp.get("n_unique_suppliers", wp.get("unique_suppliers", 0)))
+        prob_pct = prob * 100
+
+        chance_parts = []
+        if prob_pct > 0:
+            chance_parts.append(f"Probabilidade: {_pct(prob)}")
+        if n_suppliers > 0:
+            chance_parts.append(f"Concorrentes: ~{n_suppliers}")
+        else:
+            chance_parts.append(_friendly_competition_text(prob, wp))
+
+        # Top fornecedor recorrente
+        fornecedores = _get_top_fornecedores_for_edital(ed)
+        if fornecedores:
+            top = fornecedores[0]
+            chance_parts.append(
+                f"Fornecedor recorrente: {_trunc(top['nome'], 40)} ({top['contratos']} contrato(s))"
+            )
+
+        ficha_block.append(Paragraph(" &nbsp;|&nbsp; ".join(chance_parts[:2]), styles["body"]))
+        if len(chance_parts) > 2:
+            ficha_block.append(Paragraph(chance_parts[2], styles["body_small"]))
+        ficha_block.append(Spacer(1, 2 * mm))
+
+        # === 4. VALE O INVESTIMENTO? ===
+        ficha_block.append(Paragraph("<b>4. VALE O INVESTIMENTO?</b>", styles["h3"]))
+        roi_min = _safe_float(roi.get("roi_min", 0))
+        roi_max = _safe_float(roi.get("roi_max", 0))
+        score_total = _safe_int(risk.get("total", 0))
+
+        invest_parts = []
+        custo = roi.get("calculation_memory", {}).get("custo_participacao", 0)
+        if custo and _safe_float(custo) > 0:
+            invest_parts.append(f"Custo proposta: ~{_currency_short(custo)}")
+        if roi_max > 0:
+            invest_parts.append(f"Retorno: {_currency_short(roi_min)} — {_currency_short(roi_max)}")
+        if score_total > 0:
+            invest_parts.append(f"Score viabilidade: {score_total}/100")
+
+        if invest_parts:
+            ficha_block.append(Paragraph(" &nbsp;|&nbsp; ".join(invest_parts), styles["body"]))
+        else:
+            ficha_block.append(Paragraph("Dados insuficientes para estimativa de retorno.", styles["body_small"]))
+
+        # Strategic reclassification note
+        reclass = roi.get("strategic_reclassification")
+        if reclass == "INVESTIMENTO_ESTRATEGICO_ACERVO":
+            rationale = _s(roi.get("reclassification_rationale", ""))
+            ficha_block.append(Paragraph(
+                f"<i>Investimento Estratégico em Acervo: {_trunc(rationale, 120)}</i>",
+                ParagraphStyle(f"reclass_{idx}", parent=styles["body_small"],
+                               textColor=SIGNAL_AMBER, fontName="Helvetica-Oblique"),
+            ))
+        ficha_block.append(Spacer(1, 2 * mm))
+
+        # === 5. QUAIS OS RISCOS? ===
+        ficha_block.append(Paragraph("<b>5. QUAIS OS RISCOS?</b>", styles["h3"]))
+        risks_list = []
+        # From risk_analysis
+        risk_an = ed.get("risk_analysis", {})
+        if isinstance(risk_an, dict) and risk_an.get("flags"):
+            for flag in risk_an["flags"][:3]:
+                severity = flag.get("severity", "")
+                flag_text = _s(flag.get("flag", ""))
+                if severity == "ALTA":
+                    risks_list.append(f"<font color='{SIGNAL_RED.hexval()}'><b>[ALTO]</b></font> {flag_text}")
+                elif severity == "MEDIA":
+                    risks_list.append(f"<font color='{SIGNAL_AMBER.hexval()}'><b>[MEDIO]</b></font> {flag_text}")
+        # From fiscal risk
+        fiscal = risk.get("fiscal_risk", {})
+        if isinstance(fiscal, dict) and fiscal.get("nivel") == "ALTO":
+            fiscal_alerts = fiscal.get("alertas", [])
+            if fiscal_alerts:
+                risks_list.append(f"<font color='{SIGNAL_RED.hexval()}'><b>[FISCAL]</b></font> {fiscal_alerts[0]}")
+        # From organ risk
+        organ_risk = ed.get("organ_risk", {})
+        if organ_risk and organ_risk.get("organ_track_record") == "RISCO":
+            risks_list.append(f"<font color='{SIGNAL_RED.hexval()}'><b>[ORGAO]</b></font> Historico de problemas no orgao licitante")
+        # Tight deadline
+        dias = ed.get("dias_restantes")
+        if dias is not None and _safe_int(dias) <= 7:
+            risks_list.append(f"<font color='{SIGNAL_AMBER.hexval()}'><b>[PRAZO]</b></font> Encerra em {dias} dia(s)")
+        # IBGE fiscal capacity
+        ibge = ed.get("ibge", {})
+        pop = ibge.get("populacao")
+        if pop and valor_est and pop < 10_000 and valor_est > 5_000_000:
+            risks_list.append(f"<font color='{SIGNAL_AMBER.hexval()}'><b>[FISCAL]</b></font> Municipio pequeno ({_fmt_pop(pop)} hab.) licitando {_currency_short(valor_est)}")
+
+        if risks_list:
+            for r in risks_list[:3]:
+                ficha_block.append(Paragraph(f"  {r}", styles["body_small"]))
+        else:
+            ficha_block.append(Paragraph("Nenhum risco relevante identificado.", styles["body_small"]))
+        ficha_block.append(Spacer(1, 2 * mm))
+
+        # === 6. PROXIMO PASSO ===
+        ficha_block.append(Paragraph("<b>6. PROXIMO PASSO</b>", styles["h3"]))
+        # Derive concrete action from recommendation + deadline
+        dias_val = _safe_int(dias) if dias is not None else 30
+        if rec == "PARTICIPAR":
+            if dias_val <= 5:
+                action = f"Submeter proposta URGENTE ate {_date(ed.get('data_encerramento'))}"
+            elif dias_val <= 14:
+                action = f"Preparar documentacao e proposta ate {_date(ed.get('data_encerramento'))}"
+            else:
+                action = f"Iniciar preparacao documental. Prazo: {_date(ed.get('data_encerramento'))}"
+        else:  # AVALIAR
+            if not acervo_confirmado:
+                action = "Verificar acervo tecnico antes de decidir participacao"
+            else:
+                action = f"Avaliar custo-beneficio e decidir ate 7 dias antes de {_date(ed.get('data_encerramento'))}"
+
+        ficha_block.append(Paragraph(
+            f"<b>{_s(action)}</b>",
+            ParagraphStyle(f"action_{idx}", parent=styles["body"],
+                           fontName="Helvetica-Bold", fontSize=9, textColor=INK),
+        ))
+
+        ficha_block.append(Spacer(1, 6 * mm))
+
+        # Wrap entire ficha in KeepTogether for clean page breaks
+        el.append(KeepTogether(ficha_block))
+
+    el.append(Spacer(1, 4 * mm))
+    return el
+
+
+def _build_annex_nao_recomendado_inline(data: dict, styles: dict, sec: dict) -> list:
+    """Condensed table of non-recommended + vetoed editais (inline, not annex)."""
+    editais = data.get("editais", [])
+    nr_editais = [
+        (ed.get("_display_idx", i), ed) for i, ed in enumerate(editais, 1)
+        if _normalize_recommendation(_s(ed.get("recomendacao", ""))) == "NÃO RECOMENDADO"
+        or (ed.get("risk_score") or {}).get("vetoed", False)
+    ]
+    if not nr_editais:
+        return []
+
+    el = []
+    num = sec["next"]()
+    el.extend(_section_heading(f"{num}. Editais Nao Recomendados ({len(nr_editais)})", styles))
+
+    avail = PAGE_WIDTH - 2 * MARGIN
+    header = [
+        Paragraph("#", styles["cell_header_center"]),
+        Paragraph("Municipio / Objeto", styles["cell_header"]),
+        Paragraph("Valor", styles["cell_header_right"]),
+        Paragraph("Motivo", styles["cell_header"]),
+    ]
+    rows = [header]
+    # Cap to 10 rows — rest goes to Excel
+    display_nr = nr_editais[:10]
+    overflow_nr = len(nr_editais) - len(display_nr)
+
+    for idx, ed in display_nr:
+        mun = _s(ed.get("municipio", ""))
+        uf = _s(ed.get("uf", ""))
+        obj = _trunc(_s(ed.get("objeto", "")), 120)
+        valor = _currency_short(ed.get("valor_estimado"))
+        link = _fix_pncp_link(ed.get("link", ""))
+
+        risk = ed.get("risk_score", {}) or {}
+        if risk.get("vetoed"):
+            veto_reasons = risk.get("veto_reasons", [])
+            justif = "ELIMINATORIO: " + "; ".join(veto_reasons) if veto_reasons else "Impedimento legal"
+            justif = _trunc(justif, 100)
+        else:
+            justif = _trunc(_s(ed.get("justificativa", "")), 80)
+
+        obj_text = f'{mun}/{uf} — {obj}'
+        if link and link.startswith("http"):
+            obj_text = f'<a href="{link}" color="{LINK_BLUE.hexval()}">{obj_text}</a>'
+
+        rows.append([
+            Paragraph(f"<b>{idx}</b>", styles["cell_center"]),
+            Paragraph(obj_text, styles["cell"]),
+            Paragraph(valor, styles["cell_right"]),
+            Paragraph(justif, styles["cell"]),
+        ])
+
+    t = _three_rule_table(rows, [avail * 0.06, avail * 0.34, avail * 0.12, avail * 0.48])
+    el.append(t)
+    if overflow_nr > 0:
+        el.append(Paragraph(
+            f"+ {overflow_nr} edital(is) adicional(is) na planilha Excel.",
+            ParagraphStyle("nr_overflow", parent=styles["caption"],
+                           fontName="Helvetica-Oblique", textColor=TEXT_MUTED,
+                           spaceBefore=2 * mm),
+        ))
+    el.append(Spacer(1, 6 * mm))
+    return el
+
+
+def _build_development_plan_condensed(data: dict, styles: dict, sec: dict | None = None) -> list:
+    """V6: Development plan condensed to 3-5 bullet points."""
+    editais = data.get("editais", [])
+    all_gaps = []
+    for ed in editais:
+        qual_gap = ed.get("qualification_gap", {})
+        for gap in qual_gap.get("operational_gaps", []):
+            gap_copy = dict(gap)
+            gap_copy["edital_objeto"] = _trunc(_s(ed.get("objeto", "")), 60)
+            all_gaps.append(gap_copy)
+
+    if not all_gaps:
+        return []
+
+    # Deduplicate
+    seen = set()
+    unique_gaps = []
+    for g in all_gaps:
+        key = (g.get("gap_type", ""), g.get("description", ""))
+        if key not in seen:
+            seen.add(key)
+            unique_gaps.append(g)
+
+    if not unique_gaps:
+        return []
+
+    el = []
+    num = sec["next"]() if sec else 5
+    el.extend(_section_heading(f"{num}. Plano de Desenvolvimento", styles))
+
+    el.append(Paragraph(
+        "Lacunas operacionais identificadas que, se sanadas, ampliam o acesso a novos mercados.",
+        styles["body_small"],
+    ))
+    el.append(Spacer(1, 2 * mm))
+
+    # Max 5 bullets
+    for g in unique_gaps[:5]:
+        gap_type = _s(g.get("gap_type", ""))
+        desc = _trunc(_s(g.get("description", "")), 100)
+        action = _trunc(_s(g.get("action_required", "")), 80)
+        timeline = _s(g.get("estimated_timeline", ""))
+
+        bullet_text = f"<b>{gap_type}:</b> {desc}"
+        if action:
+            bullet_text += f" — <i>{action}</i>"
+        if timeline:
+            bullet_text += f" ({timeline})"
+
+        el.append(Paragraph(f"  {bullet_text}", styles["body_small"]))
+
+    el.append(Spacer(1, 6 * mm))
+    return el
+
+
+def generate_markdown(data: dict, output_path: str) -> None:
+    """C3: Generate clean markdown from JSON data, covering only sections in the PDF."""
+    editais = data.get("editais", [])
+    empresa = data.get("empresa", {})
+    resumo = data.get("resumo_executivo", {})
+
+    lines: list[str] = []
+
+    # Header
+    nome = empresa.get("nome_fantasia") or empresa.get("razao_social", "Empresa")
+    cnpj = empresa.get("cnpj", "")
+    lines.append(f"# Relatorio Executivo de Oportunidades em Licitacoes")
+    lines.append(f"**{nome}** | CNPJ {cnpj}")
+    lines.append(f"Data: {_today()}")
+    lines.append("")
+
+    # Resumo Executivo
+    lines.append("## 1. Resumo Executivo")
+    lines.append("")
+    texto = resumo.get("texto", "")
+    if texto:
+        lines.append(texto)
+        lines.append("")
+
+    total = len(editais)
+    participar_eds = [e for e in editais if (e.get("recomendacao") or "").upper() == "PARTICIPAR"]
+    avaliar_eds = [e for e in editais if "AVALIAR" in (e.get("recomendacao") or "").upper()]
+    valor_total = sum(_safe_float_gen(e.get("valor_estimado")) for e in editais)
+
+    lines.append(f"| Metrica | Valor |")
+    lines.append(f"|---------|-------|")
+    lines.append(f"| Oportunidades | {total} |")
+    lines.append(f"| Participar | {len(participar_eds)} |")
+    lines.append(f"| Avaliar | {len(avaliar_eds)} |")
+    lines.append(f"| Valor Total | {_currency_short(valor_total)} |")
+    lines.append("")
+
+    destaques = resumo.get("destaques", [])
+    if destaques:
+        for d in destaques[:3]:
+            lines.append(f"- {d}")
+        lines.append("")
+
+    # Tese
+    thesis_data = data.get("strategic_thesis")
+    if thesis_data and thesis_data.get("thesis"):
+        rationale = thesis_data.get("rationale", "")
+        lines.append(f"**Tese: {thesis_data['thesis']}** — {_trunc(rationale, 180)}")
+        lines.append("")
+
+    # Decision Table
+    lines.append("## 2. Decisao em 30 Segundos")
+    lines.append("")
+    lines.append("| # | Objeto | Valor | Prazo | Recomendacao |")
+    lines.append("|---|--------|-------|-------|--------------|")
+    editais_sorted = sorted(
+        editais,
+        key=lambda e: (
+            REC_ORDER.get(_normalize_recommendation(e.get("recomendacao", "")), 9),
+            -(_safe_int((e.get("risk_score") or {}).get("total", 0))),
+        ),
+    )
+    for i, ed in enumerate(editais_sorted[:20], 1):
+        obj = _trunc(ed.get("objeto", ""), 80)
+        valor = _currency_short(ed.get("valor_estimado"))
+        prazo = _format_prazo_short(ed.get("dias_restantes"))
+        rec = _normalize_recommendation(ed.get("recomendacao", ""))
+        lines.append(f"| {i} | {obj} | {valor} | {prazo} | {rec} |")
+    lines.append("")
+
+    # Fichas
+    ficha_eds = [e for e in editais if _normalize_recommendation(e.get("recomendacao", "")) in ("PARTICIPAR", "AVALIAR COM CAUTELA")]
+    ficha_eds.sort(key=lambda e: -(_safe_int((e.get("risk_score") or {}).get("total", 0))))
+
+    if ficha_eds:
+        lines.append("## 3. Fichas de Oportunidade")
+        lines.append("")
+        for i, ed in enumerate(ficha_eds[:5], 1):
+            rec = _normalize_recommendation(ed.get("recomendacao", ""))
+            mun = ed.get("municipio", "")
+            uf = ed.get("uf", "")
+            obj = ed.get("objeto", "")
+            valor = _currency(ed.get("valor_estimado")) if ed.get("valor_estimado") else "N/I"
+            modalidade = ed.get("modalidade", "")
+            link = _fix_pncp_link(ed.get("link", ""))
+
+            lines.append(f"### [{rec}] {mun}/{uf} — {_trunc(obj, 100)}")
+            lines.append(f"{valor} | {modalidade} | Prazo: {_date(ed.get('data_encerramento'))}")
+            if link:
+                lines.append(f"[Link PNCP]({link})")
+            lines.append("")
+
+            lines.append(f"**1. O que e?** {_trunc(ed.get('justificativa', obj), 200)}")
+            lines.append("")
+
+            # Chance
+            wp = ed.get("win_probability", {}) or {}
+            prob = _safe_float(wp.get("probability", 0))
+            n_sup = _safe_int(wp.get("n_unique_suppliers", 0))
+            lines.append(f"**3. Temos chance?** Probabilidade: {_pct(prob)} | Concorrentes: ~{n_sup if n_sup else 'N/I'}")
+            lines.append("")
+
+            # ROI
+            roi = ed.get("roi_potential", {}) or {}
+            roi_max = roi.get("roi_max", 0)
+            score = _safe_int((ed.get("risk_score") or {}).get("total", 0))
+            lines.append(f"**4. Vale o investimento?** Retorno: ate {_currency_short(roi_max)} | Viabilidade: {score}/100")
+            lines.append("")
+
+            # Risks
+            risk_an = ed.get("risk_analysis", {})
+            if isinstance(risk_an, dict) and risk_an.get("flags"):
+                lines.append("**5. Riscos:**")
+                for flag in risk_an["flags"][:3]:
+                    lines.append(f"- [{flag.get('severity', '')}] {flag.get('flag', '')}")
+                lines.append("")
+
+            lines.append("---")
+            lines.append("")
+
+    # NÃO RECOMENDADO
+    nao_rec = [e for e in editais if _normalize_recommendation(e.get("recomendacao", "")) == "NÃO RECOMENDADO"]
+    if nao_rec:
+        lines.append(f"## 4. Editais Nao Recomendados ({len(nao_rec)})")
+        lines.append("")
+        lines.append("| # | Objeto | Valor | Motivo |")
+        lines.append("|---|--------|-------|--------|")
+        for i, ed in enumerate(nao_rec, 1):
+            obj = _trunc(ed.get("objeto", ""), 60)
+            valor = _currency_short(ed.get("valor_estimado"))
+            justif = _trunc(ed.get("justificativa", ""), 80)
+            lines.append(f"| {i} | {obj} | {valor} | {justif} |")
+        lines.append("")
+
+    # Proximos Passos
+    proximos = data.get("proximos_passos", [])
+    if proximos:
+        lines.append("## Proximos Passos")
+        lines.append("")
+        for step in proximos:
+            if isinstance(step, dict):
+                acao = step.get("acao", "")
+                prazo = step.get("prazo", "")
+                lines.append(f"- **{acao}** (prazo: {prazo})")
+            else:
+                lines.append(f"- {step}")
+        lines.append("")
+
+    # Perfil da Empresa
+    lines.append("## Perfil da Empresa")
+    lines.append("")
+    lines.append(f"- Razao Social: {empresa.get('razao_social', '')}")
+    lines.append(f"- CNPJ: {empresa.get('cnpj', '')}")
+    lines.append(f"- CNAE: {empresa.get('cnae_principal', '')}")
+    lines.append(f"- Porte: {empresa.get('porte', '')}")
+    lines.append(f"- Capital Social: {_currency(empresa.get('capital_social')) if empresa.get('capital_social') else 'N/I'}")
+    lines.append(f"- Sede: {empresa.get('cidade_sede', '')} — {empresa.get('uf_sede', '')}")
+    lines.append("")
+
+    # Footer
+    lines.append("---")
+    lines.append(f"*Tiago Sasaki — Consultor de Inteligencia em Licitacoes*")
+    lines.append(f"*Relatorio confidencial preparado exclusivamente para o destinatario*")
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines))
+
+
+# ============================================================
 # ANNEXES (3-layer architecture: Camada 3)
 # ============================================================
 
@@ -4211,6 +4921,164 @@ def _build_annex_nao_recomendado(data: dict, styles: dict, sec: dict) -> list:
     t = _three_rule_table(rows, [avail * 0.06, avail * 0.34, avail * 0.12, avail * 0.48])
     el.append(t)
     el.append(Spacer(1, 8 * mm))
+    return el
+
+
+def _build_annex_company_condensed(data: dict, styles: dict, sec: dict) -> list:
+    """V6 Annex A: Condensed company profile — key data only, ~0.5 page."""
+    el = []
+    el.append(PageBreak())
+    num = sec["next"]()
+    el.extend(_section_heading(f"Anexo A — Perfil da Empresa", styles))
+
+    emp = data.get("empresa", {})
+    avail = PAGE_WIDTH - 2 * MARGIN
+
+    # Compact key-value table (essential fields only)
+    info_rows = []
+    raw_fields = [
+        ("Razao Social", emp.get("razao_social")),
+        ("CNPJ", emp.get("cnpj")),
+        ("CNAE Principal", emp.get("cnae_principal")),
+        ("Porte", emp.get("porte")),
+        ("Capital Social", _currency(emp.get("capital_social")) if emp.get("capital_social") else None),
+        ("Sede", f"{emp.get('cidade_sede', '')} — {emp.get('uf_sede', '')}"),
+    ]
+    for label, value in raw_fields:
+        if value and str(value).strip() and value != " — ":
+            info_rows.append([
+                Paragraph(f"<b>{label}</b>", ParagraphStyle(
+                    f"lbl_c_{label[:6]}", parent=styles["cell"],
+                    fontName="Helvetica-Bold", textColor=TEXT_SECONDARY,
+                )),
+                Paragraph(_s(str(value)), styles["cell"]),
+            ])
+
+    if info_rows:
+        info_t = Table(info_rows, colWidths=[avail * 0.22, avail * 0.78])
+        info_t.setStyle(TableStyle([
+            ("LINEABOVE", (0, 0), (-1, 0), 0.6, RULE_HEAVY),
+            ("LINEBELOW", (0, -1), (-1, -1), 0.4, RULE_COLOR),
+            *[("LINEBELOW", (0, i), (-1, i), 0.2, RULE_COLOR) for i in range(len(info_rows) - 1)],
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ("LEFTPADDING", (0, 0), (-1, -1), 5),
+        ]))
+        el.append(info_t)
+        el.append(Spacer(1, 3 * mm))
+
+    # Sanctions — single line
+    sancoes = emp.get("sancoes", {})
+    if sancoes:
+        has_sanction = any(sancoes.get(k) for k in ["ceis", "cnep", "cepim", "ceaf"])
+        is_inconclusive = sancoes.get("inconclusive", False)
+        if is_inconclusive:
+            sanc_text = f"<font color='{SIGNAL_AMBER.hexval()}'><b>Sancoes:</b> Verificacao pendente</font>"
+        elif has_sanction:
+            details = [k.upper() for k in ["ceis", "cnep", "cepim", "ceaf"] if sancoes.get(k)]
+            sanc_text = f"<font color='{SIGNAL_RED.hexval()}'><b>Sancoes:</b> Ativa — {', '.join(details)}</font>"
+        else:
+            sanc_text = "<b>Sancoes:</b> Nenhuma ativa (CEIS, CNEP, CEPIM, CEAF verificados)"
+        el.append(Paragraph(sanc_text, styles["body"]))
+        el.append(Spacer(1, 2 * mm))
+
+    # Maturity badge — single line
+    maturity = data.get("maturity_profile") or emp.get("maturity_profile", {})
+    if maturity and maturity.get("profile"):
+        profile_labels = {
+            "ENTRANTE": "Entrante", "REGIONAL": "Regional", "ESTABELECIDO": "Estabelecido",
+        }
+        el.append(Paragraph(
+            f"<b>Perfil:</b> {profile_labels.get(maturity['profile'], maturity['profile'])}",
+            styles["body"],
+        ))
+
+    # Contract history — single line
+    historico = emp.get("historico_contratos", [])
+    if historico:
+        valor_hist = sum(_safe_float(c.get("valor")) for c in historico)
+        el.append(Paragraph(
+            f"<b>Historico:</b> {len(historico)} contrato(s) governamentais"
+            + (f" ({_currency(valor_hist)})" if valor_hist > 0 else ""),
+            styles["body"],
+        ))
+
+    el.append(Spacer(1, 6 * mm))
+    return el
+
+
+def _build_annex_sources_condensed(data: dict, styles: dict, sec: dict) -> list:
+    """V6 Annex B: Condensed sources + methodology — ~0.5 page."""
+    el = []
+    num = sec["next"]()
+    el.extend(_section_heading(f"Anexo B — Fontes e Metodologia", styles))
+
+    # Data sources — compact text list instead of table
+    metadata = data.get("_metadata", {})
+    sources = metadata.get("sources", {})
+    source_labels = {
+        "opencnpj": "Receita Federal",
+        "portal_transparencia_sancoes": "Portal da Transparencia (sancoes)",
+        "pncp": "Portal Nacional de Contratacoes Publicas",
+        "sicaf": "SICAF",
+    }
+    if sources:
+        src_parts = []
+        for key, label in source_labels.items():
+            src = sources.get(key, {})
+            status_label, _ = _get_source_label(src)
+            src_parts.append(f"{label}: {status_label}")
+        el.append(Paragraph(
+            "<b>Fontes consultadas:</b> " + " | ".join(src_parts),
+            styles["body_small"],
+        ))
+        gen_at = _date(metadata.get("generated_at", ""))
+        if gen_at:
+            el.append(Paragraph(f"Dados coletados em {gen_at}.", styles["caption"]))
+        el.append(Spacer(1, 3 * mm))
+
+    # Methodology — 3 lines instead of full tables
+    el.append(Paragraph(
+        "<b>Metodologia:</b> Indice de viabilidade = media ponderada de 5 dimensoes "
+        "(Habilitacao 30%, Financeiro 25%, Geografico 20%, Prazo 15%, Competitivo 10%). "
+        "Resultado potencial = valor x probabilidade x margem setorial - custo. "
+        "Probabilidade calibrada via historico de contratos do orgao.",
+        styles["body_small"],
+    ))
+    el.append(Spacer(1, 3 * mm))
+
+    # Disclaimer
+    el.append(Paragraph(
+        "Este relatorio tem carater informativo e nao substitui analise juridica do edital.",
+        ParagraphStyle(
+            "disclaimer_v6", parent=styles["body_small"],
+            fontName="Helvetica-Oblique", fontSize=8, textColor=TEXT_MUTED,
+        ),
+    ))
+
+    # Audit trail
+    import subprocess
+    import hashlib
+    try:
+        git_hash = subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=str(Path(__file__).parent.parent),
+            stderr=subprocess.DEVNULL,
+        ).decode().strip()
+    except Exception:
+        git_hash = "N/D"
+    gen_ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    json_hash = hashlib.sha256(
+        json.dumps(data, sort_keys=True, ensure_ascii=False).encode()
+    ).hexdigest()[:12]
+    el.append(Spacer(1, 3 * mm))
+    el.append(Paragraph(
+        _s(f"Gerado em {gen_ts} | Script v.{git_hash} | Dados SHA-256: {json_hash}", restore_accents=False),
+        ParagraphStyle("audit_v6", parent=styles["caption"],
+                       fontName="Helvetica", fontSize=7, textColor=TEXT_MUTED),
+    ))
+
     return el
 
 
@@ -4539,39 +5407,28 @@ def generate_report_b2g(data: dict) -> BytesIO:
     elements.extend(_build_coverage_warning(data, styles))
     # Sector divergence alert (CNAE vs actual contracts — before any edital analysis)
     elements.extend(_build_sector_divergence_alert(data, styles))
-    # 1. Resumo Executivo (condensed)
-    elements.extend(_build_executive_summary(data, styles, sec))
-    # 2. Posicionamento Estratégico (thesis + signals)
-    elements.extend(_build_strategic_positioning(data, styles, sec))
-    # 3. Decisão em 30 Segundos (grouped summary table)
+    # 1. Resumo Executivo (condensed) — includes tese estratégica inline
+    elements.extend(_build_executive_summary_v6(data, styles, sec))
+    # 2. Decisão em 30 Segundos (grouped summary table)
     elements.extend(_build_decision_table(data, styles, sec))
 
-    # === CAMADA 2: INTELIGÊNCIA ESTRATÉGICA ===
-    # 3. Inteligência Exclusiva — 4 differentials PNCP can't provide
-    elements.extend(_build_exclusive_intelligence(data, styles, sec))
-    # 4. Análise Detalhada (ONLY PARTICIPAR + AVALIAR — NÃO RECOMENDADO goes to Annex A)
-    elements.extend(_build_detailed_analysis(data, styles, sec, _state))
-    # 5. Matriz Estratégica + Regional (unified strategic view)
-    elements.extend(_build_portfolio_section(data, styles, sec))
-    elements.extend(_build_regional_analysis(data, styles, sec))
-    # 6. Mapa Competitivo (condensed incumbency deep-dive)
-    elements.extend(_build_competitive_section(data, styles, sec))
-    # 7. Market intelligence
-    elements.extend(_build_market_intelligence(data, styles, sec))
-    # 8. Development plan
-    elements.extend(_build_development_plan(data, styles, sec))
-    # 9. Consolidated prioritization of PARTICIPAR editais
-    elements.extend(_build_prioritization(data, styles, sec))
-    # 10. Próximos Passos
+    # === CAMADA 2: FICHAS DE EDITAIS ===
+    # 3. Fichas de Oportunidade (PARTICIPAR + AVALIAR — redesigned compact format)
+    elements.extend(_build_edital_fichas(data, styles, sec, _state))
+
+    # === CAMADA 3: COMPLEMENTAR ===
+    # 4. Editais Não Recomendados (condensed table, was Annex A)
+    elements.extend(_build_annex_nao_recomendado_inline(data, styles, sec))
+    # 5. Plano de Desenvolvimento (condensed 3-5 bullets)
+    elements.extend(_build_development_plan_condensed(data, styles, sec))
+    # 6. Próximos Passos
     elements.extend(_build_next_steps(data, styles, sec))
 
-    # === CAMADA 3: ANEXOS ===
-    # Annex A: NÃO RECOMENDADO editais (condensed table)
-    elements.extend(_build_annex_nao_recomendado(data, styles, sec))
-    # Annex B: Company Profile + SICAF
-    elements.extend(_build_annex_company(data, styles, sec))
-    # Annex C: Data Sources + Querido Diário
-    elements.extend(_build_annex_sources(data, styles, sec))
+    # === ANEXOS (condensed for V6) ===
+    # Anexo A: Perfil da Empresa (condensed, no SICAF detail)
+    elements.extend(_build_annex_company_condensed(data, styles, sec))
+    # Anexo B: Fontes e Metodologia (0.5 page)
+    elements.extend(_build_annex_sources_condensed(data, styles, sec))
 
     # E10: Validate report completeness (blocking errors + warnings)
     validation_errors, validation_warnings = validate_report_completeness(data)
@@ -4810,6 +5667,10 @@ def main():
     excel_path = str(output_path).replace(".pdf", ".xlsx")
     generate_excel_companion(data, excel_path)
     print(f"Excel generated: {excel_path}")
+
+    md_path = str(output_path).replace(".pdf", ".md")
+    generate_markdown(data, md_path)
+    print(f"Markdown generated: {md_path}")
 
 
 if __name__ == "__main__":

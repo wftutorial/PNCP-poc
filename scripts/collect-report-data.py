@@ -231,6 +231,31 @@ CNAE_KEYWORD_REFINEMENTS = {
     },
 }
 
+# CNAE-object incompatibility patterns (A1: deterministic CNAE×Object check)
+# Key: 4-digit CNAE prefix → list of INCOMPATIBLE object patterns (regex)
+# When a company's CNAE matches a key and the edital's objeto matches any pattern,
+# the edital is marked as incompatible and vetoed from recommendation.
+CNAE_INCOMPATIBLE_OBJECTS: dict[str, list[str]] = {
+    "4120": [  # Construção de edifícios — NOT compatible with:
+        r"\bpavimenta[çc][ãa]o\b", r"\basfalto\b", r"\basfaltamento\b",
+        r"\brecapeamento\b", r"\bcbuq\b",
+        r"\bponte\b", r"\bviaduto\b", r"\bpassarela\b",
+        r"\bbarragem\b", r"\breservat[oó]rio\b",
+        r"\bsaneamento\b", r"\besgoto\b", r"\btratamento de [aáe]\b",
+        r"\btopografia\b", r"\bsondagem\b", r"\bgeot[eé]cnic\b",
+        r"\bconsultoria\b", r"\bsupervis[ãa]o\b", r"\bfiscaliza[çc][ãa]o\b",
+        r"\btransporte\b", r"\bfrete\b", r"\bcaminh[ãa]o\b",
+        r"\blavanderia\b", r"\blimpeza\b", r"\bzeladoria\b",
+        r"\bmedicamento\b", r"\bhospitalar\b", r"\bsa[uú]de\b",
+        r"\baliment[aío]\b", r"\bmerenda\b", r"\brefeição\b",
+        r"\bmobili[aá]rio\b", r"\bm[oó]vel\b", r"\bm[oó]veis\b",
+    ],
+    "4211": [  # Rodovias/ferrovias — NOT compatible with:
+        r"\bedifica[çc][ãa]o\b", r"\bpr[eé]dio\b", r"\bescola\b",
+        r"\bcreche\b", r"\bubs\b", r"\bunidade\s+(habitacional|de sa[uú]de)\b",
+    ],
+}
+
 # ============================================================
 # HELPERS
 # ============================================================
@@ -6645,6 +6670,220 @@ def enrich_scenarios_and_triggers(
 
 
 # ============================================================
+# A1: CNAE × OBJECT COMPATIBILITY CHECK
+# ============================================================
+
+def _check_cnae_object_compatibility(editais: list, empresa: dict) -> None:
+    """Check if company's CNAE is compatible with each edital's object.
+
+    Sets ed["_cnae_compatible"] = True/False and ed["_cnae_incompatibility_detail"]
+    when incompatible. Mutates editais in place.
+    """
+    cnae_principal = str(empresa.get("cnae_principal", "") or "")
+    # Extract 4-digit prefix (e.g. "4120-4" -> "4120", "41204" -> "4120")
+    cnae_digits = re.sub(r"[^0-9]", "", cnae_principal)
+    cnae_prefix = cnae_digits[:4] if len(cnae_digits) >= 4 else ""
+
+    patterns = CNAE_INCOMPATIBLE_OBJECTS.get(cnae_prefix)
+    if not patterns:
+        # No incompatibility rules for this CNAE — all compatible
+        for ed in editais:
+            ed["_cnae_compatible"] = True
+            ed["_cnae_incompatibility_detail"] = None
+        return
+
+    # Compile all patterns once
+    compiled = [(p, re.compile(p, re.IGNORECASE)) for p in patterns]
+
+    for ed in editais:
+        objeto = (ed.get("objeto", ed.get("objetoCompra", "")) or "").lower()
+        matched_pattern = None
+        for raw_pat, cpat in compiled:
+            if cpat.search(objeto):
+                matched_pattern = raw_pat
+                break
+
+        if matched_pattern:
+            ed["_cnae_compatible"] = False
+            # Extract a readable snippet of what matched
+            match_obj = re.search(matched_pattern, objeto, re.IGNORECASE)
+            matched_term = match_obj.group(0) if match_obj else "termo incompatível"
+            ed["_cnae_incompatibility_detail"] = (
+                f"Objeto do edital ({matched_term}) incompatível com "
+                f"CNAE {cnae_principal} da empresa. "
+                f"Empresa não possui atividade registrada neste segmento."
+            )
+        else:
+            ed["_cnae_compatible"] = True
+            ed["_cnae_incompatibility_detail"] = None
+
+
+# ============================================================
+# A2: HABILITAÇÃO DETERMINÍSTICA CHECKLIST
+# ============================================================
+
+def _compute_habilitacao_checklist(editais: list, empresa: dict, sicaf: dict) -> None:
+    """Compute structured habilitação checklist for each edital.
+
+    Sets ed["habilitacao_checklist"] dict with boolean flags and thresholds.
+    Mutates editais in place.
+    """
+    empresa_capital = _safe_float(empresa.get("capital_social")) or 0.0
+    is_simples = bool(empresa.get("simples_nacional"))
+    is_mei = bool(empresa.get("mei"))
+    has_acervo = bool(empresa.get("maturity_profile", {}).get("acervo_objetos"))
+    has_sancoes = any(
+        v for v in (empresa.get("sancoes") or {}).values()
+        if isinstance(v, (bool, int)) and v
+    ) if isinstance(empresa.get("sancoes"), dict) else False
+    sicaf_status = sicaf.get("status_crc") if sicaf else None
+
+    for ed in editais:
+        valor = _safe_float(ed.get("valor_estimado")) or 0.0
+        modalidade = ed.get("modalidade", "") or ""
+        capital_minimo_exigido = valor * 0.10
+
+        is_concorrencia = any(
+            m in modalidade for m in ("Concorrência", "Concorrencia")
+        )
+        cat_required = is_concorrencia and valor > 100_000
+
+        ed["habilitacao_checklist"] = {
+            "capital_minimo_ok": empresa_capital >= capital_minimo_exigido,
+            "capital_minimo_exigido": capital_minimo_exigido,
+            "capital_empresa": empresa_capital,
+            "simples_ok": not (is_simples and valor > 4_800_000),
+            "mei_ok": not (is_mei and valor > 81_000),
+            "cat_required": cat_required,
+            "cat_available": has_acervo,
+            "sancoes_ok": not has_sancoes,
+            "sicaf_ok": sicaf_status in ("CADASTRADO", None),
+        }
+
+
+# ============================================================
+# A5: RICH JUSTIFICATIVAS
+# ============================================================
+
+def _build_rich_justificativa(ed: dict, empresa: dict) -> str:
+    """Build a rich, edital-specific justificativa that answers 'por quê?'.
+
+    Uses habilitacao_checklist, _cnae_compatible, distance, timeline,
+    competitive intel, and financial data to produce concrete explanations
+    instead of generic labels.
+    """
+    rs = ed.get("risk_score", {})
+    hab = ed.get("habilitacao_checklist", {})
+    valor = _safe_float(ed.get("valor_estimado")) or 0.0
+    dist_info = ed.get("distancia") or {}
+    dist_km = dist_info.get("km") if isinstance(dist_info, dict) else None
+    dias = ed.get("dias_restantes")
+    municipio = ed.get("municipio", "") or ""
+    modalidade = ed.get("modalidade", "") or ""
+
+    parts: list[str] = []
+
+    # CNAE compatibility (highest priority — if incompatible, that's the reason)
+    if not ed.get("_cnae_compatible", True):
+        detail = ed.get("_cnae_incompatibility_detail", "")
+        if detail:
+            parts.append(detail)
+        else:
+            parts.append(f"Objeto incompatível com CNAE {empresa.get('cnae_principal', '')} da empresa")
+        return ". ".join(parts) + "." if not parts[-1].endswith(".") else " ".join(parts)
+
+    # Financial fit — capital social
+    if hab.get("capital_minimo_ok") is True:
+        capital = hab.get("capital_empresa", 0)
+        exigido = hab.get("capital_minimo_exigido", 0)
+        if exigido > 0:
+            parts.append(f"Capital social R$ {capital:,.0f} atende mínimo de R$ {exigido:,.0f}")
+    elif hab.get("capital_minimo_ok") is False:
+        capital = hab.get("capital_empresa", 0)
+        exigido = hab.get("capital_minimo_exigido", 0)
+        parts.append(
+            f"Capital social R$ {capital:,.0f} insuficiente para mínimo de "
+            f"R$ {exigido:,.0f} (10% de R$ {valor:,.0f})"
+        )
+
+    # Simples Nacional / MEI limits
+    if not hab.get("simples_ok", True):
+        parts.append(f"Limite do Simples Nacional excedido: edital R$ {valor:,.0f} > R$ 4.800.000")
+    if not hab.get("mei_ok", True):
+        parts.append(f"Limite MEI excedido: edital R$ {valor:,.0f} > R$ 81.000")
+
+    # Sanções
+    if not hab.get("sancoes_ok", True):
+        parts.append("Empresa possui sanções ativas — impedimento legal à participação")
+
+    # Distance
+    if dist_km is not None:
+        try:
+            dist_km = float(dist_km)
+        except (TypeError, ValueError):
+            dist_km = None
+    if dist_km is not None:
+        if dist_km < 100:
+            parts.append(f"Proximidade favorável ({dist_km:.0f}km de {municipio})")
+        elif dist_km < 300:
+            parts.append(f"Distância viável ({dist_km:.0f}km de {municipio})")
+        elif dist_km < 500 and "Presencial" in modalidade:
+            parts.append(f"Distância moderada ({dist_km:.0f}km) para licitação presencial")
+        elif dist_km >= 500 and "Presencial" in modalidade:
+            parts.append(f"Distância elevada ({dist_km:.0f}km) para licitação presencial — logística desafiadora")
+        elif dist_km >= 500:
+            parts.append(f"Distância elevada ({dist_km:.0f}km de {municipio})")
+
+    # Timeline
+    if dias is not None:
+        try:
+            dias = int(dias)
+        except (TypeError, ValueError):
+            dias = None
+    if dias is not None:
+        if dias <= 3:
+            parts.append(f"Prazo crítico: apenas {dias} dia(s) restante(s)")
+        elif dias <= 7:
+            parts.append(f"Prazo curto: {dias} dias para encerramento")
+        elif dias <= 14:
+            parts.append(f"Prazo adequado: {dias} dias para preparação")
+        else:
+            parts.append(f"Prazo confortável: {dias} dias restantes")
+
+    # CAT / Acervo
+    if hab.get("cat_required") and not hab.get("cat_available"):
+        parts.append(
+            "Exige atestado técnico (CAT) que a empresa não possui — "
+            "participação condicionada a acervo do responsável técnico"
+        )
+    elif hab.get("cat_required") and hab.get("cat_available"):
+        parts.append("Atestado técnico (CAT) disponível via histórico de contratos")
+
+    # Competition
+    comp = rs.get("competitivo", 50)
+    if comp >= 80:
+        parts.append("Baixa concorrência identificada neste órgão")
+    elif comp <= 20:
+        parts.append("Alta concorrência — órgão com muitos fornecedores ativos")
+
+    # Fiscal risk
+    fiscal = rs.get("fiscal_risk", {})
+    if isinstance(fiscal, dict) and fiscal.get("nivel") == "ALTO":
+        parts.append("Risco fiscal elevado do município")
+
+    # Acervo
+    if rs.get("acervo_confirmado"):
+        _hist = empresa.get("historico_contratos", [])
+        _n_similar = len(_hist) if _hist else 0
+        parts.append(f"Acervo técnico inferido: {_n_similar} contratos similares no histórico")
+
+    if not parts:
+        parts.append("Análise baseada em scoring multifatorial")
+
+    return ". ".join(parts) + "."
+
+
+# ============================================================
 # RECOMMENDATION ASSIGNMENT
 # ============================================================
 
@@ -6653,6 +6892,7 @@ def assign_recommendations(editais: list, empresa: dict) -> None:
 
     Must be called AFTER compute_all_deterministic() so that risk_score.total
     is fully computed (including threshold gates and Inexigibilidade penalty).
+    Also uses _cnae_compatible and habilitacao_checklist (set by compute_all_deterministic).
     Mutates editais in place.
     """
     for ed in editais:
@@ -6660,12 +6900,37 @@ def assign_recommendations(editais: list, empresa: dict) -> None:
         total = rs.get("total", 0)
         vetoed = rs.get("vetoed", False)
         veto_reasons = rs.get("veto_reasons", [])
+        hab_check = ed.get("habilitacao_checklist", {})
 
+        # Existing veto from risk_score
         if vetoed:
             ed["recomendacao"] = "NÃO RECOMENDADO"
             ed["justificativa"] = "; ".join(veto_reasons) if veto_reasons else "Edital vetado por impedimento legal."
             continue
 
+        # A1: CNAE incompatibility veto
+        if not ed.get("_cnae_compatible", True):
+            ed["recomendacao"] = "NÃO RECOMENDADO"
+            ed["justificativa"] = _build_rich_justificativa(ed, empresa)
+            continue
+
+        # A2: Habilitação checklist vetoes
+        if not hab_check.get("simples_ok", True):
+            ed["recomendacao"] = "NÃO RECOMENDADO"
+            ed["justificativa"] = _build_rich_justificativa(ed, empresa)
+            continue
+
+        if not hab_check.get("mei_ok", True):
+            ed["recomendacao"] = "NÃO RECOMENDADO"
+            ed["justificativa"] = _build_rich_justificativa(ed, empresa)
+            continue
+
+        if hab_check.get("capital_minimo_ok") is False:
+            ed["recomendacao"] = "NÃO RECOMENDADO"
+            ed["justificativa"] = _build_rich_justificativa(ed, empresa)
+            continue
+
+        # Standard threshold-based recommendation
         if total >= 70:
             ed["recomendacao"] = "PARTICIPAR"
         elif total >= 40:
@@ -6673,54 +6938,8 @@ def assign_recommendations(editais: list, empresa: dict) -> None:
         else:
             ed["recomendacao"] = "NÃO RECOMENDADO"
 
-        # Build justificativa from score components
-        parts = []
-        hab = rs.get("habilitacao", 0)
-        fin = rs.get("financeiro", 0)
-        geo = rs.get("geografico", 0)
-        prazo = rs.get("prazo", 0)
-        comp = rs.get("competitivo", 0)
-
-        if hab >= 80:
-            parts.append("habilitação compatível")
-        elif hab < 40:
-            parts.append("risco de inabilitação")
-
-        if fin >= 80:
-            parts.append("valor adequado ao porte")
-        elif fin < 40:
-            parts.append("valor acima da capacidade financeira")
-
-        if geo >= 60:
-            parts.append("proximidade geográfica favorável")
-        elif geo < 20:
-            parts.append("distância geográfica desfavorável")
-
-        if prazo >= 80:
-            parts.append("prazo confortável")
-        elif prazo < 30:
-            parts.append("prazo insuficiente")
-
-        if comp >= 70:
-            parts.append("baixa concorrência")
-        elif comp < 30:
-            parts.append("alta concorrência")
-
-        # Fiscal risk
-        fiscal = rs.get("fiscal_risk", {})
-        if isinstance(fiscal, dict) and fiscal.get("nivel") == "ALTO":
-            parts.append("risco fiscal elevado do município")
-
-        # Acervo
-        if rs.get("acervo_confirmado"):
-            # Count similar contracts for the message
-            _hist = empresa.get("historico_contratos", [])
-            _n_similar = len(_hist) if _hist else 0  # Approximation; actual count computed in risk_score
-            parts.append(f"acervo técnico inferido: {_n_similar} contratos similares no histórico")
-        elif not rs.get("acervo_confirmado", True):
-            parts.append("sem acervo comprovado")
-
-        ed["justificativa"] = ". ".join(p.capitalize() for p in parts) + "." if parts else "Análise baseada em scoring multifatorial."
+        # A5: Rich justificativa replaces generic labels
+        ed["justificativa"] = _build_rich_justificativa(ed, empresa)
 
 
 # ============================================================
@@ -6790,6 +7009,19 @@ def compute_all_deterministic(
     if isinstance(empresa_cnaes, list):
         empresa_cnaes = " ".join(str(c) for c in empresa_cnaes)
     historico = empresa.get("historico_contratos", [])
+
+    # A1: CNAE × Object compatibility (pre-loop, sets ed["_cnae_compatible"])
+    _check_cnae_object_compatibility(editais, empresa)
+    n_incompat = sum(1 for ed in editais if not ed.get("_cnae_compatible", True))
+    if n_incompat:
+        print(f"  [A1] CNAE incompatível: {n_incompat}/{len(editais)} editais vetados por CNAE×Objeto")
+
+    # A2: Habilitação determinística checklist (pre-loop, sets ed["habilitacao_checklist"])
+    _compute_habilitacao_checklist(editais, empresa, sicaf)
+    n_cap_fail = sum(1 for ed in editais if not ed.get("habilitacao_checklist", {}).get("capital_minimo_ok", True))
+    n_simples_fail = sum(1 for ed in editais if not ed.get("habilitacao_checklist", {}).get("simples_ok", True))
+    if n_cap_fail or n_simples_fail:
+        print(f"  [A2] Habilitação: {n_cap_fail} capital insuficiente, {n_simples_fail} Simples/MEI excedido")
 
     # E5: Collect all competitive intel contracts for dispute stats
     all_competitive_contracts: list[dict] = []

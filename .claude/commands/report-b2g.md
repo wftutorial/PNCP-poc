@@ -1,510 +1,115 @@
-# /report-b2g — Relatório Executivo de Oportunidades B2G
+# /report-b2g — Relatório Executivo de Oportunidades B2G (Orchestrator)
 
 ## Purpose
 
-Gera um PDF executivo e institucional com TODAS as oportunidades abertas relevantes para um CNPJ específico, incluindo análise estratégica por edital e recomendações de ação.
+Orquestra a geração de um relatório B2G completo delegando análise e auditoria a agentes isolados.
 
 **Output:** `docs/reports/report-{CNPJ}-{nome-slug}-{YYYY-MM-DD}.pdf`
-**Rodapé:** "Tiago Sasaki - Consultor de Licitações (48)9 8834-4559"
-
----
-
-## Usage
-
-```
-/report-b2g 12.345.678/0001-90
-/report-b2g 12345678000190
-```
-
-## GUARDRAILS — REGRAS INVIOLÁVEIS
-
-1. **NUNCA fabricar dados.** Todo dado factual (editais, valores, datas, CNPJs, órgãos, distâncias) DEVE vir de API ou do JSON coletado. Se uma API falhar, registrar `"status": "API_FAILED"` — NUNCA inventar valores plausíveis.
-2. **NUNCA estimar distâncias.** Usar apenas o campo `distancia_km` do JSON (calculado via OSRM). Se `null`, escrever "Distância não calculada".
-3. **NUNCA fabricar links.** Usar apenas `link` do JSON. Se vazio, omitir.
-4. **Acentuação obrigatória.** Todo texto em português DEVE usar acentos corretos: "NÃO RECOMENDADO" (nunca "NAO"), "Concorrência" (nunca "Concorrencia"), etc.
-5. **Transparência de fontes.** Cada seção do relatório deve indicar a fonte dos dados (API, documento, análise Claude).
-6. **Se dados insuficientes, dizer.** "Dados insuficientes para análise" é preferível a qualquer estimativa sem fonte.
-7. **Toda recomendação DEVE ter justificativa.** NUNCA emitir PARTICIPAR, AVALIAR COM CAUTELA ou NÃO RECOMENDADO sem `justificativa` preenchida com motivo factual específico. Uma recomendação sem justificativa é inaceitável.
-8. **ZERO termos técnicos ou em inglês no PDF final.** Nenhuma menção a tecnologias (Playwright, httpx, OpenCNPJ, API, JSON, Python, etc.) deve aparecer no relatório entregue ao cliente. Na seção "Fontes de Dados", usar nomes institucionais: "Receita Federal", "Portal da Transparência", "Portal Nacional de Contratações Públicas", "Diários Oficiais Municipais", "Sistema de Cadastro de Fornecedores". Coluna "Detalhe" não pode conter termos como "raw", "filtered", "pages", "errors", "GET", "POST", "200 OK".
-9. **NUNCA incluir editais encerrados ou descartados.** Editais com `dias_restantes <= 0`, `status_edital == "ENCERRADO"`, `recomendacao == "DESCARTADO"` ou `relevante == False` devem ser **excluídos do relatório** — não aparecem em nenhuma seção, não recebem análise, não consomem API calls. O Resumo Executivo deve citar quantas licitações foram descartadas e o motivo (ex: "5 licitações descartadas por falta de aderência aos CNAEs da empresa"). Editais com recomendação NÃO RECOMENDADO continuam no relatório — a decisão final cabe ao leitor.
-10. **NUNCA contornar um BLOCK do Gate Determinístico.** O gate existe para impedir relatórios desonestos. Se o validador emitiu BLOCK, a causa raiz DEVE ser corrigida (re-coletar dados, ajustar parâmetros) — NUNCA "ignorar e prosseguir".
-
----
-
-## What It Does
-
-### Phase 1: Coleta Determinística de Dados (script automatizado)
-
-Executar o script de coleta que faz TODAS as chamadas de API de forma determinística e rastreável:
-
-```bash
-cd D:/pncp-poc
-python scripts/collect-report-data.py \
-  --cnpj {CNPJ} \
-  --dias 30 \
-  --output docs/reports/data-{CNPJ}-{YYYY-MM-DD}.json
-```
-
-**IMPORTANTE — NÃO passar `--ufs` manualmente.** O script deriva as UFs automaticamente do histórico de contratos da empresa. Passar UFs manualmente ignora a inteligência geográfica e pode direcionar a busca para UFs onde a empresa não opera.
-
-**O que o script coleta automaticamente:**
-- **OpenCNPJ** — Perfil completo (razão social, CNAEs, capital social, QSA, telefones)
-- **BrasilAPI** — Simples Nacional, MEI, fallback de porte
-- **Portal da Transparência** — Sanções (CEIS/CNEP/CEPIM/CEAF) + histórico de contratos federais
-- **PNCP /contratos** — Histórico completo do fornecedor (todas as esferas) — **ANTES do mapeamento de setor**
-- **Clustering de atividade** — Agrupa os contratos históricos em categorias temáticas (saúde, alimentação, engenharia, saneantes, etc.) para determinar o que a empresa REALMENTE faz, independente do CNAE cadastral
-- **Keywords derivadas do histórico** — Busca PNCP usa keywords extraídas dos contratos reais, não apenas do CNAE. Empresas que vendem materiais hospitalares buscam editais de materiais hospitalares, não de engenharia (mesmo que o CNAE diga construção)
-- **UFs derivadas do histórico** — Top 5 UFs onde a empresa tem mais contratos + UF da sede
-- **PNCP** — Editais abertos em 4 modalidades, filtrados por keywords do histórico + UFs derivadas
-- **PCP v2** — Editais complementares
-- **IBGE SIDRA** — População + PIB municipal
-- **Querido Diário** — Menções em diários oficiais municipais
-- **Distâncias** — Geocoding + rota real (OSRM)
-- **Validação de links** — HEAD requests para verificar URLs
-
-**Campos críticos no JSON de saída (verificar ANTES de prosseguir):**
-- `_keywords_source`: deve ser `"historico"` (não `"cnae_fallback"`). Se for fallback, os editais podem estar no setor errado.
-- `activity_clusters`: lista de clusters de atividade com label, count, share_pct. O cluster dominante indica o SETOR REAL da empresa.
-- `empresa._sector_divergence`: se presente, o CNAE não bate com o histórico — o relatório DEVE alertar proeminentemente.
-
-**Cada dado é tagueado com `_source`:**
-```json
-{
-  "_source": {
-    "status": "API",          // API | API_PARTIAL | API_FAILED | CALCULATED | UNAVAILABLE
-    "timestamp": "2026-03-12T10:30:00",
-    "detail": "OpenCNPJ 200 OK"
-  }
-}
-```
-
-**Flags opcionais:**
-- `--skip-distances` — Pular cálculo de distâncias (mais rápido)
-- `--skip-docs` — Pular listagem de documentos PNCP
-- `--skip-links` — Pular validação de links
-- `--skip-pcp` — Pular PCP v2
-- `--skip-qd` — Pular Querido Diário
-- `--skip-sicaf` — Pular verificação SICAF
-- `--skip-competitive` — Pular coleta de inteligência competitiva
-- `--skip-ibge` — Pular enriquecimento IBGE (população/PIB municipal)
-- `--skip-brasilapi` — Pular consulta BrasilAPI (Simples Nacional)
-
-**O script agora calcula automaticamente (Phase 1 v2):**
-- **Índice de Viabilidade** — Nota 0-100 que mede quão viável é participar deste edital para ESTA empresa. Combina: modalidade (30%), prazo (25%), valor vs. capacidade (25%) e proximidade geográfica (20%). Em `editais[].risk_score`
-- **Resultado Potencial** — Estimativa de lucro líquido caso a empresa vença, baseado no valor do edital × probabilidade de vitória × margem líquida do setor. Em `editais[].roi_potential`
-- **Cronograma Reverso** — Marcos automáticos do deadline para trás em `editais[].cronograma`
-- **Inteligência Competitiva** — Contratos históricos dos órgãos licitantes (PNCP 24 meses) em `editais[].competitive_intel`
-- **Multi-setor** — Clustering de atividade identifica os segmentos reais da empresa (funciona para qualquer CNAE: construção, alimentação, saúde, informática, vestuário, etc.)
-
-**IMPORTANTE:** O script filtra automaticamente editais encerrados ANTES de gastar API calls com documentos, distâncias e inteligência competitiva. Apenas editais com prazo aberto entram no relatório.
-
-**Após execução, VERIFICAR o output do script:**
-- Quantos editais abertos foram encontrados?
-- Alguma API falhou? (verificar `_metadata.sources`)
-- Se PNCP retornou 0 editais abertos, considerar ampliar `--dias` ou `--ufs`
-
-**SICAF integrado:** O script chama automaticamente `collect-sicaf.py` via subprocess:
-- Abre navegador para o usuário resolver o hCaptcha (~5s por consulta)
-- Coleta CRC (status cadastral, habilitações) + restrições
-- Dados SICAF são incorporados diretamente no JSON de saída (`data.sicaf`)
-- Use `--skip-sicaf` apenas se Playwright não estiver instalado
-
-### Phase 2: Download e Análise Documental dos Editais (Claude direto)
-
-**OBJETIVO:** Baixar os PDFs reais dos editais encontrados na Phase 1 e extrair insights factuais concretos.
-
-**IMPORTANTE:** Esta análise é feita pelo próprio Claude (execução local), sem chamada a APIs de LLM externas.
-
-#### 2.1. Descobrir documentos disponíveis
-
-Para cada edital PNCP do JSON (campo `docs_url` se disponível, ou construir):
-
-```bash
-curl -s "https://pncp.gov.br/api/pncp/v1/orgaos/{cnpj_orgao}/compras/{anoCompra}/{sequencialCompra}/arquivos"
-```
-
-Response: JSON array com `tipoDocumentoNome`, `tipoDocumentoId`, `titulo`, `sequencialDocumento`, `url`.
-
-**Prioridade de download:**
-1. `tipoDocumentoId: 2` — Edital (obrigatório)
-2. Termo de Referência (altamente relevante)
-3. 1 anexo relevante (planilha, projeto básico)
-
-**Máximo 3 documentos por edital.**
-
-#### 2.2. Download e leitura dos documentos
-
-**IMPORTANTE:** O PNCP frequentemente empacota editais dentro de arquivos `.zip` (não PDF direto). O header `content-disposition` indica o formato real.
-
-**Passo 1 — Download com detecção de formato:**
-
-```bash
-# Primeiro verificar o formato via HEAD request
-curl -sI "https://pncp.gov.br/pncp-api/v1/orgaos/{cnpj}/compras/{ano}/{seq}/arquivos/{seq_doc}" \
-  | grep -i content-disposition
-# Resultado: filename="EDITAL.PDF" ou filename="98430503900032026000.zip"
-
-# Download para /tmp
-curl -s -o /tmp/edital_{id}_raw \
-  "https://pncp.gov.br/pncp-api/v1/orgaos/{cnpj}/compras/{ano}/{seq}/arquivos/{seq_doc}"
-```
-
-**Passo 2 — Se `.zip`, extrair antes de ler:**
-
-```bash
-# Verificar se é ZIP (magic bytes PK)
-file /tmp/edital_{id}_raw
-
-# Se ZIP: extrair PDFs do arquivo
-mkdir -p /tmp/edital_{id}_extracted
-cd /tmp/edital_{id}_extracted && unzip -o /tmp/edital_{id}_raw "*.pdf" "*.PDF" 2>/dev/null
-ls -la /tmp/edital_{id}_extracted/
-# Ler o PDF principal (geralmente o maior ou o que contém "edital" no nome)
-```
-
-**Passo 3 — Leitura:**
-
-```
-Read(file_path="/tmp/edital_{id}.pdf", pages="1-20")
-```
-
-Para editais longos, ler em blocos de 20 páginas.
-
-**Regras de fallback:**
-- Se ZIP contém múltiplos PDFs → priorizar: (1) arquivo com "edital" no nome, (2) maior arquivo, (3) primeiro arquivo
-- Se ZIP contém apenas `.doc`/`.docx` → registrar "Documento em formato Word — análise parcial via texto extraído"
-- Se arquivo >10MB, download falhar, ou formato não reconhecido → registrar "Documento indisponível para análise"
-- Se ZIP vazio ou corrompido → registrar "Arquivo compactado corrompido"
-
-#### 2.3. Extração factual do edital
-
-Para CADA edital lido, extrair:
-
-**A. Ficha Técnica** — Número, modalidade, critério de julgamento, modo de disputa, datas (abertura, impugnação, esclarecimentos), prazo de execução, prazo de vigência, local de execução, valor estimado (ou "sigiloso"), dotação orçamentária.
-
-**B. Requisitos de Habilitação (checklist)** — Jurídica, fiscal federal/estadual/municipal, qualificação técnica (atestados, equipe, visita), econômico-financeira (índices, patrimônio líquido, capital mínimo), garantias, amostra, certidões de sanções.
-
-**C. Condições Comerciais** — Subcontratação, consórcio, ME/EPP, margem de preferência, prazo de pagamento, reajuste, penalidades.
-
-**D. Red Flags** — Prazo apertado, exigências restritivas, valor desalinhado, cláusulas incomuns, direcionamento suspeito, impugnação viável.
-
-**E. Resumo Executivo** — 2-3 parágrafos: escopo real, requisitos-chave, principal risco/oportunidade.
-
-#### 2.4. Editais PCP v2
-
-Para editais sem endpoint PNCP de arquivos:
-- Se `numero_controle_pncp` disponível, tentar construir URL PNCP
-- Se não disponível → "Análise documental não realizada — edital disponível apenas no portal PCP"
-
-### Phase 3: Análise Estratégica por Edital (Claude)
-
-Para CADA edital, cruzar dados do JSON (Phase 1) + análise documental (Phase 2) + perfil da empresa.
-
-**USE os campos pré-calculados pelo script:**
-- `risk_score.total` (0-100) → INFORMAR a recomendação. Score ≥60 favorece PARTICIPAR, 30-60 = AVALIAR, <30 = NÃO RECOMENDADO.
-- `roi_potential` → Citar no relatório como "ROI Potencial: R$X — R$Y"
-- `cronograma` → Usar na seção de Próximos Passos e alertas de prazo
-- `competitive_intel` → Usar na análise de competitividade por edital
-
-**Análises a produzir por edital:**
-
-1. **Aderência ao perfil** — CNAEs vs objeto real. (Alta/Média/Baixa)
-2. **Análise de valor** — Valor estimado vs capital social e histórico da empresa. Se `empresa.simples_nacional == true` e valor > R$4,8M: alertar incompatibilidade com regime Simples. Se `empresa.mei == true` e valor > R$81k: alertar bloqueio MEI.
-3. **Análise geográfica** — Usar `distancia_km` do JSON (OSRM). Se `null`, escrever "Distância não calculada". **NUNCA estimar.** Usar `editais[].ibge.populacao` e `editais[].ibge.pib_mil_reais` para contextualizar porte do município (ex: "Município de 3.000 habitantes licitando R$20M — risco fiscal elevado"). Se PIB per capita baixo, alertar sobre capacidade fiscal do órgão.
-4. **Análise de prazo** — Dias até encerramento. Tempo para preparar proposta?
-5. **Análise de modalidade** — Pregão (preço) vs Concorrência (técnica+preço).
-6. **Análise de habilitação** — Empresa atende requisitos? Cruzar checklist da Phase 2 com perfil:
-   - Capital mínimo vs capital real
-   - Atestados exigidos vs histórico de contratos
-   - Simples Nacional / MEI vs limites de faturamento
-   - Se NÃO atende requisito crítico → NÃO RECOMENDADO com motivo
-7. **Análise de aditivos** — Se `competitive_intel` mostra contratos com `valor_aditivos > 0` ou `situacao_contrato == "3" (rescindido)`, alertar sobre padrão do órgão. Aditivos frequentes = risco de escopo mal definido. Rescisões = red flag.
-8. **Divergência setorial** — Se `qualification_gap.gap_type == "ACERVO_SETOR_DIVERGENTE"`, a empresa tem CNAE no setor mas contratos históricos em segmento distinto. Neste caso: **NÃO invalidar o edital como NÃO RECOMENDADO**. Em vez disso, recomendar **AVALIAR COM CAUTELA** com justificativa "Participação depende de confirmação de acervo técnico no setor — verificar CATs e atestados reais da empresa". O alerta de divergência setorial já aparece no topo do relatório; a análise por edital deve complementar, não repetir.
-9. **Análise de consórcio e subcontratação** — Se o edital permite consórcio (`permite_consorcio`) e a empresa tem barreiras de capital, acervo ou capacidade operacional, sugerir consórcio como alternativa viável. Se o edital permite subcontratação (`permite_subcontratacao`), identificar componentes fora do core que podem ser subcontratados. Definir `alternativa_participacao`: "INDIVIDUAL", "CONSORCIO_RECOMENDADO" (quando há barreiras superáveis via consórcio), ou "SUBCONTRATACAO_PARCIAL" (quando componentes específicos excedem a capacidade operacional). Incluir na justificativa quando aplicável.
-10. **Recomendação** — PARTICIPAR / AVALIAR COM CAUTELA / NÃO RECOMENDADO. **Editais VETADOS pelo script (sanção, capital insuficiente, limite MEI/Simples) já vêm com `risk_score.vetoed=true` e `risk_score.veto_reasons` — estes devem ser marcados como NÃO RECOMENDADO com justificativa citando o veto específico.**
-11. **Justificativa (OBRIGATÓRIA)** — Motivo factual da recomendação. TODA recomendação DEVE ter justificativa. Para NÃO RECOMENDADO, explicar o motivo específico (ex: "Capital social R$X insuficiente para exigência de R$Y", "Distância 800km inviabiliza logística", "CNAE incompatível com objeto"). Para PARTICIPAR, explicar por que é viável. Para AVALIAR COM CAUTELA, explicar o risco específico. **Para editais com risco fiscal ALTO (`risk_score.fiscal_risk.nivel == "ALTO"`), obrigatoriamente mencionar o risco fiscal na justificativa.** Para editais com `acervo_confirmado=false`, incluir nota sobre necessidade de verificação de atestados técnicos.
-12. **Análise de cenários** — Base/Otimista/Pessimista com probabilidades e ROIs recalculados. Trigger points para monitoramento.
-13. **Sensibilidade** — A recomendação é ROBUSTA ou FRÁGIL? Se frágil, qual dimensão a torna instável?
-
-### Phase 4: Inteligência Competitiva (Claude + API)
-
-Para editais com recomendação PARTICIPAR ou AVALIAR COM CAUTELA:
-
-**4.1. Incumbentes do órgão**
-```bash
-curl -s "https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao\
-  ?dataInicial={24_meses_atras_YYYYMMDD}\
-  &dataFinal={hoje_YYYYMMDD}\
-  &codigoUnidadeAdministrativa={codigo_orgao}\
-  &pagina=1&tamanhoPagina=50"
-```
-
-**4.2. Perfil dos concorrentes (top 5)**
-```bash
-curl -s "https://api.opencnpj.org/${CNPJ_CONCORRENTE}"
-```
-
-**4.3. Análise por edital** — Concorrentes prováveis, incumbente principal, preço médio praticado, desconto médio, porte dos concorrentes, vantagem/vulnerabilidade, estratégia sugerida.
-
-**4.4. Mapa de calor competitivo** — Baixa (<3 fornecedores) / Média (3-5) / Alta (5-10) / Muito Alta (>10 ou incumbente >60%).
-
-### Phase 5: Inteligência de Mercado (Claude)
-
-1. **Panorama setorial** — Editais abertos, valor total, concentração por UF
-2. **Tendências** — Modalidades comuns, valores médios, órgãos mais ativos
-3. **Vantagens competitivas** — Baseado em perfil (porte, localização, CNAEs)
-4. **Oportunidades de nicho** — Órgãos/UFs com pouca competição
-5. **Recomendação geral** — Priorização por potencial vs esforço vs competição
-6. **Tese estratégica** — EXPANDIR / MANTER / REDUZIR exposição B2G, baseado em tendência de volume, concentração de mercado e preços praticados.
-
-### Phase 6: Montagem do JSON e Geração do PDF
-
-**6.0. CROSS-REFERENCE OBRIGATÓRIO (antes de gerar qualquer output)**
-
-Antes de gerar markdown ou PDF, executar verificação cruzada:
-
-1. **Descartados × Plano de Ação** — Para CADA edital mencionado em "Próximos Passos" ou "Plano de Ação":
-   - Verificar se foi DESCARTADO na análise detalhada (Phase 3)
-   - Verificar se a recomendação final é NÃO RECOMENDADO
-   - Se sim → REMOVER do Plano de Ação. Incluir edital descartado no plano é CONTRADIÇÃO GRAVE.
-
-2. **Condicionantes × Plano de Ação** — Para CADA edital com recomendação PARTICIPAR (condicionado):
-   - Verificar se a condição (ex: "condicionado a atestado de UBS") aparece como ação no Plano
-   - Se não → ADICIONAR a condição como ação prioritária
-
-3. **Contagem final** — Contar editais por recomendação no markdown e comparar com o JSON:
-   - PARTICIPAR no markdown == PARTICIPAR no JSON?
-   - NÃO RECOMENDADO no markdown == NÃO RECOMENDADO no JSON?
-   - Se divergir → corrigir antes de prosseguir
-
-Esta verificação é a ÚLTIMA barreira contra incoerências internas. Um relatório com plano de ação contradizendo a análise destrói a credibilidade do produto.
-
-**6.1. Montar/enriquecer o JSON de dados**
-
-O JSON da Phase 1 deve ser enriquecido com as análises das Phases 2-5:
-- `resumo_executivo` — Métricas consolidadas
-- `editais[].analise_documental` — Ficha técnica, habilitação, red flags (Phase 2)
-- `editais[].recomendacao` — PARTICIPAR/AVALIAR COM CAUTELA/NÃO RECOMENDADO
-- `editais[].justificativa` — **OBRIGATÓRIO.** Motivo factual da recomendação. NUNCA deixar vazio.
-- `editais[].analise_detalhada` — Texto analítico completo (Phases 3-4)
-- `inteligencia_mercado` — Panorama, tendências, nichos (Phase 5)
-- `proximos_passos` — Lista de ações priorizadas
-
-**6.1.5. WRITE-BACK OBRIGATÓRIO — JSON como verdade canônica**
-
-Após as Phases 2-5, SALVAR o JSON atualizado com os campos enriquecidos pelo Claude:
-
-```python
-# Campos que DEVEM ser preenchidos no JSON ANTES de gerar PDF/markdown:
-editais[].recomendacao        # PARTICIPAR / AVALIAR COM CAUTELA / NÃO RECOMENDADO / DESCARTADO
-editais[].justificativa       # Motivo factual — NUNCA vazio
-editais[].analise_documental  # Ficha técnica + habilitação + red flags (Phase 2)
-editais[].analise_detalhada   # Texto analítico completo (Phases 3-4) — opcional mas recomendado
-```
-
-O JSON é o **artifact canônico** — se o PDF for regenerado pelo script, toda a inteligência das Phases 2-5 deve estar preservada no JSON, não apenas no markdown.
-
-Comando para salvar o JSON atualizado:
-```bash
-python -c "import json; d=json.load(open('INPUT')); ... ; json.dump(d, open('INPUT','w'), ensure_ascii=False, indent=2)"
-```
-
-Ou usar o flag `--save-json` ao gerar o PDF:
-```bash
-python scripts/generate-report-b2g.py --input data.json --output report.pdf --save-json
-```
-
-**6.2. Gerar o PDF**
-```bash
-cd D:/pncp-poc
-python scripts/generate-report-b2g.py \
-  --input docs/reports/data-{CNPJ}-{YYYY-MM-DD}.json \
-  --output docs/reports/report-{CNPJ}-{nome-slug}-{YYYY-MM-DD}.pdf
-```
-
-**6.3. Gerar markdown resumido**
-
-Salvar versão markdown em `docs/reports/report-{CNPJ}-{nome-slug}-{YYYY-MM-DD}.md`.
-
----
-
-## Estrutura do PDF Final (v4 — Arquitetura de 3 Camadas)
-
-Numeração dinâmica — seções opcionais só aparecem quando há dados. Toda referência a edital é clicável (hyperlink para fonte oficial PNCP/PCP).
-
-### Camada 1 — Decisão Executiva (máx. 3 páginas)
-
-O decisor lê SÓ estas páginas e já sabe o que fazer.
-
-1. **Capa** — Título, empresa, CNPJ, setor, data. Badge Simples/MEI se aplicável.
-2. **Aviso de Cobertura** (condicional) — Banner âmbar se taxa de captura < 70% (E3)
-3. **Resumo Executivo** — Tabela de métricas-chave (editais encontrados, PARTICIPAR/AVALIAR/NR, valor total, ROI agregado, cobertura) + max 3 destaques
-4. **Posicionamento Estratégico** — Tese (EXPANDIR/MANTER/REDUZIR), sinais de mercado, exposição recomendada
-5. **Decisão em 30 Segundos** — Agrupada por recomendação: PARTICIPAR primeiro, AVALIAR segundo, NÃO RECOMENDADO resumido em 1 bloco de 3 linhas (detalhe no Anexo A). Cada edital com: município (+ pop/PIB IBGE inline), objeto (clicável), valor, prazo, score, diferencial
-
-### Camada 2 — Inteligência Estratégica (3-5 páginas)
-
-Para quem quer entender o contexto antes de agir.
-
-5. **Inteligência Exclusiva** — 4 diferenciais (incumbência, viabilidade calibrada, acervo, clusters)
-6. **Análise Detalhada** — **SÓ editais PARTICIPAR e AVALIAR COM CAUTELA.** Fichas compactas com barras visuais por dimensão (aderência/financeiro/geográfico/prazo/competitivo), cenários (Base/Otimista/Pessimista) e indicador de sensibilidade (ROBUSTA/FRÁGIL), alertas condicionais (⚠ IBGE pop/PIB, ⚠ Simples/MEI, ⚠ aditivos do órgão), cronograma em 1 linha. Títulos clicáveis para fonte oficial. ~20 linhas por edital (vs ~50 antes).
-7. **Portfólio + Regional** (unificado) — Quick Wins / Oportunidades / Investimentos / Inacessíveis + Portfólio Recomendado (conjunto ótimo de editais por retorno esperado vs. custo) + Clusters geográficos com PIB agregado (IBGE)
-8. **Mapa Competitivo** — Fornecedores recorrentes + aditivos/rescisões (PNCP expandido) + mercados favoráveis. Condensado.
-9. **Inteligência de Mercado** — Panorama, tendências, vantagens, recomendação geral
-10. **Plano de Desenvolvimento** — Lacunas consolidadas com ações e prazos
-11. **Próximos Passos** — Ações priorizadas com prazos
-
-### Camada 3 — Anexos (referência)
-
-Material de consulta, fora do fluxo principal.
-
-- **Anexo A — Editais Não Recomendados** — Tabela condensada: nº, município/objeto (clicável), valor, motivo (1 linha cada). Max 1 página.
-- **Anexo B — Perfil da Empresa** — Dados cadastrais, QSA, regime tributário (BrasilAPI: Simples/MEI/Geral), sanções, SICAF, maturidade (E8), histórico de contratos
-- **Anexo C — Fontes de Dados e Metodologia** — Tabela de fontes (nomes institucionais, status, detalhe) + Metodologia de Análise (pesos do índice de viabilidade, fórmula de ROI, calibração de probabilidade, disclaimer) + Querido Diário (se houver menções)
-
-**Rodapé em todas as páginas:** "Tiago Sasaki — Consultor de Inteligência em Licitações"
-
-**Regras visuais:**
-- Recomendações coloridas: PARTICIPAR (verde), AVALIAR COM CAUTELA (âmbar), NÃO RECOMENDADO (vermelho)
-- "Resultado Potencial" (não "Faturamento") — cálculo: valor × probabilidade × margem líquida setorial
-- Números em formato brasileiro: vírgula decimal, ponto milhar (12,5% não 12.5%)
-- Palavras nunca quebram no meio (wordWrap CJK)
-
----
-
-## APIs Reference
-
-| API | Endpoint | Auth | Rate Limit | Uso |
-|-----|----------|------|------------|-----|
-| OpenCNPJ | `api.opencnpj.org/{CNPJ}` | Nenhuma | 50 req/s | Perfil da empresa |
-| Portal Transparência | `api.portaldatransparencia.gov.br/api-de-dados/` | `chave-api-dados` header (env: `PORTAL_TRANSPARENCIA_API_KEY` em `backend/.env`) | 90 req/min | Sanções + contratos — **OBRIGATÓRIO usar a chave configurada** |
-| PNCP Consulta | `pncp.gov.br/api/consulta/v1/contratacoes/publicacao` | Nenhuma | ~100 req/min | Editais (primário) |
-| PNCP Arquivos | `pncp.gov.br/api/pncp/v1/orgaos/{cnpj}/compras/{ano}/{seq}/arquivos` | Nenhuma | ~60 req/min | Documentos do edital |
-| PNCP Download | `pncp.gov.br/pncp-api/v1/orgaos/{cnpj}/compras/{ano}/{seq}/arquivos/{n}` | Nenhuma | ~30 req/min | Download PDF |
-| PCP v2 | `compras.api.portaldecompraspublicas.com.br/v2/licitacao/processos` | Nenhuma | ~60 req/min | Editais complementares |
-| Querido Diário | `api.queridodiario.ok.org.br/gazettes` | Nenhuma | ~60 req/min | Diários oficiais |
-| Nominatim | `nominatim.openstreetmap.org/search` | Nenhuma | 1 req/s | Geocoding |
-| OSRM | `router.project-osrm.org/route/v1/driving/` | Nenhuma | ~60 req/min | Distância rodoviária |
-| BrasilAPI | `brasilapi.com.br/api/cnpj/v1/{cnpj}` | Nenhuma | ~3 req/s | Simples Nacional + MEI + fallback porte |
-| IBGE Localidades | `servicodados.ibge.gov.br/api/v1/localidades/estados/{UF}/municipios` | Nenhuma | ~1 req/s | Código IBGE do município |
-| IBGE SIDRA | `apisidra.ibge.gov.br/values/t/{tabela}/n6/{cod}/v/{var}/p/last` | Nenhuma | ~1 req/s | População (tabela 6579) + PIB (tabela 5938) |
-
-**Fontes testadas e descartadas (2026-03-10):** ComprasGov v3 (404), Comprasnet Contratos (500), Portal Transparência /licitacoes (0 resultados), TCE-PE (500), TCE-RJ (HTML não JSON). SICAF não possui API pública.
-**Fontes avaliadas e rejeitadas (2026-03-14):** Base dos Dados/BigQuery (dependência GCP), TCU Webservices (só licitações próprias), CND Federal (exige e-CNPJ), CAGED/RAIS (requer solicitação formal MTE).
 
 ---
 
 ## Execution
 
-Quando invocado:
-1. **Phase 1:** Executar `collect-report-data.py` (coleta todas as APIs + SICAF via Playwright integrado)
-2. **Phase 1.5 — GATE DETERMINÍSTICO (OBRIGATÓRIO):** Executar `validate-report-data.py` no JSON. Se BLOCKED → PARAR, informar o motivo, NÃO prosseguir. Se WARNINGS → listar todos os alertas e endereçar CADA UM no relatório.
-3. **Phase 2:** Download + análise documental dos PDFs dos editais (Claude direto)
-4. **Phase 3:** Análise estratégica cruzando perfil + edital + documento real
-5. **Phase 4:** Inteligência competitiva (PNCP histórico + OpenCNPJ concorrentes)
-6. **Phase 5:** Inteligência de mercado (panorama, tendências, nichos)
-7. **Phase 6:** Enriquecer JSON + gerar PDF + gerar markdown
-8. **Phase 7 — GATE ADVERSARIAL (OBRIGATÓRIO):** Revisão com persona do leitor. Se QUALQUER item falhar → corrigir e re-gerar.
-9. JSON final salvo em `docs/reports/data-{CNPJ}-{YYYY-MM-DD}.json`
-10. PDF gerado em `docs/reports/report-{CNPJ}-{nome-slug}-{YYYY-MM-DD}.pdf`
-11. Markdown em `docs/reports/report-{CNPJ}-{nome-slug}-{YYYY-MM-DD}.md`
+### Step 1 — Parse CNPJ
 
-### Phase 1.5: Gate Determinístico (script automatizado)
+Extrair CNPJ dos argumentos. Aceita `12.345.678/0001-90` ou `12345678000190`. Definir:
+- `DATA_JSON=docs/reports/data-{CNPJ}-{YYYY-MM-DD}.json`
+- `REPORT_PDF=docs/reports/report-{CNPJ}-{nome-slug}-{YYYY-MM-DD}.pdf`
+- `REPORT_MD=docs/reports/report-{CNPJ}-{nome-slug}-{YYYY-MM-DD}.md`
+
+### Step 2 — Phase 1: Coleta Determinística
 
 ```bash
-python scripts/validate-report-data.py docs/reports/data-{CNPJ}-{YYYY-MM-DD}.json
+cd D:/pncp-poc
+python scripts/collect-report-data.py --cnpj {CNPJ} --dias 30 --output {DATA_JSON}
 ```
 
-O script verifica coerência semântica dos dados ANTES de gerar o relatório:
+**NÃO passar `--ufs` manualmente.** O script deriva UFs do histórico de contratos.
 
-| Verificação | Se falhar |
-|-------------|-----------|
-| Keywords vieram do histórico ou do CNAE fallback? | BLOCK se fallback com >10 contratos |
-| Cluster dominante bate com os editais encontrados? | BLOCK se <10% de match |
-| Divergência setorial (CNAE ≠ histórico)? | BLOCK se zero contratos no setor |
-| >90% dos editais com habilitação parcial + >10 contratos? | BLOCK — editais no setor errado |
-| 70-90% dos editais com habilitação parcial? | WARN — considerar se editais correspondem ao perfil |
-| Todas as probabilidades de vitória <5%? | WARN — transparência obrigatória |
-| Todos os ROIs negativos? | WARN — classificar como investimento |
-| Fontes obrigatórias falharam? | BLOCK |
+Verificar output: quantos editais abertos? Alguma API falhou (`_metadata.sources`)?
 
-**Exit codes:** 0 = OK, 1 = BLOCKED (parar), 2 = WARNINGS (endereçar no relatório).
+### Step 3 — Phase 1.5: Gate Determinístico
 
-**Se BLOCKED:** Informar o usuário qual verificação falhou e sugerir ação corretiva. NÃO prosseguir com Phases 2-7.
-
-**REGRA INVIOLÁVEL sobre BLOCKs:**
-- Um BLOCK significa que os dados coletados são INCOERENTES e o relatório seria DESONESTO.
-- NUNCA contornar um BLOCK manualmente ("é falso positivo", "vou ajustar depois", etc.).
-- A ÚNICA ação correta é CORRIGIR A CAUSA RAIZ:
-  - `CLUSTER_EDITAL_MISMATCH` → Re-executar collect-report-data.py (busca trouxe editais do setor errado)
-  - `HABILITACAO_MASS_PARTIAL` → Verificar se editais correspondem ao setor real da empresa
-  - `KEYWORDS_CNAE_FALLBACK` → Re-executar com versão atualizada do clustering
-  - `SECTOR_DIVERGENCE_TOTAL` → Usar clusters de atividade real para nortear a busca
-- Se o BLOCK persistir após re-execução: informar o usuário que os dados disponíveis são insuficientes para gerar um relatório confiável. Um relatório desonesto é PIOR que nenhum relatório.
-
-**Se WARNINGS:** Listar cada alerta no início da Phase 2 e garantir que o relatório final endereça TODOS.
-
-### Phase 7: CHECKPOINT OBRIGATÓRIO — Gate Adversarial
-
-**⛔ PARAR AQUI. O relatório NÃO está pronto até que este gate seja executado e `delivery_validation` esteja no JSON.**
-
-O agente DEVE abandonar a perspectiva de quem gerou o relatório e assumir a persona do DONO DO CNPJ — o empresário que vai ler este documento para decidir onde investir tempo e dinheiro.
-
-**COMO EXECUTAR:**
-
-1. **Reler o markdown completo** com a seguinte persona:
-
-> "Eu sou o dono da empresa [RAZÃO SOCIAL]. Pago R$X por este relatório. Tenho 10 minutos para ler. Quero saber: em quais licitações devo investir meu tempo esta semana? Se o relatório não me disser isso de forma clara e honesta, foi dinheiro jogado fora."
-
-2. **Para CADA seção do relatório, perguntar:**
-
-| Pergunta | Se a resposta for NÃO |
-|----------|----------------------|
-| "Isso me ajuda a decidir algo CONCRETO?" | Cortar ou reescrever — texto que não gera ação é enchimento |
-| "Eu confiaria meu dinheiro nesta recomendação?" | Adicionar ressalvas ou rebaixar recomendação |
-| "Isso é informação que eu não conseguiria sozinho em 5 minutos?" | Cortar — o leitor paga por inteligência, não por compilação de dados públicos |
-| "Se eu seguir este conselho e perder, o relatório me avisou do risco?" | Adicionar alerta explícito |
-| "Tem alguma frase que eu precisaria ler duas vezes para entender?" | Reescrever mais simples |
-| "Tem algo repetido que já li em outra seção?" | Consolidar — repetição destrói credibilidade |
-| "Os números fazem sentido para uma empresa do meu porte?" | Se R$2M de capital e edital exige R$20M, a recomendação PARTICIPAR é desonesta |
-| "Os editais correspondem ao que a empresa realmente faz?" | Se >50% dos editais não correspondem aos clusters de atividade real → PARAR e re-coletar |
-| "O leitor entende COMO cada score foi calculado?" | Adicionar referência à seção de Metodologia (Anexo C) |
-| "As recomendações são robustas ou frágeis?" | Se frágil, mencionar explicitamente no texto |
-
-3. **Teste do "E daí?"** — Para cada parágrafo: se o leitor pode responder "e daí?", o parágrafo não agrega valor. Exemplos:
-
-- ❌ "O mercado atravessa período de alta demanda" → E daí? Isso não me diz em qual edital participar.
-- ❌ "Foram encontrados 54 editais relevantes" → E daí? Quais eu priorizo?
-- ✅ "Pregão 023/2026 Hospital Municipal de Chapecó (R$340K, medicamentos hospitalares) é a melhor oportunidade: 18% de chance, prazo de 45 dias, você já forneceu para este órgão em 2025. Decisão até 15/04." → Ação clara, personalizada, honesta.
-
-4. **Teste de honestidade** — Para cada recomendação PARTICIPAR:
-
-- A empresa tem histórico comprovado neste tipo de fornecimento/serviço? Se o histórico de contratos (`activity_clusters`) não inclui o segmento do edital → não é PARTICIPAR, é AVALIAR COM CAUTELA no máximo.
-- O ROI é positivo ou é investimento? Se investimento → dizer explicitamente "você vai gastar R$X para participar, sem retorno financeiro direto neste edital".
-- A probabilidade é realista? Se 3% → dizer "em média, você precisaria participar de ~33 licitações para vencer 1".
-- Os editais encontrados correspondem ao que a empresa realmente vende? Se `_keywords_source == "cnae_fallback"` → os editais podem estar no setor ERRADO. Verificar `activity_clusters` antes de recomendar qualquer coisa.
-
-5. **Registrar resultado** — Após a revisão adversarial, incluir no JSON:
-
-```json
-"delivery_validation": {
-    "gate_deterministic": "OK|WARNINGS|BLOCKED",
-    "gate_adversarial": "PASSED|REVISED",
-    "revisions_made": ["Rebaixado edital X de PARTICIPAR para AVALIAR (histórico não confirma competência neste segmento)", ...],
-    "reader_persona": "Dono de [PORTE] do setor [SETOR REAL do activity_clusters], 10min de atenção, busca ação concreta"
-}
+```bash
+python scripts/validate-report-data.py {DATA_JSON}
 ```
 
-### Checklist de Formato (complementar — verificar APÓS o gate adversarial)
+- **Exit 0 (OK):** Prosseguir.
+- **Exit 2 (WARNINGS):** Anotar os alertas — o Analyst deve endereçar CADA UM.
+- **Exit 1 (BLOCKED):** **PARAR.** Informar o usuário qual verificação falhou e sugerir ação corretiva. NÃO prosseguir.
 
-- [ ] Datas em DD/MM/YYYY
-- [ ] Números em formato brasileiro (vírgula decimal, ponto milhar)
-- [ ] Zero termos em inglês ou técnicos no PDF
-- [ ] Rodapé presente em todas as páginas
-- [ ] Links de editais clicáveis e validados
-- [ ] Seção de Fontes com nomes institucionais (não técnicos)
+### Step 4 — Launch ANALYST Agent (Phases 2-5)
 
-**Se QUALQUER revisão adversarial gerou mudança:** re-gerar PDF e markdown com as correções.
+Criar subagente isolado para análise documental e estratégica:
+
+```
+TaskCreate(subagent_type="claude-router:deep-executor")
+Prompt: Conteúdo de .claude/commands/report-b2g-analyst.md
+Argumentos: DATA_JSON path + lista de WARNINGS (se houver)
+```
+
+O Analyst enriquece o JSON com: `analise_documental`, `analise_detalhada`, `recomendacao`, `justificativa`, `inteligencia_mercado`, `proximos_passos`, `resumo_executivo`.
+
+**Após retorno:** Verificar que o JSON foi salvo e contém os campos obrigatórios.
+
+### Step 5 — Launch AUDITOR Agent (Phase 7)
+
+Criar subagente isolado para auditoria adversarial (NUNCA viu o processo do Analyst):
+
+```
+TaskCreate(subagent_type="claude-router:deep-executor")
+Prompt: Conteúdo de .claude/commands/report-b2g-auditor.md
+Argumentos: DATA_JSON path (já enriquecido pelo Analyst)
+```
+
+O Auditor executa checklist binário e escreve `delivery_validation` no JSON.
+
+### Step 6 — Handle Auditor Result
+
+Ler `delivery_validation.gate_adversarial` do JSON:
+
+- **"PASSED":** Prosseguir para Step 7.
+- **"REVISED":** Prosseguir (Auditor já aplicou rebaixamentos no JSON).
+- **"BLOCKED":** Executar retry loop:
+  1. Extrair `delivery_validation.block_reasons` do JSON.
+  2. Re-lançar ANALYST com feedback: "O Auditor bloqueou o relatório. Motivos: {block_reasons}. Corrigir e re-enriquecer o JSON."
+  3. Re-lançar AUDITOR no JSON corrigido.
+  4. Se AINDA BLOCKED: prosseguir para Step 7 com flag `--partial-banner` (PDF incluirá banner "ANÁLISE PARCIAL — cobertura documental incompleta").
+
+### Step 7 — Phase 6: Gerar PDF
+
+```bash
+cd D:/pncp-poc
+python scripts/generate-report-b2g.py \
+  --input {DATA_JSON} \
+  --output {REPORT_PDF} \
+  --save-json
+```
+
+Se flag `--partial-banner` ativo, adicionar: `--partial-banner`
+
+### Step 8 — Gerar Markdown
+
+Salvar versão markdown em `{REPORT_MD}` com resumo executivo + tabela de editais + recomendações.
+
+### Step 9 — Report Results
+
+Informar ao usuário:
+- PDF gerado: `{REPORT_PDF}`
+- JSON final: `{DATA_JSON}`
+- Markdown: `{REPORT_MD}`
+- Resultado do gate adversarial (PASSED/REVISED/BLOCKED+retry)
+- Contagem: X PARTICIPAR, Y AVALIAR, Z NÃO RECOMENDADO
+
+---
+
+## GUARDRAILS — Regras do Orchestrator
+
+1. O orchestrator NÃO realiza análise. Delega para agentes isolados.
+2. NUNCA contornar um BLOCK do Gate Determinístico (Step 3).
+3. Máximo 1 retry após BLOCK do Auditor. Após isso, gerar PDF parcial.
+4. Verificar JSON entre steps — campos obrigatórios devem estar preenchidos.
+5. Se o Analyst retornar JSON sem `recomendacao` ou `justificativa` em algum edital, rejeitar e re-executar.
 
 ## Params
 

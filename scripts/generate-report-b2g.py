@@ -1408,7 +1408,8 @@ def _build_viability_text(risk: dict, styles: dict, _state: dict | None = None) 
             for k in sorted(w, key=lambda x: w[x], reverse=True):
                 parts.append(f"{name_map.get(k, k)} ({_pct(w[k])})")
             el.append(Paragraph(
-                f"Pesos calibrados para o setor da empresa: {', '.join(parts)}.",
+                f"Pesos estimados para o setor da empresa: {', '.join(parts)}. "
+                f"Os pesos são aproximações setoriais — o peso real varia conforme o edital específico.",
                 styles["caption"],
             ))
         else:
@@ -5041,16 +5042,31 @@ def _build_annex_sources_condensed(data: dict, styles: dict, sec: dict) -> list:
     # Methodology — 3 lines instead of full tables
     el.append(Paragraph(
         "<b>Metodologia:</b> Indice de viabilidade = media ponderada de 5 dimensoes "
-        "(Habilitacao 30%, Financeiro 25%, Geografico 20%, Prazo 15%, Competitivo 10%). "
+        "(Habilitacao 30%, Financeiro 25%, Geografico 20%, Prazo 15%, Competitivo 10%) — "
+        "pesos sao estimativas setoriais; o peso real de cada fator varia conforme o edital. "
         "Resultado potencial = valor x probabilidade x margem setorial - custo. "
-        "Probabilidade calibrada via historico de contratos do orgao.",
+        "Probabilidade de vitoria e estimativa heuristica baseada em dados historicos "
+        "de contratacao do orgao (modelo heuristico inspirado em analise de frequencia).",
         styles["body_small"],
     ))
     el.append(Spacer(1, 3 * mm))
 
     # Disclaimer
     el.append(Paragraph(
-        "Este relatorio tem carater informativo e nao substitui analise juridica do edital.",
+        "Este relatorio tem carater informativo e analitico. NAO constitui parecer juridico, "
+        "contabil ou de engenharia. "
+        "Limitacoes: (1) verificacao de habilitacao e PARCIAL — regularidade fiscal (CND Federal, "
+        "Estadual, Municipal, FGTS, CNDT), certidao de falencia e registro CREA/CAU NAO sao "
+        "verificados automaticamente; (2) percentual de capital minimo/patrimonio liquido e "
+        "estimativa setorial — o percentual real e definido em cada edital e deve ser conferido "
+        "antes de submeter proposta; (3) probabilidades de vitoria sao estimativas heuristicas "
+        "baseadas em dados historicos de contratacao do orgao, NAO sao projecoes estatisticas "
+        "calibradas; (4) capacidade financeira estimada e uma aproximacao — a capacidade real "
+        "depende de patrimonio liquido, receita, linhas de credito e contratos em andamento; "
+        "(5) CNAE nao e requisito legal de habilitacao — a Lei 14.133/2021 exige qualificacao "
+        "tecnica (atestados) e compatibilidade do objeto social. "
+        "A decisao de participar e de exclusiva responsabilidade da empresa. "
+        "Recomenda-se consulta a advogado e contador antes de submeter propostas.",
         ParagraphStyle(
             "disclaimer_v6", parent=styles["body_small"],
             fontName="Helvetica-Oblique", fontSize=8, textColor=TEXT_MUTED,
@@ -5100,8 +5116,10 @@ def _build_methodology_content(styles: dict) -> list:
     el.append(Paragraph("<b>Metodologia de Análise</b>", styles["h3"]))
 
     el.append(Paragraph(
-        "O índice de viabilidade combina cinco dimensões com pesos calibrados "
-        "para refletir os fatores mais determinantes na decisão de participação:",
+        "O índice de viabilidade combina cinco dimensões com pesos estimados "
+        "para refletir os fatores mais determinantes na decisão de participação. "
+        "Os pesos são estimativas setoriais utilizadas como aproximação — o peso real de cada "
+        "fator varia conforme o edital específico.",
         styles["body_small"],
     ))
     el.append(Spacer(1, 3 * mm))
@@ -5150,10 +5168,12 @@ def _build_methodology_content(styles: dict) -> list:
     el.append(Spacer(1, 3 * mm))
 
     # Probability calibration
-    el.append(Paragraph("<b>Calibração da Probabilidade</b>", styles["h3"]))
+    el.append(Paragraph("<b>Estimativa de Probabilidade</b>", styles["h3"]))
     el.append(Paragraph(
-        "A probabilidade de vitória é calculada com base no histórico de contratos "
-        "do órgão licitante obtido via Portal Nacional de Contratações Públicas. "
+        "A probabilidade de vitória é uma estimativa heurística baseada em dados históricos "
+        "de contratação do órgão licitante obtidos via Portal Nacional de Contratações Públicas. "
+        "O modelo heurístico inspirado em análise de frequência considera o número de "
+        "contratos históricos disponíveis — NÃO é uma projeção estatística calibrada. "
         "O nível de confiança da estimativa varia conforme a amostra disponível:",
         styles["body_small"],
     ))
@@ -5184,9 +5204,20 @@ def _build_methodology_content(styles: dict) -> list:
         alignment=TA_JUSTIFY,
     )
     el.append(Paragraph(
-        "Este relatório tem caráter informativo e não substitui análise jurídica do edital. "
-        "Probabilidades são estimativas baseadas em dados históricos e não representam "
-        "garantia de resultado.",
+        "Este relatório tem caráter informativo e analítico. NÃO constitui parecer jurídico, "
+        "contábil ou de engenharia. "
+        "Limitações: (1) verificação de habilitação é PARCIAL — regularidade fiscal (CND Federal, "
+        "Estadual, Municipal, FGTS, CNDT), certidão de falência e registro CREA/CAU NÃO são "
+        "verificados automaticamente; (2) o percentual de capital mínimo/patrimônio líquido "
+        "utilizado é uma estimativa setorial — o percentual real é definido em cada edital e "
+        "deve ser conferido antes de submeter proposta; (3) probabilidades de vitória são "
+        "estimativas heurísticas baseadas em dados históricos de contratação do órgão, NÃO são "
+        "projeções estatísticas calibradas; (4) a capacidade financeira estimada é uma "
+        "aproximação — a capacidade real depende de patrimônio líquido, receita, linhas de "
+        "crédito e contratos em andamento; (5) CNAE não é requisito legal de habilitação — "
+        "a Lei 14.133/2021 exige qualificação técnica (atestados) e compatibilidade do objeto "
+        "social. A decisão de participar é de exclusiva responsabilidade da empresa. "
+        "Recomenda-se consulta a advogado e contador antes de submeter propostas.",
         disclaimer_style,
     ))
     return el

@@ -35,16 +35,17 @@ Para CADA edital com recomendacao `PARTICIPAR`:
 | C1 | Justificativa contém pelo menos 2 afirmações factuais? | Justificativa genérica ou vazia |
 | C2 | Se `distancia_km` preenchido, justificativa menciona distância? | Distância ignorada na análise |
 | C3 | Se `habilitacao_checklist.cat_required==true` E `cat_available==false`, está flagueado? | Requisito crítico não atendido ignorado |
-| C4 | Se `_cnae_compatible==false`, recomendacao é NÃO RECOMENDADO? | CNAE incompatível com recomendação positiva |
-| C5 | Se `empresa.simples_nacional==true`, valor < R$4,8M? | Limite Simples Nacional violado |
+| C4 | Se `_cnae_compatible==false`, recomendacao é no máximo AVALIAR COM CAUTELA? (CNAE não é requisito legal — o script pode recomendar AVALIAR, não NÃO RECOMENDADO) | CNAE incompatível levando a NÃO RECOMENDADO sem outro motivo |
+| C5 | Se `simples_revenue_warning==true`, a justificativa menciona o alerta tributário? | Alerta tributário do Simples ignorado na justificativa |
 | C6 | Se `empresa.mei==true`, valor < R$81k? | Limite MEI violado |
 | C7 | `analise_documental` preenchido (não null/vazio)? | Análise documental ausente |
 | C8 | Links com `link_valid==true` ou sem link? | Link inválido não flagueado |
 | C9 | Se `risk_score.vetoed==true`, recomendacao é NÃO RECOMENDADO? | Veto do script ignorado |
 | C10 | Se `risk_score.fiscal_risk.nivel=="ALTO"`, justificativa menciona risco fiscal? | Risco fiscal alto ignorado |
+| C11 | Justificativa NÃO usa termos legais incorretos ("impedimento legal", "vedado", "proibido") para situações que são apenas alertas comerciais? | Linguagem jurídica incorreta para alertas não-legais |
 
 Para editais com recomendacao `AVALIAR COM CAUTELA`:
-- Aplicar checks C1, C7, C8 apenas.
+- Aplicar checks C1, C7, C8, C11 apenas.
 
 ---
 

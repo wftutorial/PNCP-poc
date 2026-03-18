@@ -4810,46 +4810,36 @@ def compute_risk_score(edital: dict, empresa: dict, sicaf: dict, sector_key: str
     if restricao.get("possui_restricao"):
         veto_gates.append("Restrição cadastral SICAF ativa — inabilitação provável")
 
-    # Gate 3: Capital < 10% of contract value — insuficiente para habilitação econômico-financeira
-    if capital > 0 and valor > 0 and (capital / valor) < 0.10:
+    # Gate 3: Capital < sector-specific % of contract value — insuficiente para habilitação econômico-financeira
+    # Capital minimum: use sector-specific % (varies 5%-10%). 10% is the legal MAX (Lei 14.133, art. 69 §4).
+    # The actual % is edital-specific — we use the sector default as approximation.
+    sector_hab = _HABILITACAO_REQUIREMENTS.get(sector_key, _HABILITACAO_REQUIREMENTS.get("_default", {}))
+    capital_min_pct = sector_hab.get("capital_minimo_pct", 0.10)
+    if capital > 0 and valor > 0 and (capital / valor) < capital_min_pct:
         veto_gates.append(
             f"Capital social insuficiente: {_fmt_brl(capital)} = {capital/valor:.0%} do valor do edital "
-            f"(mínimo usual: 10%)"
+            f"(estimativa usual do setor: {capital_min_pct:.0%}, verificar edital para % real)"
         )
 
-    # Gate 4: MEI + valor > R$81k — legal limit
+    # Gate 4: REMOVED — R$81K is the MEI annual REVENUE ceiling (LC 128, art. 18-A §1),
+    # NOT a procurement participation limit. A MEI can legally bid on contracts of any value.
+    # The risk is that winning may push revenue above the ceiling, causing exit from MEI.
+    # This is now handled as a WARNING in risk_score, not a veto.
     is_mei = empresa.get("mei") or empresa.get("opcao_pelo_mei")
-    if is_mei and valor > 81_000:
-        veto_gates.append(
-            f"Limite MEI excedido: edital {_fmt_brl(valor)} > R$ 81.000 (teto MEI)"
-        )
 
-    # Gate 5: Simples Nacional + valor > R$4.8M — legal limit
+    # Gate 5: REMOVED — R$4.8M is the Simples Nacional annual REVENUE ceiling (LC 123, art. 3, II),
+    # NOT a procurement participation limit. A company can legally bid on contracts of any value.
+    # The risk is that winning may push revenue above the ceiling, causing exit from Simples.
+    # This is now handled as a WARNING in risk_score, not a veto.
     is_simples = empresa.get("simples_nacional") or empresa.get("opcao_pelo_simples")
-    if is_simples and valor > 4_800_000:
-        veto_gates.append(
-            f"Limite Simples Nacional excedido: edital {_fmt_brl(valor)} > R$ 4.800.000"
-        )
 
-    # Gate 6: Presencial > 500km — logística inviável
-    modalidade_raw = (edital.get("modalidade") or "")
-    dist_raw = edital.get("distancia", {})
-    dist_km_raw = dist_raw.get("km") if isinstance(dist_raw, dict) else None
-    if "Presencial" in modalidade_raw and dist_km_raw is not None and dist_km_raw > 500:
-        veto_gates.append(
-            f"Licitação presencial a {dist_km_raw:.0f}km da sede — logística inviável"
-        )
+    # Gate 6: REMOVED — Distance veto has no legal basis. Construction companies routinely
+    # mobilize teams hundreds of km away. Distance already penalizes the geographic score.
+    # Keeping as informational note in justificativa instead of veto.
 
-    # Gate 7: Concessão de longo prazo — incompatível com porte EPP
-    import re as _re
-    objeto_raw = (edital.get("objeto") or "").lower()
-    if "concessão" in objeto_raw or "concessao" in objeto_raw:
-        anos_match = _re.search(r'(\d{1,2})\s*anos?', objeto_raw)
-        if anos_match and int(anos_match.group(1)) > 5:
-            anos_val = int(anos_match.group(1))
-            veto_gates.append(
-                f"Concessão de longo prazo ({anos_val} anos) — incompatível com porte EPP"
-            )
+    # Gate 7: REMOVED — No legal prohibition on any company size bidding long-term concessions.
+    # This is a financial planning concern, not a legal barrier.
+    # Long-term concessions already receive lower financial scores due to capacity ratio.
 
     if veto_gates:
         weights = _SECTOR_WEIGHT_PROFILES.get(sector_key, _SECTOR_WEIGHT_PROFILES["_default"])
@@ -4892,7 +4882,10 @@ def compute_risk_score(edital: dict, empresa: dict, sicaf: dict, sector_key: str
     if valor <= 0 or capital <= 0:
         fin_score = 50  # Unknown
     else:
-        capacity = capital * 10
+        # Financial capacity approximation: capital x 5 (conservative multiplier accounting for
+        # leverage, credit lines, and operational reserves). This is a heuristic, NOT an accounting metric.
+        # Disclosed in methodology section as "estimativa heuristica de capacidade financeira".
+        capacity = capital * 5  # Reduced from 10x to 5x for conservatism
         if valor <= capacity * 0.5:
             fin_score = 100
         elif valor <= capacity:
@@ -5210,7 +5203,7 @@ def compute_win_probability(
     capital = _safe_float(empresa.get("capital_social")) or 0.0
     valor = _safe_float(edital.get("valor_estimado")) or 0.0
     if capital > 0 and valor > 0:
-        cap_ratio = valor / (capital * 10)  # value vs capacity
+        cap_ratio = valor / (capital * 5)  # value vs capacity (conservative heuristic)
         if cap_ratio > 5:
             contextual_mult *= 0.5  # Extreme financial stretch
         elif cap_ratio > 2:
@@ -6722,7 +6715,7 @@ def _check_cnae_object_compatibility(editais: list, empresa: dict) -> None:
 # A2: HABILITAÇÃO DETERMINÍSTICA CHECKLIST
 # ============================================================
 
-def _compute_habilitacao_checklist(editais: list, empresa: dict, sicaf: dict) -> None:
+def _compute_habilitacao_checklist(editais: list, empresa: dict, sicaf: dict, sector_key: str = "") -> None:
     """Compute structured habilitação checklist for each edital.
 
     Sets ed["habilitacao_checklist"] dict with boolean flags and thresholds.
@@ -6738,26 +6731,42 @@ def _compute_habilitacao_checklist(editais: list, empresa: dict, sicaf: dict) ->
     ) if isinstance(empresa.get("sancoes"), dict) else False
     sicaf_status = sicaf.get("status_crc") if sicaf else None
 
+    # Sector-specific capital minimum percentage (Lei 14.133, art. 69 §4: max 10%)
+    sector_hab = _HABILITACAO_REQUIREMENTS.get(sector_key, _HABILITACAO_REQUIREMENTS.get("_default", {}))
+    capital_min_pct = sector_hab.get("capital_minimo_pct", 0.10)
+
     for ed in editais:
         valor = _safe_float(ed.get("valor_estimado")) or 0.0
         modalidade = ed.get("modalidade", "") or ""
-        capital_minimo_exigido = valor * 0.10
+        capital_minimo_exigido = valor * capital_min_pct
 
-        is_concorrencia = any(
-            m in modalidade for m in ("Concorrência", "Concorrencia")
-        )
-        cat_required = is_concorrencia and valor > 100_000
+        # Any modality can require atestados tecnicos for works/engineering (Lei 14.133, art. 67).
+        # Concorrencia almost always requires them; Pregao for engineering frequently does too.
+        is_obra = ed.get("_nature") in ("OBRA", "SERVICO_ENGENHARIA")
+        cat_required = is_obra and valor > 80_000  # Most engineering works above dispensa threshold require CAT
 
         ed["habilitacao_checklist"] = {
             "capital_minimo_ok": empresa_capital >= capital_minimo_exigido,
             "capital_minimo_exigido": capital_minimo_exigido,
             "capital_empresa": empresa_capital,
-            "simples_ok": not (is_simples and valor > 4_800_000),
-            "mei_ok": not (is_mei and valor > 81_000),
+            # No legal prohibition on Simples Nacional bidding any value
+            "simples_ok": True,
+            "simples_revenue_warning": is_simples and valor > 4_800_000,  # Tax planning alert
+            # No legal prohibition on MEI bidding any value
+            "mei_ok": True,
+            "mei_revenue_warning": is_mei and valor > 81_000,  # Tax planning alert
             "cat_required": cat_required,
             "cat_available": has_acervo,
             "sancoes_ok": not has_sancoes,
             "sicaf_ok": sicaf_status in ("CADASTRADO", None),
+            # Items NOT verified by automated analysis (explicit for transparency)
+            "fiscal_federal_verificado": False,  # CND Federal — requer consulta manual
+            "fiscal_estadual_verificado": False,  # CND Estadual — requer consulta manual
+            "fiscal_municipal_verificado": False,  # CND Municipal — requer consulta manual
+            "fgts_verificado": False,  # CRF FGTS — requer consulta manual
+            "trabalhista_verificado": False,  # CNDT Trabalhista — requer consulta manual
+            "falencia_verificado": False,  # Certidao negativa de falencia — requer consulta manual
+            "crea_cau_verificado": False,  # Registro CREA/CAU — requer consulta manual
         }
 
 
@@ -6783,14 +6792,15 @@ def _build_rich_justificativa(ed: dict, empresa: dict) -> str:
 
     parts: list[str] = []
 
-    # CNAE compatibility (highest priority — if incompatible, that's the reason)
+    # CNAE compatibility — advisory, not veto (Lei 14.133 does not reference CNAE)
     if not ed.get("_cnae_compatible", True):
         detail = ed.get("_cnae_incompatibility_detail", "")
-        if detail:
-            parts.append(detail)
-        else:
-            parts.append(f"Objeto incompatível com CNAE {empresa.get('cnae_principal', '')} da empresa")
-        return ". ".join(parts) + "." if not parts[-1].endswith(".") else " ".join(parts)
+        parts.append(
+            f"CNAE principal ({empresa.get('cnae_principal', '')}) diverge do objeto do edital"
+            f"{': ' + detail if detail else ''}. "
+            f"CNAE nao e requisito legal de habilitacao (Lei 14.133 exige atestados tecnicos, nao CNAE) — "
+            f"participacao viavel se empresa possuir atestados e objeto social compativel"
+        )
 
     # Financial fit — capital social
     if hab.get("capital_minimo_ok") is True:
@@ -6802,15 +6812,21 @@ def _build_rich_justificativa(ed: dict, empresa: dict) -> str:
         capital = hab.get("capital_empresa", 0)
         exigido = hab.get("capital_minimo_exigido", 0)
         parts.append(
-            f"Capital social R$ {capital:,.0f} insuficiente para mínimo de "
-            f"R$ {exigido:,.0f} (10% de R$ {valor:,.0f})"
+            f"Capital social R$ {capital:,.0f} insuficiente para minimo estimado de "
+            f"R$ {exigido:,.0f} (verificar edital para % real — maximo legal: 10%)"
         )
 
-    # Simples Nacional / MEI limits
-    if not hab.get("simples_ok", True):
-        parts.append(f"Limite do Simples Nacional excedido: edital R$ {valor:,.0f} > R$ 4.800.000")
-    if not hab.get("mei_ok", True):
-        parts.append(f"Limite MEI excedido: edital R$ {valor:,.0f} > R$ 81.000")
+    # Simples Nacional / MEI revenue warnings (advisory, not legal barrier)
+    if hab.get("simples_revenue_warning"):
+        parts.append(
+            f"ALERTA TRIBUTARIO: contrato de {_fmt_brl(valor)} pode levar faturamento anual "
+            f"acima do teto do Simples Nacional (R$ 4,8M) — avaliar impacto tributario antes de participar"
+        )
+    if hab.get("mei_revenue_warning"):
+        parts.append(
+            f"ALERTA TRIBUTARIO: contrato de {_fmt_brl(valor)} pode levar faturamento anual "
+            f"acima do teto MEI (R$ 81.000) — avaliar enquadramento tributario antes de participar"
+        )
 
     # Sanções
     if not hab.get("sancoes_ok", True):
@@ -6908,23 +6924,18 @@ def assign_recommendations(editais: list, empresa: dict) -> None:
             ed["justificativa"] = "; ".join(veto_reasons) if veto_reasons else "Edital vetado por impedimento legal."
             continue
 
-        # A1: CNAE incompatibility veto
+        # A1: CNAE incompatibility — NOT a legal disqualification (Lei 14.133 does not reference CNAE).
+        # What matters is technical qualification (atestados) and social contract object clause.
+        # Downgrade to AVALIAR COM CAUTELA with advisory, not hard veto.
         if not ed.get("_cnae_compatible", True):
-            ed["recomendacao"] = "NÃO RECOMENDADO"
+            if total >= 40:
+                ed["recomendacao"] = "AVALIAR COM CAUTELA"
+            else:
+                ed["recomendacao"] = "NÃO RECOMENDADO"
             ed["justificativa"] = _build_rich_justificativa(ed, empresa)
             continue
 
-        # A2: Habilitação checklist vetoes
-        if not hab_check.get("simples_ok", True):
-            ed["recomendacao"] = "NÃO RECOMENDADO"
-            ed["justificativa"] = _build_rich_justificativa(ed, empresa)
-            continue
-
-        if not hab_check.get("mei_ok", True):
-            ed["recomendacao"] = "NÃO RECOMENDADO"
-            ed["justificativa"] = _build_rich_justificativa(ed, empresa)
-            continue
-
+        # A2: Habilitação checklist — capital check (simples/mei are now warnings, not vetoes)
         if hab_check.get("capital_minimo_ok") is False:
             ed["recomendacao"] = "NÃO RECOMENDADO"
             ed["justificativa"] = _build_rich_justificativa(ed, empresa)
@@ -7017,11 +7028,12 @@ def compute_all_deterministic(
         print(f"  [A1] CNAE incompatível: {n_incompat}/{len(editais)} editais vetados por CNAE×Objeto")
 
     # A2: Habilitação determinística checklist (pre-loop, sets ed["habilitacao_checklist"])
-    _compute_habilitacao_checklist(editais, empresa, sicaf)
+    _compute_habilitacao_checklist(editais, empresa, sicaf, sector_key=sector_key)
     n_cap_fail = sum(1 for ed in editais if not ed.get("habilitacao_checklist", {}).get("capital_minimo_ok", True))
-    n_simples_fail = sum(1 for ed in editais if not ed.get("habilitacao_checklist", {}).get("simples_ok", True))
-    if n_cap_fail or n_simples_fail:
-        print(f"  [A2] Habilitação: {n_cap_fail} capital insuficiente, {n_simples_fail} Simples/MEI excedido")
+    n_simples_warn = sum(1 for ed in editais if ed.get("habilitacao_checklist", {}).get("simples_revenue_warning"))
+    n_mei_warn = sum(1 for ed in editais if ed.get("habilitacao_checklist", {}).get("mei_revenue_warning"))
+    if n_cap_fail or n_simples_warn or n_mei_warn:
+        print(f"  [A2] Habilitação: {n_cap_fail} capital insuficiente, {n_simples_warn} alerta Simples, {n_mei_warn} alerta MEI")
 
     # E5: Collect all competitive intel contracts for dispute stats
     all_competitive_contracts: list[dict] = []

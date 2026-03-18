@@ -102,13 +102,13 @@ Para CADA edital, cruzar: JSON (Phase 1) + análise documental (Phase 2) + perfi
 **Análises obrigatórias por edital:**
 
 1. **Aderência ao perfil** — CNAEs vs objeto real (Alta/Média/Baixa)
-2. **Análise de valor** — Valor vs capital social/histórico. Se `simples_nacional == true` e valor > R$4,8M: alertar. Se `mei == true` e valor > R$81k: alertar.
+2. **Análise de valor** — Valor vs capital social/histórico. Se `simples_revenue_warning == true`: alertar que o contrato pode levar faturamento anual acima do teto do Simples Nacional — é decisão tributária do empresário, NÃO impedimento legal de participar. Se `mei == true` e valor > R$81k: alertar.
 3. **Análise geográfica** — Usar `distancia_km` (NUNCA estimar). Usar `ibge.populacao` e `ibge.pib_mil_reais` para contextualizar porte municipal.
 4. **Análise de prazo** — Dias até encerramento. Tempo para preparar proposta?
 5. **Análise de modalidade** — Pregão (preço) vs Concorrência (técnica+preço)
-6. **Análise de habilitação** — Cruzar checklist Phase 2 com perfil: capital mínimo vs real, atestados exigidos vs histórico, Simples/MEI vs limites. Se NÃO atende requisito crítico -> NÃO RECOMENDADO.
+6. **Análise de habilitação** — Cruzar checklist Phase 2 com perfil: capital mínimo vs real, atestados exigidos vs histórico, Simples/MEI vs limites. Se NÃO atende requisito crítico -> NÃO RECOMENDADO. **Nota sobre capital mínimo:** O percentual de capital mínimo (5-10%) é definido em CADA edital — o script usa o default do setor como estimativa. O valor real deve ser verificado no edital.
 7. **Análise de aditivos** — Se `competitive_intel` mostra aditivos ou rescisões, alertar padrões do órgão.
-8. **Divergência setorial** — Se `qualification_gap.gap_type == "ACERVO_SETOR_DIVERGENTE"`: NÃO invalidar. Recomendar AVALIAR COM CAUTELA + "verificar CATs e atestados reais".
+8. **Divergência setorial** — Se `qualification_gap.gap_type == "ACERVO_SETOR_DIVERGENTE"`: NÃO invalidar. Recomendar AVALIAR COM CAUTELA + "verificar CATs e atestados reais". **CNAE NÃO é requisito legal de habilitação.** A Lei 14.133 exige atestados técnicos (art. 67) e compatibilidade do objeto social (art. 66), não CNAE. Empresa com CNAE 4120 e atestados de pavimentação pode participar de editais de pavimentação.
 9. **Consórcio/subcontratação** — Se barreiras de capital/acervo e edital permite: sugerir alternativa. Definir `alternativa_participacao`.
 10. **Recomendação** — PARTICIPAR / AVALIAR COM CAUTELA / NÃO RECOMENDADO. Editais com `risk_score.vetoed=true` -> NÃO RECOMENDADO citando veto.
 11. **Justificativa (OBRIGATÓRIA)** — Motivo factual. Para risco fiscal ALTO: mencionar. Para `acervo_confirmado=false`: nota sobre verificação.

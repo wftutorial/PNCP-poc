@@ -142,12 +142,94 @@ MODALIDADES_SERVICOS = {4, 5, 6, 7}            # Concorrências + Pregões (remo
 
 PNCP_MAX_PAGE_SIZE = 50
 PNCP_MAX_PAGES = 10
+PNCP_MAX_PAGES_UF = 20  # Per-UF queries: more pages since results are focused
 PCP_PAGE_SIZE = 10
 PCP_MAX_PAGES = 20
 
 MAX_RETRIES = 3
 RETRY_BACKOFF = [1.0, 3.0, 8.0]
 REQUEST_TIMEOUT = 30.0
+
+# CNAE-specific keyword refinements for CNAE fallback mode
+# When contract history is unavailable, these refine the broad sector keywords
+# to match the specific CNAE sub-activity. Only applied when _keywords_source == "cnae_fallback".
+CNAE_KEYWORD_REFINEMENTS = {
+    "4120": {  # Construção de edifícios
+        "exclude_patterns": [
+            "pavimentação", "pavimentacao", "pavimentação asfáltica", "pavimentacao asfaltica",
+            "recapeamento", "recapeamento asfaltico", "recapeamento asfáltico",
+            "asfalto", "asfaltamento",
+            "ponte", "viaduto", "passarela",
+            "barragem", "reservatório", "reservatorio",
+            "saneamento básico", "saneamento basico",
+            "esgoto", "estação de tratamento", "estacao de tratamento",
+            "topografia", "sondagem geotécnica", "sondagem geotecnica", "sondagem spt", "sondagem de solo",
+            "fiscalização de obra", "fiscalizacao de obra",
+            "supervisão de obra", "supervisao de obra",
+            "gerenciamento de obra",
+            "laudo técnico", "laudo tecnico",
+            "projeto arquitetônico", "projeto arquitetonico",
+            "revitalização urbana", "revitalizacao urbana",
+            "restauração de patrimônio", "restauracao de patrimonio",
+            "restauração de fachada", "restauracao de fachada",
+            "restauração de edifício", "restauracao de edificio",
+        ],
+        "extra_include": [
+            "unidade habitacional", "casa popular", "habitação popular", "habitacao popular",
+            "creche", "escola", "UBS", "posto de saúde", "posto de saude",
+            "centro esportivo", "ginásio", "ginasio", "quadra coberta", "quadra poliesportiva",
+            "prédio público", "predio publico", "sede administrativa",
+            "centro comunitário", "centro comunitario",
+            "unidade de saúde", "unidade de saude",
+        ],
+    },
+    "4211": {  # Construção de rodovias, ferrovias, obras de urbanização e obras de arte especiais
+        "exclude_patterns": [
+            "edificação", "edificacao", "prédio", "predio",
+            "escola", "creche", "UBS", "posto de saúde", "posto de saude",
+            "elevador", "elevadores",
+            "telhado", "cobertura metálica", "cobertura metalica",
+            "pintura predial", "pintura de fachada",
+            "instalação elétrica", "instalacao eletrica",
+            "instalação hidráulica", "instalacao hidraulica",
+        ],
+        "extra_include": [
+            "rodovia", "estrada", "via urbana",
+            "ciclovia", "calçada", "calcada",
+            "meio-fio", "meio fio", "guia",
+            "sinalização viária", "sinalizacao viaria",
+        ],
+    },
+    "4399": {  # Serviços especializados para construção
+        "exclude_patterns": [],
+        "extra_include": [
+            "serviço especializado", "servico especializado",
+            "manutenção predial", "manutencao predial",
+        ],
+    },
+    "4322": {  # Instalações hidráulicas, de sistemas de ventilação e refrigeração
+        "exclude_patterns": [
+            "pavimentação", "pavimentacao", "asfalto", "ponte", "viaduto",
+            "terraplanagem", "sondagem",
+        ],
+        "extra_include": [
+            "instalação hidráulica", "instalacao hidraulica",
+            "sistema de ventilação", "sistema de ventilacao",
+            "ar condicionado", "refrigeração", "refrigeracao",
+            "sprinkler", "hidrante",
+        ],
+    },
+    "4330": {  # Obras de acabamento
+        "exclude_patterns": [
+            "pavimentação", "pavimentacao", "asfalto", "ponte", "viaduto",
+            "terraplanagem", "sondagem",
+        ],
+        "extra_include": [
+            "acabamento", "pintura", "revestimento",
+            "piso", "forro", "gesso",
+        ],
+    },
+}
 
 # ============================================================
 # HELPERS
@@ -3174,49 +3256,64 @@ def _search_pncp_single(
     seen_ids: set[str] = set()
     source_meta = {"total_raw": 0, "total_filtered": 0, "pages_fetched": 0, "errors": 0}
 
+    # FIX-1: When 1-5 UFs, iterate per-UF with server-side uf param for focused results
+    use_per_uf = 1 <= len(ufs) <= 5
+    uf_iterations: list[str | None] = [uf for uf in ufs] if use_per_uf else [None]
+    max_pages = PNCP_MAX_PAGES_UF if use_per_uf else PNCP_MAX_PAGES
+
     for mod_code, mod_name in mod_dict.items():
         if label_prefix:
             print(f"    {label_prefix} Modalidade {mod_code} ({mod_name}):")
         else:
             print(f"\n  Modalidade {mod_code} ({mod_name}):")
-        for page in range(1, PNCP_MAX_PAGES + 1):
-            data, status = api.get(
-                f"{PNCP_BASE}/contratacoes/publicacao",
-                params={
+
+        for uf_filter in uf_iterations:
+            if uf_filter:
+                print(f"      UF {uf_filter}:")
+
+            for page in range(1, max_pages + 1):
+                params = {
                     "dataInicial": data_inicial,
                     "dataFinal": data_final,
                     "codigoModalidadeContratacao": mod_code,
                     "pagina": page,
                     "tamanhoPagina": PNCP_MAX_PAGE_SIZE,
-                },
-                label=f"PNCP mod={mod_code} p={page}",
-            )
-            if status != "API" or not data:
-                source_meta["errors"] += 1
-                break
+                }
+                if uf_filter:
+                    params["uf"] = uf_filter
 
-            items = data if isinstance(data, list) else data.get("data", data.get("resultado", []))
-            if not isinstance(items, list) or not items:
-                break
+                uf_label = f" uf={uf_filter}" if uf_filter else ""
+                data, status = api.get(
+                    f"{PNCP_BASE}/contratacoes/publicacao",
+                    params=params,
+                    label=f"PNCP mod={mod_code}{uf_label} p={page}",
+                )
+                if status != "API" or not data:
+                    source_meta["errors"] += 1
+                    break
 
-            source_meta["pages_fetched"] += 1
-            source_meta["total_raw"] += len(items)
+                items = data if isinstance(data, list) else data.get("data", data.get("resultado", []))
+                if not isinstance(items, list) or not items:
+                    break
 
-            for item in items:
-                edital = _parse_pncp_item(item, keywords, ufs, keyword_patterns=keyword_patterns,
-                                         nature_profile=nature_profile, cluster_nature=cluster_nature,
-                                         cluster_nature_profile=cluster_nature_profile)
-                if edital:
-                    eid = edital.get("_id", "")
-                    if eid and eid not in seen_ids:
-                        seen_ids.add(eid)
-                        all_editais.append(edital)
+                source_meta["pages_fetched"] += 1
+                source_meta["total_raw"] += len(items)
 
-            # If fewer results than page size, we have reached the end
-            if len(items) < PNCP_MAX_PAGE_SIZE:
-                break
+                for item in items:
+                    edital = _parse_pncp_item(item, keywords, ufs, keyword_patterns=keyword_patterns,
+                                             nature_profile=nature_profile, cluster_nature=cluster_nature,
+                                             cluster_nature_profile=cluster_nature_profile)
+                    if edital:
+                        eid = edital.get("_id", "")
+                        if eid and eid not in seen_ids:
+                            seen_ids.add(eid)
+                            all_editais.append(edital)
 
-            time.sleep(0.5)  # Rate limiting
+                # If fewer results than page size, we have reached the end
+                if len(items) < PNCP_MAX_PAGE_SIZE:
+                    break
+
+                time.sleep(0.5)  # Rate limiting
 
     source_meta["total_filtered"] = len(all_editais)
     return all_editais, source_meta
@@ -3250,12 +3347,15 @@ def _fetch_pncp_pages_cached(
     mod_code: int,
     data_inicial: str,
     data_final: str,
-    raw_cache: dict[tuple[int, int], list[dict] | None],
+    raw_cache: dict[tuple[int, int, str], list[dict] | None],
+    uf_filter: str | None = None,
 ) -> tuple[list[dict], int, int]:
-    """Fetch all pages for a single modalidade, using raw_cache to avoid duplicate API calls.
+    """Fetch all pages for a single modalidade (optionally per-UF), using raw_cache.
 
-    Cache key is (mod_code, page). PNCP doesn't filter by keyword or UF server-side,
-    so the same (mod, page) returns identical results regardless of which cluster requests it.
+    Cache key is (mod_code, page, uf_filter or "ALL"). When uf_filter is set,
+    the PNCP API filters server-side by UF and we allow more pages (PNCP_MAX_PAGES_UF).
+    PNCP doesn't filter by keyword server-side, so results for the same
+    (mod, page, uf) are identical regardless of which cluster requests them.
 
     Returns (all_items, pages_fetched, errors).
     A cached entry of None means the page was previously fetched and returned no/error data
@@ -3264,9 +3364,10 @@ def _fetch_pncp_pages_cached(
     all_items: list[dict] = []
     pages_fetched = 0
     errors = 0
+    max_pages = PNCP_MAX_PAGES_UF if uf_filter else PNCP_MAX_PAGES
 
-    for page in range(1, PNCP_MAX_PAGES + 1):
-        cache_key = (mod_code, page)
+    for page in range(1, max_pages + 1):
+        cache_key = (mod_code, page, uf_filter or "ALL")
 
         if cache_key in raw_cache:
             cached = raw_cache[cache_key]
@@ -3292,16 +3393,20 @@ def _fetch_pncp_pages_cached(
                 continue
 
         # Cache miss — call API
+        params = {
+            "dataInicial": data_inicial,
+            "dataFinal": data_final,
+            "codigoModalidadeContratacao": mod_code,
+            "pagina": page,
+            "tamanhoPagina": PNCP_MAX_PAGE_SIZE,
+        }
+        if uf_filter:
+            params["uf"] = uf_filter
+        uf_label = f" uf={uf_filter}" if uf_filter else ""
         data, status = api.get(
             f"{PNCP_BASE}/contratacoes/publicacao",
-            params={
-                "dataInicial": data_inicial,
-                "dataFinal": data_final,
-                "codigoModalidadeContratacao": mod_code,
-                "pagina": page,
-                "tamanhoPagina": PNCP_MAX_PAGE_SIZE,
-            },
-            label=f"PNCP mod={mod_code} p={page}",
+            params=params,
+            label=f"PNCP mod={mod_code}{uf_label} p={page}",
         )
         if status != "API" or not data:
             errors += 1
@@ -3357,23 +3462,33 @@ def collect_pncp_multi_cluster(
         else:
             all_mods.update(mods)
 
-    # --- Phase 2: Fetch each unique (mod, page) ONCE ---
-    raw_cache: dict[tuple[int, int], list[dict] | None] = {}
+    # --- Phase 2: Fetch each unique (mod, page, uf) ONCE ---
+    # FIX-4: When 1-5 UFs, iterate per-UF with server-side uf param
+    use_per_uf = 1 <= len(ufs) <= 5
+    uf_iterations: list[str | None] = [uf for uf in ufs] if use_per_uf else [None]
+    raw_cache: dict[tuple[int, int, str], list[dict] | None] = {}
     raw_by_mod: dict[int, list[dict]] = {}
     total_pages_fetched = 0
     total_errors = 0
 
-    print(f"\n  [CACHE] Fetching {len(all_mods)} unique modalidades (shared across {len(cluster_searches)} clusters)")
+    uf_desc = f", per-UF ({', '.join(ufs)})" if use_per_uf else ""
+    print(f"\n  [CACHE] Fetching {len(all_mods)} unique modalidades (shared across {len(cluster_searches)} clusters{uf_desc})")
 
     for mod_code in sorted(all_mods):
         mod_name = MODALIDADES.get(mod_code, f"Mod {mod_code}")
         print(f"    Modalidade {mod_code} ({mod_name}):")
-        items, pf, errs = _fetch_pncp_pages_cached(
-            api, mod_code, data_inicial, data_final, raw_cache,
-        )
-        raw_by_mod[mod_code] = items
-        total_pages_fetched += pf
-        total_errors += errs
+        mod_items: list[dict] = []
+        for uf_filter in uf_iterations:
+            if uf_filter:
+                print(f"      UF {uf_filter}:")
+            items, pf, errs = _fetch_pncp_pages_cached(
+                api, mod_code, data_inicial, data_final, raw_cache,
+                uf_filter=uf_filter,
+            )
+            mod_items.extend(items)
+            total_pages_fetched += pf
+            total_errors += errs
+        raw_by_mod[mod_code] = mod_items
 
     total_raw = sum(len(items) for items in raw_by_mod.values())
     cache_hits = sum(1 for k, v in raw_cache.items() if v is not None) - total_pages_fetched
@@ -7705,6 +7820,7 @@ Examples:
     # ---- Merge keywords: Contract history (primary) + CNAE (secondary) ----
     # Contract-derived keywords go first (higher relevance), then CNAE keywords
     # that aren't already covered by contract keywords.
+    _cnae_refinement_applied: str | None = None  # Tracks whether CNAE refinement was used
     if contract_keywords:
         existing_lower = {kw.lower() for kw in contract_keywords}
         # Add CNAE keywords that aren't already represented
@@ -7717,6 +7833,32 @@ Examples:
     else:
         keywords = cnae_keywords
         print(f"  Keywords finais: CNAE apenas ({len(keywords)} termos)")
+
+        # Apply CNAE-specific keyword refinements for fallback mode
+        cnae_raw = str(empresa.get("cnae_principal", "")).split("-")[0].split(" ")[0]
+        cnae_prefix = re.sub(r"[^0-9]", "", cnae_raw)[:4]
+        refinement = CNAE_KEYWORD_REFINEMENTS.get(cnae_prefix)
+        if refinement:
+            original_count = len(keywords)
+            # Remove excluded patterns
+            exclude_set = set(p.lower() for p in refinement.get("exclude_patterns", []))
+            keywords = [kw for kw in keywords if kw.lower() not in exclude_set]
+            excluded_count = original_count - len(keywords)
+            # Add extra includes (avoid duplicates)
+            existing_lower = {k.lower() for k in keywords}
+            added = []
+            for extra in refinement.get("extra_include", []):
+                if extra.lower() not in existing_lower:
+                    keywords.append(extra)
+                    existing_lower.add(extra.lower())
+                    added.append(extra)
+            _cnae_refinement_applied = cnae_prefix
+            print(f"  CNAE refinement ({cnae_prefix}): {original_count} → {len(keywords)} keywords "
+                  f"(-{excluded_count} excluídas, +{len(added)} adicionadas)")
+            if exclude_set:
+                print(f"  Excluídas: {', '.join(sorted(exclude_set)[:5])}{'...' if len(exclude_set) > 5 else ''}")
+            if added:
+                print(f"  Adicionadas: {', '.join(added[:5])}{'...' if len(added) > 5 else ''}")
 
     # ---- UFs (contract-history-first, like keywords) ----
     ufs_meta = {}
@@ -8023,6 +8165,9 @@ Examples:
     # Store activity clusters and keyword source metadata
     data["activity_clusters"] = contract_clusters if contract_clusters else []
     data["_keywords_source"] = "historico" if contract_clusters else "cnae_fallback"
+    if _cnae_refinement_applied:
+        data["_keywords_refined"] = True
+        data["_cnae_refinement_applied"] = _cnae_refinement_applied
     data["nature_profile"] = company_nature_profile if company_nature_profile else {}
 
     # ---- Strategic Market Thesis ----

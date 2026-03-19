@@ -59,19 +59,23 @@ _ILLEGAL_XML_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]")
 # Column definitions: (header, width, align)
 COLUMNS = [
     ("N\u00ba", 5, "center"),
-    ("Objeto", 65, "left"),
-    ("\u00d3rg\u00e3o", 40, "left"),
+    ("Objeto", 55, "left"),
+    ("\u00d3rg\u00e3o", 35, "left"),
     ("UF", 5, "center"),
-    ("Munic\u00edpio", 22, "left"),
+    ("Munic\u00edpio", 20, "left"),
     ("Valor Estimado", 18, "right"),
-    ("Modalidade", 22, "left"),
+    ("Modalidade", 20, "left"),
     ("Publica\u00e7\u00e3o", 13, "center"),
     ("Abertura Propostas", 18, "center"),
     ("Encerramento", 18, "center"),
+    ("Dist\u00e2ncia (km)", 12, "right"),
+    ("Custo Proposta", 14, "right"),
+    ("ROI", 10, "center"),
+    ("Popula\u00e7\u00e3o", 12, "right"),
     ("Compat\u00edvel CNAE", 12, "center"),
     ("Dentro Capacidade", 14, "center"),
     ("Densidade KW", 10, "center"),
-    ("Keywords", 30, "left"),
+    ("Keywords", 25, "left"),
     ("Link PNCP", 12, "center"),
 ]
 
@@ -309,8 +313,49 @@ def _build_oportunidades(wb: Workbook, items: list[dict], capacity_10x: float | 
         if dt_enc:
             enc_cell.number_format = DATETIME_FMT
 
-        # K: Compativel CNAE
-        cnae_cell = ws.cell(row=row_num, column=11, value=cnae_label)
+        # K: Distância (km)
+        dist_data = item.get("distancia", {})
+        dist_km = _safe_float(dist_data.get("km")) if isinstance(dist_data, dict) else None
+        dist_cell = ws.cell(row=row_num, column=11)
+        if dist_km is not None:
+            dist_cell.value = dist_km
+            dist_cell.number_format = '#,##0'
+        else:
+            dist_cell.value = ""
+
+        # L: Custo Proposta
+        custo_data = item.get("custo_proposta", {})
+        custo_total = _safe_float(custo_data.get("total")) if isinstance(custo_data, dict) else None
+        custo_cell = ws.cell(row=row_num, column=12)
+        if custo_total is not None:
+            custo_cell.value = custo_total
+            custo_cell.number_format = CURRENCY_FMT
+        else:
+            custo_cell.value = ""
+
+        # M: ROI
+        roi_data = item.get("roi_proposta", {})
+        roi_class = roi_data.get("classificacao", "") if isinstance(roi_data, dict) else ""
+        roi_cell = ws.cell(row=row_num, column=13, value=roi_class)
+        if roi_class in ("EXCELENTE", "BOM"):
+            roi_cell.font = st["green_font"]
+        elif roi_class in ("MARGINAL", "DESFAVORAVEL"):
+            roi_cell.font = st["red_font"]
+        elif roi_class == "MODERADO":
+            roi_cell.font = st["amber_font"]
+
+        # N: População
+        ibge_data = item.get("ibge", {})
+        pop = ibge_data.get("populacao") if isinstance(ibge_data, dict) else None
+        pop_cell = ws.cell(row=row_num, column=14)
+        if pop is not None:
+            pop_cell.value = pop
+            pop_cell.number_format = '#,##0'
+        else:
+            pop_cell.value = ""
+
+        # O: Compativel CNAE
+        cnae_cell = ws.cell(row=row_num, column=15, value=cnae_label)
         if cnae_label == "SIM":
             cnae_cell.font = st["green_font"]
         elif cnae_label == "N\u00c3O":
@@ -318,8 +363,8 @@ def _build_oportunidades(wb: Workbook, items: list[dict], capacity_10x: float | 
         else:
             cnae_cell.font = st["amber_font"]
 
-        # L: Dentro Capacidade
-        cap_cell = ws.cell(row=row_num, column=12, value=cap_label)
+        # P: Dentro Capacidade
+        cap_cell = ws.cell(row=row_num, column=16, value=cap_label)
         if cap_label == "SIM":
             cap_cell.font = st["green_font"]
         elif cap_label == "N\u00c3O":
@@ -327,31 +372,31 @@ def _build_oportunidades(wb: Workbook, items: list[dict], capacity_10x: float | 
         else:
             cap_cell.font = Font(color="808080")
 
-        # M: Densidade KW
-        kw_cell = ws.cell(row=row_num, column=13)
+        # Q: Densidade KW
+        kw_cell = ws.cell(row=row_num, column=17)
         if kw_density is not None:
             kw_cell.value = kw_density / 100.0 if kw_density > 1 else kw_density
             kw_cell.number_format = PCT_FMT
         else:
             kw_cell.value = ""
 
-        # N: Keywords
-        ws.cell(row=row_num, column=14, value=_sanitize(match_kw))
+        # R: Keywords
+        ws.cell(row=row_num, column=18, value=_sanitize(match_kw))
 
-        # O: Link PNCP
+        # S: Link PNCP
         if link_pncp:
-            link_cell = ws.cell(row=row_num, column=15, value="Abrir")
+            link_cell = ws.cell(row=row_num, column=19, value="Abrir")
             link_cell.hyperlink = str(link_pncp)
             link_cell.font = st["link_font"]
         else:
-            ws.cell(row=row_num, column=15, value="")
+            ws.cell(row=row_num, column=19, value="")
 
         # Apply row-level styling
         for col in range(1, len(COLUMNS) + 1):
             cell = ws.cell(row=row_num, column=col)
             cell.border = st["thin_border"]
-            # Only set fill if not already a styled cell (links, cnae, capacity keep font)
-            if col not in (11, 12, 15):
+            # Only set fill if not already a styled cell (links, cnae, capacity, roi keep font)
+            if col not in (13, 15, 16, 19):
                 if is_alt and cell.fill == PatternFill(fill_type=None):
                     cell.fill = row_fill
             elif is_alt:
@@ -543,12 +588,32 @@ def _build_metadata(wb: Workbook, data: dict, items: list[dict]):
     setor = busca.get("setor", busca.get("setor_mapeado", "N/D"))
     total_bruto = stats.get("total_bruto", stats.get("total_pncp", total))
 
+    # SICAF / Sanctions enrichment data
+    sicaf = empresa.get("sicaf", {})
+    sicaf_status = sicaf.get("status", "N/D") if isinstance(sicaf, dict) else "N/D"
+    sancoes = empresa.get("sancoes", {})
+    sancionada = empresa.get("sancionada", False)
+    restricao_sicaf = empresa.get("restricao_sicaf")
+
+    sancoes_str = "Nenhuma"
+    if isinstance(sancoes, dict) and sancionada:
+        ativas = [k.upper() for k, v in sancoes.items() if v and k not in ("sancionada", "inconclusive")]
+        sancoes_str = ", ".join(ativas) if ativas else "SIM (detalhes indispon\u00edveis)"
+
+    restricao_str = "SIM" if restricao_sicaf else ("N\u00c3O" if restricao_sicaf is not None else "N/D")
+
     rows = [
         ("CNPJ", _format_cnpj(empresa.get("cnpj", "N/D"))),
         ("Raz\u00e3o Social", empresa.get("razao_social", "N/D")),
         ("CNAE Principal", cnae_str),
         ("Capital Social", _format_brl(capital) if capital else "N/D"),
         ("Capacidade (10\u00d7)", _format_brl(capacity_10x) if capacity_10x else "N/D"),
+        ("", ""),  # separator
+        ("SICAF Status", sicaf_status),
+        ("Restri\u00e7\u00e3o SICAF", restricao_str),
+        ("San\u00e7\u00f5es Ativas", sancoes_str),
+        ("Empresa Sancionada", "SIM \u26d4" if sancionada else "N\u00c3O \u2705"),
+        ("", ""),  # separator
         ("UFs Buscadas", ufs_str),
         ("Per\u00edodo", periodo_str),
         ("Dias", dias),
@@ -558,7 +623,7 @@ def _build_metadata(wb: Workbook, data: dict, items: list[dict]):
         ("Total Incompat\u00edvel", incompat_count),
         ("Valor Total Compat\u00edvel", _format_brl(valor_compat)),
         ("Gerado em", datetime.now().strftime("%d/%m/%Y %H:%M:%S")),
-        ("Script", "intel-collect.py + intel-excel.py"),
+        ("Script", "intel-collect.py + intel-enrich.py + intel-excel.py"),
     ]
 
     for row_idx, (label, value) in enumerate(rows, start=1):

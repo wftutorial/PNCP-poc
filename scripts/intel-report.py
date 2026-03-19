@@ -771,6 +771,87 @@ def _build_perfil_e_mapa(data: dict, styles: dict) -> list:
         ]))
         el.append(pt)
 
+    el.append(Spacer(1, 4 * mm))
+
+    # --- Situação Cadastral (SICAF + Sanções) ---
+    sicaf = empresa.get("sicaf", {})
+    sancoes = empresa.get("sancoes", {})
+    sancionada = empresa.get("sancionada", False)
+    restricao = empresa.get("restricao_sicaf")
+    has_cadastral = isinstance(sicaf, dict) and sicaf.get("status") or isinstance(sancoes, dict)
+
+    if has_cadastral:
+        el.append(Paragraph("Situação Cadastral", styles["h2"]))
+
+        cadastral_rows = []
+
+        # SICAF
+        if isinstance(sicaf, dict) and sicaf.get("status"):
+            sicaf_status = _s(sicaf.get("status", ""))
+            crc = sicaf.get("crc", {})
+            crc_status = _s(crc.get("status_cadastral", "")) if isinstance(crc, dict) else ""
+
+            sicaf_text = sicaf_status
+            if crc_status:
+                sicaf_text += f" — CRC: {crc_status}"
+
+            cadastral_rows.append([
+                Paragraph("SICAF", styles["cell_header"]),
+                Paragraph(sicaf_text, styles["cell"]),
+            ])
+
+            if restricao is True:
+                cadastral_rows.append([
+                    Paragraph("Restrição SICAF", styles["cell_header"]),
+                    Paragraph(
+                        '<font color="#B5342A"><b>SIM — Empresa com restrição cadastral ativa</b></font>',
+                        styles["cell"],
+                    ),
+                ])
+            elif restricao is False:
+                cadastral_rows.append([
+                    Paragraph("Restrição SICAF", styles["cell_header"]),
+                    Paragraph(
+                        '<font color="#1B7A3D">Nenhuma restrição</font>',
+                        styles["cell"],
+                    ),
+                ])
+
+        # Sanções
+        if isinstance(sancoes, dict):
+            if sancionada:
+                ativas = [k.upper() for k, v in sancoes.items() if v and k not in ("sancionada", "inconclusive")]
+                sancoes_text = (
+                    f'<font color="#B5342A"><b>EMPRESA SANCIONADA — {", ".join(ativas)}</b></font>'
+                    if ativas else
+                    '<font color="#B5342A"><b>EMPRESA SANCIONADA</b></font>'
+                )
+            else:
+                sancoes_text = '<font color="#1B7A3D">Nenhuma sanção ativa (CEIS/CNEP/CEPIM/CEAF)</font>'
+
+            cadastral_rows.append([
+                Paragraph("Sanções", styles["cell_header"]),
+                Paragraph(sancoes_text, styles["cell"]),
+            ])
+
+        if cadastral_rows:
+            ct = Table(cadastral_rows, colWidths=[80, avail - 80])
+            ct.setStyle(TableStyle([
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("TOPPADDING", (0, 0), (-1, -1), 3),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                ("LINEBELOW", (0, 0), (-1, -1), 0.3, RULE_COLOR),
+            ]))
+            el.append(ct)
+
+        if sancionada:
+            el.append(Spacer(1, 2 * mm))
+            el.append(Paragraph(
+                "<i>Empresa com impedimento legal para participação em licitações. "
+                "Recomenda-se regularização junto aos órgãos competentes antes de prosseguir.</i>",
+                styles["italic_note"],
+            ))
+
     el.append(Spacer(1, 6 * mm))
 
     # --- Mapa de Oportunidades ---
@@ -783,7 +864,8 @@ def _build_perfil_e_mapa(data: dict, styles: dict) -> list:
             Paragraph("Objeto", styles["cell_header"]),
             Paragraph("Valor", styles["cell_header_right"]),
             Paragraph("UF", styles["cell_header_center"]),
-            Paragraph("Abertura", styles["cell_header_center"]),
+            Paragraph("Dist.", styles["cell_header_right"]),
+            Paragraph("Custo", styles["cell_header_right"]),
             Paragraph("Dificuldade", styles["cell_header_center"]),
         ]
         rows = [header]
@@ -796,16 +878,28 @@ def _build_perfil_e_mapa(data: dict, styles: dict) -> list:
                 f"dif_{idx}", parent=styles["cell_center"],
                 textColor=dif_color, fontName="Helvetica-Bold",
             )
+
+            # Distance
+            dist_data = ed.get("distancia", {})
+            dist_km = dist_data.get("km") if isinstance(dist_data, dict) else None
+            dist_text = f"{dist_km:.0f}km" if dist_km is not None else "—"
+
+            # Cost
+            cost_data = ed.get("custo_proposta", {})
+            cost_total = cost_data.get("total") if isinstance(cost_data, dict) else None
+            cost_text = _currency_short(cost_total) if cost_total else "—"
+
             rows.append([
                 Paragraph(str(idx), styles["cell_center"]),
-                Paragraph(_trunc(_s(ed.get("objeto", "")), 50), styles["cell"]),
+                Paragraph(_trunc(_s(ed.get("objeto", "")), 40), styles["cell"]),
                 Paragraph(_currency_short(ed.get("valor_estimado")), styles["cell_right"]),
                 Paragraph(_s(ed.get("uf", "")), styles["cell_center"]),
-                Paragraph(_date(ed.get("data_abertura") or ed.get("data_publicacao")), styles["cell_center"]),
+                Paragraph(dist_text, styles["cell_right"]),
+                Paragraph(cost_text, styles["cell_right"]),
                 Paragraph(dif_text, dif_style),
             ])
 
-        widths = [18, avail - 18 - 58 - 25 - 48 - 50, 58, 25, 48, 50]
+        widths = [18, avail - 18 - 58 - 25 - 42 - 52 - 50, 58, 25, 42, 52, 50]
         el.append(_three_rule_table(rows, widths))
 
     el.append(PageBreak())
@@ -849,6 +943,39 @@ def _build_edital_detail(idx: int, ed: dict, styles: dict) -> list:
         f"Valor Estimado: <b>{valor}</b> | Abertura: <b>{data_abertura}</b>",
         styles["edital_meta"],
     ))
+
+    # Distance + Cost line (if enriched)
+    dist_data = ed.get("distancia", {})
+    cost_data = ed.get("custo_proposta", {})
+    ibge_data = ed.get("ibge", {})
+    roi_data = ed.get("roi_proposta", {})
+
+    geo_parts = []
+    if isinstance(dist_data, dict) and dist_data.get("km") is not None:
+        km = dist_data["km"]
+        dur = dist_data.get("duracao_horas")
+        dur_text = f" ({dur:.1f}h)" if dur else ""
+        geo_parts.append(f"Distância: <b>{km:.0f} km{dur_text}</b>")
+
+    if isinstance(cost_data, dict) and cost_data.get("total") is not None:
+        tipo = cost_data.get("modalidade_tipo", "")
+        tipo_label = " (eletrônica)" if tipo == "eletronica" else ""
+        geo_parts.append(f"Custo proposta{tipo_label}: <b>{_currency(cost_data['total'])}</b>")
+
+    if isinstance(roi_data, dict) and roi_data.get("classificacao"):
+        roi_class = roi_data["classificacao"]
+        roi_color = "#1B7A3D" if roi_class in ("EXCELENTE", "BOM") else (
+            "#B5342A" if roi_class in ("MARGINAL", "DESFAVORAVEL") else "#B8860B"
+        )
+        geo_parts.append(f'ROI: <font color="{roi_color}"><b>{roi_class}</b></font>')
+
+    if isinstance(ibge_data, dict) and ibge_data.get("populacao"):
+        pop = ibge_data["populacao"]
+        pop_text = f"{pop:,}".replace(",", ".")
+        geo_parts.append(f"Pop: {pop_text} hab")
+
+    if geo_parts:
+        elements.append(Paragraph(" | ".join(geo_parts), styles["edital_meta"]))
 
     # Clickable link
     link = _fix_pncp_link(ed.get("link") or ed.get("link_edital", ""))

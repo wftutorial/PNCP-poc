@@ -7,8 +7,8 @@ Zero ruído. Zero perda de oportunidades. Funciona para qualquer ramo de ativida
 Utiliza TODOS os CNAEs da empresa (principal + secundários) para máxima cobertura.
 
 **Entregáveis:**
-1. `docs/intel/intel-{CNPJ}-{razao-slug}-{YYYY-MM-DD}.xlsx` — Planilha completa com TODOS os editais
-2. `docs/intel/intel-{CNPJ}-{razao-slug}-{YYYY-MM-DD}.pdf` — Relatório estratégico dos top 20 (max 15 páginas)
+1. `docs/intel/intel-{CNPJ}-{razao-slug}-{YYYY-MM-DD}.xlsx` — Planilha completa com TODOS os editais (inclui distância, custo, ROI)
+2. `docs/intel/intel-{CNPJ}-{razao-slug}-{YYYY-MM-DD}.pdf` — Relatório estratégico dos top 20 (max 15 páginas, com situação cadastral + custo logístico)
 
 ---
 
@@ -43,6 +43,31 @@ Verificar output:
 - Capital social obtido?
 
 Se `empresa._source.status == "API_FAILED"`: PARAR e informar que não foi possível obter dados da empresa.
+
+### Step 2.5 — Enriquecimento (SICAF + Sanções + Distância + Custo)
+
+```bash
+python scripts/intel-enrich.py --input {DATA_JSON}
+```
+
+Para pular SICAF (evita captcha manual): `--skip-sicaf`
+
+O script automaticamente:
+1. Consulta Portal da Transparência (CEIS/CNEP/CEPIM/CEAF) — sanções
+2. Coleta SICAF via Playwright (CRC, restrição) — requer captcha manual 1x
+3. Geocodifica sede da empresa + municípios dos editais (OSRM + Nominatim)
+4. Calcula distância sede→edital (OSRM Table API — batch)
+5. Coleta IBGE (população/PIB) de cada município
+6. Calcula custo estimativo de proposta (presencial vs eletrônico)
+7. Calcula ROI simplificado (valor_edital / custo_proposta)
+
+Verificar output:
+- Empresa sancionada? → Se SIM: **ALERTA VERMELHO** — empresa impedida de licitar
+- Restrição SICAF? → Se SIM: **WARNING** — risco de inabilitação
+- Quantas distâncias calculadas?
+- Quantos custos estimados?
+
+Se `empresa.sancionada == true`: Informar o impedimento legal e recomendar regularização. O relatório será gerado com alerta de impedimento.
 
 ### Step 3 — Gate de Ruído (Claude inline)
 
@@ -94,7 +119,14 @@ Verificar: quantos editais tiveram texto extraído? Algum falhou?
 
 ### Step 7 — Análise Profunda (Claude inline)
 
-Para cada edital do top 20, ler o texto extraído dos documentos e produzir a análise estruturada:
+Para cada edital do top 20, ler o texto extraído dos documentos e produzir a análise estruturada.
+
+Usar os dados enriquecidos (distância, custo, IBGE, SICAF) como contexto:
+- Se `distancia.km` > 500: mencionar custo logístico elevado
+- Se `custo_proposta.total` > 5% do valor: alertar sobre margem
+- Se `roi_proposta.classificacao` == "DESFAVORAVEL": recomendar cautela
+- Se `ibge.populacao` < 5000 e valor > R$1M: alertar fragilidade logística
+- Se empresa sancionada/com restrição SICAF: todas as recomendações = NÃO RECOMENDADO
 
 ```json
 {
@@ -109,7 +141,8 @@ Para cada edital do top 20, ler o texto extraído dos documentos e produzir a an
   "consorcio": "Permitido/Não permitido/Não mencionado",
   "observacoes_criticas": "...",
   "nivel_dificuldade": "BAIXO/MEDIO/ALTO",
-  "recomendacao_acao": "..."
+  "recomendacao_acao": "...",
+  "custo_logistico_nota": "..."
 }
 ```
 

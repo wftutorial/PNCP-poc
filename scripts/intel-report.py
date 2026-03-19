@@ -722,6 +722,22 @@ def _build_sumario_executivo(data: dict, styles: dict) -> list:
         widths = [20, avail - 20 - 70 - 30 - 55, 70, 30, 55]
         el.append(_three_rule_table(rows, widths))
 
+    # Quality Seal
+    quality = data.get("quality_stats", {})
+    completeness = quality.get("completeness_pct", 0)
+    seal_color = SIGNAL_GREEN if completeness >= 80 else SIGNAL_AMBER if completeness >= 60 else SIGNAL_RED
+    seal_text = f"Completude dos dados: {completeness}%"
+    if data.get("empresa", {}).get("sicaf"):
+        seal_text += " | SICAF: Verificado"
+    if data.get("empresa", {}).get("sancionada") is False:
+        seal_text += " | Sanções: Nenhuma"
+
+    el.append(Spacer(1, 4 * mm))
+    el.append(Paragraph(seal_text, ParagraphStyle(
+        "QualitySeal", parent=styles["caption"],
+        textColor=seal_color, fontSize=7,
+    )))
+
     el.append(PageBreak())
     return el
 
@@ -964,8 +980,23 @@ def _build_edital_detail(idx: int, ed: dict, styles: dict) -> list:
     # Value + date line
     valor = _currency(ed.get("valor_estimado"))
     data_abertura = _date(ed.get("data_abertura") or ed.get("data_publicacao"))
+
+    # Status temporal badge
+    status_t = ed.get("status_temporal", "")
+    if status_t == "URGENTE":
+        status_badge = f'<font color="{SIGNAL_RED.hexval()}">URGENTE — {ed.get("dias_restantes", "?")} dias</font>'
+    elif status_t == "IMINENTE":
+        status_badge = f'<font color="{SIGNAL_AMBER.hexval()}">IMINENTE — {ed.get("dias_restantes", "?")} dias</font>'
+    elif status_t == "PLANEJAVEL":
+        dias = ed.get("dias_restantes", "?")
+        status_badge = f'<font color="{SIGNAL_GREEN.hexval()}">PLANEJÁVEL — {dias} dias</font>'
+    elif status_t == "EXPIRADO":
+        status_badge = f'<font color="{TEXT_MUTED.hexval()}">ENCERRADO</font>'
+    else:
+        status_badge = '<font color="#8896A6">Prazo indefinido</font>'
+
     elements.append(Paragraph(
-        f"Valor Estimado: <b>{valor}</b> | Abertura: <b>{data_abertura}</b>",
+        f"Valor Estimado: <b>{valor}</b> | Abertura: <b>{data_abertura}</b> | {status_badge}",
         styles["edital_meta"],
     ))
 
@@ -1226,6 +1257,9 @@ def _filter_top20(top20: list[dict]) -> list[dict]:
         # Skip excluded recommendations
         if any(kw in acao for kw in exclude_keywords):
             continue
+        # Skip expired editais
+        if e.get("status_temporal") == "EXPIRADO":
+            continue
         # Dedup by normalized objeto + valor
         obj = (e.get("objeto") or "").lower().strip()
         for prefix in ["[portal de compras públicas] - ", "[portal de compras publicas] - "]:
@@ -1250,6 +1284,49 @@ def generate_intel_report(data: dict, output_path: str) -> str:
     data["top20_excluded_count"] = excluded_count
     # Use filtered list for all report sections
     data["top20"] = filtered_top20
+
+    # ── Quality Gate: Validate completeness ──
+    REQUIRED_FIELDS = ["data_sessao", "criterio_julgamento", "regime_execucao", "consorcio", "recomendacao_acao"]
+    FORBIDDEN_WORDS = ["verificar", "possivelmente", "buscar edital", "não detalhado", "a confirmar"]
+
+    quality_stats = {
+        "total_editais": len(filtered_top20),
+        "campos_completos": 0,
+        "campos_total": 0,
+        "editais_completos": 0,
+        "warnings": [],
+    }
+
+    for e in filtered_top20:
+        analise = e.get("analise", {})
+        edital_complete = True
+        for field in REQUIRED_FIELDS:
+            quality_stats["campos_total"] += 1
+            val = (analise.get(field) or "").lower()
+            has_forbidden = any(fw in val for fw in FORBIDDEN_WORDS)
+            is_empty = not val or val == "n/a"
+            if has_forbidden or is_empty:
+                edital_complete = False
+                obj_short = (e.get("objeto") or "")[:50]
+                quality_stats["warnings"].append(f"{obj_short}: campo '{field}' incompleto")
+            else:
+                quality_stats["campos_completos"] += 1
+        if edital_complete:
+            quality_stats["editais_completos"] += 1
+
+    total_fields = quality_stats["campos_total"]
+    complete_fields = quality_stats["campos_completos"]
+    completeness_pct = round(complete_fields / total_fields * 100) if total_fields > 0 else 0
+    quality_stats["completeness_pct"] = completeness_pct
+    data["quality_stats"] = quality_stats
+
+    # Print quality report
+    print(f"  Qualidade: {completeness_pct}% campos completos ({complete_fields}/{total_fields})")
+    print(f"  Editais 100% completos: {quality_stats['editais_completos']}/{quality_stats['total_editais']}")
+    if quality_stats["warnings"]:
+        print(f"  Warnings ({len(quality_stats['warnings'])}):")
+        for w in quality_stats["warnings"][:10]:
+            print(f"    - {w}")
 
     styles = _build_styles()
     elements: list = []

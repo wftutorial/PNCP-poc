@@ -41,7 +41,7 @@ if sys.platform == "win32":
 VERSION = "1.0.0"
 
 MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024  # 50 MB per file
-MAX_TEXT_PER_EDITAL = 30_000           # chars
+MAX_TEXT_PER_EDITAL = 60_000           # chars
 MAX_DOCS_PER_EDITAL = 3               # top-priority documents
 DOWNLOAD_TIMEOUT_S = 60               # seconds
 DOWNLOAD_RATE_LIMIT_S = 0.2           # seconds between downloads
@@ -453,7 +453,7 @@ def process_edital(edital: dict[str, Any], idx: int, total: int) -> None:
         combined = "\n\n---\n\n".join(all_text_parts)
 
         if len(combined) > MAX_TEXT_PER_EDITAL:
-            combined = combined[:MAX_TEXT_PER_EDITAL] + "\n\n[... texto truncado em 30.000 caracteres ...]"
+            combined = combined[:MAX_TEXT_PER_EDITAL] + "\n\n[... texto truncado em 60.000 caracteres ...]"
 
         edital["texto_documentos"] = combined
         print(f"  Extraído: {len(combined):,} chars de {success_count}/{len(to_download)} documentos")
@@ -505,6 +505,9 @@ def select_top_editais(
         # valor == 0 or None means sigiloso — include as unknown
         if valor is not None and valor > 0 and valor > capacidade:
             continue
+        # Skip expired editais
+        if e.get("status_temporal") == "EXPIRADO":
+            continue
         # Dedup: skip if we've already seen this edital
         key = _dedup_key(e)
         if key in seen_keys:
@@ -546,6 +549,11 @@ def main() -> None:
         metavar="JSON",
         help="Caminho do JSON de saída (padrão: sobrescreve --input)",
     )
+    parser.add_argument(
+        "--preserve-top20",
+        action="store_true",
+        help="Preservar top20 existente no JSON (não sobrescrever seleção anterior)",
+    )
     args = parser.parse_args()
 
     input_path = Path(args.input)
@@ -578,27 +586,83 @@ def main() -> None:
     print(f"Total de editais na base: {len(editais)}")
 
     # ── Filter + select top N ──
-    top = select_top_editais(editais, capital_social, args.top)
+    if args.preserve_top20 and data.get("top20"):
+        top = data["top20"]
+        print(f"\n--preserve-top20: Usando {len(top)} editais existentes")
+        # Only process editais that don't have text yet
+        to_process = [ed for ed in top if not ed.get("texto_documentos")]
+        if to_process:
+            print(f"  {len(to_process)} editais sem texto \u2014 processando")
+            for i, ed in enumerate(to_process, 1):
+                process_edital(ed, i, len(to_process))
+        else:
+            print("  Todos j\u00e1 t\u00eam texto extra\u00eddo")
+        compat_total = sum(1 for e in editais if e.get("cnae_compatible"))
+        print(
+            f"\nFiltrados: {compat_total} CNAE-compat\u00edveis, "
+            f"{len(top)} no top20 preservado"
+        )
+    else:
+        top = select_top_editais(editais, capital_social, args.top)
 
-    compat_total = sum(1 for e in editais if e.get("cnae_compatible"))
-    print(
-        f"\nFiltrados: {compat_total} CNAE-compatíveis, "
-        f"{len(top)} dentro da capacidade → processando top {args.top}"
-    )
+        compat_total = sum(1 for e in editais if e.get("cnae_compatible"))
+        print(
+            f"\nFiltrados: {compat_total} CNAE-compat\u00edveis, "
+            f"{len(top)} dentro da capacidade \u2192 processando top {args.top}"
+        )
 
-    if not top:
-        print("\nNenhum edital elegível encontrado. Saindo.")
-        data["top20"] = []
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        print(f"JSON salvo: {output_path}")
-        return
+        if not top:
+            print("\nNenhum edital eleg\u00edvel encontrado. Saindo.")
+            data["top20"] = []
+            with open(output_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            print(f"JSON salvo: {output_path}")
+            return
 
-    print(f"\nProcessando {len(top)} editais (top {args.top} por valor, capacidade R$ {capacidade:,.0f})")
+        print(f"\nProcessando {len(top)} editais (top {args.top} por valor, capacidade R$ {capacidade:,.0f})")
 
-    # ── Process each edital ──
-    for i, ed in enumerate(top, 1):
-        process_edital(ed, i, len(top))
+        # ── Process each edital ──
+        for i, ed in enumerate(top, 1):
+            process_edital(ed, i, len(top))
+
+    # ── Quality scoring ──
+    for ed in top:
+        texto = ed.get("texto_documentos") or ""
+        text_len = len(texto)
+        texto_lower = texto.lower()
+
+        # Check for key edital sections in extracted text
+        key_sections = {
+            "habilitacao": any(kw in texto_lower for kw in ["habilita\u00e7\u00e3o", "habilitacao", "habilita\u00e7"]),
+            "qualificacao": any(kw in texto_lower for kw in ["qualifica\u00e7\u00e3o econ\u00f4mic", "qualificacao economic", "patrim\u00f4nio l\u00edquido", "patrimonio liquido", "capital social"]),
+            "garantia": any(kw in texto_lower for kw in ["garantia", "cau\u00e7\u00e3o", "cau\u00e7ao", "seguro-garantia"]),
+            "prazo": any(kw in texto_lower for kw in ["prazo de execu\u00e7\u00e3o", "prazo de execucao", "meses", "dias corridos"]),
+            "sessao": any(kw in texto_lower for kw in ["sess\u00e3o p\u00fablica", "sessao publica", "data da sess\u00e3o", "data da sessao", "abertura da sess\u00e3o"]),
+            "visita": any(kw in texto_lower for kw in ["visita t\u00e9cnica", "visita tecnica", "vistoria"]),
+            "consorcio": any(kw in texto_lower for kw in ["cons\u00f3rcio", "consorcio"]),
+        }
+        sections_found = sum(1 for v in key_sections.values() if v)
+
+        if text_len >= 10000 and sections_found >= 3:
+            quality = "COMPLETO"
+        elif text_len >= 2000 or sections_found >= 1:
+            quality = "PARCIAL"
+        elif text_len > 0:
+            quality = "INSUFICIENTE"
+        else:
+            quality = "VAZIO"
+
+        ed["extraction_quality"] = quality
+        ed["extraction_chars"] = text_len
+        ed["extraction_sections"] = key_sections
+
+    # ── Quality summary ──
+    quality_counts: dict[str, int] = {}
+    for ed in top:
+        q = ed.get("extraction_quality", "N/A")
+        quality_counts[q] = quality_counts.get(q, 0) + 1
+
+    print(f"\n  Qualidade extra\u00e7\u00e3o: {quality_counts}")
 
     # ── Update JSON ──
     # Upsert top20 key; store the enriched slice
@@ -612,7 +676,7 @@ def main() -> None:
 
     print(f"\n{'─' * 60}")
     print(f"JSON atualizado: {output_path}")
-    print(f"top20: {len(top)} editais | {docs_extracted} com texto extraído | {total_chars:,} chars total")
+    print(f"top20: {len(top)} editais | {docs_extracted} com texto extra\u00eddo | {total_chars:,} chars total")
 
 
 if __name__ == "__main__":

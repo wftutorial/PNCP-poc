@@ -255,6 +255,27 @@ def _parse_pncp_item(item: dict, mod_code: int, mod_name: str, ufs: list[str]) -
     else:
         link = ""
 
+    # Calculate status_temporal
+    status_temporal = "SEM_DATA"
+    dias_restantes = None
+    if data_encerramento_raw:
+        try:
+            # Parse ISO date (may have timezone)
+            enc_str = data_encerramento_raw[:19]  # trim to YYYY-MM-DDTHH:MM:SS
+            dt_enc = datetime.fromisoformat(enc_str)
+            now = datetime.now()
+            dias_restantes = (dt_enc.replace(tzinfo=None) - now.replace(tzinfo=None)).days
+            if dias_restantes < 0:
+                status_temporal = "EXPIRADO"
+            elif dias_restantes <= 7:
+                status_temporal = "URGENTE"
+            elif dias_restantes <= 15:
+                status_temporal = "IMINENTE"
+            else:
+                status_temporal = "PLANEJAVEL"
+        except (ValueError, TypeError):
+            status_temporal = "SEM_DATA"
+
     return {
         "_id": f"{cnpj_clean}/{ano}/{seq}" if (cnpj_clean and ano and seq) else f"unknown/{uuid.uuid4().hex[:12]}",
         "objeto": objeto,
@@ -272,6 +293,8 @@ def _parse_pncp_item(item: dict, mod_code: int, mod_name: str, ufs: list[str]) -
         "ano_compra": ano,
         "sequencial_compra": seq,
         "_dedup_key": f"{cnpj_clean}/{ano}/{seq}",
+        "status_temporal": status_temporal,
+        "dias_restantes": dias_restantes,
     }
 
 
@@ -765,6 +788,12 @@ def assemble_output(
             if v == 0 or v <= capacidade_10x:
                 total_dentro_capacidade += 1
 
+    # Temporal status stats
+    status_counts: dict[str, int] = {}
+    for ed in compatible:
+        st = ed.get("status_temporal", "SEM_DATA")
+        status_counts[st] = status_counts.get(st, 0) + 1
+
     # Sort editais: compatible first (by valor desc), then incompatible (by valor desc)
     compatible_sorted = sorted(compatible, key=lambda e: (e.get("valor_estimado") or 0.0), reverse=True)
     incompatible_sorted = sorted(incompatible, key=lambda e: (e.get("valor_estimado") or 0.0), reverse=True)
@@ -798,6 +827,9 @@ def assemble_output(
             "pncp_errors": source_meta.get("errors", 0),
             "pncp_pagination_exhausted": source_meta.get("pagination_exhausted", []),
             "total_after_dedup": source_meta.get("total_after_xdedup", len(editais)),
+            "status_temporal": status_counts,
+            "total_expirados": status_counts.get("EXPIRADO", 0),
+            "total_urgentes": status_counts.get("URGENTE", 0),
         },
         "editais": editais_sorted,
         "_metadata": {
@@ -1051,6 +1083,9 @@ def main():
     print(f"  Dentro capacidade:    {stats['total_dentro_capacidade']}")
     print(f"  Paginas PNCP:         {stats['pncp_pages_fetched']}")
     print(f"  Erros PNCP:           {stats['pncp_errors']}")
+    st_counts = stats.get("status_temporal", {})
+    st_parts = ", ".join(f"{k}={v}" for k, v in sorted(st_counts.items()))
+    print(f"  Status temporal:      {st_parts or 'N/A'} (expirados={stats['total_expirados']}, urgentes={stats['total_urgentes']})")
     print(f"  Tempo total:          {elapsed:.1f}s")
     print(f"  Salvo em:             {out_path}")
     print(f"{'='*60}")

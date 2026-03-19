@@ -23,6 +23,7 @@ import io
 import json
 import os
 import re
+import statistics
 import sys
 import threading
 import time
@@ -97,6 +98,11 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _CHECKPOINT_FILE = _PROJECT_ROOT / "data" / "intel_pncp_checkpoint.json"
 _CHECKPOINT_TTL_HOURS = 2      # Re-use cached UF+mod result if < 2h old
 _CHECKPOINT_CLEANUP_HOURS = 24  # Evict stale checkpoint entries older than 24h
+
+# Competitive intelligence cache
+_COMPETITIVE_CACHE_FILE = str(_PROJECT_ROOT / "data" / "competitive_cache.json")
+_COMPETITIVE_CACHE_TTL_DAYS = 7  # Cache competitive intel per organ for 7 days
+_COMPETITIVE_MAX_ORGANS = 15     # Max unique organs to query
 
 # Competitive modalidades ONLY (Concorrencias + Pregoes)
 # Excluded: Dispensa(8), Inexigibilidade(9), Inaplicabilidade(14),
@@ -669,6 +675,323 @@ def apply_cnae_keyword_gate(
 
 
 # ============================================================
+# STEP 4b: COMPETITIVE INTELLIGENCE PER ORGAN
+# ============================================================
+
+def collect_competitive_intel(
+    api: ApiClient,
+    editais: list[dict],
+    meses: int = 24,
+) -> None:
+    """Collect competitive intelligence for each unique organ in the top editais.
+
+    Queries PNCP /v1/contratos per organ CNPJ to find historical suppliers,
+    compute concentration metrics (HHI), and assess competition level.
+
+    Mutates editais in place, adding 'competitive_intel' to each edital.
+    Results are cached per organ CNPJ with a 7-day TTL.
+
+    Args:
+        api: ApiClient instance for HTTP requests.
+        editais: List of edital dicts (must have 'cnpj_orgao').
+        meses: Lookback period in months (default 24, split into yearly windows).
+    """
+    # Only process cnae_compatible editais
+    compatible = [ed for ed in editais if ed.get("cnae_compatible")]
+    if not compatible:
+        print("  Competitive intel: nenhum edital compativel, pulando.")
+        return
+
+    # Group by cnpj_orgao, deduplicate
+    organ_to_editais: dict[str, list[dict]] = {}
+    for ed in compatible:
+        cnpj = ed.get("cnpj_orgao", "")
+        if cnpj and len(cnpj) >= 11:  # Valid CNPJ length
+            organ_to_editais.setdefault(cnpj, []).append(ed)
+
+    # Limit to top organs by edital count (then by value)
+    organ_ranked = sorted(
+        organ_to_editais.keys(),
+        key=lambda c: (
+            len(organ_to_editais[c]),
+            sum(_safe_float(e.get("valor_estimado")) or 0 for e in organ_to_editais[c]),
+        ),
+        reverse=True,
+    )
+    organs_to_query = organ_ranked[:_COMPETITIVE_MAX_ORGANS]
+
+    print(f"  Orgaos unicos: {len(organ_to_editais)}, consultando top {len(organs_to_query)}")
+
+    # Load cache
+    cache: dict = {}
+    try:
+        cache = _load_json_cache(_COMPETITIVE_CACHE_FILE)
+    except Exception:
+        pass
+
+    now = _today()
+    results_lock = threading.Lock()
+    organ_results: dict[str, dict] = {}  # cnpj -> intel dict
+    counters = {"cached": 0, "fetched": 0, "failed": 0}
+    counter_lock = threading.Lock()
+
+    def _is_cache_valid(entry: dict) -> bool:
+        ts_str = entry.get("_cached_at", "")
+        if not ts_str:
+            return False
+        try:
+            ts = datetime.fromisoformat(ts_str)
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+            return (now - ts).days < _COMPETITIVE_CACHE_TTL_DAYS
+        except Exception:
+            return False
+
+    def _build_date_windows(meses: int) -> list[tuple[str, str]]:
+        """Build yearly date windows (max 365 days per PNCP query).
+
+        Returns list of (dataInicial, dataFinal) pairs in YYYYMMDD format.
+        """
+        windows: list[tuple[str, str]] = []
+        end = now
+        total_days = meses * 30  # Approximate
+        remaining = total_days
+
+        while remaining > 0:
+            window_days = min(remaining, 365)
+            start = end - timedelta(days=window_days)
+            windows.append((_date_compact(start), _date_compact(end)))
+            end = start
+            remaining -= window_days
+
+        return windows
+
+    def _fetch_organ_contracts(cnpj_orgao: str) -> dict | None:
+        """Fetch all contracts for a single organ, merging yearly windows."""
+        # Check cache first
+        cached = cache.get(cnpj_orgao)
+        if cached and _is_cache_valid(cached):
+            with counter_lock:
+                counters["cached"] += 1
+            return cached
+
+        windows = _build_date_windows(meses)
+        all_contracts: list[dict] = []
+        seen_ids: set[str] = set()
+
+        for data_inicial, data_final in windows:
+            page = 1
+            max_pages = 20  # Safety limit per window
+
+            while page <= max_pages:
+                params = {
+                    "cnpjOrgao": cnpj_orgao,
+                    "dataInicial": data_inicial,
+                    "dataFinal": data_final,
+                    "pagina": page,
+                    "tamanhoPagina": 50,
+                }
+
+                data, status = api.get(
+                    f"{PNCP_BASE}/contratos",
+                    params=params,
+                    label=f"Contratos orgao={cnpj_orgao[:8]}.. p={page}",
+                )
+
+                if status != "API" or not data:
+                    break
+
+                # Handle response structure
+                items = []
+                if isinstance(data, dict):
+                    items = data.get("data", [])
+                    if not isinstance(items, list):
+                        items = []
+                elif isinstance(data, list):
+                    items = data
+
+                if not items:
+                    break
+
+                for item in items:
+                    ctrl = item.get("numeroControlePNCP", "")
+                    if ctrl and ctrl in seen_ids:
+                        continue
+                    if ctrl:
+                        seen_ids.add(ctrl)
+
+                    contract = {
+                        "fornecedor": item.get("nomeRazaoSocialFornecedor", ""),
+                        "cnpj_fornecedor": item.get("niFornecedor", ""),
+                        "valor_inicial": _safe_float(item.get("valorInicial")),
+                        "valor_global": _safe_float(item.get("valorGlobal")),
+                        "objeto": item.get("objetoContrato", ""),
+                        "categoria": item.get("categoriaProcesso", ""),
+                        "data_assinatura": item.get("dataAssinatura", ""),
+                        "numero_controle": ctrl,
+                    }
+                    all_contracts.append(contract)
+
+                # Check if more pages exist
+                total_pages = 1
+                if isinstance(data, dict):
+                    total_pages = data.get("totalPaginas", 1)
+
+                if page >= total_pages or len(items) < 50:
+                    break
+
+                page += 1
+                time.sleep(0.3)  # Rate limit within pagination
+
+            time.sleep(0.5)  # Rate limit between windows
+
+        if not all_contracts:
+            # No contracts found -- still valid result
+            result = _compute_intel_metrics(all_contracts, cnpj_orgao)
+            result["_cached_at"] = now.isoformat()
+            with counter_lock:
+                counters["fetched"] += 1
+            return result
+
+        result = _compute_intel_metrics(all_contracts, cnpj_orgao)
+        result["_cached_at"] = now.isoformat()
+
+        with counter_lock:
+            counters["fetched"] += 1
+
+        return result
+
+    def _compute_intel_metrics(contracts: list[dict], cnpj_orgao: str) -> dict:
+        """Compute competitive intelligence metrics from a list of contracts."""
+        if not contracts:
+            return {
+                "cnpj_orgao": cnpj_orgao,
+                "total_contracts": 0,
+                "total_value": 0.0,
+                "unique_suppliers": 0,
+                "top_suppliers": [],
+                "hhi": 0.0,
+                "competition_level": "SEM_DADOS",
+            }
+
+        # Group by supplier CNPJ
+        supplier_data: dict[str, dict] = {}  # cnpj -> {name, count, value}
+        total_value = 0.0
+
+        for c in contracts:
+            cnpj_f = (c.get("cnpj_fornecedor") or "").strip()
+            if not cnpj_f:
+                continue
+            nome = c.get("fornecedor", "")
+            valor = _safe_float(c.get("valor_global")) or _safe_float(c.get("valor_inicial")) or 0.0
+            total_value += valor
+
+            if cnpj_f not in supplier_data:
+                supplier_data[cnpj_f] = {"nome": nome, "cnpj": cnpj_f, "count": 0, "value": 0.0}
+            supplier_data[cnpj_f]["count"] += 1
+            supplier_data[cnpj_f]["value"] += valor
+            # Keep the most recent name
+            if nome:
+                supplier_data[cnpj_f]["nome"] = nome
+
+        unique_count = len(supplier_data)
+
+        # Top 5 suppliers by contract count (tie-break by value)
+        suppliers_ranked = sorted(
+            supplier_data.values(),
+            key=lambda s: (s["count"], s["value"]),
+            reverse=True,
+        )
+        top_suppliers = [
+            {
+                "nome": s["nome"],
+                "cnpj": s["cnpj"],
+                "contratos": s["count"],
+                "valor_total": round(s["value"], 2),
+            }
+            for s in suppliers_ranked[:5]
+        ]
+
+        # HHI (Herfindahl-Hirschman Index) based on value share
+        hhi = 0.0
+        if total_value > 0:
+            for s in supplier_data.values():
+                share = s["value"] / total_value
+                hhi += share * share
+        hhi = round(hhi, 4)
+
+        # Competition level based on unique supplier count
+        if unique_count <= 2:
+            competition_level = "BAIXA"
+        elif unique_count <= 5:
+            competition_level = "MEDIA"
+        elif unique_count <= 10:
+            competition_level = "ALTA"
+        else:
+            competition_level = "MUITO_ALTA"
+
+        return {
+            "cnpj_orgao": cnpj_orgao,
+            "total_contracts": len(contracts),
+            "total_value": round(total_value, 2),
+            "unique_suppliers": unique_count,
+            "top_suppliers": top_suppliers,
+            "hhi": hhi,
+            "competition_level": competition_level,
+        }
+
+    def _fetch_with_error_handling(cnpj_orgao: str) -> tuple[str, dict | None]:
+        try:
+            result = _fetch_organ_contracts(cnpj_orgao)
+            return cnpj_orgao, result
+        except Exception as exc:
+            print(f"    WARN: Falha ao coletar contratos para orgao {cnpj_orgao}: {exc}")
+            with counter_lock:
+                counters["failed"] += 1
+            return cnpj_orgao, None
+
+    # Fetch in parallel (max 3 workers to respect rate limits)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
+        futures = {
+            pool.submit(_fetch_with_error_handling, cnpj): cnpj
+            for cnpj in organs_to_query
+        }
+        for fut in concurrent.futures.as_completed(futures):
+            cnpj_orgao, result = fut.result()
+            if result is not None:
+                with results_lock:
+                    organ_results[cnpj_orgao] = result
+
+    # Save updated cache
+    for cnpj, result in organ_results.items():
+        cache[cnpj] = result
+    try:
+        _save_json_cache(_COMPETITIVE_CACHE_FILE, cache)
+    except Exception as e:
+        print(f"  WARN: Falha ao salvar competitive cache: {e}")
+
+    # Assign results to editais
+    assigned = 0
+    for ed in editais:
+        cnpj = ed.get("cnpj_orgao", "")
+        if cnpj in organ_results:
+            intel = organ_results[cnpj]
+            # Strip internal cache metadata from the edital copy
+            ed["competitive_intel"] = {
+                k: v for k, v in intel.items()
+                if not k.startswith("_")
+            }
+            assigned += 1
+        else:
+            ed["competitive_intel"] = None
+
+    print(f"  Competitive intel: {counters['cached']} do cache, "
+          f"{counters['fetched']} da API, {counters['failed']} falhas, "
+          f"{assigned} editais enriquecidos")
+
+
+
+# ============================================================
 # STEP 5: FETCH DOCUMENT LISTINGS (top 50 by valor)
 # ============================================================
 
@@ -868,6 +1191,291 @@ def assemble_output(
     }
 
 
+
+# ============================================================
+# STEP 5b: PRICE BENCHMARKING (historical organ contracts)
+# ============================================================
+
+BENCHMARK_CACHE_FILE = str(_PROJECT_ROOT / "data" / "benchmark_cache.json")
+_BENCHMARK_CACHE_TTL_DAYS = 7
+
+
+def _parse_numero_controle_pncp(numero_controle: str) -> tuple[str, str, str] | None:
+    """Parse numeroControlePncpCompra into (cnpj_orgao, ano, sequencial).
+
+    Format: {cnpjOrgao}-{unidade}-{seq_padded}/{ano}
+    Example: '12345678000190-1-000042/2025' -> ('12345678000190', '2025', '42')
+    """
+    if not numero_controle:
+        return None
+    try:
+        # Split on '/' to get ano
+        parts = numero_controle.rsplit("/", 1)
+        if len(parts) != 2:
+            return None
+        left, ano = parts
+        ano = ano.strip()
+
+        # Split left on '-' to get cnpj_orgao and sequencial
+        segments = left.split("-")
+        if len(segments) < 3:
+            return None
+
+        cnpj_orgao = segments[0].strip()
+        # Sequencial is the last segment, strip leading zeros
+        seq_padded = segments[-1].strip()
+        sequencial = str(int(seq_padded))  # remove leading zeros
+
+        if not cnpj_orgao or not ano or not sequencial:
+            return None
+        return (cnpj_orgao, ano, sequencial)
+    except (ValueError, IndexError):
+        return None
+
+
+def collect_price_benchmarks(api: "ApiClient", editais: list[dict]) -> None:
+    """Collect price benchmarking data from historical organ contracts.
+
+    For each organ in the top-20 editais (by valor_estimado), queries PNCP
+    for historical contracts and their procurement results to calculate
+    typical discount percentages (homologado vs estimado).
+
+    Mutates editais in-place, adding 'price_benchmark' dict to top-20 editais.
+    """
+    compatible = [ed for ed in editais if ed.get("cnae_compatible")]
+    compatible_sorted = sorted(
+        compatible,
+        key=lambda e: (e.get("valor_estimado") or 0.0),
+        reverse=True,
+    )
+    top20 = compatible_sorted[:20]
+    if not top20:
+        print("  Price benchmark: nenhum edital compativel para analisar")
+        return
+
+    top20_ids = {ed["_id"] for ed in top20}
+
+    # Group top20 editais by cnpj_orgao
+    organ_editais: dict[str, list[dict]] = {}
+    for ed in top20:
+        cnpj = ed.get("cnpj_orgao", "")
+        if cnpj:
+            organ_editais.setdefault(cnpj, []).append(ed)
+
+    if not organ_editais:
+        print("  Price benchmark: nenhum orgao com CNPJ valido nos top 20")
+        return
+
+    print(f"\n  Price benchmark: analisando {len(organ_editais)} orgaos dos top {len(top20)} editais...")
+
+    # Load benchmark cache
+    bench_cache: dict = {}
+    try:
+        bench_cache = _load_json_cache(BENCHMARK_CACHE_FILE)
+        if bench_cache:
+            print(f"  Benchmark cache: {len(bench_cache)} orgaos carregados do disco")
+    except Exception:
+        pass
+
+    now = _today()
+    cache_cutoff = now - timedelta(days=_BENCHMARK_CACHE_TTL_DAYS)
+
+    # Check if a cache entry is still fresh
+    def _cache_fresh(cnpj: str) -> bool:
+        entry = bench_cache.get(cnpj)
+        if not isinstance(entry, dict):
+            return False
+        ts_str = entry.get("_cached_at", "")
+        try:
+            ts = datetime.fromisoformat(ts_str)
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+            return ts > cache_cutoff
+        except Exception:
+            return False
+
+    # Collect benchmark data per organ
+    organ_benchmarks: dict[str, dict] = {}
+
+    for cnpj_orgao in organ_editais:
+        # Check cache first
+        if _cache_fresh(cnpj_orgao):
+            organ_benchmarks[cnpj_orgao] = bench_cache[cnpj_orgao]
+            print(f"    Orgao {cnpj_orgao}: benchmark do cache")
+            continue
+
+        # Fetch contracts for this organ (2 yearly queries for 2-year coverage)
+        all_contracts: list[dict] = []
+        for year_offset in range(2):
+            end_date = now - timedelta(days=365 * year_offset)
+            start_date = end_date - timedelta(days=365)
+            data_inicial = _date_compact(start_date)
+            data_final = _date_compact(end_date)
+
+            for page in range(1, 5):  # max 4 pages per year (200 contracts)
+                params = {
+                    "cnpjOrgao": cnpj_orgao,
+                    "dataInicial": data_inicial,
+                    "dataFinal": data_final,
+                    "pagina": page,
+                    "tamanhoPagina": 50,
+                }
+                data, status = api.get(
+                    f"{PNCP_BASE}/contratos",
+                    params=params,
+                    label=f"Contratos orgao={cnpj_orgao} yr={year_offset} p={page}",
+                )
+
+                if status != "API" or not data:
+                    break
+
+                items = data if isinstance(data, list) else data.get("data", data.get("resultado", []))
+                if not isinstance(items, list) or not items:
+                    break
+
+                all_contracts.extend(items)
+
+                if len(items) < 50:
+                    break
+
+                time.sleep(0.3)
+
+            time.sleep(0.3)
+
+        if not all_contracts:
+            print(f"    Orgao {cnpj_orgao}: nenhum contrato encontrado")
+            continue
+
+        # Extract procurement references from contracts
+        procurement_refs: list[tuple[str, str, str]] = []
+        seen_refs: set[str] = set()
+        for contract in all_contracts:
+            numero_controle = contract.get("numeroControlePncpCompra") or ""
+            parsed = _parse_numero_controle_pncp(numero_controle)
+            if parsed:
+                ref_key = f"{parsed[0]}/{parsed[1]}/{parsed[2]}"
+                if ref_key not in seen_refs:
+                    seen_refs.add(ref_key)
+                    procurement_refs.append(parsed)
+
+        # Query procurement details (max 10 per organ)
+        descontos: list[float] = []
+        contratos_com_resultado = 0
+        total_analisados = 0
+
+        for ref_cnpj, ref_ano, ref_seq in procurement_refs[:10]:
+            data, status = api.get(
+                f"{PNCP_BASE}/orgaos/{ref_cnpj}/compras/{ref_ano}/{ref_seq}",
+                label=f"Compra {ref_cnpj}/{ref_ano}/{ref_seq}",
+            )
+
+            if status == "API" and isinstance(data, dict):
+                total_analisados += 1
+                existe_resultado = data.get("existeResultado", False)
+                if existe_resultado:
+                    contratos_com_resultado += 1
+
+                valor_estimado = _safe_float(data.get("valorTotalEstimado"))
+                valor_homologado = _safe_float(data.get("valorTotalHomologado"))
+
+                if (valor_estimado and valor_estimado > 0
+                        and valor_homologado and valor_homologado > 0):
+                    desconto = 1.0 - (valor_homologado / valor_estimado)
+                    # Sanity check: discount should be between -1 and 1
+                    # (negative means awarded above estimate)
+                    if -1.0 <= desconto <= 1.0:
+                        descontos.append(desconto)
+
+            time.sleep(0.3)
+
+        # Compute statistics (skip if insufficient sample)
+        if len(descontos) < 3:
+            print(f"    Orgao {cnpj_orgao}: {len(descontos)} contratos com desconto (insuficiente, min 3)")
+            # Cache the "insufficient" result too to avoid re-querying
+            organ_benchmarks[cnpj_orgao] = {
+                "contratos_analisados": total_analisados,
+                "contratos_com_resultado": contratos_com_resultado,
+                "descontos_encontrados": len(descontos),
+                "insuficiente": True,
+                "_cached_at": now.isoformat(),
+            }
+            bench_cache[cnpj_orgao] = organ_benchmarks[cnpj_orgao]
+            continue
+
+        desconto_medio = statistics.mean(descontos)
+        desconto_mediano = statistics.median(descontos)
+        # quantiles with method='inclusive' for small samples
+        quartiles = statistics.quantiles(descontos, n=4, method="inclusive")
+        desconto_p25 = quartiles[0]
+        desconto_p75 = quartiles[2]
+
+        benchmark_data = {
+            "desconto_medio": round(desconto_medio, 4),
+            "desconto_mediano": round(desconto_mediano, 4),
+            "desconto_p25": round(desconto_p25, 4),
+            "desconto_p75": round(desconto_p75, 4),
+            "contratos_com_resultado": contratos_com_resultado,
+            "total_analisados": total_analisados,
+            "descontos_encontrados": len(descontos),
+            "insuficiente": False,
+            "_cached_at": now.isoformat(),
+        }
+        organ_benchmarks[cnpj_orgao] = benchmark_data
+        bench_cache[cnpj_orgao] = benchmark_data
+
+        print(f"    Orgao {cnpj_orgao}: desconto mediano {desconto_mediano:.1%} "
+              f"({len(descontos)} contratos com resultado)")
+
+    # Apply benchmarks to top-20 editais
+    applied = 0
+    for ed in editais:
+        if ed["_id"] not in top20_ids:
+            continue
+
+        cnpj = ed.get("cnpj_orgao", "")
+        bm = organ_benchmarks.get(cnpj)
+        if not bm or bm.get("insuficiente"):
+            continue
+
+        valor_est = _safe_float(ed.get("valor_estimado")) or 0.0
+        desconto_med = bm["desconto_mediano"]
+        p25 = bm["desconto_p25"]
+        p75 = bm["desconto_p75"]
+        n_contratos = bm["descontos_encontrados"]
+
+        benchmark_entry: dict[str, Any] = {
+            "desconto_medio_orgao": bm["desconto_medio"],
+            "desconto_mediano_orgao": desconto_med,
+            "desconto_p25": p25,
+            "desconto_p75": p75,
+            "contratos_analisados": n_contratos,
+        }
+
+        if valor_est > 0:
+            # Suggested price range based on historical discounts
+            # p75 = higher discount -> lower price (min)
+            # p25 = lower discount -> higher price (max)
+            benchmark_entry["valor_sugerido_min"] = round(valor_est * (1.0 - p75), 2)
+            benchmark_entry["valor_sugerido_max"] = round(valor_est * (1.0 - p25), 2)
+
+        benchmark_entry["nota"] = (
+            f"Orgao historicamente contrata com {abs(desconto_med):.0%} de "
+            f"{'desconto' if desconto_med >= 0 else 'acrescimo'} "
+            f"(mediana de {n_contratos} contratos nos ultimos 2 anos)"
+        )
+
+        ed["price_benchmark"] = benchmark_entry
+        applied += 1
+
+    # Save benchmark cache
+    try:
+        _save_json_cache(BENCHMARK_CACHE_FILE, bench_cache)
+    except Exception as e:
+        print(f"  WARN: Falha ao salvar benchmark cache: {e}")
+
+    print(f"  Price benchmark: {applied} editais enriquecidos de {len(top20)} top-20")
+
+
 # ============================================================
 # MAIN
 # ============================================================
@@ -903,7 +1511,7 @@ def main():
 
     api = ApiClient(verbose=not args.quiet)
 
-    print("\n[1/6] Perfil da empresa...")
+    print("\n[1/7] Perfil da empresa...")
     empresa = collect_opencnpj(api, cnpj14)
     if empresa.get("_source", {}).get("status") == "API_FAILED":
         print(f"\nERROR: Nao foi possivel obter dados da empresa para CNPJ {cnpj_formatted}")
@@ -921,7 +1529,7 @@ def main():
     print(f"  UF Sede: {uf_sede}")
 
     # ── Step 2: Map ALL CNAEs -> keywords (principal + secundários) ──
-    print("\n[2/6] Mapeando TODOS os CNAEs para keywords...")
+    print("\n[2/7] Mapeando TODOS os CNAEs para keywords...")
 
     # Collect all CNAEs (principal + secondary)
     all_cnaes: list[str] = []
@@ -995,7 +1603,7 @@ def main():
     print(f"  Patterns compilados: {len(keyword_patterns)}")
 
     # ── Step 3: Exhaustive PNCP search ──
-    print(f"\n[3/6] Busca exaustiva PNCP ({dias} dias, {len(ufs)} UFs, {len(MODALIDADES_BUSCA)} modalidades)...")
+    print(f"\n[3/7] Busca exaustiva PNCP ({dias} dias, {len(ufs)} UFs, {len(MODALIDADES_BUSCA)} modalidades)...")
     editais, source_meta = search_pncp_exhaustive(
         api, ufs, dias, MODALIDADES_BUSCA,
         cnpj14=cnpj14,
@@ -1044,19 +1652,29 @@ def main():
         print(f"  Dedup cross-portal: sem duplicatas detectadas ({total_before_xdedup} editais)")
 
     # ── Step 4: CNAE keyword gate ──
-    print(f"\n[4/6] Aplicando gate de keywords CNAE ({len(all_cnae_prefixes)} prefixos, {len(all_sector_keys)} setores)...")
+    print(f"\n[4/7] Aplicando gate de keywords CNAE ({len(all_cnae_prefixes)} prefixos, {len(all_sector_keys)} setores)...")
     apply_cnae_keyword_gate(
         editais, keywords, keyword_patterns, sector_key, cnae_prefix,
         all_cnae_prefixes=all_cnae_prefixes,
         all_sector_keys=all_sector_keys,
     )
 
-    # ── Step 5: Fetch documents for top 50 ──
-    print(f"\n[5/6] Buscando documentos PNCP...")
+    # ── Step 5: Competitive intelligence per organ ──
+    print(f"\n[5/7] Coletando inteligencia competitiva ({_COMPETITIVE_MAX_ORGANS} orgaos, {24} meses)...")
+    collect_competitive_intel(api, editais)
+
+    # ── Step 6: Fetch documents for top 50 ──
+    print(f"\n[6/7] Buscando documentos PNCP...")
     fetch_documents_top50(api, editais)
 
-    # ── Step 6: Save output ──
-    print(f"\n[6/6] Montando JSON de saida...")
+
+    # -- Step 6b: Price benchmarking (historical organ discounts) --
+    print(f"\n[6b/7] Price benchmarking (top 20 editais)...")
+    collect_price_benchmarks(api, editais)
+
+
+    # ── Step 7: Save output ──
+    print(f"\n[7/7] Montando JSON de saida...")
     output = assemble_output(
         empresa=empresa,
         editais=editais,

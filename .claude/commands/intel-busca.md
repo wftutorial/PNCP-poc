@@ -45,6 +45,10 @@ Verificar output:
 - Capital social obtido?
 - Quantos EXPIRADOS foram marcados?
 
+O script automaticamente coleta:
+- **Inteligencia competitiva:** contratos dos ultimos 2 anos de cada orgao (top 15 orgaos, consultas anuais consolidadas)
+- **Benchmark de preco:** desconto mediano historico do orgao + faixa de lance sugerida
+
 Se `empresa._source.status == "API_FAILED"`: PARAR e informar que nao foi possivel obter dados da empresa.
 
 ### Step 2.5 — Enriquecimento (SICAF + Sancoes + Distancia + Custo)
@@ -376,6 +380,7 @@ Informar ao usuario:
 13. Se PyMuPDF/OCR nao instalado: informar o usuario e prosseguir sem extracao (analise limitada ao objeto)
 14. **Top 10 editais no PDF** (max 15 paginas). Se a empresa tem >10 editais PARTICIPAR, priorizar por valor e incluir os demais como lista resumida (1 linha por edital). O Excel contem a lista completa.
 15. **Cada gate tem autonomia para demandar reexecucao** de etapas anteriores
+16. **Benchmark de preco requer minimo 3 contratos com resultado** — orgaos com dados insuficientes nao geram sugestao de lance
 
 ## Params
 

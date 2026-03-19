@@ -1096,6 +1096,41 @@ def _build_edital_detail(idx: int, ed: dict, styles: dict) -> list:
             styles["edital_link"],
         ))
 
+    # --- Competitive Intelligence ---
+    comp_intel = ed.get("competitive_intel", {})
+    if isinstance(comp_intel, dict) and comp_intel.get("unique_suppliers"):
+        comp_parts = []
+        level = comp_intel.get("competition_level", "")
+        level_color = {"BAIXA": SIGNAL_RED, "MEDIA": SIGNAL_AMBER, "ALTA": SIGNAL_GREEN, "MUITO_ALTA": SIGNAL_GREEN}
+        color = level_color.get(level, TEXT_COLOR)
+
+        comp_parts.append(f'Competição: <font color="{color.hexval()}"><b>{level}</b></font> ({comp_intel["unique_suppliers"]} fornecedores)')
+
+        top_sup = comp_intel.get("top_suppliers", [])
+        if top_sup:
+            top_name = top_sup[0].get("nome", "")[:40]
+            top_share = top_sup[0].get("share", 0)
+            comp_parts.append(f"Incumbente: {top_name} ({top_share:.0%})")
+
+        hhi = comp_intel.get("hhi", 0)
+        if hhi > 0.5:
+            comp_parts.append(f'HHI: <font color="{SIGNAL_RED.hexval()}"><b>{hhi:.3f}</b></font> (concentrado)')
+
+        elements.append(Paragraph(" | ".join(comp_parts), styles["edital_meta"]))
+
+    # --- Price Benchmark ---
+    benchmark = ed.get("price_benchmark", {})
+    if isinstance(benchmark, dict) and benchmark.get("contratos_analisados", 0) >= 3:
+        val_min = benchmark.get("valor_sugerido_min")
+        val_max = benchmark.get("valor_sugerido_max")
+        desc_med = benchmark.get("desconto_mediano_orgao", 0)
+        n = benchmark.get("contratos_analisados", 0)
+
+        bench_text = f"Faixa de lance sugerida: <b>{_currency_short(val_min)} — {_currency_short(val_max)}</b>"
+        bench_text += f" | Desconto mediano do órgão: <b>{desc_med:.0%}</b> (base: {n} contratos)"
+
+        elements.append(Paragraph(bench_text, styles["edital_meta"]))
+
     # If no analise, show placeholder
     if not analise:
         elements.append(Paragraph(

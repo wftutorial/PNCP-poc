@@ -11,6 +11,7 @@ Usage:
     python scripts/intel-analyze.py --input docs/intel/intel-CNPJ-slug-YYYY-MM-DD.json
     python scripts/intel-analyze.py --input data.json --top 10
     python scripts/intel-analyze.py --input data.json --model gpt-4.1-mini --output analyzed.json
+    python scripts/intel-analyze.py --input data.json --review
 
 Requires:
     pip install openai
@@ -53,6 +54,9 @@ LLM_TEMPERATURE = 0          # Deterministic output
 MAX_WORKERS = 5              # Parallel LLM calls
 RETRY_ATTEMPTS = 2           # Retry on transient failures
 RETRY_DELAY_S = 2.0          # Seconds between retries
+
+REVIEW_MAX_TEXT_CHARS = 10_000  # Max text chars for adversarial review context
+REVIEW_MAX_TOKENS = 1_000       # Max tokens for review response
 
 # Thread-safe print lock
 import threading
@@ -168,6 +172,35 @@ FORMATO DE SAIDA (JSON exato):
   "recomendacao_acao": "PARTICIPAR|NAO PARTICIPAR",
   "custo_logistico_nota": "string"
 }"""
+
+
+# ============================================================
+# ADVERSARIAL REVIEW PROMPT
+# ============================================================
+
+REVIEW_SYSTEM_PROMPT = """\
+Voce e um AUDITOR independente de analises de editais de licitacao.
+Sua tarefa e revisar uma analise produzida por outro analista e identificar ERROS FACTUAIS.
+
+Voce recebera:
+1. O texto (parcial) do edital
+2. A analise produzida pelo analista
+
+Verifique CADA ponto abaixo:
+- data_sessao: a data extraida confere com o texto do edital?
+- criterio_julgamento: o criterio esta correto conforme o texto?
+- garantias: as garantias foram corretamente extraidas (tipo, percentual, valor)?
+- recomendacao_acao: a recomendacao e coerente com os dados (prazo, valor, dificuldade, requisitos)?
+- Algum campo diz "Nao consta no edital disponivel" mas a informacao ESTA presente no texto?
+
+REGRAS:
+1. Retorne SOMENTE um JSON com os campos que precisam correcao.
+2. Se a analise esta 100% correta, retorne: {"corrections": {}}
+3. Se encontrou erros, retorne: {"corrections": {"campo": "valor_correto", ...}}
+4. Inclua um campo "review_notes" com uma string explicando brevemente o que foi corrigido (ou "Analise validada sem correcoes").
+5. NAO invente informacao — so corrija com base no texto do edital.
+6. Mantenha os mesmos formatos de enum (PARTICIPAR/NAO PARTICIPAR, BAIXO/MEDIO/ALTO, etc).
+"""
 
 
 # ============================================================
@@ -447,6 +480,72 @@ def _validate_analysis(analysis: dict[str, Any]) -> dict[str, Any]:
 
 
 # ============================================================
+# ADVERSARIAL REVIEW
+# ============================================================
+
+def _adversarial_review(
+    client: Any,
+    edital: dict[str, Any],
+    analise: dict[str, Any],
+    model: str,
+) -> dict[str, Any]:
+    """Run an adversarial review pass on a completed analysis.
+
+    Sends the analysis + first 10000 chars of document text to an AUDITOR
+    persona that checks for factual errors and missing extractions.
+
+    Args:
+        client: OpenAI client instance
+        edital: The edital dict (with texto_documentos)
+        analise: The completed analysis dict to review
+        model: OpenAI model to use
+
+    Returns:
+        dict of corrections (only fields that need fixing), empty if all correct.
+    """
+    texto = (edital.get("texto_documentos") or "")[:REVIEW_MAX_TEXT_CHARS]
+    if not texto.strip():
+        return {}
+
+    # Build a clean copy of the analysis (exclude internal metadata fields)
+    analise_clean = {k: v for k, v in analise.items() if not k.startswith("_")}
+
+    user_prompt = (
+        "TEXTO DO EDITAL (primeiros 10000 caracteres):\n"
+        f"{texto}\n\n"
+        "ANALISE PRODUZIDA PELO ANALISTA:\n"
+        f"{json.dumps(analise_clean, ensure_ascii=False, indent=2)}\n\n"
+        "Revise a analise acima comparando com o texto do edital. "
+        "Retorne SOMENTE o JSON com corrections e review_notes."
+    )
+
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            temperature=0,
+            max_tokens=REVIEW_MAX_TOKENS,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": REVIEW_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+        )
+
+        content = response.choices[0].message.content or "{}"
+        result = json.loads(content)
+
+        corrections = result.get("corrections", {})
+        if not isinstance(corrections, dict):
+            corrections = {}
+
+        return corrections
+
+    except Exception as exc:
+        _tprint(f"    REVIEW WARN: Falha na revisao adversarial: {exc}")
+        return {}
+
+
+# ============================================================
 # PER-EDITAL ANALYSIS
 # ============================================================
 
@@ -705,6 +804,11 @@ def main() -> None:
         help="Re-analisar editais que ja possuem campo 'analise'",
     )
     parser.add_argument(
+        "--review",
+        action="store_true",
+        help="Habilitar revisao adversarial pos-analise (LLM auditor corrige erros factuais)",
+    )
+    parser.add_argument(
         "--quiet",
         action="store_true",
         help="Reduzir output",
@@ -730,6 +834,7 @@ def main() -> None:
     print(f"  Input:   {input_path}")
     print(f"  Model:   {args.model}")
     print(f"  Workers: {args.workers}")
+    print(f"  Review:  {'ON' if args.review else 'OFF'}")
     print(f"{'=' * 60}")
 
     with open(input_path, "r", encoding="utf-8") as f:
@@ -839,6 +944,42 @@ def main() -> None:
                     applied += 1
                 break
 
+    # ── Adversarial review pass ──
+    review_corrections_total = 0
+    review_corrections_per_edital: dict[str, int] = {}
+
+    if args.review:
+        reviewed_editais = [ed for ed in top20 if ed.get("analise") and ed.get("analise", {}).get("_source") != "fallback"]
+        if reviewed_editais:
+            print(f"\n[1.5/2] Revisao adversarial de {len(reviewed_editais)} editais...")
+            for ed in reviewed_editais:
+                objeto = (ed.get("objeto") or "")[:60]
+                eid = ed.get("_id") or objeto[:30]
+                analise = ed["analise"]
+
+                corrections = _adversarial_review(client, ed, analise, args.model)
+                num_corrections = len(corrections)
+                review_corrections_per_edital[eid] = num_corrections
+
+                if num_corrections > 0:
+                    review_corrections_total += num_corrections
+                    _tprint(f"    REVIEW [{eid[:40]}]: {num_corrections} correcao(oes) aplicada(s)")
+                    # Merge corrections into analysis (override fields)
+                    for field_name, corrected_value in corrections.items():
+                        if field_name in ANALYSIS_FIELDS:
+                            analise[field_name] = corrected_value
+                    analise["_reviewed"] = True
+                    analise["_review_corrections"] = num_corrections
+                else:
+                    _tprint(f"    REVIEW [{eid[:40]}]: OK — sem correcoes")
+                    analise["_reviewed"] = True
+                    analise["_review_corrections"] = 0
+
+            # Re-validate after corrections
+            for ed in reviewed_editais:
+                if ed.get("analise", {}).get("_review_corrections", 0) > 0:
+                    ed["analise"] = _validate_analysis(ed["analise"])
+
     # ── Generate executive summary ──
     if not args.skip_summary:
         print(f"\n[2/2] Gerando resumo executivo...")
@@ -877,6 +1018,9 @@ def main() -> None:
             1 for e in top20
             if "NAO" in (e.get("analise", {}).get("recomendacao_acao", ""))
         ),
+        "review_enabled": args.review,
+        "review_corrections_total": review_corrections_total,
+        "review_corrections_per_edital": review_corrections_per_edital,
     }
 
     # ── Save output ──
@@ -920,6 +1064,13 @@ def main() -> None:
     print(f"  Fallback (erro LLM):   {fallback}")
     print(f"  PARTICIPAR:            {participar}")
     print(f"  NAO PARTICIPAR:        {nao}")
+    if args.review:
+        print(f"  Revisao adversarial:   ON")
+        print(f"  Correcoes totais:      {review_corrections_total}")
+        reviewed_count = sum(1 for v in review_corrections_per_edital.values())
+        corrected_count = sum(1 for v in review_corrections_per_edital.values() if v > 0)
+        print(f"  Editais revisados:     {reviewed_count}")
+        print(f"  Editais corrigidos:    {corrected_count}")
     print(f"  Resumo executivo:      {'Sim' if data.get('resumo_executivo') else 'Nao'}")
     print(f"  Proximos passos:       {len(data.get('proximos_passos', []))} itens")
     print(f"  Tempo total:           {elapsed:.1f}s")

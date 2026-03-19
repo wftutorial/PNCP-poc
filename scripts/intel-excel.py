@@ -72,10 +72,16 @@ COLUMNS = [
     ("Dist\u00e2ncia (km)", 12, "right"),
     ("Custo Proposta", 14, "right"),
     ("ROI", 10, "center"),
+    ("Competi\u00e7\u00e3o", 12, "center"),
+    ("Fornecedores", 10, "right"),
+    ("Incumbente", 30, "left"),
+    ("Desc. Mediano \u00d3rg\u00e3o", 14, "center"),
+    ("Lance Sugerido Min", 16, "right"),
+    ("Lance Sugerido Max", 16, "right"),
     ("Popula\u00e7\u00e3o", 12, "right"),
     ("Compat\u00edvel CNAE", 12, "center"),
     ("Dentro Capacidade", 14, "center"),
-    ("Relevância", 10, "center"),
+    ("Relev\u00e2ncia", 10, "center"),
     ("Setor", 25, "left"),
     ("Link PNCP", 12, "center"),
 ]
@@ -142,7 +148,7 @@ def _cnae_label(item: dict) -> str:
     val = item.get("cnae_compatible")
     if val is True or str(val).upper() in ("TRUE", "SIM", "YES", "1"):
         return "SIM"
-    if val is False or str(val).upper() in ("FALSE", "NAO", "NÃO", "NO", "0"):
+    if val is False or str(val).upper() in ("FALSE", "NAO", "N\u00c3O", "NO", "0"):
         return "N\u00c3O"
     if val is None:
         return "AVALIAR"
@@ -150,7 +156,7 @@ def _cnae_label(item: dict) -> str:
     s = str(val).upper().strip()
     if s in ("SIM", "YES", "TRUE"):
         return "SIM"
-    if s in ("NAO", "NÃO", "NO", "FALSE"):
+    if s in ("NAO", "N\u00c3O", "NO", "FALSE"):
         return "N\u00c3O"
     return "AVALIAR"
 
@@ -356,7 +362,7 @@ def _build_oportunidades(wb: Workbook, items: list[dict], capacity_10x: float | 
         dt_enc = _parse_dt(item.get("data_encerramento_proposta", item.get("dataEncerramentoProposta")))
         row.append(_dc(10, value=dt_enc, number_format=DATETIME_FMT if dt_enc else None))
 
-        # K: Distância (km)
+        # K: Distancia (km)
         dist_data = item.get("distancia", {})
         dist_km = _safe_float(dist_data.get("km")) if isinstance(dist_data, dict) else None
         if dist_km is not None:
@@ -385,54 +391,98 @@ def _build_oportunidades(wb: Workbook, items: list[dict], capacity_10x: float | 
             roi_font = None
         row.append(_dc(13, value=roi_class, font=roi_font))
 
-        # N: População
+        # N: Competicao (competition_level)
+        comp = item.get("competitive_intel", {})
+        comp_level = comp.get("competition_level", "") if isinstance(comp, dict) else ""
+        if comp_level in ("ALTA", "MUITO_ALTA"):
+            comp_font = st["green_font"]
+        elif comp_level == "MEDIA":
+            comp_font = st["amber_font"]
+        elif comp_level == "BAIXA":
+            comp_font = st["red_font"]
+        else:
+            comp_font = None
+        row.append(_dc(14, value=comp_level, font=comp_font))
+
+        # O: Fornecedores (unique_suppliers)
+        unique_sup = comp.get("unique_suppliers", "") if isinstance(comp, dict) else ""
+        row.append(_dc(15, value=unique_sup))
+
+        # P: Incumbente (top supplier name)
+        top_sups = comp.get("top_suppliers", []) if isinstance(comp, dict) else []
+        incumbente = top_sups[0].get("nome", "")[:30] if top_sups else ""
+        row.append(_dc(16, value=_sanitize(incumbente)))
+
+        # Q: Desc. Mediano Orgao
+        bench = item.get("price_benchmark", {})
+        desc_med = bench.get("desconto_mediano_orgao") if isinstance(bench, dict) else None
+        if desc_med is not None:
+            row.append(_dc(17, value=desc_med, number_format=PCT_FMT))
+        else:
+            row.append(_dc(17, value=""))
+
+        # R: Lance Sugerido Min
+        lance_min = bench.get("valor_sugerido_min") if isinstance(bench, dict) else None
+        if lance_min is not None:
+            row.append(_dc(18, value=lance_min, number_format=CURRENCY_FMT))
+        else:
+            row.append(_dc(18, value=""))
+
+        # S: Lance Sugerido Max
+        lance_max = bench.get("valor_sugerido_max") if isinstance(bench, dict) else None
+        if lance_max is not None:
+            row.append(_dc(19, value=lance_max, number_format=CURRENCY_FMT))
+        else:
+            row.append(_dc(19, value=""))
+
+        # T: Populacao
         ibge_data = item.get("ibge", {})
         pop = ibge_data.get("populacao") if isinstance(ibge_data, dict) else None
         if pop is not None:
-            row.append(_dc(14, value=pop, number_format='#,##0'))
+            row.append(_dc(20, value=pop, number_format='#,##0'))
         else:
-            row.append(_dc(14, value=""))
+            row.append(_dc(20, value=""))
 
-        # O: Compativel CNAE
+        # U: Compativel CNAE
         if cnae_label == "SIM":
             cnae_font = st["green_font"]
         elif cnae_label == "N\u00c3O":
             cnae_font = st["red_font"]
         else:
             cnae_font = st["amber_font"]
-        row.append(_dc(15, value=cnae_label, font=cnae_font))
+        row.append(_dc(21, value=cnae_label, font=cnae_font))
 
-        # P: Dentro Capacidade
+        # V: Dentro Capacidade
         if cap_label == "SIM":
             cap_font = st["green_font"]
         elif cap_label == "N\u00c3O":
             cap_font = st["red_font"]
         else:
             cap_font = Font(color="808080")
-        row.append(_dc(16, value=cap_label, font=cap_font))
+        row.append(_dc(22, value=cap_label, font=cap_font))
 
-        # Q: Relevância (human-readable label from keyword density)
+        # W: Relevancia (human-readable label from keyword density)
         if kw_density is not None:
             if kw_density >= 5:
                 rel_label, rel_font = "Alta", st["green_font"]
             elif kw_density >= 1:
-                rel_label, rel_font = "Média", st["amber_font"]
+                rel_label, rel_font = "M\u00e9dia", st["amber_font"]
             else:
                 rel_label, rel_font = "Baixa", st["red_font"]
-            row.append(_dc(17, value=rel_label, font=rel_font))
+            row.append(_dc(23, value=rel_label, font=rel_font))
         else:
-            row.append(_dc(17, value=""))
+            row.append(_dc(23, value=""))
 
-        # R: Setor
-        row.append(_dc(18, value=_sanitize(sector_name)))
+        # X: Setor
+        row.append(_dc(24, value=_sanitize(sector_name)))
 
-        # S: Link PNCP — use HYPERLINK formula (write-only mode doesn't support cell.hyperlink)
+        # Y: Link PNCP — use HYPERLINK formula (write-only mode doesn't support cell.hyperlink)
         if link_pncp:
             safe_url = str(link_pncp).replace('"', '%22')
             link_val = f'=HYPERLINK("{safe_url}","Abrir")'
-            row.append(_dc(19, value=link_val, font=st["link_font"]))
+            row.append(_dc(25, value=link_val, font=st["link_font"]))
         else:
-            row.append(_dc(19, value=""))
+            row.append(_dc(25, value=""))
 
         ws.append(row)
 

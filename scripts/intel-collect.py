@@ -778,14 +778,16 @@ def main():
         all_sector_keys=all_sector_keys,
     )
 
-    # Determine output path
+    # Determine output path — include razao_social slug
     if args.output:
         out_path = args.output
     else:
         today_str = _date_iso(_today())
+        slug = re.sub(r"[^\w\-]", "-", (razao or "empresa").lower())[:40].strip("-")
+        slug = re.sub(r"-+", "-", slug)  # collapse multiple dashes
         out_dir = str(_PROJECT_ROOT / "docs" / "intel")
         os.makedirs(out_dir, exist_ok=True)
-        out_path = os.path.join(out_dir, f"intel-{cnpj14}-{today_str}.json")
+        out_path = os.path.join(out_dir, f"intel-{cnpj14}-{slug}-{today_str}.json")
 
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:

@@ -7,8 +7,8 @@ Zero ruído. Zero perda de oportunidades. Funciona para qualquer ramo de ativida
 Utiliza TODOS os CNAEs da empresa (principal + secundários) para máxima cobertura.
 
 **Entregáveis:**
-1. `docs/intel/intel-{CNPJ}-{YYYY-MM-DD}.xlsx` — Planilha completa com TODOS os editais
-2. `docs/intel/intel-{CNPJ}-{YYYY-MM-DD}.pdf` — Relatório estratégico dos top 20 (max 15 páginas)
+1. `docs/intel/intel-{CNPJ}-{razao-slug}-{YYYY-MM-DD}.xlsx` — Planilha completa com TODOS os editais
+2. `docs/intel/intel-{CNPJ}-{razao-slug}-{YYYY-MM-DD}.pdf` — Relatório estratégico dos top 20 (max 15 páginas)
 
 ---
 
@@ -25,9 +25,9 @@ Aceita formatos:
 Definir variáveis:
 - `CNPJ` = 14 dígitos limpos
 - `UFS` = lista de UF siglas (uppercase)
-- `DATA_JSON = docs/intel/intel-{CNPJ}-{YYYY-MM-DD}.json`
-- `EXCEL_FILE = docs/intel/intel-{CNPJ}-{YYYY-MM-DD}.xlsx`
-- `PDF_FILE = docs/intel/intel-{CNPJ}-{YYYY-MM-DD}.pdf`
+- `DATA_JSON = docs/intel/intel-{CNPJ}-{razao-social-slug}-{YYYY-MM-DD}.json`
+- `EXCEL_FILE = docs/intel/intel-{CNPJ}-{razao-social-slug}-{YYYY-MM-DD}.xlsx`
+- `PDF_FILE = docs/intel/intel-{CNPJ}-{razao-social-slug}-{YYYY-MM-DD}.pdf`
 
 ### Step 2 — Coleta Determinística
 

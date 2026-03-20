@@ -1158,19 +1158,22 @@ def assemble_output(
             "sector_keys": sorted(all_sector_keys) if all_sector_keys else [sector_key],
         },
         "estatisticas": {
-            "total_bruto": len(editais),
+            "total_bruto": len(editais) + source_meta.get("total_expirados_removidos", 0),
+            "total_expirados_removidos": source_meta.get("total_expirados_removidos", 0),
+            "total_apos_filtro_temporal": len(editais),
             "total_cnae_compativel": len(compatible),
             "total_cnae_incompativel": len(incompatible),
             "total_needs_llm_review": len(needs_llm),
             "valor_total_compativel": round(valor_total_compat, 2),
             "capacidade_10x": round(capacidade_10x, 2),
             "total_dentro_capacidade": total_dentro_capacidade,
+            "total_nao_expirados": len(compatible),
             "pncp_pages_fetched": source_meta.get("pages_fetched", 0),
             "pncp_errors": source_meta.get("errors", 0),
             "pncp_pagination_exhausted": source_meta.get("pagination_exhausted", []),
             "total_after_dedup": source_meta.get("total_after_xdedup", len(editais)),
             "status_temporal": status_counts,
-            "total_expirados": status_counts.get("EXPIRADO", 0),
+            "total_expirados": source_meta.get("total_expirados_removidos", 0),
             "total_urgentes": status_counts.get("URGENTE", 0),
         },
         "editais": editais_sorted,
@@ -1651,6 +1654,14 @@ def main():
     else:
         print(f"  Dedup cross-portal: sem duplicatas detectadas ({total_before_xdedup} editais)")
 
+    # ── Step 3b: Remove expired tenders BEFORE any further processing ──
+    n_before_expiry = len(editais)
+    n_expirados = sum(1 for ed in editais if ed.get("status_temporal") == "EXPIRADO")
+    editais = [ed for ed in editais if ed.get("status_temporal") != "EXPIRADO"]
+    if n_expirados > 0:
+        print(f"\n  Filtro temporal: {n_expirados} expirados removidos de {n_before_expiry} editais ({len(editais)} restantes)")
+    source_meta["total_expirados_removidos"] = n_expirados
+
     # ── Step 4: CNAE keyword gate ──
     print(f"\n[4/7] Aplicando gate de keywords CNAE ({len(all_cnae_prefixes)} prefixos, {len(all_sector_keys)} setores)...")
     apply_cnae_keyword_gate(
@@ -1712,6 +1723,8 @@ def main():
     print(f"  RESULTADO")
     print(f"{'='*60}")
     print(f"  Total bruto:          {stats['total_bruto']}")
+    print(f"  Expirados removidos:  {stats['total_expirados_removidos']} (filtrados antes de tudo)")
+    print(f"  Ativos analisados:    {stats['total_apos_filtro_temporal']}")
     print(f"  CNAE compativeis:     {stats['total_cnae_compativel']}")
     print(f"  CNAE incompativeis:   {stats['total_cnae_incompativel']}")
     print(f"  Precisam LLM review:  {stats['total_needs_llm_review']}")
@@ -1722,7 +1735,7 @@ def main():
     print(f"  Erros PNCP:           {stats['pncp_errors']}")
     st_counts = stats.get("status_temporal", {})
     st_parts = ", ".join(f"{k}={v}" for k, v in sorted(st_counts.items()))
-    print(f"  Status temporal:      {st_parts or 'N/A'} (expirados={stats['total_expirados']}, urgentes={stats['total_urgentes']})")
+    print(f"  Status temporal:      {st_parts or 'N/A'} (urgentes={stats['total_urgentes']})")
     print(f"  Tempo total:          {elapsed:.1f}s")
     print(f"  Salvo em:             {out_path}")
     print(f"{'='*60}")

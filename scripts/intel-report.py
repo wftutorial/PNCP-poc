@@ -682,15 +682,18 @@ def _build_funil(data: dict, styles: dict) -> list:
     top20 = data.get("top20", [])
 
     total_bruto = estatisticas.get("total_bruto", len(data.get("editais", [])))
+    total_expirados = estatisticas.get("total_expirados_removidos", estatisticas.get("total_expirados", 0))
+    total_ativos = estatisticas.get("total_apos_filtro_temporal", total_bruto - total_expirados)
     total_compat = estatisticas.get("total_cnae_compativel", 0)
     total_dentro = estatisticas.get("total_dentro_capacidade", total_compat)
-    total_nao_expirados = estatisticas.get("total_nao_expirados", total_dentro)
     total_analisados = estatisticas.get("total_analisados_profundidade", 20)
     total_recomendados = len(top20)
 
     empresa = data.get("empresa", {})
     ufs = ", ".join(data.get("busca", {}).get("ufs", []))
     dias = data.get("busca", {}).get("dias", 30)
+    capital = _safe_float(empresa.get("capital_social")) or 0
+    cap_10x = capital * 10 if capital > 0 else 0
 
     el.append(Spacer(1, 6 * mm))
     el.append(Paragraph("Metodologia de Seleção", styles["h2"]))
@@ -699,11 +702,12 @@ def _build_funil(data: dict, styles: dict) -> list:
     avail = PAGE_WIDTH - 2 * MARGIN
 
     # Funnel rows: [count, description, detail]
+    # Order matches pipeline: bruto → expirados removidos → CNAE → capacidade → analisados → recomendados
     funnel_steps = [
         (str(total_bruto), "editais publicados", f"PNCP — {ufs} — últimos {dias} dias"),
+        (str(total_ativos), "com prazo vigente", f"{total_expirados} expirados removidos antes de qualquer análise"),
         (str(total_compat), "compatíveis com CNAE", f"filtro por {len(empresa.get('cnaes', []) or [''])} códigos de atividade"),
-        (str(total_dentro), "dentro da capacidade", f"limite: {_currency_short(empresa.get('capital_social', 0) * 10)} (10× capital social)"),
-        (str(total_nao_expirados), "com prazo vigente", "excluídos editais encerrados ou expirados"),
+        (str(total_dentro), "dentro da capacidade", f"limite: {_currency_short(cap_10x)} (10× capital social)"),
         (str(total_analisados), "analisados em profundidade", "documentos baixados e revisados individualmente"),
         (str(total_recomendados), "RECOMENDADOS", "viabilidade técnica e econômica confirmada"),
     ]

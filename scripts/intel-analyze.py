@@ -263,6 +263,17 @@ def _build_enrichment_context(edital: dict[str, Any], empresa: dict[str, Any]) -
     parts.append(f"MODALIDADE: {edital.get('modalidade_nome', 'N/A')}")
     parts.append(f"ORGAO: {edital.get('orgao_nome', 'N/A')}")
 
+    # CNAE confidence (v4)
+    cnae_conf = edital.get("cnae_confidence")
+    if cnae_conf is not None:
+        parts.append(f"CONFIANCA CNAE: {cnae_conf:.0%}")
+
+    # Victory profile fit (v4)
+    fit_label = edital.get("_victory_fit_label")
+    if fit_label:
+        fit_score = edital.get("_victory_fit", 0)
+        parts.append(f"ADERENCIA PERFIL HISTORICO: {fit_label} ({fit_score:.0%})")
+
     # Temporal status
     status = edital.get("status_temporal")
     if status:
@@ -270,6 +281,11 @@ def _build_enrichment_context(edital: dict[str, Any], empresa: dict[str, Any]) -
     data_abertura = edital.get("data_abertura") or edital.get("data_sessao")
     if data_abertura:
         parts.append(f"DATA ABERTURA: {data_abertura}")
+
+    # Delta status (v4)
+    delta = edital.get("_delta_status")
+    if delta and delta != "INALTERADO":
+        parts.append(f"STATUS DELTA: {delta}")
 
     # Distance
     dist = edital.get("distancia") or {}
@@ -294,6 +310,30 @@ def _build_enrichment_context(edital: dict[str, Any], empresa: dict[str, Any]) -
     custo_total = custo.get("total")
     if custo_total:
         parts.append(f"CUSTO ESTIMADO PROPOSTA: {_fmt_brl(custo_total)}")
+
+    # Bid simulation (v4)
+    bid = edital.get("_bid_simulation") or {}
+    if bid.get("has_data") or bid.get("historico_contratos", 0) >= 3:
+        lance = bid.get("lance_sugerido", 0)
+        desc = bid.get("desconto_sugerido_pct", 0)
+        pwin = bid.get("p_vitoria_pct", 0)
+        parts.append(
+            f"SIMULACAO LANCE: R$ {lance:,.2f} (desconto {desc:.1f}%, "
+            f"P(vitoria) {pwin:.0f}%)"
+        )
+
+    # Structured extraction hints (v4)
+    struct = edital.get("_structured_extraction") or {}
+    struct_fields = struct.get("fields") or {}
+    hints: list[str] = []
+    for fname, fdata in struct_fields.items():
+        if isinstance(fdata, dict) and fdata.get("found"):
+            val = fdata.get("value", "")
+            if val and len(val) < 200:
+                hints.append(f"  {fname}: {val}")
+    if hints:
+        parts.append("\nDADOS PRE-EXTRAIDOS (confirmar com texto do edital):")
+        parts.extend(hints[:15])  # Max 15 hints to not overflow context
 
     return "\n".join(parts)
 

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import glob as glob_mod
 import hashlib
 import importlib.util
 import io
@@ -76,7 +77,7 @@ PNCP_FILES_BASE = _crd.PNCP_FILES_BASE
 PNCP_MAX_PAGE_SIZE = _crd.PNCP_MAX_PAGE_SIZE
 MODALIDADES = _crd.MODALIDADES
 MODALIDADES_EXCLUIDAS = _crd.MODALIDADES_EXCLUIDAS
-PNCP_MAX_PAGES_UF = _crd.PNCP_MAX_PAGES_UF
+PNCP_MAX_PAGES_UF = 80  # Override: 80 pages × 50 = 4000 items per UF per modalidade
 PNCP_MAX_PAGES = _crd.PNCP_MAX_PAGES
 CNAE_KEYWORD_REFINEMENTS = _crd.CNAE_KEYWORD_REFINEMENTS
 _compile_keyword_patterns = _crd._compile_keyword_patterns
@@ -93,7 +94,7 @@ collect_portal_transparencia = _crd.collect_portal_transparencia
 # CONSTANTS
 # ============================================================
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 # Checkpoint file for resume/fault-tolerance
@@ -145,7 +146,7 @@ _EXCLUSION_PATTERN_STRINGS: list[tuple[str, str]] = [
     # Surveillance/Security guards
     ("surveillance_security_guards", r'(vigilancia.*patrimonial|controlador de acesso|vigia\b|porteiro|seguranca.*armada|monitoramento.*eletronico.*patrimon)'),
     # Cleaning/Conservation
-    ("cleaning_conservation", r'(limpeza.{0,15}(asseio|conserva|predial|hospitalar)|servicos de conservacao e limpeza|coleta.{0,15}(residuo|lixo)|destinacao final.{0,15}(residuo|rcc|aterro))'),
+    ("cleaning_conservation", r'(limpeza.{0,15}(asseio|conserva|predial|hospitalar)|servicos de conservacao e limpeza|coleta.{0,15}(residuo|lixo)|destinacao final.{0,15}residuo)'),
     # Vehicles/Fuel (purchase, not road construction)
     ("vehicles_fuel", r'(aquisicao de (veiculo|automovel|caminhao|onibus|ambulancia|motocicleta)|combustivel|gasolina|diesel|etanol|gas liquefeito|lubrificante)'),
     # Uniforms/Office
@@ -153,7 +154,7 @@ _EXCLUSION_PATTERN_STRINGS: list[tuple[str, str]] = [
     # Energy purchase (not infrastructure)
     ("energy_purchase", r'(aquisicao de energia eletrica|contratacao.{0,20}energia eletrica.*varejista|locacao.*usina.*energia)'),
     # Equipment purchase (not construction-related)
-    ("equipment_purchase", r'(equipamentos perifericos.*sistema|equipamentos especiais.*paassex|rolo compactador|retroescavadeira|pa carregadeira|motoniveladora|escavadeira hidraulica)'),
+    ("equipment_purchase", r'(equipamentos perifericos.*sistema|equipamentos especiais.*paassex)'),
     # Naval/Military specialized
     ("naval_military", r'(construcao naval|lancha|embarcacao|navio|fragata|corveta|submarino)'),
     # Pest control / mosquito
@@ -198,6 +199,111 @@ def _compute_dedup_hash(edital: dict) -> str:
     municipio = (edital.get("municipio") or "").lower().strip()
     raw = f"{uf}|{municipio}|{valor}|{obj[:150]}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+# Portuguese stop words for semantic dedup (minimal set)
+_PT_STOP_WORDS = frozenset({
+    "de", "da", "do", "das", "dos", "para", "com", "por", "em",
+    "no", "na", "nos", "nas", "ao", "aos", "a", "o", "as", "os", "e", "ou",
+})
+
+
+def _token_overlap(text_a: str, text_b: str) -> float:
+    """Compute token overlap ratio between two strings (excluding stop words).
+
+    Returns intersection/union of lowercase word sets (Jaccard similarity).
+    """
+    words_a = {w for w in text_a.lower().split() if w not in _PT_STOP_WORDS and len(w) > 1}
+    words_b = {w for w in text_b.lower().split() if w not in _PT_STOP_WORDS and len(w) > 1}
+    if not words_a or not words_b:
+        return 0.0
+    intersection = words_a & words_b
+    union = words_a | words_b
+    return len(intersection) / len(union) if union else 0.0
+
+
+def _semantic_dedup(editais: list[dict]) -> list[dict]:
+    """Remove semantic duplicates within each UF.
+
+    Two editais are considered semantic duplicates if:
+      a. Same cnpj_orgao (same organ)
+      b. valor_estimado within +/-15% of each other
+      c. Token overlap of objeto > 65%
+
+    When duplicates are found, the earlier one (by publication date) is kept.
+    """
+    # Group by UF
+    by_uf: dict[str, list[dict]] = {}
+    for ed in editais:
+        uf = ed.get("uf", "XX")
+        by_uf.setdefault(uf, []).append(ed)
+
+    removed_ids: set[str] = set()
+    n_semantic_dupes = 0
+
+    for uf, uf_editais in by_uf.items():
+        n = len(uf_editais)
+        if n < 2:
+            continue
+
+        for i in range(n):
+            ed_a = uf_editais[i]
+            id_a = ed_a.get("_id", "")
+            if id_a in removed_ids:
+                continue
+
+            for j in range(i + 1, n):
+                ed_b = uf_editais[j]
+                id_b = ed_b.get("_id", "")
+                if id_b in removed_ids:
+                    continue
+
+                # Condition a: same organ
+                cnpj_a = ed_a.get("cnpj_orgao", "")
+                cnpj_b = ed_b.get("cnpj_orgao", "")
+                if not cnpj_a or cnpj_a != cnpj_b:
+                    continue
+
+                # Condition b: valor within +/-15%
+                val_a = _safe_float(ed_a.get("valor_estimado")) or 0.0
+                val_b = _safe_float(ed_b.get("valor_estimado")) or 0.0
+                if val_a > 0 and val_b > 0:
+                    ratio = val_a / val_b if val_b > val_a else val_b / val_a
+                    if ratio < 0.85:  # More than 15% difference
+                        continue
+                elif val_a != val_b:
+                    # One is 0, other isn't — not similar
+                    continue
+
+                # Condition c: token overlap > 65%
+                obj_a = ed_a.get("objeto", "")
+                obj_b = ed_b.get("objeto", "")
+                overlap = _token_overlap(obj_a, obj_b)
+                if overlap <= 0.80:
+                    continue
+
+                # All 3 conditions met — mark the later one as duplicate
+                date_a = ed_a.get("data_publicacao", "")
+                date_b = ed_b.get("data_publicacao", "")
+                # Keep earlier publication date, remove later
+                if date_b < date_a and date_b:
+                    # B is earlier — remove A
+                    removed_ids.add(id_a)
+                    ed_a["_dedup_semantic"] = True
+                    n_semantic_dupes += 1
+                    break  # A is removed, stop comparing it
+                else:
+                    # A is earlier or same — remove B
+                    removed_ids.add(id_b)
+                    ed_b["_dedup_semantic"] = True
+                    n_semantic_dupes += 1
+
+    if n_semantic_dupes > 0:
+        print(f"  Dedup semantico: {n_semantic_dupes} duplicatas semanticas removidas")
+    else:
+        print(f"  Dedup semantico: sem duplicatas semanticas detectadas")
+
+    return [ed for ed in editais if ed.get("_id", "") not in removed_ids]
 
 
 def _date_compact(dt: datetime) -> str:
@@ -635,8 +741,8 @@ def classify_by_object_heuristic(objeto: str, cnae_principal_desc: str) -> str:
         return 'INCOMPATIVEL'
     if has_weak_compat and not has_strong_incompat:
         return 'COMPATIVEL'
-    # Default: conservative rejection (zero noise > zero loss)
-    return 'INCOMPATIVEL'
+    # Default: pass through for LLM review (avoid discarding ambiguous editais)
+    return 'NEEDS_REVIEW'
 
 
 def apply_cnae_keyword_gate(
@@ -647,6 +753,7 @@ def apply_cnae_keyword_gate(
     cnae_prefix: str,
     all_cnae_prefixes: set[str] | None = None,
     all_sector_keys: set[str] | None = None,
+    confidence_threshold: float = 0.35,
 ) -> None:
     """Classify each edital as cnae_compatible or not. Mutates in place.
 
@@ -654,6 +761,14 @@ def apply_cnae_keyword_gate(
     All editais pass through -- we just flag them.
     When multiple CNAEs are provided, an edital is only excluded if it's
     incompatible with ALL CNAEs (not just the primary one).
+
+    Computes a probabilistic cnae_confidence (0.0-1.0) for each edital:
+      - Base from keyword density (caps at 60%)
+      - Heuristic bonus (+20% strong_compatible, +10% weak_compatible)
+      - Exclusion penalty (-30% for partial exclusion pattern match)
+      - CNAE match bonus (+10% if objeto contains company CNAE description words)
+
+    cnae_compatible is derived from cnae_confidence >= confidence_threshold.
     """
     _all_prefixes = all_cnae_prefixes or {cnae_prefix}
     _all_sectors = all_sector_keys or {sector_key}
@@ -687,6 +802,7 @@ def apply_cnae_keyword_gate(
 
         if not objeto_lower.strip():
             ed["cnae_compatible"] = False
+            ed["cnae_confidence"] = 0.0
             ed["keyword_density"] = 0.0
             ed["match_keywords"] = []
             ed["needs_llm_review"] = True
@@ -699,6 +815,7 @@ def apply_cnae_keyword_gate(
         exclusion = _check_hard_exclusions(objeto_lower, sector_key)
         if exclusion:
             ed["cnae_compatible"] = False
+            ed["cnae_confidence"] = 0.0
             ed["keyword_density"] = 0.0
             ed["match_keywords"] = []
             ed["needs_llm_review"] = False
@@ -726,6 +843,7 @@ def apply_cnae_keyword_gate(
                 all_incompatible = False
             if all_incompatible:
                 ed["cnae_compatible"] = False
+                ed["cnae_confidence"] = 0.0
                 ed["keyword_density"] = 0.0
                 ed["match_keywords"] = []
                 ed["needs_llm_review"] = False
@@ -741,6 +859,7 @@ def apply_cnae_keyword_gate(
                 break
         if exclude_hit:
             ed["cnae_compatible"] = False
+            ed["cnae_confidence"] = 0.0
             ed["keyword_density"] = 0.0
             ed["match_keywords"] = []
             ed["needs_llm_review"] = False
@@ -761,10 +880,63 @@ def apply_cnae_keyword_gate(
         # Density via compiled patterns (more accurate, word-boundary)
         density = _compute_keyword_density(objeto_lower, keyword_patterns)
 
-        # Compatibility gate: at least 1 keyword match with density >= threshold
+        # ── Probabilistic confidence scoring ──
         density_threshold = SECTOR_DENSITY_OVERRIDES.get(sector_key, INTEL_DENSITY_MIN)
-        is_compatible = len(matched_kws) >= 1 and density >= density_threshold
 
+        # Base confidence from keyword density (caps at 60%)
+        confidence = min(1.0, density / density_threshold * 0.6) if density_threshold > 0 else 0.0
+
+        # Heuristic bonus: check object classification
+        _cnae_desc = ed.get("cnae_principal_descricao") or ""
+        _heuristic = classify_by_object_heuristic(objeto, _cnae_desc)
+        heuristic_label = None
+        if _heuristic == 'COMPATIVEL':
+            # Determine strong vs weak by re-checking patterns
+            _obj_lower_h = (objeto or '').lower()
+            _strong_compat_pat = re.compile(
+                r'(obra|construcao|reforma|ampliacao|restauracao|recuperacao|revitalizacao|'
+                r'pavimentacao|drenagem|terraplanagem|saneamento|urbanizacao|'
+                r'projeto (basico|executivo)|levantamento topografico|estudo geotecnico|'
+                r'fiscalizacao de obra|supervisao de obra|gerenciamento de obra|'
+                r'impermeabilizacao|revestimento|alvenaria|concretagem|fundacao|'
+                r'estrutura metalica|cobertura|telhado|fachada|'
+                r'rede de (agua|esgoto|drenagem)|estacao (tratamento|elevatoria)|'
+                r'ponte|viaduto|passarela|muro de contencao|talude)',
+                re.IGNORECASE
+            )
+            if _strong_compat_pat.search(_obj_lower_h):
+                confidence += 0.20  # strong_compatible
+                heuristic_label = "strong_compatible"
+            else:
+                confidence += 0.10  # weak_compatible
+                heuristic_label = "weak_compatible"
+
+        # Exclusion pattern penalty: -30% for partial match (when not a full reject)
+        _partial_exclusion_hit = False
+        if len(matched_kws) > 0:  # Has some keywords, so not a full reject candidate
+            for _excl_name, _excl_pat in EXCLUSION_PATTERNS:
+                if _excl_pat.search(objeto_lower):
+                    confidence -= 0.30
+                    _partial_exclusion_hit = True
+                    break
+
+        # CNAE match bonus: +10% if objeto contains company CNAE description words
+        if _cnae_desc:
+            _cnae_words = {w.lower() for w in _cnae_desc.split() if len(w) > 3}
+            _obj_words = set(objeto_lower.split())
+            if _cnae_words and _cnae_words & _obj_words:
+                confidence += 0.10
+
+        # Clamp to [0.0, 1.0]
+        confidence = max(0.0, min(1.0, confidence))
+
+        # ── Compatibility gate (derived from confidence) ──
+        # Legacy check: at least 1 keyword match with density >= threshold
+        is_compatible_legacy = len(matched_kws) >= 1 and density >= density_threshold
+        # New: confidence-based
+        is_compatible = confidence >= confidence_threshold or is_compatible_legacy
+
+        ed["cnae_confidence"] = round(confidence, 4)
         ed["cnae_compatible"] = is_compatible
         ed["keyword_density"] = round(density, 4)
         ed["match_keywords"] = matched_kws
@@ -779,6 +951,7 @@ def apply_cnae_keyword_gate(
             for _excl_name, _excl_pat in EXCLUSION_PATTERNS:
                 if _excl_pat.search(objeto_lower):
                     ed["cnae_compatible"] = False
+                    ed["cnae_confidence"] = 0.0
                     ed["needs_llm_review"] = False
                     ed["exclusion_reason"] = f"exclusion_pattern: {_excl_name}"
                     stats["excluded_pattern"] += 1
@@ -786,36 +959,42 @@ def apply_cnae_keyword_gate(
 
         # Secondary heuristic classifier: resolve remaining needs_llm_review editais.
         if ed["needs_llm_review"]:
-            _cnae_desc = ed.get("cnae_principal_descricao") or ""
-            _heuristic = classify_by_object_heuristic(objeto, _cnae_desc)
             if _heuristic == 'COMPATIVEL':
                 ed["cnae_compatible"] = True
                 ed["needs_llm_review"] = False
                 ed["gate2_decision"] = {
                     "compatible": True,
                     "reason": "COMPATIVEL_HEURISTIC",
+                    "heuristic_strength": heuristic_label or "compatible",
+                    "cnae_confidence": ed["cnae_confidence"],
                     "keyword_density": ed["keyword_density"],
                     "match_keywords": ed["match_keywords"][:5],
                     "timestamp": _today().isoformat(),
                 }
                 stats["compatible"] += 1
-            else:
+                stats["needs_llm_heuristic"] = stats.get("needs_llm_heuristic", 0) + 1
+                continue
+            elif _heuristic == 'INCOMPATIVEL':
                 ed["cnae_compatible"] = False
+                ed["cnae_confidence"] = max(0.0, ed["cnae_confidence"])
                 ed["needs_llm_review"] = False
                 ed["gate2_decision"] = {
                     "compatible": False,
                     "reason": "INCOMPATIVEL_HEURISTIC",
+                    "cnae_confidence": ed["cnae_confidence"],
                     "keyword_density": ed["keyword_density"],
                     "match_keywords": ed["match_keywords"][:5],
                     "timestamp": _today().isoformat(),
                 }
                 stats["incompatible"] += 1
-            stats["needs_llm_heuristic"] = stats.get("needs_llm_heuristic", 0) + 1
-            continue
+                stats["needs_llm_heuristic"] = stats.get("needs_llm_heuristic", 0) + 1
+                continue
+            # else: NEEDS_REVIEW — keep needs_llm_review=True, let LLM decide
 
         ed["gate2_decision"] = {
             "compatible": ed["cnae_compatible"],
             "reason": ed.get("exclusion_reason", "keyword_match" if ed["cnae_compatible"] else "low_density"),
+            "cnae_confidence": ed["cnae_confidence"],
             "keyword_density": ed["keyword_density"],
             "match_keywords": ed["match_keywords"][:5],  # top 5 matches
             "timestamp": _today().isoformat(),
@@ -837,9 +1016,10 @@ def apply_cnae_keyword_gate(
     print()
     print(
         "  CNAE Gate: %d compativeis, %d incompativeis, "
-        "%d excluidos por padrao, %d precisam LLM review" % (
+        "%d excluidos por padrao, %d precisam LLM review (threshold=%.0f%%)" % (
             stats['compatible'], stats['incompatible'],
             stats['excluded_pattern'], stats['needs_llm'],
+            confidence_threshold * 100,
         )
     )
     if _heuristic_total:
@@ -1349,6 +1529,7 @@ def assemble_output(
             "pncp_errors": source_meta.get("errors", 0),
             "pncp_pagination_exhausted": source_meta.get("pagination_exhausted", []),
             "total_after_dedup": source_meta.get("total_after_xdedup", len(editais)),
+            "total_semantic_dedup_removed": source_meta.get("total_semantic_dedup_removed", 0),
             "status_temporal": status_counts,
             "total_expirados": source_meta.get("total_expirados_removidos", 0),
             "total_urgentes": status_counts.get("URGENTE", 0),
@@ -1657,6 +1838,105 @@ def collect_price_benchmarks(api: "ApiClient", editais: list[dict]) -> None:
 
 
 # ============================================================
+# DELTA DETECTION (compare against previous runs)
+# ============================================================
+
+def _detect_delta(editais: list[dict], previous_json_path: str | None) -> dict:
+    """Compare editais against a previous run to detect changes.
+
+    Marks each edital with `_delta_status`:
+      - "NOVO": not in previous run
+      - "VENCENDO": dias_restantes <= 3 and previously > 3
+      - "ATUALIZADO": valor_estimado changed by >5%
+      - "INALTERADO": no significant changes
+
+    Returns a summary dict with counts.
+    """
+    summary = {"novos": 0, "atualizados": 0, "vencendo": 0, "inalterados": 0}
+
+    if not previous_json_path or not os.path.isfile(previous_json_path):
+        # No previous run — all are new
+        for ed in editais:
+            ed["_delta_status"] = "NOVO"
+        summary["novos"] = len(editais)
+        return summary
+
+    # Load previous data
+    try:
+        with open(previous_json_path, encoding="utf-8") as f:
+            prev_data = json.load(f)
+    except Exception as e:
+        print(f"  WARN: Falha ao carregar run anterior ({previous_json_path}): {e}")
+        for ed in editais:
+            ed["_delta_status"] = "NOVO"
+        summary["novos"] = len(editais)
+        return summary
+
+    # Extract previous editais by _id
+    prev_editais = prev_data.get("editais", [])
+    prev_by_id: dict[str, dict] = {}
+    for ped in prev_editais:
+        pid = ped.get("_id", "")
+        if pid:
+            prev_by_id[pid] = ped
+
+    # Extract previous run date for metadata
+    prev_generated = prev_data.get("_metadata", {}).get("generated_at", "")
+    prev_date = prev_generated[:10] if prev_generated else "desconhecido"
+
+    for ed in editais:
+        eid = ed.get("_id", "")
+        ed["_delta_previous_run"] = prev_date
+
+        if eid not in prev_by_id:
+            ed["_delta_status"] = "NOVO"
+            summary["novos"] += 1
+            continue
+
+        prev_ed = prev_by_id[eid]
+
+        # Check "VENCENDO": dias_restantes <= 3 now, but was > 3 previously
+        dias_now = ed.get("dias_restantes")
+        dias_prev = prev_ed.get("dias_restantes")
+        if (dias_now is not None and dias_prev is not None
+                and dias_now <= 3 and dias_prev > 3):
+            ed["_delta_status"] = "VENCENDO"
+            summary["vencendo"] += 1
+            continue
+
+        # Check "ATUALIZADO": valor_estimado changed by >5%
+        val_now = _safe_float(ed.get("valor_estimado")) or 0.0
+        val_prev = _safe_float(prev_ed.get("valor_estimado")) or 0.0
+        if val_now > 0 and val_prev > 0:
+            diff_ratio = abs(val_now - val_prev) / val_prev
+            if diff_ratio > 0.05:
+                ed["_delta_status"] = "ATUALIZADO"
+                summary["atualizados"] += 1
+                continue
+
+        ed["_delta_status"] = "INALTERADO"
+        summary["inalterados"] += 1
+
+    return summary
+
+
+def _find_previous_run(cnpj14: str) -> str | None:
+    """Find the most recent intel JSON for the given CNPJ in docs/intel/."""
+    intel_dir = str(_PROJECT_ROOT / "docs" / "intel")
+    if not os.path.isdir(intel_dir):
+        return None
+
+    pattern = os.path.join(intel_dir, f"intel-{cnpj14}*.json")
+    matches = glob_mod.glob(pattern)
+    if not matches:
+        return None
+
+    # Sort by modification time descending, return most recent
+    matches.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+    return matches[0]
+
+
+# ============================================================
 # MAIN
 # ============================================================
 
@@ -1875,15 +2155,25 @@ def main():
     else:
         print(f"  Dedup cross-portal: sem duplicatas detectadas ({total_before_xdedup} editais)")
 
+    # ── Semantic dedup (token overlap within UF) ──
+    n_before_semantic = len(editais)
+    editais = _semantic_dedup(editais)
+    n_semantic_removed = n_before_semantic - len(editais)
+    source_meta["total_semantic_dedup_removed"] = n_semantic_removed
+
     # ── Step 3b: Remove expired tenders BEFORE any further processing ──
+    # NOTE: Only EXPIRADO (based on data_encerramento_proposta) causes removal.
+    # SESSAO_REALIZADA is kept as a status flag but does NOT exclude — data_abertura_proposta
+    # being in the past means proposals STARTED being accepted, not that the tender is closed.
     n_before_expiry = len(editais)
     n_expirados = sum(1 for ed in editais if ed.get("status_temporal") == "EXPIRADO")
     n_sessao_realizada = sum(1 for ed in editais if ed.get("status_temporal") == "SESSAO_REALIZADA")
-    editais = [ed for ed in editais if ed.get("status_temporal") not in ("EXPIRADO", "SESSAO_REALIZADA")]
-    n_removed = n_expirados + n_sessao_realizada
+    editais = [ed for ed in editais if ed.get("status_temporal") != "EXPIRADO"]
+    n_removed = n_expirados
     if n_removed > 0:
-        print(f"\n  Filtro temporal: {n_removed} removidos de {n_before_expiry} editais ({len(editais)} restantes) "
-              f"[{n_expirados} encerrados + {n_sessao_realizada} sessao realizada]")
+        print(f"\n  Filtro temporal: {n_removed} expirados removidos de {n_before_expiry} editais ({len(editais)} restantes)")
+    if n_sessao_realizada > 0:
+        print(f"  Info: {n_sessao_realizada} editais com sessao realizada mantidos (proposta aberta)")
     source_meta["total_expirados_removidos"] = n_removed
     source_meta["total_expirados_encerrados"] = n_expirados
     source_meta["total_sessao_realizada"] = n_sessao_realizada
@@ -1910,6 +2200,18 @@ def main():
     collect_price_benchmarks(api, editais)
 
 
+    # ── Step 6c: Delta detection (compare against previous run) ──
+    print(f"\n[6c/7] Detectando delta com run anterior...")
+    previous_run_path = _find_previous_run(cnpj14)
+    if previous_run_path:
+        print(f"  Run anterior encontrado: {previous_run_path}")
+    else:
+        print(f"  Nenhum run anterior encontrado — todos serao marcados como NOVO")
+    delta_summary = _detect_delta(editais, previous_run_path)
+    source_meta["_delta_summary"] = delta_summary
+    print(f"  Delta: {delta_summary['novos']} novos, {delta_summary['atualizados']} atualizados, "
+          f"{delta_summary['vencendo']} vencendo, {delta_summary['inalterados']} inalterados")
+
     # ── Step 7: Save output ──
     print(f"\n[7/7] Montando JSON de saida...")
     output = assemble_output(
@@ -1925,6 +2227,11 @@ def main():
         all_cnaes=all_cnaes,
         all_sector_keys=all_sector_keys,
     )
+
+    # Add delta summary to output metadata
+    output["_metadata"]["_delta_summary"] = delta_summary
+    if previous_run_path:
+        output["_metadata"]["_delta_previous_file"] = os.path.basename(previous_run_path)
 
     # Determine output path — include razao_social slug
     if args.output:
@@ -1964,6 +2271,10 @@ def main():
     st_counts = stats.get("status_temporal", {})
     st_parts = ", ".join(f"{k}={v}" for k, v in sorted(st_counts.items()))
     print(f"  Status temporal:      {st_parts or 'N/A'} (urgentes={stats['total_urgentes']})")
+    _ds = delta_summary
+    print(f"  Delta:                {_ds['novos']} novos, {_ds['atualizados']} atualizados, "
+          f"{_ds['vencendo']} vencendo, {_ds['inalterados']} inalterados")
+    print(f"  Semantic dedup:       {source_meta.get('total_semantic_dedup_removed', 0)} removidos")
     print(f"  Tempo total:          {elapsed:.1f}s")
     print(f"  Salvo em:             {out_path}")
     print(f"{'='*60}")

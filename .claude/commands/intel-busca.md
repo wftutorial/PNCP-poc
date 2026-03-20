@@ -17,6 +17,15 @@ Utiliza TODOS os CNAEs da empresa (principal + secundarios) para maxima cobertur
 - A recomendacao (PARTICIPAR / NAO PARTICIPAR) e resultado da analise, NAO criterio de exclusao do top20. Editais NAO PARTICIPAR por motivos legitimos (prazo, acervo, distancia) permanecem — o cliente precisa dessa informacao.
 - O cliente NUNCA ve editais fora do setor. Editais de medicamentos, alimentacao, TI, etc. sao filtrados antes de qualquer output.
 
+### Capacidades v4 (novo)
+
+1. **Classificacao Probabilistica** — CNAE gate agora produz `cnae_confidence` (0-100%) em vez de binario YES/NO. Threshold configuravel por setor. Compoe keyword density (40%), heuristica (30%), exclusion pattern (30%).
+2. **Perfil de Vitoria** — Analisa historico de contratos da empresa e aprende: faixa de valor preferida, modalidades com maior vitoria, porte de municipio, tipos de obra recorrentes. Score de aderencia 0-100% por edital.
+3. **Simulacao de Lance** — Para cada edital com dados de benchmark, calcula lance otimo: P(vitoria) × margem. Usa HHI, descontos historicos do orgao, margem minima do setor. Resultado: lance sugerido + faixa (agressivo/conservador) + probabilidade estimada.
+4. **Extracao Estruturada** — Templates por tipo de documento (Edital, TR, Planilha). Regex especializados extraem campos tipados (patrimonio liquido, acervo, garantias, prazo) ANTES da analise LLM, fornecendo hints que reduzem "Nao consta" de ~30% para <5%.
+5. **Delta Reporting** — Compara contra ultima execucao e marca cada edital: NOVO / ATUALIZADO / VENCENDO / INALTERADO. Excel e PDF mostram apenas mudancas relevantes.
+6. **Dedup Semantico** — Alem do dedup por hash, detecta duplicatas cross-portal: mesmo orgao + municipio + valor ±15% + objeto com >65% token overlap = mesmo edital.
+
 ---
 
 ## Execution

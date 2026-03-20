@@ -81,6 +81,20 @@ if _lib_dir not in sys.path:
     sys.path.insert(0, _lib_dir)
 from cost_estimator import estimate_proposal_cost, estimate_roi_simple
 
+# Bid simulator (v4)
+try:
+    from bid_simulator import simulate_bid
+except ImportError:
+    simulate_bid = None  # type: ignore[assignment]
+
+# Victory profile (v4)
+try:
+    from victory_profile import build_victory_profile, score_edital_fit, format_fit_label
+except ImportError:
+    build_victory_profile = None  # type: ignore[assignment]
+    score_edital_fit = None  # type: ignore[assignment]
+    format_fit_label = None  # type: ignore[assignment]
+
 # ============================================================
 # CONSTANTS
 # ============================================================
@@ -332,12 +346,87 @@ def enrich_editais(
 
     print(f"  [CUSTO] {costs_computed} estimativas de custo calculadas")
 
+    # --- 2f. Bid simulation (v4) ---
+    bids_computed = 0
+    if simulate_bid is not None:
+        cnae_principal = None
+        # Try to get CNAE from empresa context (passed via capital_social's caller)
+        # We use a simple approach: get first compatible edital's competitive_intel
+        for ed in editais:
+            if ed["_id"] not in target_ids:
+                continue
+            ci = ed.get("competitive_intel") or {}
+            bm = ed.get("price_benchmark") or {}
+            if ci or bm:
+                bid_result = simulate_bid(
+                    edital=ed,
+                    competitive_intel=ci,
+                    benchmark=bm,
+                    cnae_principal=cnae_principal,
+                )
+                ed["_bid_simulation"] = {
+                    "lance_sugerido": bid_result.lance_sugerido,
+                    "desconto_sugerido_pct": bid_result.desconto_sugerido_pct,
+                    "p_vitoria_pct": bid_result.p_vitoria_pct,
+                    "margem_liquida_pct": bid_result.margem_liquida_pct,
+                    "lance_agressivo": bid_result.lance_agressivo,
+                    "lance_conservador": bid_result.lance_conservador,
+                    "desconto_agressivo_pct": bid_result.desconto_agressivo_pct,
+                    "desconto_conservador_pct": bid_result.desconto_conservador_pct,
+                    "competidores_esperados": bid_result.competidores_esperados,
+                    "historico_contratos": bid_result.historico_contratos,
+                    "confianca": bid_result.confianca,
+                    "racional": bid_result.racional,
+                    "has_data": bid_result.has_data,
+                }
+                if bid_result.has_data:
+                    bids_computed += 1
+        print(f"  [LANCE] {bids_computed} simulações de lance calculadas")
+    else:
+        print(f"  [LANCE] Módulo bid_simulator não disponível — pulando")
+
+    # --- 2g. Victory profile fit scoring (v4) ---
+    fits_computed = 0
+    if build_victory_profile is not None and score_edital_fit is not None:
+        # Build profile from all competitive_intel contracts
+        all_contracts: list[dict] = []
+        for ed in editais:
+            ci = ed.get("competitive_intel") or {}
+            contracts = ci.get("contracts", [])
+            if contracts:
+                all_contracts.extend(contracts)
+
+        if len(all_contracts) >= 3:
+            profile = build_victory_profile(
+                all_contracts,
+                company_capital=capital_social or 0.0,
+            )
+            if profile.has_data:
+                for ed in editais:
+                    if ed["_id"] not in target_ids:
+                        continue
+                    fit = score_edital_fit(ed, profile)
+                    ed["_victory_fit"] = fit
+                    ed["_victory_fit_label"] = format_fit_label(fit)
+                    fits_computed += 1
+                print(f"  [PERFIL] {fits_computed} editais com score de aderência "
+                      f"(perfil de {profile.total_contracts} contratos)")
+            else:
+                print(f"  [PERFIL] Dados insuficientes para perfil de vitória "
+                      f"({len(all_contracts)} contratos < 3 mínimo)")
+        else:
+            print(f"  [PERFIL] Sem contratos históricos para perfil de vitória")
+    else:
+        print(f"  [PERFIL] Módulo victory_profile não disponível — pulando")
+
     return {
         "editais_enriquecidos": len(target_editais),
         "distancias_ok": sum(1 for d in distance_results.values() if d.get("km") is not None),
         "ibge_ok": ibge_ok,
         "custos_ok": costs_computed,
         "sede_geocodificada": origin is not None,
+        "bids_computed": bids_computed,
+        "fits_computed": fits_computed,
     }
 
 

@@ -563,6 +563,68 @@ def gate5_coherence(
 
 
 # ============================================================
+# V4 VALIDATION (new capabilities)
+# ============================================================
+
+def validate_v4_fields(top20: list[dict], empresa: dict) -> dict[str, Any]:
+    """Validate v4 fields: cnae_confidence, victory_fit, bid_simulation, delta."""
+    result: dict[str, Any] = {
+        "passed": True,
+        "issues": [],
+        "stats": {
+            "with_confidence": 0,
+            "with_fit": 0,
+            "with_bid": 0,
+            "with_delta": 0,
+            "with_structured": 0,
+        },
+    }
+
+    for idx, edital in enumerate(top20):
+        eid = _edital_id(edital, idx)
+
+        # cnae_confidence
+        conf = edital.get("cnae_confidence")
+        if conf is not None:
+            result["stats"]["with_confidence"] += 1
+            if not (0 <= float(conf) <= 1):
+                result["issues"].append(f"{eid}: cnae_confidence={conf} fora do range 0-1")
+                result["passed"] = False
+
+        # victory fit
+        fit = edital.get("_victory_fit")
+        if fit is not None:
+            result["stats"]["with_fit"] += 1
+            if not (0 <= float(fit) <= 1):
+                result["issues"].append(f"{eid}: _victory_fit={fit} fora do range 0-1")
+                result["passed"] = False
+
+        # bid simulation
+        bid = edital.get("_bid_simulation")
+        if bid and isinstance(bid, dict):
+            result["stats"]["with_bid"] += 1
+            if bid.get("has_data") and bid.get("lance_sugerido", 0) <= 0:
+                result["issues"].append(f"{eid}: bid has_data=true mas lance_sugerido <= 0")
+                result["passed"] = False
+
+        # delta
+        delta = edital.get("_delta_status")
+        if delta:
+            result["stats"]["with_delta"] += 1
+            valid_deltas = {"NOVO", "ATUALIZADO", "VENCENDO", "INALTERADO"}
+            if delta not in valid_deltas:
+                result["issues"].append(f"{eid}: _delta_status='{delta}' invalido")
+                result["passed"] = False
+
+        # structured extraction
+        struct = edital.get("_structured_extraction")
+        if struct and isinstance(struct, dict):
+            result["stats"]["with_structured"] += 1
+
+    return result
+
+
+# ============================================================
 # MAIN
 # ============================================================
 
@@ -619,6 +681,21 @@ def main() -> None:
     _header("GATE 5: Coerencia do Relatorio")
     gate5_result, gate5_removed = gate5_coherence(top20, do_fix=args.fix)
 
+    # ── V4 Fields Validation ──
+    _header("V4: Campos de Inteligencia Avancada")
+    v4_result = validate_v4_fields(top20, empresa)
+    stats = v4_result["stats"]
+    print(f"  Confianca CNAE:     {stats['with_confidence']}/{len(top20)} editais")
+    print(f"  Aderencia perfil:   {stats['with_fit']}/{len(top20)} editais")
+    print(f"  Simulacao lance:    {stats['with_bid']}/{len(top20)} editais")
+    print(f"  Status delta:       {stats['with_delta']}/{len(top20)} editais")
+    print(f"  Extracao estrut.:   {stats['with_structured']}/{len(top20)} editais")
+    if v4_result["issues"]:
+        for issue in v4_result["issues"]:
+            _fail(issue)
+    else:
+        _ok("Campos v4 validos")
+
     # Combine all removed editais
     all_removed = []
     for e in gate2_removed:
@@ -655,6 +732,11 @@ def main() -> None:
                 "passed": gate5_result["passed"],
                 "campos_completos_pct": gate5_result["campos_completos_pct"],
                 "issues": gate5_result["issues"],
+            },
+            "v4_fields": {
+                "passed": v4_result["passed"],
+                "stats": v4_result["stats"],
+                "issues": v4_result["issues"],
             },
         },
         "overall_passed": overall_passed,

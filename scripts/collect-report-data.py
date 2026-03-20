@@ -160,23 +160,19 @@ REQUEST_TIMEOUT = 30.0
 CNAE_KEYWORD_REFINEMENTS = {
     "4120": {  # Construção de edifícios
         "exclude_patterns": [
-            "pavimentação", "pavimentacao", "pavimentação asfáltica", "pavimentacao asfaltica",
-            "recapeamento", "recapeamento asfaltico", "recapeamento asfáltico",
-            "asfalto", "asfaltamento",
+            # Keep: structures genuinely outside building construction
             "ponte", "viaduto", "passarela",
             "barragem", "reservatório", "reservatorio",
-            "saneamento básico", "saneamento basico",
-            "esgoto", "estação de tratamento", "estacao de tratamento",
-            "topografia", "sondagem geotécnica", "sondagem geotecnica", "sondagem spt", "sondagem de solo",
-            "fiscalização de obra", "fiscalizacao de obra",
-            "supervisão de obra", "supervisao de obra",
-            "gerenciamento de obra",
-            "laudo técnico", "laudo tecnico",
-            "projeto arquitetônico", "projeto arquitetonico",
-            "revitalização urbana", "revitalizacao urbana",
+            # Keep: heritage restoration (specialized niche)
             "restauração de patrimônio", "restauracao de patrimonio",
             "restauração de fachada", "restauracao de fachada",
             "restauração de edifício", "restauracao de edificio",
+            # Removed: pavimentacao/asfalto (site paving is part of construction)
+            # Removed: saneamento/esgoto (often included in building projects)
+            # Removed: topografia/sondagem (preliminary studies for construction)
+            # Removed: fiscalizacao/supervisao/gerenciamento (engineering services)
+            # Removed: laudo tecnico/projeto arquitetonico (design services)
+            # Removed: revitalizacao urbana (often includes building work)
         ],
         "extra_include": [
             "unidade habitacional", "casa popular", "habitação popular", "habitacao popular",
@@ -241,18 +237,25 @@ CNAE_KEYWORD_REFINEMENTS = {
 # the edital is marked as incompatible and vetoed from recommendation.
 CNAE_INCOMPATIBLE_OBJECTS: dict[str, list[str]] = {
     "4120": [  # Construção de edifícios — NOT compatible with:
-        r"\bpavimenta[çc][ãa]o\b", r"\basfalto\b", r"\basfaltamento\b",
-        r"\brecapeamento\b", r"\bcbuq\b",
+        # Keep: genuinely different infrastructure
         r"\bponte\b", r"\bviaduto\b", r"\bpassarela\b",
         r"\bbarragem\b", r"\breservat[oó]rio\b",
-        r"\bsaneamento\b", r"\besgoto\b", r"\btratamento de [aáe]\b",
-        r"\btopografia\b", r"\bsondagem\b", r"\bgeot[eé]cnic\b",
-        r"\bconsultoria\b", r"\bsupervis[ãa]o\b", r"\bfiscaliza[çc][ãa]o\b",
+        # Keep: logistics/transport (not construction)
         r"\btransporte\b", r"\bfrete\b", r"\bcaminh[ãa]o\b",
-        r"\blavanderia\b", r"\blimpeza\b", r"\bzeladoria\b",
-        r"\bmedicamento\b", r"\bhospitalar\b", r"\bsa[uú]de\b",
+        # Keep: facility services (not construction)
+        r"\blavanderia\b", r"\bzeladoria\b",
+        # Keep: food/medical (clearly different sectors)
+        r"\bmedicamento\b", r"\bhospitalar\b",
         r"\baliment[aío]\b", r"\bmerenda\b", r"\brefeição\b",
-        r"\bmobili[aá]rio\b", r"\bm[oó]vel\b", r"\bm[oó]veis\b",
+        # Keep: consulting (pure advisory, not execution)
+        r"\bconsultoria\b",
+        # Removed: pavimentacao/asfalto/recapeamento/cbuq (paving is construction)
+        # Removed: saneamento/esgoto (sanitation is construction)
+        # Removed: topografia/sondagem/geotecnica (prelim studies for construction)
+        # Removed: supervisao/fiscalizacao (engineering services)
+        # Removed: limpeza (limpeza de terreno = site clearing)
+        # Removed: saude (unidade de saude = common building target)
+        # Removed: mobiliario/moveis (often part of renovation scope)
     ],
     "4211": [  # Rodovias/ferrovias — NOT compatible with:
         r"\bedifica[çc][ãa]o\b", r"\bpr[eé]dio\b", r"\bescola\b",
@@ -3826,7 +3829,8 @@ HARD_EXCLUSIONS_ENGENHARIA: frozenset[str] = frozenset({
     "combustível", "abastecimento de combustivel", "recarga de toner", "cartuchos",
     "locação de veículos", "locacao de veiculos",
     "serviço de copa", "servico de copa",
-    "jardinagem", "paisagismo ornamental",
+    "jardinagem",
+    # Removed: "paisagismo ornamental" (often part of construction landscaping)
     "coleta de lixo", "coleta de residuos solidos",
     "transporte escolar",
     "fornecimento de refeição", "fornecimento de refeicao",
@@ -3836,8 +3840,8 @@ HARD_EXCLUSIONS_ENGENHARIA: frozenset[str] = frozenset({
     "material de limpeza",
     "detergente", "desinfetante", "papel higiênico", "papel higienico",
     "papel toalha",
-    "ar condicionado", "aparelho de ar condicionado",
-    "mobiliário", "mobiliario", "móveis", "moveis",
+    # Removed: "ar condicionado" (often part of building construction scope)
+    # Removed: "mobiliario"/"moveis" (often part of building renovation scope)
     "equipamento de informática", "equipamento de informatica",
     "computador", "notebook", "impressora",
     "medicamento", "material hospitalar", "material médico", "material medico",

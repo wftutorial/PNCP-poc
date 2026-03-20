@@ -869,6 +869,88 @@ def _build_sumario_executivo(data: dict, styles: dict) -> list:
     return el
 
 
+def _build_delta_section(data: dict, styles: dict) -> list:
+    """Delta section: changes since last analysis run."""
+    meta = data.get("meta", {})
+    delta = meta.get("_delta_summary") if isinstance(meta, dict) else None
+    if not delta or not isinstance(delta, dict):
+        return []
+
+    el: list = []
+    avail = PAGE_WIDTH - 2 * MARGIN
+
+    data_anterior = _s(delta.get("data_anterior", ""))
+    titulo = f"Mudanças desde última análise ({data_anterior})" if data_anterior else "Mudanças desde última análise"
+    el.extend(_section_heading(titulo, styles))
+    el.append(Spacer(1, 2 * mm))
+
+    novos = delta.get("novos", 0)
+    atualizados = delta.get("atualizados", 0)
+    vencendo = delta.get("vencendo_3dias", 0)
+    sem_alteracao = delta.get("sem_alteracao", 0)
+
+    # Green bullet — novos
+    if novos > 0:
+        el.append(Paragraph(
+            f'<font color="{SIGNAL_GREEN.hexval()}">●</font> '
+            f'<b>{novos}</b> {_plural(novos, "novo edital identificado", "novos editais identificados")}',
+            styles["bullet"],
+        ))
+
+    # Blue bullet — atualizados
+    if atualizados > 0:
+        el.append(Paragraph(
+            f'<font color="{LINK_BLUE.hexval()}">●</font> '
+            f'<b>{atualizados}</b> {_plural(atualizados, "edital com valor atualizado", "editais com valor atualizado")}',
+            styles["bullet"],
+        ))
+
+    # Red bullet — vencendo (bold)
+    if vencendo > 0:
+        el.append(Paragraph(
+            f'<font color="{SIGNAL_RED.hexval()}">●</font> '
+            f'<b>{vencendo}</b> {_plural(vencendo, "edital vencendo em até 3 dias", "editais vencendo em até 3 dias")}',
+            ParagraphStyle(
+                "delta_urgent", parent=styles["bullet"],
+                fontName="Times-Bold",
+            ),
+        ))
+
+    # Gray bullet — sem alteração (smaller)
+    if sem_alteracao > 0:
+        el.append(Paragraph(
+            f'<font color="{TEXT_MUTED.hexval()}">●</font> '
+            f'{sem_alteracao} {_plural(sem_alteracao, "edital sem alteração", "editais sem alteração")}',
+            styles["bullet_small"],
+        ))
+
+    # Red alert box if vencendo > 0
+    if vencendo > 0:
+        el.append(Spacer(1, 3 * mm))
+        alert_text = (
+            f'<b>AÇÃO IMEDIATA:</b> {vencendo} '
+            f'{_plural(vencendo, "edital encerra", "editais encerram")} em até 3 dias'
+        )
+        alert_para = Paragraph(alert_text, ParagraphStyle(
+            "delta_alert", parent=styles["body"],
+            fontName="Helvetica-Bold", fontSize=9, textColor=colors.white,
+            leading=12,
+        ))
+        alert_table = Table([[alert_para]], colWidths=[avail - 10 * mm])
+        alert_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), SIGNAL_RED),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+            ("ROUNDEDCORNERS", [3, 3, 3, 3]),
+        ]))
+        el.append(alert_table)
+
+    el.append(Spacer(1, 4 * mm))
+    return el
+
+
 def _build_perfil_e_mapa(data: dict, styles: dict) -> list:
     """Page 3: Perfil da Empresa + Mapa de Oportunidades."""
     el: list = []
@@ -1085,13 +1167,17 @@ def _build_edital_detail(idx: int, ed: dict, styles: dict) -> list:
     elements.append(rule_t)
     elements.append(Spacer(1, 2 * mm))
 
-    # Title (clickable link to PNCP)
+    # Title (clickable link to PNCP) + NOVO badge if delta status
     objeto = _smart_trunc(ed.get("objeto", "Sem objeto"), 80)
     link = _fix_pncp_link(ed.get("link") or ed.get("link_pncp") or ed.get("link_edital", ""))
+    delta_status = ed.get("_delta_status", "")
+    novo_badge = ""
+    if delta_status == "NOVO":
+        novo_badge = f' <font color="{SIGNAL_GREEN.hexval()}" size="8"><b>[NOVO]</b></font>'
     if link:
-        title_text = f'#{idx} — <a href="{link}" color="#1a56db">{objeto}</a>'
+        title_text = f'#{idx} — <a href="{link}" color="#1a56db">{objeto}</a>{novo_badge}'
     else:
-        title_text = f"#{idx} — {objeto}"
+        title_text = f"#{idx} — {objeto}{novo_badge}"
     elements.append(Paragraph(title_text, styles["edital_title"]))
 
     # Metadata line
@@ -1101,6 +1187,28 @@ def _build_edital_detail(idx: int, ed: dict, styles: dict) -> list:
     modalidade = _s(ed.get("modalidade", ""))
     loc = f"{uf} — {municipio}" if municipio else uf
     meta_parts = [p for p in [orgao, loc, modalidade] if p]
+
+    # Enhancement 3: cnae_confidence + victory_fit_label in metadata row
+    cnae_conf = ed.get("cnae_confidence")
+    if cnae_conf is not None:
+        try:
+            cnae_pct = int(float(cnae_conf) * 100) if float(cnae_conf) <= 1 else int(float(cnae_conf))
+        except (ValueError, TypeError):
+            cnae_pct = None
+        if cnae_pct is not None:
+            conf_color = SIGNAL_GREEN if cnae_pct >= 70 else SIGNAL_AMBER if cnae_pct >= 40 else SIGNAL_RED
+            meta_parts.append(f'<font color="{conf_color.hexval()}">Compatibilidade: {cnae_pct}%</font>')
+
+    fit_label = ed.get("_victory_fit_label")
+    if fit_label:
+        fit_upper = str(fit_label).upper()
+        fit_color = (
+            SIGNAL_GREEN if fit_upper in ("EXCELENTE", "ÓTIMO", "OTIMO") else
+            SIGNAL_AMBER if fit_upper in ("BOM", "MODERADO") else
+            SIGNAL_RED if fit_upper in ("BAIXO", "FRACO") else TEXT_SECONDARY
+        )
+        meta_parts.append(f'<font color="{fit_color.hexval()}">Aderência ao Perfil: {_s(fit_label)}</font>')
+
     if meta_parts:
         elements.append(Paragraph(" | ".join(meta_parts), styles["edital_meta"]))
 
@@ -1229,6 +1337,73 @@ def _build_edital_detail(idx: int, ed: dict, styles: dict) -> list:
         bench_text += f" | Desconto mediano do órgão: <b>{desc_med:.0%}</b> (base: {n} contratos)"
 
         elements.append(Paragraph(bench_text, styles["edital_meta"]))
+
+    # --- Bid Simulation ---
+    bid_sim = ed.get("_bid_simulation", {})
+    if isinstance(bid_sim, dict) and bid_sim.get("lance_sugerido") is not None:
+        elements.append(Paragraph("SIMULAÇÃO DE LANCE", styles["subsection"]))
+
+        lance = _currency(bid_sim.get("lance_sugerido"))
+        desconto = bid_sim.get("desconto_pct", 0)
+        desc_text = f"{desconto:.1f}%" if isinstance(desconto, (int, float)) else str(desconto)
+        elements.append(Paragraph(
+            f"Lance sugerido: <b>{lance}</b> (desconto {desc_text})",
+            styles["bullet"],
+        ))
+
+        # Range: agressivo — conservador
+        val_agr = bid_sim.get("lance_agressivo")
+        val_cons = bid_sim.get("lance_conservador")
+        desc_agr = bid_sim.get("desconto_agressivo_pct")
+        desc_cons = bid_sim.get("desconto_conservador_pct")
+        if val_agr is not None and val_cons is not None:
+            agr_desc = f", desc {desc_agr:.1f}%" if isinstance(desc_agr, (int, float)) else ""
+            cons_desc = f", desc {desc_cons:.1f}%" if isinstance(desc_cons, (int, float)) else ""
+            elements.append(Paragraph(
+                f"Faixa: {_currency(val_agr)} (agressivo{agr_desc}) a {_currency(val_cons)} (conservador{cons_desc})",
+                styles["bullet_small"],
+            ))
+
+        # P(vitória)
+        p_vitoria = bid_sim.get("probabilidade_vitoria")
+        if p_vitoria is not None:
+            try:
+                pv = float(p_vitoria)
+                pv_pct = pv * 100 if pv <= 1 else pv
+            except (ValueError, TypeError):
+                pv_pct = None
+            if pv_pct is not None:
+                pv_color = SIGNAL_GREEN if pv_pct >= 50 else SIGNAL_AMBER if pv_pct >= 30 else SIGNAL_RED
+                elements.append(Paragraph(
+                    f'P(vitória) estimada: <font color="{pv_color.hexval()}"><b>{pv_pct:.0f}%</b></font>',
+                    styles["bullet"],
+                ))
+
+        # Margem líquida
+        margem = bid_sim.get("margem_liquida_pct")
+        if margem is not None:
+            try:
+                m_text = f"{float(margem):.1f}%"
+            except (ValueError, TypeError):
+                m_text = str(margem)
+            elements.append(Paragraph(
+                f"Margem líquida projetada: {m_text}",
+                styles["bullet_small"],
+            ))
+
+        # Confidence note
+        n_contratos = bid_sim.get("contratos_base", 0)
+        confianca = _s(bid_sim.get("confianca", ""))
+        note_parts = []
+        if n_contratos:
+            note_parts.append(f"Baseado em {n_contratos} contratos do órgão")
+        if confianca:
+            note_parts.append(f"Confiança: {confianca.upper()}")
+        if note_parts:
+            elements.append(Paragraph(
+                ". ".join(note_parts),
+                styles["caption"],
+            ))
 
     # If no analise, show placeholder
     if not analise:
@@ -1676,6 +1851,9 @@ def generate_intel_report(data: dict, output_path: str) -> str:
 
     # Page 2: Sumário Executivo
     elements.extend(_build_sumario_executivo(data, styles))
+
+    # Delta section (changes since last run) — after executive summary
+    elements.extend(_build_delta_section(data, styles))
 
     # Page 3: Perfil + Mapa
     elements.extend(_build_perfil_e_mapa(data, styles))

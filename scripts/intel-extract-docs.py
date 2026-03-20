@@ -93,6 +93,20 @@ except ImportError:
     _XLRD_OK = False
     print("WARN: xlrd not installed — XLS files will be skipped. Run: pip install xlrd")
 
+# ── Structured extraction templates (optional) ──
+try:
+    from lib.doc_templates import extract_structured, detect_doc_type, merge_extractions, DocType
+    _DOC_TEMPLATES_OK = True
+except ImportError:
+    _DOC_TEMPLATES_OK = False
+
+# ── Victory profile (optional) ──
+try:
+    from lib.victory_profile import build_victory_profile, score_edital_fit, format_fit_label
+    _VICTORY_PROFILE_OK = True
+except ImportError:
+    _VICTORY_PROFILE_OK = False
+
 
 # ============================================================
 # TEXT EXTRACTION — PDF
@@ -441,12 +455,15 @@ def process_edital(edital: dict[str, Any], idx: int, total: int) -> None:
     tmpdir = tempfile.mkdtemp(prefix="intel_edital_")
     try:
         all_text_parts: list[str] = []
+        # Track (doc_metadata, extracted_text) pairs for structured extraction
+        doc_text_pairs: list[tuple[dict[str, Any], str]] = []
         success_count = 0
 
         for doc in to_download:
             text = download_and_extract(doc, tmpdir)
             if text and text.strip():
                 all_text_parts.append(text.strip())
+                doc_text_pairs.append((doc, text.strip()))
                 success_count += 1
             time.sleep(DOWNLOAD_RATE_LIMIT_S)
 
@@ -457,6 +474,39 @@ def process_edital(edital: dict[str, Any], idx: int, total: int) -> None:
 
         edital["texto_documentos"] = combined
         print(f"  Extraído: {len(combined):,} chars de {success_count}/{len(to_download)} documentos")
+
+        # ── Structured extraction by document type ──
+        if _DOC_TEMPLATES_OK and doc_text_pairs:
+            extractions = []
+            for doc_meta, text_part in doc_text_pairs:
+                doc_titulo = doc_meta.get("titulo") or doc_meta.get("tipo") or ""
+                doc_filename = (doc_meta.get("download_url") or "").rsplit("/", 1)[-1]
+                detected_type = detect_doc_type(doc_titulo, doc_filename)
+                extraction = extract_structured(text_part, detected_type)
+                extractions.append(extraction)
+
+            if extractions:
+                merged = merge_extractions(extractions)
+                total_fields = sum(ext.total_fields for ext in extractions)
+                found_count = sum(1 for f in merged.values() if f.found)
+                completeness = round(found_count / max(len(merged), 1) * 100, 1) if merged else 0.0
+                doc_types_processed = list({
+                    ext.doc_type.value for ext in extractions if ext.doc_type != DocType.UNKNOWN
+                })
+
+                edital["_structured_extraction"] = {
+                    "fields": {
+                        name: {
+                            "found": f.found,
+                            "value": f.value,
+                            "confidence": f.confidence,
+                        }
+                        for name, f in merged.items()
+                    },
+                    "completeness_pct": completeness,
+                    "doc_types_processed": doc_types_processed,
+                }
+                print(f"  Extração estruturada: {found_count} campos encontrados, {completeness}% completude, tipos: {doc_types_processed}")
 
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
@@ -484,8 +534,19 @@ def _dedup_key(e: dict[str, Any]) -> str:
     return f"{uf}|{valor}|{obj[:100]}"
 
 
-def calculate_opportunity_score(edital: dict[str, Any], capacidade_10x: float) -> float:
-    """Score editais for top20 ranking. Higher = better opportunity."""
+def calculate_opportunity_score(
+    edital: dict[str, Any],
+    capacidade_10x: float,
+    victory_profile: Any = None,
+) -> float:
+    """Score editais for top20 ranking. Higher = better opportunity.
+
+    Args:
+        edital: Edital dict with valor_estimado, distancia, status_temporal, etc.
+        capacidade_10x: Company capacity (capital_social * 10).
+        victory_profile: Optional VictoryProfile from lib.victory_profile.
+            When provided and has_data, blends historical fit into the score.
+    """
     valor = edital.get('valor_estimado') or 0
     dist_km = (edital.get('distancia') or {}).get('km')
     status = edital.get('status_temporal', 'PLANEJAVEL')
@@ -513,8 +574,18 @@ def calculate_opportunity_score(edital: dict[str, Any], capacidade_10x: float) -
     # Temporal bonus
     temporal_bonus = {'URGENTE': 0.10, 'IMINENTE': 0.05, 'PLANEJAVEL': 0.0, 'SEM_DATA': -0.05}.get(status, 0)
 
-    # Final score
-    score = base_score * (1 - dist_penalty) + temporal_bonus
+    # Existing score (unchanged when no victory_profile)
+    existing_score = base_score * (1 - dist_penalty) + temporal_bonus
+
+    # Victory profile blending
+    if _VICTORY_PROFILE_OK and victory_profile is not None and hasattr(victory_profile, 'has_data') and victory_profile.has_data:
+        fit_score = score_edital_fit(edital, victory_profile)
+        edital['_victory_fit'] = round(fit_score, 4)
+        edital['_victory_fit_label'] = format_fit_label(fit_score)
+        score = 0.6 * existing_score + 0.4 * fit_score
+    else:
+        score = existing_score
+
     return round(score, 4)
 
 
@@ -522,10 +593,15 @@ def select_top_editais(
     editais: list[dict[str, Any]],
     capital_social: float,
     top_n: int,
+    victory_profile: Any = None,
 ) -> list[dict[str, Any]]:
     """
     Filter editais by CNAE compatibility + valor capacity, dedup, sort by opportunity
     score (valor × proximity × urgency), return top N.
+
+    Args:
+        victory_profile: Optional VictoryProfile. When provided, blends historical
+            fit into opportunity scoring (0.6 existing + 0.4 victory fit).
     """
     capacidade_10x = capital_social * 10
     capacidade_3x = capital_social * 3
@@ -558,7 +634,7 @@ def select_top_editais(
 
     # Score and sort by opportunity score desc
     for e in candidates:
-        e['_opportunity_score'] = calculate_opportunity_score(e, capacidade_10x)
+        e['_opportunity_score'] = calculate_opportunity_score(e, capacidade_10x, victory_profile)
     candidates.sort(key=lambda e: e.get('_opportunity_score') or 0, reverse=True)
     return candidates[:top_n]
 
@@ -628,6 +704,32 @@ def main() -> None:
     print(f"Capital social: R$ {capital_social:,.2f} | Capacidade estimada: R$ {capacidade:,.2f}")
     print(f"Total de editais na base: {len(editais)}")
 
+    # ── Build victory profile from competitive_intel (if available) ──
+    victory_profile = None
+    if _VICTORY_PROFILE_OK:
+        all_contracts: list[dict[str, Any]] = []
+        # Collect contracts from competitive_intel across all editais
+        for ed in editais:
+            ci = ed.get("competitive_intel") or {}
+            contracts_list = ci.get("contratos") or ci.get("contracts") or []
+            if isinstance(contracts_list, list):
+                all_contracts.extend(contracts_list)
+        # Also check top-level competitive_intel
+        top_ci = data.get("competitive_intel") or {}
+        top_contracts = top_ci.get("contratos") or top_ci.get("contracts") or []
+        if isinstance(top_contracts, list):
+            all_contracts.extend(top_contracts)
+
+        if all_contracts:
+            victory_profile = build_victory_profile(all_contracts, capital_social)
+            if victory_profile.has_data:
+                print(f"Perfil de vitória: {victory_profile.total_contracts} contratos, "
+                      f"valor médio R$ {victory_profile.valor_mean:,.0f}, "
+                      f"UFs: {list(victory_profile.uf_weights.keys())[:5]}")
+            else:
+                print(f"Perfil de vitória: apenas {victory_profile.total_contracts} contrato(s) — mínimo 3 necessários, ignorando")
+                victory_profile = None
+
     # ── Filter + select top N ──
     if args.preserve_top20 and data.get("top20"):
         top = data["top20"]
@@ -646,7 +748,7 @@ def main() -> None:
             f"{len(top)} no top20 preservado"
         )
     else:
-        top = select_top_editais(editais, capital_social, args.top)
+        top = select_top_editais(editais, capital_social, args.top, victory_profile)
 
         compat_total = sum(1 for e in editais if e.get("cnae_compatible"))
         print(

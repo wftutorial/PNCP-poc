@@ -706,7 +706,7 @@ def _build_funil(data: dict, styles: dict) -> list:
     funnel_steps = [
         (str(total_bruto), "editais publicados", f"PNCP — {ufs} — últimos {dias} dias"),
         (str(total_ativos), "com prazo vigente", f"{total_expirados} expirados removidos antes de qualquer análise"),
-        (str(total_compat), "compatíveis com CNAE", f"filtro por {len(empresa.get('cnaes', []) or [''])} códigos de atividade"),
+        (str(total_compat), "compatíveis com CNAE", f"filtro por {1 + len([c for c in (empresa.get('cnaes_secundarios') or '').split(',') if c.strip()])} códigos de atividade"),
         (str(total_dentro), "dentro da capacidade", f"limite: {_currency_short(cap_10x)} (10× capital social)"),
         (str(total_analisados), "analisados em profundidade", "documentos baixados e revisados individualmente"),
         (str(total_recomendados), "RECOMENDADOS", "viabilidade técnica e econômica confirmada"),
@@ -766,9 +766,10 @@ def _build_sumario_executivo(data: dict, styles: dict) -> list:
     # Metrics row — 4 big numbers
     total_compat = estatisticas.get("total_cnae_compativel", len(data.get("editais", [])))
     dentro_capacidade = estatisticas.get("total_dentro_capacidade", total_compat)
-    recomendados = len(top20)
+    _participar = [e for e in top20 if (e.get("analise") or {}).get("recomendacao_acao", "").upper().startswith("PARTICIPAR")]
+    recomendados = len(_participar)
 
-    valor_total = sum(_safe_float(e.get("valor_estimado")) for e in top20)
+    valor_total = sum(_safe_float(e.get("valor_estimado")) for e in _participar)
 
     avail = PAGE_WIDTH - 2 * MARGIN
     col_w = avail / 4
@@ -1034,7 +1035,22 @@ def _build_perfil_e_mapa(data: dict, styles: dict) -> list:
 
             sicaf_text = sicaf_status
             if crc_status:
-                sicaf_text += f" — CRC: {crc_status}"
+                # Avoid duplicate CRC if sicaf_status already contains it
+                if "CRC:" not in sicaf_status:
+                    sicaf_text += f" — CRC: {crc_status}"
+                else:
+                    # Deduplicate: keep first CRC mention, append Restrições if present
+                    crc_m = re.search(r"CRC:\s*[^,—]+", sicaf_status)
+                    rest_m = re.search(r"Restrições:\s*[^,—]+", sicaf_status)
+                    parts = []
+                    base = sicaf_status.split("CRC:")[0].strip().rstrip("—").rstrip(" —").strip()
+                    if base:
+                        parts.append(base)
+                    if crc_m:
+                        parts.append(crc_m.group(0).strip())
+                    if rest_m:
+                        parts.append(rest_m.group(0).strip())
+                    sicaf_text = " — ".join(parts) if parts else sicaf_status
 
             cadastral_rows.append([
                 Paragraph("SICAF", styles["cell_header"]),
@@ -1099,7 +1115,10 @@ def _build_perfil_e_mapa(data: dict, styles: dict) -> list:
     el.extend(_section_heading("Mapa de Oportunidades", styles))
     el.append(Spacer(1, 2 * mm))
 
-    if top20:
+    # Only show editais that have analise populated
+    top20_pdf = [e for e in top20 if e.get("analise")]
+
+    if top20_pdf:
         header = [
             Paragraph("#", styles["cell_header_center"]),
             Paragraph("Objeto", styles["cell_header"]),
@@ -1110,7 +1129,7 @@ def _build_perfil_e_mapa(data: dict, styles: dict) -> list:
             Paragraph("Dificuldade", styles["cell_header_center"]),
         ]
         rows = [header]
-        for idx, ed in enumerate(top20, 1):
+        for idx, ed in enumerate(top20_pdf, 1):
             analise = ed.get("analise", {})
             dif = (analise.get("nivel_dificuldade") or "").upper()
             dif_color = DIFFICULTY_STYLES.get(dif, TEXT_COLOR)
@@ -1200,14 +1219,24 @@ def _build_edital_detail(idx: int, ed: dict, styles: dict) -> list:
             meta_parts.append(f'<font color="{conf_color.hexval()}">Compatibilidade: {cnae_pct}%</font>')
 
     fit_label = ed.get("_victory_fit_label")
-    if fit_label:
-        fit_upper = str(fit_label).upper()
-        fit_color = (
-            SIGNAL_GREEN if fit_upper in ("EXCELENTE", "ÓTIMO", "OTIMO") else
-            SIGNAL_AMBER if fit_upper in ("BOM", "MODERADO") else
-            SIGNAL_RED if fit_upper in ("BAIXO", "FRACO") else TEXT_SECONDARY
-        )
-        meta_parts.append(f'<font color="{fit_color.hexval()}">Aderência ao Perfil: {_s(fit_label)}</font>')
+    if not fit_label:
+        # Derive from cnae_confidence when _victory_fit_label is absent
+        _cnae_c = ed.get("cnae_confidence")
+        if _cnae_c is not None:
+            try:
+                _cnae_v = float(_cnae_c)
+            except (ValueError, TypeError):
+                _cnae_v = 0.5
+            fit_label = "Alto" if _cnae_v >= 0.9 else ("Moderado" if _cnae_v >= 0.6 else "Baixo")
+        else:
+            fit_label = "Moderado"
+    fit_upper = str(fit_label).upper()
+    fit_color = (
+        SIGNAL_GREEN if fit_upper in ("EXCELENTE", "ÓTIMO", "OTIMO", "ALTO") else
+        SIGNAL_AMBER if fit_upper in ("BOM", "MODERADO") else
+        SIGNAL_RED if fit_upper in ("BAIXO", "FRACO") else TEXT_SECONDARY
+    )
+    meta_parts.append(f'<font color="{fit_color.hexval()}">Aderência ao Perfil: {_s(fit_label)}</font>')
 
     if meta_parts:
         elements.append(Paragraph(" | ".join(meta_parts), styles["edital_meta"]))
@@ -1253,18 +1282,42 @@ def _build_edital_detail(idx: int, ed: dict, styles: dict) -> list:
         tipo_label = " (eletrônica)" if tipo == "eletronica" else ""
         geo_parts.append(f"Custo proposta{tipo_label}: <b>{_currency(cost_data['total'])}</b>")
 
-    if isinstance(roi_data, dict) and roi_data.get("classificacao"):
-        roi_class = roi_data["classificacao"]
-        roi_color = "#1B7A3D" if roi_class in ("EXCELENTE", "BOM") else (
-            "#B5342A" if roi_class in ("MARGINAL", "DESFAVORAVEL") else "#B8860B"
-        )
-        retorno_label = {
-            "EXCELENTE": "Retorno excelente",
-            "BOM": "Bom retorno",
-            "MODERADO": "Retorno moderado",
-            "MARGINAL": "Retorno marginal",
-            "DESFAVORAVEL": "Retorno desfavorável",
-        }.get(roi_class, roi_class)
+    # Calculate retorno label from actual ROI and distance
+    _valor_est = _safe_float(ed.get("valor_estimado"))
+    _custo_prop = cost_data.get("total") if isinstance(cost_data, dict) else None
+    _dist_km_val = dist_data.get("km") if isinstance(dist_data, dict) else None
+    _roi_ratio = (_valor_est / float(_custo_prop)) if _custo_prop and float(_custo_prop) > 0 else None
+
+    if _roi_ratio is not None or (isinstance(roi_data, dict) and roi_data.get("classificacao")):
+        # Derive retorno_label from ROI + distance
+        if _roi_ratio is not None and _dist_km_val is not None:
+            if _roi_ratio > 5000 and _dist_km_val < 300:
+                retorno_label = "Retorno excelente"
+                roi_color = "#1B7A3D"
+            elif _roi_ratio > 2000 or _dist_km_val < 200:
+                retorno_label = "Bom retorno"
+                roi_color = "#1B7A3D"
+            elif _dist_km_val > 500:
+                retorno_label = "Retorno questionável"
+                roi_color = "#B5342A"
+            else:
+                retorno_label = "Retorno moderado"
+                roi_color = "#B8860B"
+        elif isinstance(roi_data, dict) and roi_data.get("classificacao"):
+            roi_class = roi_data["classificacao"]
+            roi_color = "#1B7A3D" if roi_class in ("EXCELENTE", "BOM") else (
+                "#B5342A" if roi_class in ("MARGINAL", "DESFAVORAVEL") else "#B8860B"
+            )
+            retorno_label = {
+                "EXCELENTE": "Retorno excelente",
+                "BOM": "Bom retorno",
+                "MODERADO": "Retorno moderado",
+                "MARGINAL": "Retorno marginal",
+                "DESFAVORAVEL": "Retorno desfavorável",
+            }.get(roi_class, roi_class)
+        else:
+            retorno_label = "Retorno moderado"
+            roi_color = "#B8860B"
         geo_parts.append(f'<font color="{roi_color}"><b>{retorno_label}</b></font>')
 
     if isinstance(ibge_data, dict) and ibge_data.get("populacao"):
@@ -1340,7 +1393,10 @@ def _build_edital_detail(idx: int, ed: dict, styles: dict) -> list:
 
     # --- Bid Simulation ---
     bid_sim = ed.get("_bid_simulation", {})
-    if isinstance(bid_sim, dict) and bid_sim.get("lance_sugerido") is not None:
+    _bid_desconto = bid_sim.get("desconto_pct", 0) if isinstance(bid_sim, dict) else 0
+    _bid_confianca = (bid_sim.get("confianca") or "").upper() if isinstance(bid_sim, dict) else ""
+    _bid_skip = (isinstance(_bid_desconto, (int, float)) and _bid_desconto == 0 and _bid_confianca in ("INSUFICIENTE", ""))
+    if isinstance(bid_sim, dict) and bid_sim.get("lance_sugerido") is not None and not _bid_skip:
         elements.append(Paragraph("SIMULAÇÃO DE LANCE", styles["subsection"]))
 
         lance = _currency(bid_sim.get("lance_sugerido"))
@@ -1507,14 +1563,16 @@ def _build_analise_individual(data: dict, styles: dict) -> list:
     """Pages 4-13: Individual analysis of top 20 editais, 2 per page."""
     el: list = []
     top20 = data.get("top20", [])
+    # Only render editais that have analise populated
+    top20_pdf = [e for e in top20 if e.get("analise")]
 
-    if not top20:
+    if not top20_pdf:
         return el
 
     el.extend(_section_heading("Análise Individual", styles))
     el.append(Spacer(1, 2 * mm))
 
-    for idx, ed in enumerate(top20, 1):
+    for idx, ed in enumerate(top20_pdf, 1):
         detail = _build_edital_detail(idx, ed, styles)
         # Use KeepTogether to avoid splitting a single edital across pages
         el.append(KeepTogether(detail))
@@ -1560,10 +1618,30 @@ def _build_proximos_passos(data: dict, styles: dict) -> list:
 
     # Assign priority based on deadline days if not already set
     def _infer_priority(passo: dict) -> str:
+        # If acao is a string with priority prefix (e.g. "URGENTE: Do X by DD/MM/YYYY")
+        acao_text = passo.get("acao", "").upper()
+        if "URGENTE:" in acao_text:
+            return "URGENTE"
+        if "PRIORITARIO:" in acao_text or "PRIORITÁRIO:" in acao_text:
+            return "ALTA"
+        if "AVALIAR:" in acao_text:
+            return "MEDIA"
+        if "MONITORAR:" in acao_text:
+            return "BAIXA"
+
         prio = passo.get("prioridade", "").upper()
         if prio in ("URGENTE", "ALTA", "MEDIA", "BAIXA"):
             return prio
+
+        # Try to extract deadline date from acao text for priority inference
         prazo = passo.get("prazo", "")
+        if not prazo:
+            # Extract date from acao string
+            date_m = re.search(r"(\d{2}/\d{2}/\d{4})", passo.get("acao", ""))
+            if date_m:
+                prazo = date_m.group(1)
+                passo["prazo"] = prazo  # populate prazo from extracted date
+
         # Try to extract days from prazo text
         m = re.search(r"(\d+)\s*dias?", prazo, re.IGNORECASE)
         if m:
@@ -1675,30 +1753,10 @@ def _build_consorcio_section(data: dict, styles: dict) -> list:
     return el
 
 def _build_plano_acao(data: dict, styles: dict) -> list:
-    """Pages 14-15: Próximos Passos + Cronograma."""
+    """Cronograma de Prazos (timeline table only — Plano de Ação removed per FALHA 8)."""
     el: list = []
     top20 = data.get("top20", [])
-    proximos_passos = data.get("proximos_passos", [])
     avail = PAGE_WIDTH - 2 * MARGIN
-
-    el.extend(_section_heading("Plano de Ação", styles))
-    el.append(Spacer(1, 4 * mm))
-
-    # Numbered list of próximos passos
-    if proximos_passos:
-        for idx, passo in enumerate(proximos_passos, 1):
-            el.append(Paragraph(f"<b>{idx}.</b> {_s(passo)}", styles["body"]))
-    else:
-        el.append(Paragraph(
-            "1. Revisar os requisitos de habilitação de cada edital priorizado.<br/>"
-            "2. Providenciar atestados de capacidade técnica necessários.<br/>"
-            "3. Agendar visitas técnicas obrigatórias.<br/>"
-            "4. Preparar documentação econômico-financeira.<br/>"
-            "5. Elaborar propostas de preço competitivas.",
-            styles["body"],
-        ))
-
-    el.append(Spacer(1, 6 * mm))
 
     # Timeline table
     if top20:
@@ -1707,16 +1765,30 @@ def _build_plano_acao(data: dict, styles: dict) -> list:
         header = [
             Paragraph("#", styles["cell_header_center"]),
             Paragraph("Edital", styles["cell_header"]),
-            Paragraph("Abertura", styles["cell_header_center"]),
+            Paragraph("Sessão", styles["cell_header_center"]),
             Paragraph("Ação Prioritária", styles["cell_header"]),
             Paragraph("Dificuldade", styles["cell_header_center"]),
         ]
         rows = [header]
 
-        # Sort by data_abertura (earliest first)
+        def _extract_sessao_date(ed_item: dict) -> str:
+            """Extract session date for sorting — priority: analise fields > edital fields."""
+            a = ed_item.get("analise") or {}
+            # Try analise date fields first (may contain "DD/MM/YYYY as HH:MMh" format)
+            for field in ("data_sessao", "prazo_proposta"):
+                val = a.get(field, "")
+                if val:
+                    m = re.search(r"(\d{2}/\d{2}/\d{4})", str(val))
+                    if m:
+                        # Convert DD/MM/YYYY to YYYY-MM-DD for sorting
+                        parts = m.group(1).split("/")
+                        return f"{parts[2]}-{parts[1]}-{parts[0]}"
+            return ed_item.get("data_abertura_proposta") or ed_item.get("data_abertura") or ed_item.get("data_publicacao") or "9999"
+
+        # Sort by session date (earliest first)
         sorted_eds = sorted(
             enumerate(top20, 1),
-            key=lambda x: x[1].get("data_abertura") or x[1].get("data_publicacao") or "9999",
+            key=lambda x: _extract_sessao_date(x[1]),
         )
 
         for orig_idx, ed in sorted_eds[:20]:
@@ -1736,7 +1808,7 @@ def _build_plano_acao(data: dict, styles: dict) -> list:
             rows.append([
                 Paragraph(str(orig_idx), styles["cell_center"]),
                 Paragraph(obj_text, styles["cell"]),
-                Paragraph(_date(ed.get("data_abertura") or ed.get("data_publicacao")), styles["cell_center"]),
+                Paragraph(_date(_extract_sessao_date(ed)), styles["cell_center"]),
                 Paragraph(acao, styles["cell"]),
                 Paragraph(dif_text, dif_style),
             ])

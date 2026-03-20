@@ -418,8 +418,20 @@ def gate4_completeness(
             result["passed"] = False
             _fail(issue)
 
-        # recomendacao_acao
+        # recomendacao_acao — check for "Não consta no edital" placeholder (FALHA 4)
         rec_val = str(analise.get("recomendacao_acao") or "").strip()
+        _nao_consta_pattern = re.compile(r"N[ãa]o\s+consta\s+no\s+edital", re.IGNORECASE)
+        if _nao_consta_pattern.search(rec_val):
+            issue = f"{eid}: recomendacao_acao contém placeholder de campo vazio"
+            result["issues"].append(issue)
+            result["passed"] = False
+            _fail(issue)
+            if do_fix:
+                cleaned_rec = _nao_consta_pattern.sub("", rec_val).strip(" .,;-")
+                analise["recomendacao_acao"] = cleaned_rec if cleaned_rec else "NAO PARTICIPAR"
+                _fix(f"Removido placeholder 'Nao consta no edital' de recomendacao_acao em {eid}")
+                rec_val = analise["recomendacao_acao"]
+
         rec_norm = _normalize_text(rec_val)
 
         # Must be PARTICIPAR or NAO PARTICIPAR, never VERIFICAR/AVALIAR/empty
@@ -473,6 +485,7 @@ def gate4_completeness(
 def gate5_coherence(
     top20: list[dict],
     do_fix: bool = False,
+    data_root: dict | None = None,
 ) -> dict:
     """Validate report coherence: no expired, no sector-incompatible, completeness threshold."""
     result: dict[str, Any] = {
@@ -509,7 +522,55 @@ def gate5_coherence(
         if "nao participar" in rec:
             nao_participar_count += 1
     if nao_participar_count > 0:
-        _pass(f"{nao_participar_count} edital(is) NAO PARTICIPAR no top20 (mantidos com justificativa)")
+        _ok(f"{nao_participar_count} edital(is) NAO PARTICIPAR no top20 (mantidos com justificativa)")
+
+    # 2b. All editais in top20[:20] must have analise populated
+    for idx, edital in enumerate(top20[:20]):
+        if idx in indices_to_remove:
+            continue
+        analise = edital.get("analise")
+        if not analise:
+            eid = _edital_id(edital, idx)
+            issue = f"{eid}: edital sem analise no top20"
+            result["issues"].append(issue)
+            result["passed"] = False
+            _fail(issue)
+
+    # 2c. proximos_passos must not reference municipalities of NAO PARTICIPAR editais (FALHA 3)
+    # Build set of municipality names from NAO PARTICIPAR editais
+    nao_participar_municipios: set[str] = set()
+    for edital in top20:
+        analise_np = edital.get("analise") or {}
+        rec_np = _normalize_text(str(analise_np.get("recomendacao_acao") or ""))
+        if "nao participar" in rec_np:
+            municipio = str(edital.get("municipio_nome") or edital.get("municipio") or "").strip()
+            if municipio:
+                nao_participar_municipios.add(_normalize_text(municipio))
+
+    if nao_participar_municipios:
+        proximos_passos: list = data_root.get("proximos_passos") if isinstance(data_root, dict) else []
+        proximos_passos = proximos_passos if isinstance(proximos_passos, list) else []
+        indices_passo_to_remove: list[int] = []
+        for passo_idx, passo in enumerate(proximos_passos):
+            passo_norm = _normalize_text(str(passo))
+            for municipio_norm in nao_participar_municipios:
+                if municipio_norm and municipio_norm in passo_norm:
+                    issue = (
+                        f"proximo_passo #{passo_idx+1} menciona municipio de edital NAO PARTICIPAR"
+                        f" ('{municipio_norm}'): '{str(passo)[:80]}'"
+                    )
+                    result["issues"].append(issue)
+                    result["passed"] = False
+                    _fail(issue)
+                    if do_fix and passo_idx not in indices_passo_to_remove:
+                        indices_passo_to_remove.append(passo_idx)
+                        result["auto_fixed"].append(f"Removido proximo_passo #{passo_idx+1}")
+                        _fix(f"Removido proximo_passo #{passo_idx+1} (municipio NAO PARTICIPAR)")
+                    break
+        if do_fix and indices_passo_to_remove and isinstance(data_root, dict):
+            data_root["proximos_passos"] = [
+                p for i, p in enumerate(proximos_passos) if i not in indices_passo_to_remove
+            ]
 
     # 3. All tenders have data_sessao filled or status_temporal defined
     for idx, edital in enumerate(top20):
@@ -679,7 +740,7 @@ def main() -> None:
 
     # ── GATE 5: Report Coherence ──
     _header("GATE 5: Coerencia do Relatorio")
-    gate5_result, gate5_removed = gate5_coherence(top20, do_fix=args.fix)
+    gate5_result, gate5_removed = gate5_coherence(top20, do_fix=args.fix, data_root=data)
 
     # ── V4 Fields Validation ──
     _header("V4: Campos de Inteligencia Avancada")

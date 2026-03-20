@@ -209,6 +209,15 @@ Ler o JSON preparado. Para cada edital em `top20` (que NAO tenha `analise` preen
 - Se o documento foi baixado e lido, TODAS as informacoes concretas devem ser extraidas
 - Se genuinamente ausente apos busca exaustiva, escrever "Nao consta no edital disponivel"
 
+**REGRA DE REDACAO:** A frase "Nao consta no edital disponivel" e permitida APENAS como valor de campo isolado (ex: data_sessao, visita_tecnica).
+NUNCA deve aparecer DENTRO de frases em recomendacao_acao ou observacoes_criticas.
+Se precisar indicar limitacao documental, reformular como: "Edital completo indisponivel para download — consultar diretamente no portal antes de elaborar proposta."
+
+**REGRA SESSAO_REALIZADA:** Quando status_temporal == "SESSAO_REALIZADA":
+- A recomendacao DEVE incluir: "Sessao de lances ja realizada. Consultar resultado no portal antes de qualquer acao."
+- NUNCA dizer "a proposta esta aberta" ou "pode ser enviada imediatamente"
+- No resumo executivo: contabilizar separadamente editais PLANEJAVEL/IMINENTE/URGENTE (acao imediata) vs SESSAO_REALIZADA (consultar resultado)
+
 **Extracao obrigatoria do texto do edital:**
 - Data e hora da sessao publica (buscar: "sessao publica", "data da disputa", "abertura")
 - Prazo limite de propostas (buscar: "limite para", "encaminhamento das propostas")
@@ -297,10 +306,22 @@ Para cada edital no top20 com `analise` preenchida e `texto_documentos` disponiv
 Redigir `resumo_executivo` (2-3 paragrafos): total de editais, compativeis, recomendados, destaques, alertas.
 Citar numeros concretos, valores, municipios. Ser direto e acionavel.
 
+**REGRA DE CONSISTENCIA:** Os numeros do resumo executivo DEVEM ser computados a partir do JSON:
+- "X editais PARTICIPAR" = count de top20 com analise.recomendacao_acao == "PARTICIPAR"
+- "R$ Y milhoes" = soma de valor_estimado dos editais PARTICIPAR
+- NUNCA usar numeros diferentes dos que serao renderizados no PDF
+
+Redigir resumo separando:
+- Editais com acao imediata (PLANEJAVEL + IMINENTE + URGENTE): X editais, R$ Y
+- Editais com sessao realizada (SESSAO_REALIZADA): X editais — consultar resultados nos portais
+
 **7.3 — Proximos passos:**
 Redigir `proximos_passos` (lista de 5-8 acoes concretas).
 Cada passo deve comecar com prefixo: `URGENTE:` / `PRIORITARIO:` / `AVALIAR:` / `MONITORAR:`
 Citar numeros de editais (#N), valores, datas, municipios. NUNCA usar "verificar".
+
+**REGRA ABSOLUTA:** Proximos passos NUNCA devem citar editais cuja recomendacao_acao seja NAO PARTICIPAR.
+Antes de incluir qualquer edital nos proximos passos, confirmar que sua recomendacao e PARTICIPAR.
 
 Salvar `resumo_executivo` e `proximos_passos` no JSON.
 

@@ -530,17 +530,24 @@ def _build_oportunidades(wb: Workbook, items: list[dict], capacity_10x: float | 
             cap_font = st["gray_font"]
         row.append(_dc(25, value=cap_label, font=cap_font))
 
-        # Col 26: Relevancia (human-readable label from keyword density)
-        if kw_density is not None:
-            if kw_density >= 5:
+        # Col 26: Relevancia — based on cnae_confidence + capacity
+        # Alta: confidence >= 0.8 AND within capacity
+        # Media: confidence >= 0.5 (or no confidence data)
+        # Baixa: confidence < 0.5
+        _cnae_conf_raw = _safe_float(item.get("cnae_confidence"))
+        if _cnae_conf_raw is not None:
+            # Normalize to 0-1 range (same logic as col 24)
+            _cnae_conf_norm = _cnae_conf_raw if _cnae_conf_raw <= 1.0 else _cnae_conf_raw / 100.0
+            _within_cap = cap_label == "SIM" or cap_label == "N/D"
+            if _cnae_conf_norm >= 0.8 and _within_cap:
                 rel_label, rel_font = "Alta", st["green_font"]
-            elif kw_density >= 1:
+            elif _cnae_conf_norm >= 0.5:
                 rel_label, rel_font = "M\u00e9dia", st["amber_font"]
             else:
                 rel_label, rel_font = "Baixa", st["red_font"]
-            row.append(_dc(26, value=rel_label, font=rel_font))
         else:
-            row.append(_dc(26, value=""))
+            rel_label, rel_font = "M\u00e9dia", st["amber_font"]
+        row.append(_dc(26, value=rel_label, font=rel_font))
 
         # Col 27: Setor
         row.append(_dc(27, value=_sanitize(sector_name)))

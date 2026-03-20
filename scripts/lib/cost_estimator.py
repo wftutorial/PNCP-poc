@@ -124,24 +124,41 @@ def estimate_proposal_cost(
     """
     p = params or DEFAULT_PARAMS
 
-    # Sessao eletronica: custo minimo (so tempo tecnico de preparo)
+    # Sessao eletronica: custo base (tempo tecnico) + visita tecnica se distante (>200km)
     if is_eletronico:
         tempo_preparo = p.horas_sessao * p.custo_hora_tecnico
+        custo_base = max(600.0, tempo_preparo)  # Minimo R$ 600
+
+        # Site visit surcharge: pregoes eletronicos podem exigir visita tecnica previa
+        visita_tecnica = 0.0
+        km = distancia_km if (distancia_km is not None and distancia_km > 0) else 0.0
+        if km > 200:
+            visita_tecnica = km * 2.0  # R$ 2/km (deslocamento ida+volta simplificado)
+
+        total_eletronico = custo_base + visita_tecnica
+        nota_eletronico = "Sessao eletronica -- custo limitado a tempo de preparacao da proposta"
+        if visita_tecnica > 0:
+            nota_eletronico += f"; acrescimo de R${visita_tecnica:.0f} para visita tecnica ({km:.0f}km)"
+
         return {
-            "total": round(tempo_preparo, 2),
+            "total": round(total_eletronico, 2),
             "modalidade_tipo": "eletronica",
             "breakdown": {
                 "deslocamento": 0.0,
                 "hospedagem": 0.0,
                 "alimentacao": 0.0,
                 "pedagio": 0.0,
-                "tempo_tecnico": round(tempo_preparo, 2),
+                "tempo_tecnico": round(custo_base, 2),
+                "visita_tecnica": round(visita_tecnica, 2),
             },
             "premissas": {
                 "horas_preparo": p.horas_sessao,
                 "custo_hora": p.custo_hora_tecnico,
+                "custo_base_minimo": 600.0,
+                "distancia_km_visita": round(km, 1),
+                "custo_km_visita": 2.0 if km > 200 else 0.0,
             },
-            "nota": "Sessao eletronica -- custo limitado a tempo de preparacao da proposta",
+            "nota": nota_eletronico,
         }
 
     # Se nao tem dados de distancia, retornar indisponivel

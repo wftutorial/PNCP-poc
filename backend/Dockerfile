@@ -63,4 +63,7 @@ EXPOSE 8000
 COPY start.sh /app/start.sh
 RUN chmod +x /app/start.sh
 
-CMD ["/app/start.sh"]
+# CRIT-SIGSEGV-FIX: Force uvicorn standalone to eliminate SIGSEGV from Gunicorn fork.
+# cryptography C extensions are fork-unsafe and crash workers on POST body parsing.
+# Use start.sh only when RUNNER != uvicorn (via shell form for env var expansion).
+CMD ["sh", "-c", "if [ \"$RUNNER\" = 'uvicorn' ]; then exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --timeout-keep-alive 75; else exec /app/start.sh; fi"]

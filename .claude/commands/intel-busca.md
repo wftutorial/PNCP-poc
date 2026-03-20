@@ -38,37 +38,33 @@ cd D:/pncp-poc
 python scripts/intel-collect.py --cnpj {CNPJ} --ufs {UFS} --output {DATA_JSON}
 ```
 
-Verificar output:
-- Quantos editais brutos capturados?
-- Quantos compativeis com CNAE?
-- Algum erro de API?
-- Capital social obtido?
-- Quantos EXPIRADOS foram marcados?
-
-O script automaticamente coleta:
-- **Inteligencia competitiva:** contratos dos ultimos 2 anos de cada orgao (top 15 orgaos, consultas anuais consolidadas)
-- **Benchmark de preco:** desconto mediano historico do orgao + faixa de lance sugerida
+O script automaticamente executa nesta ordem:
+1. **Perfil da empresa** (OpenCNPJ)
+2. **SICAF + Sancoes** (Playwright captcha + Portal da Transparencia) — usuario resolve captcha no inicio e fica livre
+3. **Mapeamento CNAE → keywords**
+4. **Busca exaustiva PNCP** (todas UFs × modalidades)
+5. **Filtro temporal** — expirados removidos ANTES de qualquer analise
+6. **Gate CNAE** — keywords + density threshold
+7. **Inteligencia competitiva** — contratos dos ultimos 2 anos (top 15 orgaos)
+8. **Documentos PNCP** — top 50 por valor
+9. **Benchmark de preco** — desconto mediano historico do orgao
 
 Se `empresa._source.status == "API_FAILED"`: PARAR e informar que nao foi possivel obter dados da empresa.
 
-### Step 2.5 — Enriquecimento (SICAF + Sancoes + Distancia + Custo)
+### Step 2.5 — Enriquecimento (Distancia + IBGE + Custo)
 
-**SICAF e OBRIGATORIO — NUNCA pular.** E a primeira verificacao cadastral e deve ser feita antes de qualquer analise.
+**SICAF ja foi coletado no Step 2 (intel-collect.py).** O enrich agora foca em geocodificacao e custos.
 
 ```bash
 python scripts/intel-enrich.py --input {DATA_JSON}
 ```
 
-**NAO usar `--skip-sicaf`.** O captcha manual do SICAF e necessario 1x por execucao. Aguardar o usuario resolver o captcha.
-
-O script automaticamente:
-1. **Coleta SICAF via Playwright (CRC, restricao)** — requer captcha manual 1x
-2. Consulta Portal da Transparencia (CEIS/CNEP/CEPIM/CEAF) — sancoes
-3. Geocodifica sede da empresa + municipios dos editais (OSRM + Nominatim)
-4. Calcula distancia sede-edital (OSRM Table API — batch)
-5. Coleta IBGE (populacao/PIB) de cada municipio
-6. Calcula custo estimativo de proposta (presencial vs eletronico)
-7. Calcula ROI simplificado (valor_edital / custo_proposta)
+O script automaticamente (pula SICAF se ja coletado):
+1. Geocodifica sede da empresa + municipios dos editais (OSRM + Nominatim)
+2. Calcula distancia sede-edital (OSRM Table API — batch)
+3. Coleta IBGE (populacao/PIB) de cada municipio
+4. Calcula custo estimativo de proposta (presencial vs eletronico)
+5. Calcula ROI simplificado (valor_edital / custo_proposta)
 
 Verificar output:
 - Empresa sancionada? Se SIM: **ALERTA VERMELHO** — empresa impedida de licitar

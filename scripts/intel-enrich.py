@@ -386,16 +386,28 @@ def main():
     api = ApiClient(verbose=not args.quiet)
 
     # ── Step 1: Empresa enrichment (SICAF + Sanções) ──
-    print(f"\n[1/2] Verificação cadastral da empresa...")
-    empresa_enrich = enrich_empresa(api, cnpj14, skip_sicaf=args.skip_sicaf)
+    # Skip if already collected by intel-collect.py (Step 1b)
+    sicaf_already = empresa.get("sicaf") and empresa["sicaf"].get("status") != "PULADO" and empresa["sicaf"].get("crc_status")
+    if sicaf_already:
+        print(f"\n[1/2] Verificação cadastral da empresa...")
+        print(f"  ✅ SICAF já coletado no intel-collect.py — pulando")
+        empresa_enrich = {
+            "sicaf": empresa.get("sicaf", {}),
+            "sancoes": empresa.get("sancoes", {}),
+            "sancionada": empresa.get("sancionada", False),
+            "restricao_sicaf": empresa.get("restricao_sicaf"),
+        }
+    else:
+        print(f"\n[1/2] Verificação cadastral da empresa...")
+        empresa_enrich = enrich_empresa(api, cnpj14, skip_sicaf=args.skip_sicaf)
 
-    # Merge into empresa
-    data["empresa"]["sicaf"] = empresa_enrich.get("sicaf", {})
-    data["empresa"]["sancoes"] = empresa_enrich.get("sancoes", {})
-    data["empresa"]["sancoes_source"] = empresa_enrich.get("sancoes_source", {})
-    data["empresa"]["sancionada"] = empresa_enrich.get("sancionada", False)
-    data["empresa"]["restricao_sicaf"] = empresa_enrich.get("restricao_sicaf")
-    data["empresa"]["historico_contratos_federais"] = empresa_enrich.get("historico_contratos_federais", [])
+        # Merge into empresa
+        data["empresa"]["sicaf"] = empresa_enrich.get("sicaf", {})
+        data["empresa"]["sancoes"] = empresa_enrich.get("sancoes", {})
+        data["empresa"]["sancoes_source"] = empresa_enrich.get("sancoes_source", {})
+        data["empresa"]["sancionada"] = empresa_enrich.get("sancionada", False)
+        data["empresa"]["restricao_sicaf"] = empresa_enrich.get("restricao_sicaf")
+        data["empresa"]["historico_contratos_federais"] = empresa_enrich.get("historico_contratos_federais", [])
 
     # Check abort conditions
     if empresa_enrich.get("sancionada"):

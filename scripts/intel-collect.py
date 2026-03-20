@@ -86,6 +86,8 @@ _load_json_cache = _crd._load_json_cache
 _save_json_cache = _crd._save_json_cache
 DOCS_CACHE_FILE = _crd.DOCS_CACHE_FILE
 CNAE_INCOMPATIBLE_OBJECTS = _crd.CNAE_INCOMPATIBLE_OBJECTS
+collect_sicaf = _crd.collect_sicaf
+collect_portal_transparencia = _crd.collect_portal_transparencia
 
 # ============================================================
 # CONSTANTS
@@ -1493,6 +1495,7 @@ def main():
     parser.add_argument("--output", type=str, default=None, help="Caminho do JSON de saida")
     parser.add_argument("--quiet", action="store_true", help="Reduzir output no console")
     parser.add_argument("--no-cache", action="store_true", help="Ignorar checkpoint e forcar nova coleta completa")
+    parser.add_argument("--skip-sicaf", action="store_true", help="Pular coleta SICAF (evita captcha)")
     args = parser.parse_args()
 
     t0 = time.time()
@@ -1530,6 +1533,49 @@ def main():
     print(f"  CNAE: {cnae_principal}")
     print(f"  Capital: {_fmt_brl(capital)}")
     print(f"  UF Sede: {uf_sede}")
+
+    # ── Step 1b: SICAF + Sanções (run early so user resolves captcha upfront) ──
+    skip_sicaf = getattr(args, "skip_sicaf", False)
+    if not skip_sicaf:
+        print(f"\n[1b/7] Verificação cadastral SICAF + Sanções...")
+        print(f"   Navegador vai abrir. Resolva o captcha quando solicitado.\n")
+
+        # Portal da Transparência — Sanções
+        pt_key = os.environ.get("PORTAL_TRANSPARENCIA_API_KEY", "")
+        pt_data = collect_portal_transparencia(api, cnpj14, pt_key)
+        empresa["sancoes"] = pt_data.get("sancoes", {})
+        empresa["sancoes_source"] = pt_data.get("sancoes_source", {})
+        empresa["historico_contratos_federais"] = pt_data.get("historico_contratos", [])
+
+        sancionada = empresa["sancoes"].get("sancionada", False)
+        empresa["sancionada"] = sancionada
+        if sancionada:
+            sancoes_ativas = [k for k, v in empresa["sancoes"].items() if v and k not in ("sancionada", "inconclusive")]
+            print(f"\n  *** ALERTA: Empresa SANCIONADA ({', '.join(s.upper() for s in sancoes_ativas)}) ***")
+            print(f"  *** Empresa IMPEDIDA de licitar ***")
+
+        # SICAF
+        sicaf_data = collect_sicaf(cnpj14, verbose=True)
+        empresa["sicaf"] = sicaf_data
+        restricao = sicaf_data.get("restricao", {})
+        if isinstance(restricao, dict):
+            empresa["restricao_sicaf"] = restricao.get("possui_restricao", None)
+        elif isinstance(restricao, bool):
+            empresa["restricao_sicaf"] = restricao
+        else:
+            empresa["restricao_sicaf"] = None
+
+        crc_status = sicaf_data.get("crc_status", "N/D")
+        restricao_str = "SIM" if empresa.get("restricao_sicaf") else "NÃO"
+        print(f"  SICAF: CRC {crc_status} | Restrição: {restricao_str}")
+        if empresa.get("restricao_sicaf"):
+            print(f"  *** ALERTA: SICAF com RESTRIÇÃO ativa — risco de inabilitação ***")
+    else:
+        print(f"\n[1b/7] SICAF pulado (--skip-sicaf)")
+        empresa["sicaf"] = {"status": "PULADO"}
+        empresa["sancionada"] = False
+        empresa["sancoes"] = {}
+        empresa["restricao_sicaf"] = None
 
     # ── Step 2: Map ALL CNAEs -> keywords (principal + secundários) ──
     print("\n[2/7] Mapeando TODOS os CNAEs para keywords...")

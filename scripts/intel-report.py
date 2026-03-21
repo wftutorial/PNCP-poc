@@ -355,7 +355,7 @@ def _plural(n: int, singular: str, plural: str) -> str:
 # DETERMINISTIC RESUMO + PRÓXIMOS PASSOS (computed from data)
 # ============================================================
 
-def _generate_resumo(empresa: dict, top20_pdf: list[dict], stats: dict) -> str:
+def _generate_resumo(empresa: dict, top20_pdf: list[dict], stats: dict, *, busca: dict | None = None) -> str:
     """Generate resumo executivo deterministically from data."""
     participar = [e for e in top20_pdf if (e.get('analise') or {}).get('recomendacao_acao', '').upper().startswith('PARTICIPAR')]
     nao_part = [e for e in top20_pdf if (e.get('analise') or {}).get('recomendacao_acao', '').upper().startswith('NAO')]
@@ -363,13 +363,20 @@ def _generate_resumo(empresa: dict, top20_pdf: list[dict], stats: dict) -> str:
     val_participar = sum((_safe_float(e.get('valor_estimado')) for e in participar))
 
     total_compat = stats.get('total_cnae_compativel', 0)
-    n_removidos = stats.get('total_expirados_removidos', 0)
+
+    busca = busca or {}
+    ufs_list = busca.get("ufs", [])
+    ufs_str = ", ".join(ufs_list) if isinstance(ufs_list, list) else ""
+    dias = busca.get("dias", 30)
 
     nome = empresa.get('razao_social', 'A empresa')
 
     lines: list[str] = []
-    lines.append(f"A {nome} possui {total_compat} oportunidades abertas compatíveis identificadas no PNCP "
-                  f"({n_removidos} editais expirados ou com sessão já realizada foram excluídos).")
+    if ufs_str:
+        lines.append(f"Foram identificadas {total_compat} oportunidades abertas compatíveis com a {nome} "
+                      f"em {ufs_str} nos últimos {dias} dias.")
+    else:
+        lines.append(f"Foram identificadas {total_compat} oportunidades abertas compatíveis com a {nome}.")
     lines.append(f"Dos editais analisados em profundidade, {len(participar)} receberam recomendação PARTICIPAR "
                   f"(valor total R$ {val_participar/1e6:.1f}M) e {len(nao_part)} NÃO PARTICIPAR com justificativa.")
 
@@ -747,81 +754,89 @@ def _build_cover(data: dict, styles: dict) -> list:
     return el
 
 
-def _build_funil(data: dict, styles: dict) -> list:
-    """Build visual funnel explaining the filtering pipeline."""
+def _build_low_volume_context(total_compat: int, ufs: list, dias: int) -> str:
+    """Generate market context explanation when results are low."""
+    ufs_str = ", ".join(ufs) if isinstance(ufs, list) else str(ufs)
+    n_ufs = len(ufs) if isinstance(ufs, list) else 1
+
+    if total_compat == 0:
+        return (f"Nenhuma oportunidade aberta identificada em {ufs_str} nos últimos {dias} dias. "
+                f"Isso pode indicar sazonalidade ou baixo volume de licitações nestas UFs. "
+                f"Recomendação: expandir a busca para UFs limítrofes ou aumentar o período de monitoramento.")
+    elif total_compat < 5:
+        return (f"Volume abaixo da média em {n_ufs} UF{'s' if n_ufs > 1 else ''}. "
+                f"Licitações de obras e engenharia tipicamente concentram-se em períodos específicos do ano fiscal "
+                f"(março–maio e agosto–outubro). "
+                f"Recomendação: monitorar semanalmente e considerar UFs adjacentes para ampliar o funil de oportunidades.")
+    else:
+        return (f"Volume moderado de oportunidades em {ufs_str}. "
+                f"Para maximizar a captação, considere monitoramento semanal.")
+
+
+def _build_market_snapshot(data: dict, styles: dict) -> list:
+    """Build a market snapshot showing opportunity landscape — client-facing."""
     el: list = []
     estatisticas = data.get("estatisticas", {})
     top20 = data.get("top20", [])
+    empresa = data.get("empresa", {})
+    busca = data.get("busca", {})
 
-    total_bruto = estatisticas.get("total_bruto", len(data.get("editais", [])))
-    total_expirados = estatisticas.get("total_expirados_removidos", estatisticas.get("total_expirados", 0))
-    total_ativos = estatisticas.get("total_apos_filtro_temporal", total_bruto - total_expirados)
+    ufs = busca.get("ufs", [])
+    ufs_str = ", ".join(ufs) if isinstance(ufs, list) else str(ufs)
+    dias = busca.get("dias", 30)
     total_compat = estatisticas.get("total_cnae_compativel", 0)
     total_dentro = estatisticas.get("total_dentro_capacidade", total_compat)
-    total_analisados = estatisticas.get("total_analisados_profundidade", 20)
-    total_recomendados = len(top20)
 
-    empresa = data.get("empresa", {})
-    ufs = ", ".join(data.get("busca", {}).get("ufs", []))
-    dias = data.get("busca", {}).get("dias", 30)
+    _participar = [e for e in top20 if (e.get("analise") or {}).get("recomendacao_acao", "").upper().startswith("PARTICIPAR")]
+    recomendados = len(_participar)
+
+    status_counts = estatisticas.get("status_temporal", {})
+    n_urgente = status_counts.get("URGENTE", 0)
+    n_iminente = status_counts.get("IMINENTE", 0)
+    n_planejavel = status_counts.get("PLANEJAVEL", 0)
+
     capital = _safe_float(empresa.get("capital_social")) or 0
     cap_10x = capital * 10 if capital > 0 else 0
 
     el.append(Spacer(1, 6 * mm))
-    el.append(Paragraph("Metodologia de Seleção", styles["h2"]))
+    el.append(Paragraph("Panorama do Mercado", styles["h2"]))
     el.append(Spacer(1, 2 * mm))
 
     avail = PAGE_WIDTH - 2 * MARGIN
 
-    # Funnel rows: [count, description, detail]
-    # Order matches pipeline: bruto → expirados removidos → CNAE → capacidade → analisados → recomendados
-    funnel_steps = [
-        (str(total_bruto), "editais publicados", f"PNCP — {ufs} — últimos {dias} dias"),
-        (str(total_ativos), "com prazo vigente", f"{total_expirados} expirados removidos antes de qualquer análise"),
-        (str(total_compat), "compatíveis com CNAE", f"filtro por {1 + len([c for c in (empresa.get('cnaes_secundarios') or '').split(',') if c.strip()])} códigos de atividade"),
-        (str(total_dentro), "dentro da capacidade", f"limite: {_currency_short(cap_10x)} (10× capital social)"),
-        (str(total_analisados), "analisados em profundidade", "documentos baixados e revisados individualmente"),
-        (str(total_recomendados), "RECOMENDADOS", "viabilidade técnica e econômica confirmada"),
+    snapshot_rows = [
+        (str(total_compat), "oportunidades compatíveis",
+         f"editais abertos em {ufs_str} nos últimos {dias} dias"),
+        (str(total_dentro), "dentro da capacidade financeira",
+         f"valor ≤ {_currency_short(cap_10x)} (10× capital social)" if cap_10x > 0 else "capacidade não informada"),
+        (str(recomendados), "RECOMENDADOS para participação",
+         f"{n_urgente} urgentes + {n_iminente} iminentes + {n_planejavel} planejáveis"),
     ]
 
     rows = []
-    for count, label, detail in funnel_steps:
+    for count, label, detail in snapshot_rows:
         rows.append([
-            Paragraph(f"<b>{count}</b>", ParagraphStyle("fc", fontName="Times-Bold", fontSize=14, textColor=INK, alignment=TA_RIGHT, leading=18)),
-            Paragraph(f"<b>{label}</b>", ParagraphStyle("fl", fontName="Helvetica", fontSize=9, textColor=TEXT_COLOR, leading=12)),
-            Paragraph(detail, ParagraphStyle("fd", fontName="Helvetica", fontSize=7.5, textColor=TEXT_SECONDARY, leading=10)),
+            Paragraph(f"<b>{_s(count)}</b>", ParagraphStyle("fc", fontName="Times-Bold", fontSize=16, textColor=INK, alignment=TA_RIGHT, leading=20)),
+            Paragraph(f"<b>{_s(label)}</b>", ParagraphStyle("fl", fontName="Helvetica", fontSize=10, textColor=TEXT_COLOR, leading=13)),
+            Paragraph(_s(detail), ParagraphStyle("fd", fontName="Helvetica", fontSize=8, textColor=TEXT_SECONDARY, leading=11)),
         ])
 
-    # Arrow rows between steps
-    final_rows = []
-    for i, row in enumerate(rows):
-        final_rows.append(row)
-        if i < len(rows) - 1:
-            final_rows.append([
-                Paragraph("", styles["cell"]),
-                Paragraph("↓", ParagraphStyle("arrow", fontName="Helvetica", fontSize=8, textColor=TEXT_MUTED, alignment=TA_LEFT, leading=10)),
-                Paragraph("", styles["cell"]),
-            ])
-
-    col_widths = [45, avail * 0.35, avail - 45 - avail * 0.35]
-    t = Table(final_rows, colWidths=col_widths)
+    col_widths = [45, avail * 0.38, avail - 45 - avail * 0.38]
+    t = Table(rows, colWidths=col_widths)
     t.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 0), (-1, -1), 2),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-        ("LEFTPADDING", (0, 0), (0, -1), 0),
-        ("RIGHTPADDING", (0, 0), (0, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
         # Last row highlight (green background)
         ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#E8F5E9")),
-        ("ROUNDEDCORNERS", [0, 0, 0, 0]),
     ]))
     el.append(t)
 
-    el.append(Spacer(1, 3 * mm))
-    el.append(Paragraph(
-        "<i>A planilha Excel contém todos os editais compatíveis com a empresa para análise própria.</i>",
-        styles["italic_note"],
-    ))
+    # Low-volume market context (when < 10 compatible)
+    if total_compat < 10:
+        el.append(Spacer(1, 4 * mm))
+        context_text = _build_low_volume_context(total_compat, ufs, dias)
+        el.append(Paragraph(f"<i>{_s(context_text)}</i>", styles["italic_note"]))
 
     return el
 
@@ -868,21 +883,12 @@ def _build_sumario_executivo(data: dict, styles: dict) -> list:
         data.get("empresa", {}),
         top20_with_analise,
         estatisticas,
+        busca=data.get("busca", {}),
     )
     for paragraph in resumo.split("\n\n"):
         paragraph = paragraph.strip()
         if paragraph:
             el.append(Paragraph(_s(paragraph), styles["body"]))
-
-    # Note about excluded editais
-    excluded = data.get("top20_excluded_count", 0)
-    if excluded > 0:
-        el.append(Spacer(1, 2 * mm))
-        el.append(Paragraph(
-            f"<i>{excluded} editais foram analisados mas excluídos deste relatório por incompatibilidade "
-            f"com a atividade da empresa ou duplicidade. A lista completa está na planilha Excel.</i>",
-            styles["italic_note"],
-        ))
 
     el.append(Spacer(1, 4 * mm))
 
@@ -929,7 +935,7 @@ def _build_sumario_executivo(data: dict, styles: dict) -> list:
         textColor=seal_color, fontSize=7,
     )))
 
-    el.extend(_build_funil(data, styles))
+    el.extend(_build_market_snapshot(data, styles))
 
     el.append(PageBreak())
     return el

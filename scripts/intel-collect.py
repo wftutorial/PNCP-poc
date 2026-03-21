@@ -1573,7 +1573,8 @@ def assemble_output(
             "sector_keys": sorted(all_sector_keys) if all_sector_keys else [sector_key],
         },
         "estatisticas": {
-            "total_bruto": len(editais) + source_meta.get("total_expirados_removidos", 0),
+            "total_publicacoes_consultadas": len(editais) + source_meta.get("total_expirados_removidos", 0),
+            "total_bruto": len(editais) + source_meta.get("total_expirados_removidos", 0),  # deprecated alias
             "total_expirados_removidos": source_meta.get("total_expirados_removidos", 0),
             "total_expirados_encerrados": source_meta.get("total_expirados_encerrados", 0),
             "total_sessao_realizada": source_meta.get("total_sessao_realizada", 0),
@@ -2048,8 +2049,8 @@ def main():
                         help="CNPJ da empresa, com ou sem formatacao (ex: 12345678000190 ou 12.345.678/0001-90)")
     parser.add_argument("--ufs", required=True,
                         help="UFs separadas por virgula — codigos de 2 letras (ex: SC,PR,RS)")
-    parser.add_argument("--dias", type=int, default=30,
-                        help="Periodo de busca em dias, 1-365 (default: 30)")
+    parser.add_argument("--dias", type=int, default=90,
+                        help="Periodo de busca em dias, 1-365 (default: 90)")
     parser.add_argument("--output", type=str, default=None,
                         help="Caminho do JSON de saida (default: auto-nomeado em docs/intel/)")
     parser.add_argument("--quiet", action="store_true",
@@ -2360,33 +2361,37 @@ def main():
 
     elapsed = time.time() - t0
 
-    # Summary
+    # Summary — lead with actionable numbers
     stats = output["estatisticas"]
+    st_counts = stats.get("status_temporal", {})
     print(f"\n{'='*60}")
-    print(f"  RESULTADO")
+    print(f"  OPORTUNIDADES IDENTIFICADAS")
     print(f"{'='*60}")
-    print(f"  Total bruto:          {stats['total_bruto']}")
+    print(f"  Oportunidades abertas:  {stats['total_cnae_compativel']}")
+    print(f"  Dentro da capacidade:   {stats['total_dentro_capacidade']}")
+    print(f"  Valor total:            {_fmt_brl(stats['valor_total_compativel'])}")
+    print(f"  Urgentes (<=7 dias):    {stats['total_urgentes']}")
+    print(f"  Iminentes (7-15 dias):  {st_counts.get('IMINENTE', 0)}")
+    print(f"  Planejaveis (>15 dias): {st_counts.get('PLANEJAVEL', 0)}")
+    print(f"{'='*60}")
+    print(f"  Detalhes da coleta:")
+    print(f"    Publicacoes PNCP:     {stats['total_publicacoes_consultadas']}")
     _n_enc = stats.get("total_expirados_encerrados", stats["total_expirados_removidos"])
     _n_sr = stats.get("total_sessao_realizada", 0)
-    print(f"  Expirados removidos:  {stats['total_expirados_removidos']} ({_n_enc} encerrados + {_n_sr} sessao realizada)")
-    print(f"  Ativos analisados:    {stats['total_apos_filtro_temporal']}")
-    print(f"  CNAE compativeis:     {stats['total_cnae_compativel']}")
-    print(f"  CNAE incompativeis:   {stats['total_cnae_incompativel']}")
-    print(f"  Precisam LLM review:  {stats['total_needs_llm_review']}")
-    print(f"  Valor total compat:   {_fmt_brl(stats['valor_total_compativel'])}")
-    print(f"  Capacidade 10x:       {_fmt_brl(stats['capacidade_10x'])}")
-    print(f"  Dentro capacidade:    {stats['total_dentro_capacidade']}")
-    print(f"  Paginas PNCP:         {stats['pncp_pages_fetched']}")
-    print(f"  Erros PNCP:           {stats['pncp_errors']}")
-    st_counts = stats.get("status_temporal", {})
+    print(f"    Descartadas:          {stats['total_expirados_removidos']} ({_n_enc} encerrados + {_n_sr} sessao realizada)")
+    print(f"    Apos filtro temporal:  {stats['total_apos_filtro_temporal']}")
+    print(f"    CNAE incompativeis:   {stats['total_cnae_incompativel']}")
+    print(f"    Precisam LLM review:  {stats['total_needs_llm_review']}")
+    print(f"    Paginas PNCP:         {stats['pncp_pages_fetched']}")
+    print(f"    Erros PNCP:           {stats['pncp_errors']}")
     st_parts = ", ".join(f"{k}={v}" for k, v in sorted(st_counts.items()))
-    print(f"  Status temporal:      {st_parts or 'N/A'} (urgentes={stats['total_urgentes']})")
+    print(f"    Status temporal:      {st_parts or 'N/A'}")
     _ds = delta_summary
-    print(f"  Delta:                {_ds['novos']} novos, {_ds['atualizados']} atualizados, "
+    print(f"    Delta:                {_ds['novos']} novos, {_ds['atualizados']} atualizados, "
           f"{_ds['vencendo']} vencendo, {_ds['inalterados']} inalterados")
-    print(f"  Semantic dedup:       {source_meta.get('total_semantic_dedup_removed', 0)} removidos")
-    print(f"  Tempo total:          {elapsed:.1f}s")
-    print(f"  Salvo em:             {out_path}")
+    print(f"    Semantic dedup:       {source_meta.get('total_semantic_dedup_removed', 0)} removidos")
+    print(f"    Tempo total:          {elapsed:.1f}s")
+    print(f"  Salvo em:               {out_path}")
     print(f"{'='*60}")
 
     api.print_stats()

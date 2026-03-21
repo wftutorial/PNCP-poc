@@ -317,8 +317,14 @@ Para cada edital no top20 com `analise` preenchida e `texto_documentos` disponiv
 - Marcar `analise._reviewed = true`
 
 **7.2 — Resumo executivo:**
-Redigir `resumo_executivo` (2-3 parágrafos) **em português com acentuação completa**: total de editais, compatíveis, recomendados, destaques, alertas.
+Redigir `resumo_executivo` (2-3 parágrafos) **em português com acentuação completa**: oportunidades abertas, recomendados, destaques, alertas.
 Citar números concretos, valores, municípios. Ser direto e acionável.
+
+**REGRA DE FRAMING (OBRIGATÓRIA):** O resumo executivo NUNCA menciona números brutos de publicações consultadas.
+- ERRADO: "De 2.676 editais analisados, 4 são compatíveis"
+- CORRETO: "Foram identificadas 4 oportunidades abertas compatíveis com a empresa em PB, SE, PE"
+- O número bruto de publicações é informação interna de debug, sem valor para o cliente.
+- Se quiser contextualizar volume baixo, usar linguagem de mercado: "O mercado de licitações em PB apresenta volume moderado neste período."
 
 **REGRA DE CONSISTENCIA:** Os numeros do resumo executivo DEVEM ser computados a partir do JSON:
 - "X editais PARTICIPAR" = count de top20 com analise.recomendacao_acao == "PARTICIPAR"
@@ -427,12 +433,21 @@ python scripts/intel-report.py --input {DATA_JSON} --output {PDF_FILE}
 
 ### Step 9 — Report Results
 
-Informar ao usuario:
-- Excel: `{EXCEL_FILE}` — {N} oportunidades compativeis com o perfil da empresa
-- PDF: `{PDF_FILE}` — Analise de 20 editais ({K} PARTICIPAR, {L} NAO PARTICIPAR com justificativa, completude: XX%)
+Informar ao usuario, liderando com oportunidades (NUNCA com numeros brutos de publicacoes):
+- **Oportunidades:** {N} oportunidades abertas compativeis ({U} urgentes, {I} iminentes, {P} planejaveis)
+- Excel: `{EXCEL_FILE}` — lista completa das {N} oportunidades
+- PDF: `{PDF_FILE}` — analise de {T} editais ({K} PARTICIPAR, {L} NAO PARTICIPAR com justificativa, completude: XX%)
 - JSON: `{DATA_JSON}`
 - Resumo: top 3 oportunidades PARTICIPAR com valor, prazo, e status temporal
 - Destaques: editais NAO PARTICIPAR mais relevantes e motivo (para contexto estrategico)
+
+**NUNCA dizer "X editais analisados" referindo-se ao total bruto de publicacoes PNCP.** O total bruto inclui atas, homologacoes, contratos e resultados que nao sao editais abertos. Usar apenas o numero de oportunidades compativeis.
+
+**Se < 10 oportunidades compativeis:**
+- Explicar que o volume depende da sazonalidade e do porte das UFs consultadas
+- Sugerir UFs adjacentes ou aumento do periodo de monitoramento
+- Informar que licitacoes de obras concentram-se em marco-maio e agosto-outubro
+- NUNCA apresentar resultado baixo como falha do sistema — e informacao de mercado
 
 ---
 

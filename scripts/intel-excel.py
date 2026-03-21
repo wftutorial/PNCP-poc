@@ -847,13 +847,13 @@ def _build_metadata(wb: Workbook, data: dict, items: list[dict]):
         ("Per\u00edodo", periodo_str),
         ("Dias", dias),
         ("Setor Mapeado", setor),
-        ("Editais Analisados", total_bruto),
+        ("Publicações PNCP Consultadas", total_bruto),
         ("Oportunidades Identificadas", compat_count),
         ("Valor Total das Oportunidades", _format_brl(valor_compat)),
         ("Gerado em", datetime.now().strftime("%d/%m/%Y %H:%M:%S")),
         ("Script", "intel-collect.py + intel-enrich.py + intel-excel.py"),
         ("", ""),  # separator
-        ("NOTA - Aba 'Oportunidades'", f"{compat_count} oportunidades identificadas (de {total_bruto} editais analisados em {ufs_str}). CNAE compativel + prazo vigente."),
+        ("NOTA - Aba 'Oportunidades'", f"{compat_count} oportunidades abertas identificadas em {ufs_str}. CNAE compatível + prazo vigente."),
     ]
 
     for label, value in rows:

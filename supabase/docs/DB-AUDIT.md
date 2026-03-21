@@ -1,355 +1,235 @@
 # SmartLic Database Audit Report
 
-**Date:** 2026-03-20 | **Auditor:** @data-engineer (Brownfield Discovery Phase 2)
-**Scope:** All 86 migration files + backend query patterns
-**Rating Scale:** CRITICAL (production risk) / HIGH (should fix soon) / MEDIUM (improve when convenient) / LOW (nice to have)
+**Date:** 2026-03-21 | **Auditor:** @data-engineer (Delta)
+**Scope:** All 85 Supabase migration files + 10 backend migration files + backend query patterns
+**Rating:** CRITICAL (production risk) | HIGH (fix soon) | MEDIUM (improve when convenient) | LOW (nice to have)
 
 ---
 
 ## Executive Summary
 
-The SmartLic database is in good shape overall. Four rounds of systematic hardening (016, TD-003, DEBT-009, DEBT-113) have addressed most RLS and FK issues. The schema is well-indexed with comprehensive pg_cron retention. However, several findings remain worth addressing.
+The SmartLic database schema is **mature and well-maintained** for a POC-advanced (v0.5) product. After 85+ migrations, the schema has been through multiple hardening rounds (DEBT-001 through DEBT-120). Key strengths:
 
-| Severity | Count | Est. Total Hours |
-|----------|-------|-----------------|
-| CRITICAL | 1 | 2h |
-| HIGH | 5 | 14h |
-| LOW | 6 | 8h |
-| MEDIUM | 8 | 16h |
-| **Total** | **20** | **~40h** |
+- All 27 tables have RLS enabled
+- FK standardization to profiles(id) is complete (verified by DEBT-113 assertion)
+- 15 pg_cron retention jobs cover all growing tables
+- Service role policies consistently use `TO service_role` (no auth.role() patterns remain)
+- Optimistic locking on pipeline_items and user_subscriptions
 
----
-
-## 1. Schema Issues
-
-### S-01: `handle_new_user()` Trigger Omits New Columns (HIGH, 2h)
-
-**Finding:** The latest version of `handle_new_user()` (migration 20260225110000) inserts 10 columns but omits several that were added later:
-- `subscription_status` (added 20260225100000) -- defaults to 'trial' via column default, so not blocking
-- `trial_expires_at` (added 20260225100000) -- **NULL for new users**, meaning trial expiration is not set at signup
-- `marketing_emails_enabled` (added 20260227140000) -- defaults to TRUE via column default
-
-**Impact:** New user signups will have `trial_expires_at = NULL`. The application layer in `quota.py` must handle this (and does, by computing from `created_at + TRIAL_DURATION_DAYS`). However, this creates a dependency on application-level logic that should be in the trigger.
-
-**Fix:** Update `handle_new_user()` to set `trial_expires_at = NOW() + INTERVAL '14 days'` and `subscription_status = 'trial'`.
-
-### S-02: `plans.stripe_price_id` Legacy Column Still Present (LOW, 1h)
-
-**Finding:** The `stripe_price_id` column on `plans` is deprecated (documented in DEBT-017) but still exists. `billing.py` uses it as a fallback. Three newer columns (`stripe_price_id_monthly`, `_semiannual`, `_annual`) plus `plan_billing_periods.stripe_price_id` are the canonical sources.
-
-**Impact:** Schema confusion. New developers may use the wrong column.
-
-**Fix:** After confirming `billing.py` no longer falls back to it, drop the column. Currently: accept risk (LOW).
-
-### S-03: Inconsistent `created_at` Nullability (LOW, 1h)
-
-**Finding:** Most tables define `created_at TIMESTAMPTZ NOT NULL DEFAULT now()`, but a few use nullable defaults:
-- `user_oauth_tokens.created_at` -- `DEFAULT NOW()` without NOT NULL
-- `plan_billing_periods.created_at` -- `DEFAULT NOW()` without NOT NULL
-
-**Impact:** Queries assuming non-null `created_at` could produce unexpected results.
-
-**Fix:** `ALTER TABLE ... ALTER COLUMN created_at SET NOT NULL` on `user_oauth_tokens` and `plan_billing_periods`.
-
-### S-04: `search_state_transitions.user_id` Is Nullable (MEDIUM, 1h)
-
-**Finding:** The `user_id` column was added in DEBT-009 (20260308320000) as nullable for backfill purposes. After backfill, orphan rows (where `search_id` does not match any `search_sessions`) will have `user_id = NULL`.
-
-**Impact:** The RLS policy `user_id = auth.uid()` silently excludes these rows from user queries (correct behavior). However, `NULL` user_id means the retention cleanup job deletes these rows anyway (30-day retention). Acceptable, but should be NOT NULL after initial backfill stabilizes.
-
-**Fix:** After verifying no NULL user_id rows exist in production, add `NOT NULL` constraint.
-
-### S-05: `classification_feedback.user_id` FK to `auth.users` vs `profiles` Race Condition (MEDIUM, 1h)
-
-**Finding:** Migration 20260308200000 (DEBT-002) creates `classification_feedback` with `REFERENCES auth.users(id)`, but migration 20260311100000 (DEBT-113) re-points it to `profiles(id)`. On a fresh install, the table is created pointing to `auth.users` and then immediately re-pointed. This works but is fragile -- if DEBT-113 fails, the FK is wrong.
-
-**Impact:** Works in practice. On disaster recovery (fresh migration replay), it self-corrects.
-
-**Fix:** Update DEBT-002's CREATE TABLE to reference `profiles(id)` directly (requires migration edit or a new consolidation migration).
+However, several structural debt items remain from rapid feature iteration, and the migration history itself introduces complexity. This audit identifies **19 debt items** across 6 categories.
 
 ---
 
-## 2. RLS Gaps
+## Category 1: Schema Design Issues
 
-### R-01: `trial_email_log` Has No User-Facing Policies (LOW, 0.5h)
+### DB-DEBT-001: profiles table has 20+ columns (wide table smell)
+- **Severity:** MEDIUM
+- **Description:** The profiles table serves as a catch-all for user data: auth fields, billing state (subscription_status, trial_expires_at, subscription_end_date), marketing preferences (whatsapp_consent, email_unsubscribed, marketing_emails_enabled), business context (context_data JSONB), and partner referral tracking. This violates SRP at the table level.
+- **Impact:** Every profiles query pulls all columns. The handle_new_user() trigger must list all 10+ columns explicitly. Adding new user attributes further bloats the table.
+- **Recommendation:** Consider extracting billing state into a dedicated `user_billing_state` view or materialized columns, and marketing preferences into `user_preferences`. For now, the profiles table works fine at POC scale.
+- **Estimated effort:** 8-12 hours (including backend code changes)
 
-**Finding:** RLS is enabled but there are NO policies for `authenticated` or `anon` roles. Only `service_role` (which bypasses RLS) can access it. This is intentional (backend-only table), but there is no explicit `service_role_all` policy documented.
+### DB-DEBT-002: Dual subscription status tracking (profiles.subscription_status vs user_subscriptions.subscription_status)
+- **Severity:** HIGH
+- **Description:** Subscription status is stored in two places: `profiles.subscription_status` (CHECK: trial, active, canceling, past_due, expired) and `user_subscriptions.subscription_status` (CHECK: active, trialing, past_due, canceled, expired). The values are not identical (profiles uses "canceling" but user_subscriptions uses "canceled"; profiles uses "trial" but user_subscriptions uses "trialing"). The sync trigger (migration 017) was removed as dead code in migration 030.
+- **Impact:** Status drift between the two columns. No trigger or application-level guarantee keeps them in sync. Billing decisions may use stale data from one source.
+- **Recommendation:** Define one as the source of truth (user_subscriptions for Stripe-sourced state, profiles for app-visible state) and document the mapping. Add a CHECK constraint comment documenting the semantic difference, or unify the enum values.
+- **Estimated effort:** 3-4 hours
 
-**Impact:** None -- service_role bypasses RLS anyway. However, if the backend ever switches from service_role to authenticated context, writes would silently fail.
+### DB-DEBT-003: organizations.plan_type CHECK constraint is overly permissive
+- **Severity:** LOW
+- **Description:** The CHECK constraint on organizations.plan_type (added in DEBT-100) allows 13 different values including legacy ones (free, avulso, pack, monthly, annual). Organizations was only introduced for consultoria use cases and should only accept current plan types.
+- **Impact:** No practical impact (organizations feature is not yet active in production), but it allows invalid data insertion.
+- **Recommendation:** Tighten the CHECK to `('consultoria', 'smartlic_pro', 'master')` when the organizations feature ships.
+- **Estimated effort:** 0.5 hours
 
-**Fix:** Add explicit `service_role_all` policy for consistency and documentation.
+### DB-DEBT-004: search_sessions has 24 columns (wide table)
+- **Severity:** LOW
+- **Description:** search_sessions combines search parameters (sectors, ufs, dates, keywords), search results (total_raw, total_filtered, valor_total, resumo_executivo), lifecycle state (status, error_message, pipeline_stage, duration_ms), and operational metadata (search_id, response_state, failed_ufs). This is a result of incremental additions across 4 migrations.
+- **Impact:** Large row size. Historical queries that only need parameters or results still fetch lifecycle columns.
+- **Recommendation:** Acceptable at current scale. If table grows past 1M rows, consider partitioning by created_at (range) or splitting results into a separate table.
+- **Estimated effort:** 16+ hours (major refactor)
 
-### R-02: `reconciliation_log` Service Role Policy Uses `auth.role()` Pattern (MEDIUM, 0.5h)
-
-**Finding:** Migration 20260228140000 creates the policy as:
-```sql
-USING (auth.role() = 'service_role')
-```
-This was supposed to be standardized to `TO service_role` in TD-003 (20260304200000), which did fix it. However, the runtime assertion in DEBT-113 would catch this. Verify the policy is correct in production.
-
-**Impact:** Likely already fixed. If not, the `auth.role()` pattern works but is less efficient than `TO service_role`.
-
-**Fix:** Verify in production; if still using `auth.role()`, apply the `TO service_role` pattern.
-
-### R-03: `organizations` Members Can View Organization But Not Update (LOW, 0.5h)
-
-**Finding:** Organization admins (members with role='admin') can SELECT the organization but there is no UPDATE policy for non-owner admins. Only the owner can UPDATE.
-
-**Impact:** Org admins cannot modify organization settings (name, logo) through Supabase client directly. They must use the backend service role.
-
-**Fix:** If org admin edits are needed via frontend: add UPDATE policy for admin members. Currently, backend handles all writes, so this is acceptable.
-
----
-
-## 3. Performance Concerns
-
-### P-01: `get_conversations_with_unread_count()` Uses COUNT(*) OVER() (HIGH, 4h)
-
-**Finding:** The function computes `COUNT(*) OVER()` (window function for total count) inside the CTE that also does LIMIT/OFFSET. The window function counts ALL matching rows before pagination is applied, requiring a full scan of matching conversations.
-
-**Impact:** As conversations grow, this query becomes slower. For admins (who see ALL conversations), this is an O(N) scan on every page load.
-
-**Fix:** Split into two queries: one for paginated results, one for total count (with caching). Or use `SELECT count(*)` as a separate cheap query.
-
-### P-02: `cleanup_search_cache_per_user()` Trigger Fires on Every INSERT (MEDIUM, 1h)
-
-**Finding:** The trigger fires on every INSERT to `search_results_cache`, counts all entries for the user, and short-circuits if <= 5. The short-circuit was added in DEBT-017 but the COUNT query still runs every time.
-
-**Impact:** Minor overhead per cache write. With the short-circuit, this is fast (index scan on user_id), but unnecessary for the common case.
-
-**Fix:** Consider increasing the eviction threshold check. Current design is acceptable.
-
-### P-03: Missing Composite Index on `alert_sent_items(alert_id, sent_at)` (MEDIUM, 0.5h)
-
-**Finding:** The retention cleanup query is `DELETE WHERE sent_at < NOW() - 180 days`. There is a `sent_at` index but the retention query does not filter by `alert_id` first, leading to a full scan of old rows.
-
-**Impact:** The daily cleanup job scans the entire table. With 180-day retention, this is bounded but could be large.
-
-**Fix:** The existing `idx_alert_sent_items_sent_at` index handles this adequately. LOW priority.
-
-### P-04: `search_sessions` Has Overlapping Indexes (LOW, 1h)
-
-**Finding:** Multiple indexes cover `user_id`:
-- `idx_search_sessions_user_id` ON (user_id) -- added by DEBT-001
-- `idx_search_sessions_created` ON (user_id, created_at DESC) -- original
-- `idx_search_sessions_user_status_created` ON (user_id, status, created_at DESC) -- STORY-264
-
-**Impact:** Redundant indexes waste storage and slow writes. The composite indexes subsume the simple `user_id` indexes.
-
-**Fix:** Drop `idx_search_sessions_user_id` if the composite indexes serve all query patterns. Verify with `pg_stat_user_indexes`.
+### DB-DEBT-005: pipeline_items.search_id is TEXT, search_sessions.search_id is UUID
+- **Severity:** MEDIUM
+- **Description:** pipeline_items.search_id was added as TEXT (DEBT-120), while search_sessions.search_id is UUID. This type mismatch prevents adding a proper FK constraint and causes implicit casts in join queries.
+- **Impact:** No referential integrity between pipeline items and their originating search. Queries joining on search_id require explicit casting.
+- **Recommendation:** Change pipeline_items.search_id to UUID, or document that it may contain non-UUID values from external sources.
+- **Estimated effort:** 1-2 hours
 
 ---
 
-## 4. Security Issues
+## Category 2: Missing Indexes
 
-### SEC-01: Hardcoded Stripe Price IDs in Migrations (CRITICAL, 2h)
+### DB-DEBT-006: No index on conversations.user_id for RLS evaluation
+- **Severity:** MEDIUM
+- **Description:** The conversations table has `idx_conversations_user_id` created in migration 012. However, conversations RLS policy for users uses `auth.uid() = user_id` which benefits from this index. The index exists, so this is verified as NOT an issue. No action needed.
+- **Status:** RESOLVED (verified present)
 
-**Finding:** Migrations 015, 029, 20260226120000, and 20260301300000 contain production Stripe price IDs (e.g., `price_1T54vN9FhmvPslGYgfTGIAzV`). These are:
-1. Visible in the git repository to anyone with code access
-2. Hardcoded, meaning staging/dev environments get production price IDs
-3. Cannot be changed without a new migration
+### DB-DEBT-007: No index on user_subscriptions for common billing query pattern
+- **Severity:** MEDIUM
+- **Description:** The billing code in `quota.py` and `billing.py` frequently queries `user_subscriptions WHERE user_id = X AND is_active = true ORDER BY created_at DESC LIMIT 1`. The existing `idx_user_subscriptions_active` covers `(user_id, is_active)` but does not include `created_at` for the ORDER BY.
+- **Impact:** The ORDER BY created_at DESC requires a sort step after the index lookup. At current scale (low user count), this is negligible. At 10K+ active subscriptions, it could matter.
+- **Recommendation:** Replace `idx_user_subscriptions_active` with `(user_id, is_active, created_at DESC) WHERE is_active = true`.
+- **Estimated effort:** 0.5 hours
 
-**Impact:** If the repository becomes public, Stripe price IDs are exposed. While price IDs are not secret (they are public in Stripe checkout), they allow anyone to construct checkout sessions for production prices. The bigger risk is staging environments accidentally charging production prices.
-
-**Fix:** Move Stripe price IDs to environment variables or a separate config table. The IDs in migrations should be test/placeholder values, with production values set via Supabase dashboard or `railway variables`.
-
-### SEC-02: System Cache Warmer Account in `auth.users` (MEDIUM, 1h)
-
-**Finding:** Migration 20260226110000 inserts a system account (`00000000-0000-0000-0000-000000000000`) into `auth.users` with empty password. Migration 20260308330000 bans it until 2099.
-
-**Impact:** The account exists in auth.users with `authenticated` role. While banned, it still appears in user listings and could confuse admin dashboards. The nil UUID is a well-known sentinel value.
-
-**Fix:** Ensure admin user listing queries exclude `id = '00000000-0000-0000-0000-000000000000'`. The ban is adequate defense-in-depth.
-
-### SEC-03: `user_oauth_tokens.access_token` Stored in Public Schema (MEDIUM, 2h)
-
-**Finding:** OAuth access and refresh tokens are stored in the `user_oauth_tokens` table in the public schema. The column comments say "AES-256 encrypted" but the encryption is done at the application layer, not database layer.
-
-**Impact:** If an attacker gains database read access (e.g., via SQL injection or leaked service role key), they get encrypted tokens. The encryption key must be in a separate system for this to be effective. If the `OAUTH_ENCRYPTION_KEY` env var is compromised along with DB access, tokens are fully exposed.
-
-**Fix:** This is the standard pattern for token storage. Ensure `OAUTH_ENCRYPTION_KEY` is in a secrets manager, not just env vars. Consider using Supabase Vault (if available) for additional protection.
+### DB-DEBT-008: No retention index on reconciliation_log
+- **Severity:** LOW
+- **Description:** reconciliation_log has `idx_reconciliation_log_run_at` for history queries but no pg_cron retention job. The table is admin-only and low-volume, so this is not urgent.
+- **Impact:** Unbounded growth of reconciliation_log (though grows by at most ~30 rows/month).
+- **Recommendation:** Add pg_cron job to clean entries older than 12 months.
+- **Estimated effort:** 0.5 hours
 
 ---
 
-## 5. Migration Issues
+## Category 3: RLS & Security
 
-### M-01: Three Naming Conventions for Migrations (MEDIUM, 4h)
+### DB-DEBT-009: trial_email_log has RLS enabled but NO policies
+- **Severity:** MEDIUM
+- **Description:** trial_email_log (migration 20260224100000) enables RLS but creates no policies at all. The comment says "service_role only (backend accesses via service key)" which is correct since service_role bypasses RLS. However, if any authenticated-role query accidentally targets this table, it will return empty results silently.
+- **Impact:** No practical security risk (backend always uses service_role), but it violates the project pattern where every RLS-enabled table has an explicit `service_role_all` policy for clarity.
+- **Recommendation:** Add `CREATE POLICY "service_role_all" ON trial_email_log FOR ALL TO service_role USING (true) WITH CHECK (true)` for consistency.
+- **Estimated effort:** 0.5 hours
 
-**Finding:** Migration files use three different naming patterns:
-1. **Numbered prefix:** `001_profiles_and_sessions.sql` through `033_fix_missing_cache_columns.sql` (33 files)
-2. **Timestamped:** `20260220120000_add_search_id.sql` through `20260315100000_debt120.sql` (53 files)
-3. **Lettered suffix:** `006a_...`, `006b_...`, `027b_...` (3 files)
+### DB-DEBT-010: handle_new_user() trigger runs as SECURITY DEFINER with phone uniqueness check
+- **Severity:** MEDIUM
+- **Description:** The handle_new_user() function (latest version from migration 20260225110000) runs as SECURITY DEFINER (bypasses RLS) and performs a `SELECT COUNT(*) FROM profiles WHERE phone_whatsapp = _phone` before insert. This SELECT-then-INSERT pattern has a TOCTOU race condition under concurrent signups with the same phone number.
+- **Impact:** Two users could potentially sign up with the same phone number if requests arrive simultaneously. The partial UNIQUE index `idx_profiles_phone_whatsapp_unique` catches this at the constraint level, so the race condition would result in a constraint violation error (not silent duplicate).
+- **Recommendation:** The UNIQUE index already provides the real safety net. The COUNT(*) check in the trigger is redundant defense-in-depth. Consider removing the check and relying solely on the UNIQUE constraint with proper error handling in the backend. The RAISE EXCEPTION currently masks the real constraint name.
+- **Estimated effort:** 1 hour
 
-**Impact:** Supabase CLI applies migrations in lexicographic order. The numbered migrations (001-033) sort before timestamped ones (20260...), which is correct since they were created first. However, `027b` sorts between `027` and `028`, which could cause ordering issues if `027b` depends on something after `027`.
-
-**Fix:** Post-GTM, consider a migration squash to consolidate into a single baseline migration + new timestamped migrations going forward. This is a debt item, not a risk.
-
-### M-02: `027b` Was Superseded by `033` (LOW, 0.5h)
-
-**Finding:** `027b_search_cache_add_sources_and_fetched_at.sql` has a comment saying "SUPERSEDED by 033_fix_missing_cache_columns.sql". Both files use `IF NOT EXISTS` so they are safe to run in sequence, but `027b` is effectively dead code.
-
-**Impact:** None -- Supabase CLI runs both, and the IF NOT EXISTS makes them idempotent. But it is confusing.
-
-**Fix:** Leave as-is or add `-- DEPRECATED: see 033` comment to the file.
-
-### M-03: No Down Migrations (MEDIUM, 2h)
-
-**Finding:** None of the 86 migration files have corresponding "down" or "rollback" migrations. Some migrations include rollback instructions in comments, but these are not automated.
-
-**Impact:** If a migration causes issues in production, rollback requires manual SQL. Supabase CLI does not natively support down migrations, so this is the standard pattern.
-
-**Fix:** For critical migrations (billing, RLS), document rollback SQL in a `supabase/rollbacks/` directory. Not blocking.
-
-### M-04: Legacy Backend Migrations Still Exist (LOW, 0.5h)
-
-**Finding:** `backend/migrations/` contains 7 migration files that were bridged into Supabase migrations via DEBT-002 (20260308200000). The backend migrations are now redundant.
-
-**Impact:** Confusion for new developers about which migrations are authoritative.
-
-**Fix:** Add a `DEPRECATED.md` file in `backend/migrations/` pointing to `supabase/migrations/`. Or delete the files.
+### DB-DEBT-011: classification_feedback FK may still reference auth.users on fresh installs
+- **Severity:** HIGH
+- **Description:** The classification_feedback table was first created in DEBT-002 bridge migration (20260308200000) with `REFERENCES auth.users(id)`. DEBT-113 (20260311100000) detects and fixes this at runtime using a DO block. However, the original CREATE TABLE statement still references auth.users. If DEBT-113 fails or is skipped, the FK is wrong.
+- **Impact:** On a disaster-recovery full replay of migrations, classification_feedback could end up with an auth.users FK instead of profiles(id).
+- **Recommendation:** Edit the DEBT-002 bridge migration CREATE TABLE to reference profiles(id) directly (safe since DEBT-113 handles the runtime case). Or create a new migration that unconditionally replaces the FK.
+- **Estimated effort:** 1 hour
 
 ---
 
-## 6. Naming Conventions
+## Category 4: Migration Health
 
-### N-01: Inconsistent Constraint Names (LOW, 2h)
+### DB-DEBT-012: 85 migration files with complex dependency chains
+- **Severity:** MEDIUM
+- **Description:** The migration history spans 85 files with two naming conventions: sequential (`001_` to `033_`) and timestamped (`20260220...` to `20260315...`). Several migrations supersede earlier ones (e.g., 033 supersedes 027b). The handle_new_user() function has been redefined in **7 different migrations** (001, 007, 016, 024, 027, 20260224000000, 20260225110000). Some migrations reference constraints/indexes created by earlier migrations by exact name, creating fragile coupling.
+- **Impact:** Full replay from scratch is risky. A developer running migrations on a fresh DB may encounter errors if ordering assumptions are violated. Understanding the "current state" requires reading all 85 files.
+- **Recommendation:** Create a "squash migration" that represents the current state of the schema as a single idempotent SQL file. Keep it as `000_squashed_baseline.sql` alongside the incremental migrations. This does NOT replace the existing migrations -- it serves as documentation and disaster recovery baseline.
+- **Estimated effort:** 4-6 hours
 
-**Finding:** Constraints use multiple naming patterns:
-- `profiles_plan_type_check` (table_column_type)
-- `chk_profiles_subscription_status` (chk_table_column)
-- `unique_user_month` (descriptive)
-- `user_subscriptions_plan_id_fkey` (table_column_fkey)
-- `fk_monthly_quota_user_id` (fk_table_column)
+### DB-DEBT-013: backend/migrations/ directory is fully redundant
+- **Severity:** LOW
+- **Description:** The 10 files in `backend/migrations/` are all covered by Supabase migrations (confirmed by DEBT-002 bridge migration). The backend directory still exists and could confuse developers about which migration set to use.
+- **Impact:** No functional impact. Confusion risk only.
+- **Recommendation:** Add a `backend/migrations/README.md` stating "DEPRECATED: All migrations consolidated into supabase/migrations/ as of DEBT-002 (2026-03-08). Do not add new files here." Or remove the directory entirely.
+- **Estimated effort:** 0.5 hours
 
-DEBT-017 documented a naming convention (`chk_`, `fk_`, `uq_`, `idx_`), but legacy constraints retain original names.
-
-**Impact:** Makes it harder to find constraints by name pattern.
-
-**Fix:** Not worth renaming existing constraints. Enforce convention for new constraints going forward.
-
-### N-02: Inconsistent Trigger Names (LOW, 0.5h)
-
-**Finding:** Trigger naming varies:
-- `profiles_updated_at` (table_purpose)
-- `tr_pipeline_items_updated_at` (tr_table_purpose)
-- `trg_update_conversation_last_message` (trg_purpose)
-- `trigger_alerts_updated_at` (trigger_purpose)
-
-**Impact:** Cosmetic. All triggers function correctly.
-
-**Fix:** Not worth renaming. Enforce `trg_table_purpose` convention for new triggers.
+### DB-DEBT-014: Production Stripe price IDs hardcoded in migrations
+- **Severity:** MEDIUM
+- **Description:** Migrations 015, 029, 20260226120000, and 20260301300000 contain production Stripe price IDs (e.g., `price_1T54vN9FhmvPslGYgfTGIAzV`). Migration 021 documents this issue but no fix was implemented. Running these migrations against a staging/development environment will point to production Stripe prices.
+- **Impact:** Development/staging environments could accidentally create real Stripe subscriptions with production prices. A developer would need to manually UPDATE the price IDs after running migrations.
+- **Recommendation:** Move Stripe price IDs to environment variables or a separate configuration table. The plan_billing_periods table is already the source of truth -- seed it from env vars in a deployment script rather than hardcoding in migrations.
+- **Estimated effort:** 3-4 hours
 
 ---
 
-## 7. Data Integrity
+## Category 5: Data Integrity
 
-### D-01: `profiles.plan_type` Is a Denormalized Cache (HIGH, 4h)
+### DB-DEBT-015: No FK between search_state_transitions.search_id and search_sessions.search_id
+- **Severity:** LOW
+- **Description:** Documented in DEBT-017/DB-050: search_sessions.search_id is nullable and not UNIQUE (retries share IDs), so a FK constraint is impossible. Orphan cleanup relies on pg_cron retention (30 days for transitions, 12 months for sessions).
+- **Impact:** Orphan transitions accumulate between the 30-day and 12-month cleanup windows. No data corruption risk, just unnecessary rows.
+- **Recommendation:** Acceptable. The pg_cron retention job at 30 days handles cleanup adequately. Documented as intentional.
+- **Estimated effort:** 0 hours (accepted)
 
-**Finding:** `profiles.plan_type` is a cached copy of the user's current plan. It is kept in sync by:
-1. Stripe webhook handlers in `billing.py` that update it on subscription changes
-2. The `handle_new_user()` trigger that sets it to `'free_trial'`
-3. The now-removed `sync_profile_plan_type()` trigger (migration 030 dropped it because it referenced a non-existent `status` column)
+### DB-DEBT-016: plans table has inactive/legacy rows that cannot be deleted
+- **Severity:** LOW
+- **Description:** The user_subscriptions.plan_id FK uses ON DELETE RESTRICT (documented as intentional in migration 022). This means legacy plans (free, pack_5, pack_10, pack_20, monthly, annual, consultor_agil, maquina, sala_guerra) cannot be deleted even though they are inactive. They will remain in the plans table forever.
+- **Impact:** Plans table bloat (12 rows instead of 3). Any `SELECT * FROM plans` returns inactive plans that frontends must filter.
+- **Recommendation:** Acceptable. The `is_active = false` filter works correctly. Adding a `WHERE is_active = true` to the public RLS SELECT policy would prevent inactive plans from being returned to anonymous/authenticated users.
+- **Estimated effort:** 0.5 hours (if RLS filter added)
 
-If webhook processing fails or is delayed, `plan_type` can drift from the actual subscription state in `user_subscriptions`.
-
-**Impact:** The "fail to last known plan" design pattern means the system intentionally uses stale `plan_type` as a fallback. This is documented and accepted. However, there is no automated reconciliation to detect drift.
-
-**Fix:** The existing `reconciliation_log` table and Stripe reconciliation job should include `profiles.plan_type` vs `user_subscriptions.plan_id` drift detection. Estimated: 4h to add this check.
-
-### D-02: `search_state_transitions.search_id` Has No FK Constraint (MEDIUM, 1h)
-
-**Finding:** `search_id` in `search_state_transitions` correlates with `search_sessions.search_id`, but there is no FK constraint. This is documented in DEBT-017 as intentional: `search_sessions.search_id` is nullable and not unique (retries share IDs).
-
-**Impact:** Orphan rows are possible but cleaned up by the 30-day retention job.
-
-**Fix:** Accept as-is. The app-layer integrity + retention cleanup is the correct pattern for an audit trail table.
-
-### D-03: `organizations.plan_type` CHECK Is Overly Permissive (MEDIUM, 0.5h)
-
-**Finding:** The CHECK constraint on `organizations.plan_type` (added in DEBT-100) allows 13 values including legacy types (`'free'`, `'avulso'`, `'pack'`, `'monthly'`, `'annual'`) that are no longer valid for profiles.
-
-**Impact:** Organizations could be assigned legacy plan types that have no billing integration.
-
-**Fix:** Tighten the CHECK to only allow active plan types: `'free_trial'`, `'smartlic_pro'`, `'consultoria'`, `'master'`.
-
-### D-04: `partner_referrals.referred_user_id` Is Nullable After FK Change (HIGH, 1h)
-
-**Finding:** Migration 20260304100000 changed the FK to `ON DELETE SET NULL`, and DEBT-001 dropped the NOT NULL constraint to match. This means when a referred user deletes their account, the referral record keeps `referred_user_id = NULL` instead of being deleted.
-
-**Impact:** Revenue share calculations that filter by `referred_user_id IS NOT NULL` still work. But orphaned referral records accumulate. There is no retention cleanup for `partner_referrals`.
-
-**Fix:** Add a pg_cron job to clean up `partner_referrals WHERE referred_user_id IS NULL AND churned_at IS NOT NULL AND churned_at < NOW() - INTERVAL '12 months'`.
-
-### D-05: No Retention on `user_subscriptions` (HIGH, 1h)
-
-**Finding:** The `user_subscriptions` table has no pg_cron retention job. Old, inactive subscriptions accumulate indefinitely.
-
-**Impact:** Table will grow without bound. Each subscription change creates a new row (since `is_active=false` on old ones).
-
-**Fix:** Add retention: `DELETE WHERE is_active = false AND created_at < NOW() - INTERVAL '24 months'`.
-
-### D-06: `pipeline_items.search_id` Is TEXT, Not UUID (LOW, 0.5h)
-
-**Finding:** The `search_id` column on `pipeline_items` (added in DEBT-120) is `TEXT`, while `search_sessions.search_id` is `UUID`. They represent the same value.
-
-**Impact:** No FK can be created with mismatched types. Type comparison works (UUID auto-casts to text), but it is inconsistent.
-
-**Fix:** Change to UUID in a future migration (requires backfill if data exists).
+### DB-DEBT-017: No CHECK constraint on search_sessions.error_code
+- **Severity:** LOW
+- **Description:** The error_code column on search_sessions (added in 20260221100000) accepts any text. The COMMENT documents valid values (sources_unavailable, timeout, filter_error, llm_error, db_error, quota_exceeded, unknown) but there is no CHECK constraint enforcing them.
+- **Impact:** Inconsistent error codes could be stored. Analytics queries that GROUP BY error_code may show unexpected values.
+- **Recommendation:** Add CHECK constraint matching the documented values. Also add CHECK for response_state (live, cached, degraded, empty_failure) and pipeline_stage.
+- **Estimated effort:** 1 hour
 
 ---
 
-## 8. Findings Summary Table
+## Category 6: Performance Concerns
 
-| ID | Severity | Category | Finding | Est. Hours |
-|----|----------|----------|---------|------------|
-| SEC-01 | CRITICAL | Security | Hardcoded Stripe price IDs in migrations | 2h |
-| S-01 | HIGH | Schema | handle_new_user() omits trial_expires_at | 2h |
-| P-01 | HIGH | Performance | get_conversations_with_unread_count COUNT(*) OVER() | 4h |
-| D-01 | HIGH | Integrity | profiles.plan_type denormalized without reconciliation check | 4h |
-| D-04 | HIGH | Integrity | partner_referrals orphans accumulate (no retention) | 1h |
-| D-05 | HIGH | Integrity | user_subscriptions no retention on inactive rows | 1h |
-| R-02 | MEDIUM | RLS | Verify reconciliation_log policy in production | 0.5h |
-| S-04 | MEDIUM | Schema | search_state_transitions.user_id should be NOT NULL | 1h |
-| S-05 | MEDIUM | Schema | classification_feedback FK ordering on fresh install | 1h |
-| SEC-02 | MEDIUM | Security | System cache warmer in auth.users | 1h |
-| SEC-03 | MEDIUM | Security | OAuth tokens in public schema (app-layer encryption) | 2h |
-| M-01 | MEDIUM | Migration | Three naming conventions | 4h |
-| M-03 | MEDIUM | Migration | No down/rollback migrations | 2h |
-| P-02 | MEDIUM | Performance | cleanup_search_cache fires COUNT on every INSERT | 1h |
-| P-03 | MEDIUM | Performance | alert_sent_items retention scan pattern | 0.5h |
-| D-02 | MEDIUM | Integrity | search_state_transitions.search_id no FK (by design) | 1h |
-| D-03 | MEDIUM | Integrity | organizations.plan_type CHECK overly permissive | 0.5h |
-| S-02 | LOW | Schema | Deprecated stripe_price_id column | 1h |
-| S-03 | LOW | Schema | Inconsistent created_at nullability | 1h |
-| P-04 | LOW | Performance | Overlapping user_id indexes on search_sessions | 1h |
-| R-01 | LOW | RLS | trial_email_log missing explicit service_role policy | 0.5h |
-| R-03 | LOW | RLS | Organization admins cannot UPDATE org | 0.5h |
-| M-02 | LOW | Migration | Superseded 027b still in directory | 0.5h |
-| M-04 | LOW | Migration | Legacy backend/migrations/ still present | 0.5h |
-| N-01 | LOW | Naming | Inconsistent constraint naming | 2h |
-| N-02 | LOW | Naming | Inconsistent trigger naming | 0.5h |
-| D-06 | LOW | Integrity | pipeline_items.search_id TEXT vs UUID | 0.5h |
+### DB-DEBT-018: JSONB columns without size governance on several tables
+- **Severity:** MEDIUM
+- **Description:** While search_results_cache and search_results_store have 2MB CHECK constraints on their JSONB results columns, other JSONB columns have no size limits: audit_events.details, stripe_webhook_events.payload, classification_feedback (no JSONB but bid_objeto is unbounded TEXT), alert_preferences (no JSONB issue), alerts.filters, and search_sessions.resumo_executivo (TEXT, could be very long from LLM output).
+- **Impact:** A malicious or buggy API call could insert very large JSONB/TEXT values, causing storage bloat and slow queries.
+- **Recommendation:** Add CHECK constraints on: stripe_webhook_events.payload (< 256KB), audit_events.details (< 64KB), alerts.filters (< 16KB). For search_sessions.resumo_executivo, add a 50KB limit. Backend validation is the primary defense but DB-level constraints provide defense-in-depth.
+- **Estimated effort:** 2 hours
+
+### DB-DEBT-019: pg_cron job scheduling collision at 4:00 UTC
+- **Severity:** LOW
+- **Description:** Two pg_cron jobs run at exactly 4:00 UTC daily: `cleanup-search-state-transitions` and `cleanup-expired-search-results`. The DEBT-009 migration intentionally staggers jobs by 5-minute intervals (4:00, 4:05, 4:10, etc.) but these two overlap.
+- **Impact:** Simultaneous DELETE queries could cause brief I/O contention. At current data volumes this is negligible.
+- **Recommendation:** Reschedule `cleanup-expired-search-results` to 3:55 UTC to avoid collision.
+- **Estimated effort:** 0.5 hours
 
 ---
 
-## 9. Recommended Priority Actions
+## Summary Table
 
-### Immediate (before next release)
-1. **SEC-01:** Move Stripe price IDs out of migrations into env vars or config table
-2. **S-01:** Update `handle_new_user()` to set `trial_expires_at`
-
-### Short-term (next sprint)
-3. **D-05:** Add retention job for inactive `user_subscriptions`
-4. **D-04:** Add retention job for orphaned `partner_referrals`
-5. **D-01:** Add plan_type drift detection to reconciliation job
-6. **P-01:** Optimize `get_conversations_with_unread_count()` total count
-
-### Medium-term (next quarter)
-7. **M-01:** Migration squash to single baseline
-8. **M-03:** Create rollback SQL for critical migrations
-9. **S-04:** Add NOT NULL to `search_state_transitions.user_id`
-10. **D-03:** Tighten `organizations.plan_type` CHECK
+| ID | Severity | Category | Description | Effort |
+|----|----------|----------|-------------|--------|
+| DB-DEBT-001 | MEDIUM | Schema | profiles table too wide (20+ columns) | 8-12h |
+| DB-DEBT-002 | HIGH | Schema | Dual subscription_status tracking | 3-4h |
+| DB-DEBT-003 | LOW | Schema | organizations.plan_type overly permissive | 0.5h |
+| DB-DEBT-004 | LOW | Schema | search_sessions too wide (24 columns) | 16+h |
+| DB-DEBT-005 | MEDIUM | Schema | pipeline_items.search_id TEXT vs UUID type mismatch | 1-2h |
+| DB-DEBT-007 | MEDIUM | Indexes | user_subscriptions missing created_at in active index | 0.5h |
+| DB-DEBT-008 | LOW | Indexes | reconciliation_log no retention job | 0.5h |
+| DB-DEBT-009 | MEDIUM | Security | trial_email_log RLS has no explicit policies | 0.5h |
+| DB-DEBT-010 | MEDIUM | Security | handle_new_user TOCTOU race on phone check | 1h |
+| DB-DEBT-011 | HIGH | Security | classification_feedback FK to auth.users on fresh install | 1h |
+| DB-DEBT-012 | MEDIUM | Migrations | 85 migrations need squash baseline | 4-6h |
+| DB-DEBT-013 | LOW | Migrations | backend/migrations/ fully redundant | 0.5h |
+| DB-DEBT-014 | MEDIUM | Migrations | Stripe price IDs hardcoded in migrations | 3-4h |
+| DB-DEBT-015 | LOW | Integrity | No FK on search_state_transitions.search_id | 0h |
+| DB-DEBT-016 | LOW | Integrity | Legacy plans cannot be deleted | 0.5h |
+| DB-DEBT-017 | LOW | Integrity | No CHECK on search_sessions.error_code | 1h |
+| DB-DEBT-018 | MEDIUM | Performance | JSONB columns without size governance | 2h |
+| DB-DEBT-019 | LOW | Performance | pg_cron scheduling collision at 4:00 UTC | 0.5h |
 
 ---
 
-*Generated 2026-03-20 by @data-engineer during Brownfield Discovery Phase 2.*
+## Priority Recommendations
+
+### Immediate (this sprint)
+1. **DB-DEBT-002** (HIGH) -- Document or unify subscription_status semantics
+2. **DB-DEBT-011** (HIGH) -- Fix classification_feedback FK for fresh installs
+
+### Next sprint
+3. **DB-DEBT-005** (MEDIUM) -- Fix pipeline_items.search_id type to UUID
+4. **DB-DEBT-009** (MEDIUM) -- Add explicit service_role policy to trial_email_log
+5. **DB-DEBT-014** (MEDIUM) -- Extract Stripe price IDs from migrations
+
+### Backlog
+6. **DB-DEBT-012** (MEDIUM) -- Create squash baseline migration
+7. **DB-DEBT-018** (MEDIUM) -- Add JSONB size constraints
+8. **DB-DEBT-007** (MEDIUM) -- Optimize user_subscriptions index
+9. All LOW items
+
+---
+
+## Positive Findings
+
+The following areas are **well-implemented** and deserve recognition:
+
+1. **RLS coverage is 100%** -- All 27 public tables have RLS enabled with appropriate policies
+2. **Service role standardization is complete** -- No `auth.role()` patterns remain (verified by DEBT-113 assertion)
+3. **FK standardization to profiles(id)** -- All user_id FKs point to profiles(id) instead of auth.users(id)
+4. **Comprehensive retention policies** -- 15 pg_cron jobs cover all growing tables with appropriate retention windows
+5. **2MB JSONB constraints** -- Applied to the two highest-volume JSONB tables (search_results_cache, search_results_store)
+6. **Optimistic locking** -- pipeline_items.version and user_subscriptions.version prevent lost updates
+7. **Atomic quota operations** -- Three RPC functions (check_and_increment_quota, increment_quota_atomic, increment_quota_fallback_atomic) prevent race conditions
+8. **Trigger consolidation** -- Single canonical `set_updated_at()` function used by 13+ tables (cleanup completed in DEBT-001)
+9. **Audit trail** -- SHA-256 hashed PII in audit_events meets LGPD/GDPR requirements
+10. **System account security** -- Cache warmer account banned until 2099, empty password, is_admin=false

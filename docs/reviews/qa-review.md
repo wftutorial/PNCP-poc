@@ -1,388 +1,307 @@
 # QA Review - Technical Debt Assessment
-**Reviewer:** @qa
-**Date:** 2026-03-20
-**Documents Reviewed:** technical-debt-DRAFT.md (Phase 4) + db-specialist-review.md (Phase 5) + ux-specialist-review.md (Phase 6)
-**Supersedes:** qa-review.md v2.0 (2026-03-12 GTM Readiness)
+
+**Reviewer:** @qa (Quinn)
+**Date:** 2026-03-21
+**Input:** docs/prd/technical-debt-DRAFT.md + system-architecture.md + DB-AUDIT.md + frontend-spec.md
+**Scope:** General quality review, gap analysis, test state assessment, gate decision
 
 ---
 
-## Gate Status: APPROVED WITH CONDITIONS
+## Gate Status: APPROVED (with caveats)
+
+The assessment is comprehensive, well-structured, and actionable. It correctly identifies 54 actionable debt items across 3 audits with consistent severity ratings, effort estimates, and a sound dependency-aware execution plan. The caveats below are improvements to track, not blockers.
 
 ---
 
-## Resumo da Revisao
+## 1. Gaps Identificados
 
-The Technical Debt Assessment is thorough, well-structured, and actionable. The original DRAFT identified 79 items across 3 areas (System, Database, Frontend). The specialist reviews added rigor: @data-engineer removed 3 false positives, added 4 new items, and downgraded 8 severities based on production evidence; @ux-design-expert removed 2 false positives, added 4 new items, and significantly recalibrated 11 severities by verifying against actual source code rather than spec.
+### 1.1 Areas Nao Cobertas
 
-However, this QA review identified several gaps that must be addressed before the assessment can drive sprint planning. The most significant finding is a **critical mischaracterization of SYS-01 (CORS)** -- the DRAFT and system-architecture.md describe `allow_origins=["*"]` as a CRITICAL production security risk, but investigation reveals a more nuanced situation involving dead code vs. live code paths. There are also cross-cutting concerns (security, observability, API contract stability) that no specialist covered, and the dependency analysis underestimates regression risks.
+| Area | Status | Impact |
+|------|--------|--------|
+| **CI/CD debt** | Not audited | 17 GitHub Actions workflows exist but no audit of workflow health, redundancy, or gaps (e.g., `tests.yml` vs `backend-tests.yml` overlap) |
+| **Dependency debt (backend)** | Not audited | `requirements.txt` has no pinned hashes, no `pip-audit` in CI. Python dependency vulnerabilities are unchecked beyond Dependabot. |
+| **Dependency debt (frontend)** | Partially covered | DEBT-FE-001 (react-hook-form) noted, but no audit of outdated/vulnerable packages. `framer-motion 12.33.0` and `@sentry/nextjs 10.38.0` versions not validated. |
+| **Observability/monitoring debt** | Not audited | Prometheus, OpenTelemetry, and Sentry are in the stack but no audit of metric coverage gaps, alert rules, or dashboard completeness. |
+| **Documentation debt** | Minimally covered | DEBT-SYS-018 (stale backend docs) is LOW priority. No audit of API documentation (OpenAPI spec completeness), inline code comments, or developer onboarding docs. |
+| **Infrastructure/IaC debt** | Not audited | Railway configuration is spread across `railway.toml`, `railway-worker.toml`, and env vars. No audit of infrastructure reproducibility. |
+| **Secret management debt** | Not audited | 356 env vars mentioned but no audit of rotation policy, access scope, or whether secrets are properly scoped per service. |
 
-The overall quality of the assessment is high. The specialist reviews are exceptionally well-done -- both went beyond surface validation to verify claims against actual code, which is exactly the rigor expected. The 5 false positives removed (DB-07, DB-16, DB-20, FE-13, FE-22) demonstrate the value of specialist review. The assessment is ready for sprint planning after the conditions below are met.
+### 1.2 Debitos Nao Identificados (QA-found)
 
----
-
-## Gaps Identificados
-
-### Areas Nao Cobertas
-
-**1. API Contract Stability (not assessed by any specialist)**
-
-The DRAFT identifies SYS-07 (inconsistent API versioning) but no one assessed the actual breaking change risk. The system has:
-- 49+ endpoints across 38 route modules
-- Tests use snapshot-based API contract validation (`backend/tests/snapshots/api_contracts/`)
-- No consumer-driven contract tests (Pact or equivalent)
-- Frontend proxy routes are tightly coupled to backend response shapes
-
-If a backend response schema changes, the frontend breaks silently -- no type safety crosses the proxy boundary. The `openapi.json` in the frontend is generated but not used for validation at build time. This is a gap.
-
-**2. Secrets Rotation and Key Management (mentioned, not assessed)**
-
-DB-11 (OAuth tokens in public schema) was assessed by @data-engineer as "standard pattern." SEC-03 in the DB audit mentions encryption keys. But nobody assessed:
-- Is `OAUTH_ENCRYPTION_KEY` rotated? What is the rotation procedure?
-- Are Stripe API keys rotated? What happens during rotation?
-- Is there a secrets inventory with rotation schedule?
-- `SUPABASE_SERVICE_ROLE_KEY` has unlimited power -- is access audited?
-
-**3. Dependency Supply Chain Security**
-
-No mention of:
-- `pip-audit` results (the CI runs it, but are there known vulnerabilities?)
-- `npm audit` results for frontend
-- Dependabot auto-merge for minor versions -- does this introduce risk?
-- Lock file integrity verification
-
-**4. Rate Limiting Bypass Risk**
-
-The system has rate limiting (10/min per user for search, 5/5min per IP for login). But:
-- Rate limiting falls back to in-memory when Redis is down (per-worker only)
-- With 2 Gunicorn workers, effective rate limit doubles during Redis outage
-- No mention of rate limiting on the SSE endpoint (`/buscar-progress/{id}`)
-- No assessment of DDoS resilience at the Railway level
-
-**5. Data Privacy / LGPD Compliance**
-
-The system handles:
-- User PII (email, name, CNPJ)
-- Search behavior (what companies search for, which bids they track)
-- OAuth tokens
-
-No specialist assessed LGPD compliance: data retention policies for PII, right-to-deletion implementation, data export capability, privacy policy accuracy vs. actual data practices.
-
-### Riscos Nao Mapeados
-
-**1. SYS-01 (CORS) Mischaracterization -- IMPORTANT**
-
-Upon code investigation, the CORS situation is more nuanced than the DRAFT presents:
-
-- `backend/main.py` (the file loaded by `uvicorn main:app` / `gunicorn main:app`) **does** have `allow_origins=["*"]`
-- `backend/startup/app_factory.py` has a proper `create_app()` with `get_cors_origins()` that rejects wildcards
-- `backend/config/cors.py` has production-safe CORS logic with explicit origin lists
-- **The app_factory pattern was extracted (DEBT-107, commit `4d51a53a`) but was never wired as the entry point**
-- `start.sh` still runs `main:app`, not `startup.app_factory:create_app()`
-
-This means either: (a) the production app truly runs with `allow_origins=["*"]` and only root + health endpoints (which would mean the entire API is broken), or (b) there is additional route registration happening at import time that was not visible in the code I examined. Given that the production app works (7332 tests pass against `main:app`), option (b) is more likely -- routes are registered somewhere via side effects.
-
-**Recommendation:** Before planning SYS-01 remediation, verify: (1) Does production actually use `main:app` from the 92-line stub, or has `start.sh` been overridden in Railway? (2) If it does use the stub, how are routes registered? (3) The correct fix may be simply changing `start.sh` to use `startup.app_factory:create_app` rather than patching CORS in `main.py`.
-
-**2. Dead Code Path Risk**
-
-The coexistence of `main.py` (old stub) and `startup/app_factory.py` (new factory) is itself a risk. Tests import `from main import app` (the old stub), but production may or may not use the same code path. This means:
-- Tests may not be testing the actual production CORS configuration
-- Tests may not be testing the actual production middleware stack
-- The `startup/` directory may be entirely dead code
-
-This dual-path situation is not documented in the DRAFT. It should be elevated to HIGH priority.
-
-**3. Webhook Idempotency**
-
-Stripe webhooks are mentioned (signature verification confirmed) but:
-- Is webhook processing idempotent? If Railway delivers the same webhook twice (which happens during deploys), does the system handle it?
-- `stripe_webhook_events` table exists for logging, but is it used for dedup?
-- Billing state corruption from duplicate webhooks could cause revenue issues
-
-**4. Background Job Failure Recovery**
-
-ARQ jobs (LLM summaries, Excel generation) have fallback to inline execution when Redis is down. But:
-- What happens if a job starts, Redis dies mid-execution, and the job is lost?
-- Is there a dead letter queue for failed jobs?
-- Are job results persisted before sending SSE events? (If SSE event is sent but client missed it, can it recover?)
+| ID | Debt | Severity | Area | Evidence |
+|----|------|----------|------|----------|
+| **QA-DEBT-001** | `cron_jobs.py` (2,039 LOC) has ZERO test files | HIGH | Backend/Testing | `find backend/tests -name "*cron*"` returns nothing. This is a 2K LOC module running scheduled production tasks with no automated verification. |
+| **QA-DEBT-002** | `supabase_client.py` (537 LOC, contains SupabaseCircuitBreaker) has ZERO test files | HIGH | Backend/Testing | The circuit breaker singleton is used by the entire backend. Tests mock it but never test it directly. |
+| **QA-DEBT-003** | `search_state_manager.py` (544 LOC) has ZERO test files | MEDIUM | Backend/Testing | State machine for search lifecycle is untested. |
+| **QA-DEBT-004** | `worker_lifecycle.py` (125 LOC) has ZERO test files | MEDIUM | Backend/Testing | ARQ worker startup/shutdown logic is untested. |
+| **QA-DEBT-005** | 11 `filter_*.py` submodules have no individual test files | MEDIUM | Backend/Testing | `filter_basic.py`, `filter_density.py`, `filter_keywords.py`, `filter_recovery.py`, `filter_status.py`, `filter_uf.py`, `filter_utils.py`, `filter_value.py` -- all untested individually. Tests exist for `filter.py` (the monolith) but not for the decomposed submodules. This means DEBT-SYS-001 (filter decomposition) cannot verify correctness of individual submodules after refactoring. |
+| **QA-DEBT-006** | `webhooks/` directory has no test file named `test_webhook_handler.py` -- coverage is via `test_stripe_webhook.py` and `test_payment_failed_webhook.py` which may not cover all 10+ event types | MEDIUM | Backend/Security | DEBT-SYS-007 identifies the webhook handler as 1,192 LOC. Need to verify all Stripe event types are tested. |
+| **QA-DEBT-007** | Frontend pages with zero tests: `onboarding/`, `mensagens/`, `redefinir-senha/`, `ajuda/`, `features/` | MEDIUM | Frontend/Testing | Onboarding is the first protected experience (783 LOC) with no unit tests. |
+| **QA-DEBT-008** | No backend `requirements.txt` lockfile with hashes | LOW | Backend/Security | `pip install -r requirements.txt` is vulnerable to supply chain attacks without hash verification. |
+| **QA-DEBT-009** | Test-to-source LOC ratio discrepancy | INFO | Backend/Testing | DRAFT says 1.8x but the real concern is not the ratio -- it is that test coverage is unevenly distributed. Some modules have 10+ test files (filter, auth, cache) while others have zero. |
 
 ---
 
-## Analise de Riscos Cruzados
+## 2. Riscos Cruzados
 
 | Risco | Areas Afetadas | Probabilidade | Impacto | Mitigacao |
-|-------|----------------|---------------|---------|-----------|
-| CORS fix breaks frontend proxy | SYS-01, Frontend proxy, E2E tests | MEDIUM | HIGH | Must test with actual production origins. E2E tests run against localhost -- they would not catch a wrong origin list. |
-| PNCP async migration breaks search | SYS-02, search pipeline, cache, tests | LOW | CRITICAL | 7332 tests provide good coverage, but httpx vs requests mock patterns differ. All `@patch("pncp_client.requests.Session")` mocks will break. |
-| Component library adoption breaks existing pages | FE-02, FE-01, FE-03 | MEDIUM | MEDIUM | Visual regression testing needed. No Storybook (FE-16) makes verification harder. Suggest Playwright screenshot comparison as gate. |
-| Migration squash breaks fresh installs | DB-12, CI, staging | HIGH | HIGH | @data-engineer correctly rejected this. The DRAFT should remove squash from the recommended actions. |
-| Retention jobs delete valid data | DB-05, DB-06, DB-29 | LOW | HIGH | Must add `WHERE` conditions carefully. Test with production-like data volumes first. Add dry-run mode. |
-| Test pollution fixes break existing tests | SYS-14, all test suites | MEDIUM | MEDIUM | Fixing root causes (sys.modules, importlib.reload) may change import behavior and break tests that depend on the polluted state. Run full suite after each fix. |
-| plan_type reconciliation triggers false alarms | DB-04, billing, quota | LOW | MEDIUM | @data-engineer notes reconciliation already exists but lacks granular metrics. Adding metrics should not change behavior. |
-| `app_factory` vs `main.py` dual path | SYS-01, SYS-06, all middleware, all routes | HIGH | CRITICAL | This is the highest-risk item. If the factory is not the production entry point, all middleware (CORS, rate limiting, correlation IDs, security headers, deprecation warnings) may not be active. Must verify immediately. |
+|-------|---------------|---------------|---------|-----------|
+| **Billing status drift + untested webhook paths** | DEBT-DB-001 + DEBT-SYS-007 + QA-DEBT-006 | MEDIUM | CRITICAL | Paying users could lose access or free users could get paid features. Requires comprehensive webhook event type test matrix before any billing refactor. |
+| **Backend restructuring breaks import paths** | DEBT-SYS-004 + DEBT-SYS-001 + DEBT-SYS-002 | HIGH (during Wave 3) | HIGH | 344 test files depend on current import paths. A single import change can cascade into dozens of test failures. Must snapshot test count before and after each restructuring step. |
+| **Filter decomposition without submodule tests** | DEBT-SYS-001 + DEBT-SYS-012 + QA-DEBT-005 | HIGH | MEDIUM | The 11 `filter_*.py` submodules have no individual tests. Completing the filter decomposition (DEBT-SYS-001) without first adding submodule tests means regressions will be caught only by the monolith tests, which may not cover all edge cases in the submodules. |
+| **Cron jobs untested + migration squash risk** | QA-DEBT-001 + DEBT-DB-008 | LOW | HIGH | `cron_jobs.py` orchestrates 15+ pg_cron retention jobs. If migration squash (DEBT-DB-008) alters cron job definitions, there are no tests to catch regressions. |
+| **Circuit breaker untested + cache dependency** | QA-DEBT-002 + DEBT-SYS-006 | LOW | HIGH | `SupabaseCircuitBreaker` in `supabase_client.py` is a global singleton affecting every DB operation. If cache refactoring (DEBT-SYS-006) changes the interaction pattern, the breaker behavior is unverified. |
+| **Frontend error boundaries missing on critical flows** | DEBT-FE-007 + QA-DEBT-007 | MEDIUM | MEDIUM | Onboarding has neither error boundaries nor unit tests. A runtime error during first-time user experience has no recovery path and no automated detection. |
 
 ---
 
-## Validacao de Dependencias
+## 3. Dependencias Validadas
 
-### Ordem de Resolucao
+### 3.1 Ordem Correta?
 
-The DRAFT proposes a 4-sprint execution plan. The order is largely correct, with these adjustments:
+The proposed 4-wave execution order is **sound** with one correction needed:
 
-**Sprint 0 adjustments:**
-- **ADD:** Investigate and resolve the `main.py` vs `app_factory.py` dual-path issue BEFORE fixing CORS. If `app_factory` is dead code, wiring it in as the entry point resolves SYS-01, SYS-06, SYS-17, and SYS-18 simultaneously.
-- **KEEP:** DB-01 (Stripe IDs) as P0 -- confirmed CRITICAL by @data-engineer.
-- **KEEP:** FE-19 (react-hook-form dep) and FE-05 quick fixes.
+**Wave 1 (Quick wins):** Correct. These are truly independent and low-risk. However, the DRAFT lists 18 quick wins at ~25h combined -- this is aggressive for a single sprint alongside feature work. Recommend splitting into 2 sub-waves:
+- Wave 1a: Security quick wins (DEBT-DB-002 FK fix, DEBT-DB-006 RLS, DEBT-FE-008 skip-link, DEBT-FE-001 deps)
+- Wave 1b: Maintainability quick wins (DEBT-SYS-013 ComprasGov, DEBT-SYS-008 types, remaining items)
 
-**Sprint 1 adjustments:**
-- **ELEVATE:** SYS-14 (test pollution) should be Sprint 0, not Sprint 1. The DRAFT correctly notes it "blocks velocity of ALL other items." Fixing it in Sprint 0 means Sprint 1-3 work is faster.
-- **KEEP:** DB-05 + DB-06 retention jobs.
-- **ADD:** FE-34 (AuthProvider location) should be done BEFORE FE-09 (component locations). Moving AuthProvider to `contexts/` eliminates the circular dependency risk (FE-26) and is a prerequisite for clean component reorganization.
+**Wave 2 (Database hygiene):** Correct dependency chain. DEBT-DB-001 (subscription status) must precede DEBT-DB-008 (migration squash) because the squash should capture the resolved state.
 
-**Sprint 2 adjustments:**
-- **AGREE:** FE-02 (component library) before FE-01 (inline var migration). This dependency is correctly identified.
-- **CONCERN:** SYS-02 (PNCP async) at 16h is the largest single item. It should be done on a feature branch with incremental migration (one method at a time), not as a big-bang rewrite.
+**Wave 3 (Backend restructuring):** Correct but **must add a prerequisite**: create tests for untested modules (QA-DEBT-001 through QA-DEBT-005) BEFORE restructuring. Without these tests, restructuring is flying blind.
 
-**Sprint 3 adjustments:**
-- **AGREE:** FE-01 (40h -> 32h per @ux-design-expert) with codemod automation.
-- **CONCERN:** FE-03 (buscar refactor, 16h) and SYS-15 (state management, 16h) are the same problem. The DRAFT notes this but still counts both in the total. Remove SYS-15 from the sprint plan to avoid double-counting.
+**Wave 4 (Frontend quality):** Correct and can genuinely run in parallel with Wave 3.
 
-### Critical Path
+### 3.2 Bloqueios Potenciais
 
-```
-[Sprint 0 - Week 1]
-  main.py/app_factory unification (resolves SYS-01, SYS-06, SYS-17, SYS-18)
-    |
-  DB-01 (Stripe IDs) -- independent, parallel
-    |
-  SYS-14 (test pollution) -- unlocks velocity
-    |
-[Sprint 1 - Weeks 2-3]
-  FE-34 (AuthProvider move) -> FE-09 (component locations)
-    |                              |
-  DB retention jobs (parallel)     |
-    |                              v
-[Sprint 2 - Weeks 4-5]          FE-02 (component library)
-  SYS-02 (PNCP async)              |
-  DB-04 (reconciliation metrics)   |
-                                   v
-[Sprint 3 - Weeks 6-7]         FE-01 (inline var codemod)
-                                FE-03 (buscar refactor)
-```
+| Bloqueio | Afeta | Descricao |
+|----------|-------|-----------|
+| **No staging Stripe account** | DEBT-DB-009 (Stripe price IDs) | The DRAFT asks this question to @data-engineer. If no staging Stripe account exists, this item is blocked until one is created (1-2h setup on Stripe side). |
+| **Test creation before restructuring** | Wave 3 (all) | Backend restructuring without first adding tests for `cron_jobs.py`, `supabase_client.py`, `search_state_manager.py`, and `filter_*.py` submodules is risky. Estimated blocker: 16-24h of test writing. |
+| **CI workflow confusion** | Any parallel work | `tests.yml`, `backend-tests.yml`, and `backend-ci.yml` appear to overlap. Developers may not know which workflow gates their PR. Should be clarified before Wave 3 to avoid CI confusion during high-change periods. |
 
-### Bloqueios Potenciais
+### 3.3 Oportunidades de Paralelizacao
 
-1. **main.py vs app_factory investigation** -- If the factory is dead code, wiring it in requires testing the entire middleware stack. Could surface unexpected issues.
-2. **Railway environment access** -- Verifying CORS configuration in production requires Railway CLI access or dashboard access. Not a code-only fix.
-3. **Stripe test vs production environment** -- DB-01 fix requires Stripe test-mode price IDs for staging. If test-mode isn't set up, this blocks.
-4. **PNCP API instability** -- SYS-02 (async migration) requires stable PNCP responses for testing. If PNCP changes its API again (as it did with the page size change), the migration could be delayed.
+The DRAFT's Group A/B/C parallelization is correct. Additional parallelization opportunities:
+
+- **DEBT-FE-002 (SearchForm ARIA) + DEBT-FE-008 (skip-link)**: Both are accessibility, but touch completely different files. Can be done simultaneously.
+- **DEBT-SYS-011 (test audit) can start in Wave 1**: It is an analysis task, not a code change. Starting early provides data for Wave 3 planning.
+- **QA-DEBT-001 through QA-DEBT-005 (missing tests)**: Can be written in parallel with Wave 1 and Wave 2, serving as the prerequisite for Wave 3.
 
 ---
 
-## Testes Requeridos
+## 4. Estado Atual dos Testes
 
-### Pre-Remediacao (escrever ANTES de corrigir)
+### 4.1 Backend
 
-These tests document current behavior and serve as regression guards:
+| Metric | Value |
+|--------|-------|
+| Total test files | 344 (332 in tests/, 12 in fixtures/integration/snapshots) |
+| Estimated tests | 7,332+ passing, 0 failures baseline |
+| Test LOC | ~140,199 |
+| Source LOC | ~77,364 |
+| Test/source ratio | 1.81x |
+| Files with skip/xfail markers | 10+ (checked: `test_admin`, `test_alerts`, `test_alert_matcher`, `test_background_revalidation`, `test_bulkhead`, `test_cache_correctness`, `test_cache_refresh`, integration tests) |
+| Integration test directory | Yes (backend/tests/integration/) |
+| Snapshot tests | Yes (backend/tests/snapshots/api_contracts/) |
+| Conftest fixtures | Comprehensive (ARQ isolation, circuit breaker reset, async task cleanup, fast asyncio sleep) |
 
-| Debito | Teste Pre-Remediacao | Tipo |
-|--------|----------------------|------|
-| SYS-01 (CORS) | Test that verifies actual CORS headers returned by production app (not just config). Use TestClient with `Origin` header. | Backend integration |
-| SYS-02 (PNCP async) | Characterization tests for all `pncp_client.py` public methods with mock `httpx.Client` responses. Document exact request/response shapes. | Backend unit |
-| DB-01 (Stripe IDs) | Test that `plan_billing_periods` can be populated without hardcoded IDs (seed script test). | Backend integration |
-| DB-05/06 (retention) | Test that documents current row counts and growth patterns. Snapshot test for retention query correctness. | Backend unit |
-| FE-01 (inline var) | Visual regression screenshots of 5 key pages (buscar, dashboard, pipeline, planos, login) BEFORE codemod. | E2E (Playwright) |
-| FE-02 (component library) | Inventory test that lists all ad-hoc Card/Modal/Badge implementations. Serves as migration checklist. | Script/audit |
-| FE-07 (useIsMobile) | CLS measurement on mobile viewport BEFORE fix (Lighthouse CI or Playwright). | E2E |
-| SYS-14 (test pollution) | Run `python scripts/run_tests_safe.py --parallel 1` (sequential, no isolation) and document which tests fail. This is the "pollution baseline." | Meta-test |
+**Coverage gaps (modules with ZERO test files):**
 
-### Pos-Remediacao (validar correcao)
+| Module | LOC | Risk Level | Notes |
+|--------|-----|------------|-------|
+| `cron_jobs.py` | 2,039 | HIGH | Production scheduled tasks, untested |
+| `supabase_client.py` | 537 | HIGH | Circuit breaker singleton, only mock-tested indirectly |
+| `search_state_manager.py` | 544 | MEDIUM | Search lifecycle state machine |
+| `worker_lifecycle.py` | 125 | MEDIUM | ARQ worker startup/shutdown |
+| `filter_basic.py` through `filter_value.py` (8 files) | ~1,500 est. | MEDIUM | Decomposed filter submodules |
+| `bid_analyzer.py` | unknown | LOW | Bid analysis logic |
+| `business_hours.py` | unknown | LOW | Business hours utility |
+| `exceptions.py` | unknown | LOW | Custom exception classes |
+| `schema_contract.py` | unknown | LOW | Schema validation |
+| `schemas_stats.py` | unknown | LOW | Schema statistics |
+| `seed_users.py` | unknown | LOW | User seeding script |
+| `search_context.py` | 137 | LOW | Search context object |
 
-| Debito | Teste Pos-Remediacao | Criterio de Sucesso |
-|--------|----------------------|---------------------|
-| SYS-01 (CORS) | Request from `https://evil.com` returns no `Access-Control-Allow-Origin` header. Request from `https://smartlic.tech` returns correct header. | Zero unauthorized origins |
-| SYS-02 (PNCP async) | Full search pipeline test with mocked async httpx responses. Verify no `asyncio.to_thread()` usage remains. | All 7332 tests pass + zero `requests` imports |
-| DB-01 (Stripe IDs) | Fresh install with `seed.sql` populates correct price IDs from env vars. `grep -r 'price_1' supabase/migrations/` returns only historical (already-applied) migrations. | Staging uses test-mode IDs |
-| FE-01 (inline var) | `grep -r 'var(--' frontend/app/ | wc -l` returns <50 (gradient/glass exceptions only). | >95% migration |
-| FE-02 (component library) | Import analysis: `grep -r 'from.*components/ui' | sort -u` shows Card, Modal, Badge, Select, Tabs in use. | 5 new primitives adopted |
-| SYS-14 (test pollution) | `pytest --timeout=30 -q` runs full suite without hangs (Linux) or `run_tests_safe.py --parallel 1` passes all (Windows). | Zero pollution-caused failures |
+### 4.2 Frontend
 
-### Metricas de Qualidade
+| Metric | Value |
+|--------|-------|
+| Total test files | 306 |
+| Estimated tests | 5,583+ passing, 3 pre-existing failures |
+| Coverage threshold | 60% (CI gate) |
+| jest.setup.js polyfills | `crypto.randomUUID`, `EventSource` |
+| Module name mapper | `@/` -> `<rootDir>/` (documented pitfall) |
 
-| Metrica | Baseline (hoje) | Meta pos-remediacao |
-|---------|-----------------|---------------------|
-| Backend test count | 7332 pass / 0 fail | >= 7332 pass / 0 fail (no regression) |
-| Frontend test count | 5583 pass / 0 fail | >= 5583 pass / 0 fail (no regression) |
-| E2E test count | 60 pass | >= 60 pass |
-| Backend test coverage | 70%+ (CI gate) | >= 70% (maintain) |
-| Frontend test coverage | 60%+ (CI gate) | >= 60% (maintain) |
-| `var(--` occurrences in frontend | ~1,754 | <50 |
-| UI primitive components | 6 | >= 11 (Card, Modal, Badge, Select, Tabs added) |
-| CORS unauthorized origins allowed | `*` (all) | 0 (explicit allowlist) |
-| Tables without retention policy | 3+ (user_subscriptions, partner_referrals, monthly_quota) | 0 |
-| Accessibility critical violations (axe-core) | 0 (per E2E baseline) | 0 (maintain) |
+**Coverage gaps (pages with ZERO test files):**
 
----
+| Page | LOC | Risk Level | Notes |
+|------|-----|------------|-------|
+| `onboarding/page.tsx` | 783 | HIGH | First protected user experience, no tests |
+| `mensagens/page.tsx` | 547 | MEDIUM | Feature-gated but routable |
+| `redefinir-senha/page.tsx` | ~150 | MEDIUM | Password reset flow |
+| `ajuda/page.tsx` | ~300 | LOW | Help center |
+| `features/page.tsx` | ~300 | LOW | Marketing page |
+| 4 SEO content pages (`como-*`) | ~200 each | LOW | Static content |
 
-## Respostas ao Architect
+### 4.3 E2E
 
-### Q1: SYS-14 -- Test pollution: quais padroes causam mais flakes?
+| Metric | Value |
+|--------|-------|
+| Total spec files | 31 (+ helpers directory) |
+| Estimated tests | ~60 |
+| Framework | Playwright |
+| Accessibility specs | 2 (axe-core based: `accessibility-audit.spec.ts`, `dialog-accessibility.spec.ts`) |
 
-**Top 3 por impacto:**
+**Critical flows covered:**
+- Search happy path, validation, errors, LLM fallback
+- Authentication UX, signup consent
+- Pipeline kanban, dashboard flows
+- Billing checkout, plan display
+- SSE failure modes
+- Mobile viewport, theme
+- Landing page, institutional pages
+- SEO schema validation
 
-1. **`sys.modules["arq"] = MagicMock()` without cleanup** -- This was the root cause of the most widespread pollution. The conftest `_isolate_arq_module` autouse fixture now handles it, but 4+ test files still do raw injection. The fixture mitigates but does not eliminate the root cause. With `run_tests_safe.py --parallel`, each file runs in its own subprocess, so cross-file pollution is eliminated. Within a single file, the conftest fixture handles it. **This pattern does NOT cause flakes with subprocess isolation.**
+**Missing E2E flows:**
+- Onboarding wizard (3-step flow) -- no dedicated E2E spec
+- Password reset flow -- no spec
+- Admin sub-pages (emails, metrics, partners, SLO) -- only admin-users.spec.ts
+- Account settings sub-pages -- no spec
+- Trial expiration conversion flow -- no spec
+- Error boundary behavior -- covered by `error-handling.spec.ts` but not for onboarding/signup specifically
 
-2. **Global singleton state leakage (`supabase_cb`, `InMemoryCache`)** -- Circuit breaker and cache instances persist across tests. If test A triggers CB OPEN, test B inherits the state. The conftest `_reset_supabase_cb` and `_cleanup_in_memory_cache` autouse fixtures address this, but any new global singleton must be manually added to conftest. **This pattern causes flakes even with subprocess isolation if multiple tests in the same file share the singleton.**
+### 4.4 CI/CD
 
-3. **`importlib.reload()` with monkeypatch** -- Several tests reload modules to pick up env var changes. After monkeypatch restores the env var, the module remains in its reloaded state. This is particularly insidious because the failure manifests in LATER tests, not the test that did the reload. **This pattern causes flakes in sequential runs and is partially mitigated by subprocess isolation (per-file, not per-test).**
+| Workflow | Purpose | Trigger |
+|----------|---------|---------|
+| `backend-tests.yml` | Backend pytest | PR + push |
+| `frontend-tests.yml` | Frontend jest | PR + push |
+| `e2e.yml` | Playwright E2E | PR + push |
+| `backend-ci.yml` | Backend CI (lint + type check?) | PR |
+| `tests.yml` | Combined tests? | Unknown -- potential overlap with above |
+| `deploy.yml` | Production deploy + migration push | Push to main |
+| `staging-deploy.yml` | Staging deploy | Push to staging? |
+| `migration-gate.yml` | PR warning for unapplied migrations | PR |
+| `migration-check.yml` | Block on unapplied migrations | Push + schedule |
+| `pr-validation.yml` | PR checks | PR |
+| `codeql.yml` | CodeQL security scanning | Schedule + PR |
+| `lighthouse.yml` | Lighthouse performance audit | Schedule? |
+| `load-test.yml` | Load testing (Locust) | Manual? |
+| `handle-new-user-guard.yml` | Guard against handle_new_user changes | PR |
+| `sync-sectors.yml` | Sector fallback sync | Manual? |
+| `cleanup.yml` | Cleanup | Schedule? |
+| `dependabot-auto-merge.yml` | Auto-merge Dependabot PRs | Dependabot |
 
-**`run_tests_safe.py --parallel` eliminates cross-file pollution but NOT intra-file pollution.** Remaining flakes are: 4 quota tests that share global state within the same file. These pass in isolation but fail when run together in the same process.
-
-### Q2: Cobertura de testes dos debitos CRITICAL -- CORS
-
-**Current test coverage for CORS:**
-- `backend/tests/test_main.py` likely tests the stub `main.py` (which has `allow_origins=["*"]`)
-- No test verifies that specific origins are rejected
-- No test verifies the `get_cors_origins()` function in isolation (but `backend/config/cors.py` exists and could be tested)
-- E2E tests run against `localhost:3000` -> `localhost:8000`, which bypasses CORS entirely (same-origin or proxy)
-
-**If CORS is restricted to specific origins:**
-- No backend tests should break (TestClient does not enforce CORS)
-- E2E tests would not break (Playwright does not enforce CORS)
-- Manual browser testing IS required to verify CORS works in production
-- Frontend proxy routes (`/api/*`) are same-origin, so they bypass CORS entirely -- only direct browser-to-backend calls would be affected, and the architecture does not make any
-
-**Recommendation:** Add a test in `test_cors.py` that uses TestClient with explicit `Origin` headers and verifies `Access-Control-Allow-Origin` response header values.
-
-### Q3: FE-04 -- Error pages coverage
-
-**All major routes HAVE error.tsx files:**
-- `app/error.tsx` (root)
-- `app/buscar/error.tsx`
-- `app/pipeline/error.tsx`
-- `app/historico/error.tsx`
-- `app/dashboard/error.tsx`
-- `app/conta/error.tsx`
-- `app/alertas/error.tsx`
-- `app/mensagens/error.tsx`
-- `app/admin/error.tsx`
-
-**Routes WITHOUT error.tsx:**
-- `app/onboarding/` -- no error.tsx
-- `app/planos/` -- no error.tsx (but mostly static)
-- `app/blog/` -- no error.tsx (SSC, less critical)
-- `app/login/`, `app/signup/` -- no error.tsx
-- SEO pages (`/como-*`, `/licitacoes/`) -- no error.tsx (SSC)
-
-The root `app/error.tsx` catches errors from routes without their own error.tsx, so this is not a gap -- it is a coverage question. The @ux-design-expert correctly downgraded FE-04 to MEDIUM because all error.tsx files DO report to Sentry.
-
-**Automated verification:** A lint rule or test script could glob `frontend/app/**/page.tsx` and check for a sibling `error.tsx`. This would take ~1h to implement as a CI check.
-
-### Q4: Regressao em migration squash (DB-12)
-
-**@data-engineer definitively rejected migration squash.** I concur with this recommendation. The risks outweigh the benefits:
-
-- Supabase CLI does not support squash natively
-- 86 migrations run in <30s on fresh install -- performance is not an issue
-- CI (`migration-check.yml`) runs `supabase db push` on every push to main, which validates all migrations against a clean database
-- Fresh install equivalence would require comparing `pg_dump` output before and after squash, which is complex and error-prone
-
-**The DRAFT should remove DB-12 from the priority matrix entirely** (severity already downgraded to LOW, 0h by @data-engineer). It should be marked as "ACCEPTED -- no action needed."
-
-### Q5: FE-24 -- a11y testing
-
-**`@axe-core/playwright` IS integrated in E2E tests.** The file `frontend/e2e-tests/accessibility-audit.spec.ts` (DEBT-109) runs axe-core on 5 core pages with WCAG 2.0 AA + WCAG 2.1 AA tags. The gate is: **0 critical violations** (serious/moderate are logged but not gating).
-
-**Current baseline:** The test exists and runs. I cannot determine the exact violation count without running it, but the test asserts `critical.length === 0` and it passes in CI.
-
-**Recommended CI threshold:** Keep the current gate (0 critical). Add a separate non-blocking report for serious violations with a target of reducing by 20% per quarter. Do NOT gate on serious/moderate immediately -- this would block deployments for issues that may require design changes.
+**CI/CD gaps:**
+- `tests.yml` vs `backend-tests.yml` vs `backend-ci.yml` -- potential redundancy, unclear which is the gate
+- No `pip-audit` or `npm audit` in CI pipeline
+- No SAST beyond CodeQL (no Semgrep, Snyk, or similar)
+- No dependency license audit
+- `load-test.yml` trigger unclear -- should be part of pre-release checklist
 
 ---
 
-## Ajustes de Prioridade Recomendados
+## 5. Testes Requeridos para Resolucao
 
-| Item | Prioridade DRAFT | Prioridade Ajustada | Motivo |
-|------|-----------------|---------------------|--------|
-| SYS-01 (CORS `*`) | P0 CRITICAL | **P0 CRITICAL -- but scope changed** | Fix is likely `start.sh` entry point change, not CORS config patch. Must investigate first. |
-| SYS-06 (route registration) | P1 HIGH | **P0 -- bundled with SYS-01** | Same root cause: `main.py` vs `app_factory.py`. Fixing one fixes both. |
-| SYS-17 (BidIQ title) | P3 LOW | **P0 -- bundled with SYS-01** | `app_factory.py` already has correct title. |
-| SYS-18 (version 0.2.0) | P3 LOW | **P0 -- bundled with SYS-01** | `app_factory.py` already has `APP_VERSION`. |
-| SYS-14 (test pollution) | P2 MEDIUM | **P0** | Blocks velocity of all other work. Must be Sprint 0. |
-| FE-01 (inline var) | P0 CRITICAL | **P1 HIGH** | Per @ux-design-expert: not CRITICAL (visual behavior identical). DX debt, not UX debt. |
-| SYS-02 (PNCP sync) | P0 CRITICAL | **P1 HIGH** | Verified: `pncp_client.py` still uses synchronous `requests` (line 8). DEBT-107 commit message claimed migration but `import requests` persists. Downgrade to P1 because `asyncio.to_thread()` wrapper is adequate mitigation for current scale (2 workers). |
-| SYS-03 (ComprasGov offline) | P0 CRITICAL | **P2 MEDIUM** | ComprasGov has been down since 2026-03-03 (17 days). Adding a health check for an API that may never come back is low ROI. A 15-minute cron that checks `dadosabertos.compras.gov.br` and sends a Slack alert is sufficient. |
-| DB-03 + DB-28 (conversations perf) | P1 HIGH + MEDIUM | **P2 MEDIUM** | Per @data-engineer: <500 rows, negligible impact. Revisit at 5000. |
-| DB-04 (plan_type reconciliation) | P1 HIGH | **P2 MEDIUM** | Per @data-engineer: reconciliation ALREADY EXISTS. Only missing granular metrics. |
-| DB-05 (partner_referrals) | P1 HIGH | **P3 LOW** | Per @data-engineer: <50 rows, 1-2 orphans/month. |
-| FE-26 (circular imports) | P3 LOW | **P2 MEDIUM** | Per @ux-design-expert: elevated to MEDIUM. Root cause of FE-34 (AuthProvider location). |
-| SYS-15 (state management) | P2 MEDIUM | **REMOVE** | Duplicate of FE-03 (buscar complexity). Already noted in DRAFT but still counted. Remove from plan. |
+### Para os Top 10 Debitos
 
----
-
-## Parecer Final
-
-### Qualidade do Assessment
-
-The Technical Debt Assessment is **high quality** and demonstrates the value of multi-phase specialist review. Key strengths:
-
-1. **Specialist reviews verified claims against code, not just specs.** The @ux-design-expert discovered that FE-13 (aria-current) and FE-22 (PlanToggle focus) were already implemented. The @data-engineer found that DB-07, DB-16, and DB-20 were already resolved. This level of verification prevents wasted effort.
-
-2. **Severity calibration is well-reasoned.** Both specialists provided clear rationale for every severity change. The @ux-design-expert's recalibration of FE-05 (global-error.tsx uses hex BY DESIGN) and FE-08 (only 4 images in codebase) shows deep understanding.
-
-3. **Dependency analysis is actionable.** The DRAFT's sprint plan and the @data-engineer's dependency chains provide a clear execution path.
-
-4. **Effort estimates are realistic.** The @ux-design-expert reduced FE-01 from 40h to 32h with a codemod strategy. The @data-engineer reduced total DB effort from 40h to 27h. These are evidence-based adjustments.
-
-### Condicoes para APPROVED
-
-The assessment is APPROVED for sprint planning **after** these conditions are met:
-
-1. **MUST: Resolve the `main.py` vs `app_factory.py` ambiguity.** Determine which app is actually served in production. This affects the severity and remediation of SYS-01, SYS-06, SYS-17, SYS-18. A 30-minute investigation (check Railway logs for startup message, or add a temporary log line) resolves this.
-
-2. **VERIFIED: SYS-02 (PNCP sync) is still valid.** Despite DEBT-107 commit message claiming migration, `pncp_client.py` line 8 still has `import requests`. The migration was either incomplete or reverted. SYS-02 remains valid but downgraded to P1 (mitigated by `asyncio.to_thread()`).
-
-3. **MUST: Remove SYS-15 from the sprint plan** (duplicate of FE-03).
-
-4. **SHOULD: Add a "Resolved Items" section to the DRAFT** listing items already fixed (DB-07, DB-16, DB-20, FE-13, FE-22, and potentially SYS-02).
-
-5. **SHOULD: Incorporate @data-engineer's 4 new items** (DB-28, DB-29, DB-30, DB-31) and @ux-design-expert's 4 new items (FE-33, FE-34, FE-35, FE-36) into the DRAFT's priority matrix.
-
-6. **SHOULD: Add cross-cutting risk section** covering API contract stability, secrets rotation, and the `main.py`/`app_factory.py` dual-path issue.
-
-### Riscos Aceitos
-
-The following risks are documented and accepted for now:
-
-1. **No consumer-driven contract tests** (API proxy coupling) -- Accepted because the frontend proxy pattern provides a single integration point and the team is small. Revisit when adding mobile clients or external API consumers.
-
-2. **LGPD compliance gaps** -- Accepted for pre-revenue beta. Must be addressed before scaling to paying customers.
-
-3. **Rate limiting fallback to per-worker in-memory** -- Accepted because Railway runs 2 workers and Redis uptime is >99.9% on Upstash.
-
-4. **No dead letter queue for ARQ jobs** -- Accepted because jobs have inline fallback (LLM/Excel execute synchronously if queue unavailable). Failed jobs result in delayed delivery, not data loss.
-
-5. **Dependency supply chain risk** -- Accepted because CI runs `pip-audit` and Dependabot handles minor updates. No known critical vulnerabilities at time of review.
-
-6. **OAuth token encryption at app layer only** -- Accepted per industry standard pattern. Document key rotation procedure as a future improvement.
+| Rank | Debt ID | Testes ANTES (regressao) | Testes DEPOIS (aceitacao) | Metrica |
+|------|---------|--------------------------|---------------------------|---------|
+| 1 | DEBT-SYS-003 (sync/async dual) | Verify `pncp_client.py` sync fallback works under current test suite. Add test for `asyncio.to_thread()` wrapper. | Verify only `httpx` is used. No `requests` import. Thread pool not needed. | Import audit: `grep -r "import requests" backend/` returns 0 |
+| 2 | DEBT-SYS-002 (schemas monolith) | Snapshot all Pydantic model names and their field sets. Run `pytest --co -q` to baseline test count. | All models importable from new locations. Backward-compat re-exports from `schemas.py`. Zero test failures. | Test count unchanged, import paths updated |
+| 3 | DEBT-SYS-001 (filter.py decomp) | **Create individual test files for all 8 `filter_*.py` submodules** (QA-DEBT-005). Baseline: `pytest -k test_filter` pass count. | Each submodule has dedicated test file. `filter.py` reduced below 500 LOC. All filter tests pass. | filter test count >= current, `wc -l filter.py` < 500 |
+| 4 | DEBT-DB-001 (subscription status) | Add test verifying current profiles.subscription_status and user_subscriptions.subscription_status are both readable and usable by `quota.py`. | Single canonical source documented. Mapping test exists. Webhook sync verified. | `test_subscription_status_canonical.py` passes |
+| 5 | DEBT-DB-002 (FK to auth.users) | Run full migration replay on fresh DB (in CI or local). Document current FK target. | Migration replay succeeds. FK points to profiles(id). `\d classification_feedback` shows correct FK. | Migration replay CI step passes |
+| 6 | DEBT-FE-001 (react-hook-form deps) | `npm ls react-hook-form` shows current location. Build succeeds. | `react-hook-form` in dependencies (not devDependencies). Build succeeds. | `npm ls react-hook-form` shows dependencies |
+| 7 | DEBT-FE-002 (SearchForm ARIA) | **Add axe-core test for /buscar page** (extend existing Playwright accessibility audit). Document current violations. | SearchForm has `role="search"`, `aria-label`. axe-core /buscar returns 0 critical violations. | axe-core violation count for /buscar = 0 critical |
+| 8 | DEBT-FE-008 (skip-link broken) | Manual keyboard test: Tab on /buscar, verify skip link does NOT work. Document in test. | `id="main-content"` on protected layout `<main>`. Skip link navigates correctly on /buscar. | E2E test: `page.keyboard.press('Tab')` + verify focus target |
+| 9 | DEBT-SYS-008 (api-types bundle) | Measure current bundle size: `npm run build` + check `.next/analyze` or `next build --debug`. | Tree-shaking verified. Bundle size reduced. | Bundle size delta (bytes) |
+| 10 | DEBT-SYS-013 (ComprasGov dead) | Verify ComprasGov circuit breaker is currently OPEN (expected). Log current timeout consumption. | ComprasGov client disabled via feature flag or removed. No timeout budget consumed. Pipeline source count = 2 (PNCP + PCP). | `grep "compras_gov" backend/logs` shows no requests |
 
 ---
 
-## Numeros Revisados
+## 6. Respostas ao Architect (Section 8 Questions)
 
-Incorporating specialist adjustments:
+### Q1: DEBT-SYS-011 (test LOC ratio) -- Should we audit for test duplication before refactoring?
 
-| Metrica | DRAFT Original | Pos-Revisao |
-|---------|---------------|-------------|
-| Total items | 79 | 83 (+ 8 added - 5 removed + 1 duplicate removed) |
-| CRITICAL | 5 | 2 (DB-01, SYS-01 pending investigation) |
-| HIGH | 19 | 15 (multiple downgrades by specialists) |
-| MEDIUM | 32 | 38 (upgrades from LOW + new items) |
-| LOW | 23 | 28 (downgrades from MEDIUM/HIGH + new items) |
-| Estimated effort | 372.5h | ~310h (specialist estimate reductions + false positive removals - SYS-15 duplicate) |
-| False positives removed | 0 | 5 (DB-07, DB-16, DB-20, FE-13, FE-22) |
-| Potentially resolved | 0 | 0 (SYS-02 verified: still uses `requests`) |
+**Yes, but with a narrow scope.** A full test duplication audit (8h per the DRAFT) is not blocking. Instead, I recommend a targeted approach:
+
+1. Before Wave 3 restructuring, run `pytest --co -q | wc -l` to baseline the exact test count (currently 7,332+).
+2. After each restructuring step (e.g., after `filter.py` decomposition), re-run and compare. The count must be >= baseline.
+3. If test count drops, investigate whether tests were lost or legitimately consolidated.
+4. For test duplication specifically, the concern is over-specified tests (testing implementation details like exact mock call counts). These should be identified and relaxed during the restructuring itself, not in a separate pass.
+
+**Bottom line:** Baseline the count, validate after each step. Do not invest 8h in a pre-audit.
+
+### Q2: Regression risk for Wave 3 -- What testing strategy?
+
+**Recommended strategy (3-layer defense):**
+
+1. **Pre-restructuring baseline**: `pytest --co -q | wc -l` (test discovery count) + `python scripts/run_tests_safe.py --parallel 4` (full pass count). Record both numbers.
+2. **Per-step validation**: After each structural change (e.g., moving `filter.py` into `filter/` package), run the full suite. Zero tolerance for new failures. Use `git stash` to revert if failures appear and investigate before proceeding.
+3. **Import path guard**: After Wave 3 completes, add a CI check that verifies no `from filter import X` (old path) remains in non-test code. This prevents regression from new code using old paths.
+
+**Do NOT batch restructuring.** Each DEBT-SYS item in Wave 3 should be a separate PR with its own test validation.
+
+### Q3: Quick wins -- batch into PRs or ship individually?
+
+**Batch into 3 thematic PRs:**
+
+- **PR 1 (Security/a11y):** DEBT-DB-002 FK, DEBT-DB-006 RLS, DEBT-FE-008 skip-link, DEBT-FE-001 deps, DEBT-DB-005 index (~5 items, ~3h)
+- **PR 2 (Backend cleanup):** DEBT-SYS-003 sync/async, DEBT-SYS-013 ComprasGov, DEBT-DB-007 TOCTOU (~3 items, ~7h)
+- **PR 3 (Frontend polish):** DEBT-FE-002 ARIA, DEBT-FE-015 icon, DEBT-SYS-008 types, DEBT-FE-007 error boundaries (~4 items, ~7h)
+
+This avoids 18 individual PRs (review fatigue) while keeping each PR thematically coherent and independently revertible.
+
+### Q4: DEBT-FE-007 (error boundaries) -- Do E2E tests cover error scenarios?
+
+**Partially.** `error-handling.spec.ts` and `failure-scenarios.spec.ts` exist but focus on search errors and API failures. There is **no E2E spec** that:
+- Triggers a React rendering error on the onboarding page
+- Verifies the error boundary catches it
+- Verifies a recovery action (e.g., "Tentar novamente" button) works
+
+**Recommendation:** When adding error boundaries (DEBT-FE-007), also add 1 E2E test per page that injects a rendering error (e.g., mock a hook to throw) and verifies the error boundary renders. This is 1-2h additional effort on top of the 3h estimate.
+
+### Q5: Accessibility testing -- axe-core E2E or manual screen reader?
+
+**Both, in phases:**
+
+1. **Phase 1 (automated, immediate):** Extend existing `accessibility-audit.spec.ts` to include `/buscar` and all protected pages. axe-core catches ~57% of WCAG 2.1 AA issues automatically. This validates DEBT-FE-002 and DEBT-FE-008. Effort: 2h.
+2. **Phase 2 (manual, next sprint):** Manual NVDA/VoiceOver testing on `/buscar` and `/onboarding`. axe-core cannot verify that `aria-live` announcements are actually spoken, or that the search flow is comprehensible via screen reader. Effort: 4h.
+
+For the DRAFT's current scope, Phase 1 (automated) is sufficient. Phase 2 should be done before claiming WCAG compliance.
 
 ---
 
-*Reviewed 2026-03-20 by @qa during Brownfield Discovery Phase 7.*
-*All findings cross-referenced against codebase. Investigation of CORS/main.py dual-path is code-verified.*
+## 7. Parecer Final
+
+### Pontos Fortes do Assessment
+
+1. **Consistent ID scheme and severity ratings.** All 54 items have unique IDs, severity, effort, and area. The renumbering from source audits to DRAFT IDs is clean (though the mapping should be documented -- see caveats).
+2. **Dependency analysis is actionable.** The dependency chains in Section 6 correctly identify that `DEBT-SYS-004` (package grouping) is the gateway to Wave 3, and that `DEBT-DB-001` must precede `DEBT-DB-008`.
+3. **Cross-cutting risk matrix in Section 7 is well-reasoned.** The billing integrity risk (DEBT-DB-001 + DEBT-SYS-007 + DEBT-SYS-009) is correctly identified as the highest-impact compound risk.
+4. **Quick wins are genuinely quick.** The 18 items marked "Quick Win" are all verifiable small changes. The effort estimates are realistic.
+5. **Questions for specialists (Section 8) are specific and decision-forcing.** Each question presents concrete options rather than open-ended asks.
+
+### Pontos de Atencao
+
+1. **ID mapping between source audits and DRAFT is not documented.** The DRAFT renumbers DB-DEBT-002 (dual subscription) to DEBT-DB-001, and DB-DEBT-001 (profiles wide) to DEBT-DB-003. Without a mapping table, cross-referencing between the DRAFT and the source audits is error-prone. Recommend adding an appendix.
+2. **Test coverage gaps are the biggest unaddressed risk.** The DRAFT identifies DEBT-SYS-011 (test LOC ratio) as MEDIUM but misses that several critical production modules have ZERO test files. This is not about ratio -- it is about blind spots. `cron_jobs.py` (2,039 LOC) and `supabase_client.py` (537 LOC with the circuit breaker) are production-critical and untested.
+3. **Wave 3 prerequisite is missing.** The execution plan goes directly to backend restructuring without requiring test creation for untested modules first. This should be a hard prerequisite.
+4. **CI/CD debt is absent.** With 17 workflows, some potentially overlapping (`tests.yml` vs `backend-tests.yml` vs `backend-ci.yml`), this is a non-trivial source of developer confusion and CI cost.
+5. **Observability debt is absent.** At POC stage this is acceptable, but as the product moves to revenue, metric coverage gaps and alert rule completeness become important.
+6. **The DRAFT says "55 total" but lists 54 unique IDs.** The count includes 1 resolved item (DB-DEBT-006). The executive summary should say "55 identified, 54 actionable, 1 resolved" for clarity.
+
+### Recomendacoes
+
+1. **Add an ID mapping appendix** to the DRAFT (source audit ID -> DRAFT ID) to enable traceability.
+2. **Elevate test coverage gaps to a new section** (or add QA-DEBT-001 through QA-DEBT-005 as new items). These are not captured in any of the 3 source audits and represent the highest risk during debt resolution.
+3. **Add "Wave 0: Test safety net"** before Wave 3. Estimated 16-24h to create tests for `cron_jobs.py`, `supabase_client.py`, `search_state_manager.py`, and `filter_*.py` submodules.
+4. **Consider a CI/CD mini-audit** (2-4h) to clarify workflow overlap and identify which workflow is the actual PR gate.
+5. **Track the 3 pre-existing frontend test failures** -- these should be fixed or documented as accepted before starting frontend debt work (Wave 4) to maintain a clean baseline.
+6. **The effort total (~297-325h) is realistic** for the identified items. With the additional test creation work (Wave 0), expect ~320-350h total.
+
+---
+
+*Review completed 2026-03-21 by @qa (Quinn). Gate status: APPROVED. The assessment is ready for sprint planning with the caveats above tracked as follow-up items.*

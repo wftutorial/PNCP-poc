@@ -1,277 +1,300 @@
-# SmartLic Database Schema Reference
+# SmartLic Database Schema Documentation
 
-**Date:** 2026-03-20 | **Auditor:** @data-engineer (Brownfield Discovery Phase 2)
-**Supabase Project:** fqqyovlzdzimiwfofdjk | **PostgreSQL:** 17
-**Migrations:** 86 files in `supabase/migrations/`
-**Tables:** 32 public tables | **Functions:** 12 | **Triggers:** 14 | **pg_cron Jobs:** 13
+> Generated: 2026-03-21 | Source: 85 Supabase migrations + 10 backend migrations
+> Database: PostgreSQL 17 (Supabase Cloud)
+> Supabase Project: fqqyovlzdzimiwfofdjk
 
 ---
 
 ## Table of Contents
 
-1. [Entity-Relationship Overview](#1-entity-relationship-overview)
-2. [Tables — Full Column Reference](#2-tables--full-column-reference)
-3. [RLS Policies](#3-rls-policies)
-4. [Indexes](#4-indexes)
-5. [Functions and Triggers](#5-functions-and-triggers)
-6. [pg_cron Retention Jobs](#6-pgcron-retention-jobs)
-7. [Key Access Patterns](#7-key-access-patterns)
-8. [Custom Types](#8-custom-types)
+1. [Table Categories](#table-categories)
+2. [Tables](#tables)
+3. [Custom Types & Enums](#custom-types--enums)
+4. [Functions (RPC)](#functions-rpc)
+5. [Triggers](#triggers)
+6. [Indexes](#indexes)
+7. [RLS Policies](#rls-policies)
+8. [pg_cron Scheduled Jobs](#pg_cron-scheduled-jobs)
+9. [Entity Relationships](#entity-relationships)
+10. [Extensions](#extensions)
 
 ---
 
-## 1. Entity-Relationship Overview
+## Table Categories
 
-```
-auth.users (Supabase managed)
-    |
-    | 1:1 (ON DELETE CASCADE, via handle_new_user trigger)
-    v
-profiles --------> plans (plan_type FK via CHECK constraint, not FK)
-    |                |
-    |                |---> plan_billing_periods (plan_id FK)
-    |                |---> plan_features (plan_id FK)
-    |
-    |----> user_subscriptions (user_id FK, plan_id FK to plans)
-    |----> monthly_quota (user_id FK)
-    |----> search_sessions (user_id FK)
-    |          |---> search_state_transitions (search_id correlation, no FK)
-    |
-    |----> search_results_cache (user_id FK)
-    |----> search_results_store (user_id FK)
-    |----> pipeline_items (user_id FK)
-    |----> classification_feedback (user_id FK)
-    |
-    |----> conversations (user_id FK)
-    |          |---> messages (conversation_id FK, sender_id FK to profiles)
-    |
-    |----> alerts (user_id FK)
-    |          |---> alert_sent_items (alert_id FK)
-    |          |---> alert_runs (alert_id FK)
-    |
-    |----> alert_preferences (user_id FK, 1:1)
-    |----> user_oauth_tokens (user_id FK)
-    |----> google_sheets_exports (user_id FK)
-    |----> trial_email_log (user_id FK)
-    |----> mfa_recovery_codes (user_id FK)
-    |----> mfa_recovery_attempts (user_id FK)
-    |
-    |----> organizations (owner_id FK, ON DELETE RESTRICT)
-    |          |---> organization_members (org_id FK, user_id FK to profiles)
-    |
-    |----> partners (no FK to profiles, contact_email link)
-    |          |---> partner_referrals (partner_id FK, referred_user_id FK to profiles)
+| Domain | Tables |
+|--------|--------|
+| **Auth & Profiles** | `profiles`, `mfa_recovery_codes`, `mfa_recovery_attempts` |
+| **Search** | `search_sessions`, `search_state_transitions`, `search_results_cache`, `search_results_store` |
+| **Billing** | `plans`, `plan_billing_periods`, `plan_features`, `user_subscriptions`, `monthly_quota`, `stripe_webhook_events`, `reconciliation_log` |
+| **Pipeline** | `pipeline_items` |
+| **Messaging** | `conversations`, `messages` |
+| **Alerts** | `alerts`, `alert_sent_items`, `alert_runs`, `alert_preferences` |
+| **Feedback** | `classification_feedback` |
+| **OAuth & Export** | `user_oauth_tokens`, `google_sheets_exports` |
+| **Audit & Compliance** | `audit_events`, `trial_email_log` |
+| **Monitoring** | `health_checks`, `incidents` |
+| **Organizations** | `organizations`, `organization_members` |
+| **Partners** | `partners`, `partner_referrals` |
 
-Standalone:
-    stripe_webhook_events (no user FK, evt_ PK)
-    audit_events (hashed actor IDs, no FK)
-    health_checks (no user FK, service_role only)
-    incidents (no user FK, service_role only)
-    reconciliation_log (no user FK, admin only)
-```
+**Total: 27 public tables**
 
 ---
 
-## 2. Tables -- Full Column Reference
+## Tables
 
-### 2.1 Core / Auth
-
-#### `profiles`
-Extends auth.users. Created automatically via `handle_new_user()` trigger on signup.
+### profiles
+Extends `auth.users` with application-specific fields. Central user table -- most FKs in the system reference `profiles(id)`.
 
 | Column | Type | Nullable | Default | Constraints |
 |--------|------|----------|---------|-------------|
 | `id` | uuid | NO | - | PK, FK -> auth.users(id) ON DELETE CASCADE |
-| `email` | text | NO | - | UNIQUE (partial index) |
+| `email` | text | NO | - | UNIQUE (idx_profiles_email_unique) |
 | `full_name` | text | YES | - | |
 | `company` | text | YES | - | |
-| `sector` | text | YES | - | |
-| `phone_whatsapp` | text | YES | - | CHECK regex `^[0-9]{10,11}$`, UNIQUE (partial) |
-| `whatsapp_consent` | boolean | YES | false | |
-| `whatsapp_consent_at` | timestamptz | YES | - | |
-| `plan_type` | text | NO | 'free_trial' | CHECK IN ('free_trial','consultor_agil','maquina','sala_guerra','master','smartlic_pro','consultoria') |
+| `plan_type` | text | NO | `'free_trial'` | CHECK: free_trial, consultor_agil, maquina, sala_guerra, master, smartlic_pro, consultoria |
 | `avatar_url` | text | YES | - | |
-| `is_admin` | boolean | NO | false | |
-| `context_data` | jsonb | YES | '{}' | Onboarding wizard data |
-| `subscription_status` | text | YES | 'trial' | CHECK IN ('trial','active','canceling','past_due','expired') |
+| `is_admin` | boolean | NO | `false` | Partial index WHERE is_admin = true |
+| `sector` | text | YES | - | |
+| `phone_whatsapp` | text | YES | - | CHECK: `^[0-9]{10,11}$`, UNIQUE (partial WHERE NOT NULL) |
+| `whatsapp_consent` | boolean | YES | `false` | |
+| `whatsapp_consent_at` | timestamptz | YES | - | |
+| `context_data` | jsonb | YES | `'{}'::jsonb` | Onboarding wizard business context |
+| `subscription_status` | text | YES | `'trial'` | CHECK: trial, active, canceling, past_due, expired |
 | `trial_expires_at` | timestamptz | YES | - | |
 | `subscription_end_date` | timestamptz | YES | - | |
-| `email_unsubscribed` | boolean | YES | false | |
+| `email_unsubscribed` | boolean | YES | `false` | LGPD compliance |
 | `email_unsubscribed_at` | timestamptz | YES | - | |
-| `marketing_emails_enabled` | boolean | NO | true | |
+| `marketing_emails_enabled` | boolean | NO | `true` | |
 | `referred_by_partner_id` | uuid | YES | - | FK -> partners(id) |
-| `created_at` | timestamptz | NO | now() | |
-| `updated_at` | timestamptz | NO | now() | Auto-updated via trigger |
-
-#### `user_subscriptions`
-Tracks Stripe subscriptions and purchased packs per user.
-
-| Column | Type | Nullable | Default | Constraints |
-|--------|------|----------|---------|-------------|
-| `id` | uuid | NO | gen_random_uuid() | PK |
-| `user_id` | uuid | NO | - | FK -> profiles(id) ON DELETE CASCADE |
-| `plan_id` | text | NO | - | FK -> plans(id) ON DELETE RESTRICT |
-| `credits_remaining` | int | YES | - | null = unlimited |
-| `starts_at` | timestamptz | NO | now() | |
-| `expires_at` | timestamptz | YES | - | null = never expires |
-| `stripe_subscription_id` | text | YES | - | UNIQUE (partial, WHERE NOT NULL) |
-| `stripe_customer_id` | text | YES | - | Indexed (partial) |
-| `is_active` | boolean | NO | true | |
-| `billing_period` | varchar(10) | NO | 'monthly' | CHECK IN ('monthly','semiannual','annual') |
-| `annual_benefits` | jsonb | NO | '{}' | |
-| `subscription_status` | text | YES | 'active' | CHECK IN ('active','trialing','past_due','canceled','expired') |
-| `first_failed_at` | timestamptz | YES | - | Dunning tracking |
-| `version` | integer | NO | 1 | Optimistic locking |
-| `created_at` | timestamptz | NO | now() | |
-| `updated_at` | timestamptz | NO | now() | Auto-updated via trigger |
-
-#### `monthly_quota`
-Tracks monthly search usage per user. Lazy-reset (new row per month_year).
-
-| Column | Type | Nullable | Default | Constraints |
-|--------|------|----------|---------|-------------|
-| `id` | uuid | NO | gen_random_uuid() | PK |
-| `user_id` | uuid | NO | - | FK -> profiles(id) ON DELETE CASCADE |
-| `month_year` | varchar(7) | NO | - | Format: "YYYY-MM" |
-| `searches_count` | int | NO | 0 | |
-| `created_at` | timestamptz | NO | now() | |
-| `updated_at` | timestamptz | NO | now() | |
-
-UNIQUE constraint: `(user_id, month_year)`
-
-#### `user_oauth_tokens`
-Encrypted OAuth 2.0 tokens for Google Sheets integration.
-
-| Column | Type | Nullable | Default | Constraints |
-|--------|------|----------|---------|-------------|
-| `id` | uuid | NO | gen_random_uuid() | PK |
-| `user_id` | uuid | NO | - | FK -> profiles(id) ON DELETE CASCADE |
-| `provider` | varchar(50) | NO | - | CHECK IN ('google','microsoft','dropbox') |
-| `access_token` | text | NO | - | AES-256 encrypted |
-| `refresh_token` | text | YES | - | AES-256 encrypted |
-| `expires_at` | timestamptz | NO | - | |
-| `scope` | text | NO | - | |
-| `created_at` | timestamptz | YES | now() | |
-| `updated_at` | timestamptz | YES | now() | |
-
-UNIQUE constraint: `(user_id, provider)`
-
-#### `mfa_recovery_codes`
-
-| Column | Type | Nullable | Default | Constraints |
-|--------|------|----------|---------|-------------|
-| `id` | uuid | NO | gen_random_uuid() | PK |
-| `user_id` | uuid | NO | - | FK -> profiles(id) ON DELETE CASCADE |
-| `code_hash` | text | NO | - | bcrypt hashed |
-| `used_at` | timestamptz | YES | - | |
-| `created_at` | timestamptz | NO | now() | |
-
-#### `mfa_recovery_attempts`
-
-| Column | Type | Nullable | Default | Constraints |
-|--------|------|----------|---------|-------------|
-| `id` | uuid | NO | gen_random_uuid() | PK |
-| `user_id` | uuid | NO | - | FK -> profiles(id) ON DELETE CASCADE |
-| `attempted_at` | timestamptz | NO | now() | |
-| `success` | boolean | NO | false | |
+| `created_at` | timestamptz | NO | `now()` | |
+| `updated_at` | timestamptz | NO | `now()` | Auto-updated via trigger |
 
 ---
 
-### 2.2 Search / Pipeline
-
-#### `search_sessions`
-Records every search attempt (success, failure, timeout).
+### plans
+Plan catalog (public pricing data).
 
 | Column | Type | Nullable | Default | Constraints |
 |--------|------|----------|---------|-------------|
-| `id` | uuid | NO | gen_random_uuid() | PK |
+| `id` | text | NO | - | PK |
+| `name` | text | NO | - | |
+| `description` | text | YES | - | |
+| `max_searches` | int | YES | - | NULL = unlimited |
+| `price_brl` | numeric(10,2) | NO | `0` | |
+| `duration_days` | int | YES | - | NULL = perpetual |
+| `stripe_price_id` | text | YES | - | DEPRECATED: use period-specific columns |
+| `stripe_price_id_monthly` | text | YES | - | |
+| `stripe_price_id_semiannual` | text | YES | - | |
+| `stripe_price_id_annual` | text | YES | - | |
+| `is_active` | boolean | NO | `true` | |
+| `created_at` | timestamptz | NO | `now()` | |
+| `updated_at` | timestamptz | NO | `now()` | Auto-updated via trigger |
+
+**Seed data:** free, pack_5, pack_10, pack_20 (inactive), monthly, annual (inactive), master, consultor_agil (inactive, legacy), maquina (inactive, legacy), sala_guerra (inactive, legacy), smartlic_pro (active), consultoria (active)
+
+---
+
+### plan_billing_periods
+Multi-period pricing for plans. Source of truth for Stripe price IDs.
+
+| Column | Type | Nullable | Default | Constraints |
+|--------|------|----------|---------|-------------|
+| `id` | uuid | NO | `gen_random_uuid()` | PK |
+| `plan_id` | text | NO | - | FK -> plans(id) ON DELETE CASCADE |
+| `billing_period` | text | NO | - | CHECK: monthly, semiannual, annual |
+| `price_cents` | integer | NO | - | |
+| `discount_percent` | integer | YES | `0` | |
+| `stripe_price_id` | text | YES | - | |
+| `created_at` | timestamptz | YES | `now()` | |
+| `updated_at` | timestamptz | YES | `now()` | Auto-updated via trigger |
+
+UNIQUE: `(plan_id, billing_period)`
+
+---
+
+### plan_features
+Billing-period-specific feature flags.
+
+| Column | Type | Nullable | Default | Constraints |
+|--------|------|----------|---------|-------------|
+| `id` | serial | NO | auto | PK |
+| `plan_id` | text | NO | - | FK -> plans(id) ON DELETE CASCADE |
+| `billing_period` | varchar(10) | NO | - | CHECK: monthly, semiannual, annual |
+| `feature_key` | varchar(100) | NO | - | |
+| `enabled` | boolean | NO | `true` | |
+| `metadata` | jsonb | YES | `'{}'` | |
+| `created_at` | timestamptz | NO | `now()` | |
+| `updated_at` | timestamptz | NO | `now()` | Auto-updated via trigger |
+
+UNIQUE: `(plan_id, billing_period, feature_key)`
+
+---
+
+### user_subscriptions
+Active and historical user subscription records.
+
+| Column | Type | Nullable | Default | Constraints |
+|--------|------|----------|---------|-------------|
+| `id` | uuid | NO | `gen_random_uuid()` | PK |
 | `user_id` | uuid | NO | - | FK -> profiles(id) ON DELETE CASCADE |
-| `search_id` | uuid | YES | - | Correlation ID for SSE/ARQ/cache |
+| `plan_id` | text | NO | - | FK -> plans(id) ON DELETE RESTRICT |
+| `credits_remaining` | int | YES | - | NULL = unlimited |
+| `starts_at` | timestamptz | NO | `now()` | |
+| `expires_at` | timestamptz | YES | - | NULL = never expires |
+| `stripe_subscription_id` | text | YES | - | UNIQUE (partial WHERE NOT NULL) |
+| `stripe_customer_id` | text | YES | - | Indexed (partial WHERE NOT NULL) |
+| `is_active` | boolean | NO | `true` | |
+| `billing_period` | varchar(10) | NO | `'monthly'` | CHECK: monthly, semiannual, annual |
+| `annual_benefits` | jsonb | NO | `'{}'` | |
+| `subscription_status` | text | YES | `'active'` | CHECK: active, trialing, past_due, canceled, expired |
+| `first_failed_at` | timestamptz | YES | - | Dunning tracking |
+| `version` | integer | NO | `1` | Optimistic locking |
+| `created_at` | timestamptz | NO | `now()` | |
+| `updated_at` | timestamptz | NO | `now()` | Auto-updated via trigger |
+
+---
+
+### monthly_quota
+Tracks monthly search usage per user for plan-based pricing.
+
+| Column | Type | Nullable | Default | Constraints |
+|--------|------|----------|---------|-------------|
+| `id` | uuid | NO | `gen_random_uuid()` | PK |
+| `user_id` | uuid | NO | - | FK -> profiles(id) ON DELETE CASCADE |
+| `month_year` | varchar(7) | NO | - | Format: "YYYY-MM" |
+| `searches_count` | int | NO | `0` | |
+| `created_at` | timestamptz | NO | `now()` | |
+| `updated_at` | timestamptz | NO | `now()` | |
+
+UNIQUE: `(user_id, month_year)`. Retention: 24 months (pg_cron).
+
+---
+
+### search_sessions
+User search history with lifecycle tracking.
+
+| Column | Type | Nullable | Default | Constraints |
+|--------|------|----------|---------|-------------|
+| `id` | uuid | NO | `gen_random_uuid()` | PK |
+| `user_id` | uuid | NO | - | FK -> profiles(id) ON DELETE CASCADE |
+| `search_id` | uuid | YES | - | Links to SSE/ARQ |
 | `sectors` | text[] | NO | - | |
 | `ufs` | text[] | NO | - | |
 | `data_inicial` | date | NO | - | |
 | `data_final` | date | NO | - | |
 | `custom_keywords` | text[] | YES | - | |
-| `total_raw` | int | NO | 0 | |
-| `total_filtered` | int | NO | 0 | |
-| `valor_total` | numeric(14,2) | YES | 0 | |
+| `total_raw` | int | NO | `0` | |
+| `total_filtered` | int | NO | `0` | |
+| `valor_total` | numeric(14,2) | YES | `0` | |
 | `resumo_executivo` | text | YES | - | |
 | `destaques` | text[] | YES | - | |
 | `excel_storage_path` | text | YES | - | |
-| `status` | text | NO | 'created' | CHECK IN ('created','processing','completed','failed','timed_out','cancelled') |
+| `status` | text | NO | `'created'` | CHECK: created, processing, completed, failed, timed_out, cancelled |
 | `error_message` | text | YES | - | |
 | `error_code` | text | YES | - | |
-| `started_at` | timestamptz | NO | now() | |
+| `started_at` | timestamptz | NO | `now()` | |
 | `completed_at` | timestamptz | YES | - | |
 | `duration_ms` | integer | YES | - | |
 | `pipeline_stage` | text | YES | - | |
-| `raw_count` | integer | YES | 0 | |
-| `response_state` | text | YES | - | live/cached/degraded/empty_failure |
+| `raw_count` | integer | YES | `0` | |
+| `response_state` | text | YES | - | live, cached, degraded, empty_failure |
 | `failed_ufs` | text[] | YES | - | |
-| `created_at` | timestamptz | NO | now() | |
+| `created_at` | timestamptz | NO | `now()` | |
 
-#### `search_state_transitions`
-Audit trail for search state machine. Fire-and-forget inserts.
+Retention: 12 months (pg_cron).
+
+---
+
+### search_state_transitions
+Audit trail for search state machine transitions. Fire-and-forget inserts.
 
 | Column | Type | Nullable | Default | Constraints |
 |--------|------|----------|---------|-------------|
-| `id` | uuid | NO | gen_random_uuid() | PK |
-| `search_id` | uuid | NO | - | No FK (app-layer integrity) |
+| `id` | uuid | NO | `gen_random_uuid()` | PK |
+| `search_id` | uuid | NO | - | No FK (search_sessions.search_id not unique) |
 | `user_id` | uuid | YES | - | FK -> profiles(id) ON DELETE CASCADE |
-| `from_state` | text | YES | - | |
+| `from_state` | text | YES | - | NULL for initial CREATED |
 | `to_state` | text | NO | - | |
 | `stage` | text | YES | - | |
-| `details` | jsonb | YES | '{}' | |
+| `details` | jsonb | YES | `'{}'` | |
 | `duration_since_previous_ms` | integer | YES | - | |
-| `created_at` | timestamptz | NO | now() | |
+| `created_at` | timestamptz | NO | `now()` | |
 
-#### `search_results_cache`
-L2 persistent cache (Supabase layer of two-level cache). Max 10 entries per user.
+Retention: 30 days (pg_cron).
+
+---
+
+### search_results_cache
+L2 persistent cache (SWR pattern). Max entries per user with priority-based eviction.
 
 | Column | Type | Nullable | Default | Constraints |
 |--------|------|----------|---------|-------------|
-| `id` | uuid | NO | gen_random_uuid() | PK |
+| `id` | uuid | NO | `gen_random_uuid()` | PK |
 | `user_id` | uuid | NO | - | FK -> profiles(id) ON DELETE CASCADE |
 | `params_hash` | text | NO | - | |
 | `params_hash_global` | text | YES | - | Cross-user cache sharing |
 | `search_params` | jsonb | NO | - | |
-| `results` | jsonb | NO | - | CHECK octet_length <= 2MB |
-| `total_results` | integer | NO | 0 | |
-| `sources_json` | jsonb | NO | '["pncp"]' | |
-| `fetched_at` | timestamptz | NO | now() | |
-| `priority` | text | NO | 'cold' | CHECK IN ('hot','warm','cold') |
-| `access_count` | integer | NO | 0 | |
+| `results` | jsonb | NO | - | CHECK: octet_length <= 2MB |
+| `total_results` | integer | NO | `0` | |
+| `sources_json` | jsonb | NO | `'["pncp"]'` | |
+| `fetched_at` | timestamptz | NO | `now()` | |
+| `priority` | text | NO | `'cold'` | CHECK: hot, warm, cold |
+| `access_count` | integer | NO | `0` | |
 | `last_accessed_at` | timestamptz | YES | - | |
 | `last_success_at` | timestamptz | YES | - | |
 | `last_attempt_at` | timestamptz | YES | - | |
-| `fail_streak` | integer | NO | 0 | |
+| `fail_streak` | integer | NO | `0` | |
 | `degraded_until` | timestamptz | YES | - | |
 | `coverage` | jsonb | YES | - | |
 | `fetch_duration_ms` | integer | YES | - | |
-| `created_at` | timestamptz | NO | now() | |
+| `created_at` | timestamptz | NO | `now()` | |
 
-UNIQUE constraint: `(user_id, params_hash)`
+UNIQUE: `(user_id, params_hash)`. Cold entries > 7 days cleaned by pg_cron.
 
-#### `search_results_store`
+---
+
+### search_results_store
 L3 persistent storage. Prevents "Busca nao encontrada" after L1/L2 TTL expiry.
 
 | Column | Type | Nullable | Default | Constraints |
 |--------|------|----------|---------|-------------|
 | `search_id` | uuid | NO | - | PK |
 | `user_id` | uuid | NO | - | FK -> profiles(id) ON DELETE CASCADE |
-| `results` | jsonb | NO | - | CHECK octet_length < 2MB |
+| `results` | jsonb | NO | - | CHECK: octet_length < 2MB |
 | `sector` | text | YES | - | |
 | `ufs` | text[] | YES | - | |
-| `total_filtered` | int | YES | 0 | |
-| `created_at` | timestamptz | YES | now() | |
-| `expires_at` | timestamptz | YES | now() + 24h | |
+| `total_filtered` | int | YES | `0` | |
+| `created_at` | timestamptz | YES | `now()` | |
+| `expires_at` | timestamptz | YES | `now() + 24h` | |
 
-#### `pipeline_items`
-Opportunity pipeline (kanban board). One item per user per PNCP ID.
+Retention: daily pg_cron cleans expired rows.
+
+---
+
+### stripe_webhook_events
+Idempotency store for Stripe webhook processing.
 
 | Column | Type | Nullable | Default | Constraints |
 |--------|------|----------|---------|-------------|
-| `id` | uuid | NO | gen_random_uuid() | PK |
+| `id` | varchar(255) | NO | - | PK, CHECK: `^evt_` |
+| `type` | varchar(100) | NO | - | |
+| `processed_at` | timestamptz | NO | `now()` | |
+| `payload` | jsonb | YES | - | |
+| `status` | varchar(20) | NO | `'completed'` | |
+| `received_at` | timestamptz | YES | `now()` | |
+
+Retention: 90 days (pg_cron).
+
+---
+
+### pipeline_items
+Kanban pipeline for tracking procurement opportunities.
+
+| Column | Type | Nullable | Default | Constraints |
+|--------|------|----------|---------|-------------|
+| `id` | uuid | NO | `gen_random_uuid()` | PK |
 | `user_id` | uuid | NO | - | FK -> profiles(id) ON DELETE CASCADE |
 | `pncp_id` | text | NO | - | |
 | `objeto` | text | NO | - | |
@@ -280,505 +303,620 @@ Opportunity pipeline (kanban board). One item per user per PNCP ID.
 | `valor_estimado` | numeric | YES | - | |
 | `data_encerramento` | timestamptz | YES | - | |
 | `link_pncp` | text | YES | - | |
-| `stage` | text | NO | 'descoberta' | CHECK IN ('descoberta','analise','preparando','enviada','resultado') |
+| `stage` | text | NO | `'descoberta'` | CHECK: descoberta, analise, preparando, enviada, resultado |
 | `notes` | text | YES | - | |
+| `version` | integer | NO | `1` | Optimistic locking |
 | `search_id` | text | YES | - | Traceability to search origin |
-| `version` | integer | NO | 1 | Optimistic locking |
-| `created_at` | timestamptz | NO | now() | |
-| `updated_at` | timestamptz | NO | now() | Auto-updated via trigger |
+| `created_at` | timestamptz | NO | `now()` | |
+| `updated_at` | timestamptz | NO | `now()` | Auto-updated via trigger |
 
-UNIQUE constraint: `(user_id, pncp_id)`
+UNIQUE: `(user_id, pncp_id)`
 
-#### `classification_feedback`
-User feedback on AI classification accuracy.
+---
+
+### conversations
+InMail support messaging system.
 
 | Column | Type | Nullable | Default | Constraints |
 |--------|------|----------|---------|-------------|
-| `id` | uuid | NO | gen_random_uuid() | PK |
+| `id` | uuid | NO | `gen_random_uuid()` | PK |
+| `user_id` | uuid | NO | - | FK -> profiles(id) ON DELETE CASCADE |
+| `subject` | text | NO | - | CHECK: length <= 200 |
+| `category` | text | NO | - | CHECK: suporte, sugestao, funcionalidade, bug, outro |
+| `status` | text | NO | `'aberto'` | CHECK: aberto, respondido, resolvido |
+| `last_message_at` | timestamptz | NO | `now()` | |
+| `first_response_at` | timestamptz | YES | - | SLA tracking |
+| `created_at` | timestamptz | NO | `now()` | |
+| `updated_at` | timestamptz | NO | `now()` | |
+
+Retention: 24 months (pg_cron).
+
+---
+
+### messages
+
+| Column | Type | Nullable | Default | Constraints |
+|--------|------|----------|---------|-------------|
+| `id` | uuid | NO | `gen_random_uuid()` | PK |
+| `conversation_id` | uuid | NO | - | FK -> conversations(id) ON DELETE CASCADE |
+| `sender_id` | uuid | NO | - | FK -> profiles(id) ON DELETE CASCADE |
+| `body` | text | NO | - | CHECK: length 1-5000 |
+| `is_admin_reply` | boolean | NO | `false` | |
+| `read_by_user` | boolean | NO | `false` | |
+| `read_by_admin` | boolean | NO | `false` | |
+| `created_at` | timestamptz | NO | `now()` | |
+
+Retention: 24 months (pg_cron orphan safety net).
+
+---
+
+### alerts
+User-defined email alert filters.
+
+| Column | Type | Nullable | Default | Constraints |
+|--------|------|----------|---------|-------------|
+| `id` | uuid | NO | `gen_random_uuid()` | PK |
+| `user_id` | uuid | NO | - | FK -> profiles(id) ON DELETE CASCADE |
+| `name` | text | NO | `''` | |
+| `filters` | jsonb | NO | `'{}'` | Schema: {setor, ufs[], valor_min, valor_max, keywords[]} |
+| `active` | boolean | NO | `true` | |
+| `created_at` | timestamptz | NO | `now()` | |
+| `updated_at` | timestamptz | NO | `now()` | Auto-updated via trigger |
+
+---
+
+### alert_sent_items
+Dedup tracking for alert emails.
+
+| Column | Type | Nullable | Default | Constraints |
+|--------|------|----------|---------|-------------|
+| `id` | uuid | NO | `gen_random_uuid()` | PK |
+| `alert_id` | uuid | NO | - | FK -> alerts(id) ON DELETE CASCADE |
+| `item_id` | text | NO | - | |
+| `sent_at` | timestamptz | NO | `now()` | |
+
+UNIQUE: `(alert_id, item_id)`. Retention: 180 days (pg_cron).
+
+---
+
+### alert_runs
+Alert execution history.
+
+| Column | Type | Nullable | Default | Constraints |
+|--------|------|----------|---------|-------------|
+| `id` | uuid | NO | `gen_random_uuid()` | PK |
+| `alert_id` | uuid | NO | - | FK -> alerts(id) ON DELETE CASCADE |
+| `run_at` | timestamptz | NO | `now()` | |
+| `items_found` | integer | NO | `0` | |
+| `items_sent` | integer | NO | `0` | |
+| `status` | text | NO | `'pending'` | CHECK: pending, running, completed, failed, matched, no_results, no_match, all_deduped, error |
+
+Retention: 90 days completed only (pg_cron).
+
+---
+
+### alert_preferences
+Per-user email digest scheduling.
+
+| Column | Type | Nullable | Default | Constraints |
+|--------|------|----------|---------|-------------|
+| `id` | uuid | NO | `gen_random_uuid()` | PK |
+| `user_id` | uuid | NO | - | FK -> profiles(id) ON DELETE CASCADE, UNIQUE |
+| `frequency` | alert_frequency | NO | `'daily'` | ENUM: daily, twice_weekly, weekly, off |
+| `enabled` | boolean | NO | `true` | |
+| `last_digest_sent_at` | timestamptz | YES | - | |
+| `created_at` | timestamptz | NO | `now()` | |
+| `updated_at` | timestamptz | NO | `now()` | Auto-updated via trigger |
+
+Auto-created for new users via trigger on profiles INSERT.
+
+---
+
+### classification_feedback
+User feedback on classification accuracy.
+
+| Column | Type | Nullable | Default | Constraints |
+|--------|------|----------|---------|-------------|
+| `id` | uuid | NO | `gen_random_uuid()` | PK |
 | `user_id` | uuid | NO | - | FK -> profiles(id) ON DELETE CASCADE |
 | `search_id` | uuid | NO | - | |
 | `bid_id` | text | NO | - | |
 | `setor_id` | text | NO | - | |
-| `user_verdict` | text | NO | - | CHECK IN ('false_positive','false_negative','correct') |
+| `user_verdict` | text | NO | - | CHECK: false_positive, false_negative, correct |
 | `reason` | text | YES | - | |
-| `category` | text | YES | - | CHECK IN ('wrong_sector','irrelevant_modality','too_small','too_large','closed','other') |
+| `category` | text | YES | - | CHECK: wrong_sector, irrelevant_modality, too_small, too_large, closed, other |
 | `bid_objeto` | text | YES | - | |
 | `bid_valor` | decimal | YES | - | |
 | `bid_uf` | text | YES | - | |
 | `confidence_score` | integer | YES | - | |
 | `relevance_source` | text | YES | - | |
-| `created_at` | timestamptz | YES | now() | |
+| `created_at` | timestamptz | YES | `now()` | |
 
-UNIQUE constraint: `(user_id, search_id, bid_id)`
+UNIQUE: `(user_id, search_id, bid_id)`. Retention: 24 months (pg_cron).
 
 ---
 
-### 2.3 Billing
-
-#### `plans`
-Plan catalog. Source of truth for plan definitions.
+### user_oauth_tokens
+Encrypted OAuth 2.0 tokens for third-party integrations.
 
 | Column | Type | Nullable | Default | Constraints |
 |--------|------|----------|---------|-------------|
-| `id` | text | NO | - | PK |
-| `name` | text | NO | - | |
-| `description` | text | YES | - | |
-| `max_searches` | int | YES | - | null = unlimited |
-| `price_brl` | numeric(10,2) | NO | 0 | |
-| `duration_days` | int | YES | - | null = perpetual |
-| `stripe_price_id` | text | YES | - | DEPRECATED — use period-specific columns |
-| `stripe_price_id_monthly` | text | YES | - | |
-| `stripe_price_id_semiannual` | text | YES | - | |
-| `stripe_price_id_annual` | text | YES | - | |
-| `is_active` | boolean | NO | true | |
-| `created_at` | timestamptz | NO | now() | |
-| `updated_at` | timestamptz | NO | now() | Auto-updated via trigger |
+| `id` | uuid | NO | `gen_random_uuid()` | PK |
+| `user_id` | uuid | NO | - | FK -> profiles(id) ON DELETE CASCADE |
+| `provider` | varchar(50) | NO | - | CHECK: google, microsoft, dropbox |
+| `access_token` | text | NO | - | AES-256 encrypted |
+| `refresh_token` | text | YES | - | AES-256 encrypted |
+| `expires_at` | timestamptz | NO | - | |
+| `scope` | text | NO | - | |
+| `created_at` | timestamptz | YES | `now()` | |
+| `updated_at` | timestamptz | YES | `now()` | |
 
-Active plans: `free` (inactive), `smartlic_pro`, `consultoria`, `master`. Legacy: `consultor_agil`, `maquina`, `sala_guerra` (inactive).
+UNIQUE: `(user_id, provider)`
 
-#### `plan_billing_periods`
-Multi-period pricing for each plan. Source of truth for Stripe price IDs.
+---
+
+### google_sheets_exports
+Export history for Google Sheets.
 
 | Column | Type | Nullable | Default | Constraints |
 |--------|------|----------|---------|-------------|
-| `id` | uuid | NO | gen_random_uuid() | PK |
-| `plan_id` | text | NO | - | FK -> plans(id) ON DELETE CASCADE |
-| `billing_period` | text | NO | - | CHECK IN ('monthly','semiannual','annual') |
-| `price_cents` | integer | NO | - | |
-| `discount_percent` | integer | YES | 0 | |
-| `stripe_price_id` | text | YES | - | |
-| `created_at` | timestamptz | YES | now() | |
-| `updated_at` | timestamptz | YES | now() | Auto-updated via trigger |
+| `id` | uuid | NO | `gen_random_uuid()` | PK |
+| `user_id` | uuid | NO | - | FK -> profiles(id) ON DELETE CASCADE |
+| `spreadsheet_id` | varchar(255) | NO | - | |
+| `spreadsheet_url` | text | NO | - | |
+| `search_params` | jsonb | NO | - | GIN index |
+| `total_rows` | int | NO | - | CHECK: >= 0 |
+| `created_at` | timestamptz | NO | `now()` | |
+| `updated_at` | timestamptz | NO | `now()` | Auto-updated via trigger (renamed from last_updated_at) |
 
-UNIQUE constraint: `(plan_id, billing_period)`
+---
 
-#### `plan_features`
-Billing-period-specific feature flags.
-
-| Column | Type | Nullable | Default | Constraints |
-|--------|------|----------|---------|-------------|
-| `id` | serial | NO | - | PK |
-| `plan_id` | text | NO | - | FK -> plans(id) ON DELETE CASCADE |
-| `billing_period` | varchar(10) | NO | - | CHECK IN ('monthly','semiannual','annual') |
-| `feature_key` | varchar(100) | NO | - | |
-| `enabled` | boolean | NO | true | |
-| `metadata` | jsonb | YES | '{}' | |
-| `created_at` | timestamptz | NO | now() | |
-| `updated_at` | timestamptz | NO | now() | Auto-updated via trigger |
-
-UNIQUE constraint: `(plan_id, billing_period, feature_key)`
-
-#### `stripe_webhook_events`
-Idempotency store for Stripe webhook processing.
+### audit_events
+Persistent audit log. All PII stored as SHA-256 hashes (LGPD/GDPR).
 
 | Column | Type | Nullable | Default | Constraints |
 |--------|------|----------|---------|-------------|
-| `id` | varchar(255) | NO | - | PK, CHECK starts with `evt_` |
-| `type` | varchar(100) | NO | - | |
-| `processed_at` | timestamptz | NO | now() | |
-| `payload` | jsonb | YES | - | |
-| `status` | varchar(20) | NO | 'completed' | |
-| `received_at` | timestamptz | YES | now() | |
+| `id` | uuid | NO | `gen_random_uuid()` | PK |
+| `timestamp` | timestamptz | NO | `now()` | |
+| `event_type` | text | NO | - | |
+| `actor_id_hash` | text | YES | - | SHA-256 truncated 16 hex |
+| `target_id_hash` | text | YES | - | SHA-256 truncated 16 hex |
+| `details` | jsonb | YES | - | |
+| `ip_hash` | text | YES | - | SHA-256 truncated 16 hex |
 
-#### `reconciliation_log`
+Retention: 12 months (pg_cron).
+
+---
+
+### trial_email_log
+Tracks trial reminder emails sent per user.
+
+| Column | Type | Nullable | Default | Constraints |
+|--------|------|----------|---------|-------------|
+| `id` | uuid | NO | `gen_random_uuid()` | PK |
+| `user_id` | uuid | NO | - | FK -> profiles(id) ON DELETE CASCADE |
+| `email_type` | text | NO | - | midpoint, expiring, last_day, expired |
+| `email_number` | integer | YES | - | CHECK: 1-6 |
+| `opened_at` | timestamptz | YES | - | Resend webhook |
+| `clicked_at` | timestamptz | YES | - | Resend webhook |
+| `resend_email_id` | text | YES | - | |
+| `sent_at` | timestamptz | NO | `now()` | |
+
+UNIQUE: `(user_id, email_number)`
+
+---
+
+### reconciliation_log
 Stripe-to-DB sync audit trail.
 
 | Column | Type | Nullable | Default | Constraints |
 |--------|------|----------|---------|-------------|
-| `id` | uuid | NO | gen_random_uuid() | PK |
-| `run_at` | timestamptz | NO | now() | |
-| `total_checked` | int | NO | 0 | |
-| `divergences_found` | int | NO | 0 | |
-| `auto_fixed` | int | NO | 0 | |
-| `manual_review` | int | NO | 0 | |
-| `duration_ms` | int | NO | 0 | |
-| `details` | jsonb | YES | '[]' | |
+| `id` | uuid | NO | `gen_random_uuid()` | PK |
+| `run_at` | timestamptz | NO | `now()` | |
+| `total_checked` | int | NO | `0` | |
+| `divergences_found` | int | NO | `0` | |
+| `auto_fixed` | int | NO | `0` | |
+| `manual_review` | int | NO | `0` | |
+| `duration_ms` | int | NO | `0` | |
+| `details` | jsonb | YES | `'[]'` | |
 
 ---
 
-### 2.4 Communication
-
-#### `conversations`
-
-| Column | Type | Nullable | Default | Constraints |
-|--------|------|----------|---------|-------------|
-| `id` | uuid | NO | gen_random_uuid() | PK |
-| `user_id` | uuid | NO | - | FK -> profiles(id) ON DELETE CASCADE |
-| `subject` | text | NO | - | CHECK length <= 200 |
-| `category` | text | NO | - | CHECK IN ('suporte','sugestao','funcionalidade','bug','outro') |
-| `status` | text | NO | 'aberto' | CHECK IN ('aberto','respondido','resolvido') |
-| `first_response_at` | timestamptz | YES | - | SLA tracking |
-| `last_message_at` | timestamptz | NO | now() | |
-| `created_at` | timestamptz | NO | now() | |
-| `updated_at` | timestamptz | NO | now() | |
-
-#### `messages`
+### health_checks
+Periodic health check results for uptime calculation.
 
 | Column | Type | Nullable | Default | Constraints |
 |--------|------|----------|---------|-------------|
-| `id` | uuid | NO | gen_random_uuid() | PK |
-| `conversation_id` | uuid | NO | - | FK -> conversations(id) ON DELETE CASCADE |
-| `sender_id` | uuid | NO | - | FK -> profiles(id) ON DELETE CASCADE |
-| `body` | text | NO | - | CHECK length between 1 and 5000 |
-| `is_admin_reply` | boolean | NO | false | |
-| `read_by_user` | boolean | NO | false | |
-| `read_by_admin` | boolean | NO | false | |
-| `created_at` | timestamptz | NO | now() | |
+| `id` | uuid | NO | `gen_random_uuid()` | PK |
+| `checked_at` | timestamptz | NO | `now()` | |
+| `overall_status` | text | NO | - | CHECK: healthy, degraded, unhealthy |
+| `sources_json` | jsonb | NO | `'{}'` | |
+| `components_json` | jsonb | NO | `'{}'` | |
+| `latency_ms` | integer | YES | - | |
 
-#### `alerts`
-
-| Column | Type | Nullable | Default | Constraints |
-|--------|------|----------|---------|-------------|
-| `id` | uuid | NO | gen_random_uuid() | PK |
-| `user_id` | uuid | NO | - | FK -> profiles(id) ON DELETE CASCADE |
-| `name` | text | NO | '' | |
-| `filters` | jsonb | NO | '{}' | |
-| `active` | boolean | NO | true | |
-| `created_at` | timestamptz | NO | now() | |
-| `updated_at` | timestamptz | NO | now() | Auto-updated via trigger |
-
-#### `alert_preferences`
-One row per user (1:1 with profiles, auto-created on profile insert).
-
-| Column | Type | Nullable | Default | Constraints |
-|--------|------|----------|---------|-------------|
-| `id` | uuid | NO | gen_random_uuid() | PK |
-| `user_id` | uuid | NO | - | FK -> profiles(id) ON DELETE CASCADE, UNIQUE |
-| `frequency` | alert_frequency | NO | 'daily' | ENUM: daily, twice_weekly, weekly, off |
-| `enabled` | boolean | NO | true | |
-| `last_digest_sent_at` | timestamptz | YES | - | |
-| `created_at` | timestamptz | NO | now() | |
-| `updated_at` | timestamptz | NO | now() | Auto-updated via trigger |
-
-#### `alert_sent_items`
-
-| Column | Type | Nullable | Default | Constraints |
-|--------|------|----------|---------|-------------|
-| `id` | uuid | NO | gen_random_uuid() | PK |
-| `alert_id` | uuid | NO | - | FK -> alerts(id) ON DELETE CASCADE |
-| `item_id` | text | NO | - | |
-| `sent_at` | timestamptz | NO | now() | |
-
-UNIQUE constraint: `(alert_id, item_id)`
-
-#### `alert_runs`
-
-| Column | Type | Nullable | Default | Constraints |
-|--------|------|----------|---------|-------------|
-| `id` | uuid | NO | gen_random_uuid() | PK |
-| `alert_id` | uuid | NO | - | FK -> alerts(id) ON DELETE CASCADE |
-| `run_at` | timestamptz | NO | now() | |
-| `items_found` | integer | NO | 0 | |
-| `items_sent` | integer | NO | 0 | |
-| `status` | text | NO | 'pending' | CHECK IN ('pending','running','completed','failed','matched','no_results','no_match','all_deduped','error') |
+Retention: 30 days (pg_cron).
 
 ---
 
-### 2.5 Multi-Tenant / Partners
-
-#### `organizations`
+### incidents
+System incidents for public status page.
 
 | Column | Type | Nullable | Default | Constraints |
 |--------|------|----------|---------|-------------|
-| `id` | uuid | NO | gen_random_uuid() | PK |
+| `id` | uuid | NO | `gen_random_uuid()` | PK |
+| `started_at` | timestamptz | NO | `now()` | |
+| `resolved_at` | timestamptz | YES | - | |
+| `status` | text | NO | `'ongoing'` | CHECK: ongoing, resolved |
+| `affected_sources` | text[] | NO | `'{}'` | |
+| `description` | text | NO | `''` | |
+| `updated_at` | timestamptz | NO | `now()` | Auto-updated via trigger |
+
+Retention: 90 days (pg_cron).
+
+---
+
+### mfa_recovery_codes
+Bcrypt-hashed recovery codes for TOTP MFA backup.
+
+| Column | Type | Nullable | Default | Constraints |
+|--------|------|----------|---------|-------------|
+| `id` | uuid | NO | `gen_random_uuid()` | PK |
+| `user_id` | uuid | NO | - | FK -> profiles(id) ON DELETE CASCADE |
+| `code_hash` | text | NO | - | |
+| `used_at` | timestamptz | YES | - | |
+| `created_at` | timestamptz | NO | `now()` | |
+
+---
+
+### mfa_recovery_attempts
+Brute force tracking for recovery code attempts.
+
+| Column | Type | Nullable | Default | Constraints |
+|--------|------|----------|---------|-------------|
+| `id` | uuid | NO | `gen_random_uuid()` | PK |
+| `user_id` | uuid | NO | - | FK -> profiles(id) ON DELETE CASCADE |
+| `attempted_at` | timestamptz | NO | `now()` | |
+| `success` | boolean | NO | `false` | |
+
+Retention: 30 days (pg_cron).
+
+---
+
+### organizations
+Multi-user organizations for consultoria/agency accounts.
+
+| Column | Type | Nullable | Default | Constraints |
+|--------|------|----------|---------|-------------|
+| `id` | uuid | NO | `gen_random_uuid()` | PK |
 | `name` | text | NO | - | |
 | `logo_url` | text | YES | - | |
 | `owner_id` | uuid | NO | - | FK -> profiles(id) ON DELETE RESTRICT |
-| `max_members` | int | NO | 5 | |
-| `plan_type` | text | NO | 'consultoria' | CHECK for valid plan types |
+| `max_members` | int | NO | `5` | |
+| `plan_type` | text | NO | `'consultoria'` | CHECK: multiple valid plan types |
 | `stripe_customer_id` | text | YES | - | |
-| `created_at` | timestamptz | NO | now() | |
-| `updated_at` | timestamptz | NO | now() | Auto-updated via trigger |
+| `created_at` | timestamptz | NO | `now()` | |
+| `updated_at` | timestamptz | NO | `now()` | Auto-updated via trigger |
 
-#### `organization_members`
+---
+
+### organization_members
+Members of an organization with role-based access.
 
 | Column | Type | Nullable | Default | Constraints |
 |--------|------|----------|---------|-------------|
-| `id` | uuid | NO | gen_random_uuid() | PK |
+| `id` | uuid | NO | `gen_random_uuid()` | PK |
 | `org_id` | uuid | NO | - | FK -> organizations(id) ON DELETE CASCADE |
 | `user_id` | uuid | NO | - | FK -> profiles(id) ON DELETE CASCADE |
-| `role` | text | NO | 'member' | CHECK IN ('owner','admin','member') |
-| `invited_at` | timestamptz | NO | now() | |
+| `role` | text | NO | `'member'` | CHECK: owner, admin, member |
+| `invited_at` | timestamptz | NO | `now()` | |
 | `accepted_at` | timestamptz | YES | - | NULL = pending |
 
-UNIQUE constraint: `(org_id, user_id)`
+UNIQUE: `(org_id, user_id)`
 
-#### `partners`
+---
+
+### partners
+Revenue share partner accounts.
 
 | Column | Type | Nullable | Default | Constraints |
 |--------|------|----------|---------|-------------|
-| `id` | uuid | NO | gen_random_uuid() | PK |
+| `id` | uuid | NO | `gen_random_uuid()` | PK |
 | `name` | text | NO | - | |
 | `slug` | text | NO | - | UNIQUE |
 | `contact_email` | text | NO | - | |
 | `contact_name` | text | YES | - | |
 | `stripe_coupon_id` | text | YES | - | |
-| `revenue_share_pct` | numeric(5,2) | YES | 25.00 | |
-| `status` | text | YES | 'active' | CHECK IN ('active','inactive','pending') |
-| `created_at` | timestamptz | NO | now() | |
-| `updated_at` | timestamptz | NO | now() | Auto-updated via trigger |
+| `revenue_share_pct` | numeric(5,2) | YES | `25.00` | |
+| `status` | text | YES | `'active'` | CHECK: active, inactive, pending |
+| `created_at` | timestamptz | NO | `now()` | |
+| `updated_at` | timestamptz | NO | `now()` | Auto-updated via trigger |
 
-#### `partner_referrals`
+---
+
+### partner_referrals
+Partner referral tracking for revenue share.
 
 | Column | Type | Nullable | Default | Constraints |
 |--------|------|----------|---------|-------------|
-| `id` | uuid | NO | gen_random_uuid() | PK |
+| `id` | uuid | NO | `gen_random_uuid()` | PK |
 | `partner_id` | uuid | NO | - | FK -> partners(id) ON DELETE CASCADE |
 | `referred_user_id` | uuid | YES | - | FK -> profiles(id) ON DELETE SET NULL |
-| `signup_at` | timestamptz | YES | now() | |
+| `signup_at` | timestamptz | YES | `now()` | |
 | `converted_at` | timestamptz | YES | - | |
 | `churned_at` | timestamptz | YES | - | |
 | `monthly_revenue` | numeric(10,2) | YES | - | |
 | `revenue_share_amount` | numeric(10,2) | YES | - | |
 
-UNIQUE constraint: `(partner_id, referred_user_id)`
+UNIQUE: `(partner_id, referred_user_id)`
 
 ---
 
-### 2.6 Operational
+## Custom Types & Enums
 
-#### `audit_events`
-Persistent audit log. All PII stored as SHA-256 hashes (16 hex chars).
-
-| Column | Type | Nullable | Default | Constraints |
-|--------|------|----------|---------|-------------|
-| `id` | uuid | NO | gen_random_uuid() | PK |
-| `timestamp` | timestamptz | NO | now() | |
-| `event_type` | text | NO | - | |
-| `actor_id_hash` | text | YES | - | |
-| `target_id_hash` | text | YES | - | |
-| `details` | jsonb | YES | - | |
-| `ip_hash` | text | YES | - | |
-
-#### `health_checks`
-
-| Column | Type | Nullable | Default | Constraints |
-|--------|------|----------|---------|-------------|
-| `id` | uuid | NO | gen_random_uuid() | PK |
-| `checked_at` | timestamptz | NO | now() | |
-| `overall_status` | text | NO | - | CHECK IN ('healthy','degraded','unhealthy') |
-| `sources_json` | jsonb | NO | '{}' | |
-| `components_json` | jsonb | NO | '{}' | |
-| `latency_ms` | integer | YES | - | |
-
-#### `incidents`
-
-| Column | Type | Nullable | Default | Constraints |
-|--------|------|----------|---------|-------------|
-| `id` | uuid | NO | gen_random_uuid() | PK |
-| `started_at` | timestamptz | NO | now() | |
-| `resolved_at` | timestamptz | YES | - | |
-| `status` | text | NO | 'ongoing' | CHECK IN ('ongoing','resolved') |
-| `affected_sources` | text[] | NO | '{}' | |
-| `description` | text | NO | '' | |
-| `updated_at` | timestamptz | NO | now() | Auto-updated via trigger |
-
-#### `trial_email_log`
-
-| Column | Type | Nullable | Default | Constraints |
-|--------|------|----------|---------|-------------|
-| `id` | uuid | NO | gen_random_uuid() | PK |
-| `user_id` | uuid | NO | - | FK -> profiles(id) ON DELETE CASCADE |
-| `email_type` | text | NO | - | |
-| `email_number` | integer | YES | - | CHECK 1-6 |
-| `sent_at` | timestamptz | NO | now() | |
-| `opened_at` | timestamptz | YES | - | Resend webhook |
-| `clicked_at` | timestamptz | YES | - | Resend webhook |
-| `resend_email_id` | text | YES | - | |
-
-UNIQUE constraint: `(user_id, email_number)`
-
-#### `google_sheets_exports`
-
-| Column | Type | Nullable | Default | Constraints |
-|--------|------|----------|---------|-------------|
-| `id` | uuid | NO | gen_random_uuid() | PK |
-| `user_id` | uuid | NO | - | FK -> profiles(id) ON DELETE CASCADE |
-| `spreadsheet_id` | varchar(255) | NO | - | |
-| `spreadsheet_url` | text | NO | - | |
-| `search_params` | jsonb | NO | - | GIN index |
-| `total_rows` | int | NO | - | CHECK >= 0 |
-| `created_at` | timestamptz | NO | now() | |
-| `updated_at` | timestamptz | NO | now() | Auto-updated via trigger |
+| Type | Values | Used By |
+|------|--------|---------|
+| `alert_frequency` | `daily`, `twice_weekly`, `weekly`, `off` | alert_preferences.frequency |
 
 ---
 
-## 3. RLS Policies
+## Functions (RPC)
 
-All 32 tables have RLS enabled. Policies follow a standardized pattern after 4 rounds of hardening (migrations 016, TD-003, DEBT-009, DEBT-113).
+### Quota Functions
+| Function | Returns | Purpose |
+|----------|---------|---------|
+| `check_and_increment_quota(uuid, varchar, int)` | TABLE(allowed, new_count, previous_count, quota_remaining) | Primary atomic quota check+increment |
+| `increment_quota_atomic(uuid, varchar, int)` | TABLE(new_count, was_at_limit, previous_count) | Fallback quota increment |
+| `increment_quota_fallback_atomic(uuid, text, int)` | TABLE(new_count) | Simplified fallback |
 
-### Pattern Summary
+### Billing Helper Functions
+| Function | Returns | Purpose |
+|----------|---------|---------|
+| `get_user_billing_period(uuid)` | VARCHAR(10) | Get user's current billing period |
+| `user_has_feature(uuid, varchar)` | BOOLEAN | Check if user has specific feature |
+| `get_user_features(uuid)` | TEXT[] | Get all enabled feature keys |
 
-| Pattern | Tables | Description |
-|---------|--------|-------------|
-| User owns rows | 20 tables | `auth.uid() = user_id` for SELECT/INSERT/UPDATE/DELETE |
-| Service role ALL | All 32 tables | `TO service_role USING (true) WITH CHECK (true)` |
-| Public read | plans, plan_features, plan_billing_periods | `FOR SELECT USING (true)` |
-| Admin read | stripe_webhook_events, audit_events, reconciliation_log | `EXISTS (SELECT 1 FROM profiles WHERE ... is_admin = true)` |
-| Service-only | health_checks, incidents, trial_email_log | No user-facing policies |
-
-### Notable Policies
-
-- **conversations/messages**: Users see own + admins see all (admin check via profiles.is_admin)
-- **alert_sent_items**: Users can SELECT via join to alerts (verify ownership)
-- **organizations**: Owner + admin members can SELECT; INSERT requires owner_id match
-- **organization_members**: Self-referencing RLS (members check own membership role)
-- **partners**: Admin ALL + self-read via contact_email match to auth.users email
-- **search_state_transitions**: Users read via `user_id = auth.uid()` (optimized from correlated subquery)
-
----
-
-## 4. Indexes
-
-### Counts by Table (most indexed)
-
-| Table | Index Count | Notable |
-|-------|-------------|---------|
-| search_results_cache | 7 | Priority, degraded, global hash, params hash |
-| search_sessions | 5 | User+status+created composite, search_id, inflight |
-| user_subscriptions | 5 | Stripe sub ID (unique), customer ID, billing |
-| pipeline_items | 4 | User+stage, encerramento, search_id |
-| profiles | 4 | Email trigram, admin, phone unique, subscription status |
-| conversations | 4 | User, status, last_message, status+last_msg composite |
-| messages | 3 | Conversation+created, unread by user, unread by admin |
-| alerts | 2 | User, active |
-| alert_sent_items | 3 | Dedup (unique), alert_id, sent_at |
-
-### Key Indexes for Performance
-
-- `idx_profiles_email_trgm` (GIN trigram) -- admin ILIKE search
-- `idx_search_sessions_user_status_created` -- composite for history queries
-- `idx_search_cache_priority` -- priority-based eviction
-- `idx_search_cache_global_hash` -- cross-user cache fallback
-- `idx_user_subscriptions_stripe_sub_id` -- unique partial, webhook processing
-- `idx_conversations_status_last_msg` -- admin inbox composite
-- `idx_messages_unread_by_user` / `idx_messages_unread_by_admin` -- partial indexes for badge counts
-
----
-
-## 5. Functions and Triggers
-
-### RPC Functions
-
-| Function | Purpose | Called By |
-|----------|---------|----------|
-| `check_and_increment_quota(uuid, varchar, int)` | Atomic quota check + increment | `quota.py` |
-| `increment_quota_atomic(uuid, varchar, int)` | Simpler atomic increment | `quota.py` fallback |
-| `increment_quota_fallback_atomic(uuid, text, int)` | Lightweight fallback | `quota.py` |
-| `get_conversations_with_unread_count(...)` | Conversations + unread in single query | `routes/messages.py` |
-| `get_analytics_summary(uuid, timestamptz, timestamptz)` | Analytics aggregation | `routes/analytics.py` |
-| `get_user_billing_period(uuid)` | Current billing period | Billing helpers |
-| `user_has_feature(uuid, varchar)` | Feature flag check | Billing helpers |
-| `get_user_features(uuid)` | All features for user | Billing helpers |
-| `get_table_columns_simple(text)` | Schema validation | Backend startup |
-| `pg_total_relation_size_safe(text)` | Safe table size query | Prometheus metrics |
+### Query Functions
+| Function | Returns | Purpose |
+|----------|---------|---------|
+| `get_conversations_with_unread_count(...)` | TABLE | Eliminates N+1 query in conversation list (LEFT JOIN LATERAL) |
+| `get_analytics_summary(uuid, timestamptz, timestamptz)` | TABLE | Analytics summary without full-table scan |
+| `get_table_columns_simple(text)` | TABLE(column_name) | Schema validation helper |
+| `pg_total_relation_size_safe(text)` | bigint | Safe table size query for Prometheus |
 
 ### Trigger Functions
-
-| Function | Triggers On | Purpose |
-|----------|-------------|---------|
-| `handle_new_user()` | auth.users INSERT | Auto-create profile with phone normalization |
-| `set_updated_at()` | 10 tables (UPDATE) | Canonical updated_at auto-update |
-| `update_conversation_last_message()` | messages INSERT | Update conversation.last_message_at |
-| `cleanup_search_cache_per_user()` | search_results_cache INSERT | Evict beyond 5 entries (short-circuit at <=5) |
-| `create_default_alert_preferences()` | profiles INSERT | Auto-create alert_preferences row |
-
-### Triggers by Table
-
-| Table | Trigger | Function |
-|-------|---------|----------|
-| auth.users | on_auth_user_created | handle_new_user() |
-| profiles | profiles_updated_at | set_updated_at() |
-| profiles | trigger_create_alert_preferences_on_profile | create_default_alert_preferences() |
-| plans | plans_updated_at | set_updated_at() |
-| plan_features | plan_features_updated_at | set_updated_at() |
-| plan_billing_periods | trg_plan_billing_periods_updated_at | set_updated_at() |
-| user_subscriptions | user_subscriptions_updated_at | set_updated_at() |
-| pipeline_items | tr_pipeline_items_updated_at | set_updated_at() |
-| organizations | tr_organizations_updated_at | set_updated_at() |
-| alerts | trigger_alerts_updated_at | set_updated_at() |
-| alert_preferences | trigger_alert_preferences_updated_at | set_updated_at() |
-| incidents | trg_incidents_updated_at | set_updated_at() |
-| partners | trg_partners_updated_at | set_updated_at() |
-| google_sheets_exports | trg_google_sheets_exports_updated_at | set_updated_at() |
-| conversations | trg_update_conversation_last_message | update_conversation_last_message() |
-| search_results_cache | trg_cleanup_search_cache | cleanup_search_cache_per_user() |
+| Function | Purpose |
+|----------|---------|
+| `set_updated_at()` | Canonical updated_at trigger (used by 13+ tables) |
+| `handle_new_user()` | Auto-create profile on signup (phone normalization, plan_type=free_trial) |
+| `update_conversation_last_message()` | Update conversation.last_message_at on new message |
+| `cleanup_search_cache_per_user()` | Priority-based cache eviction (short-circuit if <=5 entries) |
+| `create_default_alert_preferences()` | Auto-create alert preferences for new users |
 
 ---
 
-## 6. pg_cron Retention Jobs
+## Triggers
 
-| Job Name | Schedule | Table | Retention | Migration |
-|----------|----------|-------|-----------|-----------|
-| cleanup-monthly-quota | 1st of month, 2am | monthly_quota | 24 months | 022 |
-| cleanup-webhook-events | Daily, 3am | stripe_webhook_events | 90 days | 022 |
-| cleanup-audit-events | 1st of month, 4am | audit_events | 12 months | 023 |
-| cleanup-cold-cache-entries | Daily, 5am | search_results_cache | 7 days (cold only) | 20260225150000 |
-| cleanup-search-state-transitions | Daily, 4am | search_state_transitions | 30 days | 20260308310000 |
-| cleanup-alert-sent-items | Daily, 4:05am | alert_sent_items | 180 days | 20260308310000 |
-| cleanup-health-checks | Daily, 4:10am | health_checks | 30 days | 20260308310000 |
-| cleanup-incidents | Daily, 4:15am | incidents | 90 days | 20260308310000 |
-| cleanup-mfa-recovery-attempts | Daily, 4:20am | mfa_recovery_attempts | 30 days | 20260308310000 |
-| cleanup-alert-runs | Daily, 4:25am | alert_runs (completed) | 90 days | 20260308310000 |
-| cleanup-expired-search-results | Daily, 4am | search_results_store | expired rows | 20260309200000 |
-| cleanup-old-search-sessions | Daily, 4:30am | search_sessions | 12 months | 20260309200000 |
-| cleanup-classification-feedback | Daily, 4:45am | classification_feedback | 24 months | 20260311100000 |
-| cleanup-old-conversations | Daily, 4:50am | conversations | 24 months | 20260311100000 |
-| cleanup-orphan-messages | Daily, 4:55am | messages | 24 months | 20260311100000 |
-
----
-
-## 7. Key Access Patterns
-
-### Search Flow (hot path)
-1. `check_and_increment_quota()` RPC -- atomic quota check + increment
-2. `INSERT INTO search_sessions` -- record search attempt
-3. `INSERT INTO search_state_transitions` -- audit trail per state change
-4. `UPSERT INTO search_results_cache` -- L2 cache write (ON CONFLICT user_id, params_hash)
-5. `INSERT INTO search_results_store` -- L3 persistent store
-6. `UPDATE search_sessions SET status='completed'` -- finalize
-
-### Cache Lookup (read path)
-1. `SELECT FROM search_results_cache WHERE user_id=? AND params_hash=?` -- L2 user-specific
-2. `SELECT FROM search_results_cache WHERE params_hash_global=? ORDER BY created_at DESC LIMIT 1` -- cross-user fallback
-3. `SELECT FROM search_results_store WHERE search_id=?` -- L3 by search_id
-
-### Pipeline Operations
-1. `INSERT INTO pipeline_items` -- add to pipeline (UNIQUE user_id + pncp_id)
-2. `UPDATE pipeline_items SET stage=? WHERE id=? AND version=?` -- optimistic lock move
-3. `SELECT FROM pipeline_items WHERE user_id=? ORDER BY stage, created_at DESC` -- kanban view
-
-### Billing Flow
-1. `SELECT FROM plans WHERE id=? AND is_active=true` -- plan lookup
-2. `SELECT FROM plan_billing_periods WHERE plan_id=? AND billing_period=?` -- price lookup
-3. `INSERT INTO stripe_webhook_events` -- idempotency check (PK = evt_id)
-4. `UPDATE user_subscriptions` -- sync subscription state
-5. `UPDATE profiles SET plan_type=?` -- keep denormalized plan_type current
-
-### Analytics
-1. `get_analytics_summary(user_id)` RPC -- aggregated search stats
-2. `SELECT FROM search_sessions WHERE user_id=? ORDER BY created_at DESC` -- history
-3. `get_conversations_with_unread_count(user_id)` RPC -- inbox with counts
+| Trigger | Table | Event | Function |
+|---------|-------|-------|----------|
+| `on_auth_user_created` | auth.users | AFTER INSERT | `handle_new_user()` |
+| `profiles_updated_at` | profiles | BEFORE UPDATE | `set_updated_at()` |
+| `plans_updated_at` | plans | BEFORE UPDATE | `set_updated_at()` |
+| `plan_features_updated_at` | plan_features | BEFORE UPDATE | `set_updated_at()` |
+| `user_subscriptions_updated_at` | user_subscriptions | BEFORE UPDATE | `set_updated_at()` |
+| `tr_pipeline_items_updated_at` | pipeline_items | BEFORE UPDATE | `set_updated_at()` |
+| `tr_organizations_updated_at` | organizations | BEFORE UPDATE | `set_updated_at()` |
+| `trigger_alert_preferences_updated_at` | alert_preferences | BEFORE UPDATE | `set_updated_at()` |
+| `trigger_alerts_updated_at` | alerts | BEFORE UPDATE | `set_updated_at()` |
+| `trg_plan_billing_periods_updated_at` | plan_billing_periods | BEFORE UPDATE | `set_updated_at()` |
+| `trg_google_sheets_exports_updated_at` | google_sheets_exports | BEFORE UPDATE | `set_updated_at()` |
+| `trg_incidents_updated_at` | incidents | BEFORE UPDATE | `set_updated_at()` |
+| `trg_partners_updated_at` | partners | BEFORE UPDATE | `set_updated_at()` |
+| `trg_update_conversation_last_message` | messages | AFTER INSERT | `update_conversation_last_message()` |
+| `trg_cleanup_search_cache` | search_results_cache | AFTER INSERT | `cleanup_search_cache_per_user()` |
+| `trigger_create_alert_preferences_on_profile` | profiles | AFTER INSERT | `create_default_alert_preferences()` |
 
 ---
 
-## 8. Custom Types
+## Indexes
 
-| Type | Kind | Values | Used By |
-|------|------|--------|---------|
-| `alert_frequency` | ENUM | daily, twice_weekly, weekly, off | alert_preferences.frequency |
+### profiles (9 indexes)
+| Index | Columns | Type | Notes |
+|-------|---------|------|-------|
+| `profiles_pkey` | (id) | btree unique | PK |
+| `idx_profiles_is_admin` | (is_admin) | btree | Partial WHERE is_admin = true |
+| `idx_profiles_email_trgm` | (email) | GIN gin_trgm_ops | Admin ILIKE search |
+| `idx_profiles_email_unique` | (email) | btree unique | Partial WHERE NOT NULL |
+| `idx_profiles_phone_whatsapp_unique` | (phone_whatsapp) | btree unique | Partial WHERE NOT NULL |
+| `idx_profiles_whatsapp_consent` | (whatsapp_consent) | btree | Partial WHERE true |
+| `idx_profiles_context_porte` | (context_data->>'porte_empresa') | btree | Partial WHERE NOT NULL |
+| `idx_profiles_subscription_status` | (subscription_status) | btree | Partial WHERE != 'trial' |
+| `idx_profiles_referred_by_partner` | (referred_by_partner_id) | btree | Partial WHERE NOT NULL |
 
-All other constrained columns use CHECK constraints rather than custom types.
+### search_sessions (5 indexes)
+| Index | Columns | Notes |
+|-------|---------|-------|
+| `idx_search_sessions_created` | (user_id, created_at DESC) | History listing |
+| `idx_search_sessions_search_id` | (search_id) | Partial WHERE NOT NULL |
+| `idx_search_sessions_status` | (status) | Partial WHERE IN (created, processing) |
+| `idx_search_sessions_inflight` | (status, started_at) | Partial WHERE IN (created, processing) |
+| `idx_search_sessions_user_status_created` | (user_id, status, created_at DESC) | Composite |
+
+### search_results_cache (6 indexes)
+| Index | Columns | Notes |
+|-------|---------|-------|
+| UNIQUE | (user_id, params_hash) | |
+| `idx_search_cache_user` | (user_id, created_at DESC) | |
+| `idx_search_cache_params_hash` | (params_hash) | Cross-user queries |
+| `idx_search_cache_global_hash` | (params_hash_global, created_at DESC) | |
+| `idx_search_cache_degraded` | (degraded_until) | Partial WHERE NOT NULL |
+| `idx_search_cache_priority` | (user_id, priority, last_accessed_at) | Eviction |
+
+### user_subscriptions (6 indexes)
+| Index | Columns | Notes |
+|-------|---------|-------|
+| `idx_user_subscriptions_user` | (user_id) | |
+| `idx_user_subscriptions_active` | (user_id, is_active) | Partial WHERE is_active = true |
+| `idx_user_subscriptions_billing` | (user_id, billing_period, is_active) | Partial WHERE is_active = true |
+| `idx_user_subscriptions_stripe_sub_id` | (stripe_subscription_id) | Unique partial WHERE NOT NULL |
+| `idx_user_subscriptions_customer_id` | (stripe_customer_id) | Partial WHERE NOT NULL |
+| `idx_user_subscriptions_first_failed_at` | (first_failed_at) | Partial WHERE NOT NULL |
+
+### Other notable indexes
+| Table | Index | Columns |
+|-------|-------|---------|
+| stripe_webhook_events | `idx_webhook_events_type` | (type, processed_at) |
+| stripe_webhook_events | `idx_webhook_events_recent` | (processed_at DESC) |
+| pipeline_items | `idx_pipeline_user_stage` | (user_id, stage) |
+| pipeline_items | `idx_pipeline_encerramento` | (data_encerramento) partial |
+| pipeline_items | `idx_pipeline_items_search_id` | (search_id) partial |
+| conversations | `idx_conversations_user_id` | (user_id) |
+| conversations | `idx_conversations_status_last_msg` | (status, last_message_at DESC) |
+| conversations | `idx_conversations_unanswered` | (created_at) partial |
+| messages | `idx_messages_conversation` | (conversation_id, created_at) |
+| messages | `idx_messages_unread_by_user` | (conversation_id) partial |
+| messages | `idx_messages_unread_by_admin` | (conversation_id) partial |
+| audit_events | `idx_audit_events_type_timestamp` | (event_type, timestamp DESC) |
+| audit_events | `idx_audit_events_actor` | (actor_id_hash) partial |
+| search_state_transitions | `idx_state_transitions_search_id` | (search_id, created_at ASC) |
+| search_state_transitions | `idx_search_state_transitions_user_id` | (user_id) |
+| google_sheets_exports | `idx_google_sheets_exports_search_params` | (search_params) GIN |
+| search_results_store | `idx_search_results_user` | (user_id) |
+| search_results_store | `idx_search_results_store_user_expires` | (user_id, expires_at) |
+| alert_sent_items | `idx_alert_sent_items_dedup` | (alert_id, item_id) unique |
+
+---
+
+## RLS Policies
+
+All 27 public tables have RLS enabled. The standard pattern is:
+
+- **User-facing tables**: `auth.uid() = user_id` for SELECT/INSERT/UPDATE/DELETE
+- **Service role**: `FOR ALL TO service_role USING (true) WITH CHECK (true)`
+- **Admin tables**: `EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND is_admin = true)`
+- **Public catalog**: `FOR SELECT USING (true)` (plans, plan_features, plan_billing_periods)
+
+### Policy Summary by Table
+
+| Table | User Policies | Admin | Service Role | Public |
+|-------|--------------|-------|-------------|--------|
+| profiles | SELECT own, UPDATE own, INSERT own | - | ALL | - |
+| plans | - | - | - | SELECT all |
+| plan_billing_periods | - | - | ALL | SELECT all |
+| plan_features | - | - | - | SELECT all |
+| user_subscriptions | SELECT own | - | ALL | - |
+| monthly_quota | SELECT own | - | ALL | - |
+| search_sessions | SELECT own, INSERT own | - | ALL | - |
+| search_state_transitions | SELECT own(user_id) | - | ALL | - |
+| search_results_cache | SELECT own | - | ALL | - |
+| search_results_store | SELECT own | - | ALL | - |
+| stripe_webhook_events | - | SELECT (is_admin) | INSERT + SELECT | - |
+| pipeline_items | SELECT/INSERT/UPDATE/DELETE own | - | ALL | - |
+| conversations | SELECT own+admin, INSERT own, UPDATE admin | - | ALL | - |
+| messages | SELECT/INSERT/UPDATE own+admin | - | ALL | - |
+| alerts | SELECT/INSERT/UPDATE/DELETE own | - | ALL | - |
+| alert_sent_items | SELECT own(via join) | - | ALL | - |
+| alert_runs | SELECT own(via join) | - | ALL | - |
+| alert_preferences | SELECT/INSERT/UPDATE own | - | ALL | - |
+| classification_feedback | SELECT/INSERT/UPDATE/DELETE own | - | ALL | - |
+| user_oauth_tokens | SELECT/UPDATE/DELETE own | - | ALL | - |
+| google_sheets_exports | SELECT/INSERT/UPDATE own | - | ALL | - |
+| audit_events | - | SELECT (is_admin) | ALL | - |
+| trial_email_log | - | - | (service bypasses) | - |
+| reconciliation_log | - | SELECT (is_admin) | ALL | - |
+| health_checks | - | - | ALL | - |
+| incidents | - | - | ALL | - |
+| mfa_recovery_codes | SELECT own (authenticated) | - | ALL | - |
+| mfa_recovery_attempts | - | - | ALL | - |
+| organizations | SELECT owner+admin, INSERT/UPDATE owner | - | ALL | - |
+| organization_members | SELECT own+org admin, INSERT org admin, DELETE org admin+self | - | ALL | - |
+| partners | SELECT admin+self | ALL (admin) | ALL | - |
+| partner_referrals | SELECT admin+partner | ALL (admin) | ALL | - |
+
+---
+
+## pg_cron Scheduled Jobs
+
+| Job Name | Schedule | Retention | Table |
+|----------|----------|-----------|-------|
+| `cleanup-monthly-quota` | 2:00 UTC, 1st monthly | 24 months | monthly_quota |
+| `cleanup-webhook-events` | 3:00 UTC daily | 90 days | stripe_webhook_events |
+| `cleanup-audit-events` | 4:00 UTC, 1st monthly | 12 months | audit_events |
+| `cleanup-search-state-transitions` | 4:00 UTC daily | 30 days | search_state_transitions |
+| `cleanup-cold-cache-entries` | 5:00 UTC daily | 7 days (cold) | search_results_cache |
+| `cleanup-alert-sent-items` | 4:05 UTC daily | 180 days | alert_sent_items |
+| `cleanup-health-checks` | 4:10 UTC daily | 30 days | health_checks |
+| `cleanup-incidents` | 4:15 UTC daily | 90 days | incidents |
+| `cleanup-mfa-recovery-attempts` | 4:20 UTC daily | 30 days | mfa_recovery_attempts |
+| `cleanup-alert-runs` | 4:25 UTC daily | 90 days (completed) | alert_runs |
+| `cleanup-expired-search-results` | 4:00 UTC daily | expired rows | search_results_store |
+| `cleanup-old-search-sessions` | 4:30 UTC daily | 12 months | search_sessions |
+| `cleanup-classification-feedback` | 4:45 UTC daily | 24 months | classification_feedback |
+| `cleanup-old-conversations` | 4:50 UTC daily | 24 months | conversations |
+| `cleanup-orphan-messages` | 4:55 UTC daily | 24 months | messages |
+
+---
+
+## Entity Relationships
+
+```
+auth.users (Supabase managed)
+  |-- profiles (1:1, ON DELETE CASCADE) *** Central hub ***
+       |-- user_subscriptions (1:N, CASCADE)
+       |-- monthly_quota (1:N, CASCADE)
+       |-- search_sessions (1:N, CASCADE)
+       |-- search_results_cache (1:N, CASCADE)
+       |-- search_results_store (1:N, CASCADE)
+       |-- pipeline_items (1:N, CASCADE)
+       |-- conversations (1:N, CASCADE)
+       |-- messages (via sender_id, CASCADE)
+       |-- alerts (1:N, CASCADE)
+       |-- alert_preferences (1:1, CASCADE)
+       |-- classification_feedback (1:N, CASCADE)
+       |-- user_oauth_tokens (1:N, CASCADE)
+       |-- google_sheets_exports (1:N, CASCADE)
+       |-- mfa_recovery_codes (1:N, CASCADE)
+       |-- mfa_recovery_attempts (1:N, CASCADE)
+       |-- organization_members (N:M via org_id, CASCADE)
+       |-- organizations (via owner_id, RESTRICT)
+       |-- partner_referrals (via referred_user_id, SET NULL)
+       |-- search_state_transitions (1:N, CASCADE)
+       |-- trial_email_log (1:N, CASCADE)
+
+plans
+  |-- plan_billing_periods (1:N, CASCADE)
+  |-- plan_features (1:N, CASCADE)
+  |-- user_subscriptions (via plan_id, RESTRICT)
+
+conversations
+  |-- messages (1:N, CASCADE)
+
+alerts
+  |-- alert_sent_items (1:N, CASCADE)
+  |-- alert_runs (1:N, CASCADE)
+
+organizations
+  |-- organization_members (1:N, CASCADE)
+
+partners
+  |-- partner_referrals (1:N, CASCADE)
+  |-- profiles (via referred_by_partner_id)
+```
 
 ---
 
 ## Extensions
 
-| Extension | Purpose | Migration |
-|-----------|---------|-----------|
-| `pg_trgm` | Trigram matching for ILIKE search | 016 |
-| `pg_cron` | Scheduled retention cleanup jobs | 022 |
+| Extension | Purpose |
+|-----------|---------|
+| `pg_trgm` | Trigram matching for email ILIKE search |
+| `pg_cron` | Scheduled retention cleanup jobs (15 jobs) |
 
 ---
 
-*Generated 2026-03-20 by @data-engineer during Brownfield Discovery Phase 2.*
+## System Account
+
+A system cache warmer account exists at UUID `00000000-0000-0000-0000-000000000000`:
+- Email: `system-cache-warmer@internal.smartlic.tech`
+- Plan: `master`
+- Banned until: 2099-12-31 (cannot authenticate)
+- Purpose: Background cache warming jobs use this user_id to avoid counting against real user quotas

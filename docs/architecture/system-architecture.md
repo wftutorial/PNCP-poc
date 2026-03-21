@@ -1,7 +1,7 @@
 # SmartLic -- System Architecture Document
 
-**Date:** 2026-03-20 | **Author:** @architect (Atlas) | **Phase:** Brownfield Discovery Phase 1
-**Codebase:** `main` branch HEAD | **Version:** 3.0 (supersedes GTM Readiness Assessment v2.0)
+**Date:** 2026-03-21 | **Author:** @architect (Atlas) | **Phase:** Brownfield Discovery Phase 2
+**Codebase:** `main` branch HEAD | **Version:** 4.0 (supersedes v3.0 from 2026-03-20)
 
 ---
 
@@ -9,833 +9,622 @@
 
 ### 1.1 What SmartLic Does
 
-SmartLic is a B2G (Business-to-Government) intelligence platform that automates discovery, analysis, and qualification of public procurement opportunities (licitacoes) in Brazil. It targets construction, engineering, and service companies that participate in government bids.
+SmartLic is a B2G (Business-to-Government) intelligence platform that automates discovery, analysis, and qualification of public procurement opportunities (licitacoes) in Brazil. Built by CONFENGE Avaliacoes e Inteligencia Artificial LTDA, it targets construction, engineering, and service companies that participate in government bids, as well as consultancies and assessorias that support them.
 
 **Core Value Proposition:**
 - Aggregates procurement data from 3 government sources (PNCP, PCP v2, ComprasGov v3) into a unified search
 - AI-powered sectoral classification using GPT-4.1-nano eliminates irrelevant results
 - 4-factor viability assessment helps users prioritize high-probability opportunities
 - Kanban pipeline for opportunity tracking from discovery to bid submission
+- PDF diagnostic reports and Excel exports for decision support
 
 **Current Stage:** POC v0.5 in production (beta with trials, pre-revenue)
 **URL:** https://smartlic.tech
-**Operator:** CONFENGE Avaliacoes e Inteligencia Artificial LTDA
+**Pricing:** SmartLic Pro R$397/month (monthly), R$357/month (semiannual), R$297/month (annual). Consultoria tier also available.
 
-### 1.2 Product Capabilities
+### 1.2 Codebase Statistics
 
-| Capability | Description |
-|------------|-------------|
-| Multi-source search | PNCP + PCP v2 + ComprasGov v3 with dedup and fallback cascade |
-| AI classification | LLM arbiter classifies sectoral relevance (keyword + zero-match) |
-| Viability scoring | 4-factor deterministic score: modalidade (30%), timeline (25%), value (25%), geography (20%) |
-| Opportunity pipeline | Kanban board with drag-and-drop stage management |
-| Export | Styled Excel workbooks + AI executive summaries |
-| Search history | Saved searches, sessions, analytics dashboard |
-| Billing | Stripe subscriptions with 14-day free trial (no credit card) |
+| Metric | Count |
+|--------|-------|
+| **Backend source files** | 199 Python files |
+| **Backend source LOC** | 77,364 lines |
+| **Backend test files** | 344 files |
+| **Backend test LOC** | 140,199 lines |
+| **Backend test passing** | 7,332+ (0 failures baseline) |
+| **Backend API endpoints** | 126 (119 in routes/ + 7 in main.py) |
+| **Backend route modules** | 35 |
+| **Frontend pages** | 47 |
+| **Frontend API proxies** | 58 route handlers |
+| **Frontend components** | ~241 (41 in buscar/, ~32 shared, rest page-specific) |
+| **Frontend hooks** | 36 (27 shared + 9 buscar-specific) |
+| **Frontend test files** | 300+ files |
+| **Frontend test passing** | 5,583+ (0 failures baseline) |
+| **E2E tests** | 60 critical user flows |
+| **Database migrations** | 90 SQL files |
+| **Database tables** | 29 (28 created + profiles) |
+| **RLS policies** | 105 |
+| **Database indexes** | 95 |
+| **Database functions** | 32 |
+| **CI/CD workflows** | 17 GitHub Actions |
+| **Environment variables** | 356 lines in .env.example |
 
-### 1.3 15 Sectors
+### 1.3 Tech Stack Summary
 
-Defined in `backend/sectors_data.yaml`. Each sector has keywords, exclusion terms, and a viability value range. Examples: vestuario, construcao_civil, informatica, alimentos, saude.
+| Layer | Technology | Version |
+|-------|-----------|---------|
+| **Backend runtime** | Python | 3.12 |
+| **Backend framework** | FastAPI | 0.129.0 |
+| **ASGI server** | Uvicorn (via Gunicorn) | 0.41.0 |
+| **Process manager** | Gunicorn | 23.0.0 |
+| **Validation** | Pydantic v2 | 2.12.5 |
+| **HTTP client** | httpx | 0.28.1 |
+| **LLM** | OpenAI SDK (GPT-4.1-nano) | 1.109.1 |
+| **Database** | Supabase (PostgreSQL 17) | Cloud |
+| **Cache** | Redis (redis-py 5.3.1) | 5.x |
+| **Job queue** | ARQ | via pip |
+| **Billing** | Stripe | 11.4.1 |
+| **Email** | Resend | via REST |
+| **Auth** | Supabase Auth + PyJWT | 2.11.0 |
+| **Monitoring** | Prometheus + OpenTelemetry + Sentry | 10.38.0 (Sentry) |
+| **PDF** | ReportLab | 4.4.0 |
+| **Excel** | openpyxl | 3.1.5 |
+| **Frontend framework** | Next.js | 16.1.6 |
+| **UI library** | React | 18.3.1 |
+| **Language** | TypeScript | 5.9 |
+| **Styling** | Tailwind CSS | 3.x |
+| **State/Fetching** | SWR | 2.4.1 |
+| **Forms** | react-hook-form + zod | 4.3.6 (zod) |
+| **Animation** | Framer Motion | 12.33.0 |
+| **Charts** | Recharts | 3.7.0 |
+| **Drag-and-drop** | @dnd-kit | 6.3.1 |
+| **Onboarding** | Shepherd.js | 14.5.1 |
+| **Analytics** | Mixpanel | 2.74.0 |
 
 ---
 
-## 2. Architecture Diagram
+## 2. Deployment Topology
 
 ```
-                                    +-------------------+
-                                    |   End User        |
-                                    |   (Browser)       |
-                                    +--------+----------+
-                                             |
-                                             | HTTPS
-                                             v
-                              +------------------------------+
-                              |  Railway Frontend Service     |
-                              |  Next.js 16 + React 18       |
-                              |  (SSR + API Proxy Layer)      |
-                              +------+-----------+-----------+
-                                     |           |
-                            SSE Stream  REST API Proxy
-                            (progress)  (all endpoints)
-                                     |           |
-                                     v           v
-                              +------------------------------+
-                              |  Railway Backend Service      |
-                              |  Gunicorn + Uvicorn Workers   |
-                              |  FastAPI 0.129 + Python 3.12  |
-                              +--+----+----+----+----+-------+
-                                 |    |    |    |    |
-         +-----------------------+    |    |    |    +---------------------+
-         |                            |    |    |                         |
-         v                            v    |    v                         v
-+----------------+  +------------------+   |  +------------------+  +----------+
-| PNCP API       |  | PCP v2 API       |   |  | OpenAI API       |  | Stripe   |
-| (Priority 1)   |  | (Priority 2)     |   |  | GPT-4.1-nano     |  | Billing  |
-| pncp.gov.br    |  | portaldecompras  |   |  |                  |  |          |
-+----------------+  | publicas.com.br  |   |  +------------------+  +----------+
-                    +------------------+   |
-                                           v
-                              +------------------------------+
-                              |  Railway Worker Service       |
-                              |  ARQ Background Jobs          |
-                              |  (LLM Summaries + Excel Gen)  |
-                              +------+-----------------------+
-                                     |
-                        +------------+------------+
-                        |                         |
-                        v                         v
-               +-----------------+       +------------------+
-               | Supabase Cloud  |       | Redis (Upstash)  |
-               | PostgreSQL 17   |       | Cache + Streams  |
-               | Auth + RLS      |       | Rate Limiting    |
-               | L2 Cache        |       | L1 Cache         |
-               +-----------------+       | SSE Pub/Sub      |
-                                         | ARQ Queue        |
-                                         +------------------+
-
-     +-------------------+    +------------------+    +------------------+
-     | GitHub Actions    |    | Sentry           |    | Prometheus       |
-     | CI/CD (18 flows)  |    | Error Tracking   |    | Metrics          |
-     +-------------------+    +------------------+    +------------------+
+                          ┌─────────────────────┐
+                          │   smartlic.tech      │
+                          │   (Cloudflare DNS)   │
+                          └──────────┬──────────┘
+                                     │
+                   ┌─────────────────┼─────────────────┐
+                   │                 │                  │
+          ┌────────▼───────┐  ┌─────▼──────┐   ┌──────▼──────┐
+          │  Railway:       │  │  Railway:   │   │  Railway:    │
+          │  Frontend       │  │  Backend    │   │  Worker      │
+          │  (Next.js 16)   │  │  (Gunicorn  │   │  (ARQ)       │
+          │  Port 8080      │  │   +Uvicorn) │   │  LLM+Excel   │
+          │                 │  │  Port 8000  │   │  bg jobs      │
+          └────────┬───────┘  └──────┬──────┘   └──────┬──────┘
+                   │                 │                  │
+                   │          ┌──────┼──────┐           │
+                   │          │      │      │           │
+              ┌────▼──────┐  ┌▼─────┐ ┌────▼──┐  ┌────▼──────┐
+              │ Supabase   │  │Redis │ │OpenAI │  │  Stripe   │
+              │ Cloud      │  │(UP/  │ │GPT-4.1│  │  (billing)│
+              │ PG17+Auth  │  │RW)   │ │-nano  │  │           │
+              │ +RLS       │  │      │ │       │  │           │
+              └────────────┘  └──────┘ └───────┘  └───────────┘
+                                │
+                          ┌─────┴─────┐
+                          │  External  │
+                          │  APIs      │
+                          ├───────────┤
+                          │ PNCP v1   │ (priority 1)
+                          │ PCP v2    │ (priority 2)
+                          │ ComprasGov│ (priority 3, currently down)
+                          │ Resend    │ (email)
+                          └───────────┘
 ```
 
-**Key Data Flows:**
-1. User submits search -> Frontend proxies to Backend -> Backend fans out to 3 sources in parallel
-2. Results filtered (UF, value, keywords, LLM) -> Viability scored -> Cached (3 levels) -> Returned
-3. LLM summary + Excel generation dispatched as ARQ background jobs -> Delivered via SSE events
-4. SSE progress stream provides real-time updates (per-UF completion, stage transitions)
+### 2.1 Railway Services
+
+| Service | Process Type | Workers | Memory | Timeout |
+|---------|-------------|---------|--------|---------|
+| **Backend (web)** | `PROCESS_TYPE=web` | 2 Gunicorn/Uvicorn | 1GB | 120s (Gunicorn), ~300s (Railway proxy) |
+| **Worker** | `PROCESS_TYPE=worker` | ARQ single-process | 512MB | per-job limits |
+| **Frontend** | Next.js standalone | Node.js | 512MB | - |
+
+**Key operational parameters:**
+- Gunicorn keep-alive: 75s (> Railway proxy 60s to prevent 502s)
+- Gunicorn max-requests: 1000 + jitter 50 (memory leak prevention)
+- jemalloc enabled via `LD_PRELOAD` (reduces RSS fragmentation)
+- `--preload` disabled by default (OpenSSL fork-safety issue with cryptography>=46.0.5)
+- ARQ worker has restart wrapper: max 10 restarts with 5s delay
 
 ---
 
 ## 3. Backend Architecture
 
-### 3.1 Module Map
-
-| Category | Key Modules | Purpose |
-|----------|-------------|---------|
-| **Entry** | `main.py` | FastAPI app init, CORS, root + health endpoints |
-| **Config** | `config.py` | Environment loading, feature flags, timeout constants |
-| **Schemas** | `schemas.py`, `error_response.py` | Pydantic v2 request/response models, error codes |
-| **Pipeline** | `search_pipeline.py`, `search_context.py` | 7-stage orchestrator + typed context dataclass |
-| **Pipeline Stages** | `pipeline/stages/{validate,prepare,execute,filter_stage,enrich,generate,persist}.py` | Individual stage implementations |
-| **Consolidation** | `consolidation.py` | Multi-source parallel fetch, dedup, timeout |
-| **Data Sources** | `pncp_client.py` (sync), `clients/{portal_compras_client,compras_gov_client,querido_diario_client,portal_transparencia_client,sanctions}.py` | Source adapters with circuit breakers |
-| **Source Config** | `source_config/sources.py`, `clients/base.py` | Source registry, `SourceAdapter` ABC, `UnifiedProcurement` model |
-| **Filtering** | `filter.py`, `filter_stats.py`, `term_parser.py`, `synonyms.py`, `status_inference.py` | Keyword matching, density scoring, term parsing |
-| **AI/LLM** | `llm_arbiter.py`, `llm.py`, `relevance.py` | Classification (arbiter), summaries, relevance scoring |
-| **Viability** | `viability.py` | 4-factor viability assessment (deterministic) |
-| **Cache** | `search_cache.py` (3-level search cache), `cache.py` (Redis wrapper), `redis_pool.py` (connection pool) | L1 InMemory + L2 Redis + L3 Supabase, SWR pattern |
-| **Auth** | `auth.py` | JWT validation (ES256+JWKS), token cache (L1 memory + L2 Redis) |
-| **Authorization** | `authorization.py`, `quota.py` | Role checks, plan capabilities, atomic quota increment |
-| **Billing** | `services/billing.py`, `webhooks/stripe.py` | Stripe checkout, portal, webhook handlers |
-| **Jobs** | `job_queue.py` | ARQ worker config, job definitions, pool management |
-| **Progress** | `progress.py` | SSE event tracking via Redis Streams + in-memory fallback |
-| **Rate Limiting** | `rate_limiter.py` | Token bucket (Redis + in-memory), per-user and per-IP |
-| **Bulkhead** | `bulkhead.py` | Per-source concurrency isolation (semaphore-based) |
-| **Supabase** | `supabase_client.py` | Admin + user-scoped clients, circuit breaker, connection pool |
-| **Monitoring** | `metrics.py`, `telemetry.py`, `health.py`, `audit.py` | Prometheus, OpenTelemetry, health checks |
-| **Output** | `excel.py`, `google_sheets.py`, `report_generator.py` | Excel export, Google Sheets, PDF reports |
-| **Email** | `email_service.py`, `templates/emails/` | Transactional emails via Resend |
-| **Sectors** | `sectors.py`, `sectors_data.yaml` | 15 sector definitions with keywords and ranges |
-| **Middleware** | `middleware.py` | Request ID, correlation, structured logging context |
-| **Routes** | 38 modules in `routes/` | All API endpoints (see Section 3.7) |
-| **Services** | 16 modules in `services/` | Business logic (billing, alerts, trials, organizations, partners) |
-| **State Machine** | `search_state_manager.py`, `models/search_state.py` | Search lifecycle state machine |
-| **Security** | `log_sanitizer.py`, `encryption.py` | PII masking, field encryption |
-
-### 3.2 Search Pipeline Flow
-
-The search pipeline is a 7-stage state machine orchestrated by `SearchPipeline` in `search_pipeline.py`. Each stage operates on a shared `SearchContext` dataclass.
+### 3.1 Directory Structure
 
 ```
-Stage 1: VALIDATE    -> Auth check, quota verification, input validation
-Stage 2: PREPARE     -> Sector lookup, keyword preparation, term parsing
-Stage 3: FETCH       -> Multi-source parallel fetch (PNCP + PCP v2 + ComprasGov)
-          |
-          +---> ConsolidationService.consolidate()
-          |     - asyncio.gather() across sources with per-source timeouts
-          |     - Dedup by dedup_key (highest priority source wins: PNCP=1 > PCP=2)
-          |     - Graceful degradation: partial results on partial failure
-          |
-Stage 4: FILTER      -> UF check, value range, keyword density scoring, LLM zero-match
-          |
-          [Time Budget Check: skip LLM/viability if elapsed > 90s]
-          |
-Stage 5: ENRICH      -> LLM arbiter classification, viability assessment
-Stage 6: GENERATE    -> Excel generation, LLM summary (enqueued as ARQ jobs if available)
-Stage 7: PERSIST     -> Cache write (3 levels), search history save
+backend/
+├── main.py              (1212 LOC) — App entrypoint, Sentry, routers
+├── schemas.py           (2121 LOC) — All Pydantic models
+├── config/              — Decomposed config (DEBT-015)
+│   ├── base.py          — Core utilities, logging
+│   ├── features.py      — 40+ feature flags
+│   ├── pncp.py          — Source-specific timeouts, circuit breakers
+│   ├── cors.py          — CORS origins
+│   └── pipeline.py      — Pipeline, cache, cron config
+├── routes/              — 35 route modules, 119 endpoints
+├── clients/             — External API clients
+│   ├── portal_compras_client.py   (646 LOC) — PCP v2
+│   ├── compras_gov_client.py      (838 LOC) — ComprasGov v3
+│   ├── portal_transparencia_client.py (938 LOC)
+│   ├── querido_diario_client.py   (801 LOC)
+│   └── sanctions.py               (639 LOC)
+├── pipeline/            — 7-stage search pipeline
+│   ├── stages/          — validate, prepare, execute, filter, enrich, generate, persist
+│   ├── tracing.py
+│   └── cache_manager.py
+├── services/            — Business logic services
+│   ├── billing.py, alert_service.py, alert_matcher.py
+│   ├── organization_service.py, partner_service.py
+│   ├── dunning.py, trial_email_sequence.py
+│   └── stripe_reconciliation.py
+├── models/              — Domain models (cache, search_state, stripe)
+├── webhooks/            — Stripe webhook handler (1192 LOC)
+├── templates/emails/    — HTML email templates
+├── startup/             — App factory decomposition
+├── utils/               — cnae_mapping, date_parser, phone_normalizer
+├── source_config/       — Data source configuration
+├── unified_schemas/     — Cross-source schema normalization
+├── filter*.py           — 11 filter modules (3871 LOC in filter.py alone)
+├── pncp_client.py       (2515 LOC) — PNCP API client
+├── search_cache.py      (2512 LOC) — Two-level cache
+├── job_queue.py         (2152 LOC) — ARQ job definitions
+├── cron_jobs.py         (2039 LOC) — Scheduled tasks
+├── quota.py             (1622 LOC) — Plan quota enforcement
+├── llm_arbiter.py       (1269 LOC) — LLM classification engine
+├── auth.py              (519 LOC)  — JWT validation + cache
+├── metrics.py           (1002 LOC) — Prometheus metrics
+├── health.py            (960 LOC)  — Health checks
+└── ...69 total top-level .py files
 ```
 
-**Time Budget Chain (GTM-STAB-003):**
-```
-ARQ Job: 300s > Pipeline: 110s > Consolidation: 100s > Per-Source: 80s > Per-UF: 30s
-If elapsed > 90s at stage boundary: skip LLM classification
-If elapsed > 100s: skip viability assessment
-```
+### 3.2 Search Pipeline (Core Architecture)
 
-### 3.3 Data Source Integration
-
-#### PNCP (Priority 1) -- `pncp_client.py`
-
-- **URL:** `https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao`
-- **Client:** Synchronous `requests` library (wrapped in `asyncio.to_thread()`)
-- **Page size:** Max 50 (reduced from 500 in Feb 2026; >50 causes HTTP 400 silently)
-- **Rate limit:** 10 req/s client-side enforcement
-- **Retry:** Exponential backoff with jitter, HTTP 422 retryable (max 1 retry)
-- **Batching:** Phased UF batching (PNCP_BATCH_SIZE=5, PNCP_BATCH_DELAY_S=2.0)
-- **Circuit breaker:** 15 failures threshold, 60s cooldown
-- **Quirk:** `codigoModalidadeContratacao` now required (without it, HTTP 400)
-- **Quirk:** Health canary uses `tamanhoPagina=10`, so it cannot detect the page size limit change
-
-#### PCP v2 (Priority 2) -- `clients/portal_compras_client.py`
-
-- **URL:** `https://compras.api.portaldecompraspublicas.com.br/v2/licitacao/processos`
-- **Auth:** None (fully public API)
-- **Pagination:** Fixed 10/page (`pageCount`/`nextPage`)
-- **Limitation:** No server-side UF filtering (client-side only)
-- **Limitation:** `valor_estimado=0.0` (v2 has no value data)
-
-#### ComprasGov v3 (Priority 3) -- `clients/compras_gov_client.py`
-
-- **URL:** `https://dadosabertos.compras.gov.br`
-- **Status:** API confirmed DOWN as of 2026-03-03 (returns JSON 404)
-- **Architecture:** Dual-endpoint (legacy + Lei 14.133)
-- **Priority:** Downgraded to 99 (effectively disabled)
-
-#### Additional Sources (Intel/Report Scripts)
-
-- **Querido Diario:** `clients/querido_diario_client.py` -- municipal gazette search
-- **Portal da Transparencia:** `clients/portal_transparencia_client.py` -- sanctions check, contract history
-- **Sanctions:** `clients/sanctions.py` -- CEIS/CNEP/CEPIM sanctions check
-
-### 3.4 LLM Integration Pattern
-
-**Model:** GPT-4.1-nano (`llm_arbiter.py`)
-
-**Classification Tiers:**
-1. **keyword** (>5% density): Direct keyword match, no LLM call needed
-2. **llm_standard** (2-5% density): LLM confirms relevance (SIM/NAO)
-3. **llm_conservative** (1-2% density): LLM with higher threshold
-4. **llm_zero_match** (0% density): LLM decides if contract is relevant despite no keyword matches
-
-**Structured Output (D-02):**
-```json
-{
-  "classe": "SIM|NAO",
-  "confianca": 0-100,
-  "evidencias": ["literal citation 1", "..."],
-  "motivo_exclusao": "reason if NAO"
-}
-```
-
-**Fallback Philosophy:** REJECT on LLM failure (zero noise -- never show false positives).
-
-**Caching:**
-- L1: In-memory OrderedDict with LRU eviction (max 5000 entries, keyed by MD5 of input)
-- L2: Redis hash with 1h TTL for cross-worker sharing
-
-**Cost:** ~R$0.00007 per structured classification call.
-
-**Client Config:**
-- Timeout: 5s (configurable via `OPENAI_TIMEOUT_S`)
-- Max retries: 1
-- Lazy initialization (no import-time errors in tests)
-
-### 3.5 Caching Strategy
-
-Three-level cache with Stale-While-Revalidate (SWR) pattern:
+The search pipeline is a 7-stage orchestrator defined in `search_pipeline.py` (143 LOC thin wrapper) with stage logic in `pipeline/stages/`:
 
 ```
-+-------------------+--------+-------------+-------------------------------------+
-| Layer             | TTL    | Status      | Behavior                            |
-+-------------------+--------+-------------+-------------------------------------+
-| L1 InMemory/Redis | 4h     | Fresh 0-4h  | Serve directly, fastest             |
-| L2 Supabase       | 24h    | Stale 4-24h | Serve + trigger SWR revalidation    |
-| L3 Local File     | 24h    | Emergency   | Serve only if Supabase down         |
-+-------------------+--------+-------------+-------------------------------------+
+[1] VALIDATE   → Input validation, auth, quota check
+[2] PREPARE    → Build search parameters, resolve sectors
+[3] EXECUTE    → Parallel multi-source fetch (PNCP + PCP + ComprasGov)
+[4] FILTER     → UF → Value → Keywords → LLM zero-match → Status
+[5] ENRICH     → Viability scoring, item inspection
+[6] GENERATE   → Excel + LLM summary (via ARQ background jobs)
+[7] PERSIST    → Cache results, record search session
 ```
 
-**Cache Key:** Deterministic hash of ALL params that affect results (UFs, sector, dates, terms, filters). Date range now included in cache key (STORY-306).
-
-**Hot/Warm/Cold Tiering (B-02):**
-- HOT: 3+ accesses in 24h or saved search with recent access -> Redis TTL 2h
-- WARM: 1+ access in 24h -> Redis TTL 6h
-- COLD: No recent access -> Redis TTL 1h
-
-**Progressive Delivery (A-04):** When cache exists, returns cached results immediately and spawns a background live fetch. Frontend receives updated results via SSE.
-
-### 3.6 Auth + Billing Flow
-
-**Authentication:**
-- Supabase Auth with JWT (ES256 + JWKS, backward-compatible with HS256)
-- Local JWT validation (no API call per request)
-- Token cache: L1 in-memory (60s TTL, max 1000 entries LRU) + L2 Redis (5min TTL)
-- Google OAuth support via `routes/auth_oauth.py`
-
-**Authorization:**
-- Row-Level Security (RLS) on all Supabase tables
-- Admin client (`service_role` key, bypasses RLS) for system operations
-- User-scoped client (`anon` key + user JWT) for user-facing operations
-- Role checks: `is_admin`, `is_master` for admin endpoints
-- MFA support via `routes/mfa.py`
-
-**Billing:**
-- Stripe subscriptions: SmartLic Pro R$397/mth, R$357/mth (semi), R$297/mth (annual)
-- 14-day free trial (no credit card required)
-- Atomic quota check+increment via PostgreSQL function (prevents TOCTOU)
-- Plan capabilities loaded from DB with 5min in-memory cache
-- "Fail to last known plan": never fall back to free_trial on transient DB errors
-- 3-day grace period for subscription gaps
-- All Stripe webhook handlers sync `profiles.plan_type`
-
-### 3.7 API Routes (38 route modules)
-
-| Module | Key Endpoints | Purpose |
-|--------|--------------|---------|
-| `search.py` | `POST /buscar` | Main search orchestration |
-| `search_sse.py` | `GET /buscar-progress/{id}` | SSE progress stream |
-| `search_status.py` | `GET /v1/search/{id}/status`, `POST /v1/search/{id}/retry` | Polling + retry |
-| `pipeline.py` | CRUD `/pipeline` | Opportunity kanban |
-| `billing.py` | `POST /checkout`, `POST /billing-portal` | Stripe integration |
-| `user.py` | `GET /me`, `GET /trial-status` | User profile + trial |
-| `analytics.py` | `GET /summary`, `GET /searches-over-time` | Dashboard analytics |
-| `feedback.py` | `POST/DELETE /feedback` | Result feedback |
-| `health.py` + `health_core.py` | `GET /health`, `GET /health/cache` | System health |
-| `onboarding.py` | `POST /first-analysis` | Onboarding auto-search |
-| `sessions.py` | `GET /sessions` | Search session history |
-| `messages.py` | CRUD `/conversations` | In-app messaging |
-| `auth_oauth.py` | `GET /google`, `GET /google/callback` | Google OAuth |
-| `admin_trace.py` | `GET /search-trace/{id}` | Admin search debugging |
-| `plans.py` | `GET /plans` | Plan listing |
-| `subscriptions.py` | `GET /subscription/status` | Subscription status |
-| `feature_flags.py` | Feature flag endpoints | Runtime toggles |
-| `sectors_public.py` | `GET /setores` | Public sector list |
-| `mfa.py` | MFA setup/verify | Multi-factor auth |
-| `organizations.py` | Organization CRUD | Multi-tenant orgs |
-| `partners.py` | Partner endpoints | Partner program |
-| `alerts.py` | Alert preferences | Bid alert config |
-| `reports.py` | Report generation | B2G intel reports |
-| `bid_analysis.py` | Bid deep analysis | Competitor analysis |
-| `slo.py` | SLO endpoints | Service level tracking |
-| `metrics_api.py` | `GET /metrics` | Prometheus exposition |
-
-### 3.8 Background Jobs (ARQ)
-
-**Architecture:** Separate Railway service running `arq job_queue.WorkerSettings`.
-
-**Jobs:**
-- `llm_summary_job`: Generate AI executive summary for search results
-- `excel_generation_job`: Create styled Excel workbook
-- `email_jobs`: Trial email sequences, dunning
-
-**Communication:** SSE events (`llm_ready`, `excel_ready`) delivered via ProgressTracker.
-
-**Fallback:** When ARQ/Redis unavailable, `is_queue_available()` returns False and pipeline executes LLM/Excel inline (zero regression).
-
-**Worker Resilience:**
-- Restart wrapper in `start.sh`: max 10 restarts with 5s delay
-- Redis retry: `retry_on_timeout=True`, `retry_on_error=[ConnectionError, TimeoutError]`
-- Liveness check every 15s (CRIT-033)
-
-### 3.9 SSE Progress Tracking
-
-**Dual-Connection Pattern:**
-1. `POST /buscar` -> Initiates search, returns `search_id`
-2. `GET /buscar-progress/{search_id}` -> SSE stream with real-time progress
-
-**Implementation (STORY-276):**
-- Redis Streams for cross-worker delivery (persistent, append-only log with replay)
-- In-memory asyncio.Queue fallback for single-instance deployments
-- Last-Event-ID resumption (STORY-297): Replay from any point in stream
-- Heartbeat: 15s interval (CRIT-012)
-- Terminal events trigger stream EXPIRE (5min TTL)
-
-**Event Types:**
+**Timeout chain (strict decreasing):**
 ```
-connecting -> fetching (per-UF progress) -> filtering -> llm -> excel -> complete
-                                                        |
-                                                        +-> degraded / error
+ARQ Job(300s) > Pipeline(110s) > Consolidation(100s) > PerSource(80s) > PerUF(30s) > HTTP(10s)
 ```
+
+**Filter pipeline (fail-fast ordering):**
+1. UF check (fastest, O(1) set lookup)
+2. Value range check (simple numeric comparison)
+3. Keyword matching (density scoring with 3 thresholds: high >5%, medium 2-5%, low 1-2%)
+4. LLM zero-match classification (for 0% keyword density, GPT-4.1-nano YES/NO)
+5. Status/date validation
+6. Viability assessment (post-filter, 4-factor weighted score)
+
+### 3.3 Data Source Clients
+
+| Source | File | Priority | Auth | Page Size | Notes |
+|--------|------|----------|------|-----------|-------|
+| **PNCP** | `pncp_client.py` | 1 | None | 50 max | Primary. `codigoModalidadeContratacao` required since ~Mar 2026 |
+| **PCP v2** | `clients/portal_compras_client.py` | 2 | None (public) | 10/page | Client-side UF filtering only. `valor_estimado=0.0` always |
+| **ComprasGov v3** | `clients/compras_gov_client.py` | 3 | None | varies | Dual-endpoint (legacy + Lei 14.133). Currently down since Mar 2026 |
+
+Each source has independent circuit breakers (sliding window, configurable thresholds and cooldowns) and per-source bulkhead concurrency limits.
+
+### 3.4 Cache Architecture (Two-Level SWR)
+
+```
+Request → L1 InMemory (4h TTL, hot/warm/cold) → L2 Supabase (24h TTL)
+                ↓ miss                                    ↓ miss
+          Live fetch from sources ← ← ← ← ← ← ← ← ← ←
+                ↓ result
+          Write-through to L1 + L2
+```
+
+- **Fresh (0-6h):** Serve immediately
+- **Stale (6-24h):** Serve stale, trigger background revalidation (max 3 concurrent, 180s timeout)
+- **Expired (>24h):** Not served, force fresh fetch
+- L1 uses priority tiers: hot (recently accessed) > warm > cold (evicted first)
+- L2 is Supabase `search_results_cache` table (persistent across restarts)
+
+### 3.5 LLM Integration
+
+| Use Case | Model | Module | Pattern |
+|----------|-------|--------|---------|
+| Sectoral classification | GPT-4.1-nano | `llm_arbiter.py` | Keyword density > threshold = keyword; else LLM YES/NO |
+| Zero-match rescue | GPT-4.1-nano | `llm_arbiter.py` | Items with 0% keyword density get LLM review |
+| Executive summary | GPT-4.1-nano | `llm.py` | ARQ background job; immediate fallback summary |
+| Bid analysis | GPT-4.1-nano | `bid_analyzer.py` | Deep analysis of individual bids |
+
+**Failure mode:** REJECT on LLM failure (zero noise philosophy). No hallucinated approvals.
+
+### 3.6 Auth and Billing
+
+- **Auth:** Supabase Auth with local JWT validation (ES256+JWKS, backward compatible HS256). Token cache: L1 in-memory (60s TTL, LRU 1000 entries) + L2 Redis (5min TTL).
+- **Billing:** Stripe with 3 billing periods (monthly/semiannual/annual). 14-day free trial (no credit card). "Fail to last known plan" policy on DB errors.
+- **Quotas:** `check_and_increment_quota_atomic` with Redis token bucket rate limiting. In-memory plan cache (5min TTL).
+- **Grace period:** 3 days for subscription gaps (`SUBSCRIPTION_GRACE_DAYS`).
+
+### 3.7 Background Jobs (ARQ)
+
+The worker process runs ARQ for async tasks:
+- LLM summary generation (with immediate fallback response)
+- Excel file generation
+- Zero-match LLM classification batches
+- Trial email sequences
+- Alert matching and delivery
+
+SSE events (`llm_ready`, `excel_ready`) push updates to the frontend in real-time.
+
+### 3.8 Observability Stack
+
+| Tool | Purpose | Integration |
+|------|---------|-------------|
+| **Sentry** | Error tracking + performance | FastAPI + Starlette integrations, PII scrubbing |
+| **Prometheus** | Metrics (counters, histograms, gauges) | 1002-line metrics.py, `/metrics` endpoint |
+| **OpenTelemetry** | Distributed tracing | Pipeline stage spans, custom tracer |
+| **Structured logging** | JSON logs to stdout | `log_sanitizer.py` masks PII in all log output |
+
+### 3.9 API Endpoints Inventory
+
+**126 total endpoints** across 35 route modules + main.py:
+
+| Category | Endpoints | Key Routes |
+|----------|-----------|------------|
+| **Search** | 10 | `POST /buscar`, `GET /buscar-progress/{id}` (SSE), `/search/{id}/status`, `/search/{id}/retry` |
+| **Pipeline** | 5 | CRUD + `/pipeline/alerts` |
+| **Billing** | 6 | `/checkout`, `/billing-portal`, `/subscription/status`, `/plans` |
+| **User/Auth** | 12 | `/me`, `/change-password`, `/trial-status`, `/profile/context`, Google OAuth |
+| **Analytics** | 6 | `/summary`, `/searches-over-time`, `/top-dimensions`, `/trial-value` |
+| **Alerts** | 7 | CRUD + `/history`, `/preview`, `/unsubscribe` |
+| **Admin** | 8 | `/admin/feedback/patterns`, `/admin/partners`, `/search-trace/{id}` |
+| **Messages** | 5 | Conversations CRUD + replies |
+| **Organizations** | 6 | CRUD + invite/accept + dashboard |
+| **Health** | 8 | `/health`, `/health/live`, `/health/ready`, `/health/cache`, `/status` |
+| **Content** | 10 | SEO pages (`/setores`, `/setor/{id}`, `/panorama/{id}`), blog stats |
+| **Other** | 43 | Sessions, feedback, MFA, partners, reports, emails, feature flags, SLO |
 
 ---
 
 ## 4. Frontend Architecture
 
-### 4.1 Page Structure (22+ routes)
+### 4.1 App Router Structure (47 Pages)
 
-| Route | Purpose |
-|-------|---------|
-| `/` | Landing page |
-| `/login`, `/signup` | Authentication |
-| `/auth/callback` | OAuth callback |
-| `/onboarding` | 3-step wizard (CNAE -> UFs -> Confirmation) |
-| `/buscar` | **Main search page** -- filters, results, SSE progress |
-| `/dashboard` | User dashboard with analytics |
-| `/historico` | Search history |
-| `/pipeline` | Opportunity kanban (drag-and-drop via @dnd-kit) |
-| `/mensagens` | Messaging system |
-| `/conta` | Account settings |
-| `/planos`, `/pricing`, `/features` | Pricing and marketing |
-| `/admin`, `/admin/cache` | Admin dashboards |
-| `/ajuda` | Help center |
-| `/alertas` | Bid alert preferences |
-| `/blog` | Content marketing |
-| `/sobre` | About page |
-| `/termos`, `/privacidade` | Legal pages |
-| SEO pages | `/como-avaliar-licitacao`, `/como-evitar-prejuizo-licitacao`, etc. |
+| Category | Routes | Count |
+|----------|--------|-------|
+| **Core app** | `/buscar`, `/dashboard`, `/historico`, `/pipeline`, `/mensagens`, `/alertas`, `/status` | 7 |
+| **Auth** | `/login`, `/signup`, `/auth/callback`, `/recuperar-senha`, `/redefinir-senha`, `/onboarding` | 6 |
+| **Account** | `/conta`, `/conta/dados`, `/conta/perfil`, `/conta/plano`, `/conta/equipe`, `/conta/seguranca` | 6 |
+| **Admin** | `/admin`, `/admin/cache`, `/admin/emails`, `/admin/metrics`, `/admin/partners`, `/admin/slo` | 6 |
+| **Marketing** | `/`, `/planos`, `/pricing`, `/features`, `/sobre`, `/planos/obrigado` | 6 |
+| **Blog/SEO** | `/blog`, `/blog/[slug]`, `/blog/licitacoes/*`, `/blog/panorama/*`, `/blog/programmatic/*`, `/licitacoes/*` | 8 |
+| **Content** | `/ajuda`, `/termos`, `/privacidade`, `/como-avaliar-*`, `/como-evitar-*`, `/como-filtrar-*`, `/como-priorizar-*` | 6 |
+| **Legal** | `/termos`, `/privacidade` | 2 |
 
-### 4.2 API Proxy Pattern
+### 4.2 Component Architecture
 
-All backend calls are proxied through Next.js API routes (`frontend/app/api/`). This:
-- Hides the backend URL from the client
-- Allows adding auth headers server-side
-- Provides a CORS-free boundary
-- Enables request/response transformation
+**Buscar (search page) components: 41 files**
+- Search: `SearchForm`, `SearchResults`, `FilterPanel`, `UfProgressGrid`, `SearchProgressBanner`
+- Resilience: `CacheBanner`, `DegradationBanner`, `PartialResultsPrompt`, `SourcesUnavailable`, `DataQualityBanner`
+- AI: `LlmSourceBadge`, `ViabilityBadge`, `FeedbackButtons`, `ReliabilityBadge`
+- Loading: `EnhancedLoadingProgress`, `LoadingProgress`
 
-**40+ proxy routes** including: buscar, buscar-progress, analytics, admin, feedback, trial-status, user, plans, pipeline, sessions, messages, billing-portal, export, metrics, organizations, reports, subscriptions, alerts, etc.
+**Shared components: ~32 files** in `components/`
+- Layout: `NavigationShell`, `Sidebar`, `BottomNav`, `PageHeader`, `MobileDrawer`
+- Billing: `PlanCard`, `PlanToggle`, `PaymentFailedBanner`, `CancelSubscriptionModal` (in `billing/`)
+- Error handling: `ErrorBoundary`, `PageErrorBoundary`, `ErrorStateWithRetry`
+- User: `ProfileCompletionPrompt`, `ProfileProgressBar`, `AuthLoadingScreen`
 
-### 4.3 State Management
+### 4.3 Hooks Architecture
 
-- **No global state library** (no Redux/Zustand). State managed via custom hooks.
-- **SWR pattern:** `SWRProvider.tsx` wraps the app for data fetching with revalidation.
-- **Search state:** Complex decomposition across 9 specialized hooks in `app/buscar/hooks/`:
-  - `useSearchOrchestration.ts` -- Top-level orchestrator
-  - `useSearch.ts` -- Core search state and execution
-  - `useSearchExecution.ts` -- Search lifecycle management
-  - `useSearchFilters.ts` -- Filter state with SWR sector loading
-  - `useSearchSSEHandler.ts` -- SSE event processing
-  - `useSearchExport.ts` -- Excel/Sheets export
-  - `useSearchPersistence.ts` -- Search save/load
-  - `useSearchRetry.ts` -- Auto-retry with exponential backoff
-  - `useUfProgress.ts` -- Per-UF progress tracking
+**Shared hooks (27):** `useAlerts`, `useAnalytics`, `useConversations`, `useFeatureFlags`, `useFetchWithBackoff`, `useKeyboardShortcuts`, `useOrganization`, `usePipeline`, `usePlan`, `usePlans`, `useProfileContext`, `useQuota`, `useSearchSSE`, `useSessions`, `useTrialPhase`, etc.
 
-**Global hooks** (28 in `app/hooks/`): useAlerts, useAnalytics, usePipeline, usePlan, useQuota, useProfileContext, useSavedSearches, useOnboarding, useFeatureFlags, useFetchWithBackoff, etc.
+**Buscar hooks (9):** `useSearch` (main orchestrator), `useSearchExecution`, `useSearchExport`, `useSearchFilters`, `useSearchOrchestration`, `useSearchPersistence`, `useSearchRetry`, `useSearchSSEHandler`, `useUfProgress`
 
-### 4.4 Key Component Hierarchy (`app/buscar/`)
+### 4.4 API Proxy Pattern
 
-```
-page.tsx (HomePageContent)
-  |-- SearchForm (form inputs, sector select, date pickers)
-  |-- SearchResults (result list with cards)
-  |     |-- search-results/ (card components)
-  |     |-- LlmSourceBadge, ZeroMatchBadge, ReliabilityBadge
-  |     |-- ViabilityBadge, FeedbackButtons
-  |-- FilterPanel (UF, value, status, modalidade filters)
-  |-- EnhancedLoadingProgress (animated progress bar)
-  |-- UfProgressGrid (per-UF status during fetch)
-  |-- SourceStatusGrid (per-source health indicator)
-  |-- BuscarModals (upgrade, export, detail modals)
-  |-- ErrorDetail (structured error display)
-  |-- Banners: ExpiredCache, FilterRelaxed, PartialTimeout, Refresh, SearchError
-  |-- EmptyStates: SearchEmptyState, OnboardingEmptyState, ZeroResultsSuggestions
-```
+The frontend uses Next.js API routes as proxies to the backend (58 route handlers in `app/api/`). This provides:
+- Cookie-based auth forwarding (Supabase SSR tokens)
+- CORS isolation (frontend domain only talks to itself)
+- Backend URL hidden from client
+- Structured error extraction and forwarding
 
-### 4.5 Security (Frontend)
+### 4.5 Security Headers
 
-**Middleware (`middleware.ts`):**
-- Route protection: `/buscar`, `/historico`, `/conta`, `/admin/*`, `/dashboard`, `/mensagens`
-- Supabase SSR auth cookie management
-- CSP nonce generation per request (DEBT-108)
-- Security headers: HSTS, COOP, X-Content-Type-Options, X-Frame-Options, etc.
-- CSP enforcement with nonce-based script-src + strict-dynamic
+The `middleware.ts` implements comprehensive security:
+- **CSP:** Nonce-based `script-src` with `strict-dynamic` (DEBT-108)
+- **HSTS:** Preload enabled
+- **COOP:** `same-origin`
+- **X-DNS-Prefetch-Control:** off
+- **Frame protection:** Stripe only
+- CSP violation reporting to `/api/csp-report`
 
 ---
 
-## 5. Infrastructure
+## 5. Database Architecture
 
-### 5.1 Railway Deployment Topology
+### 5.1 Tables (29)
 
-```
-Railway Project
-  |
-  +-- Service: bidiq-backend (web)
-  |     PROCESS_TYPE=web
-  |     Gunicorn + Uvicorn workers (or uvicorn standalone via RUNNER=uvicorn)
-  |     Workers: 2 (SLA-002: reduced from 4 for 1GB RAM)
-  |     Timeout: 120s (Gunicorn), ~300s (Railway hard limit)
-  |     Keep-alive: 75s (> Railway proxy 60s)
-  |     Max-requests: 1000 + jitter 50 (memory leak prevention)
-  |
-  +-- Service: bidiq-worker
-  |     PROCESS_TYPE=worker
-  |     ARQ background job processor
-  |     Restart wrapper: max 10 restarts, 5s delay
-  |
-  +-- Service: bidiq-frontend
-        Next.js 16 production server
-        PORT=8080
-        Custom domain: smartlic.tech
-```
+| Table | Purpose | RLS |
+|-------|---------|-----|
+| `profiles` | User profiles (extends auth.users) | Yes |
+| `search_sessions` | Search history and results | Yes |
+| `search_results_cache` | L2 cache for search results | Yes |
+| `search_results_store` | Persistent search result storage | Yes |
+| `search_state_transitions` | Search state machine audit trail | Yes |
+| `pipeline_items` | Kanban pipeline opportunities | Yes |
+| `monthly_quota` | Per-user monthly search quota tracking | Yes |
+| `plan_features` | Plan capability definitions | Yes |
+| `plan_billing_periods` | Stripe price IDs per billing period | Yes |
+| `stripe_webhook_events` | Idempotent webhook event log | Yes |
+| `classification_feedback` | User feedback on LLM classifications | Yes |
+| `conversations` / `messages` | In-app messaging | Yes |
+| `user_oauth_tokens` | Google OAuth tokens | Yes |
+| `google_sheets_exports` | Export history | Yes |
+| `alerts` / `alert_runs` / `alert_sent_items` / `alert_preferences` | Email alert system | Yes |
+| `health_checks` / `incidents` | Status page data | Yes |
+| `mfa_recovery_codes` / `mfa_recovery_attempts` | MFA support | Yes |
+| `organizations` / `organization_members` | Multi-tenant orgs | Yes |
+| `partners` / `partner_referrals` | Revenue share program | Yes |
+| `trial_email_log` | Trial email sequence tracking | Yes |
+| `reconciliation_log` | Stripe reconciliation audit | Yes |
+| `audit_events` | General audit trail | Yes |
 
-### 5.2 CI/CD Pipelines (18 GitHub Actions Workflows)
+### 5.2 Key Schema Patterns
+
+- **All tables have RLS enabled** (28 tables confirmed)
+- **105 RLS policies** with consistent patterns: user_id match for user data, service_role bypass for admin operations
+- **95 indexes** covering user_id foreign keys, search parameters, and time-based queries
+- **32 database functions** including `check_and_increment_quota` (atomic), plan sync triggers, and retention policies
+- **Foreign keys standardized** to `profiles(id)` via multiple migration passes (DEBT-001, DEBT-104)
+
+---
+
+## 6. CI/CD and Infrastructure
+
+### 6.1 GitHub Actions Workflows (17)
 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
-| `backend-tests.yml` | PR + push to main | pytest + coverage (>=70%) + ruff + mypy + pip-audit |
-| `frontend-tests.yml` | PR + push to main | jest + coverage (>=60%) + lint + typecheck |
-| `e2e.yml` | PR + schedule | Playwright E2E (60 critical flows) |
-| `deploy.yml` | Push to main (backend/ or frontend/) | Railway deploy + migration apply |
-| `staging-deploy.yml` | Manual | Staging environment deploy |
-| `migration-gate.yml` | PR touching migrations | Warning comment on PR |
-| `migration-check.yml` | Push to main + daily | Block if unapplied migrations |
-| `pr-validation.yml` | PR | Label, size check, conventional commits |
-| `codeql.yml` | Schedule | GitHub CodeQL security analysis |
-| `lighthouse.yml` | Schedule | Lighthouse performance audit |
-| `load-test.yml` | Manual | Load testing |
-| `sync-sectors.yml` | Manual | Frontend sector fallback sync |
-| `cleanup.yml` | Schedule | Stale branch/artifact cleanup |
-| `dependabot-auto-merge.yml` | Dependabot PRs | Auto-merge minor updates |
+| `backend-tests.yml` | PR + push | 7332+ backend tests with pytest |
+| `frontend-tests.yml` | PR + push | 5583+ frontend tests with Jest |
+| `e2e.yml` | PR + push | 60 Playwright E2E tests |
+| `deploy.yml` | Push to main | Deploy backend + frontend to Railway |
+| `staging-deploy.yml` | Push to staging | Deploy to staging environment |
+| `pr-validation.yml` | PR | Lint, type-check, schema validation |
+| `migration-gate.yml` | PR (migrations) | Warning comment on unapplied migrations |
+| `migration-check.yml` | Push + daily | Block if unapplied migrations |
+| `codeql.yml` | Schedule | Security scanning |
+| `lighthouse.yml` | PR | Performance auditing |
+| `load-test.yml` | Manual | Locust load testing |
+| `cleanup.yml` | Schedule | Resource cleanup |
+| `dependabot-auto-merge.yml` | Dependabot PRs | Auto-merge patch updates |
+| `sync-sectors.yml` | Manual | Sync sector data frontend-backend |
+| Others | Various | handle_new_user guard, backend-ci |
 
-**Migration CI (3-layer defense):**
-1. PR Warning: migration-gate posts warning comment
-2. Push Alert: migration-check blocks on unapplied migrations
-3. Auto-Apply: deploy.yml runs `supabase db push --include-all` after deploy
+### 6.2 Three-Layer Migration Defense
 
-### 5.3 Monitoring Stack
-
-| Tool | Purpose | Configuration |
-|------|---------|---------------|
-| **Prometheus** | Metrics collection | In-memory metrics, `/metrics` endpoint, Bearer token auth |
-| **OpenTelemetry** | Distributed tracing | Trace IDs in SSE events + logs, optional spans per pipeline stage |
-| **Sentry** | Error tracking | Frontend + backend, structured context, breadcrumbs |
-| **Mixpanel** | Product analytics | Frontend events, cache hit tracking |
-| **Structured Logging** | Operational visibility | JSON format, request IDs, PII masking via `log_sanitizer.py` |
-
-**Key Prometheus Metrics:**
-- `smartlic_search_duration_seconds` (histogram, labels: sector, uf_count, cache_status)
-- `smartlic_searches_total` (counter, labels: sector, result_status, search_mode)
-- `smartlic_active_searches` (gauge)
-- `smartlic_cache_hits_total` / `smartlic_cache_misses_total` (counters)
-- `smartlic_llm_calls_total` / `smartlic_llm_duration_seconds` (histogram)
-- `smartlic_fetch_duration_seconds` (per-source histogram)
-- `smartlic_api_errors_total` (counter by source)
-- `smartlic_sse_connection_errors_total` (counter by error_type, phase)
-- Bulkhead, rate limiter, auth cache, connection pool metrics
+1. **PR Warning** (`migration-gate.yml`): Lists pending migrations, posts comment
+2. **Push Alert** (`migration-check.yml`): Blocks (exit 1) if unapplied migrations
+3. **Auto-Apply on Deploy** (`deploy.yml`): Runs `supabase db push --include-all` after deploy
 
 ---
 
-## 6. Data Flow -- End-to-End Search Request Lifecycle
+## 7. Architecture Patterns Assessment
 
-```
-1. USER clicks "Buscar" in browser
-   |
-2. Frontend useSearchExecution builds BuscaRequest
-   |  generates search_id (UUID)
-   |
-3. Frontend opens SSE connection: GET /api/buscar-progress/{search_id}
-   |  Proxied to backend: GET /buscar-progress/{search_id}
-   |
-4. Frontend fires POST /api/buscar (Next.js proxy)
-   |  Proxy adds auth token, forwards to backend
-   |
-5. BACKEND routes/search.py receives POST /buscar
-   |  a. Auth check (JWT validation, cached)
-   |  b. Rate limit check (Redis token bucket)
-   |  c. Quota check + atomic increment (Supabase)
-   |  d. Create ProgressTracker (Redis Streams or in-memory Queue)
-   |  e. Create SearchContext
-   |  f. Instantiate SearchPipeline with deps
-   |
-6. PIPELINE Stage 1: VALIDATE
-   |  Validate dates, UFs, sector existence
-   |
-7. PIPELINE Stage 2: PREPARE
-   |  Load sector keywords from sectors_data.yaml
-   |  Parse custom terms (comma-delimited or space-delimited)
-   |  Check cache -> if FRESH, return cached + skip to Stage 7
-   |  If STALE, return cached + spawn background live fetch
-   |
-8. PIPELINE Stage 3: FETCH (ConsolidationService)
-   |  a. For each source (PNCP, PCP v2):
-   |     - Acquire bulkhead semaphore (concurrency isolation)
-   |     - For each UF batch (PNCP: 5 UFs per batch):
-   |       - Fetch pages (max 50/page for PNCP)
-   |       - Emit SSE: per-UF progress
-   |     - Convert to UnifiedProcurement format
-   |  b. Dedup: by dedup_key, keep highest-priority source
-   |  c. If all sources fail: serve stale cache or raise error
-   |
-9. PIPELINE Stage 4: FILTER (fail-fast order)
-   |  a. UF check (fastest)
-   |  b. Value range check
-   |  c. Keyword density scoring
-   |  d. Status/date validation
-   |  e. LLM zero-match classification (for 0% density, if enabled)
-   |
-   [Time budget check: skip LLM if >90s elapsed]
-   |
-10. PIPELINE Stage 5: ENRICH
-    |  a. LLM arbiter for "uncertain zone" (1-5% density)
-    |  b. Viability assessment (4 factors, deterministic)
-    |  c. PNCP link generation
-    |
-11. PIPELINE Stage 6: GENERATE
-    |  a. Enqueue llm_summary_job to ARQ (or inline fallback)
-    |  b. Enqueue excel_generation_job to ARQ (or inline fallback)
-    |  c. Generate fallback summary immediately (gerar_resumo_fallback)
-    |
-12. PIPELINE Stage 7: PERSIST
-    |  a. Save to L1 InMemory cache
-    |  b. Save to L2 Redis cache
-    |  c. Save to L3 Supabase cache
-    |  d. Save search history record
-    |
-13. BACKEND returns BuscaResponse (JSON)
-    |  Frontend receives via POST response
-    |
-14. ARQ WORKER (async):
-    |  a. Generates AI summary via GPT-4.1-nano
-    |  b. Creates styled Excel workbook
-    |  c. Emits SSE events: llm_ready, excel_ready
-    |
-15. FRONTEND receives SSE events, updates UI:
-    |  - Progress bar fills per stage
-    |  - Results render incrementally
-    |  - LLM summary appears when ready
-    |  - Excel download button activates when ready
-```
+### 7.1 Patterns Used Well
+
+| Pattern | Implementation | Quality |
+|---------|---------------|---------|
+| **Circuit breaker** | Per-source (PNCP, PCP, ComprasGov) + Supabase | Sliding window, configurable thresholds |
+| **Bulkhead isolation** | Per-source concurrency limits | Prevents one slow source from starving others |
+| **SWR cache** | Two-level (InMemory + Supabase) | Graceful degradation, background revalidation |
+| **Pipeline architecture** | 7-stage with thin orchestrator + stage modules | Clean separation, testable stages |
+| **Fail-fast filtering** | Cheapest checks first, expensive (LLM) last | Optimal resource usage |
+| **Zero noise philosophy** | LLM failure = REJECT | No false positives from AI errors |
+| **Proxy pattern** | Next.js API routes proxy all backend calls | Security isolation, CORS clean |
+| **CSP nonce** | Per-request nonce with strict-dynamic | Strong XSS prevention |
+| **PII scrubbing** | Sentry before_send + log_sanitizer | Consistent masking across all outputs |
+| **Feature flags** | 40+ flags with runtime toggle capability | Gradual rollout, kill switches |
+| **Timeout chain** | Strictly decreasing per level | No unbounded waits |
+
+### 7.2 Patterns Concerns
+
+| Concern | Description |
+|---------|-------------|
+| **Monolithic filter.py** | 3,871 lines despite decomposition into 11 filter_*.py files. `filter.py` still contains substantial logic alongside the submodules |
+| **Flat backend structure** | 69 top-level .py files. Some logical groupings (filter, pncp, search) span multiple files at the same directory level |
+| **Dual search path** | Some endpoints in `main.py` (7) coexist with 119 in `routes/`. Incremental migration from monolith is complete but main.py still has legacy endpoints |
+| **Schema monolith** | `schemas.py` at 2,121 lines contains all Pydantic models. Could benefit from per-domain schema files |
+| **Config explosion** | 40+ feature flags + extensive env vars (356 lines in .env.example). Operational complexity |
 
 ---
 
-## 7. Security Architecture
+## 8. Technical Debt Register
 
-### 7.1 Authentication
+### Critical
 
-| Layer | Mechanism |
-|-------|-----------|
-| JWT Signing | ES256 (ECDSA) via JWKS endpoint, backward-compat HS256 |
-| Token Validation | Local (no API call), cached 60s (L1) + 5min (L2 Redis) |
-| Session | Supabase Auth cookies via @supabase/ssr |
-| OAuth | Google OAuth via Supabase |
-| MFA | TOTP-based multi-factor auth |
+| ID | Category | Description | Impact | Est. Effort |
+|----|----------|-------------|--------|-------------|
+| DEBT-301 | Architecture | `filter.py` at 3,871 LOC is the largest file despite 11 filter submodules existing. Core matching logic should be fully migrated to submodules, leaving filter.py as a thin orchestrator | Maintenance burden, merge conflicts, hard to reason about filtering behavior | 8h |
+| DEBT-302 | Architecture | `schemas.py` at 2,121 LOC is a monolithic Pydantic model file. All request/response models for 126 endpoints live in one file | Slow IDE navigation, merge conflicts, no domain boundary enforcement | 6h |
+| DEBT-303 | Performance | `pncp_client.py` still imports sync `requests` library alongside async `httpx`. The sync fallback is wrapped in `asyncio.to_thread()` but the dual-client pattern adds complexity | Code duplication between sync/async paths, potential thread pool exhaustion under load | 4h |
 
-### 7.2 Authorization
+### High
 
-| Layer | Mechanism |
-|-------|-----------|
-| Database | RLS on all Supabase tables |
-| API | `require_auth` dependency, `check_user_roles` for admin |
-| Quota | Atomic check+increment in PostgreSQL function |
-| Plan | Database-driven capabilities with in-memory cache |
+| ID | Category | Description | Impact | Est. Effort |
+|----|----------|-------------|--------|-------------|
+| DEBT-304 | Architecture | 69 top-level Python files in `backend/`. Logical groupings like filtering (11 files), search (4 files), PNCP (3 files) should be packages | Developer onboarding friction, hard to navigate codebase | 12h |
+| DEBT-305 | Architecture | `job_queue.py` at 2,152 LOC and `cron_jobs.py` at 2,039 LOC are both large monoliths handling all background task definitions | Hard to test individual jobs, risk of import side effects | 6h |
+| DEBT-306 | Maintainability | `search_cache.py` at 2,512 LOC handles L1, L2, SWR logic, cache key generation, and serialization all in one file | Complex state management in a single module | 4h |
+| DEBT-307 | Security | `webhooks/stripe.py` at 1,192 LOC handles all Stripe webhook events in a single handler function. Complex branching for 10+ event types | Hard to audit security-critical billing logic, risk of missed edge cases | 6h |
+| DEBT-308 | Performance | Frontend `api-types.generated.ts` at 5,177 LOC is a generated type file. If it's not tree-shaken, it bloats the client bundle | Larger bundle size, slower page loads | 2h |
+| DEBT-309 | Architecture | `quota.py` at 1,622 LOC mixes plan definition, quota checking, rate limiting, and trial logic | Multiple responsibilities in one module, hard to modify billing rules | 4h |
 
-### 7.3 Input Validation
+### Medium
 
-| Layer | Mechanism |
-|-------|-----------|
-| Request | Pydantic v2 models with field validators |
-| UUID | Regex validation (UUID v4 format only) |
-| Search Query | `SAFE_SEARCH_PATTERN` regex, max 100 chars, SQL pattern escaping |
-| Plan ID | Alphanumeric + underscore, max 50 chars |
-| Password | Min 8 chars, 1 uppercase, 1 digit |
+| ID | Category | Description | Impact | Est. Effort |
+|----|----------|-------------|--------|-------------|
+| DEBT-310 | Maintainability | `main.py` at 1,212 LOC still contains 7 endpoints, Sentry init, PII scrubbing, health checks, and startup/shutdown logic despite startup/ decomposition existing | Entrypoint does too much; startup/ module exists but isn't fully used | 4h |
+| DEBT-311 | Testing | Backend test LOC (140,199) is 1.8x the source LOC (77,364). While high coverage is good, the test-to-source ratio suggests potential test duplication or over-specification | Slower CI, test maintenance burden, brittle tests that break on refactoring | 8h (audit) |
+| DEBT-312 | Maintainability | 11 filter_*.py files + filter.py creates ambiguity about which file owns which filtering responsibility. `filter.py` header says "Keyword matching engine for uniform/apparel procurement" but it's used for all sectors | Confusing module naming, stale docstrings | 3h |
+| DEBT-313 | Infrastructure | ComprasGov v3 data source has been down since March 2026. The client code (838 LOC) and circuit breaker config remain active. Priority should be formally demoted or the source should be disabled | Wasted timeout budget on dead source, confusing source health dashboard | 2h |
+| DEBT-314 | Maintainability | `config/features.py` exports 40+ feature flags. Several may be permanently enabled/disabled but are still treated as toggleable | Configuration complexity, dead feature flag accumulation | 3h |
+| DEBT-315 | Architecture | Frontend has 58 API proxy routes. Many follow identical patterns (forward auth, proxy to backend, extract errors). A generic proxy factory exists (`create-proxy-route.ts`) but not all routes use it | Code duplication across proxy routes | 4h |
+| DEBT-316 | UX | Frontend `onboarding/page.tsx` at 783 LOC and `signup/page.tsx` at 703 LOC are large single-file pages without component decomposition | Hard to test individual form steps, maintenance burden | 4h |
 
-### 7.4 Rate Limiting
+### Low
 
-| Endpoint | Limit |
-|----------|-------|
-| Search (`POST /buscar`) | 10/min per user (configurable) |
-| Auth (login) | 5/5min per IP |
-| Signup | 3/10min per IP |
-| SSE connections | Max 3 concurrent per user |
-| SSE reconnect | 10/60s per user |
+| ID | Category | Description | Impact | Est. Effort |
+|----|----------|-------------|--------|-------------|
+| DEBT-317 | Maintainability | `backend/clients/` has 5 client modules with varying structure. No shared base class despite `base.py` existing | Inconsistent error handling across data sources | 4h |
+| DEBT-318 | Documentation | Backend has `docs/` and `examples/` directories. Content currency is unknown | Potentially stale documentation | 2h (audit) |
+| DEBT-319 | Testing | Backend `scripts/` contains 12 utility scripts, some with their own test files (`test_audit_pipeline.py`). These aren't part of the main test suite | Script quality not validated in CI | 2h |
+| DEBT-320 | Architecture | `startup/` module (app_factory.py, endpoints.py, etc.) exists as a decomposition target but `main.py` still does most initialization directly | Incomplete refactoring, two ways to do the same thing | 3h |
+| DEBT-321 | Performance | `blog.ts` at 785 LOC in the frontend lib suggests blog content may be hardcoded or statically defined rather than CMS-driven | Content updates require code deployments | N/A (design choice) |
 
-### 7.5 Network Security (Frontend Middleware)
+---
 
-- **CSP:** Nonce-based script-src with strict-dynamic
-- **HSTS:** max-age 1yr, includeSubDomains, preload
-- **COOP:** same-origin
-- **X-Frame-Options:** DENY
-- **X-Content-Type-Options:** nosniff
-- **Referrer-Policy:** strict-origin-when-cross-origin
-- **Permissions-Policy:** camera=(), microphone=(), geolocation=()
+## 9. Scalability Assessment
 
-### 7.6 Secrets Management
+### 9.1 Current Bottlenecks
 
-- All API keys in environment variables only (never committed)
-- Log sanitization via `log_sanitizer.py` (PII masking)
-- Field encryption for sensitive data (`encryption.py`)
-- CORS configurable via `CORS_ORIGINS` (currently `*` -- see Debt section)
+| Resource | Current Limit | Concern |
+|----------|--------------|---------|
+| **Railway memory** | 1GB (backend) | 2 Gunicorn workers with in-memory caches. OOM risk under load (WEB_CONCURRENCY reduced from 4 to 2) |
+| **PNCP API** | 50 items/page, rate limits | Phased UF batching (batch_size=5, delay=2s) mitigates but limits throughput |
+| **LLM calls** | ThreadPoolExecutor(max_workers=10) | Parallel but bounded. GPT-4.1-nano latency adds 1-3s per classification |
+| **Redis** | Single instance (Upstash/Railway) | No cluster. Single point of failure (mitigated by in-memory L1 fallback) |
+| **Supabase** | Cloud free/pro tier | Connection pooling via Supavisor. No read replicas |
+
+### 9.2 Horizontal Scaling Path
+
+The architecture supports horizontal scaling at the web tier (add Gunicorn workers or Railway replicas) but has shared-state constraints:
+- L1 cache is per-worker (not shared between Gunicorn workers)
+- SSE progress tracking uses in-memory asyncio.Queue (not shared)
+- Feature flags cached per-process
+- To scale beyond 1 Railway instance: move SSE to Redis Pub/Sub, move progress tracking to Redis
+
+### 9.3 Reliability Patterns
+
+- **Fallback cascade:** Live fetch -> Partial results -> Stale cache -> Empty (with degradation banners)
+- **Circuit breakers:** Per-source with independent thresholds and cooldowns
+- **Auto-retry:** Frontend exponential backoff [10s, 20s, 30s] for transient errors
+- **Graceful degradation:** SSE failure -> time-based simulation; Backend offline -> queued searches
+- **Health checks:** `/health/live` (liveness), `/health/ready` (readiness), `/health/cache` (cache status)
+
+---
+
+## 10. Security Posture
+
+### 10.1 Strengths
+
+- RLS on all 29 tables (105 policies)
+- JWT validation with ES256+JWKS support
+- CSP nonce-based with strict-dynamic
+- PII scrubbing in Sentry + structured logs
+- Input validation via Pydantic on all endpoints
+- UUID pattern validation on all ID parameters
+- Search query sanitization regex (SAFE_SEARCH_PATTERN)
+- Rate limiting (Redis token bucket)
 - Stripe webhook signature verification
+- API docs disabled in production
+- Security headers (HSTS, COOP, X-DNS-Prefetch-Control)
+- CodeQL security scanning in CI
+
+### 10.2 Areas to Monitor
+
+- `.env` files exist locally but are properly gitignored
+- `SUPABASE_SERVICE_ROLE_KEY` bypasses RLS (used by backend only)
+- `style-src 'unsafe-inline'` in CSP (accepted risk for Tailwind, documented)
+- No WAF in front of Railway (relies on Railway proxy + Cloudflare DNS)
+- MFA is optional (TOTP + recovery codes implemented but not enforced)
 
 ---
 
-## 8. Integration Points
+## 11. Data Flow Diagram
 
-### 8.1 External APIs and Constraints
+### 11.1 Search Request Flow
 
-| API | Purpose | Rate Limit | Key Constraints |
-|-----|---------|------------|-----------------|
-| PNCP | Primary procurement data | 10 req/s (self-imposed) | Max 50/page, `codigoModalidadeContratacao` required |
-| PCP v2 | Secondary procurement data | None documented | 10/page fixed, no server-side UF filter, no value data |
-| ComprasGov v3 | Tertiary procurement data | N/A | **OFFLINE since 2026-03-03** |
-| OpenAI (GPT-4.1-nano) | Classification + summaries | Standard API limits | 5s timeout, max 1 retry, ~R$0.00007/call |
-| Supabase | Database + Auth | Connection pool: 25/worker | Circuit breaker: 10 window, 50% threshold, 60s cooldown |
-| Redis (Upstash) | Cache + Streams + Queue | 50 connections | 30s socket timeout, XREAD compatible |
-| Stripe | Billing | Standard limits | Webhook signature verification |
-| Resend | Transactional email | Free tier | 1 domain limit on free plan |
-| Portal da Transparencia | Sanctions check | 90 req/min (06-01h) | `chave-api-dados` header, `codigoOrgao` required for some endpoints |
-| BrasilAPI | Company data (Simples/MEI) | Public | Used in intel reports |
-| IBGE SIDRA | Population/GDP data | Public | Used in intel reports |
+```
+User clicks "Buscar"
+    ↓
+Frontend: POST /api/buscar (Next.js proxy)
+    ↓
+Backend: POST /v1/buscar
+    ├── Auth (JWT validation, quota check)
+    ├── Check cache (L1 → L2 → miss)
+    ├── If cache hit (fresh): return immediately
+    ├── If cache stale: serve stale + background revalidation
+    ├── If cache miss:
+    │   ├── [Parallel] PNCP API (batched UFs, phased modalities)
+    │   ├── [Parallel] PCP v2 API (all UFs, client-side filter)
+    │   ├── [Parallel] ComprasGov v3 (if enabled)
+    │   ├── Consolidation (dedup by priority, normalize schemas)
+    │   ├── Filter pipeline (UF → Value → Keywords → LLM → Status)
+    │   ├── Viability scoring (4 factors)
+    │   ├── [ARQ Job] LLM summary + Excel generation
+    │   └── Cache write (L1 + L2)
+    └── Return BuscaResponse (202 if async, 200 if sync)
 
-### 8.2 Internal Integration Points
+[Parallel] SSE: GET /v1/buscar-progress/{search_id}
+    ├── Wait-for-tracker (heartbeat every 15s)
+    ├── Per-UF progress events
+    ├── source_complete events
+    ├── llm_ready / excel_ready events (from ARQ)
+    └── done event
+```
 
-| Integration | Mechanism |
-|-------------|-----------|
-| Backend <-> Frontend | REST + SSE via Next.js API proxy |
-| Web <-> Worker | ARQ job queue via Redis |
-| Backend <-> Supabase | supabase-py client (admin + user-scoped) |
-| Backend <-> Redis | redis-py 5.x async pool |
-| Cross-worker SSE | Redis Streams (STORY-276) |
-| Metrics scraping | Prometheus `/metrics` endpoint |
-| Error reporting | Sentry SDK (both frontend and backend) |
-| Analytics events | Mixpanel (frontend), structured logs (backend) |
+### 11.2 Billing Flow
+
+```
+User selects plan → POST /v1/checkout → Stripe Checkout Session
+    ↓ (redirect to Stripe)
+Stripe payment → Webhook → POST /v1/stripe/webhook
+    ├── checkout.session.completed → activate plan, sync profiles.plan_type
+    ├── invoice.paid → extend subscription
+    ├── invoice.payment_failed → dunning emails
+    ├── customer.subscription.updated → plan change, sync
+    └── customer.subscription.deleted → downgrade to free
+```
 
 ---
 
-## 9. Technical Debt Identified
+## Appendix A: Key Configuration Constants
 
-### CRITICAL
-
-| ID | Issue | Impact | Location |
-|----|-------|--------|----------|
-| TD-001 | **CORS allows all origins (`*`)** | Any website can make authenticated API calls. In production with real users, this is a significant security risk. | `main.py:43` |
-| TD-002 | **PNCP client uses synchronous `requests` library** | Blocks the event loop thread (mitigated via `asyncio.to_thread()` wrapper, but adds complexity and limits concurrency). All other clients use async httpx. | `pncp_client.py` |
-| TD-003 | **ComprasGov v3 offline with no monitoring** | Third data source completely unavailable since 2026-03-03 with no automated health check or alert to detect recovery. Priority hardcoded to 99. | `clients/compras_gov_client.py` |
-
-### HIGH
-
-| ID | Issue | Impact | Location |
-|----|-------|--------|----------|
-| TD-004 | **Prometheus SLOs are ephemeral** | All Prometheus metrics reset on container restart (in-memory only). No persistent SLO tracking. Railway restarts containers on deploy. | `metrics.py` |
-| TD-005 | **Health canary cannot detect PNCP page size limit** | Health canary uses `tamanhoPagina=10`, so it passes even when PNCP changed max from 500 to 50. A regression in page size limits would go undetected. | `health.py`, `pncp_client.py` |
-| TD-006 | **main.py is minimal but route registration happens elsewhere** | `main.py` shows only root + health endpoints. Actual route registration (38 modules) is not visible from the entry point -- it is done via a registration pattern not shown in main.py. This hurts discoverability. | `main.py` |
-| TD-007 | **API versioning inconsistent** | Some routes use `/v1/` prefix (search status, first-analysis), most do not. No version negotiation. Future breaking changes will be difficult. | `routes/*` |
-| TD-008 | **No request timeout at the application level** | Gunicorn timeout is 120s, Railway is ~300s, but there is no application-level request timeout middleware. A slow downstream call could hold a worker for the full Gunicorn timeout. | `start.sh`, pipeline |
-| TD-009 | **Worker liveness detection relies on Redis** | `_worker_alive_cache` checks via Redis key. If Redis is down, worker liveness cannot be determined, and inline fallback path activates (correct), but there is no alerting for prolonged worker absence. | `job_queue.py` |
-| TD-010 | **Search decomposition has backward-compat re-exports** | DEBT-115 decomposed `routes/search.py` into 4 sub-modules, but the original module re-exports all symbols for backward compatibility. This creates a fragile import graph where tests and modules can import from either location. | `routes/search.py` |
-
-### MEDIUM
-
-| ID | Issue | Impact | Location |
-|----|-------|--------|----------|
-| TD-011 | **`filter.py` has hardcoded keyword sets** | The default `KEYWORDS_UNIFORMES` set is hardcoded alongside the sector-based keywords from YAML. The legacy keyword set should be fully migrated to `sectors_data.yaml`. | `filter.py` |
-| TD-012 | **Multiple cache implementations** | `search_cache.py` (3-level search cache), `cache.py` (Redis wrapper), `redis_pool.py` (InMemoryCache fallback), `auth.py` (token cache), `llm_arbiter.py` (arbiter cache), `quota.py` (plan status cache). Each has its own eviction/TTL logic. | Multiple modules |
-| TD-013 | **No database migration version tracking in code** | 35 Supabase migrations + 7 backend migrations, but no in-code schema version assertion. The migration-check CI catches unapplied migrations, but there is no runtime check. | `supabase/migrations/` |
-| TD-014 | **Test pollution patterns documented but not eliminated** | MEMORY.md documents 8+ test pollution patterns (sys.modules, importlib.reload, MagicMock leakage, global singletons). These are mitigated by conftest fixtures but root causes remain. | `backend/tests/conftest.py` |
-| TD-015 | **Frontend has no global state management** | All state is in custom hooks. The 9-hook search decomposition (`useSearchOrchestration` -> 8 sub-hooks) is complex. State synchronization across hooks relies on prop drilling and callback chains. | `app/buscar/hooks/` |
-| TD-016 | **Dual connection pool management** | `supabase_client.py` manages its own httpx pool (25 connections, circuit breaker) while `redis_pool.py` manages Redis pool (50 connections). No unified pool budget or backpressure across both. | `supabase_client.py`, `redis_pool.py` |
-
-### LOW
-
-| ID | Issue | Impact | Location |
-|----|-------|--------|----------|
-| TD-017 | **App title still says "BidIQ Uniformes"** | `main.py` title and descriptions reference "BidIQ Uniformes" (original POC name), not "SmartLic". | `main.py` |
-| TD-018 | **FastAPI version declared as 0.2.0** | `main.py` declares `version="0.2.0"` but product is at v0.5. | `main.py` |
-| TD-019 | **Comment references Issue numbers** | Many code comments reference GitHub issue numbers (e.g., "Issue #168", "STORY-xxx", "CRIT-xxx") without links. Dense annotation aids archeology but hurts readability. | Throughout |
-| TD-020 | **Frontend SEO pages hardcoded** | SEO content pages (`/como-avaliar-licitacao`, etc.) are static Next.js routes, not CMS-driven. Adding new SEO pages requires code deploys. | `frontend/app/` |
-
----
-
-## 10. Resilience Patterns
-
-### 10.1 Circuit Breakers
-
-| Target | Implementation | Config |
-|--------|---------------|--------|
-| Supabase | `SupabaseCircuitBreaker` in `supabase_client.py` | Sliding window 10, 50% threshold, 60s cooldown, 3 trial calls |
-| Per-source (PNCP, PCP) | Circuit breakers in source adapters | 15 failures, 60s cooldown |
-| OpenAI | Implicit via timeout + max_retries=1 | 5s timeout |
-
-### 10.2 Timeouts
-
-```
-Railway hard limit:     ~300s (kills request)
-Gunicorn worker:        120s (configurable via GUNICORN_TIMEOUT)
-Gunicorn keep-alive:    75s (> Railway proxy 60s, prevents 502s)
-Pipeline total:         110s
-Consolidation:          100s
-Per-source fetch:       80s
-Per-UF fetch:           30s
-LLM classification:     5s per call
-Supabase pool:          30s
-Redis socket:           30s
-SSE heartbeat:          15s
-SSE body timeout:       0 (disabled on frontend proxy, infinite wait)
-```
-
-### 10.3 Fallback Cascade
-
-```
-1. Live data from all sources
-   |-- If source fails -> Partial results from remaining sources
-   |-- If all sources fail -> Stale cache (if available)
-   |-- If no cache -> Empty result with degradation guidance
-   |
-2. LLM classification
-   |-- If LLM fails -> REJECT (zero noise philosophy)
-   |-- If timeout -> Skip LLM, serve keyword-only results
-   |
-3. ARQ job queue
-   |-- If Redis down -> Inline LLM/Excel execution
-   |-- If worker down -> Inline fallback after 15s liveness check
-   |
-4. Search cache read
-   |-- L1 InMemory/Redis -> L2 Supabase -> L3 Local file -> Cache miss
-   |
-5. Search cache write
-   |-- Supabase -> Redis -> Local file (3-level save fallback)
-   |
-6. Auth token validation
-   |-- L1 Memory -> L2 Redis -> JWT decode (no cache)
-   |
-7. Rate limiting
-   |-- Redis -> In-memory fallback (per-worker only)
-   |
-8. Frontend
-   |-- SSE fails -> Time-based progress simulation
-   |-- Backend down -> Stale sector cache from localStorage
-   |-- Auto-retry: [10s, 20s, 30s], max 3 attempts
-```
-
-### 10.4 Bulkhead Pattern
-
-Each data source has its own asyncio.Semaphore (`bulkhead.py`). If PNCP exhausts its concurrency slots, PCP v2 continues unaffected.
-
-### 10.5 Graceful Degradation
-
-- **Partial results:** If some UFs or sources fail, results from successful ones are returned with `is_partial=True` and `degradation_reason`.
-- **Progressive delivery (A-04):** Cached results returned immediately; live fetch spawns in background.
-- **Time budget:** After 90s, LLM classification skipped. After 100s, viability assessment skipped.
-- **Gunicorn worker recycling:** `max-requests=1000` with jitter prevents memory leaks.
-- **SIGSEGV mitigation:** `--preload` disabled by default due to cryptography/OpenSSL fork-safety issues. Uvicorn standalone mode (`RUNNER=uvicorn`) available as alternative.
-
-### 10.6 Stale-While-Revalidate (SWR)
-
-- Fresh (0-4h): Serve directly
-- Stale (4-24h): Serve immediately + trigger background revalidation (max 3 concurrent, 180s timeout)
-- Expired (>24h): Not served (new fetch required)
-- Emergency: Local file cache served only when Supabase and Redis both down
-
----
-
-## Appendix A: File Counts and Test Baselines
-
-| Metric | Value |
-|--------|-------|
-| Backend route modules | 38 |
-| Backend service modules | 16 |
-| Backend client modules | 9 |
-| Pipeline stages | 7 |
-| Supabase migrations | 35 |
-| Backend tests | 7332 passing / 311 files |
-| Frontend tests | 5583 passing / 135 files |
-| E2E tests | 60 critical flows |
-| GitHub Actions workflows | 18 |
-| Frontend pages | 22+ |
-| Frontend API proxies | 40+ |
-| Frontend components (buscar) | 41 |
-| Frontend shared components | 32+ |
-| Frontend hooks (shared) | 28 |
-| Frontend hooks (buscar) | 9 |
+| Constant | Value | Source |
+|----------|-------|--------|
+| `PNCP_MAX_PAGE_SIZE` | 50 | PNCP API limit (was 500, reduced Feb 2026) |
+| `PNCP_BATCH_SIZE` | 5 UFs per batch | Rate limit mitigation |
+| `PNCP_BATCH_DELAY_S` | 2.0s | Inter-batch delay |
+| `PIPELINE_TIMEOUT` | 110s | Total pipeline timeout |
+| `CONSOLIDATION_TIMEOUT` | 100s | Multi-source consolidation |
+| `PNCP_TIMEOUT_PER_SOURCE` | 80s | Per-source fetch timeout |
+| `PNCP_TIMEOUT_PER_UF` | 30s | Per-UF fetch timeout |
+| `PIPELINE_SKIP_LLM_AFTER_S` | 90s | Skip LLM if pipeline running long |
+| `PIPELINE_SKIP_VIABILITY_AFTER_S` | 100s | Skip viability scoring |
+| `GUNICORN_TIMEOUT` | 120s | Worker request timeout |
+| `GUNICORN_KEEP_ALIVE` | 75s | > Railway proxy 60s |
+| `WEB_CONCURRENCY` | 2 | Workers (Railway 1GB limit) |
+| `CACHE_L1_TTL` | 4h | In-memory cache TTL |
+| `CACHE_L2_TTL` | 24h | Supabase cache TTL |
+| `TRIAL_DURATION_DAYS` | 14 | Free trial length |
+| `MAX_CACHE_ENTRIES` | 1000 | L1 auth token cache |
+| `SSE_HEARTBEAT_INTERVAL` | 15s | SSE keep-alive |
+| `SEARCH_DEFAULT_PERIOD` | 10 days | Default search date range |
 
 ## Appendix B: Environment Variables (Key)
 
@@ -858,7 +647,10 @@ Each data source has its own asyncio.Semaphore (`bulkhead.py`). If PNCP exhausts
 | `SEARCH_RATE_LIMIT_PER_MINUTE` | Per-user search rate limit | 10 |
 | `SEARCH_ASYNC_ENABLED` | Enable async search via ARQ | `false` |
 | `METRICS_ENABLED` | Enable Prometheus metrics | `true` |
+| `SENTRY_DSN` | Sentry error tracking URL | Optional |
+| `APP_VERSION` | Release version tag | `dev` |
 
 ---
 
-*Document generated 2026-03-20 by @architect (Atlas) during Brownfield Discovery Phase 1.*
+*Document generated 2026-03-21 by @architect (Atlas) during Brownfield Discovery Phase 2.*
+*Codebase analysis based on actual file reads — all numbers verified against source.*

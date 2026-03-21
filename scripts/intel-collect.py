@@ -79,6 +79,21 @@ MODALIDADES = _crd.MODALIDADES
 MODALIDADES_EXCLUIDAS = _crd.MODALIDADES_EXCLUIDAS
 PNCP_MAX_PAGES_UF = 80  # Override: 80 pages × 50 = 4000 items per UF per modalidade
 PNCP_MAX_PAGES = _crd.PNCP_MAX_PAGES
+
+# ── v1.3 Performance constants ──
+# Date chunking: split large date ranges into smaller windows to avoid pagination exhaustion
+_DATE_CHUNK_DAYS = 14  # Each chunk covers 14 days (shorter = fewer pages per combo)
+# Parallel workers for PNCP fetch (all modalidade×UF×chunk combos dispatched at once)
+_PNCP_FETCH_WORKERS = 4  # Balanced: 3-5 avoids cascading timeouts on gov server
+# Adaptive rate limiter
+_RATE_LIMIT_BASE_S = 0.15   # Base interval between requests (150ms)
+_RATE_LIMIT_MAX_S = 2.0     # Max interval on slowdowns
+_RATE_LIMIT_SLOW_THRESHOLD_S = 5.0  # Response > 5s = "slow"
+_RATE_LIMIT_DECAY = 0.85    # Decay factor on fast responses
+_RATE_LIMIT_GROWTH = 1.5    # Growth factor on slow responses
+# Circuit breaker: pause after consecutive timeouts
+_CIRCUIT_BREAKER_THRESHOLD = 3   # 3 consecutive failures = pause
+_CIRCUIT_BREAKER_PAUSE_S = 15.0  # Pause duration (seconds)
 CNAE_KEYWORD_REFINEMENTS = _crd.CNAE_KEYWORD_REFINEMENTS
 _compile_keyword_patterns = _crd._compile_keyword_patterns
 _compute_keyword_density = _crd._compute_keyword_density
@@ -94,7 +109,7 @@ collect_portal_transparencia = _crd.collect_portal_transparencia
 # CONSTANTS
 # ============================================================
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 # Checkpoint file for resume/fault-tolerance
@@ -107,12 +122,26 @@ _COMPETITIVE_CACHE_FILE = str(_PROJECT_ROOT / "data" / "competitive_cache.json")
 _COMPETITIVE_CACHE_TTL_DAYS = 7  # Cache competitive intel per organ for 7 days
 _COMPETITIVE_MAX_ORGANS = 15     # Max unique organs to query
 
-# Competitive modalidades ONLY (Concorrencias + Pregoes)
-# Excluded: Dispensa(8), Inexigibilidade(9), Inaplicabilidade(14),
-#           Dialogo Competitivo(2), Concurso(3), Credenciamento(12), Chamada Publica(15)
+# Modalidades competitivas relevantes (Lei 14.133/2021, arts. 28-29)
+#
+# INCLUÍDAS:
+#   4: Concorrência Eletrônica — principal para OBRAS (art. 28, §1º)
+#   5: Concorrência Presencial — mesma regra, formato presencial
+#   6: Pregão Eletrônico — serviços comuns de engenharia + materiais (art. 29)
+#   7: Pregão Presencial — mesma regra, formato presencial
+#
+# EXCLUÍDAS (sem competição ou irrelevantes):
+#   8: Dispensa — contratação direta, sem licitação
+#   9: Inexigibilidade — fornecedor exclusivo, sem competição
+#  14: Inaplicabilidade — não se aplica licitação
+#   2: Diálogo Competitivo — raríssimo, procedimento complexo
+#   3: Concurso — projetos intelectuais, não obras
+#  12: Credenciamento — cadastro aberto, não licitação
+#  15: Chamada Pública — programa agrícola (MAPA)
+#  16-19: Internacionais — irrelevante para construtoras domésticas
 MODALIDADES_BUSCA = {
     k: v for k, v in MODALIDADES.items()
-    if k not in MODALIDADES_EXCLUIDAS and k not in {2, 3, 12, 15}
+    if k in {4, 5, 6, 7}
 }
 
 # CNAE keyword density gate: 1% minimum (lower than report's 2% for zero false negatives)
@@ -171,6 +200,100 @@ for _pat_name, _pat_str in _EXCLUSION_PATTERN_STRINGS:
         EXCLUSION_PATTERNS.append((_pat_name, re.compile(_pat_str, re.IGNORECASE)))
     except re.error as _e:
         print(f"WARNING: Failed to compile exclusion pattern '{_pat_name}': {_e}", file=sys.stderr)
+
+
+# ============================================================
+# ADAPTIVE RATE LIMITER (v1.3 — DescompLicita pattern)
+# ============================================================
+
+class AdaptiveRateLimiter:
+    """Thread-safe adaptive rate limiter for PNCP API.
+
+    Starts with a short base interval and adjusts dynamically:
+    - Fast response (<2s): interval *= decay (gets faster)
+    - Slow response (>5s): interval *= growth (slows down)
+    - Consecutive timeouts: circuit breaker pauses all threads
+    """
+
+    def __init__(
+        self,
+        base_interval: float = _RATE_LIMIT_BASE_S,
+        max_interval: float = _RATE_LIMIT_MAX_S,
+        slow_threshold: float = _RATE_LIMIT_SLOW_THRESHOLD_S,
+        decay: float = _RATE_LIMIT_DECAY,
+        growth: float = _RATE_LIMIT_GROWTH,
+        cb_threshold: int = _CIRCUIT_BREAKER_THRESHOLD,
+        cb_pause: float = _CIRCUIT_BREAKER_PAUSE_S,
+    ):
+        self._interval = base_interval
+        self._min_interval = base_interval * 0.5
+        self._max_interval = max_interval
+        self._slow_threshold = slow_threshold
+        self._decay = decay
+        self._growth = growth
+        self._cb_threshold = cb_threshold
+        self._cb_pause = cb_pause
+        self._consecutive_failures = 0
+        self._lock = threading.Lock()
+
+    def wait(self) -> None:
+        """Sleep for the current adaptive interval."""
+        with self._lock:
+            interval = self._interval
+        if interval > 0.01:
+            time.sleep(interval)
+
+    def record_success(self, response_time: float) -> None:
+        """Record a successful request and adjust interval."""
+        with self._lock:
+            self._consecutive_failures = 0
+            if response_time < 2.0:
+                # Fast response: speed up
+                self._interval = max(self._min_interval, self._interval * self._decay)
+            elif response_time > self._slow_threshold:
+                # Slow response: slow down
+                self._interval = min(self._max_interval, self._interval * self._growth)
+
+    def record_failure(self) -> None:
+        """Record a failed request. Triggers circuit breaker if threshold reached."""
+        should_pause = False
+        with self._lock:
+            self._consecutive_failures += 1
+            self._interval = min(self._max_interval, self._interval * self._growth)
+            if self._consecutive_failures >= self._cb_threshold:
+                should_pause = True
+                self._consecutive_failures = 0  # Reset counter
+        # Circuit breaker pause (outside lock to avoid blocking other threads unnecessarily)
+        if should_pause:
+            print(f"    ⚡ Circuit breaker: {self._cb_threshold} failures, pausing {self._cb_pause:.0f}s")
+            time.sleep(self._cb_pause)
+
+    @property
+    def current_interval(self) -> float:
+        with self._lock:
+            return self._interval
+
+
+def _chunk_date_range(data_inicial: str, data_final: str, chunk_days: int = _DATE_CHUNK_DAYS) -> list[tuple[str, str]]:
+    """Split a date range into smaller chunks to avoid pagination exhaustion.
+
+    Args:
+        data_inicial: Start date in YYYYMMDD format
+        data_final: End date in YYYYMMDD format
+        chunk_days: Max days per chunk (default: 14)
+
+    Returns:
+        List of (start_yyyymmdd, end_yyyymmdd) tuples covering the full range.
+    """
+    start = datetime.strptime(data_inicial, "%Y%m%d")
+    end = datetime.strptime(data_final, "%Y%m%d")
+    chunks = []
+    current = start
+    while current < end:
+        chunk_end = min(current + timedelta(days=chunk_days - 1), end)
+        chunks.append((current.strftime("%Y%m%d"), chunk_end.strftime("%Y%m%d")))
+        current = chunk_end + timedelta(days=1)
+    return chunks
 
 
 # ============================================================
@@ -541,16 +664,19 @@ def search_pncp_exhaustive(
 ) -> tuple[list[dict], dict]:
     """Fetch ALL editais from PNCP for the given UFs, modalidades, and date range.
 
-    NO keyword filtering at this stage -- captures everything to avoid false negatives.
-    Deduplicates by {cnpj_orgao}/{anoCompra}/{sequencialCompra}.
-
-    Parallelizes UF fetching within each modalidade using ThreadPoolExecutor(max_workers=5).
-    Supports resume/checkpoint: skips UF+mod combos already fetched within the last 2 hours.
+    v1.3 architecture (DescompLicita pattern):
+    - Date chunking: splits range into 14-day windows to avoid pagination exhaustion
+    - All (modalidade × UF × chunk) combos dispatched in parallel (ThreadPoolExecutor)
+    - Adaptive rate limiting: starts fast (150ms), slows on timeouts, circuit breaker
+    - NO keyword filtering: captures everything, deduplicates by organ/year/seq
 
     Returns (raw_editais, source_meta).
     """
     data_inicial = _date_compact(_today() - timedelta(days=dias))
     data_final = _date_compact(_today())
+
+    # ── Date chunking: split into 14-day windows ──
+    date_chunks = _chunk_date_range(data_inicial, data_final, _DATE_CHUNK_DAYS)
 
     all_items: list[dict] = []
     seen_ids: set[str] = set()
@@ -562,12 +688,16 @@ def search_pncp_exhaustive(
         "pages_fetched": 0,
         "errors": 0,
         "pagination_exhausted": [],
+        "date_chunks": len(date_chunks),
     }
     meta_lock = threading.Lock()   # protects source_meta
 
     use_per_uf = 1 <= len(ufs) <= 10
     uf_iterations: list[str | None] = list(ufs) if use_per_uf else [None]
     max_pages = PNCP_MAX_PAGES_UF if use_per_uf else PNCP_MAX_PAGES
+
+    # ── Adaptive rate limiter (shared across all workers) ──
+    rate_limiter = AdaptiveRateLimiter()
 
     # ── Checkpoint setup ──
     top_key = _checkpoint_key(cnpj14, ufs, dias) if cnpj14 else ""
@@ -611,16 +741,21 @@ def search_pncp_exhaustive(
             checkpoint[top_key] = cp_top
         _save_checkpoint(checkpoint)
 
-    def _fetch_uf(mod_code: int, mod_name: str, uf_filter: str | None) -> None:
-        """Worker: fetch all pages for one (modalidade, UF) combination."""
-        sub_k = _subkey(mod_code, uf_filter or "ALL")
+    def _fetch_combo(
+        mod_code: int, mod_name: str, uf_filter: str | None,
+        chunk_start: str, chunk_end: str,
+    ) -> tuple[str, int, int, bool]:
+        """Worker: fetch all pages for one (modalidade, UF, date_chunk) combo.
+
+        Returns (label, page_count, item_count, had_error).
+        """
+        uf_label = uf_filter or "ALL"
+        sub_k = f"{_subkey(mod_code, uf_label)}:{chunk_start}"
 
         # Check checkpoint cache
         if _is_cache_fresh(sub_k):
             cached_items = _load_from_cache(sub_k)
             cached_pages = cp_top.get(sub_k, {}).get("last_page", 0)
-            if uf_filter:
-                print(f"    UF {uf_filter}: {cached_pages} pages, {len(cached_items)} editais (cache)")
             with meta_lock:
                 source_meta["pages_fetched"] += cached_pages
                 source_meta["total_raw_api"] += len(cached_items)
@@ -630,17 +765,17 @@ def search_pncp_exhaustive(
                     if dk and dk not in seen_ids:
                         seen_ids.add(dk)
                         all_items.append(parsed)
-            return
+            return (uf_label, cached_pages, len(cached_items), False)
 
         page_count = 0
-        uf_items_list: list[dict] = []
+        combo_items: list[dict] = []
         local_raw = 0
         error_occurred = False
 
         for page in range(1, max_pages + 1):
             params = {
-                "dataInicial": data_inicial,
-                "dataFinal": data_final,
+                "dataInicial": chunk_start,
+                "dataFinal": chunk_end,
                 "codigoModalidadeContratacao": mod_code,
                 "pagina": page,
                 "tamanhoPagina": PNCP_MAX_PAGE_SIZE,
@@ -648,20 +783,28 @@ def search_pncp_exhaustive(
             if uf_filter:
                 params["uf"] = uf_filter
 
-            uf_label = f" uf={uf_filter}" if uf_filter else ""
+            # Adaptive rate limiting (replaces fixed time.sleep(0.5))
+            if page > 1:
+                rate_limiter.wait()
+
+            t0 = time.monotonic()
             data, status = _api_get_with_retry(
                 api,
                 f"{PNCP_BASE}/contratacoes/publicacao",
                 params=params,
-                label=f"PNCP mod={mod_code}{uf_label} p={page}",
+                label=f"PNCP mod={mod_code} uf={uf_label} p={page}",
                 max_retries=2,
             )
+            elapsed = time.monotonic() - t0
 
             if status != "API" or not data:
+                rate_limiter.record_failure()
                 with meta_lock:
                     source_meta["errors"] += 1
                 error_occurred = True
                 break
+
+            rate_limiter.record_success(elapsed)
 
             items = data if isinstance(data, list) else data.get("data", data.get("resultado", []))
             if not isinstance(items, list) or not items:
@@ -680,46 +823,85 @@ def search_pncp_exhaustive(
                         continue
                     seen_ids.add(dk)
                     all_items.append(parsed)
-                uf_items_list.append(parsed)
+                combo_items.append(parsed)
 
             if len(items) < PNCP_MAX_PAGE_SIZE:
                 break
-
-            time.sleep(0.5)  # Rate limiting per worker
 
         with meta_lock:
             source_meta["pages_fetched"] += page_count
             source_meta["total_raw_api"] += local_raw
             if page_count == max_pages:
                 source_meta["pagination_exhausted"].append(
-                    f"mod={mod_code} uf={uf_filter or 'ALL'}"
+                    f"mod={mod_code} uf={uf_label} chunk={chunk_start}"
                 )
 
-        if uf_filter:
-            status_note = " (erro parcial)" if error_occurred else ""
-            print(f"    UF {uf_filter}: {page_count} pages, {len(uf_items_list)} editais{status_note}")
-
         # Save checkpoint (even on partial error — preserves what we got)
-        if not error_occurred or uf_items_list:
-            _save_to_cache(sub_k, uf_items_list, page_count)
+        if not error_occurred or combo_items:
+            _save_to_cache(sub_k, combo_items, page_count)
 
+        return (uf_label, page_count, len(combo_items), error_occurred)
+
+    # ── Build all tasks: modalidade × UF × date_chunk ──
+    tasks = []
     for mod_code, mod_name in sorted(modalidades.items()):
-        print(f"\n  Modalidade {mod_code} ({mod_name}):")
+        for uf_filter in uf_iterations:
+            for chunk_start, chunk_end in date_chunks:
+                tasks.append((mod_code, mod_name, uf_filter, chunk_start, chunk_end))
 
-        # Parallelize across UFs (max 5 threads — respect PNCP rate limits)
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
-            futures = {
-                pool.submit(_fetch_uf, mod_code, mod_name, uf_filter): uf_filter
-                for uf_filter in uf_iterations
-            }
-            for fut in concurrent.futures.as_completed(futures):
-                try:
-                    fut.result()
-                except Exception as exc:
-                    uf_filter = futures[fut]
-                    print(f"    UF {uf_filter}: ERRO inesperado: {exc}")
-                    with meta_lock:
-                        source_meta["errors"] += 1
+    n_tasks = len(tasks)
+    n_workers = min(n_tasks, _PNCP_FETCH_WORKERS)
+    print(f"\n  Busca paralela: {n_tasks} combos ({len(modalidades)} modalidades × "
+          f"{len(uf_iterations)} UFs × {len(date_chunks)} chunks de {_DATE_CHUNK_DAYS} dias)")
+    print(f"  Workers: {n_workers} | Rate limit: {_RATE_LIMIT_BASE_S:.0f}ms base (adaptativo)")
+
+    # ── Dynamic max_pages: reduce when many tasks to cap total requests ──
+    if n_tasks > 50:
+        effective_max = max(10, 600 // n_tasks)
+        if effective_max < max_pages:
+            print(f"  Max pages/combo reduzido: {max_pages} → {effective_max} (cap 600 requests)")
+            max_pages = effective_max
+
+    # ── Dispatch ALL combos in parallel ──
+    # Track per-modalidade stats for display
+    mod_stats: dict[int, dict] = {}
+    mod_stats_lock = threading.Lock()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as pool:
+        future_to_task = {
+            pool.submit(_fetch_combo, *task): task
+            for task in tasks
+        }
+        completed = 0
+        for fut in concurrent.futures.as_completed(future_to_task):
+            task = future_to_task[fut]
+            mod_code, mod_name, uf_filter, chunk_start, chunk_end = task
+            completed += 1
+            try:
+                uf_label, pages, items, had_error = fut.result()
+                with mod_stats_lock:
+                    if mod_code not in mod_stats:
+                        mod_stats[mod_code] = {"name": mod_name, "pages": 0, "items": 0, "errors": 0}
+                    mod_stats[mod_code]["pages"] += pages
+                    mod_stats[mod_code]["items"] += items
+                    if had_error:
+                        mod_stats[mod_code]["errors"] += 1
+            except Exception as exc:
+                print(f"    ERRO: mod={mod_code} uf={uf_filter} chunk={chunk_start}: {exc}")
+                with meta_lock:
+                    source_meta["errors"] += 1
+
+            # Progress indicator every 10 tasks
+            if completed % 10 == 0 or completed == n_tasks:
+                print(f"  → {completed}/{n_tasks} combos concluídos "
+                      f"(rate: {rate_limiter.current_interval*1000:.0f}ms)")
+
+    # ── Print per-modalidade summary ──
+    for mod_code in sorted(mod_stats):
+        ms = mod_stats[mod_code]
+        err_note = f" ({ms['errors']} erros)" if ms["errors"] else ""
+        print(f"    Modalidade {mod_code} ({ms['name']}): {ms['pages']} pages, "
+              f"{ms['items']} editais{err_note}")
 
     source_meta["total_after_dedup"] = len(all_items)
 

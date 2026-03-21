@@ -894,6 +894,102 @@ def main() -> int:
             print(_err("\nPipeline ABORTADO no Gate 2."))
             return 1
 
+    # ── STEP 2.5: BID SCORE COMPUTATION (v2) ───────────────────
+    if args.from_step <= 2:
+        print(f"\n{_bold('Step 2.5: Bid Score Computation')}")
+        t_bs = time.time()
+
+        try:
+            empresa = data.get("empresa", {})
+            editais_for_score = [e for e in data.get("editais", []) if e.get("cnae_compatible")]
+
+            # Parse capital social
+            cs_raw = str(empresa.get("capital_social") or "0").strip()
+            try:
+                if "," in cs_raw:
+                    cs_raw = cs_raw.replace(".", "").replace(",", ".")
+                capital_float = float(cs_raw)
+            except (ValueError, TypeError):
+                capital_float = 0.0
+
+            BID_WEIGHTS = {
+                "fit_estrategico": 0.20, "viabilidade_financeira": 0.15,
+                "roi": 0.15, "p_vitoria": 0.15, "custo_logistico": 0.10,
+                "janela_temporal": 0.10, "concorrencia": 0.15,
+            }
+            THRESHOLD = 0.45
+
+            scored = 0
+            for ed in editais_for_score:
+                scores: dict[str, float] = {}
+                scores["fit_estrategico"] = float(ed.get("_victory_fit") or 0.5)
+
+                valor = float(ed.get("valor_estimado") or 0)
+                if capital_float > 0 and valor > 0:
+                    ratio = valor / capital_float
+                    scores["viabilidade_financeira"] = (
+                        1.0 if ratio <= 1 else
+                        (0.7 if ratio <= 3 else
+                         (0.4 if ratio <= 5 else
+                          (0.2 if ratio <= 10 else 0.05)))
+                    )
+                else:
+                    scores["viabilidade_financeira"] = 0.5
+
+                roi_data = ed.get("roi_proposta") or {}
+                roi_r = float(roi_data.get("ratio_valor_custo") or 0)
+                scores["roi"] = (
+                    1.0 if roi_r >= 5 else
+                    (0.7 if roi_r >= 3 else
+                     (0.4 if roi_r >= 1.5 else
+                      (0.1 if roi_r > 0 else 0.5)))
+                )
+
+                bid_sim = ed.get("_bid_simulation") or {}
+                pw = float(bid_sim.get("p_vitoria_pct") or 0)
+                scores["p_vitoria"] = min(1.0, pw / 60.0) if pw > 0 else 0.5
+
+                dist = (ed.get("distancia") or {}).get("km")
+                if dist is None:
+                    scores["custo_logistico"] = 0.5
+                elif dist <= 100:
+                    scores["custo_logistico"] = 1.0
+                elif dist <= 300:
+                    scores["custo_logistico"] = 0.7
+                elif dist <= 600:
+                    scores["custo_logistico"] = 0.4
+                else:
+                    scores["custo_logistico"] = 0.2
+
+                status_ed = ed.get("status_temporal", "")
+                scores["janela_temporal"] = {
+                    "URGENTE": 0.3, "IMINENTE": 0.6, "PLANEJAVEL": 1.0, "SEM_DATA": 0.4,
+                }.get(status_ed, 0.5)
+
+                ci = ed.get("competitive_intel") or {}
+                cl = ci.get("competition_level", "")
+                scores["concorrencia"] = {
+                    "BAIXA": 1.0, "MEDIA": 0.7, "ALTA": 0.4, "MUITO_ALTA": 0.2,
+                }.get(cl, 0.5)
+
+                composite = sum(scores[k] * BID_WEIGHTS[k] for k in BID_WEIGHTS)
+                ed["_bid_score"] = {
+                    **scores,
+                    "_composite": round(composite, 4),
+                    "_threshold": THRESHOLD,
+                    "_recommendation": "PARTICIPAR" if composite >= THRESHOLD else "NAO PARTICIPAR",
+                }
+                scored += 1
+
+            elapsed_bs = time.time() - t_bs
+            print(f"  {_ok('OK')} Bid score computado para {scored} editais em {_fmt_duration(elapsed_bs)}")
+
+            # Save intermediate result
+            _save_json(json_path, data)
+
+        except Exception as exc:
+            print(f"  {_warn('WARN')} Bid score computation failed: {exc} — continuing without scores")
+
     # ── STEP 3: LLM GATE ────────────────────────────────────────
     if args.from_step <= 3:
         step_label = "Step 3: LLM Gate"
@@ -1066,6 +1162,17 @@ def main() -> int:
     else:
         failed = [k for k, (gp, _, _) in all_gate_results.items() if not gp]
         print(_warn(f"  Atenção: gates com falha: {', '.join(failed)}"))
+
+    # Calibration hint for bid score feedback loop
+    _cnpj_hint = cnpj14
+    if json_path:
+        try:
+            _empresa_hint = _load_json(json_path).get("empresa", {})
+            _cnpj_hint = _empresa_hint.get("cnpj") or cnpj14
+        except Exception:
+            pass
+    print(f"\n  {_info('CALIBRACAO')}: Apos resultado da licitacao, registre:")
+    print(f"    python scripts/intel-feedback.py --cnpj {_cnpj_hint} --edital <ID> --outcome win|loss")
 
     print()
     return 0

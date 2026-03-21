@@ -99,6 +99,11 @@ COLUMNS = [
     ("Relevância", 10, "center"),            # 27
     ("Setor", 25, "left"),                   # 28
     ("Link PNCP", 12, "center"),             # 29
+    # v2.0 columns
+    ("Bid Score", 10, "center"),             # 30 - _bid_score._composite
+    ("Compliance", 16, "center"),            # 31 - analise._compliance_summary
+    ("Urgência Calc.", 14, "center"),        # 32 - analise._urgency.nivel + dias
+    ("Risco Decomposto", 25, "left"),        # 33 - nivel_dificuldade decomposed
 ]
 
 # ---------------------------------------------------------------------------
@@ -597,6 +602,60 @@ def _build_oportunidades(wb: Workbook, items: list[dict], capacity_10x: float | 
             row.append(_dc(29, value=link_val, font=st["link_font"]))
         else:
             row.append(_dc(29, value=""))
+
+        # Col 30: Bid Score (_bid_score._composite as percentage)
+        bid_score_raw = (item.get("_bid_score") or {}).get("_composite")
+        bid_score = _safe_float(bid_score_raw)
+        if bid_score is not None:
+            bid_score_str = f"{bid_score:.0%}"
+            if bid_score >= 0.70:
+                bs_font = st["green_font"]
+            elif bid_score >= 0.45:
+                bs_font = st["amber_font"]
+            else:
+                bs_font = st["red_font"]
+            row.append(_dc(30, value=bid_score_str, font=bs_font))
+        else:
+            row.append(_dc(30, value=""))
+
+        # Col 31: Compliance (analise._compliance_summary)
+        compliance = (analise.get("_compliance_summary") or "") if isinstance(analise, dict) else ""
+        row.append(_dc(31, value=_sanitize(compliance)))
+
+        # Col 32: Urgência Calc. (analise._urgency.nivel + dias_restantes)
+        urgency = (analise.get("_urgency") or {}) if isinstance(analise, dict) else {}
+        if isinstance(urgency, dict):
+            nivel_u = urgency.get("nivel", "")
+            dias = urgency.get("dias_restantes")
+            urgency_str = f"{nivel_u} ({dias}d)" if dias is not None else str(nivel_u) if nivel_u else ""
+        else:
+            urgency_str = ""
+        if urgency_str:
+            nivel_upper = str(urgency.get("nivel", "")).upper() if isinstance(urgency, dict) else ""
+            if nivel_upper in ("CRITICO", "URGENTE"):
+                uc_font = st["red_font"]
+            elif nivel_upper in ("ALTO", "IMINENTE"):
+                uc_font = Font(name="Calibri", size=10, color="FF8C00")  # orange
+            elif nivel_upper in ("MEDIO", "MODERADO"):
+                uc_font = st["amber_font"]
+            else:
+                uc_font = st["green_font"]
+        else:
+            uc_font = None
+        row.append(_dc(32, value=urgency_str, font=uc_font))
+
+        # Col 33: Risco Decomposto (analise.nivel_dificuldade broken down by dimension)
+        dif = (analise.get("nivel_dificuldade") or {}) if isinstance(analise, dict) else {}
+        if isinstance(dif, dict):
+            parts = []
+            for key in ("tecnico", "prazo", "regulatorio", "logistico", "financeiro"):
+                val = dif.get(key)
+                if isinstance(val, (int, float)):
+                    parts.append(f"{key[:3].upper()}:{val:.0f}")
+            risco_str = " ".join(parts) if parts else str(dif.get("geral", ""))
+        else:
+            risco_str = str(dif) if dif else ""
+        row.append(_dc(33, value=_sanitize(risco_str)))
 
         ws.append(row)
 

@@ -421,6 +421,16 @@ def _generate_proximos_passos(top20_pdf: list[dict]) -> list[dict]:
     return passos
 
 
+def _fmt_brl_report(val: float) -> str:
+    """Format BRL value in compact form for KPI table."""
+    if val >= 1_000_000:
+        return f"R$ {val/1_000_000:,.1f}M"
+    elif val >= 1_000:
+        return f"R$ {val/1_000:,.1f}mil"
+    else:
+        return f"R$ {val:,.0f}"
+
+
 def _format_cnpj(cnpj: str) -> str:
     """Format CNPJ: 12345678000199 -> 12.345.678/0001-99."""
     c = re.sub(r"\D", "", str(cnpj))
@@ -890,6 +900,64 @@ def _build_sumario_executivo(data: dict, styles: dict) -> list:
         if paragraph:
             el.append(Paragraph(_s(paragraph), styles["body"]))
 
+    # ── Portfolio KPI Table (v2) ──
+    participar_eds = [
+        ed for ed in top20
+        if "PARTICIPAR" in (ed.get("analise", {}).get("recomendacao_acao", "")).upper()
+        and "NAO" not in (ed.get("analise", {}).get("recomendacao_acao", "")).upper()
+        and "NÃO" not in (ed.get("analise", {}).get("recomendacao_acao", "")).upper()
+    ]
+    n_participar = len(participar_eds)
+    n_total = len(top20)
+
+    total_valor = sum(
+        float(ed.get("valor_estimado") or 0)
+        for ed in participar_eds
+    )
+    total_custo = sum(
+        float((ed.get("custo_proposta") or {}).get("total") or 0)
+        for ed in participar_eds
+    )
+    p_vitorias = [
+        float((ed.get("_bid_simulation") or {}).get("p_vitoria_pct") or 0)
+        for ed in participar_eds
+    ]
+    avg_p = sum(p_vitorias) / max(1, len(p_vitorias)) if p_vitorias else 0
+    valor_esperado = sum(
+        float(ed.get("valor_estimado") or 0)
+        * float((ed.get("_bid_simulation") or {}).get("p_vitoria_pct") or 0)
+        / 100
+        for ed in participar_eds
+    )
+    roi = total_valor / max(1, total_custo)
+
+    kpi_rows_data = [
+        ("Oportunidades Recomendadas", f"{n_participar} de {n_total}"),
+        ("Valor Total do Pipeline", _fmt_brl_report(total_valor)),
+        ("Custo Estimado de Propostas", _fmt_brl_report(total_custo) if total_custo > 0 else "N/I"),
+        ("ROI Potencial do Portfólio", f"{roi:.0f}x" if total_custo > 0 else "N/I"),
+        ("P(Vitória) Média", f"{avg_p:.0f}%" if any(p_vitorias) else "N/I"),
+        ("Valor Esperado (EV)", _fmt_brl_report(valor_esperado) if valor_esperado > 0 else "N/I"),
+    ]
+
+    kpi_header = [
+        Paragraph("Indicador", styles["cell_header"]),
+        Paragraph("Valor", styles["cell_header_right"]),
+    ]
+    kpi_table_rows = [kpi_header]
+    for label, value in kpi_rows_data:
+        kpi_table_rows.append([
+            Paragraph(_s(label), styles["cell"]),
+            Paragraph(_s(value), styles["cell_right"]),
+        ])
+
+    avail_kpi = PAGE_WIDTH - 2 * MARGIN
+    kpi_col_widths = [avail_kpi * 0.6, avail_kpi * 0.4]
+    kpi_t = _three_rule_table(kpi_table_rows, kpi_col_widths)
+    el.append(Spacer(1, 3 * mm))
+    el.append(Paragraph("Métricas do Portfólio", styles["h2"]))
+    el.append(kpi_t)
+
     el.append(Spacer(1, 4 * mm))
 
     # Top 5 summary table
@@ -1202,7 +1270,11 @@ def _build_perfil_e_mapa(data: dict, styles: dict) -> list:
         rows = [header]
         for idx, ed in enumerate(top20_pdf, 1):
             analise = ed.get("analise", {})
-            dif = (analise.get("nivel_dificuldade") or "").upper()
+            _dif_raw = analise.get("nivel_dificuldade")
+            if isinstance(_dif_raw, dict):
+                dif = (_dif_raw.get("geral") or "").upper()
+            else:
+                dif = (_dif_raw or "").upper()
             dif_color = DIFFICULTY_STYLES.get(dif, TEXT_COLOR)
             dif_text = dif if dif in DIFFICULTY_STYLES else "—"
             dif_style = ParagraphStyle(
@@ -1567,6 +1639,32 @@ def _build_edital_detail(idx: int, ed: dict, styles: dict) -> list:
         if garantias:
             elements.append(Paragraph(f"• Garantia: {_s(garantias)}", styles["bullet_small"]))
 
+    # Nível de Dificuldade (dict or string)
+    _dif_raw_detail = analise.get("nivel_dificuldade")
+    if isinstance(_dif_raw_detail, dict):
+        dif_geral = _dif_raw_detail.get("geral", "MEDIO")
+        dif_justificativa = _s(_dif_raw_detail.get("justificativa", ""))
+        dif_display = _s(dif_geral)
+        if dif_justificativa:
+            dif_display += f" — {dif_justificativa}"
+        sub_parts = []
+        for key in ("tecnico", "prazo", "regulatorio", "logistico", "financeiro"):
+            val = _dif_raw_detail.get(key)
+            if isinstance(val, (int, float)):
+                sub_parts.append(f"{key[:1].upper()}:{val:.0f}")
+        if sub_parts:
+            dif_display += f" ({' '.join(sub_parts)})"
+    else:
+        dif_geral = (_dif_raw_detail or "MEDIO").upper() if _dif_raw_detail else "MEDIO"
+        dif_display = _s(_dif_raw_detail) if _dif_raw_detail else ""
+
+    if dif_display:
+        dif_color_detail = DIFFICULTY_STYLES.get(dif_geral.upper(), TEXT_COLOR)
+        elements.append(Paragraph(
+            f'Dificuldade: <font color="{dif_color_detail.hexval()}"><b>{dif_display}</b></font>',
+            styles["edital_meta"],
+        ))
+
     # CONDITIONS ROW
     prazo = _s(analise.get("prazo_execucao", ""))
     criterio = _s(analise.get("criterio_julgamento", ""))
@@ -1615,6 +1713,40 @@ def _build_edital_detail(idx: int, ed: dict, styles: dict) -> list:
     acao = analise.get("recomendacao_acao", "")
     if acao:
         elements.append(Paragraph(f"AÇÃO RECOMENDADA: {_s(acao)}", styles["action_rec"]))
+
+    # ── Compliance Mini-Table ──
+    compliance = analise.get("_compliance_matrix") or []
+    if compliance:
+        elements.append(Paragraph("MATRIZ DE CONFORMIDADE", styles["subsection"]))
+        _STATUS_COLORS = {
+            "ATENDE": SIGNAL_GREEN,
+            "NAO ATENDE": SIGNAL_RED,
+            "NÃO ATENDE": SIGNAL_RED,
+            "VERIFICAR": SIGNAL_AMBER,
+            "VERIFICAR_MANUAL": SIGNAL_AMBER,
+        }
+        comp_header = [
+            Paragraph("Requisito", styles["cell_header"]),
+            Paragraph("Status", styles["cell_header_center"]),
+            Paragraph("Evidência", styles["cell_header"]),
+        ]
+        comp_rows = [comp_header]
+        for item in compliance[:8]:
+            status_raw = _s(item.get("status", "")).upper()
+            status_color = _STATUS_COLORS.get(status_raw, TEXT_COLOR)
+            comp_rows.append([
+                Paragraph(_s(item.get("requisito", ""))[:60], styles["cell"]),
+                Paragraph(
+                    f'<font color="{status_color.hexval()}"><b>{_s(item.get("status", ""))}</b></font>',
+                    styles["cell_center"],
+                ),
+                Paragraph(_s(item.get("evidencia", ""))[:40], styles["cell"]),
+            ])
+        avail_comp = PAGE_WIDTH - 2 * MARGIN
+        comp_widths = [avail_comp * 0.40, avail_comp * 0.22, avail_comp * 0.38]
+        comp_t = _three_rule_table(comp_rows, comp_widths)
+        elements.append(comp_t)
+        elements.append(Spacer(1, 1 * mm))
 
     # Hairline separator at bottom
     hr_t = Table([[""]], colWidths=[avail], rowHeights=[1])
@@ -1808,7 +1940,11 @@ def _build_plano_acao(data: dict, styles: dict) -> list:
 
         for orig_idx, ed in sorted_eds[:20]:
             analise = ed.get("analise") or {}
-            dif = (analise.get("nivel_dificuldade") or "").upper()
+            _dif_raw_tl = analise.get("nivel_dificuldade")
+            if isinstance(_dif_raw_tl, dict):
+                dif = (_dif_raw_tl.get("geral") or "").upper()
+            else:
+                dif = (_dif_raw_tl or "").upper()
             dif_color = DIFFICULTY_STYLES.get(dif, TEXT_COLOR)
             dif_text = dif if dif in DIFFICULTY_STYLES else "—"
             dif_style = ParagraphStyle(

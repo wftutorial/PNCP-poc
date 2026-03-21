@@ -516,6 +516,21 @@ def gate4_completeness(
                 analise["recomendacao_acao"] = "NAO PARTICIPAR"
                 _fix(f"Corrigido: empresa sancionada -> NAO PARTICIPAR em {eid}")
 
+        # nivel_dificuldade: accept dict (v2) or string (legacy)
+        dif = analise.get("nivel_dificuldade")
+        if isinstance(dif, dict):
+            geral = str(dif.get("geral", "")).upper()
+            if geral and geral not in {"BAIXO", "MEDIO", "ALTO"}:
+                issue = f"{eid}: nivel_dificuldade.geral invalido: '{geral}'"
+                result["issues"].append(issue)
+                result["passed"] = False
+                _fail(issue)
+                if do_fix:
+                    dif["geral"] = "MEDIO"
+                    _fix(f"{eid}: nivel_dificuldade.geral corrigido para MEDIO")
+        elif isinstance(dif, str):
+            pass  # Legacy format, handled by existing enum check
+
     if result["passed"]:
         _ok("Todos os campos obrigatorios preenchidos corretamente")
 

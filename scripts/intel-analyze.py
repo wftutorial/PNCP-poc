@@ -46,10 +46,10 @@ if sys.platform == "win32":
 # CONSTANTS
 # ============================================================
 
-VERSION = "1.0.0"
+VERSION = "2.0.0"
 
 MAX_TEXT_CHARS = 50_000       # Truncate document text beyond this
-MAX_TOKENS_RESPONSE = 2_000  # Max tokens for LLM response
+MAX_TOKENS_RESPONSE = 2_500  # Increased for 21 fields (was 2000 for 16)
 LLM_TEMPERATURE = 0          # Deterministic output
 MAX_WORKERS = 5              # Parallel LLM calls
 RETRY_ATTEMPTS = 2           # Retry on transient failures
@@ -90,6 +90,12 @@ ANALYSIS_FIELDS = [
     "nivel_dificuldade",
     "recomendacao_acao",
     "custo_logistico_nota",
+    # v2.0 fields
+    "valor_garantia_proposta",
+    "percentual_subcontratacao",
+    "indices_contabeis_exigidos",
+    "atestados_especificos",
+    "penalidades_principais",
 ]
 
 CRITERIO_ENUM = [
@@ -126,6 +132,22 @@ DIFICULDADE_ENUM = ["BAIXO", "MEDIO", "ALTO"]
 
 RECOMENDACAO_ENUM = ["PARTICIPAR", "NAO PARTICIPAR"]
 
+# ============================================================
+# BID/NO-BID MULTI-CRITERIA SCORING (Ajuste 1)
+# ============================================================
+
+BID_SCORE_WEIGHTS = {
+    "fit_estrategico": 0.20,
+    "viabilidade_financeira": 0.15,
+    "roi": 0.15,
+    "p_vitoria": 0.15,
+    "custo_logistico": 0.10,
+    "janela_temporal": 0.10,
+    "concorrencia": 0.15,
+}
+
+BID_SCORE_THRESHOLD = 0.45  # Calibravel via win/loss tracker
+
 
 # ============================================================
 # SYSTEM PROMPT
@@ -141,7 +163,7 @@ REGRAS ABSOLUTAS:
 2. Para campos onde a informacao NAO existe no texto: use exatamente "Nao consta no edital disponivel".
 3. NUNCA use: "verificar", "possivelmente", "a confirmar", "nao detalhado", "buscar edital", "consultar".
 4. recomendacao_acao DEVE ser exatamente "PARTICIPAR" ou "NAO PARTICIPAR" — sem terceira opcao.
-5. nivel_dificuldade DEVE ser exatamente "BAIXO", "MEDIO" ou "ALTO".
+5. nivel_dificuldade DEVE ser um JSON com sub-scores (ver formato abaixo).
 6. criterio_julgamento DEVE ser um dos: Menor Preco, Tecnica e Preco, Maior Desconto, Menor Preco Global, Menor Preco por Item, Melhor Tecnica, ou "Nao consta no edital disponivel".
 7. visita_tecnica DEVE ser: Obrigatoria, Facultativa, ou "Nao consta no edital disponivel".
 8. regime_execucao DEVE ser: Empreitada por preco global, Empreitada por preco unitario, Semi-Integrada, Tarefa, Contratacao Integrada, ou "Nao consta no edital disponivel".
@@ -151,6 +173,12 @@ REGRAS ABSOLUTAS:
 12. Datas no formato DD/MM/YYYY HH:MM ou "Nao consta no edital disponivel".
 13. Se o edital e claramente incompativel com a atividade da empresa, recomende "NAO PARTICIPAR" com justificativa em observacoes_criticas.
 14. Seja CONCRETO — extraia numeros, datas, percentuais, valores exatos do texto.
+15. Se um campo _bid_score foi fornecido no contexto, USE como referencia para recomendacao_acao. Pode discordar se houver razao concreta no edital, mas justifique em observacoes_criticas.
+16. valor_garantia_proposta: percentual ou valor da garantia de proposta. Ex: "5% do valor estimado". Se nao consta: "Nao consta no edital disponivel".
+17. percentual_subcontratacao: limite de subcontratacao. Ex: "Ate 30%", "Vedado". Se nao consta: "Nao consta no edital disponivel".
+18. indices_contabeis_exigidos: lista de indices com valores minimos. Ex: ["ILC >= 1,0", "ILG >= 1,0", "SG >= 1,0"]. Se nao consta: ["Nao consta no edital disponivel"].
+19. atestados_especificos: lista de atestados/CATs exigidos com especificidades. Ex: ["Atestado de edificacao >= 500m2", "CAT engenheiro civil em drenagem"]. Se nao consta: ["Nao consta no edital disponivel"].
+20. penalidades_principais: resumo das penalidades. Ex: "Multa de 0,5% por dia de atraso, max 10%. Suspensao de 2 anos por inexecucao total." Se nao consta: "Nao consta no edital disponivel".
 
 FORMATO DE SAIDA (JSON exato):
 {
@@ -168,9 +196,14 @@ FORMATO DE SAIDA (JSON exato):
   "regime_execucao": "string",
   "consorcio": "string",
   "observacoes_criticas": "string",
-  "nivel_dificuldade": "BAIXO|MEDIO|ALTO",
+  "nivel_dificuldade": {"tecnico": 1-5, "prazo": 1-5, "regulatorio": 1-5, "logistico": 1-5, "financeiro": 1-5, "geral": "BAIXO|MEDIO|ALTO", "justificativa": "string"},
   "recomendacao_acao": "PARTICIPAR|NAO PARTICIPAR",
-  "custo_logistico_nota": "string"
+  "custo_logistico_nota": "string",
+  "valor_garantia_proposta": "string",
+  "percentual_subcontratacao": "string",
+  "indices_contabeis_exigidos": ["string", ...],
+  "atestados_especificos": ["string", ...],
+  "penalidades_principais": "string"
 }"""
 
 
@@ -202,6 +235,15 @@ REGRAS:
 6. Mantenha os mesmos formatos de enum (PARTICIPAR/NAO PARTICIPAR, BAIXO/MEDIO/ALTO, etc).
 """
 
+# Model mapping for adversarial review (use different model to reduce confirmation bias)
+REVIEW_MODEL_MAP = {
+    "gpt-4.1-nano": "gpt-4.1-mini",
+    "gpt-4.1-mini": "gpt-4.1-nano",
+    "gpt-4.1": "gpt-4.1-mini",
+    "gpt-4o-mini": "gpt-4o",
+    "gpt-4o": "gpt-4o-mini",
+}
+
 
 # ============================================================
 # HELPERS
@@ -228,6 +270,231 @@ def _fmt_brl(val: float) -> str:
     if val >= 1_000:
         return f"R$ {val / 1_000:,.1f}mil"
     return f"R$ {val:,.2f}"
+
+
+# ============================================================
+# BID/NO-BID SCORING (Ajuste 1)
+# ============================================================
+
+def _compute_bid_score(edital: dict[str, Any], empresa: dict[str, Any]) -> dict[str, Any]:
+    """Compute multi-criteria bid/no-bid score BEFORE LLM analysis."""
+    scores: dict[str, float] = {}
+
+    # D1: Fit Estrategico (victory_profile score)
+    scores["fit_estrategico"] = float(edital.get("_victory_fit") or 0.5)
+
+    # D2: Viabilidade Financeira (capital_social vs valor_estimado)
+    valor = _safe_float(edital.get("valor_estimado"))
+    cs_raw = str(empresa.get("capital_social") or "0").strip()
+    try:
+        if "," in cs_raw:
+            cs_raw = cs_raw.replace(".", "").replace(",", ".")
+        capital = float(cs_raw)
+    except (ValueError, TypeError):
+        capital = 0.0
+
+    if capital > 0 and valor > 0:
+        ratio = valor / capital
+        if ratio <= 1.0:
+            scores["viabilidade_financeira"] = 1.0
+        elif ratio <= 3.0:
+            scores["viabilidade_financeira"] = 0.7
+        elif ratio <= 5.0:
+            scores["viabilidade_financeira"] = 0.4
+        elif ratio <= 10.0:
+            scores["viabilidade_financeira"] = 0.2
+        else:
+            scores["viabilidade_financeira"] = 0.05
+    else:
+        scores["viabilidade_financeira"] = 0.5
+
+    # D3: ROI Estimado
+    roi_data = edital.get("roi_proposta") or {}
+    roi_ratio = _safe_float(roi_data.get("ratio_valor_custo"))
+    if roi_ratio >= 5.0:
+        scores["roi"] = 1.0
+    elif roi_ratio >= 3.0:
+        scores["roi"] = 0.7
+    elif roi_ratio >= 1.5:
+        scores["roi"] = 0.4
+    elif roi_ratio > 0:
+        scores["roi"] = 0.1
+    else:
+        scores["roi"] = 0.5  # Unknown
+
+    # D4: Probabilidade de Vitoria
+    bid_sim = edital.get("_bid_simulation") or {}
+    p_win = _safe_float(bid_sim.get("p_vitoria_pct"))
+    scores["p_vitoria"] = min(1.0, p_win / 60.0) if p_win > 0 else 0.5
+
+    # D5: Custo Logistico (distancia)
+    dist = (edital.get("distancia") or {}).get("km")
+    if dist is None:
+        scores["custo_logistico"] = 0.5
+    elif dist <= 100:
+        scores["custo_logistico"] = 1.0
+    elif dist <= 300:
+        scores["custo_logistico"] = 0.7
+    elif dist <= 600:
+        scores["custo_logistico"] = 0.4
+    else:
+        scores["custo_logistico"] = 0.2
+
+    # D6: Janela Temporal
+    status = edital.get("status_temporal", "")
+    if status == "URGENTE":
+        scores["janela_temporal"] = 0.3
+    elif status == "IMINENTE":
+        scores["janela_temporal"] = 0.6
+    elif status == "PLANEJAVEL":
+        scores["janela_temporal"] = 1.0
+    elif status == "SEM_DATA":
+        scores["janela_temporal"] = 0.4
+    else:
+        scores["janela_temporal"] = 0.5
+
+    # D7: Nivel de Concorrencia (from competitive_intel)
+    ci = edital.get("competitive_intel") or {}
+    comp_level = ci.get("competition_level", "")
+    if comp_level == "BAIXA":
+        scores["concorrencia"] = 1.0
+    elif comp_level == "MEDIA":
+        scores["concorrencia"] = 0.7
+    elif comp_level == "ALTA":
+        scores["concorrencia"] = 0.4
+    elif comp_level == "MUITO_ALTA":
+        scores["concorrencia"] = 0.2
+    else:
+        scores["concorrencia"] = 0.5
+
+    # Weighted composite
+    composite = sum(scores[k] * BID_SCORE_WEIGHTS[k] for k in BID_SCORE_WEIGHTS)
+
+    return {
+        **scores,
+        "_composite": round(composite, 4),
+        "_threshold": BID_SCORE_THRESHOLD,
+        "_recommendation": "PARTICIPAR" if composite >= BID_SCORE_THRESHOLD else "NAO PARTICIPAR",
+    }
+
+
+# ============================================================
+# COMPLIANCE MATRIX (Ajuste 2)
+# ============================================================
+
+def _build_compliance_matrix(
+    analise: dict[str, Any],
+    empresa: dict[str, Any],
+) -> list[dict[str, str]]:
+    """Cross-reference edital requirements with known company capabilities."""
+    reqs = analise.get("requisitos_habilitacao") or []
+    if isinstance(reqs, str):
+        reqs = [reqs]
+
+    # Known capabilities
+    sicaf_ok = not empresa.get("restricao_sicaf", False)
+    sancionada = empresa.get("sancionada", False)
+    cs_raw = str(empresa.get("capital_social") or "0").strip()
+    try:
+        if "," in cs_raw:
+            cs_raw = cs_raw.replace(".", "").replace(",", ".")
+        capital = float(cs_raw)
+    except (ValueError, TypeError):
+        capital = 0.0
+    cnaes = empresa.get("cnaes") or empresa.get("cnaes_secundarios") or []
+    porte = empresa.get("porte", "")
+    simples = empresa.get("opcao_pelo_simples", False)
+
+    matrix: list[dict[str, str]] = []
+    for req in reqs:
+        req_lower = (req or "").lower()
+        item = {"requisito": req, "status": "VERIFICAR", "evidencia": ""}
+
+        if any(k in req_lower for k in ("sicaf", "crc", "cadastro")):
+            if sicaf_ok:
+                item.update(status="ATENDE", evidencia="SICAF regular verificado")
+            else:
+                item.update(status="RISCO", evidencia="SICAF com restricao ativa")
+
+        elif any(k in req_lower for k in ("sancao", "impedid", "ceis", "cnep", "debar")):
+            if not sancionada:
+                item.update(status="ATENDE", evidencia="Sem sancoes identificadas")
+            else:
+                item.update(status="NAO ATENDE", evidencia="Empresa sancionada")
+
+        elif any(k in req_lower for k in ("capital social", "patrimonio", "patrimônio")):
+            item.update(evidencia=f"Capital social: R$ {capital:,.2f}")
+
+        elif any(k in req_lower for k in ("cnae", "atividade", "ramo")):
+            n = len(cnaes) if isinstance(cnaes, list) else 0
+            item.update(status="ATENDE" if n > 0 else "VERIFICAR", evidencia=f"{n} CNAEs ativos")
+
+        elif any(k in req_lower for k in ("me ", "epp", "micro", "pequeno porte")):
+            item.update(evidencia=f"Porte: {porte or 'nao informado'}")
+
+        elif any(k in req_lower for k in ("simples", "optante")):
+            item.update(
+                status="ATENDE" if simples else "VERIFICAR",
+                evidencia=f"Simples Nacional: {'Sim' if simples else 'Nao/Nao informado'}",
+            )
+
+        elif any(k in req_lower for k in ("atestado", "acervo", "cat ", "certidao de acervo")):
+            item.update(status="VERIFICAR_MANUAL", evidencia="Requer verificacao de acervo tecnico")
+
+        elif any(k in req_lower for k in ("responsavel tecnico", "crea", "cau", "engenheiro")):
+            item.update(status="VERIFICAR_MANUAL", evidencia="Requer verificacao de corpo tecnico")
+
+        matrix.append(item)
+
+    return matrix
+
+
+# ============================================================
+# URGENCY COMPUTATION (Ajuste 9)
+# ============================================================
+
+def _compute_urgency(edital: dict[str, Any], analise: dict[str, Any]) -> dict[str, Any]:
+    """Compute urgency level from session date extracted by LLM."""
+    data_sessao = analise.get("data_sessao", "")
+    if not data_sessao or "Nao consta" in data_sessao:
+        return {"nivel": "INDEFINIDO", "dias_restantes": None, "cor": "gray"}
+
+    # Try to parse date from various formats
+    dt = None
+    for fmt in ("%d/%m/%Y %H:%M", "%d/%m/%Y %H:%M:%S", "%d/%m/%Y", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+        try:
+            dt = datetime.strptime(data_sessao.strip(), fmt)
+            break
+        except (ValueError, IndexError):
+            continue
+
+    if dt is None:
+        # Try just the date part
+        import re as _re
+        date_match = _re.search(r"(\d{2}/\d{2}/\d{4})", data_sessao)
+        if date_match:
+            try:
+                dt = datetime.strptime(date_match.group(1), "%d/%m/%Y")
+            except ValueError:
+                pass
+
+    if dt is None:
+        return {"nivel": "INDEFINIDO", "dias_restantes": None, "cor": "gray"}
+
+    dias = (dt - datetime.now()).days
+
+    if dias < 0:
+        return {"nivel": "EXPIRADO", "dias_restantes": dias, "cor": "red"}
+    elif dias <= 3:
+        return {"nivel": "CRITICO", "dias_restantes": dias, "cor": "red"}
+    elif dias <= 7:
+        return {"nivel": "URGENTE", "dias_restantes": dias, "cor": "amber"}
+    elif dias <= 15:
+        return {"nivel": "ATENCAO", "dias_restantes": dias, "cor": "amber"}
+    elif dias <= 30:
+        return {"nivel": "NORMAL", "dias_restantes": dias, "cor": "green"}
+    else:
+        return {"nivel": "CONFORTAVEL", "dias_restantes": dias, "cor": "green"}
 
 
 def _build_enrichment_context(edital: dict[str, Any], empresa: dict[str, Any]) -> str:
@@ -320,6 +587,34 @@ def _build_enrichment_context(edital: dict[str, Any], empresa: dict[str, Any]) -
         parts.append(
             f"SIMULACAO LANCE: R$ {lance:,.2f} (desconto {desc:.1f}%, "
             f"P(vitoria) {pwin:.0f}%)"
+        )
+
+    # Bid/No-Bid Score (v2)
+    bid_score = edital.get("_bid_score") or {}
+    if bid_score:
+        composite = bid_score.get("_composite", 0)
+        parts.append(f"\nSCORE BID/NO-BID: {composite:.0%} (threshold: {BID_SCORE_THRESHOLD:.0%})")
+        parts.append("Decomposicao:")
+        for k, v in bid_score.items():
+            if not k.startswith("_") and isinstance(v, (int, float)):
+                parts.append(f"  - {k}: {v:.0%}")
+
+    # Competitive Intelligence Detail (v2)
+    ci = edital.get("competitive_intel") or {}
+    top_comp = ci.get("top_suppliers") or []
+    if top_comp:
+        parts.append(f"\nCONCORRENTES HISTORICOS DO ORGAO:")
+        for comp in top_comp[:3]:
+            nome = (comp.get("nome") or "")[:40]
+            ctr = comp.get("contratos", 0)
+            share = comp.get("share_pct", 0)
+            parts.append(f"  - {nome}: {ctr} contratos, {share:.0f}% share")
+    pb = ci.get("price_benchmark") or {}
+    if pb:
+        dm = pb.get("desconto_mediano", 0)
+        parts.append(
+            f"BENCHMARK DE PRECO: desconto mediano {dm:.1%} "
+            f"({pb.get('contratos_analisados', 0)} contratos)"
         )
 
     # Structured extraction hints (v4)
@@ -488,16 +783,42 @@ def _validate_analysis(analysis: dict[str, Any]) -> dict[str, Any]:
     # Ensure all required fields exist
     for field in ANALYSIS_FIELDS:
         if field not in analysis:
-            if field in ("requisitos_tecnicos", "requisitos_habilitacao"):
+            if field in ("requisitos_tecnicos", "requisitos_habilitacao", "indices_contabeis_exigidos", "atestados_especificos"):
                 analysis[field] = ["Nao consta no edital disponivel"]
             else:
                 analysis[field] = "Nao consta no edital disponivel"
 
     # Enforce enums
-    if analysis.get("nivel_dificuldade", "").upper() not in DIFICULDADE_ENUM:
-        analysis["nivel_dificuldade"] = "MEDIO"
+    # Handle nivel_dificuldade as dict (v2) or string (legacy)
+    dif = analysis.get("nivel_dificuldade")
+    if isinstance(dif, dict):
+        # Validate sub-scores
+        for sub in ("tecnico", "prazo", "regulatorio", "logistico", "financeiro"):
+            val = dif.get(sub)
+            if not isinstance(val, (int, float)) or val < 1 or val > 5:
+                dif[sub] = 3  # Default mid-range
+        geral = str(dif.get("geral", "")).upper()
+        if geral not in DIFICULDADE_ENUM:
+            # Compute from sub-scores
+            avg = sum(dif.get(s, 3) for s in ("tecnico", "prazo", "regulatorio", "logistico", "financeiro")) / 5
+            dif["geral"] = "BAIXO" if avg <= 2 else ("ALTO" if avg >= 4 else "MEDIO")
+        else:
+            dif["geral"] = geral
+        if "justificativa" not in dif:
+            dif["justificativa"] = ""
+        analysis["nivel_dificuldade"] = dif
+    elif isinstance(dif, str):
+        # Legacy string format — convert to dict
+        geral = dif.upper() if dif.upper() in DIFICULDADE_ENUM else "MEDIO"
+        analysis["nivel_dificuldade"] = {
+            "tecnico": 3, "prazo": 3, "regulatorio": 3, "logistico": 3, "financeiro": 3,
+            "geral": geral, "justificativa": "",
+        }
     else:
-        analysis["nivel_dificuldade"] = analysis["nivel_dificuldade"].upper()
+        analysis["nivel_dificuldade"] = {
+            "tecnico": 3, "prazo": 3, "regulatorio": 3, "logistico": 3, "financeiro": 3,
+            "geral": "MEDIO", "justificativa": "",
+        }
 
     rec = (analysis.get("recomendacao_acao") or "").upper()
     if "NAO" in rec or "NÃO" in rec:
@@ -509,7 +830,7 @@ def _validate_analysis(analysis: dict[str, Any]) -> dict[str, Any]:
         analysis["recomendacao_acao"] = "NAO PARTICIPAR"
 
     # Ensure lists are actually lists
-    for list_field in ("requisitos_tecnicos", "requisitos_habilitacao"):
+    for list_field in ("requisitos_tecnicos", "requisitos_habilitacao", "indices_contabeis_exigidos", "atestados_especificos"):
         val = analysis.get(list_field)
         if isinstance(val, str):
             analysis[list_field] = [val] if val else ["Nao consta no edital disponivel"]
@@ -622,7 +943,12 @@ def analyze_edital(
             analysis["_model"] = model
             analysis["_texto_chars"] = len(texto)
 
-            _tprint(f"    OK — {analysis['recomendacao_acao']} | {analysis['nivel_dificuldade']}")
+            # Compute urgency (v2)
+            analysis["_urgency"] = _compute_urgency(edital, analysis)
+
+            dif = analysis.get("nivel_dificuldade", {})
+            dif_label = dif.get("geral", dif) if isinstance(dif, dict) else dif
+            _tprint(f"    OK — {analysis['recomendacao_acao']} | {dif_label}")
             return analysis
 
         except Exception as exc:
@@ -678,7 +1004,7 @@ def _fallback_analysis(
         "regime_execucao": "Nao consta no edital disponivel",
         "consorcio": "Nao mencionado no edital",
         "observacoes_criticas": obs,
-        "nivel_dificuldade": "MEDIO",
+        "nivel_dificuldade": {"tecnico": 3, "prazo": 3, "regulatorio": 3, "logistico": 3, "financeiro": 3, "geral": "MEDIO", "justificativa": "Analise automatica indisponivel"},
         "recomendacao_acao": rec,
         "custo_logistico_nota": f"{municipio}/{uf} — distancia nao calculada",
         "_source": "fallback",
@@ -731,6 +1057,44 @@ def generate_executive_summary(
         else:
             nao_participar.append(f"#{i} {obj[:60]}")
 
+    # Portfolio metrics (v2 — deterministic, pre-LLM)
+    total_valor_participar = sum(
+        _safe_float(ed.get("valor_estimado"))
+        for ed in top20
+        if "PARTICIPAR" in (ed.get("analise", {}).get("recomendacao_acao", ""))
+        and "NAO" not in (ed.get("analise", {}).get("recomendacao_acao", ""))
+    )
+    total_custo_propostas = sum(
+        _safe_float((ed.get("custo_proposta") or {}).get("total"))
+        for ed in top20
+        if "PARTICIPAR" in (ed.get("analise", {}).get("recomendacao_acao", ""))
+        and "NAO" not in (ed.get("analise", {}).get("recomendacao_acao", ""))
+    )
+    p_vitorias = [
+        _safe_float((ed.get("_bid_simulation") or {}).get("p_vitoria_pct"))
+        for ed in top20
+        if "PARTICIPAR" in (ed.get("analise", {}).get("recomendacao_acao", ""))
+        and "NAO" not in (ed.get("analise", {}).get("recomendacao_acao", ""))
+    ]
+    avg_p_vitoria = sum(p_vitorias) / max(1, len(p_vitorias)) if p_vitorias else 0
+    valor_esperado = sum(
+        _safe_float(ed.get("valor_estimado")) * _safe_float((ed.get("_bid_simulation") or {}).get("p_vitoria_pct")) / 100
+        for ed in top20
+        if "PARTICIPAR" in (ed.get("analise", {}).get("recomendacao_acao", ""))
+        and "NAO" not in (ed.get("analise", {}).get("recomendacao_acao", ""))
+    )
+    roi_portfolio = total_valor_participar / max(1, total_custo_propostas)
+
+    portfolio_metrics = (
+        f"\n\nMETRICAS DE PORTFOLIO:"
+        f"\n- Oportunidades recomendadas: {len(participar)} de {len(top20)}"
+        f"\n- Valor total do pipeline: {_fmt_brl(total_valor_participar)}"
+        f"\n- Custo estimado de propostas: {_fmt_brl(total_custo_propostas)}"
+        f"\n- ROI potencial do portfolio: {roi_portfolio:.0f}x"
+        f"\n- P(vitoria) media: {avg_p_vitoria:.0f}%"
+        f"\n- Valor esperado (EV): {_fmt_brl(valor_esperado)}"
+    )
+
     summary_prompt = (
         f"Empresa: {razao}\n"
         f"Busca: {total_editais} editais encontrados, {compat} compativeis por CNAE, "
@@ -741,7 +1105,8 @@ def generate_executive_summary(
         "\n".join(participar) +
         f"\n\nRecomendados NAO PARTICIPAR ({len(nao_participar)}):\n" +
         "\n".join(nao_participar[:10]) +
-        ("\n..." if len(nao_participar) > 10 else "")
+        ("\n..." if len(nao_participar) > 10 else "") +
+        portfolio_metrics
     )
 
     system = (
@@ -753,6 +1118,7 @@ def generate_executive_summary(
         "(URGENTE > PRIORITARIO > BUSCAR > AVALIAR > MONITORAR)\n\n"
         "REGRAS:\n"
         "- Seja concreto: cite numeros de editais (#N), valores, datas, municipios\n"
+        "- Inclua as METRICAS DE PORTFOLIO fornecidas (valor total, ROI, P(vitoria), valor esperado) no resumo\n"
         "- proximos_passos devem comecar com prefixo: URGENTE:, PRIORITARIO:, BUSCAR:, AVALIAR:, MONITORAR:\n"
         "- Retorne SOMENTE o JSON, sem markdown\n"
     )
@@ -1033,6 +1399,12 @@ def main() -> None:
         help="Habilitar revisao adversarial pos-analise (modo API) — verifica consistencia da analise",
     )
     parser.add_argument(
+        "--review-model",
+        default=None,
+        metavar="MODEL",
+        help="Modelo especifico para revisao adversarial (default: modelo diferente do principal)",
+    )
+    parser.add_argument(
         "--quiet",
         action="store_true",
         help="Reduzir output (somente erros e resumo final)",
@@ -1214,7 +1586,8 @@ def main() -> None:
                 eid = ed.get("_id") or objeto[:30]
                 analise = ed["analise"]
 
-                corrections = _adversarial_review(client, ed, analise, args.model)
+                review_model = args.review_model or REVIEW_MODEL_MAP.get(args.model, args.model)
+                corrections = _adversarial_review(client, ed, analise, review_model)
                 num_corrections = len(corrections)
                 review_corrections_per_edital[eid] = num_corrections
 
@@ -1236,6 +1609,16 @@ def main() -> None:
             for ed in reviewed_editais:
                 if ed.get("analise", {}).get("_review_corrections", 0) > 0:
                     ed["analise"] = _validate_analysis(ed["analise"])
+
+    # Compute compliance matrix for each analyzed edital (v2)
+    for ed in to_analyze:
+        analise = ed.get("analise")
+        if analise:
+            ed["analise"]["_compliance_matrix"] = _build_compliance_matrix(analise, empresa)
+            matrix = ed["analise"]["_compliance_matrix"]
+            atende = sum(1 for m in matrix if m["status"] == "ATENDE")
+            total_m = len(matrix)
+            ed["analise"]["_compliance_summary"] = f"{atende}/{total_m} auto-verificados"
 
     # ── Generate executive summary ──
     if not args.skip_summary:

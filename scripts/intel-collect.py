@@ -1503,6 +1503,7 @@ def collect_competitive_intel(
                 "cnpj": s["cnpj"],
                 "contratos": s["count"],
                 "valor_total": round(s["value"], 2),
+                "share_pct": round(s["value"] / total_value * 100, 1) if total_value > 0 else 0,
             }
             for s in suppliers_ranked[:5]
         ]
@@ -1525,6 +1526,30 @@ def collect_competitive_intel(
         else:
             competition_level = "MUITO_ALTA"
 
+        # Price benchmark: spread between valor_global and valor_inicial
+        descontos: list[float] = []
+        for c in contracts:
+            v_global = _safe_float(c.get("valor_global")) or 0
+            v_inicial = _safe_float(c.get("valor_inicial")) or 0
+            if v_global > 0 and v_inicial > 0 and v_global != v_inicial:
+                spread = 1.0 - (v_inicial / v_global)
+                if -0.5 < spread < 0.8:  # Sanity check
+                    descontos.append(spread)
+
+        price_benchmark: dict[str, Any] = {}
+        if len(descontos) >= 3:
+            descontos_sorted = sorted(descontos)
+            n = len(descontos_sorted)
+            price_benchmark = {
+                "desconto_mediano": round(statistics.median(descontos), 4),
+                "desconto_p25": round(descontos_sorted[n // 4], 4),
+                "desconto_p75": round(descontos_sorted[3 * n // 4], 4),
+                "contratos_analisados": n,
+            }
+
+        # Predicted number of bidders (from unique suppliers + HHI)
+        predicted_bidders = max(2, min(unique_count, 15))
+
         return {
             "cnpj_orgao": cnpj_orgao,
             "total_contracts": len(contracts),
@@ -1533,6 +1558,8 @@ def collect_competitive_intel(
             "top_suppliers": top_suppliers,
             "hhi": hhi,
             "competition_level": competition_level,
+            "price_benchmark": price_benchmark,
+            "predicted_bidders": predicted_bidders,
         }
 
     def _fetch_with_error_handling(cnpj_orgao: str) -> tuple[str, dict | None]:

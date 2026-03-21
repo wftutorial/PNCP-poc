@@ -618,6 +618,12 @@ def calculate_opportunity_score(
     else:
         score = existing_score
 
+    # Prefer bid_score composite when available (v2)
+    bid_score_data = edital.get("_bid_score") or {}
+    bid_composite = bid_score_data.get("_composite")
+    if bid_composite is not None:
+        score = 0.7 * bid_composite + 0.3 * score
+
     # SESSAO_REALIZADA = opportunity lost — exclude entirely
     if status == 'SESSAO_REALIZADA':
         return 0.0

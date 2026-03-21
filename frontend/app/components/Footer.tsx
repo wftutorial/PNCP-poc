@@ -1,7 +1,5 @@
 'use client';
 
-import { motion } from 'framer-motion';
-import { fadeInUp } from '@/lib/animations';
 import { footer } from '@/lib/copy/valueProps';
 import { useBackendStatusContext, type BackendStatus } from '@/app/components/BackendStatusIndicator';
 

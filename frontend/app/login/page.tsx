@@ -8,9 +8,11 @@ import Link from "next/link";
 import InstitutionalSidebar from "../components/InstitutionalSidebar";
 import { toast } from "sonner";
 import { translateAuthError } from "../../lib/error-messages";
-import { APP_NAME } from "../../lib/config";
 import { Button } from "../../components/ui/button";
 import dynamic from "next/dynamic";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { loginSchema, loginPasswordSchema, type LoginFormData } from "../../lib/schemas/forms";
 
 // STORY-317: Lazy load to avoid supabase import at module level (breaks tests)
 const TotpVerificationScreen = dynamic(
@@ -68,10 +70,27 @@ function LoginContent() {
   const { signInWithEmail, signInWithMagicLink, signInWithGoogle, session, loading: authLoading } = useAuth();
   const { trackEvent, identifyUser } = useAnalytics();
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [mode, setMode] = useState<"password" | "magic">("password");
+
+  // DEBT-FE-003: react-hook-form + zod for form validation
+  // Use stricter schema (with password min 6) in password mode, base schema in magic link mode
+  const activeSchema = mode === "password" ? loginPasswordSchema : loginSchema;
+  const {
+    register,
+    handleSubmit: rhfHandleSubmit,
+    watch,
+    formState: { errors: formErrors },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } = useForm<LoginFormData>({
+    resolver: zodResolver(activeSchema) as any,
+    mode: "onBlur",
+    reValidateMode: "onChange",
+    defaultValues: { email: "", password: "" },
+  });
+
+  const email = watch("email");
+  const password = watch("password");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -145,8 +164,7 @@ function LoginContent() {
     }
   }, [authLoading, session, router, searchParams]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onFormSubmit = async (data: LoginFormData) => {
     setError(null);
     setSuccess(false);
 
@@ -159,13 +177,13 @@ function LoginContent() {
 
     try {
       if (mode === "magic") {
-        await signInWithMagicLink(email);
+        await signInWithMagicLink(data.email);
         setMagicSent(true);
         // AC16: Track login_completed for magic link
         trackEvent('login_completed', { method: "magic_link" });
         toast.success("Link mágico enviado! Verifique seu email.");
       } else {
-        await signInWithEmail(email, password);
+        await signInWithEmail(data.email, data.password);
 
         // STORY-317 AC13: Check if MFA is needed after password login
         try {
@@ -370,9 +388,25 @@ function LoginContent() {
         </div>
 
         {/* SAB-012 AC12: Email/senha + Magic Link as secondary options */}
-        <div className="flex mb-4 bg-[var(--surface-1)] rounded-button p-1">
+        {/* DEBT-FE-020: tablist/tab roles + keyboard navigation */}
+        <div
+          role="tablist"
+          aria-label="Método de login"
+          className="flex mb-4 bg-[var(--surface-1)] rounded-button p-1"
+          onKeyDown={(e) => {
+            if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+              e.preventDefault();
+              setMode((prev) => (prev === "password" ? "magic" : "password"));
+            }
+          }}
+        >
           <button
+            role="tab"
+            aria-selected={mode === "password"}
+            aria-controls="login-panel-password"
+            id="login-tab-password"
             onClick={() => setMode("password")}
+            tabIndex={mode === "password" ? 0 : -1}
             className={`flex-1 py-1.5 text-xs rounded-button transition-colors ${
               mode === "password"
                 ? "bg-[var(--surface-0)] text-[var(--ink)] shadow-sm"
@@ -382,7 +416,12 @@ function LoginContent() {
             Email + Senha
           </button>
           <button
+            role="tab"
+            aria-selected={mode === "magic"}
+            aria-controls="login-panel-magic"
+            id="login-tab-magic"
             onClick={() => setMode("magic")}
+            tabIndex={mode === "magic" ? 0 : -1}
             className={`flex-1 py-1.5 text-xs rounded-button transition-colors ${
               mode === "magic"
                 ? "bg-[var(--surface-0)] text-[var(--ink)] shadow-sm"
@@ -393,7 +432,13 @@ function LoginContent() {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form
+          id={mode === "password" ? "login-panel-password" : "login-panel-magic"}
+          aria-labelledby={mode === "password" ? "login-tab-password" : "login-tab-magic"}
+          onSubmit={rhfHandleSubmit(onFormSubmit)}
+          className="space-y-4"
+          noValidate
+        >
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-[var(--ink-secondary)] mb-1">
               Email
@@ -401,17 +446,21 @@ function LoginContent() {
             <input
               id="email"
               type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              aria-invalid={!!error}
-              aria-describedby={error ? "login-error" : undefined}
-              className="w-full px-4 py-3 rounded-input border border-[var(--border)]
-                         bg-[var(--surface-0)] text-[var(--ink)]
+              {...register("email")}
+              aria-invalid={!!formErrors.email || !!error}
+              aria-describedby={formErrors.email ? "email-error" : error ? "login-error" : undefined}
+              className={`w-full px-4 py-3 rounded-input border bg-[var(--surface-0)] text-[var(--ink)]
                          focus:border-[var(--brand-blue)] focus:outline-none focus:ring-2
-                         focus:ring-[var(--brand-blue-subtle)]"
+                         focus:ring-[var(--brand-blue-subtle)] ${
+                           formErrors.email ? "border-[var(--error)]" : "border-[var(--border)]"
+                         }`}
               placeholder="seu@email.com"
             />
+            {formErrors.email && (
+              <p id="email-error" className="mt-1 text-xs text-[var(--error)]">
+                {formErrors.email.message}
+              </p>
+            )}
           </div>
 
           {mode === "password" && (
@@ -423,17 +472,15 @@ function LoginContent() {
                 <input
                   id="password"
                   type={showPassword ? "text" : "password"}
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  aria-invalid={!!error}
-                  aria-describedby={error ? "login-error" : undefined}
-                  className="w-full px-4 py-3 pr-12 rounded-input border border-[var(--border)]
-                             bg-[var(--surface-0)] text-[var(--ink)]
+                  {...register("password")}
+                  aria-invalid={!!formErrors.password || !!error}
+                  aria-describedby={formErrors.password ? "password-error" : error ? "login-error" : undefined}
+                  className={`w-full px-4 py-3 pr-12 rounded-input border bg-[var(--surface-0)] text-[var(--ink)]
                              focus:border-[var(--brand-blue)] focus:outline-none focus:ring-2
-                             focus:ring-[var(--brand-blue-subtle)]"
+                             focus:ring-[var(--brand-blue-subtle)] ${
+                               formErrors.password ? "border-[var(--error)]" : "border-[var(--border)]"
+                             }`}
                   placeholder="Sua senha"
-                  minLength={6}
                 />
                 <button
                   type="button"
@@ -461,6 +508,11 @@ function LoginContent() {
                   )}
                 </button>
               </div>
+              {formErrors.password && (
+                <p id="password-error" className="mt-1 text-xs text-[var(--error)]">
+                  {formErrors.password.message}
+                </p>
+              )}
               <div className="mt-1 text-right">
                 <Link
                   href="/recuperar-senha"

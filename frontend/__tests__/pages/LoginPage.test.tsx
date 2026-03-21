@@ -62,7 +62,8 @@ describe('LoginPage Component', () => {
 
       // Multiple headings may exist; just check at least one is present
       expect(screen.getAllByRole('heading').length).toBeGreaterThan(0);
-      expect(screen.getByLabelText(/Email/i)).toBeInTheDocument();
+      // Use getByPlaceholderText to avoid ambiguity with multiple "Email" text elements
+      expect(screen.getByPlaceholderText(/seu@email\.com/i)).toBeInTheDocument();
     });
 
     it('should show password field by default', () => {
@@ -80,8 +81,8 @@ describe('LoginPage Component', () => {
     it('should show mode toggle buttons', () => {
       render(<LoginPage />);
 
-      expect(screen.getByRole('button', { name: /Email \+ Senha/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Magic Link/i })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /Email \+ Senha/i })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /Magic Link/i })).toBeInTheDocument();
     });
 
     it('should show link to signup page', () => {
@@ -101,7 +102,7 @@ describe('LoginPage Component', () => {
       expect(screen.getByPlaceholderText(/Sua senha/i)).toBeInTheDocument();
 
       // Click magic link mode
-      const magicButton = screen.getByRole('button', { name: /Magic Link/i });
+      const magicButton = screen.getByRole('tab', { name: /Magic Link/i });
       await act(async () => {
         fireEvent.click(magicButton);
       });
@@ -114,13 +115,13 @@ describe('LoginPage Component', () => {
       render(<LoginPage />);
 
       // Switch to magic link
-      const magicButton = screen.getByRole('button', { name: /Magic Link/i });
+      const magicButton = screen.getByRole('tab', { name: /Magic Link/i });
       await act(async () => {
         fireEvent.click(magicButton);
       });
 
       // Switch back to password
-      const passwordButton = screen.getByRole('button', { name: /Email \+ Senha/i });
+      const passwordButton = screen.getByRole('tab', { name: /Email \+ Senha/i });
       await act(async () => {
         fireEvent.click(passwordButton);
       });
@@ -135,7 +136,7 @@ describe('LoginPage Component', () => {
       expect(screen.getByRole('button', { name: /Entrar$/i })).toBeInTheDocument();
 
       // Switch to magic link
-      const magicButton = screen.getByRole('button', { name: /Magic Link/i });
+      const magicButton = screen.getByRole('tab', { name: /Magic Link/i });
       await act(async () => {
         fireEvent.click(magicButton);
       });
@@ -150,7 +151,7 @@ describe('LoginPage Component', () => {
 
       render(<LoginPage />);
 
-      const emailInput = screen.getByLabelText(/Email/i);
+      const emailInput = screen.getByPlaceholderText(/seu@email\.com/i);
       const passwordInput = screen.getByPlaceholderText(/Sua senha/i);
       const submitButton = screen.getByRole('button', { name: /Entrar$/i });
 
@@ -173,7 +174,7 @@ describe('LoginPage Component', () => {
 
       render(<LoginPage />);
 
-      const emailInput = screen.getByLabelText(/Email/i);
+      const emailInput = screen.getByPlaceholderText(/seu@email\.com/i);
       const passwordInput = screen.getByPlaceholderText(/Sua senha/i);
       const submitButton = screen.getByRole('button', { name: /Entrar$/i });
 
@@ -196,7 +197,7 @@ describe('LoginPage Component', () => {
 
       render(<LoginPage />);
 
-      const emailInput = screen.getByLabelText(/Email/i);
+      const emailInput = screen.getByPlaceholderText(/seu@email\.com/i);
       const passwordInput = screen.getByPlaceholderText(/Sua senha/i);
       const submitButton = screen.getByRole('button', { name: /Entrar$/i });
 
@@ -215,13 +216,13 @@ describe('LoginPage Component', () => {
 
       render(<LoginPage />);
 
-      const emailInput = screen.getByLabelText(/Email/i);
+      const emailInput = screen.getByPlaceholderText(/seu@email\.com/i);
       const passwordInput = screen.getByPlaceholderText(/Sua senha/i);
       const submitButton = screen.getByRole('button', { name: /Entrar$/i });
 
       await act(async () => {
         fireEvent.change(emailInput, { target: { value: 'test@example.com' } });
-        fireEvent.change(passwordInput, { target: { value: 'wrong' } });
+        fireEvent.change(passwordInput, { target: { value: 'wrongpass' } });
         fireEvent.click(submitButton);
       });
 
@@ -235,7 +236,7 @@ describe('LoginPage Component', () => {
 
       render(<LoginPage />);
 
-      const emailInput = screen.getByLabelText(/Email/i);
+      const emailInput = screen.getByPlaceholderText(/seu@email\.com/i);
       const passwordInput = screen.getByPlaceholderText(/Sua senha/i);
       const submitButton = screen.getByRole('button', { name: /Entrar$/i });
 
@@ -256,7 +257,7 @@ describe('LoginPage Component', () => {
       render(<LoginPage />);
 
       // Switch to magic link mode
-      const magicButton = screen.getByRole('button', { name: /Magic Link/i });
+      const magicButton = screen.getByRole('tab', { name: /Magic Link/i });
       await act(async () => {
         fireEvent.click(magicButton);
       });
@@ -265,7 +266,7 @@ describe('LoginPage Component', () => {
     it('should call signInWithMagicLink on form submit', async () => {
       mockSignInWithMagicLink.mockResolvedValue(undefined);
 
-      const emailInput = screen.getByLabelText(/Email/i);
+      const emailInput = screen.getByPlaceholderText(/seu@email\.com/i);
       const submitButton = screen.getByRole('button', { name: /Enviar link/i });
 
       await act(async () => {
@@ -281,7 +282,7 @@ describe('LoginPage Component', () => {
     it('should show success message after magic link sent', async () => {
       mockSignInWithMagicLink.mockResolvedValue(undefined);
 
-      const emailInput = screen.getByLabelText(/Email/i);
+      const emailInput = screen.getByPlaceholderText(/seu@email\.com/i);
       const submitButton = screen.getByRole('button', { name: /Enviar link/i });
 
       await act(async () => {
@@ -298,7 +299,7 @@ describe('LoginPage Component', () => {
     it('should allow retrying after magic link success', async () => {
       mockSignInWithMagicLink.mockResolvedValue(undefined);
 
-      const emailInput = screen.getByLabelText(/Email/i);
+      const emailInput = screen.getByPlaceholderText(/seu@email\.com/i);
       const submitButton = screen.getByRole('button', { name: /Enviar link/i });
 
       await act(async () => {
@@ -317,7 +318,7 @@ describe('LoginPage Component', () => {
       });
 
       // Should be back to form
-      expect(screen.getByLabelText(/Email/i)).toBeInTheDocument();
+      expect(screen.getByPlaceholderText(/seu@email.com/i)).toBeInTheDocument();
     });
   });
 
@@ -341,18 +342,19 @@ describe('LoginPage Component', () => {
     it('should require email field', () => {
       render(<LoginPage />);
 
-      const emailInput = screen.getByLabelText(/Email/i);
-      expect(emailInput).toHaveAttribute('required');
+      const emailInput = screen.getByPlaceholderText(/seu@email\.com/i);
+      // DEBT-FE-003: validation is now handled by zod schema, not HTML attributes
       expect(emailInput).toHaveAttribute('type', 'email');
+      expect(emailInput).toHaveAttribute('name', 'email');
     });
 
     it('should require password field in password mode', () => {
       render(<LoginPage />);
 
       const passwordInput = screen.getByPlaceholderText(/Sua senha/i);
-      expect(passwordInput).toHaveAttribute('required');
+      // DEBT-FE-003: validation is now handled by zod schema, not HTML attributes
       expect(passwordInput).toHaveAttribute('type', 'password');
-      expect(passwordInput).toHaveAttribute('minLength', '6');
+      expect(passwordInput).toHaveAttribute('name', 'password');
     });
   });
 
@@ -420,7 +422,7 @@ describe('LoginPage Component', () => {
       expect(screen.getByRole('button', { name: /Mostrar senha/i })).toBeInTheDocument();
 
       // Switch to magic link mode
-      const magicButton = screen.getByRole('button', { name: /Magic Link/i });
+      const magicButton = screen.getByRole('tab', { name: /Magic Link/i });
       await act(async () => {
         fireEvent.click(magicButton);
       });

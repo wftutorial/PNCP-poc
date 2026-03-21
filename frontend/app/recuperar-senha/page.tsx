@@ -1,16 +1,35 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../components/AuthProvider";
 import { supabase } from "../../lib/supabase";
 import Link from "next/link";
 import InstitutionalSidebar from "../components/InstitutionalSidebar";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { recuperarSenhaSchema, type RecuperarSenhaFormData } from "../../lib/schemas/forms";
 
 export default function RecuperarSenhaPage() {
   const router = useRouter();
   const { session, loading: authLoading } = useAuth();
-  const [email, setEmail] = useState("");
+
+  // DEBT-FE-003: react-hook-form + zod for form validation
+  const {
+    register,
+    handleSubmit: rhfHandleSubmit,
+    watch,
+    reset: resetForm,
+    formState: { errors: formErrors },
+  } = useForm<RecuperarSenhaFormData>({
+    resolver: zodResolver(recuperarSenhaSchema),
+    mode: "onBlur",
+    reValidateMode: "onChange",
+    defaultValues: { email: "" },
+  });
+
+  const email = watch("email");
+
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,49 +49,45 @@ export default function RecuperarSenhaPage() {
     return () => clearTimeout(timer);
   }, [cooldown]);
 
-  const handleSubmit = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault();
-      setError(null);
-      setLoading(true);
+  const onFormSubmit = async (data: RecuperarSenhaFormData) => {
+    setError(null);
+    setLoading(true);
 
-      try {
-        const canonicalUrl =
-          process.env.NEXT_PUBLIC_CANONICAL_URL || window.location.origin;
+    try {
+      const canonicalUrl =
+        process.env.NEXT_PUBLIC_CANONICAL_URL || window.location.origin;
 
-        // AC5: Call Supabase resetPasswordForEmail
-        const { error: resetError } =
-          await supabase.auth.resetPasswordForEmail(email, {
-            redirectTo: `${canonicalUrl}/redefinir-senha`,
-          });
+      // AC5: Call Supabase resetPasswordForEmail
+      const { error: resetError } =
+        await supabase.auth.resetPasswordForEmail(data.email, {
+          redirectTo: `${canonicalUrl}/redefinir-senha`,
+        });
 
-        if (resetError) throw resetError;
+      if (resetError) throw resetError;
 
-        // AC6: Show success state
-        setSent(true);
-        setCooldown(60);
-      } catch (err: unknown) {
-        // AC7: Show user-friendly error
-        const errObj = err as { message?: string };
-        const message = errObj?.message || "Erro ao enviar email";
-        if (message.toLowerCase().includes("rate limit")) {
-          setError(
-            "Muitas tentativas. Aguarde alguns minutos antes de tentar novamente."
-          );
-        } else if (
-          message.toLowerCase().includes("fetch") ||
-          message.toLowerCase().includes("network")
-        ) {
-          setError("Erro de conexão. Verifique sua internet e tente novamente.");
-        } else {
-          setError(message);
-        }
-      } finally {
-        setLoading(false);
+      // AC6: Show success state
+      setSent(true);
+      setCooldown(60);
+    } catch (err: unknown) {
+      // AC7: Show user-friendly error
+      const errObj = err as { message?: string };
+      const message = errObj?.message || "Erro ao enviar email";
+      if (message.toLowerCase().includes("rate limit")) {
+        setError(
+          "Muitas tentativas. Aguarde alguns minutos antes de tentar novamente."
+        );
+      } else if (
+        message.toLowerCase().includes("fetch") ||
+        message.toLowerCase().includes("network")
+      ) {
+        setError("Erro de conexão. Verifique sua internet e tente novamente.");
+      } else {
+        setError(message);
       }
-    },
-    [email]
-  );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   if (authLoading) {
     return (
@@ -105,7 +120,7 @@ export default function RecuperarSenhaPage() {
             <button
               onClick={() => {
                 setSent(false);
-                setEmail("");
+                resetForm({ email: "" });
               }}
               disabled={cooldown > 0}
               className="w-full py-2 text-sm text-[var(--brand-blue)] hover:underline
@@ -167,7 +182,7 @@ export default function RecuperarSenhaPage() {
           )}
 
           {/* AC4: Email input + submit button */}
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={rhfHandleSubmit(onFormSubmit)} className="space-y-4" noValidate>
             <div>
               <label
                 htmlFor="reset-email"
@@ -178,15 +193,21 @@ export default function RecuperarSenhaPage() {
               <input
                 id="reset-email"
                 type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 rounded-input border border-[var(--border)]
-                           bg-[var(--surface-0)] text-[var(--ink)]
+                {...register("email")}
+                aria-invalid={!!formErrors.email}
+                aria-describedby={formErrors.email ? "reset-email-error" : undefined}
+                className={`w-full px-4 py-3 rounded-input border bg-[var(--surface-0)] text-[var(--ink)]
                            focus:border-[var(--brand-blue)] focus:outline-none focus:ring-2
-                           focus:ring-[var(--brand-blue-subtle)]"
+                           focus:ring-[var(--brand-blue-subtle)] ${
+                             formErrors.email ? "border-[var(--error)]" : "border-[var(--border)]"
+                           }`}
                 placeholder="seu@email.com"
               />
+              {formErrors.email && (
+                <p id="reset-email-error" className="mt-1 text-xs text-[var(--error)]">
+                  {formErrors.email.message}
+                </p>
+              )}
             </div>
 
             <button

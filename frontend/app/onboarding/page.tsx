@@ -75,7 +75,14 @@ interface OnboardingData {
 
 function ProgressBar({ currentStep, totalSteps }: { currentStep: number; totalSteps: number }) {
   return (
-    <div className="flex items-center gap-2 mb-8">
+    <div
+      className="flex items-center gap-2 mb-8"
+      role="progressbar"
+      aria-valuenow={currentStep + 1}
+      aria-valuemin={1}
+      aria-valuemax={totalSteps}
+      aria-label="Progresso do cadastro"
+    >
       {Array.from({ length: totalSteps }, (_, i) => (
         <div key={i} className="flex-1 flex items-center gap-2">
           <div
@@ -89,7 +96,7 @@ function ProgressBar({ currentStep, totalSteps }: { currentStep: number; totalSt
           />
         </div>
       ))}
-      <span className="text-xs text-[var(--ink-secondary)] ml-2 whitespace-nowrap">
+      <span className="text-xs text-[var(--ink-secondary)] ml-2 whitespace-nowrap" aria-hidden="true">
         {currentStep + 1} de {totalSteps}
       </span>
     </div>

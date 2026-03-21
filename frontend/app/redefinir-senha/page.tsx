@@ -1,12 +1,25 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
 import Link from "next/link";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { redefinirSenhaSchema, type RedefinirSenhaFormData } from "../../lib/schemas/forms";
 
 export default function RedefinirSenhaPage() {
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  // DEBT-FE-003: react-hook-form + zod for form validation
+  const {
+    register,
+    handleSubmit: rhfHandleSubmit,
+    formState: { errors: formErrors, isValid: formIsValid },
+  } = useForm<RedefinirSenhaFormData>({
+    resolver: zodResolver(redefinirSenhaSchema),
+    mode: "onChange",
+    reValidateMode: "onChange",
+    defaultValues: { password: "", confirmPassword: "" },
+  });
+
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<"form" | "success" | "error" | "checking">("checking");
@@ -54,49 +67,37 @@ export default function RedefinirSenhaPage() {
     // re-registering on every render would cause duplicate handlers.
   }, []);
 
-  // AC12: Validate minimum 8 characters
-  const isValid = password.length >= 8 && password === confirmPassword;
-  const passwordTooShort = password.length > 0 && password.length < 8;
-  const passwordsMismatch =
-    confirmPassword.length > 0 && password !== confirmPassword;
+  const onFormSubmit = async (data: RedefinirSenhaFormData) => {
+    setError(null);
+    setLoading(true);
 
-  const handleSubmit = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!isValid) return;
+    try {
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: data.password,
+      });
 
-      setError(null);
-      setLoading(true);
+      if (updateError) throw updateError;
 
-      try {
-        const { error: updateError } = await supabase.auth.updateUser({
-          password,
-        });
-
-        if (updateError) throw updateError;
-
-        // AC13: Success - redirect to /buscar
-        setStatus("success");
-        setTimeout(() => {
-          window.location.href = "/buscar";
-        }, 2000);
-      } catch (err: unknown) {
-        // AC14: Show error with retry option
-        const errObj = err as { message?: string };
-        const message = errObj?.message || "Erro ao atualizar senha";
-        if (message.toLowerCase().includes("same as")) {
-          setError("A nova senha não pode ser igual à senha atual.");
-        } else if (message.toLowerCase().includes("weak")) {
-          setError("Senha muito fraca. Use letras, números e caracteres especiais.");
-        } else {
-          setError(message);
-        }
-      } finally {
-        setLoading(false);
+      // AC13: Success - redirect to /buscar
+      setStatus("success");
+      setTimeout(() => {
+        window.location.href = "/buscar";
+      }, 2000);
+    } catch (err: unknown) {
+      // AC14: Show error with retry option
+      const errObj = err as { message?: string };
+      const message = errObj?.message || "Erro ao atualizar senha";
+      if (message.toLowerCase().includes("same as")) {
+        setError("A nova senha não pode ser igual à senha atual.");
+      } else if (message.toLowerCase().includes("weak")) {
+        setError("Senha muito fraca. Use letras, números e caracteres especiais.");
+      } else {
+        setError(message);
       }
-    },
-    [password, isValid]
-  );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Checking state
   if (status === "checking") {
@@ -193,7 +194,7 @@ export default function RedefinirSenhaPage() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={rhfHandleSubmit(onFormSubmit)} className="space-y-4" noValidate>
           <div>
             <label
               htmlFor="new-password"
@@ -205,15 +206,15 @@ export default function RedefinirSenhaPage() {
               <input
                 id="new-password"
                 type={showPassword ? "text" : "password"}
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 pr-12 rounded-input border border-[var(--border)]
-                           bg-[var(--surface-0)] text-[var(--ink)]
+                {...register("password")}
+                aria-invalid={!!formErrors.password}
+                aria-describedby={formErrors.password ? "new-password-error" : undefined}
+                className={`w-full px-4 py-3 pr-12 rounded-input border bg-[var(--surface-0)] text-[var(--ink)]
                            focus:border-[var(--brand-blue)] focus:outline-none focus:ring-2
-                           focus:ring-[var(--brand-blue-subtle)]"
+                           focus:ring-[var(--brand-blue-subtle)] ${
+                             formErrors.password ? "border-[var(--error)]" : "border-[var(--border)]"
+                           }`}
                 placeholder="Mínimo 8 caracteres"
-                minLength={8}
               />
               <button
                 type="button"
@@ -263,9 +264,9 @@ export default function RedefinirSenhaPage() {
                 )}
               </button>
             </div>
-            {passwordTooShort && (
-              <p className="mt-1 text-xs text-[var(--error)]">
-                A senha deve ter pelo menos 8 caracteres
+            {formErrors.password && (
+              <p id="new-password-error" className="mt-1 text-xs text-[var(--error)]">
+                {formErrors.password.message}
               </p>
             )}
           </div>
@@ -280,26 +281,26 @@ export default function RedefinirSenhaPage() {
             <input
               id="confirm-password"
               type={showPassword ? "text" : "password"}
-              required
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full px-4 py-3 rounded-input border border-[var(--border)]
-                         bg-[var(--surface-0)] text-[var(--ink)]
+              {...register("confirmPassword")}
+              aria-invalid={!!formErrors.confirmPassword}
+              aria-describedby={formErrors.confirmPassword ? "confirm-password-error" : undefined}
+              className={`w-full px-4 py-3 rounded-input border bg-[var(--surface-0)] text-[var(--ink)]
                          focus:border-[var(--brand-blue)] focus:outline-none focus:ring-2
-                         focus:ring-[var(--brand-blue-subtle)]"
+                         focus:ring-[var(--brand-blue-subtle)] ${
+                           formErrors.confirmPassword ? "border-[var(--error)]" : "border-[var(--border)]"
+                         }`}
               placeholder="Repita a nova senha"
-              minLength={8}
             />
-            {passwordsMismatch && (
-              <p className="mt-1 text-xs text-[var(--error)]">
-                As senhas não coincidem
+            {formErrors.confirmPassword && (
+              <p id="confirm-password-error" className="mt-1 text-xs text-[var(--error)]">
+                {formErrors.confirmPassword.message}
               </p>
             )}
           </div>
 
           <button
             type="submit"
-            disabled={loading || !isValid}
+            disabled={loading || !formIsValid}
             className="w-full py-3 bg-[var(--brand-navy)] text-white rounded-button
                        font-semibold hover:bg-[var(--brand-blue)] transition-colors
                        disabled:opacity-50 disabled:cursor-not-allowed

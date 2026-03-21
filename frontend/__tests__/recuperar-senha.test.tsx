@@ -284,11 +284,16 @@ describe('RedefinirSenhaPage (/redefinir-senha)', () => {
       expect(screen.getByLabelText('Nova senha')).toBeInTheDocument();
     });
 
+    // DEBT-FE-003: With react-hook-form + zod, validation is async on change
     fireEvent.change(screen.getByLabelText('Nova senha'), {
       target: { value: '1234567' },
     });
+    // Trigger blur to ensure validation fires
+    fireEvent.blur(screen.getByLabelText('Nova senha'));
 
-    expect(screen.getByText(/pelo menos 8 caracteres/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText(/pelo menos 8 caracteres/i)).toBeInTheDocument();
+    });
     jest.useFakeTimers();
   });
 
@@ -300,14 +305,18 @@ describe('RedefinirSenhaPage (/redefinir-senha)', () => {
       expect(screen.getByLabelText('Nova senha')).toBeInTheDocument();
     });
 
+    // DEBT-FE-003: With react-hook-form + zod refine, mismatch is checked on change
     fireEvent.change(screen.getByLabelText('Nova senha'), {
       target: { value: '12345678' },
     });
     fireEvent.change(screen.getByLabelText('Confirmar nova senha'), {
       target: { value: '12345679' },
     });
+    fireEvent.blur(screen.getByLabelText('Confirmar nova senha'));
 
-    expect(screen.getByText(/senhas não coincidem/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText(/senhas não coincidem/i)).toBeInTheDocument();
+    });
     jest.useFakeTimers();
   });
 
@@ -319,13 +328,19 @@ describe('RedefinirSenhaPage (/redefinir-senha)', () => {
       expect(screen.getByLabelText('Nova senha')).toBeInTheDocument();
     });
 
-    fireEvent.change(screen.getByLabelText('Nova senha'), {
-      target: { value: 'newpassword123' },
+    // DEBT-FE-003: fill both fields, then submit (RHF validates async)
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Nova senha'), {
+        target: { value: 'newpassword123' },
+      });
+      fireEvent.change(screen.getByLabelText('Confirmar nova senha'), {
+        target: { value: 'newpassword123' },
+      });
     });
-    fireEvent.change(screen.getByLabelText('Confirmar nova senha'), {
-      target: { value: 'newpassword123' },
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /atualizar senha/i }));
     });
-    fireEvent.click(screen.getByRole('button', { name: /atualizar senha/i }));
 
     await waitFor(() => {
       expect(mockUpdateUser).toHaveBeenCalledWith({ password: 'newpassword123' });
@@ -341,13 +356,18 @@ describe('RedefinirSenhaPage (/redefinir-senha)', () => {
       expect(screen.getByLabelText('Nova senha')).toBeInTheDocument();
     });
 
-    fireEvent.change(screen.getByLabelText('Nova senha'), {
-      target: { value: 'newpassword123' },
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Nova senha'), {
+        target: { value: 'newpassword123' },
+      });
+      fireEvent.change(screen.getByLabelText('Confirmar nova senha'), {
+        target: { value: 'newpassword123' },
+      });
     });
-    fireEvent.change(screen.getByLabelText('Confirmar nova senha'), {
-      target: { value: 'newpassword123' },
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /atualizar senha/i }));
     });
-    fireEvent.click(screen.getByRole('button', { name: /atualizar senha/i }));
 
     await waitFor(() => {
       expect(screen.getByText(/senha atualizada/i)).toBeInTheDocument();
@@ -367,13 +387,18 @@ describe('RedefinirSenhaPage (/redefinir-senha)', () => {
       expect(screen.getByLabelText('Nova senha')).toBeInTheDocument();
     });
 
-    fireEvent.change(screen.getByLabelText('Nova senha'), {
-      target: { value: 'newpassword123' },
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Nova senha'), {
+        target: { value: 'newpassword123' },
+      });
+      fireEvent.change(screen.getByLabelText('Confirmar nova senha'), {
+        target: { value: 'newpassword123' },
+      });
     });
-    fireEvent.change(screen.getByLabelText('Confirmar nova senha'), {
-      target: { value: 'newpassword123' },
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /atualizar senha/i }));
     });
-    fireEvent.click(screen.getByRole('button', { name: /atualizar senha/i }));
 
     await waitFor(() => {
       expect(screen.getByText(/senha muito fraca/i)).toBeInTheDocument();

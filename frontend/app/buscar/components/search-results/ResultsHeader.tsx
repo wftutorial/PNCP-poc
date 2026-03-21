@@ -1,5 +1,6 @@
 "use client";
 
+import { forwardRef } from "react";
 import type { BuscaResult } from "../../../types";
 import type { FilterSummary } from "../../../../hooks/useSearchSSE";
 
@@ -14,18 +15,23 @@ interface ResultsHeaderProps {
  * TD-007 AC4: Results header — total count, filter stats, LLM source badges, sector info.
  * Displays the "X oportunidades selecionadas de Y analisadas" header with
  * personalized analysis badge and confidence distribution.
+ *
+ * DEBT-FE-023: Accepts a forwarded ref on the h2 heading for programmatic focus after search.
  */
-export function ResultsHeader({
-  result,
-  rawCount,
-  isProfileComplete = true,
-  filterSummary,
-}: ResultsHeaderProps) {
+export const ResultsHeader = forwardRef<HTMLHeadingElement, ResultsHeaderProps>(function ResultsHeader(
+  {
+    result,
+    rawCount,
+    isProfileComplete = true,
+    filterSummary,
+  },
+  ref,
+) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-strong" aria-live="polite" aria-atomic="true">
       <div>
         <div className="flex items-center gap-2 flex-wrap">
-          <h2 className="text-lg font-semibold text-ink" data-testid="results-header">
+          <h2 ref={ref} className="text-lg font-semibold text-ink" data-testid="results-header" tabIndex={-1}>
             {result.resumo.total_oportunidades} {result.resumo.total_oportunidades === 1 ? 'oportunidade selecionada' : 'oportunidades selecionadas'}{rawCount > 0 ? ` de ${rawCount.toLocaleString("pt-BR")} analisadas` : ''}
           </h2>
           {/* STORY-260 AC17: "Análise personalizada" badge when profile is complete */}
@@ -66,4 +72,4 @@ export function ResultsHeader({
       </div>
     </div>
   );
-}
+});

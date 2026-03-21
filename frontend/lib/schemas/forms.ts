@@ -90,6 +90,66 @@ export const profileSchema = z
 export type ProfileFormData = z.infer<typeof profileSchema>;
 
 // ============================================================================
+// Login Form Schema (DEBT-FE-003)
+// ============================================================================
+
+export const loginSchema = z.object({
+  email: z
+    .string()
+    .min(1, "Email é obrigatório")
+    .email("Email inválido"),
+  // Password is optional here because magic link mode only needs email.
+  // Password-mode validation (min 6 chars) is enforced by loginPasswordSchema.
+  password: z.string().default(""),
+});
+
+/** Stricter schema for password-mode login (email + password). */
+export const loginPasswordSchema = z.object({
+  email: z
+    .string()
+    .min(1, "Email é obrigatório")
+    .email("Email inválido"),
+  password: z
+    .string()
+    .min(6, "Mínimo 6 caracteres"),
+});
+
+export type LoginFormData = z.infer<typeof loginSchema>;
+
+// ============================================================================
+// Recuperar Senha Schema (DEBT-FE-003)
+// ============================================================================
+
+export const recuperarSenhaSchema = z.object({
+  email: z
+    .string()
+    .min(1, "Email é obrigatório")
+    .email("Email inválido"),
+});
+
+export type RecuperarSenhaFormData = z.infer<typeof recuperarSenhaSchema>;
+
+// ============================================================================
+// Redefinir Senha Schema (DEBT-FE-003)
+// ============================================================================
+
+export const redefinirSenhaSchema = z
+  .object({
+    password: z
+      .string()
+      .min(8, "A senha deve ter pelo menos 8 caracteres"),
+    confirmPassword: z
+      .string()
+      .min(1, "Confirme sua senha"),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "As senhas não coincidem",
+    path: ["confirmPassword"],
+  });
+
+export type RedefinirSenhaFormData = z.infer<typeof redefinirSenhaSchema>;
+
+// ============================================================================
 // Password Strength Helper
 // ============================================================================
 

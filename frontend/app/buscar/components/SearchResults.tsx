@@ -97,6 +97,9 @@ export default function SearchResults(props: SearchResultsProps) {
   } = props;
 
   // --- State ---
+  // DEBT-FE-023: ref for programmatic focus on results heading after search completes
+  const resultsHeadingRef = useRef<HTMLHeadingElement>(null);
+
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState<10 | 20 | 50>(() => {
     if (typeof window === "undefined") return 20;
@@ -111,6 +114,13 @@ export default function SearchResults(props: SearchResultsProps) {
   const [bannerDismissed, setBannerDismissed] = useState(false);
 
   useEffect(() => { setCurrentPage(1); }, [result, ordenacao]);
+
+  // DEBT-FE-023: Move focus to results heading when search completes and results are present
+  useEffect(() => {
+    if (!loading && result && result.resumo.total_oportunidades > 0 && resultsHeadingRef.current) {
+      resultsHeadingRef.current.focus();
+    }
+  }, [loading, result?.resumo?.total_oportunidades]);
   useEffect(() => { if (typeof window === "undefined") return; const p = new URL(window.location.href).searchParams.get("page"); if (p && Number(p) > 0) setCurrentPage(Number(p)); }, []);
   useEffect(() => { if (typeof window === "undefined" || !result) return; const u = new URL(window.location.href); currentPage > 1 ? u.searchParams.set("page", String(currentPage)) : u.searchParams.delete("page"); window.history.replaceState({}, "", u.toString()); }, [currentPage, result]);
   useEffect(() => { if (loading && ufStatuses && ufStatuses.size > 0) { setShowGrid(true); setGridFading(false); } else if (!loading && showGrid) { setGridFading(true); const t = setTimeout(() => { setShowGrid(false); setGridFading(false); }, 400); return () => clearTimeout(t); } }, [loading, ufStatuses?.size]);
@@ -197,7 +207,7 @@ export default function SearchResults(props: SearchResultsProps) {
           )}
 
           <ZeroMatchBadge progress={zeroMatchProgress ?? null} />
-          <ResultsHeader result={result} rawCount={rawCount} isProfileComplete={isProfileComplete} filterSummary={filterSummary} />
+          <ResultsHeader ref={resultsHeadingRef} result={result} rawCount={rawCount} isProfileComplete={isProfileComplete} filterSummary={filterSummary} />
           <TourInviteBanner isCompleted={isResultsTourCompleted} onStartTour={onStartResultsTour} />
           <ResultsToolbar result={result} ordenacao={ordenacao} onOrdenacaoChange={onOrdenacaoChange} loading={loading} onDownload={onDownload} downloadLoading={downloadLoading} onRegenerateExcel={onRegenerateExcel} excelFailCount={excelFailCount} excelTimedOut={excelTimedOut} planInfo={planInfo} session={session} isTrialExpired={isTrialExpired} paywallApplied={paywallApplied} totalBeforePaywall={totalBeforePaywall} sectorName={sectorName} ufsSelecionadas={ufsSelecionadas} onGeneratePdf={onGeneratePdf} pdfLoading={pdfLoading} onSearch={onSearch} />
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "../components/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { ErrorStateWithRetry } from "../../components/ErrorStateWithRetry";
@@ -35,6 +35,25 @@ const STATUS_COLORS: Record<string, string> = {
   aberto: "bg-[var(--warning)] text-white",
   respondido: "bg-[var(--brand-blue)] text-white",
   resolvido: "bg-[var(--success)] text-white",
+};
+
+// DEBT-FE-018: Status icons alongside color to avoid color-only conveying meaning
+const STATUS_ICONS: Record<string, React.ReactElement> = {
+  aberto: (
+    <svg aria-hidden="true" className="w-2.5 h-2.5 inline-block mr-0.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  ),
+  respondido: (
+    <svg aria-hidden="true" className="w-2.5 h-2.5 inline-block mr-0.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+    </svg>
+  ),
+  resolvido: (
+    <svg aria-hidden="true" className="w-2.5 h-2.5 inline-block mr-0.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  ),
 };
 
 const STATUS_FILTER_TABS: Array<{ value: string; label: string }> = [
@@ -421,8 +440,10 @@ function MensagensPageInner() {
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--surface-2)] text-[var(--ink-secondary)]">
                           {CATEGORY_LABELS[c.category] || c.category}
                         </span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${STATUS_COLORS[c.status] || ""}`}>
-                          {STATUS_LABELS[c.status] || c.status}
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded inline-flex items-center ${STATUS_COLORS[c.status] || ""}`}>
+                          {STATUS_ICONS[c.status]}
+                          <span aria-hidden="true">{STATUS_LABELS[c.status] || c.status}</span>
+                          <span className="sr-only">{STATUS_LABELS[c.status] || c.status}</span>
                         </span>
                       </div>
                       {isAdmin && c.user_email && (
@@ -469,11 +490,13 @@ function MensagensPageInner() {
                         {CATEGORY_LABELS[selectedConv.category] || selectedConv.category}
                       </span>
                       <span
-                        className={`text-xs px-2 py-0.5 rounded ${
+                        className={`text-xs px-2 py-0.5 rounded inline-flex items-center ${
                           STATUS_COLORS[selectedConv.status] || ""
                         }`}
                       >
-                        {STATUS_LABELS[selectedConv.status] || selectedConv.status}
+                        {STATUS_ICONS[selectedConv.status]}
+                        <span aria-hidden="true">{STATUS_LABELS[selectedConv.status] || selectedConv.status}</span>
+                        <span className="sr-only">{STATUS_LABELS[selectedConv.status] || selectedConv.status}</span>
                       </span>
                       <span className="text-xs text-[var(--ink-muted)]">
                         {new Date(selectedConv.created_at).toLocaleDateString("pt-BR")}

@@ -95,6 +95,8 @@ PCP_SLOW_PAGE_THRESHOLD_S: float = float(os.getenv("PCP_SLOW_PAGE_THRESHOLD_S", 
 COMPRASGOV_CB_ENABLED: bool = os.getenv("COMPRASGOV_CB_ENABLED", "true").lower() in ("true", "1", "yes")
 
 # HARDEN-010: ComprasGov v3 master flag (API down since 2026-03-03)
+# W1-PR2: ComprasGov v3 has been offline since 2026-03-03 (confirmed via Playwright).
+# Default is "false". Re-enable only after verifying https://dadosabertos.compras.gov.br is live.
 COMPRASGOV_ENABLED: bool = str_to_bool(os.getenv("COMPRASGOV_ENABLED", "false"))
 
 # GTM-STAB-003: Timeout Chain

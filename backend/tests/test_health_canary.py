@@ -75,24 +75,13 @@ class TestRealisticCanary:
             assert result.status == HealthStatus.HEALTHY
 
     @pytest.mark.asyncio
-    async def test_comprasgov_canary_uses_legacy_endpoint(self):
-        """AC1: ComprasGov canary tests legacy endpoint."""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
+    async def test_comprasgov_canary_returns_unknown_source(self):
+        """W1-PR2: ComprasGov removed from SOURCE_HEALTH_ENDPOINTS (offline since 2026-03-03).
+        check_source_health now returns UNHEALTHY with 'Unknown source' error."""
+        result = await check_source_health("ComprasGov", timeout=10.0)
 
-        with patch("health.httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_cls.return_value = mock_client
-
-            result = await check_source_health("ComprasGov", timeout=10.0)
-
-            call_args = mock_client.get.call_args
-            url = call_args.args[0]
-            assert "dadosabertos.compras.gov.br" in url
-            assert result.status == HealthStatus.HEALTHY
+        assert result.status == HealthStatus.UNHEALTHY
+        assert "Unknown source" in result.error
 
     @pytest.mark.asyncio
     async def test_canary_timeout_returns_degraded(self):
@@ -140,7 +129,7 @@ class TestPublicStatus:
             response_time_ms=450,
         )
         with patch("health.check_all_sources_health", new_callable=AsyncMock) as mock_check:
-            mock_check.return_value = {"PNCP": healthy_result, "Portal": healthy_result, "ComprasGov": healthy_result}
+            mock_check.return_value = {"PNCP": healthy_result, "Portal": healthy_result}
             with patch("redis_pool.get_redis_pool", new_callable=AsyncMock) as mock_redis:
                 mock_pool = AsyncMock()
                 mock_pool.ping = AsyncMock()
@@ -158,7 +147,6 @@ class TestPublicStatus:
         assert result["status"] == "healthy"
         assert "pncp" in result["sources"]
         assert "portal" in result["sources"]
-        assert "comprasgov" in result["sources"]
         assert result["sources"]["pncp"]["status"] == "healthy"
         assert result["sources"]["pncp"]["latency_ms"] == 450
         assert result["components"]["redis"] == "healthy"
@@ -169,10 +157,9 @@ class TestPublicStatus:
         """AC2: Status is degraded when a source is unhealthy."""
         pncp = SourceHealthResult(source_code="PNCP", status=HealthStatus.HEALTHY, response_time_ms=100)
         pcp = SourceHealthResult(source_code="Portal", status=HealthStatus.UNHEALTHY, error="timeout")
-        cg = SourceHealthResult(source_code="ComprasGov", status=HealthStatus.HEALTHY, response_time_ms=200)
 
         with patch("health.check_all_sources_health", new_callable=AsyncMock) as mock_check:
-            mock_check.return_value = {"PNCP": pncp, "Portal": pcp, "ComprasGov": cg}
+            mock_check.return_value = {"PNCP": pncp, "Portal": pcp}
             with patch("redis_pool.get_redis_pool", new_callable=AsyncMock) as mock_redis:
                 mock_redis.return_value = AsyncMock(ping=AsyncMock())
                 with patch("supabase_client.get_supabase") as mock_sb:

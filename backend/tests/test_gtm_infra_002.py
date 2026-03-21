@@ -93,15 +93,10 @@ class TestT2HealthPerSource:
         from health import SOURCE_HEALTH_ENDPOINTS
         assert "Portal" in SOURCE_HEALTH_ENDPOINTS
 
-    def test_source_health_endpoints_includes_compras_gov(self):
-        """ComprasGov must be in SOURCE_HEALTH_ENDPOINTS (AC2)."""
+    def test_source_health_endpoints_excludes_compras_gov(self):
+        """W1-PR2: ComprasGov removed from SOURCE_HEALTH_ENDPOINTS (offline since 2026-03-03)."""
         from health import SOURCE_HEALTH_ENDPOINTS
-        assert "ComprasGov" in SOURCE_HEALTH_ENDPOINTS
-
-    def test_source_health_endpoints_compras_gov_url(self):
-        """ComprasGov URL must point to dadosabertos.compras.gov.br."""
-        from health import SOURCE_HEALTH_ENDPOINTS
-        assert "dadosabertos.compras.gov.br" in SOURCE_HEALTH_ENDPOINTS["ComprasGov"]
+        assert "ComprasGov" not in SOURCE_HEALTH_ENDPOINTS
 
     @pytest.mark.asyncio
     async def test_check_all_sources_returns_per_source_dict(self):

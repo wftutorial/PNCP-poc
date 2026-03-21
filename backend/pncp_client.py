@@ -2405,15 +2405,24 @@ class PNCPLegacyAdapter:
             else:
                 results = fetch_result
         else:
-            # GTM-INFRA-001 AC1/AC3: Wrap sync PNCPClient in asyncio.to_thread()
-            # to prevent blocking the event loop with requests.Session + time.sleep()
-            client = PNCPClient()
-            results = await asyncio.to_thread(
-                lambda: list(client.fetch_all(
-                    data_inicial=data_inicial, data_final=data_final,
-                    ufs=_ufs, modalidades=self._modalidades,
-                ))
+            # W1-PR2: Use AsyncPNCPClient directly instead of wrapping sync
+            # PNCPClient in asyncio.to_thread(). We're already in async context,
+            # and buscar_todas_ufs_paralelo handles single-UF lists fine.
+            # This eliminates the to_thread overhead and the sync requests dependency
+            # on this code path.
+            fetch_result = await buscar_todas_ufs_paralelo(
+                ufs=_ufs, data_inicial=data_inicial, data_final=data_final,
+                modalidades=self._modalidades, status=self._status,
+                max_concurrent=10, on_uf_complete=self._on_uf_complete,
+                on_uf_status=self._on_uf_status,
             )
+            if isinstance(fetch_result, ParallelFetchResult):
+                results = fetch_result.items
+                if fetch_result.truncated_ufs:
+                    self.was_truncated = True
+                    self.truncated_ufs = fetch_result.truncated_ufs
+            else:
+                results = fetch_result
         for item in results:
             # GTM-FIX-017: Parse date fields from PNCP response
             data_pub = None

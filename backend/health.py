@@ -104,10 +104,11 @@ def get_uptime_seconds() -> Optional[float]:
 
 
 # Source health check endpoints
+# W1-PR2: ComprasGov v3 removed — API offline since 2026-03-03 (HARDEN-010).
+# Re-add when https://dadosabertos.compras.gov.br comes back online.
 SOURCE_HEALTH_ENDPOINTS = {
     "PNCP": "https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao",
     "Portal": "https://compras.api.portaldecompraspublicas.com.br",
-    "ComprasGov": "https://dadosabertos.compras.gov.br",
     "Licitar": "https://api.licitar.digital/v1",
     "BLL": "https://api.bll.org.br/v1",
     "BNC": "https://api.bnc.org.br/v1",
@@ -514,8 +515,9 @@ async def get_public_status() -> Dict[str, Any]:
     and last incident info — all sanitized for public consumption.
     """
     # Get source health with realistic canary (AC1)
+    # W1-PR2: ComprasGov removed — offline since 2026-03-03 (HARDEN-010)
     source_checks = await check_all_sources_health(
-        enabled_sources=["PNCP", "Portal", "ComprasGov"],
+        enabled_sources=["PNCP", "Portal"],
         timeout=10.0,
     )
 

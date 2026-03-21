@@ -6,6 +6,11 @@
  * frontend-only types (UI state, form validation, etc.)
  *
  * To regenerate API types: npm run generate:api-types
+ *
+ * W1-PR2 NOTE: No need to split this file or api-types.generated.ts for bundle size.
+ * TypeScript `type` and `interface` declarations are compile-time only and produce
+ * zero JavaScript output — tree-shaking is inherent. Only split if runtime values
+ * (enums, const arrays, functions) grow significantly.
  */
 
 import type { components } from "./api-types.generated";

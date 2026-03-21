@@ -803,8 +803,20 @@ def prepare_mode(input_path: Path, output_path: str | None, top_n: int) -> None:
     Adds _analysis_context, _analysis_rules, and _analysis_limited to each
     top20 entry so Claude Code can read them and produce the analysis inline.
     """
-    with open(input_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
+    if not input_path.exists():
+        print(f"ERROR: Arquivo nao encontrado: {input_path}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        with open(input_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        print(f"ERROR: JSON invalido em {input_path}: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    if not isinstance(data, dict):
+        print("ERROR: JSON raiz deve ser um objeto (dict)", file=sys.stderr)
+        sys.exit(1)
 
     empresa = data.get("empresa", {})
     top20 = data.get("top20", [])
@@ -860,8 +872,20 @@ def save_analysis_mode(input_path: Path, output_path: str | None) -> None:
     Runs _validate_analysis() on each top20[].analise, cleans up
     preparation fields, and updates metadata.
     """
-    with open(input_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
+    if not input_path.exists():
+        print(f"ERROR: Arquivo nao encontrado: {input_path}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        with open(input_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        print(f"ERROR: JSON invalido em {input_path}: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    if not isinstance(data, dict):
+        print("ERROR: JSON raiz deve ser um objeto (dict)", file=sys.stderr)
+        sys.exit(1)
 
     top20 = data.get("top20", [])
 
@@ -1043,11 +1067,26 @@ def main() -> None:
     print(f"  Review:  {'ON' if args.review else 'OFF'}")
     print(f"{'=' * 60}")
 
-    with open(input_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
+    try:
+        with open(input_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        print(f"ERROR: JSON invalido em {input_path}: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    if not isinstance(data, dict):
+        print("ERROR: JSON raiz deve ser um objeto (dict)", file=sys.stderr)
+        sys.exit(1)
 
     empresa = data.get("empresa", {})
+    if not isinstance(empresa, dict):
+        print("ERROR: campo 'empresa' deve ser um objeto (dict)", file=sys.stderr)
+        sys.exit(1)
+
     top20 = data.get("top20", [])
+    if not isinstance(top20, list):
+        print("ERROR: campo 'top20' deve ser uma lista", file=sys.stderr)
+        sys.exit(1)
 
     if not top20:
         print("\nERROR: Campo 'top20' vazio ou ausente no JSON.", file=sys.stderr)

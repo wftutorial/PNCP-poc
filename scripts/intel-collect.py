@@ -174,6 +174,60 @@ for _pat_name, _pat_str in _EXCLUSION_PATTERN_STRINGS:
 
 
 # ============================================================
+# RETRY HELPER
+# ============================================================
+
+# Import retry decorator for HTTP call resilience
+try:
+    from lib.retry import retry_on_failure as _retry_decorator
+except ImportError:
+    # Fallback: no-op decorator if lib.retry is not available
+    def _retry_decorator(**kwargs):  # type: ignore[misc]
+        def _noop(func):
+            return func
+        return _noop
+
+
+def _api_get_with_retry(
+    api: "ApiClient",
+    url: str,
+    params: dict | None = None,
+    label: str = "",
+    max_retries: int = 2,
+    base_delay: float = 1.0,
+) -> tuple:
+    """Wrapper around api.get() with retry logic for transient failures.
+
+    Retries on:
+      - status == "API_FAILED" (network errors, timeouts)
+      - Empty data with API status (intermittent PNCP issues)
+
+    Does NOT retry on:
+      - Successful responses (status == "API")
+      - Non-transient errors (HTTP 400, 404)
+
+    Returns: (data, status) tuple from api.get().
+    """
+    last_result = (None, "API_FAILED")
+    for attempt in range(max_retries + 1):
+        data, status = api.get(url, params=params, label=label)
+        last_result = (data, status)
+
+        # Success: return immediately
+        if status == "API" and data is not None:
+            return data, status
+
+        # Transient failure: retry with backoff
+        if attempt < max_retries:
+            delay = min(base_delay * (2 ** attempt), 30.0)
+            print(f"    [retry] {label}: attempt {attempt + 1}/{max_retries}, "
+                  f"retrying in {delay:.1f}s (status={status})")
+            time.sleep(delay)
+
+    return last_result
+
+
+# ============================================================
 # HELPERS
 # ============================================================
 
@@ -595,10 +649,12 @@ def search_pncp_exhaustive(
                 params["uf"] = uf_filter
 
             uf_label = f" uf={uf_filter}" if uf_filter else ""
-            data, status = api.get(
+            data, status = _api_get_with_retry(
+                api,
                 f"{PNCP_BASE}/contratacoes/publicacao",
                 params=params,
                 label=f"PNCP mod={mod_code}{uf_label} p={page}",
+                max_retries=2,
             )
 
             if status != "API" or not data:
@@ -1147,10 +1203,12 @@ def collect_competitive_intel(
                     "tamanhoPagina": 50,
                 }
 
-                data, status = api.get(
+                data, status = _api_get_with_retry(
+                    api,
                     f"{PNCP_BASE}/contratos",
                     params=params,
                     label=f"Contratos orgao={cnpj_orgao[:8]}.. p={page}",
+                    max_retries=1,
                 )
 
                 if status != "API" or not data:
@@ -1398,9 +1456,11 @@ def fetch_documents_top50(api: ApiClient, editais: list[dict]) -> None:
                 counters["cached"] += 1
             return
 
-        data, status = api.get(
+        data, status = _api_get_with_retry(
+            api,
             f"{PNCP_FILES_BASE}/orgaos/{cnpj_orgao}/compras/{ano}/{seq}/arquivos",
             label=f"Docs: {cnpj_orgao}/{ano}/{seq}",
+            max_retries=1,
         )
 
         if status == "API" and isinstance(data, list):
@@ -1681,10 +1741,12 @@ def collect_price_benchmarks(api: "ApiClient", editais: list[dict]) -> None:
                     "pagina": page,
                     "tamanhoPagina": 50,
                 }
-                data, status = api.get(
+                data, status = _api_get_with_retry(
+                    api,
                     f"{PNCP_BASE}/contratos",
                     params=params,
                     label=f"Contratos orgao={cnpj_orgao} yr={year_offset} p={page}",
+                    max_retries=1,
                 )
 
                 if status != "API" or not data:
@@ -1725,9 +1787,11 @@ def collect_price_benchmarks(api: "ApiClient", editais: list[dict]) -> None:
         total_analisados = 0
 
         for ref_cnpj, ref_ano, ref_seq in procurement_refs[:10]:
-            data, status = api.get(
+            data, status = _api_get_with_retry(
+                api,
                 f"{PNCP_BASE}/orgaos/{ref_cnpj}/compras/{ref_ano}/{ref_seq}",
                 label=f"Compra {ref_cnpj}/{ref_ano}/{ref_seq}",
+                max_retries=1,
             )
 
             if status == "API" and isinstance(data, dict):

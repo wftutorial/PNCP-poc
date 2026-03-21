@@ -312,6 +312,40 @@ def prioritize_docs(docs: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 # ============================================================
+# DOWNLOAD WITH RETRY
+# ============================================================
+
+
+def _download_with_retry(
+    url: str,
+    max_retries: int = 3,
+    timeout: int = DOWNLOAD_TIMEOUT_S,
+) -> httpx.Response | None:
+    """Download document with retry on transient failures.
+
+    Uses streaming to enforce MAX_DOWNLOAD_BYTES limit.
+    Returns the Response with content already consumed, or None on permanent failure.
+    """
+    for attempt in range(max_retries + 1):
+        try:
+            resp = httpx.get(url, timeout=timeout, follow_redirects=True)
+            if resp.status_code in (429, 500, 502, 503, 504) and attempt < max_retries:
+                delay = min(2.0 * (2 ** attempt), 60.0)
+                print(f"  [retry] HTTP {resp.status_code} downloading doc, retrying in {delay:.0f}s...")
+                time.sleep(delay)
+                continue
+            return resp
+        except (httpx.TimeoutException, httpx.ConnectError, httpx.ReadError) as e:
+            if attempt < max_retries:
+                delay = min(2.0 * (2 ** attempt), 60.0)
+                print(f"  [retry] {type(e).__name__} downloading doc, retrying in {delay:.0f}s...")
+                time.sleep(delay)
+            else:
+                raise
+    return resp  # type: ignore[possibly-undefined]
+
+
+# ============================================================
 # DOWNLOAD + DETECT FORMAT
 # ============================================================
 
@@ -368,30 +402,28 @@ def download_and_extract(doc: dict[str, Any], tmpdir: str) -> str:
 
     print(f"    Baixando: {titulo[:60]}")
 
-    # Stream download with size check
+    # Download with retry on transient failures
     try:
-        with httpx.Client(timeout=DOWNLOAD_TIMEOUT_S, follow_redirects=True) as client:
-            with client.stream("GET", url) as resp:
-                if resp.status_code != 200:
-                    print(f"    ⚠ HTTP {resp.status_code} para {url[:80]}")
-                    return ""
+        resp = _download_with_retry(url)
+        if resp is None:
+            print(f"    ⚠ Download falhou (sem resposta) para {url[:80]}")
+            return ""
 
-                content_length = resp.headers.get("content-length")
-                if content_length and int(content_length) > MAX_DOWNLOAD_BYTES:
-                    print(f"    ⚠ Arquivo muito grande ({int(content_length) // (1024*1024)}MB > 50MB) — ignorado")
-                    return ""
+        if resp.status_code != 200:
+            print(f"    ⚠ HTTP {resp.status_code} para {url[:80]}")
+            return ""
 
-                content_type = resp.headers.get("content-type", "")
-                chunks: list[bytes] = []
-                downloaded = 0
-                for chunk in resp.iter_bytes(chunk_size=65536):
-                    downloaded += len(chunk)
-                    if downloaded > MAX_DOWNLOAD_BYTES:
-                        print(f"    ⚠ Arquivo excedeu 50MB durante download — abortado")
-                        return ""
-                    chunks.append(chunk)
+        content_length = resp.headers.get("content-length")
+        if content_length and int(content_length) > MAX_DOWNLOAD_BYTES:
+            print(f"    ⚠ Arquivo muito grande ({int(content_length) // (1024*1024)}MB > 50MB) — ignorado")
+            return ""
 
-                raw = b"".join(chunks)
+        raw = resp.content
+        if len(raw) > MAX_DOWNLOAD_BYTES:
+            print(f"    ⚠ Arquivo excedeu 50MB durante download — abortado")
+            return ""
+
+        content_type = resp.headers.get("content-type", "")
 
     except httpx.TimeoutException:
         print(f"    ⚠ Timeout ao baixar {url[:80]}")

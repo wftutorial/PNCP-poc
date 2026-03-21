@@ -119,6 +119,47 @@ MODALIDADES_ELETRONICAS = {"eletrônico", "eletronica", "eletrônica", "eletroni
 
 
 # ============================================================
+# HTTP RETRY UTILITY
+# ============================================================
+
+def _request_with_retry(
+    url: str,
+    params: dict | None = None,
+    headers: dict | None = None,
+    max_retries: int = 3,
+    timeout: int = 30,
+) -> Any:
+    """HTTP GET with exponential backoff retry.
+
+    Used as a resilient wrapper for direct httpx.get() calls that bypass
+    ApiClient (e.g., one-off lookups, health checks).
+
+    ApiClient.get() already has its own retry logic — this utility is for
+    any future direct HTTP calls added to this module.
+    """
+    import httpx as _httpx
+
+    resp = None
+    for attempt in range(max_retries + 1):
+        try:
+            resp = _httpx.get(url, params=params, headers=headers, timeout=timeout)
+            if resp.status_code in (429, 500, 502, 503, 504) and attempt < max_retries:
+                delay = min(1.0 * (2 ** attempt), 30.0)
+                print(f"  [retry] HTTP {resp.status_code} from {url}, retrying in {delay:.0f}s...")
+                time.sleep(delay)
+                continue
+            return resp
+        except (_httpx.TimeoutException, _httpx.ConnectError, _httpx.ReadError) as e:
+            if attempt < max_retries:
+                delay = min(1.0 * (2 ** attempt), 30.0)
+                print(f"  [retry] {type(e).__name__} from {url}, retrying in {delay:.0f}s...")
+                time.sleep(delay)
+            else:
+                raise
+    return resp
+
+
+# ============================================================
 # HELPERS
 # ============================================================
 

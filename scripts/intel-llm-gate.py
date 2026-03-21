@@ -184,11 +184,23 @@ def main():
 
     input_path = Path(args.input)
     if not input_path.exists():
-        print(f"ERROR: Arquivo não encontrado: {input_path}")
+        print(f"ERROR: Arquivo nao encontrado: {input_path}")
         sys.exit(1)
 
-    with open(input_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
+    try:
+        with open(input_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        print(f"ERROR: JSON invalido em {input_path}: {e}")
+        sys.exit(1)
+
+    if not isinstance(data, dict):
+        print("ERROR: JSON raiz deve ser um objeto (dict)")
+        sys.exit(1)
+
+    if "editais" not in data or not isinstance(data.get("editais"), list):
+        print("ERROR: campo 'editais' ausente ou nao e uma lista")
+        sys.exit(1)
 
     # ── Load negative keywords ──
     if args.neg_keywords_file:

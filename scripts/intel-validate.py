@@ -683,16 +683,26 @@ def validate_v4_fields(top20: list[dict], empresa: dict) -> dict[str, Any]:
         conf = edital.get("cnae_confidence")
         if conf is not None:
             result["stats"]["with_confidence"] += 1
-            if not (0 <= float(conf) <= 1):
-                result["issues"].append(f"{eid}: cnae_confidence={conf} fora do range 0-1")
+            try:
+                conf_f = float(conf)
+                if not (0 <= conf_f <= 1):
+                    result["issues"].append(f"{eid}: cnae_confidence={conf} fora do range 0-1")
+                    result["passed"] = False
+            except (ValueError, TypeError):
+                result["issues"].append(f"{eid}: cnae_confidence={conf!r} nao e numerico")
                 result["passed"] = False
 
         # victory fit
         fit = edital.get("_victory_fit")
         if fit is not None:
             result["stats"]["with_fit"] += 1
-            if not (0 <= float(fit) <= 1):
-                result["issues"].append(f"{eid}: _victory_fit={fit} fora do range 0-1")
+            try:
+                fit_f = float(fit)
+                if not (0 <= fit_f <= 1):
+                    result["issues"].append(f"{eid}: _victory_fit={fit} fora do range 0-1")
+                    result["passed"] = False
+            except (ValueError, TypeError):
+                result["issues"].append(f"{eid}: _victory_fit={fit!r} nao e numerico")
                 result["passed"] = False
 
         # bid simulation
@@ -752,11 +762,26 @@ def main() -> None:
         print(f"ERRO: arquivo nao encontrado: {input_path}", file=sys.stderr)
         sys.exit(2)
 
-    with open(input_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
+    try:
+        with open(input_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        print(f"ERRO: JSON invalido em {input_path}: {e}", file=sys.stderr)
+        sys.exit(2)
+
+    if not isinstance(data, dict):
+        print("ERRO: JSON raiz deve ser um objeto (dict)", file=sys.stderr)
+        sys.exit(2)
 
     top20 = data.get("top20", [])
+    if not isinstance(top20, list):
+        print("ERRO: campo 'top20' deve ser uma lista", file=sys.stderr)
+        sys.exit(2)
+
     empresa = data.get("empresa", {})
+    if not isinstance(empresa, dict):
+        print("ERRO: campo 'empresa' deve ser um objeto (dict)", file=sys.stderr)
+        sys.exit(2)
 
     if not top20:
         print("ERRO: top20 vazio ou ausente no JSON", file=sys.stderr)

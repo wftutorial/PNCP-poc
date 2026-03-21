@@ -359,16 +359,22 @@ class TestCliParsing:
             "intel-pipeline.py", "--cnpj", "123", "--ufs", "SC",
         ])
         with patch("builtins.print"):
-            result = _ip.main()
-        assert result == 1
+            try:
+                result = _ip.main()
+                assert result == 1
+            except SystemExit as e:
+                assert e.code == 1
 
     def test_empty_ufs_returns_1(self, monkeypatch):
         monkeypatch.setattr("sys.argv", [
             "intel-pipeline.py", "--cnpj", "01721078000168", "--ufs", "",
         ])
         with patch("builtins.print"):
-            result = _ip.main()
-        assert result == 1
+            try:
+                result = _ip.main()
+                assert result == 1
+            except SystemExit as e:
+                assert e.code == 1
 
     def test_from_step_without_json_returns_1(self, monkeypatch, tmp_path):
         """--from-step 2 requires existing JSON."""

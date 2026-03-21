@@ -965,8 +965,12 @@ def save_analysis_mode(input_path: Path, output_path: str | None) -> None:
 # ============================================================
 
 def main() -> None:
+    """Entry point for intel-analyze CLI."""
+    from lib.constants import INTEL_VERSION
+    from lib.cli_validation import validate_input_json, validate_top, validate_model
+
     parser = argparse.ArgumentParser(
-        description="Intel Analyze — Analise LLM automatizada dos top editais para /intel-busca",
+        description="Intel Analyze — Analise LLM automatizada dos top editais para /intel-busca.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
@@ -974,7 +978,7 @@ def main() -> None:
         "--input", "-i",
         required=True,
         metavar="JSON",
-        help="JSON de entrada (output do intel-extract-docs.py com top20[])",
+        help="JSON de entrada (output do intel-extract-docs.py com top20[]). Deve existir e ser JSON valido.",
     )
     parser.add_argument(
         "--output", "-o",
@@ -987,7 +991,7 @@ def main() -> None:
         type=int,
         default=20,
         metavar="N",
-        help="Numero maximo de editais do top20 a analisar (default: 20)",
+        help="Numero maximo de editais do top20 a analisar, 1-50 (default: 20)",
     )
     parser.add_argument(
         "--prepare",
@@ -1005,7 +1009,7 @@ def main() -> None:
     parser.add_argument(
         "--model",
         default="gpt-4.1-nano",
-        help="Modelo OpenAI a usar no modo API (default: gpt-4.1-nano)",
+        help="Modelo OpenAI a usar no modo API. Modelos validos: gpt-4.1-nano, gpt-4.1-mini, gpt-4.1, gpt-4o-mini, gpt-4o (default: gpt-4.1-nano)",
     )
     parser.add_argument(
         "--workers",
@@ -1021,19 +1025,27 @@ def main() -> None:
     parser.add_argument(
         "--force",
         action="store_true",
-        help="Re-analisar editais que ja possuem campo 'analise'",
+        help="Re-analisar editais que ja possuem campo 'analise' (sobrescreve analises existentes)",
     )
     parser.add_argument(
         "--review",
         action="store_true",
-        help="Habilitar revisao adversarial pos-analise (modo API)",
+        help="Habilitar revisao adversarial pos-analise (modo API) — verifica consistencia da analise",
     )
     parser.add_argument(
         "--quiet",
         action="store_true",
-        help="Reduzir output",
+        help="Reduzir output (somente erros e resumo final)",
     )
+    parser.add_argument("--version", action="version",
+                        version=f"%(prog)s {INTEL_VERSION}")
     args = parser.parse_args()
+
+    # ── Validate arguments ──
+    validate_input_json(args.input)
+    validate_top(args.top, max_val=50)
+    if not args.prepare and not args.save_analysis:
+        validate_model(args.model)
 
     t0 = time.time()
 

@@ -2032,24 +2032,45 @@ def _find_previous_run(cnpj14: str) -> str | None:
 # ============================================================
 
 def main():
+    """Entry point for intel-collect CLI."""
+    from lib.constants import INTEL_VERSION
+    from lib.cli_validation import validate_cnpj, validate_ufs, validate_dias
+
     parser = argparse.ArgumentParser(
-        description="Intel Collect - Busca exaustiva PNCP para /intel-busca",
+        description="Intel Collect — Busca exaustiva PNCP para /intel-busca.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""Exemplos:
+  python scripts/intel-collect.py --cnpj 12345678000190 --ufs SC,PR,RS
+  python scripts/intel-collect.py --cnpj 12.345.678/0001-90 --ufs SC --dias 60
+  python scripts/intel-collect.py --cnpj 12345678000190 --ufs SC,PR --output out.json --quiet""",
     )
-    parser.add_argument("--cnpj", required=True, help="CNPJ da empresa (com ou sem formatacao)")
-    parser.add_argument("--ufs", required=True, help="UFs separadas por virgula (ex: SC,PR,RS)")
-    parser.add_argument("--dias", type=int, default=30, help="Periodo de busca em dias (default: 30)")
-    parser.add_argument("--output", type=str, default=None, help="Caminho do JSON de saida")
-    parser.add_argument("--quiet", action="store_true", help="Reduzir output no console")
-    parser.add_argument("--no-cache", action="store_true", help="Ignorar checkpoint e forcar nova coleta completa")
-    parser.add_argument("--skip-sicaf", action="store_true", help="Pular coleta SICAF (evita captcha)")
+    parser.add_argument("--cnpj", required=True,
+                        help="CNPJ da empresa, com ou sem formatacao (ex: 12345678000190 ou 12.345.678/0001-90)")
+    parser.add_argument("--ufs", required=True,
+                        help="UFs separadas por virgula — codigos de 2 letras (ex: SC,PR,RS)")
+    parser.add_argument("--dias", type=int, default=30,
+                        help="Periodo de busca em dias, 1-365 (default: 30)")
+    parser.add_argument("--output", type=str, default=None,
+                        help="Caminho do JSON de saida (default: auto-nomeado em docs/intel/)")
+    parser.add_argument("--quiet", action="store_true",
+                        help="Reduzir output no console (somente erros e resumo final)")
+    parser.add_argument("--no-cache", action="store_true",
+                        help="Ignorar checkpoint salvo e forcar nova coleta completa")
+    parser.add_argument("--skip-sicaf", action="store_true",
+                        help="Pular coleta SICAF (evita captcha do navegador)")
+    parser.add_argument("--version", action="version",
+                        version=f"%(prog)s {INTEL_VERSION}")
     args = parser.parse_args()
+
+    # ── Validate arguments ──
+    cnpj14 = validate_cnpj(args.cnpj)
+    ufs = validate_ufs(args.ufs)
+    validate_dias(args.dias)
 
     t0 = time.time()
 
     # ── Step 1: Parse args, fetch company data ──
-    cnpj14 = _clean_cnpj(args.cnpj)
     cnpj_formatted = _format_cnpj(cnpj14)
-    ufs = [u.strip().upper() for u in args.ufs.split(",") if u.strip()]
     dias = args.dias
 
     print(f"{'='*60}")

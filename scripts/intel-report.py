@@ -32,6 +32,15 @@ if sys.platform == "win32":
     except (ValueError, AttributeError):
         pass
 
+# Ensure scripts/ is on sys.path for lib imports
+_scripts_dir = str(Path(__file__).resolve().parent)
+if _scripts_dir not in sys.path:
+    sys.path.insert(0, _scripts_dir)
+
+from lib.intel_logging import setup_intel_logging
+
+logger = setup_intel_logging("intel-report")
+
 try:
     from reportlab.lib import colors
     from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT, TA_RIGHT
@@ -1966,17 +1975,29 @@ def generate_intel_report(data: dict, output_path: str) -> str:
 # ============================================================
 
 def main():
+    """Entry point for intel-report CLI."""
+    from lib.constants import INTEL_VERSION
+    from lib.cli_validation import validate_input_file
+
     parser = argparse.ArgumentParser(
-        description="Gera PDF de Inteligência de Mercado a partir de JSON enriquecido."
+        description="Gera PDF de Inteligencia de Mercado (Top 20 Oportunidades) a partir de JSON enriquecido.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""Exemplos:
+  python scripts/intel-report.py --input docs/intel/intel-12345678000190-slug-2026-03-18.json
+  python scripts/intel-report.py --input data.json --output relatorio.pdf""",
     )
-    parser.add_argument("--input", required=True, help="Caminho para JSON de entrada")
-    parser.add_argument("--output", help="Caminho para PDF de saída (auto-nomeado se omitido)")
+    parser.add_argument("--input", required=True,
+                        help="Caminho para JSON de entrada (output do intel-analyze.py com top20[].analise). Deve existir.")
+    parser.add_argument("--output",
+                        help="Caminho para PDF de saida (default: auto-nomeado baseado no input)")
+    parser.add_argument("--version", action="version",
+                        version=f"%(prog)s {INTEL_VERSION}")
     args = parser.parse_args()
 
+    # ── Validate arguments ──
+    validate_input_file(args.input)
+
     input_path = Path(args.input)
-    if not input_path.exists():
-        print(f"ERROR: Input file not found: {input_path}")
-        sys.exit(1)
 
     print(f"  Lendo {input_path}...")
     with open(input_path, "r", encoding="utf-8") as f:

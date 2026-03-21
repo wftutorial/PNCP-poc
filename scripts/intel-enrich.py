@@ -50,6 +50,10 @@ _scripts_dir = str(Path(__file__).resolve().parent)
 if _scripts_dir not in sys.path:
     sys.path.insert(0, _scripts_dir)
 
+from lib.intel_logging import setup_intel_logging
+
+logger = setup_intel_logging("intel-enrich")
+
 _crd_path = str(Path(__file__).resolve().parent / "collect-report-data.py")
 _spec = importlib.util.spec_from_file_location("collect_report_data", _crd_path)
 if _spec is None or _spec.loader is None:
@@ -145,14 +149,14 @@ def _request_with_retry(
             resp = _httpx.get(url, params=params, headers=headers, timeout=timeout)
             if resp.status_code in (429, 500, 502, 503, 504) and attempt < max_retries:
                 delay = min(1.0 * (2 ** attempt), 30.0)
-                print(f"  [retry] HTTP {resp.status_code} from {url}, retrying in {delay:.0f}s...")
+                logger.info("[retry] HTTP %d from %s, retrying in %.0fs...", resp.status_code, url, delay)
                 time.sleep(delay)
                 continue
             return resp
         except (_httpx.TimeoutException, _httpx.ConnectError, _httpx.ReadError) as e:
             if attempt < max_retries:
                 delay = min(1.0 * (2 ** attempt), 30.0)
-                print(f"  [retry] {type(e).__name__} from {url}, retrying in {delay:.0f}s...")
+                logger.info("[retry] %s from %s, retrying in %.0fs...", type(e).__name__, url, delay)
                 time.sleep(delay)
             else:
                 raise
@@ -211,8 +215,8 @@ def enrich_empresa(
     result["sancionada"] = sancionada
     if sancionada:
         sancoes_ativas = [k for k, v in result["sancoes"].items() if v and k not in ("sancionada", "inconclusive")]
-        print(f"\n  *** ALERTA: Empresa SANCIONADA ({', '.join(s.upper() for s in sancoes_ativas)}) ***")
-        print(f"  *** Empresa IMPEDIDA de licitar — recomendação: regularizar antes de prosseguir ***")
+        logger.warning("ALERTA: Empresa SANCIONADA (%s)", ", ".join(s.upper() for s in sancoes_ativas))
+        logger.warning("Empresa IMPEDIDA de licitar — recomendação: regularizar antes de prosseguir")
 
     # SICAF
     if skip_sicaf:
@@ -221,7 +225,7 @@ def enrich_empresa(
             "_source": _source_tag("UNAVAILABLE", "Coleta SICAF pulada (--skip-sicaf)"),
         }
         result["restricao_sicaf"] = None
-        print("\n  SICAF: pulado (--skip-sicaf)")
+        logger.info("SICAF: pulado (--skip-sicaf)")
     else:
         sicaf_data = collect_sicaf(cnpj14, verbose=True)
         result["sicaf"] = sicaf_data
@@ -235,8 +239,8 @@ def enrich_empresa(
             result["restricao_sicaf"] = None
 
         if result["restricao_sicaf"]:
-            print(f"\n  *** ALERTA: SICAF com RESTRIÇÃO ativa ***")
-            print(f"  *** Empresa pode participar mas com risco de inabilitação ***")
+            logger.warning("ALERTA: SICAF com RESTRIÇÃO ativa")
+            logger.warning("Empresa pode participar mas com risco de inabilitação")
 
     return result
 
@@ -272,8 +276,9 @@ def enrich_editais(
         ]
         skipped = len(compatible) - len(within_capacity)
         if skipped:
-            print(f"\n  [FILTRO] {skipped} editais acima da capacidade "
-                  f"(R${capacity_limit:,.0f} = 10× capital social R${capital_social:,.0f}) — ignorados")
+            logger.info("[FILTRO] %d editais acima da capacidade "
+                        "(R$%s = 10x capital social R$%s) — ignorados",
+                        skipped, f"{capacity_limit:,.0f}", f"{capital_social:,.0f}")
         compatible_filtered = within_capacity
     else:
         compatible_filtered = compatible
@@ -291,15 +296,15 @@ def enrich_editais(
         if capital_social and capital_social > 0
         else ""
     )
-    print(f"\n  Enriquecendo {len(target_editais)} editais compatíveis{capacity_note} "
-          f"(top {max_editais} por valor)...")
+    logger.info("Enriquecendo %d editais compatíveis%s (top %d por valor)...",
+                len(target_editais), capacity_note, max_editais)
 
     # --- 2a. Geocode sede ---
-    print(f"\n  [GEO] Geocodificando sede: {cidade_sede}/{uf_sede}")
+    logger.info("[GEO] Geocodificando sede: %s/%s", cidade_sede, uf_sede)
     origin = _geocode(api, cidade_sede, uf_sede)
     if not origin:
-        print(f"  ⚠ Não foi possível geocodificar a sede ({cidade_sede}/{uf_sede})")
-        print(f"  → Distâncias não serão calculadas")
+        logger.warning("Não foi possível geocodificar a sede (%s/%s)", cidade_sede, uf_sede)
+        logger.warning("Distâncias não serão calculadas")
 
     # --- 2b. Geocode destinos (editais) + collect unique municipalities ---
     destinations: dict[str, tuple[float, float]] = {}
@@ -319,21 +324,21 @@ def enrich_editais(
     # Save geocode cache
     _geocode_disk_save()
 
-    print(f"  [GEO] {len(destinations)} municípios geocodificados de {len(mun_set)} únicos")
+    logger.info("[GEO] %d municípios geocodificados de %d únicos", len(destinations), len(mun_set))
 
     # --- 2c. Calculate distances (batch OSRM) ---
     distance_results: dict[str, dict] = {}
     if origin and destinations:
-        print(f"  [DIST] Calculando distâncias via OSRM Table API...")
+        logger.info("[DIST] Calculando distâncias via OSRM Table API...")
         distance_results = _calculate_distances_table(api, origin, destinations)
         ok_count = sum(1 for d in distance_results.values() if d.get("km") is not None)
-        print(f"  [DIST] {ok_count}/{len(distance_results)} distâncias calculadas")
+        logger.info("[DIST] %d/%d distâncias calculadas", ok_count, len(distance_results))
 
     # --- 2d. IBGE batch ---
-    print(f"\n  [IBGE] Coletando dados municipais (população/PIB)...")
+    logger.info("[IBGE] Coletando dados municipais (população/PIB)...")
     ibge_results = collect_ibge_batch(api, list(mun_set)) if mun_set else {}
     ibge_ok = sum(1 for v in ibge_results.values() if v.get("populacao"))
-    print(f"  [IBGE] {ibge_ok}/{len(mun_set)} municípios com dados IBGE")
+    logger.info("[IBGE] %d/%d municípios com dados IBGE", ibge_ok, len(mun_set))
 
     # --- 2e. Attach to editais + compute costs ---
     costs_computed = 0
@@ -385,7 +390,7 @@ def enrich_editais(
         if cost.get("total") is not None:
             costs_computed += 1
 
-    print(f"  [CUSTO] {costs_computed} estimativas de custo calculadas")
+    logger.info("[CUSTO] %d estimativas de custo calculadas", costs_computed)
 
     # --- 2f. Bid simulation (v4) ---
     bids_computed = 0
@@ -422,9 +427,9 @@ def enrich_editais(
                 }
                 if bid_result.has_data:
                     bids_computed += 1
-        print(f"  [LANCE] {bids_computed} simulações de lance calculadas")
+        logger.info("[LANCE] %d simulações de lance calculadas", bids_computed)
     else:
-        print(f"  [LANCE] Módulo bid_simulator não disponível — pulando")
+        logger.info("[LANCE] Módulo bid_simulator não disponível — pulando")
 
     # --- 2g. Victory profile fit scoring (v4) ---
     fits_computed = 0
@@ -450,15 +455,15 @@ def enrich_editais(
                     ed["_victory_fit"] = fit
                     ed["_victory_fit_label"] = format_fit_label(fit)
                     fits_computed += 1
-                print(f"  [PERFIL] {fits_computed} editais com score de aderência "
-                      f"(perfil de {profile.total_contracts} contratos)")
+                logger.info("[PERFIL] %d editais com score de aderência "
+                           "(perfil de %d contratos)", fits_computed, profile.total_contracts)
             else:
-                print(f"  [PERFIL] Dados insuficientes para perfil de vitória "
-                      f"({len(all_contracts)} contratos < 3 mínimo)")
+                logger.info("[PERFIL] Dados insuficientes para perfil de vitória "
+                            "(%d contratos < 3 mínimo)", len(all_contracts))
         else:
-            print(f"  [PERFIL] Sem contratos históricos para perfil de vitória")
+            logger.info("[PERFIL] Sem contratos históricos para perfil de vitória")
     else:
-        print(f"  [PERFIL] Módulo victory_profile não disponível — pulando")
+        logger.info("[PERFIL] Módulo victory_profile não disponível — pulando")
 
     return {
         "editais_enriquecidos": len(target_editais),
@@ -476,28 +481,44 @@ def enrich_editais(
 # ============================================================
 
 def main():
+    """Entry point for intel-enrich CLI."""
+    from lib.constants import INTEL_VERSION
+    from lib.cli_validation import validate_input_file
+
     parser = argparse.ArgumentParser(
-        description="Intel Enrich — Enriquecimento SICAF/Sanções/Distância/Custo para /intel-busca",
+        description="Intel Enrich — Enriquecimento SICAF/Sancoes/Distancia/Custo para /intel-busca.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""Exemplos:
+  python scripts/intel-enrich.py --input docs/intel/intel-CNPJ-slug-YYYY-MM-DD.json
+  python scripts/intel-enrich.py --input data.json --skip-sicaf
+  python scripts/intel-enrich.py --input data.json --output enriched.json --max-editais 40""",
     )
-    parser.add_argument("--input", "-i", required=True, help="JSON de entrada (output do intel-collect.py)")
-    parser.add_argument("--output", "-o", default=None, help="JSON de saída (default: sobrescreve input)")
-    parser.add_argument("--skip-sicaf", action="store_true", help="Pular coleta SICAF (evita captcha)")
-    parser.add_argument("--max-editais", type=int, default=80, help="Max editais para enriquecer dentro da capacidade (default: 80)")
-    parser.add_argument("--quiet", action="store_true", help="Reduzir output")
+    parser.add_argument("--input", "-i", required=True,
+                        help="JSON de entrada (output do intel-collect.py). Deve existir.")
+    parser.add_argument("--output", "-o", default=None,
+                        help="JSON de saida (default: sobrescreve input)")
+    parser.add_argument("--skip-sicaf", action="store_true",
+                        help="Pular coleta SICAF (evita captcha do navegador)")
+    parser.add_argument("--max-editais", type=int, default=80,
+                        help="Max editais para enriquecer dentro da capacidade financeira (default: 80)")
+    parser.add_argument("--quiet", action="store_true",
+                        help="Reduzir output (somente erros e resumo final)")
+    parser.add_argument("--version", action="version",
+                        version=f"%(prog)s {INTEL_VERSION}")
     args = parser.parse_args()
+
+    # ── Validate arguments ──
+    validate_input_file(args.input)
 
     t0 = time.time()
 
     # Load input
     input_path = Path(args.input)
-    if not input_path.exists():
-        print(f"ERROR: Arquivo não encontrado: {input_path}")
-        sys.exit(1)
 
-    print(f"{'='*60}")
-    print(f"  INTEL-ENRICH v{VERSION}")
-    print(f"  Input: {input_path}")
-    print(f"{'='*60}")
+    logger.info("=" * 60)
+    logger.info("INTEL-ENRICH v%s", VERSION)
+    logger.info("Input: %s", input_path)
+    logger.info("=" * 60)
 
     with open(input_path, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -509,9 +530,9 @@ def main():
     razao = empresa.get("razao_social", "N/A")
     capital_social = _safe_float(empresa.get("capital_social"))
 
-    print(f"  Empresa: {razao}")
-    print(f"  CNPJ: {_format_cnpj(cnpj14)}")
-    print(f"  Editais: {len(editais)}")
+    logger.info("Empresa: %s", razao)
+    logger.info("CNPJ: %s", _format_cnpj(cnpj14))
+    logger.info("Editais: %d", len(editais))
 
     api = ApiClient(verbose=not args.quiet)
 
@@ -519,8 +540,8 @@ def main():
     # Skip if already collected by intel-collect.py (Step 1b)
     sicaf_already = empresa.get("sicaf") and empresa["sicaf"].get("status") != "PULADO" and empresa["sicaf"].get("crc_status")
     if sicaf_already:
-        print(f"\n[1/2] Verificação cadastral da empresa...")
-        print(f"  ✅ SICAF já coletado no intel-collect.py — pulando")
+        logger.info("[1/2] Verificação cadastral da empresa...")
+        logger.info("SICAF já coletado no intel-collect.py — pulando")
         empresa_enrich = {
             "sicaf": empresa.get("sicaf", {}),
             "sancoes": empresa.get("sancoes", {}),
@@ -528,7 +549,7 @@ def main():
             "restricao_sicaf": empresa.get("restricao_sicaf"),
         }
     else:
-        print(f"\n[1/2] Verificação cadastral da empresa...")
+        logger.info("[1/2] Verificação cadastral da empresa...")
         empresa_enrich = enrich_empresa(api, cnpj14, skip_sicaf=args.skip_sicaf)
 
         # Merge into empresa
@@ -541,18 +562,18 @@ def main():
 
     # Check abort conditions
     if empresa_enrich.get("sancionada"):
-        print(f"\n  ⛔ EMPRESA SANCIONADA — recomendação: NÃO prosseguir com participação")
-        print(f"  O relatório será gerado com alerta de impedimento.")
+        logger.warning("EMPRESA SANCIONADA — recomendação: NÃO prosseguir com participação")
+        logger.warning("O relatório será gerado com alerta de impedimento.")
 
     # ── Step 2: Edital enrichment (Distance + IBGE + Cost) ──
     cidade_sede = empresa.get("cidade_sede") or empresa.get("municipio", "")
     uf_sede = empresa.get("uf_sede") or empresa.get("uf", "")
 
     if not cidade_sede or not uf_sede:
-        print(f"\n  ⚠ Sede da empresa não disponível — distâncias não serão calculadas")
+        logger.warning("Sede da empresa não disponível — distâncias não serão calculadas")
         enrich_stats = {"editais_enriquecidos": 0, "distancias_ok": 0, "ibge_ok": 0, "custos_ok": 0}
     else:
-        print(f"\n[2/2] Enriquecendo editais (distância, IBGE, custo)...")
+        logger.info("[2/2] Enriquecendo editais (distância, IBGE, custo)...")
         enrich_stats = enrich_editais(
             api, editais, cidade_sede, uf_sede,
             max_editais=args.max_editais,
@@ -576,19 +597,21 @@ def main():
 
     elapsed = time.time() - t0
 
-    print(f"\n{'='*60}")
-    print(f"  RESULTADO ENRIQUECIMENTO")
-    print(f"{'='*60}")
-    print(f"  SICAF:                {'coletado' if not args.skip_sicaf else 'pulado'}")
-    print(f"  Sancionada:           {'SIM ⛔' if empresa_enrich.get('sancionada') else 'NÃO ✅'}")
-    print(f"  Restrição SICAF:      {'SIM ⚠' if empresa_enrich.get('restricao_sicaf') else 'NÃO ✅' if empresa_enrich.get('restricao_sicaf') is not None else 'N/D'}")
-    print(f"  Editais enriquecidos: {enrich_stats.get('editais_enriquecidos', 0)}")
-    print(f"  Distâncias OK:        {enrich_stats.get('distancias_ok', 0)}")
-    print(f"  IBGE OK:              {enrich_stats.get('ibge_ok', 0)}")
-    print(f"  Custos calculados:    {enrich_stats.get('custos_ok', 0)}")
-    print(f"  Tempo total:          {elapsed:.1f}s")
-    print(f"  Salvo em:             {out_path}")
-    print(f"{'='*60}")
+    logger.info("=" * 60)
+    logger.info("RESULTADO ENRIQUECIMENTO")
+    logger.info("=" * 60)
+    logger.info("SICAF:                %s", "coletado" if not args.skip_sicaf else "pulado")
+    logger.info("Sancionada:           %s", "SIM" if empresa_enrich.get("sancionada") else "NÃO")
+    logger.info("Restrição SICAF:      %s",
+                "SIM" if empresa_enrich.get("restricao_sicaf")
+                else "NÃO" if empresa_enrich.get("restricao_sicaf") is not None else "N/D")
+    logger.info("Editais enriquecidos: %d", enrich_stats.get("editais_enriquecidos", 0))
+    logger.info("Distâncias OK:        %d", enrich_stats.get("distancias_ok", 0))
+    logger.info("IBGE OK:              %d", enrich_stats.get("ibge_ok", 0))
+    logger.info("Custos calculados:    %d", enrich_stats.get("custos_ok", 0))
+    logger.info("Tempo total:          %.1fs", elapsed)
+    logger.info("Salvo em:             %s", out_path)
+    logger.info("=" * 60)
 
     api.print_stats()
     api.close()

@@ -736,35 +736,73 @@ def print_gate_summary(gate_name: str, passed: bool, issues: list[str], fixed: l
 # ============================================================
 
 def main() -> int:
+    """Entry point for intel-pipeline CLI orchestrator."""
+    from lib.constants import INTEL_VERSION
+    from lib.cli_validation import (
+        validate_cnpj, validate_ufs, validate_dias, validate_top, validate_from_step,
+    )
+
     parser = argparse.ArgumentParser(
         description="Orquestrador Intel-Busca com quality gates.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-    parser.add_argument("--cnpj", required=True, help="CNPJ da empresa (com ou sem formatação)")
-    parser.add_argument("--ufs", required=True, help="UFs separadas por vírgula (ex: SC,PR,RS)")
-    parser.add_argument("--dias", type=int, default=30, help="Período de busca em dias (default: 30)")
-    parser.add_argument("--top", type=int, default=20, help="Top-N editais para análise (default: 20)")
-    parser.add_argument("--skip-sicaf", action="store_true", help="Pular coleta SICAF")
+    parser.add_argument("--cnpj", required=True,
+                        help="CNPJ da empresa, com ou sem formatacao (ex: 12345678000190 ou 12.345.678/0001-90)")
+    parser.add_argument("--ufs", required=True,
+                        help="UFs separadas por virgula — codigos de 2 letras (ex: SC,PR,RS)")
+    parser.add_argument("--dias", type=int, default=30,
+                        help="Periodo de busca em dias, 1-365 (default: 30)")
+    parser.add_argument("--top", type=int, default=20,
+                        help="Top-N editais para analise detalhada, 1-100 (default: 20)")
+    parser.add_argument("--skip-sicaf", action="store_true",
+                        help="Pular coleta SICAF (evita captcha do navegador)")
     parser.add_argument(
         "--from-step", type=int, default=1, metavar="N",
         help="Retomar a partir do passo N (1-7). Requer JSON existente em docs/intel/",
     )
     parser.add_argument(
         "--no-cache", action="store_true",
-        help="Ignorar cache do PNCP (recoleta tudo)"
+        help="Ignorar cache do PNCP (recoleta tudo)",
     )
+    parser.add_argument(
+        "--dry-run", action="store_true",
+        help="Mostrar passos que seriam executados sem rodar o pipeline",
+    )
+    parser.add_argument("--version", action="version",
+                        version=f"%(prog)s {INTEL_VERSION}")
     args = parser.parse_args()
 
-    cnpj14 = _clean_cnpj(args.cnpj)
-    if len(cnpj14) != 14:
-        print(_err(f"CNPJ inválido: {args.cnpj} (deve ter 14 dígitos)"))
-        return 1
+    # ── Validate arguments ──
+    cnpj14 = validate_cnpj(args.cnpj)
+    ufs = validate_ufs(args.ufs)
+    validate_dias(args.dias)
+    validate_top(args.top)
+    validate_from_step(args.from_step)
 
-    ufs = [u.strip().upper() for u in args.ufs.split(",") if u.strip()]
-    if not ufs:
-        print(_err("--ufs não pode ser vazio"))
-        return 1
+    # ── Dry-run mode ──
+    if args.dry_run:
+        steps = [
+            "Step 1: Collect (intel-collect.py)",
+            "Gate 1: Cobertura",
+            "Step 2: Enrich (intel-enrich.py)",
+            "Gate 2: Cadastral",
+            "Step 3: LLM Gate (intel-llm-gate.py)",
+            "Gate 3: Ruido",
+            "Step 4: Extract Docs (intel-extract-docs.py)",
+            "Gate 4: Conteudo",
+            "Step 5: Analyze (manual — intel-analyze.py --prepare)",
+            "Gate 5: Recomendacao",
+            "Step 6: Excel (intel-excel.py)",
+            "Step 7: PDF Report (intel-report.py)",
+        ]
+        print(f"DRY RUN — Pipeline Intel-Busca v{INTEL_VERSION}")
+        print(f"  CNPJ: {cnpj14} | UFs: {','.join(ufs)} | Dias: {args.dias} | Top: {args.top}")
+        print(f"  From step: {args.from_step}\n")
+        for i, step in enumerate(steps, 1):
+            marker = "  SKIP" if i < args.from_step else "  RUN "
+            print(f"  {marker}  {step}")
+        return 0
 
     today = _now_str()
     INTEL_DIR.mkdir(parents=True, exist_ok=True)

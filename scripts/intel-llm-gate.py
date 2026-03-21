@@ -15,6 +15,15 @@ import json
 import sys
 from pathlib import Path
 
+# Ensure scripts/ is on sys.path for lib imports
+_scripts_dir = str(Path(__file__).resolve().parent)
+if _scripts_dir not in sys.path:
+    sys.path.insert(0, _scripts_dir)
+
+from lib.intel_logging import setup_intel_logging
+
+logger = setup_intel_logging("intel-llm-gate")
+
 # ============================================================
 # UNIVERSAL NEGATIVE KEYWORDS (never construction/engineering,
 # regardless of sector — applies to ALL companies by default)
@@ -169,37 +178,47 @@ def _build_pos_kw_from_sectors(sector_keys: list[str], sectors_yaml: dict) -> li
 # ============================================================
 
 def main():
+    """Entry point for intel-llm-gate CLI."""
+    from lib.constants import INTEL_VERSION
+    from lib.cli_validation import validate_input_file
+
     parser = argparse.ArgumentParser(
-        description="Gate de ruído: reclassifica editais 'needs_llm_review' por keyword matching.",
+        description="Gate de ruido: reclassifica editais 'needs_llm_review' por keyword matching.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""Exemplos:
+  python scripts/intel-llm-gate.py --input docs/intel/intel-CNPJ-slug-YYYY-MM-DD.json
+  python scripts/intel-llm-gate.py --input data.json --neg-keywords-file my_neg.yaml""",
     )
     parser.add_argument(
         "--input", "-i", required=True,
-        help="JSON de entrada (output do intel-collect.py / intel-llm-classify.py)",
+        help="JSON de entrada (output do intel-collect.py). Deve existir.",
     )
     parser.add_argument(
         "--neg-keywords-file", default=None,
-        help="YAML com lista 'neg_keywords' customizada (substitui a lista universal padrão)",
+        help="YAML com lista 'neg_keywords' customizada (substitui a lista universal padrao)",
     )
+    parser.add_argument("--version", action="version",
+                        version=f"%(prog)s {INTEL_VERSION}")
     args = parser.parse_args()
 
+    # ── Validate arguments ──
+    validate_input_file(args.input)
+
     input_path = Path(args.input)
-    if not input_path.exists():
-        print(f"ERROR: Arquivo nao encontrado: {input_path}")
-        sys.exit(1)
 
     try:
         with open(input_path, "r", encoding="utf-8") as f:
             data = json.load(f)
     except json.JSONDecodeError as e:
-        print(f"ERROR: JSON invalido em {input_path}: {e}")
+        logger.error("JSON invalido em %s: %s", input_path, e)
         sys.exit(1)
 
     if not isinstance(data, dict):
-        print("ERROR: JSON raiz deve ser um objeto (dict)")
+        logger.error("JSON raiz deve ser um objeto (dict)")
         sys.exit(1)
 
     if "editais" not in data or not isinstance(data.get("editais"), list):
-        print("ERROR: campo 'editais' ausente ou nao e uma lista")
+        logger.error("campo 'editais' ausente ou nao e uma lista")
         sys.exit(1)
 
     # ── Load negative keywords ──
@@ -209,9 +228,9 @@ def main():
             with open(args.neg_keywords_file, "r", encoding="utf-8") as nf:
                 neg_data = yaml.safe_load(nf) or {}
             NEG_KW = [str(k).lower() for k in neg_data.get("neg_keywords", []) if k]
-            print(f"Negative keywords: {len(NEG_KW)} loaded from {args.neg_keywords_file}")
+            logger.info("Negative keywords: %d loaded from %s", len(NEG_KW), args.neg_keywords_file)
         except Exception as e:
-            print(f"WARNING: Falha ao carregar --neg-keywords-file: {e} — usando lista universal padrão")
+            logger.warning("Falha ao carregar --neg-keywords-file: %s — usando lista universal padrão", e)
             NEG_KW = NEG_KW_DEFAULT
     else:
         NEG_KW = NEG_KW_DEFAULT
@@ -225,22 +244,22 @@ def main():
     if sector_keys and sectors_yaml:
         POS_KW, matched_keys = _build_pos_kw_from_sectors(sector_keys, sectors_yaml)
         if POS_KW:
-            print(f"Positive keywords: {len(POS_KW)} loaded from sectors_data.yaml "
-                  f"(sectors: {', '.join(matched_keys)})")
+            logger.info("Positive keywords: %d loaded from sectors_data.yaml (sectors: %s)",
+                        len(POS_KW), ", ".join(matched_keys))
         else:
-            print(f"WARNING: Sector keys {sector_keys} não encontrados em sectors_data.yaml "
-                  "— usando lista fallback embutida")
+            logger.warning("Sector keys %s não encontrados em sectors_data.yaml "
+                           "— usando lista fallback embutida", sector_keys)
             POS_KW = POS_KW_FALLBACK
     else:
         if not sectors_yaml:
-            print("WARNING: sectors_data.yaml não encontrado — usando lista fallback embutida")
+            logger.warning("sectors_data.yaml não encontrado — usando lista fallback embutida")
         else:
-            print("WARNING: sector_keys não encontrado no JSON — usando lista fallback embutida")
+            logger.warning("sector_keys não encontrado no JSON — usando lista fallback embutida")
         POS_KW = POS_KW_FALLBACK
 
     # ── Gate logic ──
     llm_review = [e for e in data["editais"] if e.get("needs_llm_review")]
-    print(f"\nPending LLM review: {len(llm_review)}")
+    logger.info("Pending LLM review: %d", len(llm_review))
 
     compat_count = 0
     incompat_count = 0
@@ -266,17 +285,19 @@ def main():
     total_incompat = sum(1 for e in data["editais"] if not e.get("cnae_compatible"))
     still_review = sum(1 for e in data["editais"] if e.get("needs_llm_review"))
 
-    print(f"\nV2 pass results:")
-    print(f"  New compatible:   {compat_count}")
-    print(f"  New incompatible: {incompat_count}")
-    print(f"\nFinal totals:")
-    print(f"  Total compatible:   {total_compat}")
-    print(f"  Total incompatible: {total_incompat}")
-    print(f"  Still needs review: {still_review}")
+    logger.info("V2 pass results:")
+    logger.info("  New compatible:   %d", compat_count)
+    logger.info("  New incompatible: %d", incompat_count)
+    logger.info("Final totals:")
+    logger.info("  Total compatible:   %d", total_compat)
+    logger.info("  Total incompatible: %d", total_incompat)
+    logger.info("  Still needs review: %d", still_review)
 
     with open(input_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-    print(f"\nJSON atualizado: {input_path}")
+
+    # User-facing output
+    print(f"JSON atualizado: {input_path}")
 
     # Show top compatible by value
     compat = sorted(

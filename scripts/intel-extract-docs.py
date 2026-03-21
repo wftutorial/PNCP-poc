@@ -680,8 +680,12 @@ def select_top_editais(
 # ============================================================
 
 def main() -> None:
+    """Entry point for intel-extract-docs CLI."""
+    from lib.constants import INTEL_VERSION
+    from lib.cli_validation import validate_input_file, validate_top
+
     parser = argparse.ArgumentParser(
-        description="Download e extração de texto de documentos de editais (PDF, ZIP, RAR, XLS, XLSX).",
+        description="Download e extracao de texto de documentos de editais (PDF, ZIP, RAR, XLS, XLSX).",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
@@ -689,32 +693,35 @@ def main() -> None:
         "--input",
         required=True,
         metavar="JSON",
-        help="Caminho para o JSON gerado pelo intel-collect.py",
+        help="Caminho para o JSON gerado pelo intel-collect.py. Deve existir.",
     )
     parser.add_argument(
         "--top",
         type=int,
         default=20,
         metavar="N",
-        help="Número de editais top por valor a processar (padrão: 20)",
+        help="Numero de editais top por valor a processar, 1-100 (padrao: 20)",
     )
     parser.add_argument(
         "--output",
         default=None,
         metavar="JSON",
-        help="Caminho do JSON de saída (padrão: sobrescreve --input)",
+        help="Caminho do JSON de saida (padrao: sobrescreve --input)",
     )
     parser.add_argument(
         "--preserve-top20",
         action="store_true",
-        help="Preservar top20 existente no JSON (não sobrescrever seleção anterior)",
+        help="Preservar top20 existente no JSON (nao sobrescrever selecao anterior)",
     )
+    parser.add_argument("--version", action="version",
+                        version=f"%(prog)s {INTEL_VERSION}")
     args = parser.parse_args()
 
+    # ── Validate arguments ──
+    validate_input_file(args.input)
+    validate_top(args.top)
+
     input_path = Path(args.input)
-    if not input_path.exists():
-        print(f"ERROR: Arquivo não encontrado: {input_path}", file=sys.stderr)
-        sys.exit(1)
 
     output_path = Path(args.output) if args.output else input_path
 

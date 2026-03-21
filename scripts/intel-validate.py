@@ -38,6 +38,15 @@ if sys.platform == "win32":
     except (ValueError, AttributeError):
         pass
 
+# Ensure scripts/ is on sys.path for lib imports
+_scripts_dir = str(Path(__file__).resolve().parent)
+if _scripts_dir not in sys.path:
+    sys.path.insert(0, _scripts_dir)
+
+from lib.intel_logging import setup_intel_logging
+
+logger = setup_intel_logging("intel-validate")
+
 # ============================================================
 # CONSTANTS
 # ============================================================
@@ -58,26 +67,26 @@ def _c(text: str, color: str) -> str:
 
 
 def _ok(msg: str) -> None:
-    print(f"  {_c('PASS', _C_GREEN)} {msg}")
+    logger.info("PASS %s", msg)
 
 
 def _fail(msg: str) -> None:
-    print(f"  {_c('FAIL', _C_RED)} {msg}")
+    logger.error("FAIL %s", msg)
 
 
 def _warn(msg: str) -> None:
-    print(f"  {_c('WARN', _C_YELLOW)} {msg}")
+    logger.warning("WARN %s", msg)
 
 
 def _fix(msg: str) -> None:
-    print(f"  {_c('FIX ', _C_CYAN)} {msg}")
+    logger.info("FIX  %s", msg)
 
 
 def _header(title: str) -> None:
     bar = "=" * 60
-    print(f"\n{_c(bar, _C_BOLD)}")
-    print(f"{_c(title, _C_BOLD)}")
-    print(f"{_c(bar, _C_BOLD)}")
+    logger.info(bar)
+    logger.info(title)
+    logger.info(bar)
 
 
 # ============================================================
@@ -735,60 +744,72 @@ def validate_v4_fields(top20: list[dict], empresa: dict) -> dict[str, Any]:
 # ============================================================
 
 def main() -> None:
+    """Entry point for intel-validate CLI."""
+    from lib.constants import INTEL_VERSION
+    from lib.cli_validation import validate_input_file
+
     parser = argparse.ArgumentParser(
         description="Validacao programatica dos Gates 2, 4 e 5 do pipeline /intel-busca.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""Exemplos:
+  python scripts/intel-validate.py --input data.json
+  python scripts/intel-validate.py --input data.json --fix
+  python scripts/intel-validate.py --input data.json --fix --strict""",
     )
     parser.add_argument(
         "--input", "-i", required=True,
-        help="JSON de entrada com top20[].analise (output do intel-analyze.py)",
+        help="JSON de entrada com top20[].analise (output do intel-analyze.py). Deve existir.",
     )
     parser.add_argument(
         "--output", "-o", default=None,
-        help="Caminho para salvar o relatorio de validacao (default: <input>-validation.json)",
+        help="Caminho para salvar o relatorio de validacao JSON (default: <input>-validation.json)",
     )
     parser.add_argument(
         "--fix", action="store_true",
-        help="Auto-corrigir problemas encontrados e salvar JSON corrigido in-place",
+        help="Auto-corrigir problemas encontrados e salvar JSON corrigido in-place. "
+             "Corrige: datas expiradas, campos vazios, recomendacoes incoerentes.",
     )
     parser.add_argument(
         "--strict", action="store_true",
-        help="Exit code 1 se qualquer gate falhar (para uso em CI)",
+        help="Exit code 1 se qualquer gate falhar (para uso em CI/CD pipelines)",
     )
+    parser.add_argument("--version", action="version",
+                        version=f"%(prog)s {INTEL_VERSION}")
     args = parser.parse_args()
+
+    # ── Validate arguments ──
+    validate_input_file(args.input)
 
     # Load input JSON
     input_path = Path(args.input)
-    if not input_path.exists():
-        print(f"ERRO: arquivo nao encontrado: {input_path}", file=sys.stderr)
-        sys.exit(2)
 
     try:
         with open(input_path, "r", encoding="utf-8") as f:
             data = json.load(f)
     except json.JSONDecodeError as e:
-        print(f"ERRO: JSON invalido em {input_path}: {e}", file=sys.stderr)
+        logger.error("JSON invalido em %s: %s", input_path, e)
         sys.exit(2)
 
     if not isinstance(data, dict):
-        print("ERRO: JSON raiz deve ser um objeto (dict)", file=sys.stderr)
+        logger.error("JSON raiz deve ser um objeto (dict)")
         sys.exit(2)
 
     top20 = data.get("top20", [])
     if not isinstance(top20, list):
-        print("ERRO: campo 'top20' deve ser uma lista", file=sys.stderr)
+        logger.error("campo 'top20' deve ser uma lista")
         sys.exit(2)
 
     empresa = data.get("empresa", {})
     if not isinstance(empresa, dict):
-        print("ERRO: campo 'empresa' deve ser um objeto (dict)", file=sys.stderr)
+        logger.error("campo 'empresa' deve ser um objeto (dict)")
         sys.exit(2)
 
     if not top20:
-        print("ERRO: top20 vazio ou ausente no JSON", file=sys.stderr)
+        logger.error("top20 vazio ou ausente no JSON")
         sys.exit(2)
 
-    print(f"Validando {len(top20)} editais no top20...")
-    print(f"Empresa: {empresa.get('razao_social', 'N/A')} (CNPJ: {empresa.get('cnpj', 'N/A')})")
+    logger.info("Validando %d editais no top20...", len(top20))
+    logger.info("Empresa: %s (CNPJ: %s)", empresa.get("razao_social", "N/A"), empresa.get("cnpj", "N/A"))
 
     # ── GATE 2: Semantic Compatibility ──
     _header("GATE 2: Compatibilidade Semantica")
@@ -806,11 +827,11 @@ def main() -> None:
     _header("V4: Campos de Inteligencia Avancada")
     v4_result = validate_v4_fields(top20, empresa)
     stats = v4_result["stats"]
-    print(f"  Confianca CNAE:     {stats['with_confidence']}/{len(top20)} editais")
-    print(f"  Aderencia perfil:   {stats['with_fit']}/{len(top20)} editais")
-    print(f"  Simulacao lance:    {stats['with_bid']}/{len(top20)} editais")
-    print(f"  Status delta:       {stats['with_delta']}/{len(top20)} editais")
-    print(f"  Extracao estrut.:   {stats['with_structured']}/{len(top20)} editais")
+    logger.info("Confianca CNAE:     %d/%d editais", stats["with_confidence"], len(top20))
+    logger.info("Aderencia perfil:   %d/%d editais", stats["with_fit"], len(top20))
+    logger.info("Simulacao lance:    %d/%d editais", stats["with_bid"], len(top20))
+    logger.info("Status delta:       %d/%d editais", stats["with_delta"], len(top20))
+    logger.info("Extracao estrut.:   %d/%d editais", stats["with_structured"], len(top20))
     if v4_result["issues"]:
         for issue in v4_result["issues"]:
             _fail(issue)
@@ -883,14 +904,14 @@ def main() -> None:
         + len(gate4_result["issues"])
         + len(gate5_result["issues"])
     )
-    print(f"  Gate 2 (Semantica):    {'PASS' if gate2_result['passed'] else 'FAIL'}")
-    print(f"  Gate 4 (Completude):   {'PASS' if gate4_result['passed'] else 'FAIL'}")
-    print(f"  Gate 5 (Coerencia):    {'PASS' if gate5_result['passed'] else 'FAIL'}")
-    print(f"  Campos completos:      {gate5_result['campos_completos_pct']}%")
-    print(f"  Issues encontradas:    {total_issues}")
-    print(f"  Editais removidos:     {len(all_removed)}")
-    print(f"  Top20 restante:        {remaining_count}")
-    print(f"  Overall:               {_c('PASS', _C_GREEN) if overall_passed else _c('FAIL', _C_RED)}")
+    logger.info("Gate 2 (Semantica):    %s", "PASS" if gate2_result["passed"] else "FAIL")
+    logger.info("Gate 4 (Completude):   %s", "PASS" if gate4_result["passed"] else "FAIL")
+    logger.info("Gate 5 (Coerencia):    %s", "PASS" if gate5_result["passed"] else "FAIL")
+    logger.info("Campos completos:      %s%%", gate5_result["campos_completos_pct"])
+    logger.info("Issues encontradas:    %d", total_issues)
+    logger.info("Editais removidos:     %d", len(all_removed))
+    logger.info("Top20 restante:        %d", remaining_count)
+    logger.info("Overall:               %s", "PASS" if overall_passed else "FAIL")
 
     # Save validation report
     if args.output:
@@ -901,7 +922,7 @@ def main() -> None:
 
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(report, f, ensure_ascii=False, indent=2)
-    print(f"\nRelatorio salvo em: {output_path}")
+    print(f"Relatorio salvo em: {output_path}")
 
     # Save fixed JSON in-place if --fix
     if args.fix:
@@ -916,16 +937,16 @@ def main() -> None:
 
         with open(input_path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
-        print(f"JSON corrigido salvo em: {input_path}")
+        print(f"JSON corrigido salvo em: {input_path}")  # user-facing
 
     # Exit code logic:
     # --fix + still failing = exit 1 (fix didn't resolve everything)
     # --strict = exit 1 on ANY remaining failure
     if args.fix and not overall_passed:
-        print(f"\n{_c('EXIT 1', _C_RED)}: --fix usado mas issues permanecem apos correcao")
+        logger.error("EXIT 1: --fix usado mas issues permanecem apos correcao")
         sys.exit(1)
     if args.strict and not overall_passed:
-        print(f"\n{_c('EXIT 1', _C_RED)}: --strict e gates falharam")
+        logger.error("EXIT 1: --strict e gates falharam")
         sys.exit(1)
 
 

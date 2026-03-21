@@ -30,6 +30,15 @@ if sys.platform == "win32":
     except (ValueError, AttributeError):
         pass
 
+# Ensure scripts/ is on sys.path for lib imports
+_scripts_dir = str(Path(__file__).resolve().parent)
+if _scripts_dir not in sys.path:
+    sys.path.insert(0, _scripts_dir)
+
+from lib.intel_logging import setup_intel_logging
+
+logger = setup_intel_logging("intel-excel")
+
 from openpyxl import Workbook
 from openpyxl.cell import WriteOnlyCell
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side, numbers
@@ -859,7 +868,7 @@ def generate_excel(data: dict, output_path: str) -> str:
     )
 
     if not isinstance(items, list):
-        print(f"WARN: campo de oportunidades nao e lista, tipo={type(items).__name__}")
+        logger.warning("campo de oportunidades nao e lista, tipo=%s", type(items).__name__)
         items = []
 
     # Compute capacity
@@ -903,25 +912,35 @@ def generate_excel(data: dict, output_path: str) -> str:
 
 
 def main():
+    """Entry point for intel-excel CLI."""
+    from lib.constants import INTEL_VERSION
+    from lib.cli_validation import validate_input_file
+
     parser = argparse.ArgumentParser(
-        description="Gera planilha Excel a partir do JSON do intel-collect.py"
+        description="Gera planilha Excel profissional a partir do JSON do intel-collect.py.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""Exemplos:
+  python scripts/intel-excel.py --input docs/intel/intel-12345678000190-slug-2026-03-18.json
+  python scripts/intel-excel.py --input data.json --output planilha.xlsx""",
     )
     parser.add_argument(
         "--input", "-i",
         required=True,
-        help="Caminho do JSON de entrada (output do intel-collect.py)",
+        help="Caminho do JSON de entrada (output do intel-collect.py). Deve existir.",
     )
     parser.add_argument(
         "--output", "-o",
         default=None,
-        help="Caminho do .xlsx de saida (default: mesmo basename com .xlsx)",
+        help="Caminho do .xlsx de saida (default: mesmo basename do input com extensao .xlsx)",
     )
+    parser.add_argument("--version", action="version",
+                        version=f"%(prog)s {INTEL_VERSION}")
     args = parser.parse_args()
 
+    # ── Validate arguments ──
+    validate_input_file(args.input)
+
     input_path = args.input
-    if not os.path.isfile(input_path):
-        print(f"ERRO: Arquivo nao encontrado: {input_path}")
-        sys.exit(1)
 
     # Default output: same name with .xlsx
     if args.output:

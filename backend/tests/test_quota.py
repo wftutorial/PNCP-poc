@@ -874,3 +874,57 @@ class TestSaveSearchSession:
         table_names = [call[0][0] for call in calls]
         assert "profiles" in table_names
         assert "search_sessions" in table_names
+
+
+class TestDebtDB022IncrementQuotaLastResort:
+    """DEBT-DB-022: Verify last-resort fallback does NOT perform non-atomic upsert.
+
+    When both RPC functions (increment_quota_atomic and increment_quota_fallback_atomic)
+    are unavailable, the code should return the current count without mutating data,
+    rather than performing a non-atomic upsert that could reset the count to 1.
+    """
+
+    @patch("supabase_client.get_supabase")
+    @patch("quota.get_monthly_quota_used", return_value=7)
+    def test_last_resort_returns_current_count_without_upsert(
+        self, mock_get_used, mock_get_sb, caplog
+    ):
+        """When both RPCs fail, should return current count and log warning."""
+        import logging
+        from quota import increment_monthly_quota
+
+        mock_sb = Mock()
+        mock_get_sb.return_value = mock_sb
+
+        # Both RPC calls raise exceptions (functions not deployed)
+        mock_sb.rpc.side_effect = Exception("RPC not available")
+
+        with caplog.at_level(logging.WARNING):
+            result = increment_monthly_quota("user-123", max_quota=100)
+
+        # Should return current count from get_monthly_quota_used
+        assert result == 7
+        mock_get_used.assert_called_once_with("user-123")
+
+        # Should NOT have called .table().upsert() — the old non-atomic path
+        mock_sb.table.assert_not_called()
+
+        # Should have logged a warning about all methods failing
+        assert any("All atomic quota increment methods failed" in r.message for r in caplog.records)
+
+    @patch("supabase_client.get_supabase")
+    @patch("quota.get_monthly_quota_used", side_effect=Exception("DB down"))
+    def test_last_resort_returns_zero_on_total_failure(
+        self, mock_get_used, mock_get_sb
+    ):
+        """When RPCs fail AND get_monthly_quota_used fails, should return 0 (fail-open)."""
+        from quota import increment_monthly_quota
+
+        mock_sb = Mock()
+        mock_get_sb.return_value = mock_sb
+        mock_sb.rpc.side_effect = Exception("RPC not available")
+
+        result = increment_monthly_quota("user-456", max_quota=100)
+
+        # Fail-open: return 0 rather than blocking user
+        assert result == 0

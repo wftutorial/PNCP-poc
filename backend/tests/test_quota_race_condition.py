@@ -44,31 +44,25 @@ class TestAtomicIncrementUnit:
         assert result == 5
 
     def test_increment_falls_back_on_rpc_error(self):
-        """Should fall back to upsert if RPC function doesn't exist."""
+        """DEBT-DB-022: When all RPCs fail, should return current count without non-atomic upsert."""
         from quota import increment_monthly_quota
 
         mock_supabase = Mock()
 
-        # RPC fails (function doesn't exist)
+        # Both RPC calls fail (functions don't exist)
         mock_supabase.rpc.return_value.execute.side_effect = Exception("function does not exist")
 
-        # Fallback: get current count
-        mock_select_result = Mock()
-        mock_select_result.data = [{"searches_count": 10}]
-
-        mock_table = Mock()
-        mock_table.select.return_value.eq.return_value.eq.return_value.execute.return_value = mock_select_result
-        mock_table.upsert.return_value.execute.return_value = Mock()
-
-        mock_supabase.table.return_value = mock_table
-
-        with patch("supabase_client.get_supabase", return_value=mock_supabase):
+        with (
+            patch("supabase_client.get_supabase", return_value=mock_supabase),
+            patch("quota.get_monthly_quota_used", return_value=10) as mock_get_used,
+        ):
             result = increment_monthly_quota("user-123")
 
-        # Should have attempted upsert
-        mock_table.upsert.assert_called_once()
-        # Result should be refetched count
-        assert result == 10  # Re-fetched after upsert
+        # DEBT-DB-022: Should NOT have called upsert (old non-atomic path removed)
+        mock_supabase.table.assert_not_called()
+        # Should return current count via get_monthly_quota_used (fail-open)
+        assert result == 10
+        mock_get_used.assert_called_with("user-123")
 
     def test_increment_with_max_quota_passes_to_rpc(self):
         """Should pass max_quota to RPC for limit enforcement."""

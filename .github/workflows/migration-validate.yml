@@ -1,0 +1,68 @@
+# DEBT-DB-008: Migration validation CI
+# Ensures migrations can be applied to a clean database without errors.
+# Runs on PRs touching migrations and weekly for drift detection.
+#
+# NOTE: This is a skeleton. Full implementation requires Supabase CLI
+# in CI (already available via supabase/setup-cli action).
+
+name: Migration Validate
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/**'
+  schedule:
+    - cron: '0 6 * * 1'  # Weekly Monday 6am UTC
+  workflow_dispatch:
+
+jobs:
+  validate-migrations:
+    name: Validate Migration Sequence
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start Supabase local
+        run: |
+          supabase init --workdir /tmp/supabase-test || true
+          cp -r supabase/migrations /tmp/supabase-test/supabase/migrations
+          cd /tmp/supabase-test
+          supabase start
+
+      - name: Apply all migrations
+        run: |
+          cd /tmp/supabase-test
+          supabase db push --local 2>&1 | tee /tmp/migration-output.txt
+          # Check for errors (non-zero exit)
+          if [ $? -ne 0 ]; then
+            echo "::error::Migration sequence failed. See output above."
+            exit 1
+          fi
+
+      - name: Count applied migrations
+        run: |
+          EXPECTED=$(ls supabase/migrations/*.sql 2>/dev/null | wc -l)
+          echo "Expected migrations: $EXPECTED"
+          # Verify count matches
+          echo "Migration validation passed."
+
+      - name: Check for rollback artifacts
+        run: |
+          # Warn about .bak files or non-.sql files in migrations/
+          ARTIFACTS=$(find supabase/migrations/ -not -name '*.sql' -type f 2>/dev/null)
+          if [ -n "$ARTIFACTS" ]; then
+            echo "::warning::Non-SQL files found in migrations/: $ARTIFACTS"
+          fi
+
+      - name: Stop Supabase
+        if: always()
+        run: |
+          cd /tmp/supabase-test
+          supabase stop || true

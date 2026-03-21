@@ -561,24 +561,18 @@ def increment_monthly_quota(user_id: str, max_quota: Optional[int] = None) -> in
         except Exception as fallback_rpc_err:
             logger.debug(f"Atomic fallback RPC not available: {fallback_rpc_err}")
 
-        # Last-resort fallback: upsert with conditional increment
-        # Still uses upsert but tries to be as atomic as possible
-        # by not reading first (AC15: eliminate read-modify-write)
-        sb.table("monthly_quota").upsert(
-            {
-                "user_id": user_id,
-                "month_year": month_key,
-                "searches_count": 1,
-                "updated_at": datetime.now(timezone.utc).isoformat(),
-            },
-            on_conflict="user_id,month_year",
-        ).execute()
-
-        # After upsert ensures row exists, do atomic increment via RPC
-        # This is the best we can do without raw SQL access
-        new_count = get_monthly_quota_used(user_id)
-        logger.info(f"Incremented monthly quota for user {mask_user_id(user_id)}: {new_count} (upsert fallback)")
-        return new_count
+        # DEBT-DB-022: Last-resort fallback removed.
+        # The previous upsert with searches_count=1 was NOT atomic:
+        # - ON CONFLICT would overwrite count to 1 (losing real count)
+        # - Separate read after upsert was a TOCTOU race
+        # Both RPC functions failed, so log clearly and fall through
+        # to the outer except block which returns best-effort estimate.
+        logger.warning(
+            f"All atomic quota increment methods failed for user {mask_user_id(user_id)}. "
+            f"RPC increment_quota_atomic and increment_quota_fallback_atomic both unavailable. "
+            f"Returning current count without increment (fail-open)."
+        )
+        return get_monthly_quota_used(user_id)
 
     except Exception as e:
         logger.error(f"Error incrementing monthly quota for user {mask_user_id(user_id)}: {e}")

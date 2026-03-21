@@ -1,4 +1,6 @@
-name: PR Validation
+# PR metadata validation: title format, body sections, secret scanning, Trivy CRITICAL.
+# This is supplementary to backend-tests.yml and frontend-tests.yml (the actual test gates).
+name: "PR Validation (Metadata + Security)"
 
 on:
   pull_request:

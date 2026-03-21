@@ -1,4 +1,4 @@
-name: handle_new_user Guard
+name: "handle_new_user Guard (Migration Safety)"
 on:
   pull_request:
     paths:

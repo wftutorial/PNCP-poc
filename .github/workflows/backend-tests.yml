@@ -1,6 +1,7 @@
 # CRIT-038 AC1: Backend test gate — zero failures required for merge
 # DEBT-007: Added API schema validation, vulnerability scanning, linting
-name: Backend Tests
+# THIS IS THE AUTHORITATIVE BACKEND PR GATE. Do not disable this workflow.
+name: "Backend Tests (PR Gate)"
 
 on:
   pull_request:

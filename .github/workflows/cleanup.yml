@@ -1,4 +1,4 @@
-name: Cleanup
+name: "Cleanup (Scheduled Maintenance)"
 
 on:
   schedule:
@@ -26,8 +26,8 @@ jobs:
 
           git fetch --all --prune
 
-          # Get all merged branches
-          git branch -r --merged origin/master | \
+          # Get all merged branches (using origin/main — this project's default branch)
+          git branch -r --merged origin/main | \
             grep -v "HEAD" | \
             grep -v "master" | \
             grep -v "main" | \

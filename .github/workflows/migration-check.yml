@@ -1,4 +1,4 @@
-name: Migration Check
+name: "Migration Check (Post-Merge Alert)"
 
 on:
   push:

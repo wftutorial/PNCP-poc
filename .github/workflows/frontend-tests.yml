@@ -1,6 +1,7 @@
 # CRIT-038 AC2: Frontend test gate — zero failures required for merge
 # DEBT-007: Added vulnerability scanning
-name: Frontend Tests
+# THIS IS THE AUTHORITATIVE FRONTEND PR GATE. Do not disable this workflow.
+name: "Frontend Tests (PR Gate)"
 
 on:
   pull_request:

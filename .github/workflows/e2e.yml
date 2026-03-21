@@ -1,4 +1,7 @@
-name: E2E Tests
+# NOTE: E2E tests are also run in tests.yml (as a job after unit tests pass).
+# This standalone workflow exists for targeted E2E runs — e.g., path-triggered on
+# frontend/backend critical files. It includes smoke test quality gate (GTM-QUAL-001 AC13).
+name: "E2E Tests (Playwright)"
 
 on:
   push:

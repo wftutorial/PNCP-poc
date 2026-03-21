@@ -1,4 +1,9 @@
-name: Backend CI
+# NOTE: This workflow (backend-ci.yml) is SUPERSEDED by backend-tests.yml (CRIT-038 PR gate).
+# backend-tests.yml is the authoritative backend PR gate with quality tools (pip-audit, ruff,
+# mypy, schema validation, per-module coverage). This file is kept for the Trivy CRITICAL scan
+# and pip-audit HIGH advisory which backend-tests.yml does not duplicate.
+# If you need to disable one, disable this file — NOT backend-tests.yml.
+name: "Backend CI (Security + Linting)"
 
 on:
   pull_request:

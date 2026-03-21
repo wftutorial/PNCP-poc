@@ -1,9 +1,14 @@
-name: Deploy to Staging
+# NOTE: Staging environment (RAILWAY_TOKEN_STAGING, STAGING_BACKEND_URL, STAGING_FRONTEND_URL)
+# is not currently provisioned. This workflow will fail silently on missing secrets.
+# The pull_request trigger has been scoped to develop/feature branches only to avoid
+# triggering on every PR to main. Re-enable or expand triggers when staging is set up.
+name: "Deploy to Staging"
 
 on:
   push:
     branches: [develop, feature/**]
   pull_request:
+    branches: [develop, feature/**]
     types: [opened, synchronize, reopened]
   workflow_dispatch:
     inputs:

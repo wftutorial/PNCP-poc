@@ -1,4 +1,4 @@
-name: Sync Sectors Fallback
+name: "Sync Sectors Fallback (Monthly)"
 
 # Run monthly on the 1st at 3 AM UTC, or manually via workflow_dispatch
 on:

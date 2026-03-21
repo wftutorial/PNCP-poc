@@ -1,4 +1,4 @@
-name: Load Testing
+name: "Load Testing (Locust)"
 
 on:
   workflow_dispatch:

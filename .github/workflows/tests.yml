@@ -2,7 +2,9 @@
 # integration, E2E). It complements backend-tests.yml which runs single-Python backend
 # tests PLUS quality tools (pip-audit, ruff, mypy, schema validation, per-module coverage).
 # Both are needed: this for cross-version + E2E, backend-tests.yml for quality gates.
-name: Tests
+# NOTE: The E2E job here duplicates e2e.yml. e2e.yml is more complete (uploads artifacts,
+# runs smoke tests). tests.yml E2E job serves as a gating step that requires unit tests first.
+name: "Tests (Full Matrix + Integration + E2E)"
 
 on:
   pull_request:

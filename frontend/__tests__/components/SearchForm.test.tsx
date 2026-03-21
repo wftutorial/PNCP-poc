@@ -247,13 +247,14 @@ describe('SearchForm Component', () => {
     it('should render search button', () => {
       render(<SearchForm {...defaultProps} />);
 
-      expect(screen.getByRole('button', { name: /Buscar Vestuário/i })).toBeInTheDocument();
+      // Button uses aria-label="Iniciar busca de licitações" (overrides text content for role queries)
+      expect(screen.getByRole('button', { name: /Iniciar busca/i })).toBeInTheDocument();
     });
 
     it('should disable search button when canSearch is false', () => {
       render(<SearchForm {...defaultProps} canSearch={false} />);
 
-      const searchButton = screen.getByRole('button', { name: /Buscar/i });
+      const searchButton = screen.getByRole('button', { name: /Iniciar busca de licitações/i });
       expect(searchButton).toBeDisabled();
     });
 
@@ -266,7 +267,7 @@ describe('SearchForm Component', () => {
     it('should call buscar when clicked', () => {
       render(<SearchForm {...defaultProps} />);
 
-      fireEvent.click(screen.getByRole('button', { name: /Buscar Vestuário/i }));
+      fireEvent.click(screen.getByRole('button', { name: /Iniciar busca de licitações/i }));
 
       expect(defaultProps.buscar).toHaveBeenCalled();
     });
@@ -338,7 +339,8 @@ describe('SearchForm Component', () => {
     it('should mark search button as busy during loading', () => {
       render(<SearchForm {...defaultProps} loading={true} />);
 
-      const searchButton = screen.getByRole('button', { name: /Consultando/i });
+      // Button aria-label is fixed; verify aria-busy on the search button
+      const searchButton = screen.getByRole('button', { name: /Iniciar busca de licitações/i });
       expect(searchButton).toHaveAttribute('aria-busy', 'true');
     });
   });

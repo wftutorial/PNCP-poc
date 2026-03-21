@@ -361,9 +361,9 @@ describe("UX-346: First-Use Experience", () => {
     it("search sets smartlic-has-searched in localStorage", async () => {
       render(<HomePage />);
 
-      // Find the main search button (contains the search label)
+      // Button uses aria-label="Iniciar busca de licitações" (overrides text content for role queries)
       const searchButton = screen.getByRole("button", {
-        name: /buscar vestuário e uniformes/i,
+        name: /Iniciar busca de licitações/i,
       });
 
       await act(async () => {
@@ -380,7 +380,7 @@ describe("UX-346: First-Use Experience", () => {
       expect(screen.getByTestId("first-use-tip")).toBeInTheDocument();
 
       const searchButton = screen.getByRole("button", {
-        name: /buscar vestuário e uniformes/i,
+        name: /Iniciar busca de licitações/i,
       });
 
       await act(async () => {

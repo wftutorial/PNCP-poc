@@ -94,7 +94,8 @@ beforeEach(() => {
 describe("AC7: Pricing fallback constants consistency", () => {
   it("Pro monthly price matches base (R$397)", () => {
     render(<PlanosPage />);
-    // Default is monthly — should show R$397
+    // Page defaults to "annual" — switch to Mensal to verify monthly price
+    fireEvent.click(screen.getByRole("radio", { name: /Mensal/i }));
     expect(screen.getByText(/R\$\s*397/)).toBeInTheDocument();
   });
 
@@ -198,7 +199,8 @@ describe("AC2: Frontend pricing fetch with fallback", () => {
   it("uses fallback values when API fails", async () => {
     mockUsePlans.mockReturnValue({ plans: null, error: new Error("fail"), isLoading: false });
     render(<PlanosPage />);
-    // Should still show pricing from fallback constants
+    // Page defaults to "annual" — switch to Mensal to verify monthly fallback price
+    fireEvent.click(screen.getByRole("radio", { name: /Mensal/i }));
     await waitFor(() => {
       expect(screen.getByText(/R\$\s*397/)).toBeInTheDocument();
     });
@@ -223,7 +225,8 @@ describe("AC2: Frontend pricing fetch with fallback", () => {
     });
 
     render(<PlanosPage />);
-    // Should show pricing from API (same values as fallback for now)
+    // Page defaults to "annual" — switch to Mensal to verify monthly price from API
+    fireEvent.click(screen.getByRole("radio", { name: /Mensal/i }));
     await waitFor(() => {
       expect(screen.getByText(/R\$\s*397/)).toBeInTheDocument();
     });
@@ -248,7 +251,8 @@ describe("AC2: Frontend pricing fetch with fallback", () => {
     });
 
     render(<PlanosPage />);
-    // Wait for API pricing to load and replace fallback
+    // Page defaults to "annual" — switch to Mensal to verify API-driven monthly price
+    fireEvent.click(screen.getByRole("radio", { name: /Mensal/i }));
     await waitFor(() => {
       expect(screen.getByText(/R\$\s*499/)).toBeInTheDocument();
     });
@@ -276,6 +280,8 @@ describe("AC3: Pricing values match Stripe (migration 20260226120000)", () => {
 
   it("Pro fallback monthly matches DB (R$397 = 39700 cents)", () => {
     render(<PlanosPage />);
+    // Page defaults to "annual" — switch to Mensal to verify monthly price
+    fireEvent.click(screen.getByRole("radio", { name: /Mensal/i }));
     // Verify R$397 is displayed (39700/100 = 397)
     expect(screen.getByText(/R\$\s*397/)).toBeInTheDocument();
     expect(STRIPE_DB_VALUES.pro.monthly / 100).toBe(397);

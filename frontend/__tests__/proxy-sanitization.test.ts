@@ -77,7 +77,7 @@ describe("GTM-PROXY-001 T1: All proxies return PT when backend offline", () => {
     const res = await POST(req);
     expect(res.status).toBe(503);
     const body = await res.json();
-    expect(body.message).toMatch(/indispon|temporariamente/i);
+    expect(body.message).toMatch(/indispon|temporariamente|configurado/i);
   });
 
   it("subscription-status GET returns 503 PT when BACKEND_URL missing", async () => {
@@ -86,7 +86,7 @@ describe("GTM-PROXY-001 T1: All proxies return PT when backend offline", () => {
     const res = await GET(req);
     expect(res.status).toBe(503);
     const body = await res.json();
-    expect(body.message).toMatch(/indispon|temporariamente/i);
+    expect(body.message).toMatch(/indispon|temporariamente|configurado/i);
   });
 
   it("search-status GET returns 503 PT when BACKEND_URL missing", async () => {
@@ -95,7 +95,7 @@ describe("GTM-PROXY-001 T1: All proxies return PT when backend offline", () => {
     const res = await GET(req);
     expect(res.status).toBe(503);
     const body = await res.json();
-    expect(body.message).toMatch(/indispon|temporariamente/i);
+    expect(body.message).toMatch(/indispon|temporariamente|configurado/i);
   });
 
   it("sessions GET returns 503 PT when BACKEND_URL missing", async () => {

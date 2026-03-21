@@ -8,9 +8,10 @@
 
 import { NextResponse } from "next/server";
 
-const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
+const BACKEND_URL = process.env.BACKEND_URL;
 
 export async function POST() {
+  if (!BACKEND_URL) return new NextResponse(null, { status: 204 });
   try {
     await fetch(`${BACKEND_URL}/v1/metrics/sse-fallback`, {
       method: "POST",

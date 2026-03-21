@@ -993,8 +993,10 @@ describe("PlanosPage — Consultoria plan card (AC21/AC22)", () => {
 
   // ── Billing period toggle affects consultoria pricing ─────────────────────
 
-  it("shows monthly consultoria price R$997 by default", () => {
+  it("shows monthly consultoria price R$997 when Mensal selected", () => {
     render(<PlanosPage />);
+    // Page defaults to "annual" — click Mensal to verify monthly consultoria price
+    fireEvent.click(screen.getByTestId("toggle-monthly"));
     // formatCurrency mock returns "R$997"
     expect(screen.getByText("R$997")).toBeInTheDocument();
   });

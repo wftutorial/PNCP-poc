@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
+const BACKEND_URL = process.env.BACKEND_URL;
 
 /**
  * CRIT-059 AC4: Proxy for GET /v1/search/{search_id}/zero-match
@@ -17,6 +17,10 @@ export async function GET(
   const authHeader = request.headers.get("authorization");
   if (authHeader) {
     headers["Authorization"] = authHeader;
+  }
+
+  if (!BACKEND_URL) {
+    return NextResponse.json({ error: "Serviço indisponível no momento." }, { status: 503 });
   }
 
   try {

@@ -488,10 +488,10 @@ def _build_oportunidades(wb: Workbook, items: list[dict], capacity_10x: float | 
         unique_sup = comp.get("unique_suppliers", "") if isinstance(comp, dict) else ""
         row.append(_dc(18, value=unique_sup))
 
-        # Col 19: Incumbente (top supplier name)
+        # Col 19: Fornecedor Recorrente (top supplier name)
         top_sups = comp.get("top_suppliers", []) if isinstance(comp, dict) else []
-        incumbente = top_sups[0].get("nome", "")[:30] if top_sups else ""
-        row.append(_dc(19, value=_sanitize(incumbente)))
+        fornecedor_recorrente = top_sups[0].get("nome", "")[:30] if top_sups else ""
+        row.append(_dc(19, value=_sanitize(fornecedor_recorrente)))
 
         # Col 20: Desc. Mediano Orgao
         bench = item.get("price_benchmark", {})

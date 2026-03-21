@@ -1511,7 +1511,7 @@ def _build_edital_detail(idx: int, ed: dict, styles: dict) -> list:
         if top_sup:
             top_name = top_sup[0].get("nome", "")[:40]
             top_share = top_sup[0].get("share", 0)
-            comp_parts.append(f"Incumbente: {top_name} ({top_share:.0%})")
+            comp_parts.append(f"Fornecedor recorrente: {top_name} ({top_share:.0%})")
 
         hhi = comp_intel.get("hhi", 0)
         if hhi > 0.5:

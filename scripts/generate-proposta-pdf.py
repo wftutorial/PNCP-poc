@@ -1183,7 +1183,7 @@ def build_pdf(data, output_path, pacote_recomendado="semanal"):
             ["Planilha genérica de editais", "Relatório personalizado com análise estratégica por edital"],
             ["Analista sem vivência no órgão", "7 anos como servidor — entende a lógica de quem compra"],
             ["Leitura superficial do edital", "PDF do edital lido página por página com checklist de habilitação"],
-            ["Sem inteligência competitiva", "Mapeamento de incumbentes e histórico de preços por órgão"],
+            ["Sem inteligência competitiva", "Mapeamento de fornecedores recorrentes e histórico de preços por órgão"],
             ["Alerta genérico", "Recomendação com nota 0-10 em 6 fatores estratégicos"],
         ], cw_dif, header_color=DARK_BLUE
     ))

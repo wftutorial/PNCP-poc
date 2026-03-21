@@ -3310,7 +3310,7 @@ def compute_risk_analysis(
     hhi = competitive_analysis.get("hhi", 0)
     if hhi > 0.5:
         flags.append({
-            "flag": "Órgão com alta concentração de fornecedores (HHI > 0.5) — incumbente forte",
+            "flag": "Órgão com alta concentração de fornecedores (HHI > 0.5) — fornecedor recorrente forte",
             "severity": "MEDIA",
             "category": "competitivo",
         })
@@ -6050,7 +6050,7 @@ def compute_win_probability(
     # Incumbency amplification (replace additive bonus with multiplicative)
     if incumbency_bonus > 0:
         contextual_mult *= 1.4   # Strong relationship signal
-        multipliers_applied.append("incumbente(×1.4)")
+        multipliers_applied.append("fornecedor_recorrente(×1.4)")
         incumbency_bonus = 0.0   # Absorbed into contextual_mult (avoid double-counting)
 
     # Final probability with confidence band
@@ -7485,7 +7485,7 @@ def calculate_scenarios(edital: dict, sector_key: str = "") -> dict:
         trigger_opt = "Menos de 3 propostas registradas"
     elif incumbency_bonus > 0:
         prob_opt = min(prob + 0.10, 0.5)
-        trigger_opt = "Empresa é incumbente no órgão"
+        trigger_opt = "Empresa é fornecedor recorrente no órgão"
     else:
         prob_opt = min(prob * 1.8, 0.4)
         trigger_opt = "Cenário favorável — competição reduzida"
@@ -7505,7 +7505,7 @@ def calculate_scenarios(edital: dict, sector_key: str = "") -> dict:
         trigger_pes = "Mais de 10 concorrentes"
     elif top_share > 0.3:
         prob_pes = prob * 0.3
-        trigger_pes = "Incumbente forte com >30% de market share"
+        trigger_pes = "Fornecedor recorrente forte com >30% de market share"
     else:
         prob_pes = prob * 0.5
         trigger_pes = "Cenário adverso — competição intensa"
@@ -7702,7 +7702,7 @@ def identify_triggers(edital: dict) -> list[dict]:
             break
     if has_rescisoes:
         triggers.append({
-            "condition": "Se incumbente perder contrato vigente (rescisão)",
+            "condition": "Se fornecedor recorrente perder contrato vigente (rescisão)",
             "action": "Oportunidade de substituição",
             "impact": "Campo limpo para novos fornecedores",
         })
@@ -7711,7 +7711,7 @@ def identify_triggers(edital: dict) -> list[dict]:
     priority_order = {
         "Se a empresa obtiver atestado técnico complementar": 1,
         "Se menos de 3 propostas registradas no dia": 2,
-        "Se incumbente perder contrato vigente (rescisão)": 3,
+        "Se fornecedor recorrente perder contrato vigente (rescisão)": 3,
         "Se o órgão publicar valor estimado revisado para baixo": 4,
         "Se publicado esclarecimento ou errata": 5,
     }

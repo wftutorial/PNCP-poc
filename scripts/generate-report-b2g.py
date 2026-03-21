@@ -1075,9 +1075,9 @@ def _build_exclusive_intelligence(data: dict, styles: dict, sec: dict) -> list:
         prob = wp.get("probability", 0)
 
         if top_share > 0.60:
-            insight = f"Incumbente dominante (>{_pct(top_share)} do mercado) — entrada difícil"
+            insight = f"Fornecedor recorrente dominante (>{_pct(top_share)} do mercado) — entrada difícil"
         elif top_share > 0.40:
-            insight = f"Incumbente forte ({_pct(top_share)}) — requer diferenciação"
+            insight = f"Fornecedor recorrente forte ({_pct(top_share)}) — requer diferenciação"
         elif unique >= 6:
             insight = f"Mercado fragmentado ({unique} fornecedores) — oportunidade aberta"
         elif unique >= 2:
@@ -1332,9 +1332,9 @@ def _build_decision_table(data: dict, styles: dict, sec: dict) -> list:
                 diff_parts.append("Impedimento legal")
         else:
             if isinstance(wp, dict) and wp.get("top_supplier_share", 0) < 0.20 and wp.get("n_unique_suppliers", wp.get("unique_suppliers", 0)) >= 2:
-                diff_parts.append("Sem incumbente dominante")
+                diff_parts.append("Sem fornecedor recorrente dominante")
             elif isinstance(wp, dict) and wp.get("top_supplier_share", 0) > 0.60:
-                diff_parts.append("Incumbente forte")
+                diff_parts.append("Fornecedor recorrente forte")
 
             if isinstance(risk, dict) and risk.get("total", 0) >= 60:
                 diff_parts.append(f"Comp. {risk['total']}/100")
@@ -1906,7 +1906,7 @@ def _build_competitive_section(data: dict, styles: dict, sec: dict) -> list:
     el.extend(_section_heading(f"{num}. Mapa Competitivo", styles))
     el.append(Paragraph(
         "Contratos históricos identificados nos órgãos licitantes — "
-        "indica incumbentes e valores praticados.",
+        "indica fornecedores recorrentes e valores praticados.",
         styles["body_small"],
     ))
     el.append(Spacer(1, 3 * mm))
@@ -1988,7 +1988,7 @@ def _build_competitive_section(data: dict, styles: dict, sec: dict) -> list:
     # E5: Recurring suppliers with advantage highlighting
     recurring = dispute_stats.get("recurring_suppliers", [])
     if recurring:
-        el.append(Paragraph("<b>Fornecedores Recorrentes (Incumbentes)</b>", styles["h3"]))
+        el.append(Paragraph("<b>Fornecedores Recorrentes</b>", styles["h3"]))
         # Compute market_share from contract counts if not provided
         total_contracts = sum(sup.get("n_contracts", sup.get("contract_count", 0)) for sup in recurring)
         for sup in recurring[:10]:
@@ -2035,7 +2035,7 @@ def _build_competitive_section(data: dict, styles: dict, sec: dict) -> list:
             styles["h3"],
         ))
         el.append(Paragraph(
-            f"{len(favorable)} edital(is) sem incumbente dominante (HHI baixo, nenhum fornecedor >20% do mercado):",
+            f"{len(favorable)} edital(is) sem fornecedor recorrente dominante (HHI baixo, nenhum fornecedor >20% do mercado):",
             styles["body_small"],
         ))
         for idx, obj, prob in favorable[:5]:

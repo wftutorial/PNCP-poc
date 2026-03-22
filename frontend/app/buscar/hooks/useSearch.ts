@@ -283,7 +283,7 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
               const fetchedData = await response.json();
               setResult(fetchedData);
               if (fetchedData.total_raw) setRawCount(fetchedData.total_raw);
-              execution.setError(null);
+              setError(null);
             }
           } catch (e) {
             console.warn('[CRIT-CORE-001] Polling: failed to fetch results after completed status:', e);
@@ -303,7 +303,7 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
         execution.asyncSearchActiveRef.current = false;
         execution.asyncSearchIdRef.current = null;
         execution.setLoading(false);
-        execution.setError({
+        setError({
           message: status.error_message || "A análise não pôde ser concluída. Tente novamente.",
           rawMessage: status.error_message || `Search ${status.status}`,
           errorCode: status.error_code || "SEARCH_FAILED",

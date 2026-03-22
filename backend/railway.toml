@@ -15,7 +15,7 @@ watchPatterns = ["**"]
 # Segmentation Faults from cryptography/chardet C extensions in forked workers.
 # Even --workers 1 uses the multiprocess spawner which triggers SIGSEGV.
 startCommand = "sh -c 'uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --timeout-keep-alive 75'"
-healthcheckPath = "/health/ready"
+healthcheckPath = "/health"
 # SLA-001 + STORY-303 AC6: 300s grace period for cold starts.
 # Without --preload (STORY-303), each worker loads 65+ modules independently (~5-15s).
 # Railway won't route traffic until /health/ready returns 200, preventing CRIT-010 404s.

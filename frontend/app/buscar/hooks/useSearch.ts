@@ -282,7 +282,7 @@ export function useSearch(filters: UseSearchParams): UseSearchReturn {
             if (response.ok) {
               const fetchedData = await response.json();
               setResult(fetchedData);
-              if (fetchedData.total_raw) execution.setRawCount(fetchedData.total_raw);
+              if (fetchedData.total_raw) setRawCount(fetchedData.total_raw);
               execution.setError(null);
             }
           } catch (e) {

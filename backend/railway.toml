@@ -11,9 +11,9 @@ dockerfilePath = "Dockerfile"
 watchPatterns = ["**"]
 
 [deploy]
-# CRIT-SIGSEGV-FIX: Force uvicorn standalone (no Gunicorn fork) to eliminate SIGSEGV
-# caused by cryptography C extensions in forked workers.
-startCommand = "sh -c 'uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --timeout-keep-alive 75 --workers ${WEB_CONCURRENCY:-2}'"
+# CRIT-SYNC-FIX: Single async worker eliminates cross-worker state issues
+# (in-memory tracker mismatch, SSE delivery failure). Scale via Railway replicas.
+startCommand = "sh -c 'uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --timeout-keep-alive 75 --workers ${WEB_CONCURRENCY:-1}'"
 healthcheckPath = "/health/ready"
 # SLA-001 + STORY-303 AC6: 300s grace period for cold starts.
 # Without --preload (STORY-303), each worker loads 65+ modules independently (~5-15s).

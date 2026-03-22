@@ -519,7 +519,17 @@ async def buscar_licitacoes(
         http_response.headers["X-Response-State"] = ctx.response_state or "live"
         http_response.headers["X-Cache-Level"] = ctx.cache_level or "none"
         # GTM-STAB-008 AC6: elapsed_s tag (synchronous path)
-        sentry_sdk.set_tag("elapsed_s", round(sync_time.time() - _search_start, 1))
+        _elapsed_s = round(sync_time.time() - _search_start, 1)
+        sentry_sdk.set_tag("elapsed_s", _elapsed_s)
+        # CRIT-SYNC-FIX: Alert on slow synchronous searches (>60s threshold)
+        if _elapsed_s > 60:
+            logger.warning(
+                f"SYNC-SLOW: Search {request.search_id} took {_elapsed_s}s "
+                f"(>{60}s threshold, ufs={len(request.ufs) if request.ufs else 0})"
+            )
+            sentry_sdk.capture_message(
+                f"Slow sync search: {_elapsed_s}s", level="warning"
+            )
         return response
 
     except PNCPRateLimitError as e:

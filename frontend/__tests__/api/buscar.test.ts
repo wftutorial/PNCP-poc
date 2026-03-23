@@ -171,9 +171,8 @@ describe("POST /api/buscar", () => {
 
   it("should handle network errors after all retries", async () => {
     jest.useRealTimers(); // Use real timers for retry delays
-    // GTM-INFRA-002: Network errors are retried MAX_RETRIES=3 times before failing
+    // GTM-INFRA-002: Network errors are retried MAX_RETRIES=2 times before failing
     (global.fetch as jest.Mock)
-      .mockRejectedValueOnce(new Error("Network error"))
       .mockRejectedValueOnce(new Error("Network error"))
       .mockRejectedValueOnce(new Error("Network error"));
 
@@ -193,8 +192,8 @@ describe("POST /api/buscar", () => {
     const data = await response.json();
 
     expect(response.status).toBe(503);
-    // Should have tried 3 times (MAX_RETRIES=3)
-    expect(global.fetch).toHaveBeenCalledTimes(3);
+    // Should have tried 2 times (MAX_RETRIES=2)
+    expect(global.fetch).toHaveBeenCalledTimes(2);
   }, 15000);
 
   it("GTM-INFRA-002 AC6/T3: should retry on 502 (expanded retryable statuses)", async () => {
@@ -203,11 +202,6 @@ describe("POST /api/buscar", () => {
     // Use structured error body so sanitizer passes it through
     const errorBody = JSON.stringify({ detail: "PNCP temporarily down", error_code: "PNCP_UNAVAILABLE" });
     (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({
-        ok: false, status: 502,
-        text: async () => errorBody,
-        headers: { get: (h: string) => h?.toLowerCase() === "content-type" ? "application/json" : null },
-      })
       .mockResolvedValueOnce({
         ok: false, status: 502,
         text: async () => errorBody,
@@ -229,21 +223,16 @@ describe("POST /api/buscar", () => {
     const data = await response.json();
 
     expect(response.status).toBe(502);
-    // Should retry 3 times (MAX_RETRIES=3)
-    expect(global.fetch).toHaveBeenCalledTimes(3);
+    // Should retry 2 times (MAX_RETRIES=2)
+    expect(global.fetch).toHaveBeenCalledTimes(2);
   }, 15000);
 
   it("should retry on 503 and fail after max retries", async () => {
     jest.useRealTimers();
-    // GTM-INFRA-002: All 3 attempts return 503 (MAX_RETRIES=3)
+    // GTM-INFRA-002: All 2 attempts return 503 (MAX_RETRIES=2)
     // Use structured error with error_code so sanitizer passes it through
     const errorBody = JSON.stringify({ detail: "Rate limited", error_code: "RATE_LIMITED" });
     (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({
-        ok: false, status: 503,
-        text: async () => errorBody,
-        headers: { get: (h: string) => h?.toLowerCase() === "content-type" ? "application/json" : null },
-      })
       .mockResolvedValueOnce({
         ok: false, status: 503,
         text: async () => errorBody,
@@ -266,7 +255,7 @@ describe("POST /api/buscar", () => {
 
     expect(response.status).toBe(503);
     expect(data.message).toBe("Rate limited");
-    expect(global.fetch).toHaveBeenCalledTimes(3);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
   }, 15000);
 
   // GTM-INFRA-002 T3: Proxy retries 524 (Cloudflare/Railway timeout)
@@ -275,11 +264,6 @@ describe("POST /api/buscar", () => {
     // 524 is now in RETRYABLE_STATUSES — must be retried like 502/503/504
     const errorBody = JSON.stringify({ detail: "Connection timed out", error_code: "TIMEOUT" });
     (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({
-        ok: false, status: 524,
-        text: async () => errorBody,
-        headers: { get: (h: string) => h?.toLowerCase() === "content-type" ? "application/json" : null },
-      })
       .mockResolvedValueOnce({
         ok: false, status: 524,
         text: async () => errorBody,
@@ -300,8 +284,8 @@ describe("POST /api/buscar", () => {
     const response = await POST(request);
     const data = await response.json();
 
-    // 524 is retried MAX_RETRIES=3 times (proves it's in RETRYABLE_STATUSES)
-    expect(global.fetch).toHaveBeenCalledTimes(3);
+    // 524 is retried MAX_RETRIES=2 times (proves it's in RETRYABLE_STATUSES)
+    expect(global.fetch).toHaveBeenCalledTimes(2);
     expect(response.status).toBe(524);
     expect(data.message).toBe("Connection timed out");
   }, 15000);
@@ -402,10 +386,10 @@ describe("POST /api/buscar", () => {
 
     await POST(request);
 
-    // CRIT-060 AC1: Verify setTimeout was called with 180s (180000ms)
+    // CRIT-082: Verify setTimeout was called with 60s (60000ms)
     expect(setTimeoutSpy).toHaveBeenCalledWith(
       expect.any(Function),
-      180 * 1000
+      60 * 1000
     );
 
     setTimeoutSpy.mockRestore();

@@ -201,7 +201,7 @@ describe("GTM-UX-003: Unified Retry UX", () => {
   });
 
   // -------------------------------------------------------------------------
-  // T2: Cooldown 5s→10s→15s (not 10s→20s→30s)
+  // T2: Cooldown 10s→20s (not 5s→10s→15s)
   // -------------------------------------------------------------------------
 
   describe("T2: Reduced cooldown timing", () => {
@@ -211,7 +211,7 @@ describe("GTM-UX-003: Unified Retry UX", () => {
       jest.restoreAllMocks();
     });
 
-    test("first retry starts at 5s countdown (not 10s)", async () => {
+    test("first retry starts at 10s countdown", async () => {
       // 504 is transient but bypasses client-side retry loop
       mockFetchHttpError(504, { message: "Gateway Timeout" });
 
@@ -222,24 +222,24 @@ describe("GTM-UX-003: Unified Retry UX", () => {
         await result.current.buscar();
       });
 
-      expect(result.current.retryCountdown).toBe(5);
+      expect(result.current.retryCountdown).toBe(10);
     });
 
-    test("second retry starts at 10s countdown (not 20s)", async () => {
+    test("second retry starts at 20s countdown", async () => {
       mockFetchHttpError(504, { message: "Gateway Timeout" });
 
       const filters = makeFilters();
       const { result } = renderHook(() => useSearch(filters as any));
 
-      // First search → 5s countdown
+      // First search → 10s countdown
       await act(async () => {
         await result.current.buscar();
       });
-      expect(result.current.retryCountdown).toBe(5);
+      expect(result.current.retryCountdown).toBe(10);
 
-      // Advance 5s to trigger auto-retry
+      // Advance 10s to trigger auto-retry
       await act(async () => {
-        jest.advanceTimersByTime(5000);
+        jest.advanceTimersByTime(10000);
       });
 
       // Wait for auto-retry fetch to complete (fails again with 504)
@@ -248,46 +248,9 @@ describe("GTM-UX-003: Unified Retry UX", () => {
         await Promise.resolve();
       });
 
-      // Second countdown should be 10s
+      // Second countdown should be 20s
       await waitFor(() => {
-        expect(result.current.retryCountdown).toBe(10);
-      });
-    });
-
-    test("third retry starts at 15s countdown (not 30s)", async () => {
-      mockFetchHttpError(504, { message: "Gateway Timeout" });
-
-      const filters = makeFilters();
-      const { result } = renderHook(() => useSearch(filters as any));
-
-      // 1st attempt → 5s countdown
-      await act(async () => {
-        await result.current.buscar();
-      });
-      expect(result.current.retryCountdown).toBe(5);
-
-      // Exhaust 1st → auto-retry → 10s countdown
-      await act(async () => {
-        jest.advanceTimersByTime(5000);
-      });
-      await act(async () => {
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      await waitFor(() => {
-        expect(result.current.retryCountdown).toBe(10);
-      });
-
-      // Exhaust 2nd → auto-retry → 15s countdown
-      await act(async () => {
-        jest.advanceTimersByTime(10000);
-      });
-      await act(async () => {
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      await waitFor(() => {
-        expect(result.current.retryCountdown).toBe(15);
+        expect(result.current.retryCountdown).toBe(20);
       });
     });
   });
@@ -313,7 +276,7 @@ describe("GTM-UX-003: Unified Retry UX", () => {
         await result.current.buscar();
       });
 
-      expect(result.current.retryCountdown).toBe(5);
+      expect(result.current.retryCountdown).toBe(10);
 
       // Hit "Tentar agora"
       act(() => {
@@ -351,33 +314,20 @@ describe("GTM-UX-003: Unified Retry UX", () => {
       jest.restoreAllMocks();
     });
 
-    test("retryExhausted is true after 3 auto-retry attempts", async () => {
+    test("retryExhausted is true after 2 auto-retry attempts", async () => {
       mockFetchHttpError(504, { message: "Gateway Timeout" });
 
       const filters = makeFilters();
       const { result } = renderHook(() => useSearch(filters as any));
 
-      // Attempt 1 → 5s countdown
+      // Attempt 1 → 10s countdown
       await act(async () => {
         await result.current.buscar();
       });
       expect(result.current.retryExhausted).toBe(false);
-      expect(result.current.retryCountdown).toBe(5);
+      expect(result.current.retryCountdown).toBe(10);
 
-      // Exhaust 1st → auto-retry attempt 2 → 10s
-      await act(async () => {
-        jest.advanceTimersByTime(5000);
-      });
-      await act(async () => {
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      await waitFor(() => {
-        expect(result.current.retryCountdown).toBe(10);
-      });
-      expect(result.current.retryExhausted).toBe(false);
-
-      // Exhaust 2nd → auto-retry attempt 3 → 15s
+      // Exhaust 1st → auto-retry attempt 2 → 20s
       await act(async () => {
         jest.advanceTimersByTime(10000);
       });
@@ -386,13 +336,13 @@ describe("GTM-UX-003: Unified Retry UX", () => {
         await Promise.resolve();
       });
       await waitFor(() => {
-        expect(result.current.retryCountdown).toBe(15);
+        expect(result.current.retryCountdown).toBe(20);
       });
       expect(result.current.retryExhausted).toBe(false);
 
-      // Exhaust 3rd → no more retries → exhausted
+      // Exhaust 2nd → no more retries → exhausted
       await act(async () => {
-        jest.advanceTimersByTime(15000);
+        jest.advanceTimersByTime(20000);
       });
       await act(async () => {
         await Promise.resolve();
@@ -427,7 +377,7 @@ describe("GTM-UX-003: Unified Retry UX", () => {
       });
 
       // Both should be set together — single unified mechanism
-      expect(result.current.retryCountdown).toBe(5);
+      expect(result.current.retryCountdown).toBe(10);
       expect(result.current.retryMessage).toBeTruthy();
       expect(result.current.retryMessage).not.toContain("reiniciando");
     });
@@ -442,7 +392,7 @@ describe("GTM-UX-003: Unified Retry UX", () => {
       await act(async () => {
         await result.current.buscar();
       });
-      expect(result.current.retryCountdown).toBe(5);
+      expect(result.current.retryCountdown).toBe(10);
       expect(result.current.retryMessage).toBeTruthy();
 
       // User starts a new manual search — should reset retry state
@@ -450,8 +400,8 @@ describe("GTM-UX-003: Unified Retry UX", () => {
         await result.current.buscar();
       });
 
-      // Should start fresh (attempt counter reset, first delay = 5s)
-      expect(result.current.retryCountdown).toBe(5);
+      // Should start fresh (attempt counter reset, first delay = 10s)
+      expect(result.current.retryCountdown).toBe(10);
     });
 
     test("contextual message matches 504 timeout error type", async () => {

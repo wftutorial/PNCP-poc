@@ -90,9 +90,9 @@ export async function POST(request: NextRequest) {
       headers["X-Correlation-ID"] = correlationId;
     }
 
-    const MAX_RETRIES = 3;
-    // GTM-INFRA-002 AC7: Backoff 1s, 2s (max 2 retries at proxy level)
-    const RETRY_DELAYS = [0, 1000, 2000]; // ms delay before each attempt
+    const MAX_RETRIES = 2;
+    // CRIT-082: Reduced to 2 attempts (1 retry) with simpler delays to prevent amplification
+    const RETRY_DELAYS = [0, 1000]; // ms delay before each attempt
     // GTM-INFRA-002 AC6: Expanded retry statuses (502/524 from Railway timeouts/deploys)
     const RETRYABLE_STATUSES = [502, 503, 504, 524];
 
@@ -127,11 +127,10 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        // CRIT-060 AC1: Proxy timeout aligned with Railway hard timeout (300s).
-        // Railway(300s) > Gunicorn(180s) > Proxy POST(180s) > Pipeline(110s).
-        // STAB-003 AC5 label preserved for traceability.
+        // CRIT-082: Proxy timeout reduced to 60s to prevent retry amplification.
+        // Chain: Client(65s) > Proxy(60s). Railway/Gunicorn handle async via 202.
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 180 * 1000);
+        const timeout = setTimeout(() => controller.abort(), 60 * 1000);
 
         response = await fetch(`${backendUrl}/v1/buscar`, {
           method: "POST",

@@ -337,7 +337,7 @@ describe("useSearchRetry — isolation tests (FE-035)", () => {
       expect(result.current.retryExhausted).toBe(false);
     });
 
-    test("starts countdown for transient error on first attempt (5s)", () => {
+    test("starts countdown for transient error on first attempt (10s)", () => {
       mockIsTransientError.mockReturnValue(true);
       mockGetRetryMessage.mockReturnValue("Problema de conexão...");
 
@@ -349,12 +349,12 @@ describe("useSearchRetry — isolation tests (FE-035)", () => {
         result.current.startAutoRetry(makeSearchError({ httpStatus: 503 }), mockSetError);
       });
 
-      expect(result.current.retryCountdown).toBe(5);
+      expect(result.current.retryCountdown).toBe(10);
       expect(result.current.retryMessage).toBe("Problema de conexão...");
       expect(result.current.retryExhausted).toBe(false);
     });
 
-    test("uses 10s delay on second attempt", () => {
+    test("uses 20s delay on second attempt", () => {
       mockIsTransientError.mockReturnValue(true);
 
       const { result } = renderHook(() => useSearchRetry());
@@ -365,28 +365,14 @@ describe("useSearchRetry — isolation tests (FE-035)", () => {
         result.current.startAutoRetry(makeSearchError(), mockSetError);
       });
 
-      expect(result.current.retryCountdown).toBe(10);
+      expect(result.current.retryCountdown).toBe(20);
     });
 
-    test("uses 15s delay on third attempt", () => {
+    test("marks retryExhausted when attempt >= 2", () => {
       mockIsTransientError.mockReturnValue(true);
 
       const { result } = renderHook(() => useSearchRetry());
       result.current.retryAttemptRef.current = 2;
-      const mockSetError = jest.fn();
-
-      act(() => {
-        result.current.startAutoRetry(makeSearchError(), mockSetError);
-      });
-
-      expect(result.current.retryCountdown).toBe(15);
-    });
-
-    test("marks retryExhausted when attempt >= 3", () => {
-      mockIsTransientError.mockReturnValue(true);
-
-      const { result } = renderHook(() => useSearchRetry());
-      result.current.retryAttemptRef.current = 3;
       const mockSetError = jest.fn();
 
       act(() => {
@@ -409,17 +395,17 @@ describe("useSearchRetry — isolation tests (FE-035)", () => {
         result.current.startAutoRetry(makeSearchError(), mockSetError);
       });
 
-      expect(result.current.retryCountdown).toBe(5);
+      expect(result.current.retryCountdown).toBe(10);
 
       act(() => {
         jest.advanceTimersByTime(1000);
       });
-      expect(result.current.retryCountdown).toBe(4);
+      expect(result.current.retryCountdown).toBe(9);
 
       act(() => {
         jest.advanceTimersByTime(1000);
       });
-      expect(result.current.retryCountdown).toBe(3);
+      expect(result.current.retryCountdown).toBe(8);
     });
 
     test("fires buscar and increments attempt when countdown reaches 0", () => {
@@ -435,9 +421,9 @@ describe("useSearchRetry — isolation tests (FE-035)", () => {
         result.current.startAutoRetry(makeSearchError(), mockSetError);
       });
 
-      // Advance past the 5-second delay
+      // Advance past the 10-second delay
       act(() => {
-        jest.advanceTimersByTime(5000);
+        jest.advanceTimersByTime(10000);
       });
 
       expect(mockBuscar).toHaveBeenCalledTimes(1);

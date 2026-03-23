@@ -301,17 +301,17 @@ describe('GTM-FIX-033: SSE Resilience', () => {
     });
   });
 
-  describe('AC5: Improved error message includes saved searches hint', () => {
+  describe('AC5: Improved error message includes retry hint', () => {
     test('error-messages maps backend errors to actionable messages', () => {
       const { getUserFriendlyError } = require('../lib/error-messages');
 
       const msg1 = getUserFriendlyError('Backend indisponível');
-      expect(msg1).toContain('análises salvas');
-      expect(msg1).toContain('tente novamente');
+      expect(msg1).toContain('conectar ao servidor');
+      expect(msg1).toContain('minutos');
 
       const msg2 = getUserFriendlyError('Erro ao buscar licitações');
-      expect(msg2).toContain('análises salvas');
-      expect(msg2).toContain('tente novamente');
+      expect(msg2).toContain('conectar ao servidor');
+      expect(msg2).toContain('minutos');
     });
   });
 });

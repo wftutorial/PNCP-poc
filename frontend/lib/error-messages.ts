@@ -50,9 +50,9 @@ const ERROR_MAP: Record<string, string> = {
   "All sources failed": "Nenhuma fonte de dados respondeu. Tente novamente em alguns minutos.",
   "No results found": "Nenhum resultado encontrado para os filtros selecionados.",
 
-  // Backend specific — GTM-FIX-033 AC5: actionable message
-  "Backend indisponível": "Não foi possível processar sua análise. A análise pode ter sido concluída. Verifique suas análises salvas ou tente novamente.",
-  "Erro ao buscar licitações": "Não foi possível processar sua análise. A análise pode ter sido concluída. Verifique suas análises salvas ou tente novamente.",
+  // Backend specific — CRIT-082: simplified messages without ambiguous "análise concluída" hint
+  "Backend indisponível": "Não foi possível conectar ao servidor. Tente novamente em alguns minutos.",
+  "Erro ao buscar licitações": "Não foi possível conectar ao servidor. Tente novamente em alguns minutos.",
   "Quota excedida": "Suas análises do mês acabaram. Faça upgrade para continuar.",
 
   // Timeout / PNCP specific (from backend detail messages)

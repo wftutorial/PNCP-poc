@@ -293,24 +293,14 @@ describe("useSearch (isolated)", () => {
     expect(result.current.error).toBeTruthy();
   });
 
-  // 5. Retry on 500 then success
-  test("buscar() retries on 500 and succeeds on second attempt", async () => {
-    const expected = makeBuscaResult();
-    global.fetch = jest
-      .fn()
-      .mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-        json: () => Promise.resolve({ message: "Internal Server Error" }),
-        headers: { get: () => null },
-      } as unknown as Response)
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: () => Promise.resolve(expected),
-        text: () => Promise.resolve(JSON.stringify(expected)),
-        headers: { get: () => null },
-      } as unknown as Response);
+  // 5. Error on 500 (no client retries — MAX_CLIENT_RETRIES=0)
+  test("buscar() sets error on 500 response (no client retries)", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: () => Promise.resolve({ message: "Internal Server Error" }),
+      headers: { get: () => null },
+    } as unknown as Response);
 
     const filters = makeFilters();
     const { result } = renderHook(() => useSearch(filters as any));
@@ -323,10 +313,11 @@ describe("useSearch (isolated)", () => {
       expect(result.current.loading).toBe(false);
     });
 
-    expect(result.current.result).toEqual(expected);
-    expect(result.current.error).toBeNull();
-    expect((global.fetch as jest.Mock).mock.calls.length).toBeGreaterThanOrEqual(2);
-  }, 20000);
+    expect(result.current.error).toBeTruthy();
+    expect(result.current.result).toBeNull();
+    // fetch called once only (no client retries)
+    expect((global.fetch as jest.Mock).mock.calls.length).toBe(1);
+  });
 
   // 6. SSE available flag
   test("sseAvailable reflects SSE mock state", () => {

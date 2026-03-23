@@ -429,9 +429,9 @@ describe("T6: SourcesUnavailable no technical names", () => {
 });
 
 // ---------------------------------------------------------------------------
-// T7: Retry on 500 and 502 (mock fetch, use fake timers for delays)
+// T7: Error on 500 and 502 (no client retries — MAX_CLIENT_RETRIES=0)
 // ---------------------------------------------------------------------------
-describe("T7: Client retry on 500/502", () => {
+describe("T7: Client error on 500/502 (no client retries)", () => {
   let originalFetch: typeof global.fetch;
 
   beforeEach(() => {
@@ -445,23 +445,12 @@ describe("T7: Client retry on 500/502", () => {
     global.fetch = originalFetch;
   });
 
-  it("retries on 500 and succeeds on 3rd attempt", async () => {
+  it("fails immediately on 500 with no client retries", async () => {
     let fetchCallCount = 0;
     global.fetch = jest.fn().mockImplementation(async (url: string, options: any) => {
       if (url === "/api/buscar" && options?.method === "POST") {
         fetchCallCount++;
-        if (fetchCallCount <= 2) {
-          return { ok: false, status: 500, json: async () => ({ message: "Server Error" }) };
-        }
-        return {
-          ok: true,
-          json: async () => ({
-            resumo: { resumo_executivo: "test", total_oportunidades: 5, valor_total: 100000, destaques: [] },
-            licitacoes: [], download_id: "test-id", total_raw: 10, total_filtrado: 5,
-            filter_stats: null, termos_utilizados: null, stopwords_removidas: null,
-            excel_available: true, upgrade_message: null, source_stats: null,
-          }),
-        };
+        return { ok: false, status: 500, json: async () => ({ message: "Server Error" }) };
       }
       return { ok: true, json: async () => ({}) };
     });
@@ -469,22 +458,16 @@ describe("T7: Client retry on 500/502", () => {
     const filters = makeMockFilters();
     const { result } = renderHook(() => useSearch(filters));
 
-    let searchPromise: Promise<void>;
-    hookAct(() => {
-      searchPromise = result.current.buscar();
+    await hookAct(async () => {
+      await result.current.buscar();
     });
 
-    // Use advanceTimersByTimeAsync for proper microtask flushing between retries
-    await hookAct(async () => { await jest.advanceTimersByTimeAsync(3500); });
-    await hookAct(async () => { await jest.advanceTimersByTimeAsync(8500); });
-    await hookAct(async () => { await searchPromise!; });
-
-    expect(fetchCallCount).toBe(3);
-    expect(result.current.result).toBeTruthy();
-    expect(result.current.error).toBeNull();
+    expect(fetchCallCount).toBe(1);
+    expect(result.current.error).toBeTruthy();
+    expect(result.current.result).toBeNull();
   });
 
-  it("retries on 502 and fails after max retries", async () => {
+  it("fails immediately on 502 with no client retries", async () => {
     let fetchCallCount = 0;
     global.fetch = jest.fn().mockImplementation(async (url: string, options: any) => {
       if (url === "/api/buscar" && options?.method === "POST") {
@@ -497,17 +480,11 @@ describe("T7: Client retry on 500/502", () => {
     const filters = makeMockFilters();
     const { result } = renderHook(() => useSearch(filters));
 
-    let searchPromise: Promise<void>;
-    hookAct(() => {
-      searchPromise = result.current.buscar();
+    await hookAct(async () => {
+      await result.current.buscar();
     });
 
-    // Use advanceTimersByTimeAsync for proper microtask flushing
-    await hookAct(async () => { await jest.advanceTimersByTimeAsync(3500); });
-    await hookAct(async () => { await jest.advanceTimersByTimeAsync(8500); });
-    await hookAct(async () => { await searchPromise!; });
-
-    expect(fetchCallCount).toBe(3);
+    expect(fetchCallCount).toBe(1);
     expect(result.current.error).toBeTruthy();
   });
 });

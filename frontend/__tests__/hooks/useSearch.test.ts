@@ -318,25 +318,15 @@ describe("useSearch hook (AC16 -- restored from quarantine)", () => {
   });
 
   // -------------------------------------------------------------------------
-  // 4. Timeout then retry (500 retries)
+  // 4. 500 error (no client retries — MAX_CLIENT_RETRIES=0)
   // -------------------------------------------------------------------------
 
-  test("buscar() retries on 500 then succeeds on second attempt", async () => {
-    const expected = makeBuscaResult();
-
-    // First call: 500 (triggers retry), second call: 200
-    global.fetch = jest
-      .fn()
-      .mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-        json: () => Promise.resolve({ message: "Internal Server Error" }),
-      } as unknown as Response)
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: () => Promise.resolve(expected),
-      } as unknown as Response);
+  test("buscar() sets error on 500 response (no client retries)", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: () => Promise.resolve({ message: "Internal Server Error" }),
+    } as unknown as Response);
 
     const filters = makeFilters();
     const { result } = renderHook(() => useSearch(filters as any));
@@ -349,13 +339,13 @@ describe("useSearch hook (AC16 -- restored from quarantine)", () => {
       expect(result.current.loading).toBe(false);
     });
 
-    // Should have succeeded on retry
-    expect(result.current.result).toEqual(expected);
-    expect(result.current.error).toBeNull();
+    // Should have error set (no retry)
+    expect(result.current.error).toBeTruthy();
+    expect(result.current.result).toBeNull();
 
-    // fetch called at least twice (initial + retry)
-    expect((global.fetch as jest.Mock).mock.calls.length).toBeGreaterThanOrEqual(2);
-  }, 20000); // Extended timeout for retry delays
+    // fetch called once only (no client retries)
+    expect((global.fetch as jest.Mock).mock.calls.length).toBe(1);
+  });
 
   // -------------------------------------------------------------------------
   // 5. cancelSearch() aborts fetch

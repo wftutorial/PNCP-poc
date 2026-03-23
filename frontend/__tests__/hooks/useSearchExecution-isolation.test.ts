@@ -463,18 +463,15 @@ describe("useSearchExecution — isolation tests (FE-035)", () => {
   });
 
   // =========================================================================
-  // Client retries on 500/502/503
+  // Client retries on 500/502/503 (MAX_CLIENT_RETRIES=0 — no client retries)
   // =========================================================================
 
   describe("client retries", () => {
-    test("retries on 500 and succeeds on second attempt", async () => {
-      const success = makeBuscaResult();
-      global.fetch = jest.fn()
-        .mockResolvedValueOnce({ ok: false, status: 500, json: () => Promise.resolve({ message: "ISE" }) } as any)
-        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(success) } as any);
+    test("fails immediately on 500 (no client retries)", async () => {
+      mockFetchError(500, { message: "ISE" });
 
-      const setResult = jest.fn();
-      const params = makeParams({ setResult });
+      const setError = jest.fn();
+      const params = makeParams({ setError });
       const { result } = renderHook(() => useSearchExecution(params as any));
 
       await act(async () => {
@@ -485,17 +482,16 @@ describe("useSearchExecution — isolation tests (FE-035)", () => {
         expect(result.current.loading).toBe(false);
       });
 
-      expect(setResult).toHaveBeenCalledWith(success);
-    }, 20000);
+      // fetch called once only (no retries)
+      expect((global.fetch as jest.Mock).mock.calls.length).toBe(1);
+      expect(setError).toHaveBeenCalled();
+    });
 
-    test("retries on 502 and succeeds on second attempt", async () => {
-      const success = makeBuscaResult();
-      global.fetch = jest.fn()
-        .mockResolvedValueOnce({ ok: false, status: 502, json: () => Promise.resolve({ message: "BG" }) } as any)
-        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(success) } as any);
+    test("fails immediately on 502 (no client retries)", async () => {
+      mockFetchError(502, { message: "BG" });
 
-      const setResult = jest.fn();
-      const params = makeParams({ setResult });
+      const setError = jest.fn();
+      const params = makeParams({ setError });
       const { result } = renderHook(() => useSearchExecution(params as any));
 
       await act(async () => {
@@ -506,8 +502,10 @@ describe("useSearchExecution — isolation tests (FE-035)", () => {
         expect(result.current.loading).toBe(false);
       });
 
-      expect(setResult).toHaveBeenCalledWith(success);
-    }, 20000);
+      // fetch called once only (no retries)
+      expect((global.fetch as jest.Mock).mock.calls.length).toBe(1);
+      expect(setError).toHaveBeenCalled();
+    });
 
     test("does NOT retry on 504 (single attempt then error)", async () => {
       mockFetchError(504, { message: "Gateway Timeout" });

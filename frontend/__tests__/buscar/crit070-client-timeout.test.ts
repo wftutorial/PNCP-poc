@@ -4,9 +4,9 @@
  * AC5 Tests:
  * - Abort without partial → SearchError with httpStatus 524
  * - Abort with partial → shows partial results (existing behavior preserved)
- * - Timeout value is 185_000 (not 115_000)
+ * - Timeout value is 65_000 (not 185_000)
  * - startAutoRetry is called on abort without partial
- * - Finalizing timer at 160s (AC3)
+ * - Finalizing timer at 50s (AC3)
  */
 
 import { renderHook, act } from "@testing-library/react";
@@ -206,10 +206,10 @@ describe("CRIT-070: Client Timeout Silent Abort", () => {
 
     expect(result.current.loading).toBe(true);
 
-    // Advance to trigger the client timeout (185s)
+    // Advance to trigger the client timeout (65s)
     // Use async act to flush the promise rejection from abort
     await act(async () => {
-      jest.advanceTimersByTime(185_000);
+      jest.advanceTimersByTime(65_000);
     });
 
     // Should have error set (not silent return)
@@ -239,7 +239,7 @@ describe("CRIT-070: Client Timeout Silent Abort", () => {
 
     // Trigger timeout — abort fires, AbortError caught, partial found
     await act(async () => {
-      jest.advanceTimersByTime(185_000);
+      jest.advanceTimersByTime(65_000);
     });
 
     // Should show partial result, NOT error
@@ -248,8 +248,8 @@ describe("CRIT-070: Client Timeout Silent Abort", () => {
     expect(result.current.error).toBeNull();
   });
 
-  // AC5-3: Timeout value is 185_000 (not 115_000)
-  test("search is NOT aborted at 115s — still loading", () => {
+  // AC5-3: Timeout value is 65_000 (not 185_000)
+  test("search is NOT aborted at 40s — still loading", () => {
     const filters = makeFilters();
     const { result } = renderHook(() => useSearch(filters as any));
 
@@ -257,9 +257,9 @@ describe("CRIT-070: Client Timeout Silent Abort", () => {
       result.current.buscar();
     });
 
-    // At 115s, should still be loading (not aborted)
+    // At 40s, should still be loading (not aborted)
     act(() => {
-      jest.advanceTimersByTime(115_000);
+      jest.advanceTimersByTime(40_000);
     });
 
     expect(result.current.loading).toBe(true);
@@ -278,7 +278,7 @@ describe("CRIT-070: Client Timeout Silent Abort", () => {
     });
 
     await act(async () => {
-      jest.advanceTimersByTime(185_000);
+      jest.advanceTimersByTime(65_000);
     });
 
     // startAutoRetry was called → error is set with CLIENT_TIMEOUT
@@ -287,8 +287,8 @@ describe("CRIT-070: Client Timeout Silent Abort", () => {
     expect(result.current.error?.httpStatus).toBe(524);
   });
 
-  // AC3: Finalizing timer at 160s
-  test("isFinalizing becomes true at 160s (not 100s)", () => {
+  // AC3: Finalizing timer at 50s
+  test("isFinalizing becomes true at 50s (not 160s)", () => {
     const filters = makeFilters();
     const { result } = renderHook(() => useSearch(filters as any));
 
@@ -296,15 +296,15 @@ describe("CRIT-070: Client Timeout Silent Abort", () => {
       result.current.buscar();
     });
 
-    // At 100s, finalizing should NOT be true (old behavior)
+    // At 30s, finalizing should NOT be true
     act(() => {
-      jest.advanceTimersByTime(100_000);
+      jest.advanceTimersByTime(30_000);
     });
     expect(result.current.isFinalizing).toBe(false);
 
-    // At 160s, finalizing SHOULD be true
+    // At 50s, finalizing SHOULD be true
     act(() => {
-      jest.advanceTimersByTime(60_000); // Total: 160s
+      jest.advanceTimersByTime(20_000); // Total: 50s
     });
     expect(result.current.isFinalizing).toBe(true);
   });

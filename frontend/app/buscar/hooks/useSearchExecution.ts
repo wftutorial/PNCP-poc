@@ -348,17 +348,18 @@ export function useSearchExecution(params: UseSearchExecutionParams): UseSearchE
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
-    // CRIT-070: Client timeout >= proxy (180s). Chain: Railway(300s) > Gunicorn(180s) > Proxy(180s) >= Client(185s)
+    // CRIT-082: Client timeout aligned with proxy (60s) + 5s margin = 65s.
+    // Chain: Client(65s) > Proxy(60s). Async search (202) uses its own 120s safety timer.
     const clientTimeoutId = setTimeout(() => {
       abortController.abort();
-    }, 185_000);
+    }, 65_000);
 
     searchStartTimeRef.current = Date.now();
     if (finalizingTimerRef.current) clearTimeout(finalizingTimerRef.current);
-    // CRIT-070 AC3: Finalizing shows ~25s before client timeout (185s - 25s = 160s)
+    // Finalizing shows ~15s before client timeout (65s - 15s = 50s)
     finalizingTimerRef.current = setTimeout(() => {
       setIsFinalizing(true);
-    }, 160_000);
+    }, 50_000);
 
     const searchStartTime = Date.now();
     const totalStates = filters.ufsSelecionadas.size;
@@ -421,8 +422,10 @@ export function useSearchExecution(params: UseSearchExecutionParams): UseSearchE
       };
       if (activeToken) headers["Authorization"] = `Bearer ${activeToken}`;
 
-      const MAX_CLIENT_RETRIES = 2;
-      const CLIENT_RETRY_DELAYS = [3000, 8000];
+      // CRIT-082: Client no longer retries — proxy handles retries to avoid amplification.
+      // Set MAX_CLIENT_RETRIES=0 so the loop runs exactly once (clientAttempt=0 only).
+      const MAX_CLIENT_RETRIES = 0;
+      const CLIENT_RETRY_DELAYS: number[] = [];
 
       for (let clientAttempt = 0; clientAttempt <= MAX_CLIENT_RETRIES; clientAttempt++) {
         if (clientAttempt > 0) {
@@ -630,7 +633,7 @@ export function useSearchExecution(params: UseSearchExecutionParams): UseSearchE
           // CRIT-070 AC2: Abort without partial must show error, never return silently
           const abortError: SearchError = {
             message: "A análise demorou mais que o esperado. Tente com menos estados.",
-            rawMessage: "Client timeout triggered after 185s",
+            rawMessage: "Client timeout triggered after 65s",
             errorCode: "CLIENT_TIMEOUT",
             searchId: newSearchId,
             correlationId: null,

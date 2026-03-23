@@ -115,11 +115,11 @@ describe('getUserFriendlyError', () => {
 
   describe('Backend specific errors', () => {
     it('should map "Backend indisponível"', () => {
-      expect(getUserFriendlyError('Backend indisponível')).toBe('Não foi possível processar sua análise. A análise pode ter sido concluída. Verifique suas análises salvas ou tente novamente.');
+      expect(getUserFriendlyError('Backend indisponível')).toBe('Não foi possível conectar ao servidor. Tente novamente em alguns minutos.');
     });
 
     it('should map "Erro ao buscar licitações"', () => {
-      expect(getUserFriendlyError('Erro ao buscar licitações')).toBe('Não foi possível processar sua análise. A análise pode ter sido concluída. Verifique suas análises salvas ou tente novamente.');
+      expect(getUserFriendlyError('Erro ao buscar licitações')).toBe('Não foi possível conectar ao servidor. Tente novamente em alguns minutos.');
     });
 
     it('should map "Quota excedida"', () => {
@@ -218,7 +218,7 @@ describe('getUserFriendlyError', () => {
       };
 
       const result = getUserFriendlyError(error);
-      expect(result).toBe('Não foi possível processar sua análise. A análise pode ter sido concluída. Verifique suas análises salvas ou tente novamente.');
+      expect(result).toBe('Não foi possível conectar ao servidor. Tente novamente em alguns minutos.');
     });
 
     it('should extract message from simple message field', () => {

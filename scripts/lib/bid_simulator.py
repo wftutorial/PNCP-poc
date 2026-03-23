@@ -270,7 +270,10 @@ def simulate_bid(
 
     # Probability estimation
     p_win = _p_win(desconto_sugerido, desconto_mediano, num_competitors, std_descontos)
-    margem = desconto_sugerido - margem_min  # Simplified margin above floor
+    # Margin = how much of the BDI remains after giving the discount
+    # BDI is already embedded in valor_estimado, so: margem = bdi - desconto
+    bdi = margins["bdi_referencia"]
+    margem = bdi - desconto_sugerido  # e.g., BDI 25% - desconto 4.3% = 20.7% margin
 
     # Confidence level
     if historico_n >= 10 and std_descontos > 0:
@@ -290,7 +293,7 @@ def simulate_bid(
         parts.append(f"~{num_competitors} concorrentes esperados")
     parts.append(
         f"Margem liquida projetada: {margem:.1%} "
-        f"(minima setor: {margem_min:.1%})"
+        f"(BDI ref: {bdi:.0%}, desconto: {desconto_sugerido:.1%})"
     )
     if p_win >= 0.6:
         parts.append("Probabilidade favoravel de vitoria")

@@ -27,10 +27,12 @@ from typing import Any
 # ============================================================
 if sys.platform == "win32":
     try:
-        if hasattr(sys.stdout, "buffer") and not isinstance(sys.stdout, io.TextIOWrapper):
-            sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-        if hasattr(sys.stderr, "buffer") and not isinstance(sys.stderr, io.TextIOWrapper):
-            sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+        if hasattr(sys.stdout, "buffer"):
+            if sys.stdout.encoding and sys.stdout.encoding.lower().replace("-", "") != "utf8":
+                sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+        if hasattr(sys.stderr, "buffer"):
+            if sys.stderr.encoding and sys.stderr.encoding.lower().replace("-", "") != "utf8":
+                sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
     except (ValueError, AttributeError):
         pass  # Already wrapped or buffer closed
 

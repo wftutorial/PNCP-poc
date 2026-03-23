@@ -154,114 +154,18 @@ MAX_RETRIES = 3
 RETRY_BACKOFF = [1.0, 3.0, 8.0]
 REQUEST_TIMEOUT = 30.0
 
-# CNAE-specific keyword refinements for CNAE fallback mode
-# When contract history is unavailable, these refine the broad sector keywords
-# to match the specific CNAE sub-activity. Only applied when _keywords_source == "cnae_fallback".
-CNAE_KEYWORD_REFINEMENTS = {
-    "4120": {  # Construção de edifícios
-        "exclude_patterns": [
-            # Keep: structures genuinely outside building construction
-            "ponte", "viaduto", "passarela",
-            "barragem", "reservatório", "reservatorio",
-            # Keep: heritage restoration (specialized niche)
-            "restauração de patrimônio", "restauracao de patrimonio",
-            "restauração de fachada", "restauracao de fachada",
-            "restauração de edifício", "restauracao de edificio",
-            # Removed: pavimentacao/asfalto (site paving is part of construction)
-            # Removed: saneamento/esgoto (often included in building projects)
-            # Removed: topografia/sondagem (preliminary studies for construction)
-            # Removed: fiscalizacao/supervisao/gerenciamento (engineering services)
-            # Removed: laudo tecnico/projeto arquitetonico (design services)
-            # Removed: revitalizacao urbana (often includes building work)
-        ],
-        "extra_include": [
-            "unidade habitacional", "casa popular", "habitação popular", "habitacao popular",
-            "creche", "escola", "UBS", "posto de saúde", "posto de saude",
-            "centro esportivo", "ginásio", "ginasio", "quadra coberta", "quadra poliesportiva",
-            "prédio público", "predio publico", "sede administrativa",
-            "centro comunitário", "centro comunitario",
-            "unidade de saúde", "unidade de saude",
-        ],
-    },
-    "4211": {  # Construção de rodovias, ferrovias, obras de urbanização e obras de arte especiais
-        "exclude_patterns": [
-            "edificação", "edificacao", "prédio", "predio",
-            "escola", "creche", "UBS", "posto de saúde", "posto de saude",
-            "elevador", "elevadores",
-            "telhado", "cobertura metálica", "cobertura metalica",
-            "pintura predial", "pintura de fachada",
-            "instalação elétrica", "instalacao eletrica",
-            "instalação hidráulica", "instalacao hidraulica",
-        ],
-        "extra_include": [
-            "rodovia", "estrada", "via urbana",
-            "ciclovia", "calçada", "calcada",
-            "meio-fio", "meio fio", "guia",
-            "sinalização viária", "sinalizacao viaria",
-        ],
-    },
-    "4399": {  # Serviços especializados para construção
-        "exclude_patterns": [],
-        "extra_include": [
-            "serviço especializado", "servico especializado",
-            "manutenção predial", "manutencao predial",
-        ],
-    },
-    "4322": {  # Instalações hidráulicas, de sistemas de ventilação e refrigeração
-        "exclude_patterns": [
-            "pavimentação", "pavimentacao", "asfalto", "ponte", "viaduto",
-            "terraplanagem", "sondagem",
-        ],
-        "extra_include": [
-            "instalação hidráulica", "instalacao hidraulica",
-            "sistema de ventilação", "sistema de ventilacao",
-            "ar condicionado", "refrigeração", "refrigeracao",
-            "sprinkler", "hidrante",
-        ],
-    },
-    "4330": {  # Obras de acabamento
-        "exclude_patterns": [
-            "pavimentação", "pavimentacao", "asfalto", "ponte", "viaduto",
-            "terraplanagem", "sondagem",
-        ],
-        "extra_include": [
-            "acabamento", "pintura", "revestimento",
-            "piso", "forro", "gesso",
-        ],
-    },
-}
-
-# CNAE-object incompatibility patterns (A1: deterministic CNAE×Object check)
-# Key: 4-digit CNAE prefix → list of INCOMPATIBLE object patterns (regex)
-# When a company's CNAE matches a key and the edital's objeto matches any pattern,
-# the edital is marked as incompatible and vetoed from recommendation.
-CNAE_INCOMPATIBLE_OBJECTS: dict[str, list[str]] = {
-    "4120": [  # Construção de edifícios — NOT compatible with:
-        # Keep: genuinely different infrastructure
-        r"\bponte\b", r"\bviaduto\b", r"\bpassarela\b",
-        r"\bbarragem\b", r"\breservat[oó]rio\b",
-        # Keep: logistics/transport (not construction)
-        r"\btransporte\b", r"\bfrete\b", r"\bcaminh[ãa]o\b",
-        # Keep: facility services (not construction)
-        r"\blavanderia\b", r"\bzeladoria\b",
-        # Keep: food/medical (clearly different sectors)
-        r"\bmedicamento\b", r"\bhospitalar\b",
-        r"\baliment[aío]\b", r"\bmerenda\b", r"\brefeição\b",
-        # Keep: consulting (pure advisory, not execution)
-        r"\bconsultoria\b",
-        # Removed: pavimentacao/asfalto/recapeamento/cbuq (paving is construction)
-        # Removed: saneamento/esgoto (sanitation is construction)
-        # Removed: topografia/sondagem/geotecnica (prelim studies for construction)
-        # Removed: supervisao/fiscalizacao (engineering services)
-        # Removed: limpeza (limpeza de terreno = site clearing)
-        # Removed: saude (unidade de saude = common building target)
-        # Removed: mobiliario/moveis (often part of renovation scope)
-    ],
-    "4211": [  # Rodovias/ferrovias — NOT compatible with:
-        r"\bedifica[çc][ãa]o\b", r"\bpr[eé]dio\b", r"\bescola\b",
-        r"\bcreche\b", r"\bubs\b", r"\bunidade\s+(habitacional|de sa[uú]de)\b",
-    ],
-}
+# CNAE-specific keyword refinements — loaded from intel_sectors_config.yaml
+# Fallback to empty dict if config file not found (backward compatible)
+try:
+    from intel_sector_loader import (
+        get_all_cnae_refinements as _get_all_cnae_refinements,
+        get_all_incompatible_objects as _get_all_incompatible_objects,
+    )
+    CNAE_KEYWORD_REFINEMENTS = _get_all_cnae_refinements()
+    CNAE_INCOMPATIBLE_OBJECTS: dict[str, list[str]] = _get_all_incompatible_objects()
+except (ImportError, FileNotFoundError):
+    CNAE_KEYWORD_REFINEMENTS = {}
+    CNAE_INCOMPATIBLE_OBJECTS: dict[str, list[str]] = {}
 
 # ============================================================
 # HELPERS
@@ -2292,7 +2196,7 @@ def map_sector(cnae_principal: str, sectors_path: str | None = None) -> tuple[st
     cnae_digits = re.sub(r"[^0-9]", "", cnae_principal.split("-")[0].split(" ")[0])[:7]
     cnae_prefix = cnae_digits[:4]
 
-    # Strategy 1: CNAE code → sector key via hardcoded map
+    # Strategy 1: CNAE code → sector key via data-driven map (from intel_sectors_config.yaml)
     sk = _CNAE_TO_SECTOR_KEY.get(cnae_prefix)
     if sk and sk in sectors_dict:
         sector = sectors_dict[sk]
@@ -2329,24 +2233,7 @@ def map_sector(cnae_principal: str, sectors_path: str | None = None) -> tuple[st
     if best_match and best_score >= 2:
         return best_match[0], best_match[1], best_key
 
-    # Strategy 3: Keyword-based sector matching from CNAE description
-    _SECTOR_HINTS: dict[str, list[str]] = {
-        "engenharia": ["construç", "construc", "edifici", "obra", "engenharia", "paviment", "infraestrutura", "urbaniz"],
-        "vestuario": ["vestuário", "vestuario", "uniforme", "confecç", "confeccao", "roupa", "têxtil", "textil"],
-        "alimentos": ["aliment", "merenda", "refeição", "refeicao", "nutriç", "nutricao", "panifica"],
-        "informatica": ["informática", "informatica", "computador", "hardware", "equipamento de ti"],
-        "software": ["software", "sistema", "desenvolvimento de programa", "tecnologia da informaç"],
-        "facilities": ["limpeza", "conservaç", "conservacao", "zeladoria", "jardinagem", "paisagis"],
-        "vigilancia": ["vigilância", "vigilancia", "segurança", "seguranca", "monitoramento"],
-        "saude": ["saúde", "saude", "farmac", "médic", "medic", "hospitalar", "laborat"],
-        "transporte": ["transporte", "veículo", "veiculo", "logística", "logistica", "frete"],
-        "mobiliario": ["móvel", "movel", "mobiliário", "mobiliario", "mobília", "mobilia"],
-        "papelaria": ["papelaria", "papel", "escritório", "escritorio", "material escolar"],
-        "manutencao_predial": ["manutenção predial", "manutencao predial", "instalações", "instalacoes"],
-        "engenharia_rodoviaria": ["rodovia", "rodoviári", "rodoviario", "estrada", "pavimentaç"],
-        "materiais_eletricos": ["elétric", "eletric", "eletroeletrônic", "eletroeletronico"],
-        "materiais_hidraulicos": ["hidráulic", "hidraulic", "saneamento", "encanamento", "tubos"],
-    }
+    # Strategy 3: Keyword-based sector matching from CNAE description (data-driven)
     for sk, hints in _SECTOR_HINTS.items():
         if any(h in cnae_lower for h in hints):
             sector = sectors_dict.get(sk, {})
@@ -2360,132 +2247,15 @@ def map_sector(cnae_principal: str, sectors_path: str | None = None) -> tuple[st
     return "Geral", fallback_kw, "geral"
 
 
-# CNAE 4-digit prefix → YAML sector key mapping (all 15 B2G sectors)
-_CNAE_TO_SECTOR_KEY: dict[str, str] = {
-    # --- Engenharia, Projetos e Obras ---
-    "4120": "engenharia",  # Construção de edifícios
-    "4110": "engenharia",  # Incorporação de empreendimentos imobiliários
-    "4212": "engenharia",  # Construção de ferrovias
-    "4221": "engenharia",  # Construção de redes (água, esgoto)
-    "4222": "engenharia",  # Construção de redes (eletricidade, telecom)
-    "4223": "engenharia",  # Construção de obras de arte especiais
-    "4291": "engenharia",  # Obras portuárias/marítimas
-    "4292": "engenharia",  # Montagem industrial
-    "4299": "engenharia",  # Outras obras de engenharia civil
-    "4311": "engenharia",  # Demolição
-    "4312": "engenharia",  # Preparação de terreno
-    "4313": "engenharia",  # Sondagem
-    "4319": "engenharia",  # Outros serviços especializados
-    "4391": "engenharia",  # Obras de fundações
-    "4399": "engenharia",  # Serviços especializados construção
-    "7112": "engenharia",  # Engenharia (escritórios)
-    "7119": "engenharia",  # Atividades técnicas (ensaios)
-    # --- Engenharia Rodoviária e Infraestrutura Viária ---
-    "4211": "engenharia_rodoviaria",  # Construção de rodovias e ferrovias
-    "4213": "engenharia_rodoviaria",  # Obras de urbanização — ruas e praças
-    # --- Manutenção e Conservação Predial ---
-    "4321": "manutencao_predial",  # Instalações elétricas
-    "4322": "manutencao_predial",  # Instalações hidráulicas, gás, etc.
-    "4329": "manutencao_predial",  # Outras instalações em construções
-    "4330": "manutencao_predial",  # Obras de acabamento
-    # --- Vestuário e Uniformes ---
-    "4781": "vestuario",  # Comércio varejista de artigos de vestuário
-    "4782": "vestuario",  # Comércio varejista de calçados
-    "1411": "vestuario",  # Confecção de roupas íntimas
-    "1412": "vestuario",  # Confecção de peças do vestuário (exceto roupas íntimas)
-    "1413": "vestuario",  # Confecção de roupas profissionais
-    "1414": "vestuario",  # Fabricação de acessórios do vestuário
-    "1421": "vestuario",  # Fabricação de meias
-    "1422": "vestuario",  # Fabricação de artigos do vestuário produzidos em malharias
-    "1531": "vestuario",  # Fabricação de calçados de couro
-    # --- Alimentos e Merenda ---
-    "1011": "alimentos",  # Abate de reses, exceto suínos
-    "1012": "alimentos",  # Abate de suínos, aves e outros
-    "1061": "alimentos",  # Fabricação de produtos do arroz
-    "1091": "alimentos",  # Fabricação de produtos de panificação
-    "1092": "alimentos",  # Fabricação de biscoitos e bolachas
-    "1099": "alimentos",  # Fabricação de outros produtos alimentícios
-    "5611": "alimentos",  # Restaurantes e similares
-    "5612": "alimentos",  # Serviços ambulantes de alimentação
-    "5620": "alimentos",  # Serviços de catering, bufê e outros
-    "4729": "alimentos",  # Comércio varejista de produtos alimentícios em geral
-    "4721": "alimentos",  # Padaria e confeitaria
-    # --- Hardware e Equipamentos de TI ---
-    "4751": "informatica",  # Comércio varejista de equipamentos de informática
-    "4752": "informatica",  # Comércio varejista de equipamentos de telefonia
-    "2621": "informatica",  # Fabricação de equipamentos de informática
-    "2622": "informatica",  # Fabricação de periféricos para equipamentos de informática
-    "9511": "informatica",  # Reparação e manutenção de computadores
-    "2631": "informatica",  # Fabricação de equipamentos transmissores de comunicação
-    # --- Software e Sistemas ---
-    "6201": "software",  # Desenvolvimento de programas sob encomenda
-    "6202": "software",  # Desenvolvimento e licenciamento de programas
-    "6203": "software",  # Desenvolvimento e licenciamento de programas não-customizáveis
-    "6204": "software",  # Consultoria em tecnologia da informação
-    "6209": "software",  # Suporte técnico, manutenção em TI
-    "6311": "software",  # Tratamento de dados, provedores de serviços
-    "6319": "software",  # Portais, provedores de conteúdo e outros serviços de informação
-    "6190": "software",  # Outras atividades de telecomunicações
-    # --- Facilities e Manutenção ---
-    "8111": "facilities",  # Serviços combinados para apoio a edifícios
-    "8112": "facilities",  # Condomínios prediais
-    "8121": "facilities",  # Limpeza em prédios e em domicílios
-    "8122": "facilities",  # Imunização e controle de pragas urbanas
-    "8129": "facilities",  # Atividades de limpeza não especificadas
-    "8130": "facilities",  # Atividades paisagísticas
-    # --- Vigilância e Segurança Patrimonial ---
-    "8011": "vigilancia",  # Atividades de vigilância e segurança privada
-    "8012": "vigilancia",  # Atividades de transporte de valores
-    "8020": "vigilancia",  # Atividades de monitoramento de sistemas de segurança
-    "8030": "vigilancia",  # Atividades de investigação particular
-    # --- Saúde ---
-    "2110": "saude",  # Fabricação de produtos farmoquímicos
-    "2121": "saude",  # Fabricação de medicamentos para uso humano
-    "2123": "saude",  # Fabricação de preparações farmacêuticas
-    "3250": "saude",  # Fabricação de instrumentos e materiais para uso médico
-    "4771": "saude",  # Comércio varejista de produtos farmacêuticos
-    "4773": "saude",  # Comércio varejista de artigos médicos e ortopédicos
-    "8610": "saude",  # Atividades de atendimento hospitalar
-    "8630": "saude",  # Atividades de atenção ambulatorial
-    "8640": "saude",  # Atividades de serviços de complementação diagnóstica
-    # --- Transporte e Veículos ---
-    "4511": "transporte",  # Comércio de automóveis e utilitários novos
-    "4512": "transporte",  # Comércio de automóveis e utilitários usados
-    "4912": "transporte",  # Transporte ferroviário de carga
-    "4921": "transporte",  # Transporte rodoviário coletivo de passageiros
-    "4922": "transporte",  # Transporte rodoviário de passageiros sob regime de fretamento
-    "4923": "transporte",  # Transporte rodoviário de táxi
-    "4924": "transporte",  # Transporte escolar
-    "4930": "transporte",  # Transporte rodoviário de carga
-    "7711": "transporte",  # Locação de automóveis sem condutor
-    "7719": "transporte",  # Locação de outros meios de transporte
-    # --- Mobiliário ---
-    "3101": "mobiliario",  # Fabricação de móveis com predominância de madeira
-    "3102": "mobiliario",  # Fabricação de móveis com predominância de metal
-    "3103": "mobiliario",  # Fabricação de colchões
-    "3104": "mobiliario",  # Fabricação de móveis de outros materiais
-    "4754": "mobiliario",  # Comércio varejista de móveis
-    # --- Papelaria e Material de Escritório ---
-    "4761": "papelaria",  # Comércio varejista de livros, jornais, papelaria
-    "1721": "papelaria",  # Fabricação de papel
-    "1731": "papelaria",  # Fabricação de embalagens de papel
-    "1741": "papelaria",  # Fabricação de produtos de papel para uso doméstico
-    "4647": "papelaria",  # Comércio atacadista de artigos de escritório
-    # --- Materiais Elétricos e Instalações ---
-    "2710": "materiais_eletricos",  # Fabricação de geradores, transformadores e motores
-    "2731": "materiais_eletricos",  # Fabricação de fios, cabos e condutores elétricos
-    "2732": "materiais_eletricos",  # Fabricação de dispositivos para instalação elétrica
-    "2733": "materiais_eletricos",  # Fabricação de aparelhos para distribuição de energia
-    "4742": "materiais_eletricos",  # Comércio varejista de material elétrico
-    "2740": "materiais_eletricos",  # Fabricação de lâmpadas e aparelhos de iluminação
-    # --- Materiais Hidráulicos e Saneamento ---
-    "2222": "materiais_hidraulicos",  # Fabricação de tubos e acessórios plásticos
-    "2449": "materiais_hidraulicos",  # Metalurgia de metais não-ferrosos
-    "4744": "materiais_hidraulicos",  # Comércio varejista de materiais de construção (hidráulicos)
-    "3600": "materiais_hidraulicos",  # Captação, tratamento e distribuição de água
-    "3701": "materiais_hidraulicos",  # Gestão de redes de esgoto
-    "3702": "materiais_hidraulicos",  # Atividades relacionadas a esgoto
-}
+# CNAE prefix → sector key and sector hints — loaded from intel_sectors_config.yaml
+# Falls back to empty dicts if config not found (backward compatible)
+try:
+    from intel_sector_loader import build_cnae_to_sector_map, build_sector_hints_map
+    _CNAE_TO_SECTOR_KEY: dict[str, str] = build_cnae_to_sector_map()
+    _SECTOR_HINTS: dict[str, list[str]] = build_sector_hints_map()
+except (ImportError, FileNotFoundError):
+    _CNAE_TO_SECTOR_KEY: dict[str, str] = {}
+    _SECTOR_HINTS: dict[str, list[str]] = {}
 
 
 def classify_edital_object_type(edital: dict) -> str:

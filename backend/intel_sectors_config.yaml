@@ -1,0 +1,503 @@
+# =============================================================================
+# Intel-Busca Sector Configuration — extends sectors_data.yaml
+#
+# This file contains sector-specific configuration for the /intel-busca command.
+# It maps CNAE prefixes to sectors, defines keyword refinements per CNAE,
+# incompatible object patterns, and sector matching hints.
+#
+# Previously these were hardcoded in collect-report-data.py and intel-collect.py.
+# Now they live here as data, making it trivial to add new sectors.
+#
+# To add a new sector:
+#   1. Add the sector in sectors_data.yaml (name, keywords, exclusions, etc.)
+#   2. Add the sector key here with cnae_prefixes, refinements, etc.
+#   3. Run tests: pytest scripts/tests/test_intel_collect.py -v
+#
+# Loaded by: collect-report-data.py (map_sector, keyword gate)
+# =============================================================================
+
+# CNAE 4-digit prefix -> sector_key mapping (reverse lookup built at load time)
+# Each sector lists which CNAE prefixes belong to it.
+sectors:
+
+  engenharia:
+    cnae_prefixes:
+      - "4120"  # Construção de edifícios
+      - "4110"  # Incorporação de empreendimentos imobiliários
+      - "4212"  # Construção de ferrovias
+      - "4221"  # Construção de redes (água, esgoto)
+      - "4222"  # Construção de redes (eletricidade, telecom)
+      - "4223"  # Construção de obras de arte especiais
+      - "4291"  # Obras portuárias/marítimas
+      - "4292"  # Montagem industrial
+      - "4299"  # Outras obras de engenharia civil
+      - "4311"  # Demolição
+      - "4312"  # Preparação de terreno
+      - "4313"  # Sondagem
+      - "4319"  # Outros serviços especializados
+      - "4391"  # Obras de fundações
+      - "4399"  # Serviços especializados construção
+      - "7112"  # Engenharia (escritórios)
+      - "7119"  # Atividades técnicas (ensaios)
+
+    sector_hints:
+      - "construç"
+      - "construc"
+      - "edifici"
+      - "obra"
+      - "engenharia"
+      - "paviment"
+      - "infraestrutura"
+      - "urbaniz"
+
+    cnae_refinements:
+      "4120":
+        exclude_patterns:
+          - "ponte"
+          - "viaduto"
+          - "passarela"
+          - "barragem"
+          - "reservatório"
+          - "reservatorio"
+          - "restauração de patrimônio"
+          - "restauracao de patrimonio"
+          - "restauração de fachada"
+          - "restauracao de fachada"
+          - "restauração de edifício"
+          - "restauracao de edificio"
+        extra_include:
+          - "unidade habitacional"
+          - "casa popular"
+          - "habitação popular"
+          - "habitacao popular"
+          - "creche"
+          - "escola"
+          - "UBS"
+          - "posto de saúde"
+          - "posto de saude"
+          - "centro esportivo"
+          - "ginásio"
+          - "ginasio"
+          - "quadra coberta"
+          - "quadra poliesportiva"
+          - "prédio público"
+          - "predio publico"
+          - "sede administrativa"
+          - "centro comunitário"
+          - "centro comunitario"
+          - "unidade de saúde"
+          - "unidade de saude"
+      "4399":
+        exclude_patterns: []
+        extra_include:
+          - "serviço especializado"
+          - "servico especializado"
+          - "manutenção predial"
+          - "manutencao predial"
+
+    incompatible_objects:
+      "4120":
+        - "\\bponte\\b"
+        - "\\bviaduto\\b"
+        - "\\bpassarela\\b"
+        - "\\bbarragem\\b"
+        - "\\breservat[oó]rio\\b"
+        - "\\btransporte\\b"
+        - "\\bfrete\\b"
+        - "\\bcaminh[ãa]o\\b"
+        - "\\blavanderia\\b"
+        - "\\bzeladoria\\b"
+        - "\\bmedicamento\\b"
+        - "\\bhospitalar\\b"
+        - "\\baliment[aío]\\b"
+        - "\\bmerenda\\b"
+        - "\\brefeição\\b"
+        - "\\bconsultoria\\b"
+      "4211":
+        - "\\bedifica[çc][ãa]o\\b"
+        - "\\bpr[eé]dio\\b"
+        - "\\bescola\\b"
+        - "\\bcreche\\b"
+        - "\\bubs\\b"
+        - "\\bunidade\\s+(habitacional|de sa[uú]de)\\b"
+
+  engenharia_rodoviaria:
+    cnae_prefixes:
+      - "4211"  # Construção de rodovias e ferrovias
+      - "4213"  # Obras de urbanização — ruas e praças
+
+    sector_hints:
+      - "rodovia"
+      - "rodoviári"
+      - "rodoviario"
+      - "estrada"
+      - "pavimentaç"
+
+    cnae_refinements:
+      "4211":
+        exclude_patterns:
+          - "edificação"
+          - "edificacao"
+          - "prédio"
+          - "predio"
+          - "escola"
+          - "creche"
+          - "UBS"
+          - "posto de saúde"
+          - "posto de saude"
+          - "elevador"
+          - "elevadores"
+          - "telhado"
+          - "cobertura metálica"
+          - "cobertura metalica"
+          - "pintura predial"
+          - "pintura de fachada"
+          - "instalação elétrica"
+          - "instalacao eletrica"
+          - "instalação hidráulica"
+          - "instalacao hidraulica"
+        extra_include:
+          - "rodovia"
+          - "estrada"
+          - "via urbana"
+          - "ciclovia"
+          - "calçada"
+          - "calcada"
+          - "meio-fio"
+          - "meio fio"
+          - "guia"
+          - "sinalização viária"
+          - "sinalizacao viaria"
+
+    incompatible_objects:
+      "4211":
+        - "\\bedifica[çc][ãa]o\\b"
+        - "\\bpr[eé]dio\\b"
+        - "\\bescola\\b"
+        - "\\bcreche\\b"
+        - "\\bubs\\b"
+        - "\\bunidade\\s+(habitacional|de sa[uú]de)\\b"
+
+  manutencao_predial:
+    cnae_prefixes:
+      - "4321"  # Instalações elétricas
+      - "4322"  # Instalações hidráulicas, gás, etc.
+      - "4329"  # Outras instalações em construções
+      - "4330"  # Obras de acabamento
+
+    sector_hints:
+      - "manutenção predial"
+      - "manutencao predial"
+      - "instalações"
+      - "instalacoes"
+
+    cnae_refinements:
+      "4322":
+        exclude_patterns:
+          - "pavimentação"
+          - "pavimentacao"
+          - "asfalto"
+          - "ponte"
+          - "viaduto"
+          - "terraplanagem"
+          - "sondagem"
+        extra_include:
+          - "instalação hidráulica"
+          - "instalacao hidraulica"
+          - "sistema de ventilação"
+          - "sistema de ventilacao"
+          - "ar condicionado"
+          - "refrigeração"
+          - "refrigeracao"
+          - "sprinkler"
+          - "hidrante"
+      "4330":
+        exclude_patterns:
+          - "pavimentação"
+          - "pavimentacao"
+          - "asfalto"
+          - "ponte"
+          - "viaduto"
+          - "terraplanagem"
+          - "sondagem"
+        extra_include:
+          - "acabamento"
+          - "pintura"
+          - "revestimento"
+          - "piso"
+          - "forro"
+          - "gesso"
+
+    incompatible_objects: {}
+
+  vestuario:
+    cnae_prefixes:
+      - "4781"  # Comércio varejista de artigos de vestuário
+      - "4782"  # Comércio varejista de calçados
+      - "1411"  # Confecção de roupas íntimas
+      - "1412"  # Confecção de peças do vestuário
+      - "1413"  # Confecção de roupas profissionais
+      - "1414"  # Fabricação de acessórios do vestuário
+      - "1421"  # Fabricação de meias
+      - "1422"  # Fabricação de artigos do vestuário em malharias
+      - "1531"  # Fabricação de calçados de couro
+
+    sector_hints:
+      - "vestuário"
+      - "vestuario"
+      - "uniforme"
+      - "confecç"
+      - "confeccao"
+      - "roupa"
+      - "têxtil"
+      - "textil"
+
+    cnae_refinements: {}
+    incompatible_objects: {}
+
+  alimentos:
+    cnae_prefixes:
+      - "1011"  # Abate de reses
+      - "1012"  # Abate de suínos, aves
+      - "1061"  # Fabricação de produtos do arroz
+      - "1091"  # Fabricação de produtos de panificação
+      - "1092"  # Fabricação de biscoitos e bolachas
+      - "1099"  # Fabricação de outros produtos alimentícios
+      - "5611"  # Restaurantes e similares
+      - "5612"  # Serviços ambulantes de alimentação
+      - "5620"  # Serviços de catering, bufê
+      - "4729"  # Comércio varejista de produtos alimentícios
+      - "4721"  # Padaria e confeitaria
+
+    sector_hints:
+      - "aliment"
+      - "merenda"
+      - "refeição"
+      - "refeicao"
+      - "nutriç"
+      - "nutricao"
+      - "panifica"
+
+    cnae_refinements: {}
+    incompatible_objects: {}
+
+  informatica:
+    cnae_prefixes:
+      - "4751"  # Comércio varejista de equipamentos de informática
+      - "4752"  # Comércio varejista de equipamentos de telefonia
+      - "2621"  # Fabricação de equipamentos de informática
+      - "2622"  # Fabricação de periféricos
+      - "9511"  # Reparação e manutenção de computadores
+      - "2631"  # Fabricação de equipamentos transmissores
+
+    sector_hints:
+      - "informática"
+      - "informatica"
+      - "computador"
+      - "hardware"
+      - "equipamento de ti"
+
+    cnae_refinements: {}
+    incompatible_objects: {}
+
+  software:
+    cnae_prefixes:
+      - "6201"  # Desenvolvimento de programas sob encomenda
+      - "6202"  # Desenvolvimento e licenciamento de programas
+      - "6203"  # Desenvolvimento de programas não-customizáveis
+      - "6204"  # Consultoria em tecnologia da informação
+      - "6209"  # Suporte técnico, manutenção em TI
+      - "6311"  # Tratamento de dados, provedores de serviços
+      - "6319"  # Portais, provedores de conteúdo
+      - "6190"  # Outras atividades de telecomunicações
+
+    sector_hints:
+      - "software"
+      - "sistema"
+      - "desenvolvimento de programa"
+      - "tecnologia da informaç"
+
+    cnae_refinements: {}
+    incompatible_objects: {}
+
+  facilities:
+    cnae_prefixes:
+      - "8111"  # Serviços combinados para apoio a edifícios
+      - "8112"  # Condomínios prediais
+      - "8121"  # Limpeza em prédios e em domicílios
+      - "8122"  # Imunização e controle de pragas
+      - "8129"  # Atividades de limpeza não especificadas
+      - "8130"  # Atividades paisagísticas
+
+    sector_hints:
+      - "limpeza"
+      - "conservaç"
+      - "conservacao"
+      - "zeladoria"
+      - "jardinagem"
+      - "paisagis"
+
+    cnae_refinements: {}
+    incompatible_objects: {}
+
+  vigilancia:
+    cnae_prefixes:
+      - "8011"  # Atividades de vigilância e segurança privada
+      - "8012"  # Atividades de transporte de valores
+      - "8020"  # Atividades de monitoramento
+      - "8030"  # Atividades de investigação particular
+
+    sector_hints:
+      - "vigilância"
+      - "vigilancia"
+      - "segurança"
+      - "seguranca"
+      - "monitoramento"
+
+    cnae_refinements: {}
+    incompatible_objects: {}
+
+  saude:
+    cnae_prefixes:
+      - "2110"  # Fabricação de produtos farmoquímicos
+      - "2121"  # Fabricação de medicamentos
+      - "2123"  # Fabricação de preparações farmacêuticas
+      - "3250"  # Fabricação de instrumentos/materiais médicos
+      - "4771"  # Comércio varejista de produtos farmacêuticos
+      - "4773"  # Comércio varejista de artigos médicos
+      - "8610"  # Atividades de atendimento hospitalar
+      - "8630"  # Atividades de atenção ambulatorial
+      - "8640"  # Atividades de complementação diagnóstica
+
+    sector_hints:
+      - "saúde"
+      - "saude"
+      - "farmac"
+      - "médic"
+      - "medic"
+      - "hospitalar"
+      - "laborat"
+
+    cnae_refinements: {}
+    incompatible_objects: {}
+
+  transporte:
+    cnae_prefixes:
+      - "4511"  # Comércio de automóveis novos
+      - "4512"  # Comércio de automóveis usados
+      - "4912"  # Transporte ferroviário de carga
+      - "4921"  # Transporte rodoviário coletivo
+      - "4922"  # Transporte sob regime de fretamento
+      - "4923"  # Transporte rodoviário de táxi
+      - "4924"  # Transporte escolar
+      - "4930"  # Transporte rodoviário de carga
+      - "7711"  # Locação de automóveis sem condutor
+      - "7719"  # Locação de outros meios de transporte
+
+    sector_hints:
+      - "transporte"
+      - "veículo"
+      - "veiculo"
+      - "logística"
+      - "logistica"
+      - "frete"
+
+    cnae_refinements: {}
+    incompatible_objects: {}
+
+  mobiliario:
+    cnae_prefixes:
+      - "3101"  # Fabricação de móveis (madeira)
+      - "3102"  # Fabricação de móveis (metal)
+      - "3103"  # Fabricação de colchões
+      - "3104"  # Fabricação de móveis (outros materiais)
+      - "4754"  # Comércio varejista de móveis
+
+    sector_hints:
+      - "móvel"
+      - "movel"
+      - "mobiliário"
+      - "mobiliario"
+      - "mobília"
+      - "mobilia"
+
+    cnae_refinements: {}
+    incompatible_objects: {}
+
+  papelaria:
+    cnae_prefixes:
+      - "4761"  # Comércio varejista de livros, jornais, papelaria
+      - "1721"  # Fabricação de papel
+      - "1731"  # Fabricação de embalagens de papel
+      - "1741"  # Fabricação de produtos de papel (uso doméstico)
+      - "4647"  # Comércio atacadista de artigos de escritório
+
+    sector_hints:
+      - "papelaria"
+      - "papel"
+      - "escritório"
+      - "escritorio"
+      - "material escolar"
+
+    cnae_refinements: {}
+    incompatible_objects: {}
+
+  materiais_eletricos:
+    cnae_prefixes:
+      - "2710"  # Fabricação de geradores, transformadores, motores
+      - "2731"  # Fabricação de fios, cabos, condutores elétricos
+      - "2732"  # Fabricação de dispositivos para instalação elétrica
+      - "2733"  # Fabricação de aparelhos para distribuição de energia
+      - "4742"  # Comércio varejista de material elétrico
+      - "2740"  # Fabricação de lâmpadas e aparelhos de iluminação
+
+    sector_hints:
+      - "elétric"
+      - "eletric"
+      - "eletroeletrônic"
+      - "eletroeletronico"
+
+    cnae_refinements: {}
+    incompatible_objects: {}
+
+  materiais_hidraulicos:
+    cnae_prefixes:
+      - "2222"  # Fabricação de tubos e acessórios plásticos
+      - "2449"  # Metalurgia de metais não-ferrosos
+      - "4744"  # Comércio varejista de materiais de construção (hidráulicos)
+      - "3600"  # Captação, tratamento e distribuição de água
+      - "3701"  # Gestão de redes de esgoto
+      - "3702"  # Atividades relacionadas a esgoto
+
+    sector_hints:
+      - "hidráulic"
+      - "hidraulic"
+      - "saneamento"
+      - "encanamento"
+      - "tubos"
+
+    cnae_refinements: {}
+    incompatible_objects: {}
+
+# =============================================================================
+# LLM Fallback Configuration
+# When map_sector() returns "Geral" (unknown CNAE), the LLM classifies
+# edital relevance using the company's CNAE description as context.
+# =============================================================================
+llm_fallback:
+  enabled: true
+  model: "gpt-4.1-nano"
+  max_concurrent: 5
+  timeout_s: 10
+  # Fallback = REJECT on LLM failure (zero noise philosophy)
+  on_failure: "reject"
+  # Prompt template: {cnae_description} and {objeto} are interpolated
+  prompt_template: |
+    Você é um classificador de licitações públicas brasileiras.
+
+    A empresa tem o seguinte CNAE: {cnae_description}
+
+    O edital tem o seguinte objeto: {objeto}
+
+    O edital é relevante para uma empresa com esse CNAE?
+    Responda APENAS "SIM" ou "NAO" (sem acentos, sem explicação).

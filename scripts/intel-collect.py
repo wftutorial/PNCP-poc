@@ -1276,6 +1276,156 @@ def apply_cnae_keyword_gate(
 
 
 # ============================================================
+# STEP 4a: LLM FALLBACK FOR UNKNOWN SECTORS
+# ============================================================
+
+def _llm_classify_edital_relevance(
+    cnae_description: str,
+    objeto: str,
+    model: str = "gpt-4.1-nano",
+    timeout_s: float = 10.0,
+) -> bool | None:
+    """Use LLM to classify whether an edital is relevant for a given CNAE.
+
+    Returns: True (relevant), False (not relevant), None (LLM failure).
+    Fallback = None (caller decides: zero noise = reject).
+    """
+    try:
+        from openai import OpenAI
+    except ImportError:
+        return None
+
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        return None
+
+    prompt = (
+        f"Você é um classificador de licitações públicas brasileiras.\n\n"
+        f"A empresa tem o seguinte CNAE: {cnae_description}\n\n"
+        f"O edital tem o seguinte objeto: {objeto}\n\n"
+        f"O edital é relevante para uma empresa com esse CNAE?\n"
+        f"Responda APENAS \"SIM\" ou \"NAO\" (sem acentos, sem explicação)."
+    )
+
+    try:
+        client = OpenAI(api_key=api_key)
+        response = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=5,
+            temperature=0,
+            timeout=timeout_s,
+        )
+        answer = (response.choices[0].message.content or "").strip().upper()
+        if "SIM" in answer:
+            return True
+        if "NAO" in answer or "NÃO" in answer:
+            return False
+        return None
+    except Exception:
+        return None
+
+
+def apply_llm_fallback_gate(
+    editais: list[dict],
+    cnae_description: str,
+    sector_key: str,
+    max_concurrent: int = 5,
+    model: str = "gpt-4.1-nano",
+) -> dict[str, int]:
+    """Apply LLM classification to editais that need review when sector is unknown.
+
+    Only runs when sector_key == "geral" (unknown CNAE mapping).
+    Classifies editais with needs_llm_review=True using GPT.
+    Mutates editais in place.
+
+    Returns: stats dict with counts.
+    """
+    stats = {"llm_reviewed": 0, "llm_accepted": 0, "llm_rejected": 0, "llm_failed": 0}
+
+    if sector_key != "geral":
+        return stats
+
+    needs_review = [ed for ed in editais if ed.get("needs_llm_review")]
+    if not needs_review:
+        return stats
+
+    # Check if LLM is available
+    try:
+        from intel_sector_loader import get_llm_fallback_config
+        llm_config = get_llm_fallback_config()
+    except (ImportError, FileNotFoundError):
+        llm_config = {"enabled": True, "model": model, "on_failure": "reject"}
+
+    if not llm_config.get("enabled", True):
+        print("  LLM fallback: desabilitado via config")
+        return stats
+
+    use_model = llm_config.get("model", model)
+    on_failure = llm_config.get("on_failure", "reject")
+
+    print(f"  LLM fallback: classificando {len(needs_review)} editais ambiguos "
+          f"(setor=geral, CNAE={cnae_description[:60]}...)")
+
+    # Use ThreadPoolExecutor for parallel LLM calls
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_concurrent) as executor:
+        future_to_ed = {}
+        for ed in needs_review:
+            objeto = ed.get("objeto", "")
+            future = executor.submit(
+                _llm_classify_edital_relevance,
+                cnae_description, objeto, use_model,
+            )
+            future_to_ed[future] = ed
+
+        for future in concurrent.futures.as_completed(future_to_ed):
+            ed = future_to_ed[future]
+            stats["llm_reviewed"] += 1
+            result = future.result()
+
+            if result is True:
+                ed["cnae_compatible"] = True
+                ed["needs_llm_review"] = False
+                ed["cnae_confidence"] = 0.50  # moderate confidence from LLM
+                ed["exclusion_reason"] = None
+                ed["gate2_decision"] = {
+                    "compatible": True,
+                    "reason": "LLM_FALLBACK_ACCEPT",
+                    "cnae_description": cnae_description[:100],
+                    "model": use_model,
+                    "timestamp": _today().isoformat(),
+                }
+                stats["llm_accepted"] += 1
+            elif result is False:
+                ed["cnae_compatible"] = False
+                ed["needs_llm_review"] = False
+                ed["cnae_confidence"] = 0.0
+                ed["exclusion_reason"] = "llm_fallback_reject"
+                ed["gate2_decision"] = {
+                    "compatible": False,
+                    "reason": "LLM_FALLBACK_REJECT",
+                    "cnae_description": cnae_description[:100],
+                    "model": use_model,
+                    "timestamp": _today().isoformat(),
+                }
+                stats["llm_rejected"] += 1
+            else:
+                # LLM failure: apply on_failure policy
+                stats["llm_failed"] += 1
+                if on_failure == "reject":
+                    ed["cnae_compatible"] = False
+                    ed["needs_llm_review"] = False
+                    ed["cnae_confidence"] = 0.0
+                    ed["exclusion_reason"] = "llm_fallback_failure_reject"
+                    stats["llm_rejected"] += 1
+                # else: keep needs_llm_review=True (pass-through)
+
+    print(f"  LLM fallback: {stats['llm_accepted']} aceitos, "
+          f"{stats['llm_rejected']} rejeitados, {stats['llm_failed']} falhas")
+    return stats
+
+
+# ============================================================
 # STEP 4b: COMPETITIVE INTELLIGENCE PER ORGAN
 # ============================================================
 
@@ -2566,6 +2716,14 @@ def main():
         all_cnae_prefixes=all_cnae_prefixes,
         all_sector_keys=all_sector_keys,
     )
+
+    # ── Step 4a: LLM fallback for unknown sectors ──
+    if sector_key == "geral":
+        print(f"\n[4a/7] LLM fallback para setor desconhecido (CNAE: {cnae_principal[:60]})...")
+        llm_stats = apply_llm_fallback_gate(
+            editais, cnae_principal, sector_key,
+        )
+        source_meta["llm_fallback_stats"] = llm_stats
 
     # ── Step 5: Competitive intelligence per organ ──
     print(f"\n[5/7] Coletando inteligencia competitiva ({_COMPETITIVE_MAX_ORGANS} orgaos, {24} meses)...")

@@ -2255,6 +2255,7 @@ def aplicar_todos_filtros(
     modo_busca: str = "publicacao",  # STORY-240 AC4: "publicacao" or "abertas"
     custom_terms: Optional[List[str]] = None,  # STORY-267: user's free search terms
     on_progress: Optional[Callable[[int, int, str], None]] = None,  # STORY-329 AC1: (processed, total, phase)
+    pncp_degraded: bool = False,  # CRIT-054 AC4: flag for PNCP source degradation
 ) -> Tuple[List[dict], Dict[str, int]]:
     """
     Aplica todos os filtros em sequência otimizada (fail-fast).

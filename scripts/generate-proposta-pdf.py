@@ -1,8 +1,8 @@
 """
 Gerador de PDF de Proposta Comercial B2G
 Usa reportlab para gerar PDF profissional a partir do JSON de dados.
-v3 — Conteúdo 100% dinâmico do JSON, fix_accents(), CTA de alta conversão,
-     seção de autoridade reescrita, KeepTogether, argparse, --pacote.
+v4 — Setor-agnóstico, entregas alinhadas com /intel-busca, sem oportunidades
+     individuais, capital 10x, nome fallback, accent map expandido.
 """
 import argparse
 import datetime
@@ -156,6 +156,49 @@ _ACCENT_MAP = [
     (r"\bsancao\b", "sanção"),
     (r"\bCracas\b", "Praças"),  # unlikely but safe
     (r"\bPraca\b", "Praça"), (r"\bpraca\b", "praça"),
+    # --- Procurement/licitação terms (v4 expansion) ---
+    (r"\baquisicao\b", "aquisição"), (r"\bAquisicao\b", "Aquisição"),
+    (r"\baquisicoes\b", "aquisições"), (r"\bAquisicoes\b", "Aquisições"),
+    (r"\bfiscalizacao\b", "fiscalização"), (r"\bFiscalizacao\b", "Fiscalização"),
+    (r"\bmedicao\b", "medição"), (r"\bMedicao\b", "Medição"),
+    (r"\borcamento\b", "orçamento"), (r"\bOrcamento\b", "Orçamento"),
+    (r"\bretencao\b", "retenção"), (r"\bRetencao\b", "Retenção"),
+    (r"\bprotocolizacao\b", "protocolização"),
+    (r"\binspecao\b", "inspeção"), (r"\bInspecao\b", "Inspeção"),
+    (r"\brescisao\b", "rescisão"), (r"\bRescisao\b", "Rescisão"),
+    (r"\bprovisao\b", "provisão"),
+    (r"\bprestacao\b", "prestação"), (r"\bPrestacao\b", "Prestação"),
+    (r"\bcotacao\b", "cotação"), (r"\bcotacoes\b", "cotações"),
+    (r"\bautorizacao\b", "autorização"), (r"\bAutorizacao\b", "Autorização"),
+    (r"\bhomologacao\b", "homologação"), (r"\bHomologacao\b", "Homologação"),
+    (r"\badjudicacao\b", "adjudicação"), (r"\bAdjudicacao\b", "Adjudicação"),
+    (r"\bdesclassificacao\b", "desclassificação"),
+    (r"\bconcessao\b", "concessão"), (r"\bConcessao\b", "Concessão"),
+    (r"\bpermissao\b", "permissão"),
+    (r"\bproducao\b", "produção"), (r"\bProducao\b", "Produção"),
+    (r"\bmanutencao\b", "manutenção"), (r"\bManutencao\b", "Manutenção"),
+    (r"\boperacao\b", "operação"), (r"\bOperacao\b", "Operação"),
+    (r"\bimplantacao\b", "implantação"), (r"\bImplantacao\b", "Implantação"),
+    (r"\brecuperacao\b", "recuperação"), (r"\bRecuperacao\b", "Recuperação"),
+    (r"\bdemolicao\b", "demolição"), (r"\bDemolicao\b", "Demolição"),
+    (r"\bsinalizacao\b", "sinalização"), (r"\bSinalizacao\b", "Sinalização"),
+    (r"\bdesapropriacao\b", "desapropriação"),
+    (r"\bregularizacao\b", "regularização"),
+    (r"\bprorrogacao\b", "prorrogação"),
+    (r"\badequacao\b", "adequação"), (r"\bAdequacao\b", "Adequação"),
+    (r"\bcertificacao\b", "certificação"),
+    (r"\bqualificacao\b", "qualificação"), (r"\bQualificacao\b", "Qualificação"),
+    # --- Sector-agnostic terms ---
+    (r"\btecnologia\b", "tecnologia"),  # correct
+    (r"\bsaude\b", "saúde"), (r"\bSaude\b", "Saúde"),
+    (r"\beducacao\b", "educação"), (r"\bEducacao\b", "Educação"),
+    (r"\balimentacao\b", "alimentação"), (r"\bAlimentacao\b", "Alimentação"),
+    (r"\btransporte\b", "transporte"),  # correct
+    (r"\bseguranca\b", "segurança"), (r"\bSeguranca\b", "Segurança"),
+    (r"\blimpeza\b", "limpeza"),  # correct
+    (r"\bcomunicacao\b", "comunicação"), (r"\bComunicacao\b", "Comunicação"),
+    (r"\bcapacitacao\b", "capacitação"),
+    (r"\bgestao\b", "gestão"), (r"\bGestao\b", "Gestão"),
 ]
 
 # Pre-compile for performance
@@ -387,7 +430,7 @@ def build_pdf(data, output_path, pacote_recomendado="semanal"):
 
     emp = data["empresa"]
     editais = data["editais"]
-    nome = emp.get("nome_fantasia", emp["razao_social"])
+    nome = (emp.get("nome_fantasia") or "").strip() or emp.get("razao_social", "Empresa")
     nome = fix_accents(nome)
 
     # Decisor from QSA
@@ -401,6 +444,8 @@ def build_pdf(data, output_path, pacote_recomendado="semanal"):
     n_cnaes = len([c.strip() for c in cnaes_sec_str.split(",") if c.strip()]) if cnaes_sec_str else 0
     total_cnaes = n_cnaes + 1  # principal + secondary
     capital = float(emp.get("capital_social", 0))
+    CAPITAL_MULTIPLIER = 10  # ME participa de editais até 10x o capital social
+    capital_threshold = capital * CAPITAL_MULTIPLIER
     capital_fmt = fmt_value_full(capital)
     setor = fix_accents(data.get("setor", ""))
 
@@ -424,10 +469,6 @@ def build_pdf(data, output_path, pacote_recomendado="semanal"):
     sancoes = emp.get("sancoes", {})
     tem_sancao = any(sancoes.get(k) for k in ("ceis", "cnep", "cepim", "ceaf"))
     sancoes_txt = "NENHUMA (CEIS, CNEP, CEPIM, CEAF)" if not tem_sancao else "VERIFICAR — sanção detectada"
-
-    # Contratos
-    contratos = emp.get("historico_contratos", [])
-    contratos_txt = f"{len(contratos)} registrados" if contratos else "Nenhum registrado"
 
     # Municipality distribution
     mun_counter = Counter()
@@ -503,29 +544,24 @@ def build_pdf(data, output_path, pacote_recomendado="semanal"):
     story.append(hr())
     story.append(Paragraph(f"{decisor_greeting},", S['BodyBold']))
     story.append(Spacer(1, 2 * mm))
-    story.append(Paragraph(
-        f"Como engenheiro da Secretaria de Estado da Infraestrutura de SC, acompanho diariamente o volume de obras "
-        f"públicas licitadas no estado. Na minha atividade paralela de consultoria, faço o caminho inverso: "
-        f"identifico, para empresas como a {nome}, quais dessas oportunidades têm aderência real ao perfil "
-        f"técnico e financeiro da empresa.", S['Body']
+
+    # Sector-agnostic intro (from JSON or generic fallback)
+    setor_intro = fix_accents(data.get("setor_intro",
+        f"Como consultor especializado em licitações públicas, acompanho diariamente o volume de "
+        f"contratações no setor de {setor}. Identifico, para empresas como a {nome}, quais "
+        f"oportunidades têm aderência real ao perfil técnico e financeiro da empresa."
     ))
-
-    # Dynamic paragraph based on data
-    melhor_mun = fix_accents(melhor_edital.get("municipio", "")) if melhor_edital else ""
-    melhor_obj_short = fix_accents(melhor_edital.get("objeto", "")) if melhor_edital else ""
-    melhor_valor = fmt_value(melhor_edital.get("valor_estimado", 0)) if melhor_edital else ""
+    story.append(Paragraph(setor_intro, S['Body']))
 
     story.append(Paragraph(
-        f"Nos últimos 30 dias, mapeei <b>{n_editais} editais abertos em {emp.get('uf_sede', 'SC')}</b> "
-        f"diretamente compatíveis com os CNAEs da {nome}, totalizando <b>{total_valor_fmt} em valor estimado</b>. "
-        f"O edital de {melhor_mun}, por exemplo, é de {melhor_obj_short.lower()} — "
-        f"match direto com o CNAE principal da empresa, com competição estimada baixa.",
+        f"Nos últimos 30 dias, mapeei <b>{n_editais} editais em {emp.get('uf_sede', 'MG')}</b> "
+        f"diretamente compatíveis com os CNAEs da {nome}, totalizando <b>{total_valor_fmt} em valor estimado</b>.",
         S['Body']
     ))
     story.append(Paragraph(
-        f"O objetivo desta proposta é apresentar um diagnóstico do mercado atual, as oportunidades "
-        f"mapeadas, e uma opção de serviço de monitoramento contínuo que permita a {nome} "
-        f"participar de forma sistemática do mercado de licitações.", S['Body']
+        f"O objetivo desta proposta é apresentar um diagnóstico do mercado atual e uma opção de "
+        f"serviço de monitoramento contínuo que permita à {nome} participar de forma sistemática "
+        f"do mercado de licitações.", S['Body']
     ))
     story.append(Paragraph(
         "Os dados são públicos. A análise é o diferencial.", S['BodyBold']
@@ -550,23 +586,20 @@ def build_pdf(data, output_path, pacote_recomendado="semanal"):
         [f"{'Sócia-Administradora' if honorific == 'Sra.' else 'Sócio-Administrador'}", decisor_full],
         ["Situação Cadastral", fix_accents(emp.get("situacao_cadastral", ""))],
         ["Sanções Gov.", sancoes_txt],
-        ["Contratos Federais", contratos_txt],
     ]))
     story.append(Spacer(1, 3 * mm))
 
     # Pontos Fortes — derived from data
     story.append(Paragraph("Pontos Fortes", S['H2']))
     pontos_fortes = []
-    if "terraplenagem" in cnae_principal_txt.lower() or "4313" in cnae_principal_txt:
-        pontos_fortes.append("CNAE principal (terraplenagem) é o mais demandado em editais de infraestrutura de SC")
-    elif cnae_principal_txt:
-        pontos_fortes.append(f"CNAE principal ({cnae_principal_txt.split(' - ')[0]}) posiciona a empresa no setor de {setor}")
+    if cnae_principal_txt:
+        cnae_code = cnae_principal_txt.split(" - ")[0].strip()
+        cnae_desc = cnae_principal_txt.split(" - ")[1].strip() if " - " in cnae_principal_txt else cnae_principal_txt
+        pontos_fortes.append(f"CNAE principal ({cnae_code}) — {fix_accents(cnae_desc)} — posiciona a empresa no setor de {setor}")
 
-    if capital >= 5_000_000:
-        pct_editais = sum(1 for e in editais if float(e.get("valor_estimado", 0)) <= capital) / max(n_editais, 1) * 100
-        pontos_fortes.append(f"Capital de {fmt_value(capital)} permite participar de {pct_editais:.0f}% dos editais identificados")
-    elif capital > 0:
-        pontos_fortes.append(f"Capital social de {fmt_value(capital)}")
+    if capital > 0:
+        pct_editais = sum(1 for e in editais if float(e.get("valor_estimado", 0)) <= capital_threshold) / max(n_editais, 1) * 100
+        pontos_fortes.append(f"Capital de {fmt_value(capital)} (limite de participação: {fmt_value(capital_threshold)}) — compatível com {pct_editais:.0f}% dos editais identificados")
 
     if n_cnaes > 5:
         pontos_fortes.append(f"{total_cnaes} CNAEs (principal + {n_cnaes} secundários) cobrem escopo amplo")
@@ -580,24 +613,21 @@ def build_pdf(data, output_path, pacote_recomendado="semanal"):
     # Pontos de Atenção — derived from data
     story.append(Paragraph("Pontos de Atenção", S['H2']))
     pontos_atencao = []
-    if not contratos:
-        pontos_atencao.append("Zero contratos federais registrados")
-    pontos_atencao.append("Nenhuma participação detectada nos editais abertos atuais")
 
-    # Capital limitation
-    editais_acima_capital = sum(1 for e in editais if float(e.get("valor_estimado", 0)) > capital)
+    # Capital limitation (10x multiplier)
+    editais_acima_capital = sum(1 for e in editais if float(e.get("valor_estimado", 0)) > capital_threshold)
     if editais_acima_capital > 0 and capital > 0:
         pontos_atencao.append(
-            f"Capital limita editais acima de {fmt_value(capital)} "
-            f"({editais_acima_capital} dos {n_editais} identificados)"
+            f"Capital limita editais acima de {fmt_value(capital_threshold)} (10x capital social) "
+            f"— {editais_acima_capital} dos {n_editais} identificados"
         )
 
     for pa in pontos_atencao:
         story.append(bullet(pa))
 
     story.append(Paragraph(
-        f"A {nome} tem perfil técnico e financeiro compatível com a grande maioria dos editais "
-        f"de infraestrutura em {emp.get('uf_sede', 'SC')}, mas não possui histórico registrado de participação. "
+        f"A {nome} tem perfil técnico e financeiro compatível com a maioria dos editais "
+        f"de {setor.lower()} em {emp.get('uf_sede', 'MG')}. "
         f"Isso representa uma oportunidade significativa de diversificação de receita.",
         S['Quote']
     ))
@@ -606,7 +636,7 @@ def build_pdf(data, output_path, pacote_recomendado="semanal"):
     # ==========================================================
     # 3. RADIOGRAFIA DO MERCADO
     # ==========================================================
-    story.append(Paragraph(f"3. Radiografia do Mercado — {emp.get('uf_sede', 'SC')} {setor}", S['H1']))
+    story.append(Paragraph(f"3. Radiografia do Mercado — {emp.get('uf_sede', 'MG')} {setor}", S['H1']))
     story.append(hr())
 
     # Big numbers
@@ -657,140 +687,79 @@ def build_pdf(data, output_path, pacote_recomendado="semanal"):
     story.append(PageBreak())
 
     # ==========================================================
-    # 4. TOP OPORTUNIDADES
+    # 4. PANORAMA DO MERCADO (aggregated, no individual editais)
     # ==========================================================
-    n_top = min(len(editais_sorted), 10)
-    story.append(Paragraph(f"4. As {n_top} Melhores Oportunidades Abertas Agora", S['H1']))
+    story.append(Paragraph(f"4. Panorama do Mercado — {setor}", S['H1']))
     story.append(hr())
-
-    top = editais_sorted[:n_top]
-    # F2: New column widths — total = 170mm
-    cw_top = [8 * mm, 68 * mm, 22 * mm, 22 * mm, 24 * mm, 26 * mm]
-    top_rows = []
-    for i, e in enumerate(top, 1):
-        v = fmt_value(float(e.get("valor_estimado", 0)))
-        mun = fix_accents(e.get("municipio", ""))
-        obj = fix_accents(e.get("objeto", ""))
-        # F2: município — objeto (em-dash), no truncation
-        edital_cell = f"{mun} — {obj}"
-        enc = fmt_date(e.get("data_encerramento", ""))
-        comp = ""
-        if isinstance(e.get("analise"), dict):
-            comp_raw = fix_accents(e["analise"].get("competitividade", ""))
-            comp = comp_raw.split(" - ")[0] if " - " in comp_raw else comp_raw.split(" — ")[0]
-        rec = fix_accents(e.get("recomendacao", ""))
-        top_rows.append([str(i), edital_cell, v, enc, comp, rec])
-
-    story.append(make_table(
-        ["#", "Edital", "Valor", "Encerra", "Competição", "Recomendação"],
-        top_rows, cw_top
+    story.append(Paragraph(
+        f"Nos últimos 30 dias, foram identificados <b>{n_editais} editais</b> compatíveis com o perfil "
+        f"da {nome} em {emp.get('uf_sede', 'MG')}, totalizando <b>{total_valor_fmt} em valor estimado</b>.",
+        S['Body']
     ))
     story.append(Spacer(1, 3 * mm))
 
-    # Dynamic highlight for best edital
-    if melhor_edital:
-        me_mun = fix_accents(melhor_edital.get("municipio", ""))
-        me_obj = fix_accents(melhor_edital.get("objeto", ""))
-        me_valor = fmt_value_full(float(melhor_edital.get("valor_estimado", 0)))
-        me_analise = melhor_edital.get("analise", {})
-        me_aderencia = fix_accents(me_analise.get("aderencia", ""))
-        me_comp = fix_accents(me_analise.get("competitividade", ""))
-        me_mod = fix_accents(melhor_edital.get("modalidade", ""))
+    # Distribution by value range
+    story.append(Paragraph("Distribuição por Faixa de Valor", S['H2']))
+    faixas = {"Até R$ 500K": 0, "R$ 500K–R$ 1M": 0, "R$ 1M–R$ 5M": 0, "R$ 5M–R$ 12M": 0, "Acima de R$ 12M": 0}
+    faixas_valor = {"Até R$ 500K": 0, "R$ 500K–R$ 1M": 0, "R$ 1M–R$ 5M": 0, "R$ 5M–R$ 12M": 0, "Acima de R$ 12M": 0}
+    for e in editais:
+        v = float(e.get("valor_estimado", 0))
+        if v <= 500_000:
+            k = "Até R$ 500K"
+        elif v <= 1_000_000:
+            k = "R$ 500K–R$ 1M"
+        elif v <= 5_000_000:
+            k = "R$ 1M–R$ 5M"
+        elif v <= 12_000_000:
+            k = "R$ 5M–R$ 12M"
+        else:
+            k = "Acima de R$ 12M"
+        faixas[k] += 1
+        faixas_valor[k] += v
 
-        story.append(Paragraph(f"Destaque: {me_mun}", S['H2']))
-        story.append(Paragraph(
-            f"{me_obj}. Aderência: {me_aderencia}. "
-            f"Modalidade: {me_mod}. Competitividade: {me_comp}. "
-            f"Valor de {me_valor} — "
-            f"{('compatível' if float(melhor_edital.get('valor_estimado', 0)) <= capital else 'acima')} "
-            f"com capital de {fmt_value(capital)} "
-            f"({float(melhor_edital.get('valor_estimado', 0))/capital*100:.0f}%)." if capital > 0 else "",
-            S['Body']
-        ))
+    cw_faixa = [40 * mm, 25 * mm, 35 * mm, 40 * mm]
+    faixa_rows = []
+    for faixa, count in faixas.items():
+        if count > 0:
+            compat = "Compatível" if faixa != "Acima de R$ 12M" else "Avaliar consórcio"
+            faixa_rows.append([faixa, str(count), fmt_value(faixas_valor[faixa]), compat])
+    story.append(make_table(["Faixa de Valor", "Qtd", "Valor Total", "Compatibilidade"], faixa_rows, cw_faixa))
+    story.append(Spacer(1, 3 * mm))
 
-    # Detect clusters (2+ editais same municipio)
-    clusters = {m: c for m, c in mun_counter.items() if c >= 2}
-    for cluster_mun, cluster_count in clusters.items():
-        cluster_valor = mun_valor.get(cluster_mun, 0)
-        story.append(Paragraph(f"Destaque: Cluster {cluster_mun}", S['H2']))
-        story.append(Paragraph(
-            f"{cluster_count} editais do mesmo órgão totalizando {fmt_value(cluster_valor)}. "
-            f"Participar de todos permite estratégia de volume: uma única mobilização para o "
-            f"município atende {cluster_count} contratos. Reduz custo logístico e aumenta a "
-            f"probabilidade de retorno.",
-            S['Body']
-        ))
+    # Distribution by modality
+    story.append(Paragraph("Distribuição por Modalidade", S['H2']))
+    mod_counter = Counter()
+    mod_valor_map = {}
+    for e in editais:
+        m = fix_accents(e.get("modalidade", "Outras"))
+        mod_counter[m] += 1
+        mod_valor_map[m] = mod_valor_map.get(m, 0) + float(e.get("valor_estimado", 0))
+    cw_mod = [55 * mm, 25 * mm, 40 * mm]
+    mod_rows = [[mod, str(cnt), fmt_value(mod_valor_map.get(mod, 0))] for mod, cnt in mod_counter.most_common()]
+    story.append(make_table(["Modalidade", "Qtd", "Valor Total"], mod_rows, cw_mod))
+    story.append(Spacer(1, 3 * mm))
+
+    story.append(Paragraph(
+        f"O volume de contratações públicas em {setor.lower()} mantém ritmo constante, "
+        f"com novos editais publicados semanalmente. "
+        f"A empresa que monitora sistematicamente tem acesso a todas essas oportunidades "
+        f"antes que os prazos se encerrem.",
+        S['Quote']
+    ))
     story.append(PageBreak())
 
-    # ==========================================================
-    # 5. ANÁLISE DETALHADA — Edital Prioritário
-    # ==========================================================
-    story.append(Paragraph("5. Análise Detalhada — Edital Prioritário", S['H1']))
-    story.append(hr())
-
-    if melhor_edital:
-        me = melhor_edital
-        me_mun = fix_accents(me.get("municipio", ""))
-        me_obj = fix_accents(me.get("objeto", ""))
-        me_orgao = fix_accents(me.get("orgao", ""))
-        me_valor_full = fmt_value_full(float(me.get("valor_estimado", 0)))
-        me_mod = fix_accents(me.get("modalidade", ""))
-        me_enc = fmt_date(me.get("data_encerramento", ""))
-        me_link = me.get("link", "")
-
-        story.append(Paragraph(f"Edital 1: {me_obj} — {me_mun}", S['H2']))
-        story.append(make_kv([
-            ["Órgão", me_orgao],
-            ["Objeto", me_obj],
-            ["Valor Estimado", me_valor_full],
-            ["Modalidade", me_mod],
-            ["Encerramento", me_enc],
-            ["Link", me_link],
-        ], kw=45 * mm))
-        story.append(Spacer(1, 3 * mm))
-
-        # Análise Estratégica from JSON
-        me_analise = me.get("analise", {})
-        if me_analise:
-            story.append(Paragraph("Análise Estratégica", S['H2']))
-            cw_str = [40 * mm, CONTENT_W - 40 * mm]
-            analise_rows = []
-            factor_labels = {
-                "aderencia": "Aderência ao perfil",
-                "valor": "Valor vs capacidade",
-                "geografica": "Geografia",
-                "prazo": "Prazo",
-                "modalidade": "Modalidade",
-                "competitividade": "Competitividade",
-                "riscos": "Riscos",
-            }
-            for key, label in factor_labels.items():
-                val = fix_accents(me_analise.get(key, ""))
-                if val:
-                    analise_rows.append([label, val])
-            story.append(make_table(["Fator", "Avaliação"], analise_rows, cw_str))
-            story.append(Spacer(1, 3 * mm))
-
-        # Perguntas do Decisor from JSON
-        perguntas = me.get("perguntas_decisor", {})
-        if isinstance(perguntas, dict) and perguntas:
-            story.append(Paragraph("Perguntas do Decisor", S['H2']))
-            cw_perg = [48 * mm, CONTENT_W - 48 * mm]
-            perg_rows = [[fix_accents(k), fix_accents(v)] for k, v in perguntas.items()]
-            story.append(make_table(["Pergunta", "Resposta"], perg_rows, cw_perg))
-
-    story.append(PageBreak())
+    # Section 5 (Análise Detalhada) REMOVED — detailed analysis is delivered by /intel-busca
 
     # ==========================================================
-    # 6. DIMENSIONAMENTO DA OPORTUNIDADE
+    # 5. DIMENSIONAMENTO DA OPORTUNIDADE
     # ==========================================================
-    story.append(Paragraph("6. Dimensionamento da Oportunidade", S['H1']))
+    story.append(Paragraph("5. Dimensionamento da Oportunidade", S['H1']))
     story.append(hr())
 
     # Valor médio por contrato
     valor_medio_fmt = fmt_value(valor_medio)
-    # ROI assumptions
-    taxa_vitoria = 0.20
+    # ROI assumptions (sector-agnostic: from JSON or default 20%)
+    taxa_vitoria = data.get("taxa_vitoria_setor", 0.20)
     pct_participacao = 0.30
     editais_participados = max(1, int(n_editais * pct_participacao))
     contratos_estimados = editais_participados * taxa_vitoria
@@ -804,9 +773,8 @@ def build_pdf(data, output_path, pacote_recomendado="semanal"):
             [f"Editais compatíveis abertos (último mês)", str(n_editais)],
             ["Participação atual estimada", "0"],
             ["Valor total dos editais compatíveis", total_valor_fmt],
-            ["Taxa média de vitória no setor (SC)", "20%"],
+            ["Taxa média de vitória (setorial)", "20%"],
             [f"Receita potencial estimada (anual)", fmt_value(receita_anual)],
-            ["Receita gov. atual registrada", f"R$ 0" if not contratos else f"{len(contratos)} contratos"],
         ], cw_loss
     ))
     story.append(Spacer(1, 3 * mm))
@@ -844,28 +812,26 @@ def build_pdf(data, output_path, pacote_recomendado="semanal"):
     story.append(PageBreak())
 
     # ==========================================================
-    # 7. CONTEÚDO DOS RELATÓRIOS
+    # 6. CONTEÚDO DOS RELATÓRIOS (aligned with /intel-busca real capabilities)
     # ==========================================================
-    story.append(Paragraph("7. O Que Cada Relatório Entrega", S['H1']))
+    story.append(Paragraph("6. O Que Cada Relatório Entrega", S['H1']))
     story.append(hr())
     story.append(Paragraph(
-        "Cada relatório entregue segue o mesmo padrão desta proposta: personalizado para o perfil "
-        "da empresa, com dados reais e recomendações acionáveis.", S['Body']
+        "Cada relatório é personalizado para o perfil da empresa, com dados reais "
+        "e recomendações acionáveis. Top 20 editais analisados individualmente com "
+        "17 campos estruturados por edital.", S['Body']
     ))
 
     cw_rel = [42 * mm, CONTENT_W - 42 * mm]
     story.append(make_table(
         ["Seção", "Conteúdo"],
         [
-            ["Perfil da Empresa", "Dados cadastrais, CNAEs, QSA, sanções, histórico gov."],
+            ["Perfil da Empresa", "Dados cadastrais, CNAEs, QSA, sanções (4 bases oficiais)"],
             ["Resumo Executivo", "Métricas-chave, destaques, alertas (visão em 2 minutos)"],
-            ["Análise por Edital", "Órgão, valor, modalidade, prazo, link PNCP"],
-            ["Análise Documental", "PDF do edital lido: habilitação, red flags, riscos"],
-            ["Análise Estratégica", "6 fatores com nota 0-10 por edital"],
-            ["Perguntas do Decisor", "Vale participar? Quanto ofertar? Quais documentos?"],
-            ["Mapa Competitivo", "Nível de competição + estratégia de precificação"],
-            ["Inteligência de Mercado", "Panorama setorial, tendências, oportunidades"],
-            ["Diários Oficiais", "Monitoramento Querido Diário"],
+            ["Top 20 Editais", "17 campos analisados por edital: objeto, requisitos, habilitação, prazos, garantias"],
+            ["Análise Documental", "PDF do edital lido: requisitos técnicos, habilitação, red flags"],
+            ["Recomendação", "PARTICIPAR ou NÃO PARTICIPAR com justificativa detalhada por edital"],
+            ["Qualificação Econômica", "Índices contábeis exigidos, atestados específicos, garantias"],
             ["Plano de Ação", "Próximos passos priorizados com datas"],
         ], cw_rel
     ))
@@ -876,20 +842,20 @@ def build_pdf(data, output_path, pacote_recomendado="semanal"):
     story.append(make_table(
         ["Fonte", "Dados"],
         [
-            ["PNCP", "Editais Pregão + Concorrência"],
-            ["PCP v2", "Editais complementares"],
+            ["PNCP", "Editais Pregão + Concorrência (fonte primária)"],
+            ["PCP v2", "Editais complementares (Portal de Compras Públicas)"],
             ["OpenCNPJ", "Perfil empresarial atualizado"],
-            ["Portal da Transparência", "Sanções + contratos federais"],
-            ["Querido Diário", "Diários oficiais municipais"],
-            ["PDFs dos Editais", "Análise documental completa"],
+            ["Portal da Transparência", "Sanções governamentais"],
+            ["PDFs dos Editais", "Extração documental (até 3 documentos por edital)"],
+            ["IBGE", "População e PIB municipal (contexto geográfico)"],
         ], cw_fnt
     ))
     story.append(PageBreak())
 
     # ==========================================================
-    # 8. PACOTES DE MONITORAMENTO
+    # 7. PACOTES DE MONITORAMENTO
     # ==========================================================
-    story.append(Paragraph("8. Pacotes de Monitoramento", S['H1']))
+    story.append(Paragraph("7. Pacotes de Monitoramento", S['H1']))
     story.append(hr())
     story.append(Paragraph(
         "Três opções dimensionadas para diferentes níveis de acompanhamento.", S['Body']
@@ -939,11 +905,17 @@ def build_pdf(data, output_path, pacote_recomendado="semanal"):
     story.append(Spacer(1, 3 * mm))
 
     # --- SEMANAL ---
-    uf_sede = emp.get('uf_sede', 'SC')
+    uf_sede = emp.get('uf_sede', 'MG')
+    uf_abrangencia = data.get("uf_abrangencia", {})
+    ufs_semanal = uf_abrangencia.get("semanal", [uf_sede])
+    ufs_diario = uf_abrangencia.get("diario", [uf_sede])
+    ufs_semanal_txt = " + ".join(ufs_semanal) if ufs_semanal else uf_sede
+    ufs_diario_txt = " + ".join(ufs_diario) if ufs_diario else uf_sede
+
     semanal_items = [
         ["Relatório Semanal Resumido", "4x por mês (toda segunda-feira)"],
         ["Relatório Executivo Completo", "1x por mês (consolidado)"],
-        ["Abrangência", f"{uf_sede} + PR + RS"],
+        ["Abrangência", ufs_semanal_txt],
         ["Análise documental (PDFs)", "Até 8 editais"],
         ["Perguntas do Decisor", "Sim"],
         ["Mapa competitivo semanal", "Sim"],
@@ -996,7 +968,7 @@ def build_pdf(data, output_path, pacote_recomendado="semanal"):
     diario_items = [
         ["Alertas diários de novos editais", "Todos os dias úteis (WhatsApp + Email)"],
         ["Relatório Semanal + Mensal", "4x semanal + 1x mensal"],
-        ["Abrangência", f"{uf_sede} + PR + RS + MG + SP"],
+        ["Abrangência", ufs_diario_txt],
         ["Análise documental (PDFs)", "Ilimitada"],
         ["Monitoramento de concorrentes", "Sim"],
         ["Estratégia de precificação", "Sugestão de desconto por edital"],
@@ -1043,7 +1015,7 @@ def build_pdf(data, output_path, pacote_recomendado="semanal"):
             ["Relatório resumido", "—", "4x/mês", "4x/mês"],
             ["Alertas diários", "—", "—", "Sim"],
             ["Análise de PDFs", "3", "8", "Ilimitada"],
-            ["UFs monitoradas", uf_sede, f"{uf_sede}+PR+RS", "5 estados"],
+            ["UFs monitoradas", uf_sede, ufs_semanal_txt, ufs_diario_txt],
             ["Alerta prazo crítico", "—", "Sim", "Imediato"],
             ["Monit. concorrentes", "—", "—", "Sim"],
             ["Valor mensal", "R$ 997", "R$ 1.500", "R$ 2.997"],
@@ -1053,9 +1025,9 @@ def build_pdf(data, output_path, pacote_recomendado="semanal"):
     story.append(PageBreak())
 
     # ==========================================================
-    # 9. ROI
+    # 8. ROI
     # ==========================================================
-    story.append(Paragraph("9. Retorno do Investimento", S['H1']))
+    story.append(Paragraph("8. Retorno do Investimento", S['H1']))
     story.append(hr())
 
     # Package values for ROI calculation
@@ -1127,13 +1099,13 @@ def build_pdf(data, output_path, pacote_recomendado="semanal"):
     story.append(PageBreak())
 
     # ==========================================================
-    # 10. QUEM ANALISA SEUS EDITAIS (Authority Section)
+    # 9. QUEM ANALISA SEUS EDITAIS (Authority Section — sector-agnostic)
     # ==========================================================
-    story.append(Paragraph("10. Quem Analisa Seus Editais", S['H1']))
+    story.append(Paragraph("9. Quem Analisa Seus Editais", S['H1']))
     story.append(hr())
     story.append(Paragraph(
-        "<b>Tiago Sasaki — Engenheiro e servidor público efetivo da Secretaria de Estado da "
-        "Infraestrutura de Santa Catarina há 7 anos.</b>",
+        "<b>Tiago Sasaki — Engenheiro e servidor público efetivo há 7 anos, "
+        "com experiência direta em processos licitatórios pelo lado do órgão público.</b>",
         S['BodyBold']
     ))
     story.append(Spacer(1, 2 * mm))
@@ -1142,25 +1114,28 @@ def build_pdf(data, output_path, pacote_recomendado="semanal"):
     story.append(Paragraph(
         "Nos últimos 7 anos, participei diretamente de processos licitatórios pelo lado do "
         "órgão público: elaborei termos de referência, analisei propostas de habilitação, "
-        "acompanhei execuções de obras e vi, de perto, os erros mais comuns que eliminam "
+        "acompanhei execuções contratuais e vi, de perto, os erros mais comuns que eliminam "
         "empresas qualificadas antes mesmo da fase de preços.",
         S['Body']
     ))
-    for item in [
-        "Já analisei mais de 500 propostas de habilitação — sei exatamente quais documentos "
-        "os pregoeiros verificam primeiro e onde 80% das inabilitações acontecem",
+    # Authority examples: from JSON or generic fallback
+    authority_items = data.get("autoridade_exemplos", [
+        "Análise de centenas de propostas de habilitação — identificação dos documentos que "
+        "pregoeiros verificam primeiro e onde a maioria das inabilitações acontecem",
 
-        "Conheço os critérios não escritos: como comissões avaliam atestados, o que realmente "
-        "configura 'experiência similar', e quando uma exigência é restritiva o suficiente para impugnar",
+        "Conhecimento dos critérios não escritos das comissões: como avaliam atestados, o que "
+        "realmente configura 'experiência similar', e quando uma exigência é restritiva o "
+        "suficiente para impugnar",
 
-        "Acompanhei dezenas de obras pelo Estado de SC — sei quais órgãos pagam em dia, quais "
-        "atrasam, e como funciona o fluxo real de medição e pagamento",
+        "Acompanhamento de dezenas de contratos públicos — conhecimento de quais órgãos pagam "
+        "em dia e como funciona o fluxo real de medição e pagamento",
 
-        "Identifiquei cláusulas restritivas disfarçadas em editais que pareciam limpos — "
+        "Identificação de cláusulas restritivas disfarçadas em editais que pareciam limpos — "
         "requisitos de capital social desproporcionais, índices contábeis eliminatórios, "
         "exigências de atestado com quantitativos acima do razoável",
-    ]:
-        story.append(bullet(item))
+    ])
+    for item in authority_items:
+        story.append(bullet(fix_accents(item)))
 
     story.append(Spacer(1, 2 * mm))
     story.append(Paragraph("Tecnologia Proprietária", S['H2']))
@@ -1180,19 +1155,19 @@ def build_pdf(data, output_path, pacote_recomendado="semanal"):
         ["Consultoria Tradicional", "Consultoria Tiago Sasaki"],
         [
             ["Busca manual em portais", "Varredura automática diária de 3+ fontes (IA)"],
-            ["Planilha genérica de editais", "Relatório personalizado com análise estratégica por edital"],
+            ["Planilha genérica de editais", "Relatório personalizado — 17 campos analisados por edital"],
             ["Analista sem vivência no órgão", "7 anos como servidor — entende a lógica de quem compra"],
-            ["Leitura superficial do edital", "PDF do edital lido página por página com checklist de habilitação"],
-            ["Sem inteligência competitiva", "Mapeamento de fornecedores recorrentes e histórico de preços por órgão"],
-            ["Alerta genérico", "Recomendação com nota 0-10 em 6 fatores estratégicos"],
+            ["Leitura superficial do edital", "PDF do edital lido com checklist de habilitação e red flags"],
+            ["Sem filtragem setorial", "Classificação automática — zero ruído, só editais do seu setor"],
+            ["Alerta genérico", "Recomendação PARTICIPAR/NÃO PARTICIPAR com justificativa detalhada"],
         ], cw_dif, header_color=DARK_BLUE
     ))
     story.append(PageBreak())
 
     # ==========================================================
-    # 11. CONDIÇÕES COMERCIAIS
+    # 10. CONDIÇÕES COMERCIAIS
     # ==========================================================
-    story.append(Paragraph("11. Condições Comerciais", S['H1']))
+    story.append(Paragraph("10. Condições Comerciais", S['H1']))
     story.append(hr())
     story.append(Paragraph(f"Pacote Recomendado: {pkg_name}", S['H2']))
 
@@ -1234,20 +1209,11 @@ def build_pdf(data, output_path, pacote_recomendado="semanal"):
     cond_especial_elements.append(oferta_label)
     cond_especial_elements.append(Spacer(1, 2 * mm))
 
-    # Build the special condition text dynamically
-    # Find the soonest and second-soonest editais for urgency
-    soonest = editais_by_deadline[:2] if len(editais_by_deadline) >= 2 else editais_by_deadline
-    urgency_examples = ""
-    for e in soonest:
-        e_mun = fix_accents(e.get("municipio", ""))
-        e_enc = fmt_date(e.get("data_encerramento", ""))
-        urgency_examples += f"{e_mun} encerra em {e_enc}, "
-    urgency_examples = urgency_examples.rstrip(", ")
-
+    # Generic urgency — no specific edital dates
     cond_text = (
         f"Para contratações formalizadas até <b>{validity_fmt}</b>, o primeiro mês de monitoramento "
-        f"é cortesia, permitindo que a empresa já receba o primeiro relatório cobrindo os "
-        f"editais com prazo mais próximo ({urgency_examples})."
+        f"é cortesia, permitindo que a empresa já receba o primeiro relatório completo com "
+        f"os editais abertos no setor de {setor.lower()}."
     )
 
     cond_inner = Table(
@@ -1276,7 +1242,7 @@ def build_pdf(data, output_path, pacote_recomendado="semanal"):
         "Elaboração de propostas comerciais (documentos de habilitação são responsabilidade da empresa)",
         "Representação presencial em sessões de licitação",
         "Serviços jurídicos (impugnações, recursos)",
-        "Execução das obras",
+        "Execução do objeto contratado",
         "Garantias financeiras",
     ]:
         story.append(bullet(item))
@@ -1286,9 +1252,9 @@ def build_pdf(data, output_path, pacote_recomendado="semanal"):
     story.append(PageBreak())
 
     # ==========================================================
-    # 12. PRÓXIMOS PASSOS
+    # 11. PRÓXIMOS PASSOS
     # ==========================================================
-    story.append(Paragraph("12. Próximos Passos", S['H1']))
+    story.append(Paragraph("11. Próximos Passos", S['H1']))
     story.append(hr())
 
     # Resumo Executivo (from JSON)
@@ -1306,33 +1272,14 @@ def build_pdf(data, output_path, pacote_recomendado="semanal"):
         ["Etapa", "Quando", "O Que Acontece"],
         [
             ["Aceite", "Dia 0", "Confirmação via WhatsApp ou email"],
-            ["Onboarding", "Dia 1-2", "Alinhamento: UFs, faixa de valor, tipos de obra"],
+            ["Onboarding", "Dia 1-2", "Alinhamento: UFs, faixa de valor, tipos de contratação"],
             ["Primeiro Relatório", "Dia 3-5", "Relatório completo + plano de ação"],
             ["Monitoramento", "Dia 6+", "Relatórios na frequência contratada"],
         ], cw_steps
     ))
     story.append(Spacer(1, 4 * mm))
 
-    # Calendário de Editais — dynamic from JSON, sorted by encerramento
-    story.append(Paragraph("Calendário de Editais em Andamento", S['H2']))
-    cw_cal = [32 * mm, CONTENT_W - 62 * mm, 30 * mm]
-    cal_rows = []
-    for e in editais_by_deadline:
-        enc_date = fmt_date(e.get("data_encerramento", ""))
-        dias = e.get("dias_restantes", "")
-        dias_str = f" ({dias} dias)" if dias else ""
-        mun = fix_accents(e.get("municipio", ""))
-        obj_short = fix_accents(e.get("objeto", ""))
-        # Shorten object for calendar — take first meaningful portion
-        if len(obj_short) > 45:
-            obj_short = obj_short[:42] + "..."
-        valor = fmt_value(float(e.get("valor_estimado", 0)))
-        cal_rows.append([f"{enc_date}{dias_str}", f"{mun} — {obj_short}", valor])
-
-    story.append(make_table(["Data", "Edital", "Valor"], cal_rows, cw_cal))
-    story.append(Spacer(1, 3 * mm))
-
-    # C2: CTA Box — high-conversion
+    # C2: CTA Box — high-conversion (no specific edital dates)
     cta_box = Table(
         [
             [Paragraph("Responda agora pelo WhatsApp: (48) 9 8834-4559", S['CTAWhite'])],
@@ -1353,15 +1300,12 @@ def build_pdf(data, output_path, pacote_recomendado="semanal"):
     story.append(cta_box)
     story.append(Spacer(1, 3 * mm))
 
-    # Urgency paragraph
-    if primeiro_encerrar:
-        pe_mun = fix_accents(primeiro_encerrar.get("municipio", ""))
-        pe_dias = primeiro_encerrar.get("dias_restantes", "?")
-        story.append(Paragraph(
-            f"O edital de {pe_mun} encerra em {pe_dias} dias. Cada dia sem monitoramento "
-            f"é um edital compatível que passa sem que {nome} sequer saiba que existiu.",
-            S['Quote']
-        ))
+    # Generic urgency (no specific edital reference)
+    story.append(Paragraph(
+        f"Novos editais são publicados semanalmente. Cada semana sem monitoramento "
+        f"é um conjunto de editais compatíveis que passa sem que a {nome} sequer saiba que existiram.",
+        S['Quote']
+    ))
 
     story.append(Spacer(1, 3 * mm))
 

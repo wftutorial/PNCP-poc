@@ -2,7 +2,7 @@
 
 from datetime import date
 from pydantic import BaseModel, Field, model_validator, field_validator
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from schemas.common import (
     StatusLicitacao,
@@ -702,7 +702,7 @@ class BuscaResponse(BaseModel):
     The Excel file can be decoded and downloaded by the frontend.
     """
 
-    resumo: ResumoEstrategico = Field(
+    resumo: Union[ResumoEstrategico, ResumoLicitacoes] = Field(
         ..., description="Strategic executive summary with actionable recommendations (AI-generated or fallback)"
     )
     licitacoes: List[LicitacaoItem] = Field(

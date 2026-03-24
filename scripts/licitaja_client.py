@@ -578,12 +578,11 @@ def collect_licitaja(
         "licitaja_dedup_removed": 0,
     }
 
-    # Check feature flag
+    # LicitaJá is always-on when API key is available (no feature flag)
     key = api_key or LICITAJA_API_KEY
-    if not LICITAJA_ENABLED or not key:
+    if not key:
         if verbose:
-            reason = "LICITAJA_ENABLED=false" if not LICITAJA_ENABLED else "sem API key"
-            print(f"  LicitaJa: pulado ({reason})")
+            print(f"  LicitaJa: pulado (sem API key — configure LICITAJA_API_KEY)")
         stats["licitaja_status"] = "DISABLED"
         return [], stats
 

@@ -181,6 +181,16 @@ class LicitaJaAdapter(SourceAdapter):
                             await asyncio.sleep(retry_after)
                             continue
                         raise SourceRateLimitError(self.code, retry_after)
+                    # BUG-002: LicitaJá also returns 401 for IP whitelist failures
+                    if "ip" in body.lower() and "permitido" in body.lower():
+                        logger.warning(
+                            f"[LICITAJA] IP not whitelisted: {body}. "
+                            "Contact LicitaJá to add server IP to allowlist."
+                        )
+                        raise SourceAuthError(
+                            self.code,
+                            f"IP not whitelisted by LicitaJá — contact provider to add server IP"
+                        )
                     raise SourceAuthError(
                         self.code,
                         f"Authentication failed: {response.status_code} — check LICITAJA_API_KEY"

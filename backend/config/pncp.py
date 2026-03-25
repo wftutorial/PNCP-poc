@@ -69,7 +69,7 @@ class RetryConfig:
 PNCP_CONNECT_TIMEOUT: float = float(os.getenv("PNCP_CONNECT_TIMEOUT", "10"))
 PNCP_READ_TIMEOUT: float = float(os.getenv("PNCP_READ_TIMEOUT", "15"))
 PNCP_MAX_RETRIES: int = int(os.getenv("PNCP_MAX_RETRIES", "1"))
-PNCP_MAX_PAGES: int = int(os.getenv("PNCP_MAX_PAGES", "5"))
+PNCP_MAX_PAGES: int = int(os.getenv("PNCP_MAX_PAGES", "20"))
 # DEBT-102 AC6: PNCP API max page size (reduced from 500 to 50 by PNCP ~Feb 2026)
 PNCP_MAX_PAGE_SIZE: int = 50
 CACHE_FIRST_FRESH_TIMEOUT: int = int(os.getenv("CACHE_FIRST_FRESH_TIMEOUT", "60"))

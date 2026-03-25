@@ -166,10 +166,19 @@ async def stage_generate(pipeline, ctx: SearchContext) -> None:
     ctx.excel_available = (ctx.quota_info.capabilities or {}).get("allow_excel", False) if ctx.quota_info else False
     ctx.upgrade_message = None
 
-    if queue_available and search_id and ctx.tracker is not None:
+    # Queue mode requires: (1) ARQ available, (2) search_id, (3) SSE tracker,
+    # AND (4) async path (quota_pre_consumed=True). Sync path must use inline
+    # mode because the response is returned immediately — no SSE to deliver
+    # excel_ready/llm_ready events after the fact.
+    _use_queue = (
+        queue_available
+        and search_id
+        and ctx.tracker is not None
+        and getattr(ctx, "quota_pre_consumed", False)
+    )
+    if _use_queue:
         # === QUEUE MODE: Dispatch to background, return fast ===
         # NOTE: Requires tracker (SSE) to deliver excel_ready/llm_ready events.
-        # Cache-first path has tracker=None — falls through to inline mode.
         logger.info(f"Queue mode: dispatching LLM + Excel jobs for search_id={search_id}")
         ctx.queue_mode = True
 

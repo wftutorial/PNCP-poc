@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
       headers["X-Correlation-ID"] = correlationId;
     }
 
-    const res = await fetch(`${backendUrl}/api/export/google-sheets`, {
+    const res = await fetch(`${backendUrl}/v1/api/export/google-sheets`, {
       method: "POST",
       headers,
       body: JSON.stringify(body),

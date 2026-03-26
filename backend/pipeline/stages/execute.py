@@ -52,6 +52,53 @@ async def stage_execute(pipeline, ctx: SearchContext) -> None:
     deps = pipeline.deps
     request = ctx.request
 
+    # DATALAKE: Shortcut to local DB query when DATALAKE_QUERY_ENABLED=true.
+    # Returns records in identical format to _normalize_item() so all downstream
+    # stages (filter, LLM, Excel) work without modification.
+    try:
+        from ingestion.config import DATALAKE_QUERY_ENABLED
+        if DATALAKE_QUERY_ENABLED:
+            from datalake_query import query_datalake
+            logger.info(
+                f"[stage_execute] DATALAKE_QUERY_ENABLED — querying local DB "
+                f"(ufs={request.ufs}, {request.data_inicial}/{request.data_final})"
+            )
+            # Resolve sector keywords for full-text search
+            _keywords: list[str] = []
+            _custom_terms: list[str] = getattr(request, "termos_customizados", None) or []
+            try:
+                from sectors import get_sector_keywords
+                if request.setor_id:
+                    _keywords = list(get_sector_keywords(request.setor_id))
+            except Exception:
+                pass
+
+            ctx.licitacoes_raw = await query_datalake(
+                ufs=request.ufs,
+                data_inicial=request.data_inicial,
+                data_final=request.data_final,
+                modalidades=request.modalidades,
+                keywords=_keywords or None,
+                custom_terms=_custom_terms or None,
+                valor_min=getattr(request, "valor_min", None),
+                valor_max=getattr(request, "valor_max", None),
+                modo_busca=getattr(request, "modo_busca", "publicacao"),
+            )
+            ctx.cached = False
+            ctx.cache_status = "datalake"
+            ctx.source_stats_data = {"datalake": {"records": len(ctx.licitacoes_raw)}}
+            BIDS_PROCESSED_TOTAL.inc(len(ctx.licitacoes_raw))
+            logger.info(
+                f"[stage_execute] Datalake returned {len(ctx.licitacoes_raw)} records"
+            )
+            return
+    except ImportError:
+        pass  # ingestion module not installed — fall through to live API
+    except Exception as _dl_err:
+        logger.warning(
+            f"[stage_execute] Datalake query failed (falling back to live API): {_dl_err}"
+        )
+
     # STORY-257A AC8-10: Search results cache
     cache_key = _compute_cache_key(request)
 

@@ -1646,6 +1646,46 @@ try:
         _worker_cron_jobs.append(
             _arq_cron(email_alerts_job, hour={ALERTS_HOUR_UTC}, minute=0, timeout=1800),
         )
+
+    # DATALAKE: Ingestion cron jobs (Phase 1)
+    try:
+        from ingestion.config import DATALAKE_ENABLED
+        if DATALAKE_ENABLED:
+            from ingestion.scheduler import (
+                ingestion_full_crawl_job,
+                ingestion_incremental_job,
+                ingestion_purge_job,
+            )
+            from ingestion.config import (
+                INGESTION_FULL_CRAWL_HOUR_UTC,
+                INGESTION_INCREMENTAL_HOURS,
+            )
+            _worker_cron_jobs.append(
+                _arq_cron(
+                    ingestion_full_crawl_job,
+                    hour={INGESTION_FULL_CRAWL_HOUR_UTC},
+                    minute=0,
+                    timeout=14400,
+                )
+            )
+            _worker_cron_jobs.append(
+                _arq_cron(
+                    ingestion_incremental_job,
+                    hour=set(INGESTION_INCREMENTAL_HOURS),
+                    minute=0,
+                    timeout=3600,
+                )
+            )
+            _worker_cron_jobs.append(
+                _arq_cron(
+                    ingestion_purge_job,
+                    hour={INGESTION_FULL_CRAWL_HOUR_UTC + 2},
+                    minute=0,
+                    timeout=600,
+                )
+            )
+    except ImportError:
+        pass
 except Exception:
     _worker_cron_jobs = []
 
@@ -2141,7 +2181,37 @@ class WorkerSettings:
         cd backend && arq job_queue.WorkerSettings
     """
 
-    functions = [llm_summary_job, excel_generation_job, cache_refresh_job, search_job, bid_analysis_job, cache_warming_job, daily_digest_job, email_alerts_job, reclassify_pending_bids_job, classify_zero_match_job]
+    # DATALAKE: Conditionally include ingestion job functions
+    _ingestion_functions: list = []
+    try:
+        from ingestion.config import DATALAKE_ENABLED as _dl_enabled
+        if _dl_enabled:
+            from ingestion.scheduler import (
+                ingestion_full_crawl_job,
+                ingestion_incremental_job,
+                ingestion_purge_job,
+            )
+            _ingestion_functions = [
+                ingestion_full_crawl_job,
+                ingestion_incremental_job,
+                ingestion_purge_job,
+            ]
+    except ImportError:
+        pass
+
+    functions = [
+        llm_summary_job,
+        excel_generation_job,
+        cache_refresh_job,
+        search_job,
+        bid_analysis_job,
+        cache_warming_job,
+        daily_digest_job,
+        email_alerts_job,
+        reclassify_pending_bids_job,
+        classify_zero_match_job,
+        *_ingestion_functions,
+    ]
     cron_jobs = _worker_cron_jobs  # CRIT-032 AC2: periodic cache refresh
     on_startup = _worker_on_startup  # CRIT-038: Inject socket_timeout into Redis pool
     redis_settings = _worker_redis_settings

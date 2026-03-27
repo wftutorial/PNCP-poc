@@ -86,13 +86,26 @@ async def query_datalake(
     )
 
     # PostgREST caps results at 1000 rows per call.
-    # Paginate per-UF to avoid truncation on multi-UF queries.
+    # Paginate per-UF to avoid truncação em queries multi-UF.
+    _POSTGREST_ROW_CAP = 1000
     rows: list[dict] = []
     for uf in ufs:
         uf_params = {**rpc_params, "p_ufs": [uf]}
         try:
             result = sb.rpc("search_datalake", uf_params).execute()
             uf_rows = result.data or []
+            # Detecta possível truncamento silencioso do PostgREST (limite 1000 linhas/chamada)
+            if len(uf_rows) == _POSTGREST_ROW_CAP:
+                logger.warning(
+                    f"[DatalakeQuery] UF {uf} returned exactly {_POSTGREST_ROW_CAP} rows "
+                    f"— possível truncamento silencioso do PostgREST. "
+                    f"Considere reduzir o intervalo de datas ou aumentar a granularidade da query."
+                )
+                try:
+                    from metrics import DATALAKE_TRUNCATION_SUSPECTED
+                    DATALAKE_TRUNCATION_SUSPECTED.labels(uf=uf).inc()
+                except Exception:
+                    pass  # Métricas são opcionais — nunca bloqueiam o fluxo principal
             rows.extend(uf_rows)
         except Exception as e:
             logger.warning(f"[DatalakeQuery] RPC failed for UF={uf}: {type(e).__name__}: {e}")

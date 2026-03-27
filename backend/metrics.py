@@ -252,6 +252,13 @@ PERSIST_FAILURES = _create_counter(
     labelnames=["store"],
 )
 
+# Datalake: possível truncamento silencioso pelo PostgREST (limite 1000 linhas por chamada RPC)
+DATALAKE_TRUNCATION_SUSPECTED = _create_counter(
+    "smartlic_datalake_truncation_suspected_total",
+    "Datalake RPC queries that returned exactly 1000 rows — possible PostgREST silent truncation",
+    labelnames=["uf"],
+)
+
 # HARDEN-006 AC4: Dedup merge-enrichment field counter
 DEDUP_FIELDS_MERGED = _create_counter(
     "smartlic_dedup_fields_merged_total",

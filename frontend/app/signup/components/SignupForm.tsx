@@ -145,6 +145,7 @@ export function SignupForm({ form, loading, error, onSubmit, isFormValid }: Sign
             inputSize="lg"
             placeholder="Seu nome"
             required
+            autoComplete="name"
             error={errors.fullName?.message}
             errorTestId="name-error"
             {...register("fullName")}
@@ -163,6 +164,7 @@ export function SignupForm({ form, loading, error, onSubmit, isFormValid }: Sign
               inputSize="lg"
               placeholder="seu@email.com"
               required
+              autoComplete="email"
               state={errors.email || emailCheckError ? "error" : undefined}
               {...register("email", {
                 onChange: () => {
@@ -226,6 +228,7 @@ export function SignupForm({ form, loading, error, onSubmit, isFormValid }: Sign
             type="tel"
             inputSize="lg"
             placeholder="+55 11 91234-5678"
+            autoComplete="tel"
             error={phoneCheckError || undefined}
             errorTestId="phone-error"
             {...register("phone", {
@@ -260,6 +263,7 @@ export function SignupForm({ form, loading, error, onSubmit, isFormValid }: Sign
               placeholder="Min. 8 caracteres, 1 maiúscula, 1 número"
               required
               minLength={8}
+              autoComplete="new-password"
               error={errors.password?.message}
               {...register("password")}
             />
@@ -340,6 +344,7 @@ export function SignupForm({ form, loading, error, onSubmit, isFormValid }: Sign
             inputSize="lg"
             placeholder="Repita sua senha"
             required
+            autoComplete="new-password"
             state={confirmPasswordMatch ? "success" : undefined}
             error={errors.confirmPassword?.message}
             errorTestId="confirm-password-error"

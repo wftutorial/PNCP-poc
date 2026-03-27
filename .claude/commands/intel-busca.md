@@ -63,12 +63,17 @@ O script automaticamente executa nesta ordem:
 1. **Perfil da empresa** (OpenCNPJ)
 2. **SICAF + Sancoes** (Playwright captcha + Portal da Transparencia) — usuario resolve captcha no inicio e fica livre
 3. **Mapeamento CNAE → keywords**
-4. **Busca exaustiva PNCP** (todas UFs × modalidades)
+4. **Busca PNCP** — usa datalake local (quando `DATALAKE_QUERY_ENABLED=true`) ou API live (fallback). Datalake: ~10-15s. Live: ~5-10 min.
 5. **Filtro temporal** — expirados removidos ANTES de qualquer analise
 6. **Gate CNAE** — keywords + density threshold
 7. **Inteligencia competitiva** — contratos dos ultimos 2 anos (top 15 orgaos)
 8. **Documentos PNCP** — top 50 por valor
 9. **Benchmark de preco** — desconto mediano historico do orgao
+
+**Flags de controle:**
+- `--no-datalake` — Forcar busca live na API PNCP (ignorar datalake)
+- Datalake ativa automaticamente quando `DATALAKE_QUERY_ENABLED=true` no `.env`
+- Se datalake falhar (Supabase down, tabela vazia), fallback automatico para API live
 
 Se `empresa._source.status == "API_FAILED"`: PARAR e informar que nao foi possivel obter dados da empresa.
 

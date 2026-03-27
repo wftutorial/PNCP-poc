@@ -566,7 +566,214 @@ def _cleanup_old_checkpoints(data: dict) -> dict:
 
 
 # ============================================================
-# STEP 3: EXHAUSTIVE PNCP SEARCH (no keyword filtering)
+# STEP 3: DATALAKE SEARCH (preferred) or LIVE PNCP API (fallback)
+# ============================================================
+
+
+def search_datalake_for_intel(
+    ufs: list[str],
+    dias: int,
+    modalidades: dict[int, str],
+) -> tuple[list[dict], dict]:
+    """Query the local datalake (pncp_raw_bids) instead of hitting the live PNCP API.
+
+    Returns results in the same format as search_pncp_exhaustive() so downstream
+    code (CNAE gate, temporal filter, dedup, etc.) works unchanged.
+
+    Falls back gracefully: returns ([], {"datalake_error": msg}) on any failure
+    so the caller can retry with the live API.
+    """
+    try:
+        from supabase import create_client
+    except ImportError:
+        return [], {"datalake_error": "supabase-py not installed"}
+
+    supabase_url = os.getenv("SUPABASE_URL", "")
+    supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "") or os.getenv("SUPABASE_ANON_KEY", "")
+    if not supabase_url or not supabase_key:
+        return [], {"datalake_error": "SUPABASE_URL or key not configured"}
+
+    try:
+        sb = create_client(supabase_url, supabase_key)
+    except Exception as e:
+        return [], {"datalake_error": f"Supabase client init failed: {e}"}
+
+    data_final = _today()
+    data_inicial = data_final - timedelta(days=dias)
+
+    rpc_params = {
+        "p_ufs": list(ufs),
+        "p_date_start": data_inicial.strftime("%Y-%m-%d"),
+        "p_date_end": data_final.strftime("%Y-%m-%d"),
+        "p_modalidades": sorted(modalidades.keys()),
+        "p_limit": 5000,
+    }
+
+    # PostgREST caps results at 1000 rows by default.
+    # Paginate per-UF to avoid hitting the cap on large queries.
+    print(f"    RPC search_datalake: ufs={ufs}, "
+          f"dates={rpc_params['p_date_start']}/{rpc_params['p_date_end']}, "
+          f"modalidades={rpc_params['p_modalidades']}")
+
+    rows: list[dict] = []
+    rpc_errors: list[str] = []
+
+    # Paginate per-UF × per-modalidade to stay under PostgREST 1000-row cap.
+    mod_ids = sorted(modalidades.keys())
+    for uf in ufs:
+        uf_total = 0
+        for mod_id in mod_ids:
+            uf_mod_params = {**rpc_params, "p_ufs": [uf], "p_modalidades": [mod_id]}
+            try:
+                result = sb.rpc("search_datalake", uf_mod_params).execute()
+                chunk = result.data or []
+                rows.extend(chunk)
+                uf_total += len(chunk)
+            except Exception as e:
+                rpc_errors.append(f"{uf}/mod{mod_id}: {e}")
+        if uf_total:
+            print(f"      {uf}: {uf_total} editais")
+
+    if rpc_errors:
+        print(f"    WARN: Erros em {len(rpc_errors)} combos: {rpc_errors[:3]}")
+
+    if not rows:
+        err = rpc_errors[0] if rpc_errors else "0 rows across all UFs"
+        return [], {"datalake_error": err}
+
+    # Convert datalake rows to intel internal format (same as _parse_pncp_item output)
+    all_items: list[dict] = []
+    seen_ids: set[str] = set()
+
+    for row in rows:
+        parsed = _datalake_row_to_intel(row, modalidades, ufs)
+        if parsed is None:
+            continue
+        dk = parsed["_dedup_key"]
+        if dk in seen_ids:
+            continue
+        seen_ids.add(dk)
+        all_items.append(parsed)
+
+    source_meta = {
+        "total_raw_api": len(rows),
+        "total_after_dedup": len(all_items),
+        "pages_fetched": 0,
+        "errors": 0,
+        "pagination_exhausted": [],
+        "source": "datalake",
+    }
+
+    return all_items, source_meta
+
+
+def _datalake_row_to_intel(row: dict, modalidades: dict[int, str], ufs: list[str]) -> dict | None:
+    """Convert a search_datalake RPC row to the intel internal format.
+
+    Must produce the same dict shape as _parse_pncp_item().
+    """
+    pncp_id = row.get("pncp_id") or ""
+    if not pncp_id:
+        return None
+
+    uf = (row.get("uf") or "").upper()
+    if ufs and uf and uf not in ufs:
+        return None
+
+    # Parse pncp_id into cnpj/ano/seq: format is "{cnpj}-{unidade}-{seq}/{ano}"
+    cnpj_clean = ""
+    ano = ""
+    seq = ""
+    match = re.match(r"^(\d+)-\d+-(\d+)/(\d+)$", pncp_id)
+    if match:
+        cnpj_clean = match.group(1)
+        seq = match.group(2)
+        ano = match.group(3)
+
+    objeto = (row.get("objeto_compra") or "").strip()
+    orgao = row.get("orgao_razao_social") or ""
+    orgao_cnpj = row.get("orgao_cnpj") or cnpj_clean
+    municipio = row.get("municipio") or ""
+    valor = None
+    raw_valor = row.get("valor_total_estimado")
+    if raw_valor is not None:
+        try:
+            valor = float(raw_valor)
+        except (TypeError, ValueError):
+            pass
+
+    mod_id = row.get("modalidade_id")
+    mod_nome = row.get("modalidade_nome") or modalidades.get(mod_id, "")
+
+    # Dates — datalake returns ISO timestamps
+    data_pub_raw = str(row.get("data_publicacao") or "")
+    data_abertura_raw = str(row.get("data_abertura") or "")
+    data_enc_raw = str(row.get("data_encerramento") or "")
+
+    data_publicacao = _parse_date_flexible(data_pub_raw) or ""
+
+    # Link
+    if cnpj_clean and ano and seq:
+        link = f"https://pncp.gov.br/app/editais/{cnpj_clean}/{ano}/{seq}"
+    else:
+        link = row.get("link_pncp") or ""
+
+    # Calculate status_temporal (same logic as _parse_pncp_item)
+    status_temporal = "SEM_DATA"
+    dias_restantes = None
+    if data_enc_raw and data_enc_raw != "None":
+        try:
+            enc_str = data_enc_raw[:19]
+            dt_enc = datetime.fromisoformat(enc_str)
+            now = datetime.now()
+            dias_restantes = (dt_enc.replace(tzinfo=None) - now.replace(tzinfo=None)).days
+            if dias_restantes < 0:
+                status_temporal = "EXPIRADO"
+            elif dias_restantes <= 7:
+                status_temporal = "URGENTE"
+            elif dias_restantes <= 15:
+                status_temporal = "IMINENTE"
+            else:
+                status_temporal = "PLANEJAVEL"
+        except (ValueError, TypeError):
+            status_temporal = "SEM_DATA"
+
+    if status_temporal not in ("EXPIRADO",) and data_abertura_raw and data_abertura_raw != "None":
+        try:
+            ab_str = data_abertura_raw[:19]
+            dt_ab = datetime.fromisoformat(ab_str)
+            now_ab = datetime.now()
+            if dt_ab.replace(tzinfo=None) < now_ab.replace(tzinfo=None):
+                status_temporal = "SESSAO_REALIZADA"
+        except (ValueError, TypeError):
+            pass
+
+    item_id = f"{cnpj_clean}/{ano}/{seq}" if (cnpj_clean and ano and seq) else f"dl/{pncp_id}"
+
+    return {
+        "_id": item_id,
+        "objeto": objeto,
+        "orgao": orgao,
+        "cnpj_orgao": orgao_cnpj,
+        "uf": uf,
+        "municipio": municipio,
+        "valor_estimado": valor,
+        "modalidade_code": mod_id,
+        "modalidade_nome": mod_nome,
+        "data_publicacao": data_publicacao,
+        "data_abertura_proposta": data_abertura_raw if data_abertura_raw != "None" else "",
+        "data_encerramento_proposta": data_enc_raw if data_enc_raw != "None" else "",
+        "link_pncp": link,
+        "ano_compra": ano,
+        "sequencial_compra": seq,
+        "_dedup_key": f"{cnpj_clean}/{ano}/{seq}" if (cnpj_clean and ano and seq) else pncp_id,
+        "status_temporal": status_temporal,
+        "dias_restantes": dias_restantes,
+    }
+
+
+# ============================================================
+# STEP 3 (fallback): EXHAUSTIVE LIVE PNCP SEARCH
 # ============================================================
 
 def _parse_pncp_item(item: dict, mod_code: int, mod_name: str, ufs: list[str]) -> dict | None:
@@ -1996,6 +2203,7 @@ def assemble_output(
             "version": VERSION,
             "sources": {
                 "pncp": {
+                    "source": source_meta.get("source", "live_api"),
                     "raw_api_items": source_meta.get("total_raw_api", 0),
                     "after_dedup": source_meta.get("total_after_dedup", 0),
                     "pages_fetched": source_meta.get("pages_fetched", 0),
@@ -2459,6 +2667,8 @@ def main():
                         help="Ignorar checkpoint salvo e forcar nova coleta completa")
     parser.add_argument("--skip-sicaf", action="store_true",
                         help="Pular coleta SICAF (evita captcha do navegador)")
+    parser.add_argument("--no-datalake", action="store_true",
+                        help="Forcar busca live na API PNCP (ignorar datalake local)")
     parser.add_argument("--version", action="version",
                         version=f"%(prog)s {INTEL_VERSION}")
     args = parser.parse_args()
@@ -2619,15 +2829,31 @@ def main():
     keyword_patterns = _compile_keyword_patterns(keywords)
     print(f"  Patterns compilados: {len(keyword_patterns)}")
 
-    # ── Step 3: Exhaustive PNCP search ──
-    print(f"\n[3/7] Busca exaustiva PNCP ({dias} dias, {len(ufs)} UFs, {len(MODALIDADES_BUSCA)} modalidades)...")
-    editais, source_meta = search_pncp_exhaustive(
-        api, ufs, dias, MODALIDADES_BUSCA,
-        cnpj14=cnpj14,
-        use_cache=not args.no_cache,
-    )
+    # ── Step 3: PNCP search (datalake preferred, live API fallback) ──
+    use_datalake = not args.no_datalake and os.getenv("DATALAKE_QUERY_ENABLED", "").lower() in ("true", "1")
+    editais: list[dict] = []
+    source_meta: dict = {}
+
+    if use_datalake:
+        print(f"\n[3/7] Busca via DATALAKE ({dias} dias, {len(ufs)} UFs, {len(MODALIDADES_BUSCA)} modalidades)...")
+        editais, source_meta = search_datalake_for_intel(ufs, dias, MODALIDADES_BUSCA)
+        if editais:
+            print(f"  Datalake: {len(editais)} editais em <2s (0 requests PNCP)")
+        else:
+            dl_err = source_meta.get("datalake_error", "empty result")
+            print(f"  Datalake indisponivel ({dl_err}) — fallback para API live")
+            use_datalake = False
+
+    if not use_datalake:
+        print(f"\n[3/7] Busca exaustiva PNCP LIVE ({dias} dias, {len(ufs)} UFs, {len(MODALIDADES_BUSCA)} modalidades)...")
+        editais, source_meta = search_pncp_exhaustive(
+            api, ufs, dias, MODALIDADES_BUSCA,
+            cnpj14=cnpj14,
+            use_cache=not args.no_cache,
+        )
+
     print(f"\n  Total bruto (dedup _id): {len(editais)} editais")
-    if source_meta["pagination_exhausted"]:
+    if source_meta.get("pagination_exhausted"):
         print(f"  WARN: Paginacao esgotada em: {source_meta['pagination_exhausted']}")
 
     # ── Step 3a: LicitaJa search (priority 4, sequential, after PNCP) ──

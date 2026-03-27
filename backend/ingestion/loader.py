@@ -138,13 +138,17 @@ def _chunk(lst: list, size: int) -> list[list]:
     return [lst[i : i + size] for i in range(0, len(lst), size)]
 
 
-def _serialize_batch(batch: list[dict]) -> str:
-    """Serialise batch to a JSON string.
+def _serialize_batch(batch: list[dict]) -> list[dict]:
+    """Prepare batch for Supabase RPC.
 
-    raw_payload inside each record is already a dict; json.dumps handles it.
-    Any non-serialisable values are converted to strings as a safety net.
+    The supabase-py client serialises RPC params as JSON automatically,
+    so we return the list directly (not a JSON string — that would be
+    sent as a scalar, causing 'cannot get array length of a scalar').
+
+    We do a json round-trip to coerce non-serialisable values (dates,
+    Decimals) to strings, matching what the RPC function expects.
     """
-    return json.dumps(batch, default=str, ensure_ascii=False)
+    return json.loads(json.dumps(batch, default=str, ensure_ascii=False))
 
 
 def _extract_counts(result: Any, batch_num: int) -> dict[str, int]:

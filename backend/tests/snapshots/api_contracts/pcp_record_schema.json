@@ -32,7 +32,7 @@
     "codigoSituacaoEdital": "int",
     "codigoTratamentoDiferenciado": "int",
     "comprador": "NoneType",
-    "dataHoraFinalLances": "str",
+    "dataHoraFinalLances": "NoneType",
     "dataHoraFinalPropostas": "str",
     "dataHoraInicioLances": "str",
     "dataHoraInicioPropostas": "str",
@@ -78,16 +78,16 @@
     ]
   },
   "sample_record": {
-    "codigoLicitacao": 467677,
+    "codigoLicitacao": 372661,
     "numeroLicitacao": null,
-    "identificacao": "CD 274924",
-    "numero": "CD 274924/2026",
-    "resumo": "Compra Direta: gestão dos resíduos sólidos recicláveis, que envolve a coleta, transporte, transbordo, tratamento e destinação ou disposição final ambientalmente adequada dos resíduos sólidos gerados pelo SEBRAE",
-    "razaoSocial": "Serviço Brasileiro de Apoio às Micro e Pequenas Empresas - SEBRAE/NA",
-    "nomeUnidade": "SEBRAE NACIONAL",
+    "identificacao": "2025000849.",
+    "numero": "001/2025 SECADM/2025",
+    "resumo": "CREDENCIAMENTO DE LEILOEIROS OFICIAIS PARA A REALIZAÇÃO DE LEILÃO BENS MÓVEIS INSERVÍVEIS DE PROPRIEDADE DA PREFEITURA MUNICIPAL DE PORTO NACIONAL, POR MEIO DE LICITAÇÃO NA MODALIDADE LEILÃO, VIABILIZANDO A EXECUÇÃO DO PROCEDIMENTO, DE ACORDO COM OS...",
+    "razaoSocial": "Secretaria Municipal de Compras e Licitações de Porto Nacional",
+    "nomeUnidade": "SECRETARIA MUNICIPAL DA ADMINISTRAÇÃO",
     "status": {
-      "codigo": 1,
-      "descricao": "Recebendo Propostas"
+      "codigo": 18,
+      "descricao": "Não Publicado"
     },
     "situacao": {
       "codigo": 0,
@@ -95,39 +95,39 @@
     },
     "tipoLicitacao": {
       "codigoModalidadeLicitacao": 0,
-      "modalidadeLicitacao": "Cotação",
-      "codigoTipoLicitacao": 11,
-      "siglaTipoLicitacao": "CFP",
-      "tipoLicitacao": "Cotação para Formação de Preços",
+      "modalidadeLicitacao": "Credenciamento",
+      "codigoTipoLicitacao": 17,
+      "siglaTipoLicitacao": "CRED",
+      "tipoLicitacao": "Credenciamento",
       "tipoRealizacao": "Eletrônico",
-      "tipoJulgamento": "Menor Preço"
+      "tipoJulgamento": "Simples informação"
     },
     "codigoSituacaoEdital": 5,
     "codigoTratamentoDiferenciado": 1,
-    "codigoSituacaoCadastroLicitacao": 2,
-    "dataHoraInicioLances": "2026-03-25T22:36:00Z",
-    "dataHoraInicioPropostas": "2026-03-25T22:36:00Z",
-    "dataHoraFinalPropostas": "2026-04-01T03:00:00Z",
-    "dataHoraFinalLances": "2026-04-01T03:00:00Z",
-    "dataHoraPublicacao": "2026-03-25T22:37:00Z",
+    "codigoSituacaoCadastroLicitacao": 3,
+    "dataHoraInicioLances": "2026-03-25T02:59:00Z",
+    "dataHoraInicioPropostas": "2025-04-10T12:00:00Z",
+    "dataHoraFinalPropostas": "2026-03-25T02:59:00Z",
+    "dataHoraFinalLances": null,
+    "dataHoraPublicacao": "2025-03-25T17:38:00Z",
     "isPublicado": false,
     "unidadeCompradora": {
-      "codigoUnidadeCompradora": 6924,
-      "nomeUnidadeCompradora": "SEBRAE NACIONAL",
-      "codigoComprador": 3946,
+      "codigoUnidadeCompradora": 6655,
+      "nomeUnidadeCompradora": "SECRETARIA MUNICIPAL DA ADMINISTRAÇÃO",
+      "codigoComprador": 1533,
       "nomeComprador": null,
-      "cidade": "Brasília",
+      "cidade": "Porto Nacional",
       "codigoMunicipioIbge": null,
-      "uf": "DF"
+      "uf": "TO"
     },
     "comprador": null,
-    "urlReferencia": "/df/servico-brasileiro-de-apoio-as-micro-e-pequenas-empresas-sebrae-na-3946/cfp-cd-274924-2026-2026-467677",
+    "urlReferencia": "/to/secretaria-municipal-de-compras-e-licitacoes-de-porto-nacional-1533/cred-001-2025-secadm-2025-2025-372661",
     "statusProcessoPublico": {
-      "codigo": 1,
-      "descricao": "Recebendo Propostas"
+      "codigo": 18,
+      "descricao": "Não Publicado"
     },
     "isExclusivoME": false,
     "isBeneficoLocal": false
   },
-  "captured_at": "2026-03-25T22:59:23.670215+00:00"
+  "captured_at": "2026-03-24T21:07:46.085922+00:00"
 }

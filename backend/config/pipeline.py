@@ -13,8 +13,11 @@ REVALIDATION_COOLDOWN_S: int = int(os.getenv("REVALIDATION_COOLDOWN_S", "600"))
 
 # ============================================
 # CRIT-072: Async-first 202 pattern
+# CRIT-SYNC-FIX: Default changed to "false" — async mode causes in-memory
+# tracker mismatch with multi-worker (WEB_CONCURRENCY>1). Keep sync until
+# tracker is externalised to Redis.
 # ============================================
-ASYNC_SEARCH_DEFAULT: bool = str_to_bool(os.getenv("ASYNC_SEARCH_DEFAULT", "true"))
+ASYNC_SEARCH_DEFAULT: bool = str_to_bool(os.getenv("ASYNC_SEARCH_DEFAULT", "false"))
 SEARCH_ASYNC_ENABLED: bool = str_to_bool(os.getenv("SEARCH_ASYNC_ENABLED", str(ASYNC_SEARCH_DEFAULT).lower()))
 SEARCH_JOB_TIMEOUT: int = int(os.getenv("SEARCH_JOB_TIMEOUT", "300"))
 MAX_CONCURRENT_SEARCHES: int = int(os.getenv("MAX_CONCURRENT_SEARCHES", "3"))
@@ -62,7 +65,8 @@ WARMUP_UF_BATCH_SIZE: int = int(os.getenv("WARMUP_UF_BATCH_SIZE", "5"))
 # ============================================
 # GTM-STAB-007: Cache Warming
 # ============================================
-CACHE_WARMING_ENABLED: bool = str_to_bool(os.getenv("CACHE_WARMING_ENABLED", "false"))
+# CRIT-081: default true — cache warming is critical for resilience (cache-first strategy)
+CACHE_WARMING_ENABLED: bool = str_to_bool(os.getenv("CACHE_WARMING_ENABLED", "true"))
 CACHE_WARMING_INTERVAL_HOURS: int = int(os.getenv("CACHE_WARMING_INTERVAL_HOURS", "4"))
 CACHE_WARMING_CONCURRENCY: int = int(os.getenv("CACHE_WARMING_CONCURRENCY", "2"))
 CACHE_WARMING_BUDGET_MINUTES: int = int(os.getenv("CACHE_WARMING_BUDGET_MINUTES", "30"))

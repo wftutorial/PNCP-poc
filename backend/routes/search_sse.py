@@ -38,6 +38,8 @@ router = APIRouter(tags=["search"])
 # STORY-365 AC5: Configurable via SSE_HEARTBEAT_INTERVAL_S env var
 _SSE_HEARTBEAT_INTERVAL = float(os.environ.get("SSE_HEARTBEAT_INTERVAL_S", "15"))
 _SSE_WAIT_HEARTBEAT_EVERY = 10  # Every 10 iterations of 0.5s = 5s
+# G1-FIX: Configurable wait timeout (default 120s matches pipeline timeout)
+_SSE_TRACKER_WAIT_TIMEOUT_S = float(os.environ.get("SSE_TRACKER_WAIT_TIMEOUT_S", "120"))
 
 # CRIT-026-ROOT: Polled XREAD constants (replacing XREAD BLOCK).
 # Non-blocking XREAD polls every _SSE_POLL_INTERVAL seconds.
@@ -167,7 +169,7 @@ async def buscar_progress_stream(
             # CRIT-012 AC1: Wait for tracker with SSE keepalive comments every 5s
             # Moved inside generator so heartbeats flow before first real event
             tracker = None
-            for i in range(60):  # 60 * 0.5s = 30s
+            for i in range(int(_SSE_TRACKER_WAIT_TIMEOUT_S * 2)):  # each iteration sleeps 0.5s
                 # HARDEN-012 AC1: Check if client disconnected
                 if await request.is_disconnected():
                     from metrics import SSE_DISCONNECTS_TOTAL

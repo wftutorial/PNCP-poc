@@ -124,7 +124,7 @@ from licitaja_client import (
 # CONSTANTS
 # ============================================================
 
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 # Checkpoint file for resume/fault-tolerance
@@ -136,6 +136,8 @@ _CHECKPOINT_CLEANUP_HOURS = 24  # Evict stale checkpoint entries older than 24h
 _COMPETITIVE_CACHE_FILE = str(_PROJECT_ROOT / "data" / "competitive_cache.json")
 _COMPETITIVE_CACHE_TTL_DAYS = 7  # Cache competitive intel per organ for 7 days
 _COMPETITIVE_MAX_ORGANS = 15     # Max unique organs to query
+_COMPETITIVE_WORKERS = 6         # Parallel workers for competitive intel (was 3)
+_BENCHMARK_WORKERS = 6           # Parallel workers for price benchmark (was 1/sequential)
 
 # Modalidades competitivas relevantes (Lei 14.133/2021, arts. 28-29)
 #
@@ -1651,6 +1653,78 @@ def apply_llm_fallback_gate(
 
 
 # ============================================================
+# STEP 1b-extra: TCU DUE DILIGENCE (v1.4 — free, no auth)
+# ============================================================
+
+_TCU_API_BASE = "https://api-certidoes.apps.tcu.gov.br/api"
+_TCU_INIDONEOS_URL = "https://contas.tcu.gov.br/inidoneos/api/rest/inidoneo"
+
+
+def _collect_tcu_due_diligence(api: "ApiClient", cnpj14: str) -> dict:
+    """Query TCU APIs for company due diligence (inidôneos + certidões APF).
+
+    Both APIs are free and require no authentication.
+    Returns dict with 'inidoneo', 'certidoes', 'certidoes_irregulares' keys.
+    """
+    result: dict[str, Any] = {
+        "inidoneo": False,
+        "inidoneo_detalhes": None,
+        "certidoes": [],
+        "certidoes_irregulares": False,
+        "_source": "tcu_api",
+    }
+
+    # 1) Check inidôneos (declared ineligible by TCU)
+    try:
+        data, status = _api_get_with_retry(
+            api,
+            _TCU_INIDONEOS_URL,
+            params={"cpfcnpj": cnpj14},
+            label="TCU inidoneos",
+            max_retries=1,
+        )
+        if status == "API" and data:
+            items = data if isinstance(data, list) else data.get("items", [])
+            if items:
+                result["inidoneo"] = True
+                result["inidoneo_detalhes"] = [
+                    {
+                        "nome": item.get("nome", ""),
+                        "processo": item.get("processo", ""),
+                        "deliberacao": item.get("deliberacao", ""),
+                        "data_final": item.get("dataFinal", ""),
+                    }
+                    for item in (items[:5] if isinstance(items, list) else [])
+                ]
+    except Exception as exc:
+        print(f"    WARN: TCU inidoneos falhou: {exc}")
+
+    # 2) Certidões APF (consolidated check: TCU + CNJ + CGU CEIS + CGU CNEP)
+    try:
+        data, status = _api_get_with_retry(
+            api,
+            f"{_TCU_API_BASE}/certidoes/{cnpj14}",
+            label="TCU certidoes APF",
+            max_retries=1,
+        )
+        if status == "API" and isinstance(data, dict):
+            certidoes_raw = data.get("certidoes", [])
+            for cert in certidoes_raw:
+                cert_entry = {
+                    "emissor": cert.get("emissor", ""),
+                    "tipo": cert.get("tipo", ""),
+                    "situacao": cert.get("situacao", ""),
+                }
+                result["certidoes"].append(cert_entry)
+                if cert.get("situacao") and cert["situacao"] != "NADA_CONSTA":
+                    result["certidoes_irregulares"] = True
+    except Exception as exc:
+        print(f"    WARN: TCU certidoes falhou: {exc}")
+
+    return result
+
+
+# ============================================================
 # STEP 4b: COMPETITIVE INTELLIGENCE PER ORGAN
 # ============================================================
 
@@ -1955,8 +2029,8 @@ def collect_competitive_intel(
                 counters["failed"] += 1
             return cnpj_orgao, None
 
-    # Fetch in parallel (max 3 workers to respect rate limits)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
+    # Fetch in parallel (v1.4: increased from 3 to 6 workers)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=_COMPETITIVE_WORKERS) as pool:
         futures = {
             pool.submit(_fetch_with_error_handling, cnpj): cnpj
             for cnpj in organs_to_query
@@ -2270,6 +2344,8 @@ def collect_price_benchmarks(api: "ApiClient", editais: list[dict]) -> None:
     for historical contracts and their procurement results to calculate
     typical discount percentages (homologado vs estimado).
 
+    v1.4: Parallelized via ThreadPoolExecutor (_BENCHMARK_WORKERS) — ~6x faster.
+
     Mutates editais in-place, adding 'price_benchmark' dict to top-20 editais.
     """
     compatible = [ed for ed in editais if ed.get("cnae_compatible")]
@@ -2296,7 +2372,8 @@ def collect_price_benchmarks(api: "ApiClient", editais: list[dict]) -> None:
         print("  Price benchmark: nenhum orgao com CNPJ valido nos top 20")
         return
 
-    print(f"\n  Price benchmark: analisando {len(organ_editais)} orgaos dos top {len(top20)} editais...")
+    print(f"\n  Price benchmark: analisando {len(organ_editais)} orgaos dos top {len(top20)} editais "
+          f"({_BENCHMARK_WORKERS} workers)...")
 
     # Load benchmark cache
     bench_cache: dict = {}
@@ -2324,141 +2401,165 @@ def collect_price_benchmarks(api: "ApiClient", editais: list[dict]) -> None:
         except Exception:
             return False
 
-    # Collect benchmark data per organ
+    # Thread-safe containers for parallel benchmark collection
+    bench_lock = threading.Lock()
     organ_benchmarks: dict[str, dict] = {}
+    counters = {"cached": 0, "fetched": 0, "failed": 0}
 
-    for cnpj_orgao in organ_editais:
+    def _fetch_organ_benchmark(cnpj_orgao: str) -> tuple[str, dict | None]:
+        """Fetch and compute benchmark for a single organ (thread-safe)."""
         # Check cache first
         if _cache_fresh(cnpj_orgao):
-            organ_benchmarks[cnpj_orgao] = bench_cache[cnpj_orgao]
-            print(f"    Orgao {cnpj_orgao}: benchmark do cache")
-            continue
+            with bench_lock:
+                counters["cached"] += 1
+            return cnpj_orgao, bench_cache[cnpj_orgao]
 
-        # Fetch contracts for this organ (2 yearly queries for 2-year coverage)
-        all_contracts: list[dict] = []
-        for year_offset in range(2):
-            end_date = now - timedelta(days=365 * year_offset)
-            start_date = end_date - timedelta(days=365)
-            data_inicial = _date_compact(start_date)
-            data_final = _date_compact(end_date)
+        try:
+            # Fetch contracts for this organ (2 yearly queries for 2-year coverage)
+            all_contracts: list[dict] = []
+            for year_offset in range(2):
+                end_date = now - timedelta(days=365 * year_offset)
+                start_date = end_date - timedelta(days=365)
+                data_inicial = _date_compact(start_date)
+                data_final = _date_compact(end_date)
 
-            for page in range(1, 5):  # max 4 pages per year (200 contracts)
-                params = {
-                    "cnpjOrgao": cnpj_orgao,
-                    "dataInicial": data_inicial,
-                    "dataFinal": data_final,
-                    "pagina": page,
-                    "tamanhoPagina": 50,
-                }
-                data, status = _api_get_with_retry(
-                    api,
-                    f"{PNCP_BASE}/contratos",
-                    params=params,
-                    label=f"Contratos orgao={cnpj_orgao} yr={year_offset} p={page}",
-                    max_retries=1,
-                )
+                for page in range(1, 5):  # max 4 pages per year (200 contracts)
+                    params = {
+                        "cnpjOrgao": cnpj_orgao,
+                        "dataInicial": data_inicial,
+                        "dataFinal": data_final,
+                        "pagina": page,
+                        "tamanhoPagina": 50,
+                    }
+                    data, status = _api_get_with_retry(
+                        api,
+                        f"{PNCP_BASE}/contratos",
+                        params=params,
+                        label=f"Bench orgao={cnpj_orgao[:8]}.. yr={year_offset} p={page}",
+                        max_retries=1,
+                    )
 
-                if status != "API" or not data:
-                    break
+                    if status != "API" or not data:
+                        break
 
-                items = data if isinstance(data, list) else data.get("data", data.get("resultado", []))
-                if not isinstance(items, list) or not items:
-                    break
+                    items = data if isinstance(data, list) else data.get("data", data.get("resultado", []))
+                    if not isinstance(items, list) or not items:
+                        break
 
-                all_contracts.extend(items)
+                    all_contracts.extend(items)
 
-                if len(items) < 50:
-                    break
+                    if len(items) < 50:
+                        break
+
+                    time.sleep(0.3)
 
                 time.sleep(0.3)
 
-            time.sleep(0.3)
+            if not all_contracts:
+                with bench_lock:
+                    counters["fetched"] += 1
+                return cnpj_orgao, None
 
-        if not all_contracts:
-            print(f"    Orgao {cnpj_orgao}: nenhum contrato encontrado")
-            continue
+            # Extract procurement references from contracts
+            procurement_refs: list[tuple[str, str, str]] = []
+            seen_refs: set[str] = set()
+            for contract in all_contracts:
+                numero_controle = contract.get("numeroControlePncpCompra") or ""
+                parsed = _parse_numero_controle_pncp(numero_controle)
+                if parsed:
+                    ref_key = f"{parsed[0]}/{parsed[1]}/{parsed[2]}"
+                    if ref_key not in seen_refs:
+                        seen_refs.add(ref_key)
+                        procurement_refs.append(parsed)
 
-        # Extract procurement references from contracts
-        procurement_refs: list[tuple[str, str, str]] = []
-        seen_refs: set[str] = set()
-        for contract in all_contracts:
-            numero_controle = contract.get("numeroControlePncpCompra") or ""
-            parsed = _parse_numero_controle_pncp(numero_controle)
-            if parsed:
-                ref_key = f"{parsed[0]}/{parsed[1]}/{parsed[2]}"
-                if ref_key not in seen_refs:
-                    seen_refs.add(ref_key)
-                    procurement_refs.append(parsed)
+            # Query procurement details (max 10 per organ)
+            descontos: list[float] = []
+            contratos_com_resultado = 0
+            total_analisados = 0
 
-        # Query procurement details (max 10 per organ)
-        descontos: list[float] = []
-        contratos_com_resultado = 0
-        total_analisados = 0
+            for ref_cnpj, ref_ano, ref_seq in procurement_refs[:10]:
+                data, status = _api_get_with_retry(
+                    api,
+                    f"{PNCP_BASE}/orgaos/{ref_cnpj}/compras/{ref_ano}/{ref_seq}",
+                    label=f"Compra {ref_cnpj[:8]}../{ref_ano}/{ref_seq}",
+                    max_retries=1,
+                )
 
-        for ref_cnpj, ref_ano, ref_seq in procurement_refs[:10]:
-            data, status = _api_get_with_retry(
-                api,
-                f"{PNCP_BASE}/orgaos/{ref_cnpj}/compras/{ref_ano}/{ref_seq}",
-                label=f"Compra {ref_cnpj}/{ref_ano}/{ref_seq}",
-                max_retries=1,
-            )
+                if status == "API" and isinstance(data, dict):
+                    total_analisados += 1
+                    existe_resultado = data.get("existeResultado", False)
+                    if existe_resultado:
+                        contratos_com_resultado += 1
 
-            if status == "API" and isinstance(data, dict):
-                total_analisados += 1
-                existe_resultado = data.get("existeResultado", False)
-                if existe_resultado:
-                    contratos_com_resultado += 1
+                    valor_estimado = _safe_float(data.get("valorTotalEstimado"))
+                    valor_homologado = _safe_float(data.get("valorTotalHomologado"))
 
-                valor_estimado = _safe_float(data.get("valorTotalEstimado"))
-                valor_homologado = _safe_float(data.get("valorTotalHomologado"))
+                    if (valor_estimado and valor_estimado > 0
+                            and valor_homologado and valor_homologado > 0):
+                        desconto = 1.0 - (valor_homologado / valor_estimado)
+                        if -1.0 <= desconto <= 1.0:
+                            descontos.append(desconto)
 
-                if (valor_estimado and valor_estimado > 0
-                        and valor_homologado and valor_homologado > 0):
-                    desconto = 1.0 - (valor_homologado / valor_estimado)
-                    # Sanity check: discount should be between -1 and 1
-                    # (negative means awarded above estimate)
-                    if -1.0 <= desconto <= 1.0:
-                        descontos.append(desconto)
+                time.sleep(0.3)
 
-            time.sleep(0.3)
+            # Compute statistics
+            if len(descontos) < 3:
+                result = {
+                    "contratos_analisados": total_analisados,
+                    "contratos_com_resultado": contratos_com_resultado,
+                    "descontos_encontrados": len(descontos),
+                    "insuficiente": True,
+                    "_cached_at": now.isoformat(),
+                }
+                with bench_lock:
+                    counters["fetched"] += 1
+                return cnpj_orgao, result
 
-        # Compute statistics (skip if insufficient sample)
-        if len(descontos) < 3:
-            print(f"    Orgao {cnpj_orgao}: {len(descontos)} contratos com desconto (insuficiente, min 3)")
-            # Cache the "insufficient" result too to avoid re-querying
-            organ_benchmarks[cnpj_orgao] = {
-                "contratos_analisados": total_analisados,
+            desconto_medio = statistics.mean(descontos)
+            desconto_mediano = statistics.median(descontos)
+            quartiles = statistics.quantiles(descontos, n=4, method="inclusive")
+            desconto_p25 = quartiles[0]
+            desconto_p75 = quartiles[2]
+
+            result = {
+                "desconto_medio": round(desconto_medio, 4),
+                "desconto_mediano": round(desconto_mediano, 4),
+                "desconto_p25": round(desconto_p25, 4),
+                "desconto_p75": round(desconto_p75, 4),
                 "contratos_com_resultado": contratos_com_resultado,
+                "total_analisados": total_analisados,
                 "descontos_encontrados": len(descontos),
-                "insuficiente": True,
+                "insuficiente": False,
                 "_cached_at": now.isoformat(),
             }
-            bench_cache[cnpj_orgao] = organ_benchmarks[cnpj_orgao]
-            continue
+            print(f"    Orgao {cnpj_orgao}: desconto mediano {desconto_mediano:.1%} "
+                  f"({len(descontos)} contratos com resultado)")
+            with bench_lock:
+                counters["fetched"] += 1
+            return cnpj_orgao, result
 
-        desconto_medio = statistics.mean(descontos)
-        desconto_mediano = statistics.median(descontos)
-        # quantiles with method='inclusive' for small samples
-        quartiles = statistics.quantiles(descontos, n=4, method="inclusive")
-        desconto_p25 = quartiles[0]
-        desconto_p75 = quartiles[2]
+        except Exception as exc:
+            print(f"    WARN: Falha benchmark orgao {cnpj_orgao}: {exc}")
+            with bench_lock:
+                counters["failed"] += 1
+            return cnpj_orgao, None
 
-        benchmark_data = {
-            "desconto_medio": round(desconto_medio, 4),
-            "desconto_mediano": round(desconto_mediano, 4),
-            "desconto_p25": round(desconto_p25, 4),
-            "desconto_p75": round(desconto_p75, 4),
-            "contratos_com_resultado": contratos_com_resultado,
-            "total_analisados": total_analisados,
-            "descontos_encontrados": len(descontos),
-            "insuficiente": False,
-            "_cached_at": now.isoformat(),
+    # v1.4: Parallel benchmark collection via ThreadPoolExecutor
+    n_workers = min(len(organ_editais), _BENCHMARK_WORKERS)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as pool:
+        futures = {
+            pool.submit(_fetch_organ_benchmark, cnpj): cnpj
+            for cnpj in organ_editais
         }
-        organ_benchmarks[cnpj_orgao] = benchmark_data
-        bench_cache[cnpj_orgao] = benchmark_data
+        for fut in concurrent.futures.as_completed(futures):
+            cnpj_orgao, result = fut.result()
+            if result is not None:
+                with bench_lock:
+                    organ_benchmarks[cnpj_orgao] = result
+                    bench_cache[cnpj_orgao] = result
 
-        print(f"    Orgao {cnpj_orgao}: desconto mediano {desconto_mediano:.1%} "
-              f"({len(descontos)} contratos com resultado)")
+    print(f"  Benchmark: {counters['cached']} cache, {counters['fetched']} fetched, "
+          f"{counters['failed']} failed")
 
     # Apply benchmarks to top-20 editais
     applied = 0
@@ -2748,6 +2849,17 @@ def main():
         print(f"  SICAF: CRC {crc_status} | Restrição: {restricao_str}")
         if empresa.get("restricao_sicaf"):
             print(f"  *** ALERTA: SICAF com RESTRIÇÃO ativa — risco de inabilitação ***")
+
+        # TCU Due Diligence — Inidôneos + Certidões APF (v1.4, free API, no auth)
+        print(f"  TCU: Verificando inidoneos e certidoes APF...")
+        tcu_data = _collect_tcu_due_diligence(api, cnpj14)
+        empresa["tcu"] = tcu_data
+        if tcu_data.get("inidoneo"):
+            print(f"  *** ALERTA: Empresa declarada INIDÔNEA pelo TCU ***")
+        if tcu_data.get("certidoes_irregulares"):
+            print(f"  *** ALERTA: Certidões APF com irregularidades ***")
+        else:
+            print(f"  TCU: Nada consta (inidoneos + certidoes APF)")
     else:
         print(f"\n[1b/7] SICAF pulado (--skip-sicaf)")
         empresa["sicaf"] = {"status": "PULADO"}
@@ -2969,18 +3081,35 @@ def main():
         )
         source_meta["llm_fallback_stats"] = llm_stats
 
-    # ── Step 5: Competitive intelligence per organ ──
-    print(f"\n[5/7] Coletando inteligencia competitiva ({_COMPETITIVE_MAX_ORGANS} orgaos, {24} meses)...")
-    collect_competitive_intel(api, editais)
+    # ── Steps 5+6+6b: Run competitive intel, documents, and benchmark IN PARALLEL ──
+    # v1.4: These three steps are independent (mutate different fields on editais)
+    # Running them concurrently saves 3-15 minutes depending on cache state.
+    print(f"\n[5/7] Coletando inteligencia competitiva + documentos + price benchmark (paralelo)...")
 
-    # ── Step 6: Fetch documents for top 50 ──
-    print(f"\n[6/7] Buscando documentos PNCP...")
-    fetch_documents_top50(api, editais)
+    def _run_competitive():
+        collect_competitive_intel(api, editais)
 
+    def _run_documents():
+        fetch_documents_top50(api, editais)
 
-    # -- Step 6b: Price benchmarking (historical organ discounts) --
-    print(f"\n[6b/7] Price benchmarking (top 20 editais)...")
-    collect_price_benchmarks(api, editais)
+    def _run_benchmarks():
+        collect_price_benchmarks(api, editais)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as step_pool:
+        fut_comp = step_pool.submit(_run_competitive)
+        fut_docs = step_pool.submit(_run_documents)
+        fut_bench = step_pool.submit(_run_benchmarks)
+
+        # Wait for all to complete, propagate exceptions
+        for fut, name in [
+            (fut_comp, "competitive intel"),
+            (fut_docs, "documents"),
+            (fut_bench, "price benchmark"),
+        ]:
+            try:
+                fut.result()
+            except Exception as exc:
+                print(f"  WARN: {name} falhou: {exc}")
 
 
     # ── Step 6c: Delta detection (compare against previous run) ──

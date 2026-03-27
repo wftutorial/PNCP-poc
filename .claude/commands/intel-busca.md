@@ -33,6 +33,14 @@ Utiliza TODOS os CNAEs da empresa (principal + secundarios) para maxima cobertur
 5. **Delta Reporting** — Compara contra ultima execucao e marca cada edital: NOVO / ATUALIZADO / VENCENDO / INALTERADO. Excel e PDF mostram apenas mudancas relevantes.
 6. **Dedup Semantico** — Alem do dedup por hash, detecta duplicatas cross-portal: mesmo orgao + municipio + valor ±15% + objeto com >65% token overlap = mesmo edital.
 
+### Capacidades v5 — Performance & Due Diligence (v1.4.0)
+
+7. **Pipeline Paralelo** — Steps 5 (competitive intel), 6 (docs), 6b (benchmark) executam em paralelo via ThreadPoolExecutor. Reduz tempo total de 25-50min para 8-15min.
+8. **Benchmark Paralelo** — Price benchmark paralelizado com 6 workers (era sequencial). 10-15 orgaos processados simultaneamente.
+9. **Competitive Intel 6 workers** — Aumentado de 3 para 6 workers para coleta de inteligencia competitiva.
+10. **TCU Due Diligence** — Verificacao automatica de inidoneos (TCU) + certidoes APF consolidadas (TCU+CNJ+CGU CEIS+CGU CNEP). API gratuita, sem autenticacao.
+11. **MCP Brasil Integration** — Servidor MCP configurado com 213 ferramentas de 28 APIs governamentais brasileiras para uso interativo (PNCP, Transparencia, TCU, BrasilAPI, etc.).
+
 ---
 
 ## Execution

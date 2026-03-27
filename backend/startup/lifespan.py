@@ -140,6 +140,27 @@ async def _periodic_saturation_metrics() -> None:
             logger.warning("HARDEN-024: Saturation metrics error: %s", e)
 
 
+def _check_async_multiworker_mismatch() -> None:
+    """CRIT-SYNC-FIX: Warn if async search is enabled with multiple workers.
+
+    Async mode uses an in-memory progress tracker that is not shared across
+    Gunicorn workers. When WEB_CONCURRENCY > 1 the POST and SSE requests may
+    hit different workers, causing the tracker-mismatch bug.
+    """
+    from config.pipeline import ASYNC_SEARCH_DEFAULT, SEARCH_ASYNC_ENABLED
+
+    web_concurrency = int(os.getenv("WEB_CONCURRENCY", "1"))
+    async_enabled = ASYNC_SEARCH_DEFAULT or SEARCH_ASYNC_ENABLED
+
+    if async_enabled and web_concurrency > 1:
+        logger.critical(
+            "CRIT-SYNC-FIX: ASYNC_SEARCH_DEFAULT=%s and WEB_CONCURRENCY=%d — "
+            "this combination causes in-memory tracker mismatch across workers. "
+            "Set ASYNC_SEARCH_DEFAULT=false or WEB_CONCURRENCY=1 to avoid broken SSE progress.",
+            ASYNC_SEARCH_DEFAULT, web_concurrency,
+        )
+
+
 @asynccontextmanager
 async def lifespan(app_instance: FastAPI):
     """Application lifespan context manager — startup and shutdown."""
@@ -149,6 +170,9 @@ async def lifespan(app_instance: FastAPI):
 
     # === STARTUP ===
     validate_env_vars()
+
+    # CRIT-SYNC-FIX: Detect dangerous async + multi-worker combination
+    _check_async_multiworker_mismatch()
 
     # DEBT-008: Memory baseline
     from health import get_memory_usage, update_memory_metrics

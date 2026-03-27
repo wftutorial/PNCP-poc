@@ -92,6 +92,14 @@ async def submit_feedback(
         feedback_id = result.data[0]["id"] if result.data else "unknown"
         logger.info(f"Feedback created: user={user_id[:8]}... bid={body.bid_id} verdict={body.user_verdict.value}")
 
+    # FN/FP observability: count negative feedback as proxy for false positives/negatives
+    try:
+        if body.user_verdict.value in ("false_positive", "false_negative"):
+            from metrics import FEEDBACK_NEGATIVE_TOTAL
+            FEEDBACK_NEGATIVE_TOTAL.labels(setor=body.setor_id or "unknown").inc()
+    except Exception:
+        pass
+
     return FeedbackResponse(
         id=feedback_id,
         received_at=now,

@@ -990,6 +990,28 @@ LLM_SUMMARY_CACHE_MISSES = _create_counter(
 )
 
 # ============================================================================
+# FN/FP observability (CTO Advisory Action Plan)
+# ============================================================================
+
+FILTER_DECISIONS_BY_SETOR = _create_counter(
+    "smartlic_filter_decisions_by_setor_total",
+    "Filter pipeline decisions by sector and outcome",
+    labelnames=["setor", "decision"],  # decision: keyword_approved, keyword_rejected, llm_approved, llm_rejected
+)
+
+LLM_FALLBACK_REJECTS_TOTAL = _create_counter(
+    "smartlic_llm_fallback_rejects_total",
+    "Items rejected due to LLM failure (silent false negative risk)",
+    labelnames=["setor", "reason"],  # reason: timeout, error, budget_exceeded
+)
+
+FEEDBACK_NEGATIVE_TOTAL = _create_counter(
+    "smartlic_feedback_negative_total",
+    "User negative feedback on search results (proxy for false positives)",
+    labelnames=["setor"],
+)
+
+# ============================================================================
 # ASGI app factory for /metrics endpoint
 # ============================================================================
 

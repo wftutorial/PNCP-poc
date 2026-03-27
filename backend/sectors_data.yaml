@@ -2366,6 +2366,34 @@ sectors:
         - "trafego"
         - "sinalização"
         - "sinalizacao"
+      # Frente4 AC3: "conservação" is ambiguous (environmental conservation, food preservation,
+      # asset conservation). Context ensures only civil works/infrastructure maintenance matches.
+      "conservação":
+        - "predial"
+        - "obra"
+        - "pavimento"
+        - "estrada"
+        - "rodovia"
+        - "infraestrutura"
+        - "restauração"
+        - "restauracao"
+        - "recuperação"
+        - "recuperacao"
+        - "manutenção"
+        - "manutencao"
+      conservacao:
+        - "predial"
+        - "obra"
+        - "pavimento"
+        - "estrada"
+        - "rodovia"
+        - "infraestrutura"
+        - "restauração"
+        - "restauracao"
+        - "recuperação"
+        - "recuperacao"
+        - "manutenção"
+        - "manutencao"
     # CRIT-FLT-007: Co-occurrence rules for engenharia
     co_occurrence_rules:
       # Rule 1: "obra" in non-construction context (literary, artistic)
@@ -2716,6 +2744,24 @@ sectors:
         - "tecnologia"
         - "uso"
         - "digital"
+        - "antivírus"
+        - "antivirus"
+        - "informática"
+        - "informatica"
+      "licença":
+        - "software"
+        - "sistema"
+        - "microsoft"
+        - "adobe"
+        - "oracle"
+        - "ti"
+        - "tecnologia"
+        - "uso"
+        - "digital"
+        - "antivírus"
+        - "antivirus"
+        - "informática"
+        - "informatica"
       sap:
         - "sistema"
         - "erp"
@@ -2760,13 +2806,33 @@ sectors:
       sistema:
         - "informação"
         - "informacao"
+        - "informatizado"
         - "software"
         - "digital"
+        - "plataforma"
         - "computador"
         - "tecnologia"
         - "ti"
         - "automação"
         - "automacao"
+        - "dados"
+        - "aplicativo"
+        - "programa"
+        - "gerenciamento"
+        - "gestão eletrônica"
+        - "gestao eletronica"
+      # Frente4 AC3: "plataforma" is ambiguous (physical platform, loading dock).
+      # Context ensures only digital/software platform context matches.
+      plataforma:
+        - "digital"
+        - "software"
+        - "sistema"
+        - "eletrônica"
+        - "eletronica"
+        - "online"
+        - "web"
+        - "aplicativo"
+        - "tecnologia"
     # CRIT-FLT-007: Co-occurrence rules for software
     co_occurrence_rules:
       # Rule 1: "plataforma" in non-software context (physical platform)
@@ -4007,6 +4073,43 @@ sectors:
         - "desarmada"
         - "controle de acesso"
         - "ronda"
+      # Frente4 AC5: "vigilância/vigilancia" is generic and can appear in healthcare,
+      # epidemiological, or food safety contexts. Context ensures physical security matches.
+      "vigilância":
+        - "patrimonial"
+        - "armada"
+        - "desarmada"
+        - "segurança"
+        - "seguranca"
+        - "monitoramento"
+        - "portaria"
+        - "guarita"
+        - "ronda"
+      vigilancia:
+        - "patrimonial"
+        - "armada"
+        - "desarmada"
+        - "segurança"
+        - "seguranca"
+        - "monitoramento"
+        - "portaria"
+        - "guarita"
+        - "ronda"
+      # Frente4 AC5: "monitoramento" alone is very generic (environmental, health, water quality).
+      # Context ensures only electronic security/surveillance monitoring matches.
+      monitoramento:
+        - "câmera"
+        - "camera"
+        - "cftv"
+        - "alarme"
+        - "segurança"
+        - "seguranca"
+        - "eletrônico"
+        - "eletronico"
+        - "vigilância"
+        - "vigilancia"
+        - "vídeo"
+        - "video"
     # CRIT-FLT-007: Co-occurrence rules for vigilancia
     co_occurrence_rules:
       # Rule 1: "segurança" in non-guard context (cybersecurity, food safety)
@@ -4757,6 +4860,34 @@ sectors:
         - "manutenção"
         - "manutencao"
         - "viaduto"
+      # Frente4 AC4: "sinalização" is ambiguous (fire signage, hospital signage, internal signs).
+      # Context ensures only road/traffic signaling context matches.
+      "sinalização":
+        - "viária"
+        - "viaria"
+        - "rodoviária"
+        - "rodoviaria"
+        - "trânsito"
+        - "transito"
+        - "horizontal"
+        - "vertical"
+        - "semafórica"
+        - "semaforica"
+        - "placas"
+        - "rodovia"
+      sinalizacao:
+        - "viária"
+        - "viaria"
+        - "rodoviária"
+        - "rodoviaria"
+        - "trânsito"
+        - "transito"
+        - "horizontal"
+        - "vertical"
+        - "semafórica"
+        - "semaforica"
+        - "placas"
+        - "rodovia"
     # CRIT-FLT-007: Co-occurrence rules for engenharia_rodoviaria
     co_occurrence_rules:
       # Rule 1: "asfalto" in non-road context (roofing, waterproofing)
@@ -4971,6 +5102,60 @@ sectors:
         - "kva"
         - "distribuição"
         - "distribuicao"
+      # Frente4 AC2: "quadro" is ambiguous (whiteboard, painting, table/chart).
+      # Context ensures only electrical panel/distribution board context matches.
+      quadro:
+        - "elétrico"
+        - "eletrico"
+        - "distribuição"
+        - "distribuicao"
+        - "energia"
+        - "disjuntor"
+        - "circuito"
+        - "comando"
+        - "força"
+        - "forca"
+        - "proteção elétrica"
+        - "protecao eletrica"
+      # Frente4 AC2: "cabo" is ambiguous (nautical cable, data cable, military rank).
+      # Context ensures only electrical conductor context matches.
+      cabo:
+        - "elétrico"
+        - "eletrico"
+        - "energia"
+        - "cobre"
+        - "alumínio"
+        - "aluminio"
+        - "condutor"
+        - "flexível"
+        - "flexivel"
+        - "aterramento"
+        - "tensão"
+        - "tensao"
+      # Frente4 AC2: "luminária" is reasonably specific but can appear in decor contexts.
+      # Context ensures electrical/public lighting context matches.
+      "luminária":
+        - "led"
+        - "iluminação"
+        - "iluminacao"
+        - "lâmpada"
+        - "lampada"
+        - "poste"
+        - "pública"
+        - "publica"
+        - "fluorescente"
+        - "refletor"
+      luminaria:
+        - "led"
+        - "iluminação"
+        - "iluminacao"
+        - "lâmpada"
+        - "lampada"
+        - "poste"
+        - "pública"
+        - "publica"
+        - "fluorescente"
+        - "refletor"
     # CRIT-FLT-007: Co-occurrence rules for materiais_eletricos
     co_occurrence_rules:
       # Rule 1: "cabo" in non-electrical context (nautical, telecom)

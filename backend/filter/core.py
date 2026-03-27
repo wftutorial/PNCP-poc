@@ -2780,6 +2780,11 @@ def aplicar_todos_filtros(
             lic["_term_density"] = term_density
 
             resultado_keyword.append(lic)
+            try:
+                from metrics import FILTER_DECISIONS_BY_SETOR
+                FILTER_DECISIONS_BY_SETOR.labels(setor=setor or "unknown", decision="keyword_approved").inc()
+            except Exception:
+                pass
         else:
             stats["rejeitadas_keyword"] += 1
             # STORY-248 AC9: Record keyword miss
@@ -2789,6 +2794,11 @@ def aplicar_todos_filtros(
                     sector=setor,
                     description_preview=objeto[:100],
                 )
+            except Exception:
+                pass
+            try:
+                from metrics import FILTER_DECISIONS_BY_SETOR
+                FILTER_DECISIONS_BY_SETOR.labels(setor=setor or "unknown", decision="keyword_rejected").inc()
             except Exception:
                 pass
 
@@ -3375,6 +3385,11 @@ def aplicar_todos_filtros(
                             f"density={lic.get('_term_density', 0):.1%} "
                             f"objeto={objeto[:80]}"
                         )
+                        try:
+                            from metrics import FILTER_DECISIONS_BY_SETOR
+                            FILTER_DECISIONS_BY_SETOR.labels(setor=setor or "unknown", decision="llm_approved").inc()
+                        except Exception:
+                            pass
                     else:
                         with _arbiter_stats_lock:
                             stats["rejeitadas_llm_arbiter"] += 1
@@ -3393,6 +3408,11 @@ def aplicar_todos_filtros(
                                 sector=setor,
                                 description_preview=objeto[:100],
                             )
+                        except Exception:
+                            pass
+                        try:
+                            from metrics import FILTER_DECISIONS_BY_SETOR
+                            FILTER_DECISIONS_BY_SETOR.labels(setor=setor or "unknown", decision="llm_rejected").inc()
                         except Exception:
                             pass
 

@@ -271,18 +271,35 @@ class TestStructuredOutput:
         assert call_args.kwargs["max_tokens"] == 800  # DEBT-101 AC5: increased 300→800 to eliminate truncation
         assert call_args.kwargs["response_format"] == {"type": "json_object"}
 
-    def test_error_returns_reject_dict(self, mock_openai_client):
-        """API error returns reject dict with confidence=0."""
+    def test_error_returns_pending_review_dict(self, mock_openai_client):
+        """API error returns pending_review dict when LLM_FALLBACK_PENDING_ENABLED=true."""
         mock_openai_client.chat.completions.create.side_effect = Exception("timeout")
 
-        with patch("config.get_feature_flag", return_value=True):
+        with patch("config.get_feature_flag", return_value=True), \
+             patch("config.LLM_FALLBACK_PENDING_ENABLED", True):
+            result = classify_contract_primary_match(
+                objeto="Teste", valor=1_000_000, setor_name="Vestuário",
+            )
+
+        assert result["is_primary"] is False
+        assert result["confidence"] == 40  # Gray-zone pending = 40 (lower than normal LLM at 70+)
+        assert result["rejection_reason"] == "LLM unavailable"
+        assert result["pending_review"] is True
+        assert result["_classification_source"] == "llm_fallback_pending"
+
+    def test_error_returns_reject_when_pending_disabled(self, mock_openai_client):
+        """API error returns hard REJECT when LLM_FALLBACK_PENDING_ENABLED=false."""
+        mock_openai_client.chat.completions.create.side_effect = Exception("timeout")
+
+        with patch("config.get_feature_flag", return_value=True), \
+             patch("config.LLM_FALLBACK_PENDING_ENABLED", False):
             result = classify_contract_primary_match(
                 objeto="Teste", valor=1_000_000, setor_name="Vestuário",
             )
 
         assert result["is_primary"] is False
         assert result["confidence"] == 0
-        assert result["rejection_reason"] == "LLM unavailable"
+        assert result.get("pending_review") is not True
 
 
 # =============================================================================

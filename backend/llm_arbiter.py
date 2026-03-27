@@ -28,6 +28,7 @@ from openai import OpenAI
 from metrics import (
     LLM_CALLS, LLM_DURATION, EVIDENCE_PREFIX_STRIPPED, ARBITER_CACHE_SIZE,
     ARBITER_CACHE_HITS, ARBITER_CACHE_MISSES, ARBITER_CACHE_EVICTIONS,
+    LLM_FALLBACK_REJECTS_TOTAL,
 )
 
 # Configure logging
@@ -833,23 +834,31 @@ Os termos buscados descrevem o OBJETO PRINCIPAL deste contrato (não itens secun
 
         # STORY-354 AC1+AC8: When LLM fails for zero-match bids, return PENDING_REVIEW
         # instead of REJECT — prevents silent loss of potentially relevant opportunities.
+        # Frente 3: Also applies to gray-zone (1-5% density) prompt levels "standard" and
+        # "conservative" — they are equally at risk of silent loss during OpenAI outages.
         from config import LLM_FALLBACK_PENDING_ENABLED
-        if LLM_FALLBACK_PENDING_ENABLED and prompt_level == "zero_match":
+        _gray_zone_levels = {"zero_match", "standard", "conservative"}
+        if LLM_FALLBACK_PENDING_ENABLED and prompt_level in _gray_zone_levels:
             logger.warning(
                 f"LLM arbiter FAILED (PENDING_REVIEW fallback): {e} | "
-                f"search={_search_id} mode={mode} context={context[:50]}... valor={valor:,.2f}"
+                f"search={_search_id} mode={mode} prompt_level={prompt_level} "
+                f"context={context[:50]}... valor={valor:,.2f}"
             )
             from metrics import LLM_FALLBACK_PENDING
             _sector_label = context[:50] if mode == "setor" else "termos"
             _reason = type(e).__name__
             LLM_FALLBACK_PENDING.labels(sector=_sector_label, reason=_reason).inc()
+            # Gray-zone items get confidence=40 (lower than normal LLM approvals at 70+)
+            # to signal reduced certainty. Zero-match items keep confidence=0 (no keywords found).
+            _pending_confidence = 40 if prompt_level in {"standard", "conservative"} else 0
             result = {
                 "is_primary": False,
-                "confidence": 0,
+                "confidence": _pending_confidence,
                 "evidence": [],
                 "rejection_reason": "LLM unavailable",
                 "needs_more_data": False,
                 "pending_review": True,
+                "_classification_source": "llm_fallback_pending",
             }
             return result
 
@@ -858,6 +867,12 @@ Os termos buscados descrevem o OBJETO PRINCIPAL deste contrato (não itens secun
             f"search={_search_id} mode={mode} context={context[:50]}... valor={valor:,.2f}"
         )
         # AC3: Conservative fallback on error — REJECT with confidence 0
+        try:
+            _setor_label = setor_id or "unknown"
+            _reason = type(e).__name__
+            LLM_FALLBACK_REJECTS_TOTAL.labels(setor=_setor_label, reason=_reason).inc()
+        except Exception:
+            pass
         result = {
             "is_primary": False,
             "confidence": 0,

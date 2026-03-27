@@ -219,7 +219,9 @@ npm run test:e2e:headed             # Debug mode
 - Keywords match -> "keyword" source (>5% density)
 - Low density -> "llm_standard" (2-5%), "llm_conservative" (1-2%)
 - Zero match -> "llm_zero_match" (GPT-4.1-nano YES/NO)
-- Fallback = REJECT on LLM failure (zero noise philosophy)
+- Fallback = PENDING_REVIEW on LLM failure when `LLM_FALLBACK_PENDING_ENABLED=true` (gray zone + zero-match); hard REJECT when disabled
+- Classification SLA: precision >= 85%, recall >= 70% (benchmark-validated, 15 samples/sector). NOT zero FN/FP — impossible with ambiguous government text.
+- Observability: `smartlic_filter_decisions_by_setor_total`, `smartlic_llm_fallback_rejects_total`, `smartlic_feedback_negative_total` Prometheus counters
 
 ### SSE Progress Tracking
 - `search_id` links SSE stream to POST request
@@ -268,7 +270,7 @@ For detailed module tables and route maps, see `.claude/rules/architecture-detai
 ### LLM Integration
 - GPT-4.1-nano for classification + summaries
 - Zero-match prompt: `_build_zero_match_prompt()` in `llm_arbiter.py`
-- Fallback = REJECT on failure (zero noise philosophy)
+- Fallback = PENDING_REVIEW on failure (gray zone + zero-match) when `LLM_FALLBACK_PENDING_ENABLED=true`; REJECT when disabled
 - ARQ background jobs for summaries (immediate fallback response)
 - ThreadPoolExecutor(max_workers=10) for parallel LLM calls
 

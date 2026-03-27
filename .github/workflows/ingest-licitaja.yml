@@ -1,0 +1,49 @@
+name: Ingest LicitaJá → Datalake
+
+on:
+  schedule:
+    # Every 6 hours: 00:00, 06:00, 12:00, 18:00 UTC
+    - cron: '0 0,6,12,18 * * *'
+  workflow_dispatch:
+    inputs:
+      dias:
+        description: 'Lookback days'
+        default: '10'
+        type: string
+      ufs:
+        description: 'UFs (comma-separated, empty = all)'
+        default: ''
+        type: string
+
+jobs:
+  ingest:
+    name: Fetch LicitaJá → Supabase
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install httpx python-dotenv
+
+      - name: Run ingestion
+        env:
+          LICITAJA_API_KEY: ${{ secrets.LICITAJA_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          DIAS="${{ github.event.inputs.dias || '10' }}"
+          UFS="${{ github.event.inputs.ufs || '' }}"
+
+          CMD="python scripts/ingest-licitaja.py --dias $DIAS"
+          if [ -n "$UFS" ]; then
+            CMD="$CMD --ufs $UFS"
+          fi
+
+          echo "Running: $CMD"
+          $CMD

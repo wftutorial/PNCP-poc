@@ -76,11 +76,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // getSession also failed — give up
       }
       if (isMountedRef.current) setLoading(false);
-    }, 10000);
+    }, 3000);
 
     const initAuth = async () => {
       try {
-        // Primary: server-validated user
+        // Fast path: getSession() reads local JWT (~50ms, no network round-trip)
+        const { data: { session: localSession } } = await supabase.auth.getSession();
+
+        if (!isMountedRef.current) return; // UX-408 AC1
+
+        if (localSession?.user) {
+          // Render immediately with session data — user sees the page NOW
+          clearTimeout(authTimeout);
+          setUser(localSession.user);
+          setSession(localSession);
+          setLoading(false);
+
+          // Background: upgrade to server-validated user (non-blocking)
+          supabase.auth.getUser().then(({ data: { user: validatedUser } }) => {
+            if (validatedUser && isMountedRef.current) setUser(validatedUser);
+          }).catch(() => { /* keep session user as fallback */ });
+
+          // Background: fetch admin status (non-blocking)
+          if (localSession.access_token) {
+            fetchAdminStatus(localSession.access_token);
+          }
+          return;
+        }
+
+        // No local session — fall back to server-validated getUser() for public pages / expired sessions
         const { data: { user: validatedUser }, error: userError } = await supabase.auth.getUser();
 
         if (!isMountedRef.current) return; // UX-408 AC1
@@ -108,7 +132,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!isMountedRef.current) return; // UX-408 AC1
         if (currentSession) {
           if (process.env.NODE_ENV !== "production") console.info("[AuthProvider] getUser returned null, attempting session refresh (AC6)");
-          const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
+          const { data: { session: refreshedSession } } = await supabase.auth.refreshSession();
 
           if (!isMountedRef.current) return; // UX-408 AC1
           if (refreshedSession?.user) {
@@ -134,7 +158,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (!isMountedRef.current) return; // UX-408 AC1
 
-        // AC5: getUser() threw an error — fall back to session data
+        // AC5: error — fall back to session data
         try {
           const { data: { session: fallbackSession } } = await supabase.auth.getSession();
           if (!isMountedRef.current) return; // UX-408 AC1

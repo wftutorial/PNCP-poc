@@ -20,26 +20,20 @@ export function AlertNotificationBell() {
   >([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [featureDisabled, setFeatureDisabled] = useState(() => {
-    try {
-      return localStorage.getItem("smartlic_alerts_disabled") === "true";
-    } catch {
-      return false;
-    }
-  });
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Fetch unread alert count
   const fetchNotifications = useCallback(async () => {
-    if (!session?.access_token || featureDisabled) return;
+    if (!session?.access_token) return;
     try {
       const res = await fetch("/api/alerts", {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
-      // UX-434: 404 means alerts feature disabled — stop polling
+      // 401/403: auth not ready yet — skip silently
+      if (res.status === 401 || res.status === 403) return;
+      // 404: no alerts configured — treat as empty, keep polling
       if (res.status === 404) {
-        try { localStorage.setItem("smartlic_alerts_disabled", "true"); } catch { /* ignore */ }
-        setFeatureDisabled(true);
+        setUnreadCount(0);
         return;
       }
       if (!res.ok) return;
@@ -60,13 +54,17 @@ export function AlertNotificationBell() {
     } catch {
       // silent
     }
-  }, [session?.access_token, featureDisabled]);
+  }, [session?.access_token]);
 
   useEffect(() => {
-    fetchNotifications();
+    // Delay first fetch by 2s to avoid racing with AuthProvider initialization
+    const initial = setTimeout(() => fetchNotifications(), 2000);
     // Refresh every 5 minutes
     const interval = setInterval(fetchNotifications, 5 * 60 * 1000);
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(initial);
+      clearInterval(interval);
+    };
   }, [fetchNotifications]);
 
   // Close dropdown on outside click
@@ -80,7 +78,7 @@ export function AlertNotificationBell() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, [open]);
 
-  if (!session?.access_token || featureDisabled) return null;
+  if (!session?.access_token) return null;
 
   return (
     <div className="relative" ref={dropdownRef}>

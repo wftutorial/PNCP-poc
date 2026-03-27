@@ -94,7 +94,9 @@ describe("UX-408: AuthProvider race condition fixes", () => {
   });
 
   test("T1 (AC1): AuthProvider does not call setState after unmount", async () => {
-    // getUser will resolve AFTER the component unmounts
+    // getUser will resolve AFTER the component unmounts.
+    // With the fast-path refactor, getSession() is called first; mock it to
+    // return no session so initAuth() falls through to getUser().
     let resolveGetUser: (value: any) => void;
     mockGetUser_AP.mockImplementation(
       () =>
@@ -102,21 +104,30 @@ describe("UX-408: AuthProvider race condition fixes", () => {
           resolveGetUser = resolve;
         })
     );
+    // getSession returns null session so the fast path is skipped
+    mockGetSession_AP.mockResolvedValue({ data: { session: null } });
 
     const consoleWarnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
     const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
 
-    const { unmount } = render(
-      <AuthProvider>
-        <TestConsumer />
-      </AuthProvider>
-    );
+    let unmountFn: () => void;
+    await act(async () => {
+      const { unmount } = render(
+        <AuthProvider>
+          <TestConsumer />
+        </AuthProvider>
+      );
+      unmountFn = unmount;
+      // Flush getSession() promise so initAuth() reaches getUser()
+      await Promise.resolve();
+      await Promise.resolve();
+    });
 
-    // Component is mounted and loading
+    // Component is mounted and loading (getUser still pending)
     expect(screen.getByTestId("loading")).toHaveTextContent("true");
 
     // Unmount BEFORE getUser resolves
-    unmount();
+    unmountFn!();
 
     // Now resolve getUser — should NOT cause setState warning
     await act(async () => {

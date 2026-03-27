@@ -2337,8 +2337,11 @@ def aplicar_todos_filtros(
 
     # Etapa 1: Filtro de UF (mais rápido - O(1))
     resultado_uf: List[dict] = []
+    _empty_uf_count = 0
     for lic in licitacoes:
         uf = lic.get("uf", "")
+        if not uf:
+            _empty_uf_count += 1
         if uf in ufs_selecionadas:
             resultado_uf.append(lic)
         else:
@@ -2352,6 +2355,12 @@ def aplicar_todos_filtros(
                 )
             except Exception:
                 pass
+    if _empty_uf_count > 0:
+        logger.warning(
+            f"[P0-DIAG] {_empty_uf_count} items have empty UF field "
+            f"(federal agencies?) — rejected by UF filter. "
+            f"UFs requested: {ufs_selecionadas}"
+        )
 
     logger.debug(
         f"  Após filtro UF: {len(resultado_uf)} "

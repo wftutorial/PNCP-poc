@@ -1150,7 +1150,7 @@ class PNCPClient:
                             for item in self._fetch_by_uf(
                                 chunk_start, chunk_end, modalidade, uf, on_progress
                             ):
-                                normalized = self._normalize_item(item)
+                                normalized = self._normalize_item(item, uf_hint=uf)
                                 item_id = normalized.get("numeroControlePNCP", "")
                                 if item_id and item_id not in seen_ids:
                                     seen_ids.add(item_id)
@@ -1183,7 +1183,7 @@ class PNCPClient:
         )
 
     @staticmethod
-    def _normalize_item(item: Dict[str, Any]) -> Dict[str, Any]:
+    def _normalize_item(item: Dict[str, Any], uf_hint: str | None = None) -> Dict[str, Any]:
         """
         Flatten nested PNCP API response into the flat format expected by
         filter.py, excel.py and llm.py.
@@ -1194,11 +1194,23 @@ class PNCPClient:
 
         Also ensures linkSistemaOrigem is preserved for Excel hyperlinks.
         Note: linkProcessoEletronico is always empty from PNCP API (CRIT-FLT-008).
+
+        Args:
+            item: Raw PNCP API response item.
+            uf_hint: Fallback UF code when the API returns empty ufSigla
+                     (common for federal agencies). Typically the UF that
+                     was queried.
         """
         unidade = item.get("unidadeOrgao") or {}
         orgao = item.get("orgaoEntidade") or {}
 
-        item["uf"] = unidade.get("ufSigla", "")
+        uf_from_api = unidade.get("ufSigla", "")
+        # P0-FIX: Federal agencies often return empty ufSigla.
+        # Use the queried UF as fallback so the item is not rejected by the UF filter.
+        if not uf_from_api and uf_hint:
+            uf_from_api = uf_hint
+            item["_uf_from_hint"] = True
+        item["uf"] = uf_from_api
         item["municipio"] = unidade.get("municipioNome", "")
         item["nomeOrgao"] = orgao.get("razaoSocial", "") or unidade.get("nomeUnidade", "")
         item["codigoCompra"] = item.get("numeroControlePNCP", "")
@@ -1885,7 +1897,7 @@ class AsyncPNCPClient:
                     item_id = item.get("numeroControlePNCP", "")
                     if item_id and item_id not in state.seen_ids:
                         state.seen_ids.add(item_id)
-                        normalized = PNCPClient._normalize_item(item)
+                        normalized = PNCPClient._normalize_item(item, uf_hint=uf)
                         state.items.append(normalized)
 
                 state.pages_fetched = pagina

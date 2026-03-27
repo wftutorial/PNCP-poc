@@ -49,14 +49,25 @@ jest.mock("next/link", () => {
 // Tests
 // ---------------------------------------------------------------------------
 
+// Helper: advance fake timers and flush microtasks so async callbacks settle
+async function advanceTimersAndFlush(ms: number) {
+  jest.advanceTimersByTime(ms);
+  // Flush the microtask queue so resolved promises (fetch mocks) settle
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
 describe("AlertNotificationBell", () => {
   beforeEach(() => {
+    jest.useFakeTimers();
     jest.clearAllMocks();
     mockUseAuth.mockReturnValue({ session: mockSession });
     global.fetch = jest.fn();
   });
 
   afterEach(() => {
+    jest.useRealTimers();
     jest.restoreAllMocks();
   });
 
@@ -90,6 +101,10 @@ describe("AlertNotificationBell", () => {
     await act(async () => {
       render(<AlertNotificationBell />);
     });
+    // Advance past the 2s initial delay in a separate act block
+    await act(async () => {
+      jest.advanceTimersByTime(2100);
+    });
 
     await waitFor(() => {
       expect(screen.getByTestId("notification-badge")).toBeInTheDocument();
@@ -111,6 +126,9 @@ describe("AlertNotificationBell", () => {
 
     await act(async () => {
       render(<AlertNotificationBell />);
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(2100);
     });
 
     await waitFor(() => {
@@ -150,6 +168,9 @@ describe("AlertNotificationBell", () => {
 
     await act(async () => {
       render(<AlertNotificationBell />);
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(2100);
     });
 
     // Wait for fetch to complete
@@ -237,6 +258,9 @@ describe("AlertNotificationBell", () => {
 
     await act(async () => {
       render(<AlertNotificationBell />);
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(2100);
     });
 
     await waitFor(() => {

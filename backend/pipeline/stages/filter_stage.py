@@ -287,6 +287,59 @@ async def stage_filter(pipeline, ctx: SearchContext) -> None:
                     f"[STAB-005] Level-3 relaxation returned {len(_l3_candidates)} results by value"
                 )
 
+    # P0-FIX: Auto-relaxation for sector-based searches with zero results.
+    # The existing relaxation (levels 1-3 above) only triggers for custom_terms searches.
+    # Sector searches (setor_id set, no custom_terms) were returning 0 results because
+    # keyword/exclusion filters are too strict for some UFs.
+    if (
+        not ctx.custom_terms
+        and ctx.request.setor_id
+        and len(ctx.licitacoes_filtradas) == 0
+        and len(ctx.licitacoes_raw) > 0
+        and ctx.relaxation_level == 0
+    ):
+        logger.info(
+            f"[P0-FIX] Zero results for sector={ctx.request.setor_id} — "
+            f"attempting sector keyword-free relaxation"
+        )
+        _sector_relaxed, _sector_stats = deps.aplicar_todos_filtros(
+            ctx.licitacoes_raw,
+            ufs_selecionadas=set(request.ufs),
+            status=status_filter,
+            modalidades=request.modalidades,
+            valor_min=request.valor_minimo,
+            valor_max=request.valor_maximo,
+            esferas=esferas_values,
+            municipios=request.municipios,
+            keywords=None,       # P0-FIX: remove keyword filter
+            exclusions=None,     # P0-FIX: remove exclusion filter
+            context_required=None,
+            min_match_floor=None,
+            setor=None,          # P0-FIX: remove sector filter to bypass classification
+            modo_busca=request.modo_busca or "publicacao",
+            custom_terms=None,
+            pncp_degraded="PNCP" in (ctx.sources_degraded or []),
+        )
+        if _sector_relaxed:
+            # Cap at top 20 by estimated value to avoid noise
+            _sector_relaxed_sorted = sorted(
+                _sector_relaxed,
+                key=lambda bid: float(bid.get("valorTotalEstimado") or bid.get("valorEstimado") or 0),
+                reverse=True,
+            )[:20]
+            ctx.licitacoes_filtradas = _sector_relaxed_sorted
+            ctx.filter_stats = _sector_stats
+            ctx.relaxation_level = 2
+            ctx.filter_relaxed = True
+            ctx.filter_summary = (
+                f"Filtros de setor relaxados: mostrando top {len(_sector_relaxed_sorted)} "
+                f"resultados por valor de {len(_sector_relaxed)} encontrados"
+            )
+            logger.info(
+                f"[P0-FIX] Sector relaxation recovered {len(_sector_relaxed_sorted)} results "
+                f"(from {len(_sector_relaxed)} candidates)"
+            )
+
     # SSE: Filtering complete
     if ctx.tracker:
         await ctx.tracker.emit(

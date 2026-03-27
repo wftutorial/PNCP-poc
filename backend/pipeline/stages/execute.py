@@ -87,7 +87,7 @@ async def stage_execute(pipeline, ctx: SearchContext) -> None:
             ctx.cached = False
             ctx.cache_status = "datalake"
             ctx.source_stats_data = {"datalake": {"records": len(ctx.licitacoes_raw)}}
-            BIDS_PROCESSED_TOTAL.inc(len(ctx.licitacoes_raw))
+            BIDS_PROCESSED_TOTAL.labels(source="datalake").inc(len(ctx.licitacoes_raw))
             logger.info(
                 f"[stage_execute] Datalake returned {len(ctx.licitacoes_raw)} records"
             )

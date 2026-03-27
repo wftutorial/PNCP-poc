@@ -85,16 +85,25 @@ async def query_datalake(
         f"tsquery={tsquery!r}, limit={limit}"
     )
 
-    try:
-        result = sb.rpc("search_datalake", rpc_params).execute()
-    except Exception as e:
-        logger.error(f"[DatalakeQuery] RPC failed: {type(e).__name__}: {e}")
+    # PostgREST caps results at 1000 rows per call.
+    # Paginate per-UF to avoid truncation on multi-UF queries.
+    rows: list[dict] = []
+    for uf in ufs:
+        uf_params = {**rpc_params, "p_ufs": [uf]}
+        try:
+            result = sb.rpc("search_datalake", uf_params).execute()
+            uf_rows = result.data or []
+            rows.extend(uf_rows)
+        except Exception as e:
+            logger.warning(f"[DatalakeQuery] RPC failed for UF={uf}: {type(e).__name__}: {e}")
+
+    if not rows:
+        logger.warning("[DatalakeQuery] All UF queries returned 0 rows")
         return []
 
-    rows = result.data or []
     normalized = [_row_to_normalized(row) for row in rows]
 
-    logger.info(f"[DatalakeQuery] Returned {len(normalized)} records from local DB")
+    logger.info(f"[DatalakeQuery] Returned {len(normalized)} records from local DB ({len(ufs)} UFs)")
     return normalized
 
 

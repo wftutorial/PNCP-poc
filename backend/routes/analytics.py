@@ -226,15 +226,35 @@ async def get_top_dimensions(
         sectors_agg: dict[str, dict] = {}
 
         for s in sessions:
-            valor = float(Decimal(str(s.get("valor_total") or 0)))
+            try:
+                raw_valor = s.get("valor_total")
+                valor = float(Decimal(str(raw_valor))) if raw_valor else 0.0
+            except Exception:
+                valor = 0.0
+                logger.warning(
+                    f"ISSUE-024: Malformed valor_total={s.get('valor_total')!r} "
+                    f"in session {s.get('id', '?')}, defaulting to 0"
+                )
 
-            for uf in (s.get("ufs") or []):
+            raw_ufs = s.get("ufs") or []
+            if isinstance(raw_ufs, str):
+                raw_ufs = [raw_ufs]
+
+            for uf in raw_ufs:
+                if not isinstance(uf, str) or not uf:
+                    continue
                 if uf not in ufs_agg:
                     ufs_agg[uf] = {"count": 0, "value": 0.0}
                 ufs_agg[uf]["count"] += 1
                 ufs_agg[uf]["value"] += valor
 
-            for sector in (s.get("sectors") or []):
+            raw_sectors = s.get("sectors") or []
+            if isinstance(raw_sectors, str):
+                raw_sectors = [raw_sectors]
+
+            for sector in raw_sectors:
+                if not isinstance(sector, str) or not sector:
+                    continue
                 if sector not in sectors_agg:
                     sectors_agg[sector] = {"count": 0, "value": 0.0}
                 sectors_agg[sector]["count"] += 1

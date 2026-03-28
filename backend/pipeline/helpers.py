@@ -8,8 +8,28 @@ import logging
 from datetime import datetime, timezone as _tz
 
 from schemas import LicitacaoItem, UfStatusDetail, CoverageMetadata
+from utils.value_sanitizer import VALUE_HARD_CAP
 
 logger = logging.getLogger(__name__)
+
+
+def _sanitize_item_valor(valor) -> float | None:
+    """ISSUE-022: Sanitize individual bid value for card display.
+
+    Values exceeding the hard cap (R$ 10B) are returned as None
+    so frontend shows "Valor não informado" instead of absurd numbers.
+    """
+    if valor is None:
+        return None
+    try:
+        v = float(valor)
+    except (ValueError, TypeError):
+        return None
+    if v <= 0:
+        return None
+    if v > VALUE_HARD_CAP:
+        return None
+    return v
 
 
 def _build_pncp_link(lic: dict) -> str | None:
@@ -100,7 +120,7 @@ def _convert_to_licitacao_items(licitacoes: list[dict]) -> list[LicitacaoItem]:
                 orgao=lic.get("nomeOrgao", ""),
                 uf=lic.get("uf", ""),
                 municipio=lic.get("municipio"),
-                valor=lic.get("valorTotalEstimado") or None,
+                valor=_sanitize_item_valor(lic.get("valorTotalEstimado")),
                 modalidade=lic.get("modalidadeNome"),
                 data_publicacao=lic.get("dataPublicacaoPncp", "")[:10] if lic.get("dataPublicacaoPncp") else None,
                 data_abertura=lic.get("dataAberturaProposta", "")[:10] if lic.get("dataAberturaProposta") else None,

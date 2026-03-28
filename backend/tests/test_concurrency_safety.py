@@ -23,6 +23,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from auth import require_auth
+from database import get_user_db
 
 
 # ============================================================================
@@ -129,11 +130,14 @@ def _mock_pipeline_sb():
     return sb
 
 
-def _create_pipeline_client(user=None):
+def _create_pipeline_client(user=None, mock_user_db=None):
     from routes.pipeline import router
     app = FastAPI()
     app.include_router(router)
     app.dependency_overrides[require_auth] = lambda: (user or MOCK_USER)
+    if mock_user_db is None:
+        mock_user_db = _mock_pipeline_sb()
+    app.dependency_overrides[get_user_db] = lambda: mock_user_db
     return TestClient(app)
 
 
@@ -399,15 +403,13 @@ class TestPipelineOptimisticLocking:
 
     @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
     @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
-    @patch("routes.pipeline.get_supabase")
-    def test_ac23_update_with_correct_version_succeeds(self, mock_get_sb):
+    def test_ac23_update_with_correct_version_succeeds(self):
         """AC23: Pipeline update with matching version succeeds."""
         sb = _mock_pipeline_sb()
         updated_item = {**SAMPLE_PIPELINE_ITEM, "stage": "analise", "version": 2}
         sb.execute.return_value = Mock(data=[updated_item])
-        mock_get_sb.return_value = sb
 
-        client = _create_pipeline_client()
+        client = _create_pipeline_client(mock_user_db=sb)
         resp = client.patch(
             f"/pipeline/{SAMPLE_PIPELINE_ITEM['id']}",
             json={"stage": "analise", "version": 1},
@@ -420,12 +422,10 @@ class TestPipelineOptimisticLocking:
 
     @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
     @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
-    @patch("routes.pipeline.get_supabase")
     @patch("routes.pipeline.sb_execute")
-    def test_ac24_update_with_wrong_version_returns_409(self, mock_sb_exec, mock_get_sb):
+    def test_ac24_update_with_wrong_version_returns_409(self, mock_sb_exec):
         """AC24: Pipeline update with stale version returns 409 Conflict."""
         sb = _mock_pipeline_sb()
-        mock_get_sb.return_value = sb
 
         # First sb_execute call: version mismatch → 0 rows
         # Second sb_execute call: item exists (confirm 409, not 404)
@@ -434,7 +434,7 @@ class TestPipelineOptimisticLocking:
             Mock(data=[{"id": SAMPLE_PIPELINE_ITEM["id"], "version": 3}]),  # EXISTS check
         ]
 
-        client = _create_pipeline_client()
+        client = _create_pipeline_client(mock_user_db=sb)
         resp = client.patch(
             f"/pipeline/{SAMPLE_PIPELINE_ITEM['id']}",
             json={"stage": "analise", "version": 1},  # Stale version
@@ -446,12 +446,10 @@ class TestPipelineOptimisticLocking:
 
     @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
     @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
-    @patch("routes.pipeline.get_supabase")
     @patch("routes.pipeline.sb_execute")
-    def test_ac24_update_nonexistent_item_returns_404(self, mock_sb_exec, mock_get_sb):
+    def test_ac24_update_nonexistent_item_returns_404(self, mock_sb_exec):
         """AC24 edge: version mismatch on non-existent item → 404 not 409."""
         sb = _mock_pipeline_sb()
-        mock_get_sb.return_value = sb
 
         # Both calls return empty — item doesn't exist
         mock_sb_exec.side_effect = [
@@ -459,7 +457,7 @@ class TestPipelineOptimisticLocking:
             Mock(data=[]),  # EXISTS check → not found
         ]
 
-        client = _create_pipeline_client()
+        client = _create_pipeline_client(mock_user_db=sb)
         resp = client.patch(
             "/pipeline/nonexistent-id",
             json={"stage": "analise", "version": 1},
@@ -469,17 +467,15 @@ class TestPipelineOptimisticLocking:
 
     @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
     @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
-    @patch("routes.pipeline.get_supabase")
-    def test_ac12_get_pipeline_returns_version(self, mock_get_sb):
+    def test_ac12_get_pipeline_returns_version(self):
         """AC12: GET pipeline items includes version field in response."""
         sb = _mock_pipeline_sb()
         sb.execute.return_value = Mock(
             data=[SAMPLE_PIPELINE_ITEM],
             count=1,
         )
-        mock_get_sb.return_value = sb
 
-        client = _create_pipeline_client()
+        client = _create_pipeline_client(mock_user_db=sb)
         resp = client.get("/pipeline")
 
         assert resp.status_code == 200
@@ -490,14 +486,12 @@ class TestPipelineOptimisticLocking:
 
     @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
     @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
-    @patch("routes.pipeline.get_supabase")
-    def test_legacy_update_without_version_still_works(self, mock_get_sb):
+    def test_legacy_update_without_version_still_works(self):
         """Backward compat: update without version uses legacy path."""
         sb = _mock_pipeline_sb()
         sb.execute.return_value = Mock(data=[SAMPLE_PIPELINE_ITEM])
-        mock_get_sb.return_value = sb
 
-        client = _create_pipeline_client()
+        client = _create_pipeline_client(mock_user_db=sb)
         resp = client.patch(
             f"/pipeline/{SAMPLE_PIPELINE_ITEM['id']}",
             json={"stage": "analise"},  # No version field

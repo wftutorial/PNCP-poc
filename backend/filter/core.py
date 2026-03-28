@@ -2684,7 +2684,11 @@ def aplicar_todos_filtros(
     compiled_patterns: Dict[str, re.Pattern] = {}
     for keyword in kw:
         try:
-            escaped = re.escape(keyword)
+            # ISSUE-017: Normalize keyword before compiling regex.
+            # match_keywords() searches against normalize_text(objeto) which strips
+            # accents, so the compiled pattern must also be accent-free.
+            kw_normalized = normalize_text(keyword)
+            escaped = re.escape(kw_normalized)
             compiled_patterns[keyword] = re.compile(
                 rf'\b{escaped}\b', re.IGNORECASE | re.UNICODE
             )

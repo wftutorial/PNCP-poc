@@ -109,12 +109,11 @@ class TestCreatePipelineItem:
     @patch("routes.pipeline._check_pipeline_limit", _noop_check_pipeline_limit)
     @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
     @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
-    @patch("routes.pipeline.get_supabase")
-    def test_create_success(self, mock_get_sb):
+    def test_create_success(self):
+        # ISSUE-021: POST now uses user_db (get_user_db dependency), not get_supabase
         sb = _mock_sb()
         sb.execute.return_value = Mock(data=[SAMPLE_ITEM])
-        mock_get_sb.return_value = sb
-        client = _create_client()
+        client = _create_client(mock_user_db=sb)
 
         resp = client.post("/pipeline", json={
             "pncp_id": PNCP_ID,
@@ -135,14 +134,12 @@ class TestCreatePipelineItem:
     @patch("routes.pipeline._check_pipeline_limit", _noop_check_pipeline_limit)
     @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
     @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
-    @patch("routes.pipeline.get_supabase")
-    def test_create_duplicate_409(self, mock_get_sb):
+    def test_create_duplicate_409(self):
         """Test duplicate pncp_id for same user returns 409."""
+        # ISSUE-021: POST now uses user_db
         sb = _mock_sb()
-        # Simulate unique constraint violation
         sb.execute.side_effect = Exception("duplicate key value violates unique constraint")
-        mock_get_sb.return_value = sb
-        client = _create_client()
+        client = _create_client(mock_user_db=sb)
 
         resp = client.post("/pipeline", json={
             "pncp_id": PNCP_ID,
@@ -158,13 +155,12 @@ class TestCreatePipelineItem:
     @patch("routes.pipeline._check_pipeline_limit", _noop_check_pipeline_limit)
     @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
     @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
-    @patch("routes.pipeline.get_supabase")
-    def test_create_duplicate_23505_error_code(self, mock_get_sb):
+    def test_create_duplicate_23505_error_code(self):
         """Test PostgreSQL unique violation error code 23505."""
+        # ISSUE-021: POST now uses user_db
         sb = _mock_sb()
         sb.execute.side_effect = Exception("ERROR: duplicate key; sqlstate: 23505")
-        mock_get_sb.return_value = sb
-        client = _create_client()
+        client = _create_client(mock_user_db=sb)
 
         resp = client.post("/pipeline", json={
             "pncp_id": PNCP_ID,
@@ -192,13 +188,12 @@ class TestCreatePipelineItem:
     @patch("routes.pipeline._check_pipeline_limit", _noop_check_pipeline_limit)
     @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
     @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
-    @patch("routes.pipeline.get_supabase")
-    def test_create_empty_data_failure(self, mock_get_sb):
+    def test_create_empty_data_failure(self):
         """Test database failure (empty result.data) returns 500."""
+        # ISSUE-021: POST now uses user_db
         sb = _mock_sb()
         sb.execute.return_value = Mock(data=[])  # Empty data = failure
-        mock_get_sb.return_value = sb
-        client = _create_client()
+        client = _create_client(mock_user_db=sb)
 
         resp = client.post("/pipeline", json={
             "pncp_id": PNCP_ID,
@@ -300,13 +295,12 @@ class TestUpdatePipelineItem:
 
     @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
     @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
-    @patch("routes.pipeline.get_supabase")
-    def test_update_stage_success(self, mock_get_sb):
+    def test_update_stage_success(self):
+        # ISSUE-021: PATCH now uses user_db
         sb = _mock_sb()
         updated_item = {**SAMPLE_ITEM, "stage": "analise"}
         sb.execute.return_value = Mock(data=[updated_item])
-        mock_get_sb.return_value = sb
-        client = _create_client()
+        client = _create_client(mock_user_db=sb)
 
         resp = client.patch(f"/pipeline/{ITEM_ID}", json={
             "stage": "analise",
@@ -318,13 +312,12 @@ class TestUpdatePipelineItem:
 
     @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
     @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
-    @patch("routes.pipeline.get_supabase")
-    def test_update_notes_success(self, mock_get_sb):
+    def test_update_notes_success(self):
+        # ISSUE-021: PATCH now uses user_db
         sb = _mock_sb()
         updated_item = {**SAMPLE_ITEM, "notes": "Importante: verificar requisitos técnicos"}
         sb.execute.return_value = Mock(data=[updated_item])
-        mock_get_sb.return_value = sb
-        client = _create_client()
+        client = _create_client(mock_user_db=sb)
 
         resp = client.patch(f"/pipeline/{ITEM_ID}", json={
             "notes": "Importante: verificar requisitos técnicos",
@@ -336,13 +329,12 @@ class TestUpdatePipelineItem:
 
     @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
     @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
-    @patch("routes.pipeline.get_supabase")
-    def test_update_both_stage_and_notes(self, mock_get_sb):
+    def test_update_both_stage_and_notes(self):
+        # ISSUE-021: PATCH now uses user_db
         sb = _mock_sb()
         updated_item = {**SAMPLE_ITEM, "stage": "preparando", "notes": "Documentos prontos"}
         sb.execute.return_value = Mock(data=[updated_item])
-        mock_get_sb.return_value = sb
-        client = _create_client()
+        client = _create_client(mock_user_db=sb)
 
         resp = client.patch(f"/pipeline/{ITEM_ID}", json={
             "stage": "preparando",
@@ -370,8 +362,7 @@ class TestUpdatePipelineItem:
 
     @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
     @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
-    @patch("routes.pipeline.get_supabase")
-    def test_update_empty_payload_422(self, mock_get_sb):
+    def test_update_empty_payload_422(self):
         client = _create_client()
 
         resp = client.patch(f"/pipeline/{ITEM_ID}", json={})
@@ -381,12 +372,11 @@ class TestUpdatePipelineItem:
 
     @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
     @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
-    @patch("routes.pipeline.get_supabase")
-    def test_update_not_found_404(self, mock_get_sb):
+    def test_update_not_found_404(self):
+        # ISSUE-021: PATCH now uses user_db
         sb = _mock_sb()
         sb.execute.return_value = Mock(data=[])  # Empty result = not found
-        mock_get_sb.return_value = sb
-        client = _create_client()
+        client = _create_client(mock_user_db=sb)
 
         resp = client.patch(f"/pipeline/{ITEM_ID}", json={
             "stage": "analise",
@@ -404,12 +394,11 @@ class TestDeletePipelineItem:
 
     @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
     @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
-    @patch("routes.pipeline.get_supabase")
-    def test_delete_success(self, mock_get_sb):
+    def test_delete_success(self):
+        # ISSUE-021: DELETE now uses user_db
         sb = _mock_sb()
         sb.execute.return_value = Mock(data=[SAMPLE_ITEM])
-        mock_get_sb.return_value = sb
-        client = _create_client()
+        client = _create_client(mock_user_db=sb)
 
         resp = client.delete(f"/pipeline/{ITEM_ID}")
 
@@ -420,12 +409,11 @@ class TestDeletePipelineItem:
 
     @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
     @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
-    @patch("routes.pipeline.get_supabase")
-    def test_delete_not_found_404(self, mock_get_sb):
+    def test_delete_not_found_404(self):
+        # ISSUE-021: DELETE now uses user_db
         sb = _mock_sb()
         sb.execute.return_value = Mock(data=[])  # Empty result = not found
-        mock_get_sb.return_value = sb
-        client = _create_client()
+        client = _create_client(mock_user_db=sb)
 
         resp = client.delete(f"/pipeline/{ITEM_ID}")
 

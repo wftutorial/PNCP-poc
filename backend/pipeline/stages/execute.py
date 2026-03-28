@@ -67,9 +67,11 @@ async def stage_execute(pipeline, ctx: SearchContext) -> None:
             _keywords: list[str] = []
             _custom_terms: list[str] = getattr(request, "termos_customizados", None) or []
             try:
-                from sectors import get_sector_keywords
+                from sectors import get_sector
                 if request.setor_id:
-                    _keywords = list(get_sector_keywords(request.setor_id))
+                    sector = get_sector(request.setor_id)
+                    if sector and sector.keywords:
+                        _keywords = list(sector.keywords)
             except Exception:
                 pass
 

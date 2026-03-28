@@ -163,9 +163,36 @@ def _cap_zero_match_pool(
 
     top_value = pool[:n_value]
     remainder = pool[n_value:]
-    random_sample = _rng.sample(remainder, min(n_random, len(remainder)))
 
-    to_classify = top_value + random_sample
+    # ISSUE-029: Replace random sampling with sector-aware affinity scoring.
+    # Random sampling was injecting completely irrelevant bids (e.g. diesel, poços)
+    # into the LLM classification budget. Sector-keyword affinity ranks by relevance.
+    if n_random > 0 and remainder:
+        if setor:
+            try:
+                from sectors import get_sector_config
+                sector_cfg = get_sector_config(setor)
+                sector_kws = {
+                    kw.lower()
+                    for kw in (
+                        sector_cfg.get("keywords", [])
+                        if isinstance(sector_cfg, dict)
+                        else getattr(sector_cfg, "keywords", [])
+                    )
+                }
+
+                def _sector_affinity(lic: dict) -> int:
+                    obj = (lic.get("objetoCompra") or lic.get("objeto") or "").lower()
+                    return sum(1 for kw in sector_kws if kw in obj)
+
+                remainder.sort(key=_sector_affinity, reverse=True)
+            except Exception:
+                pass  # Keep value-based order as fallback
+        semantic_sample = remainder[:n_random]
+    else:
+        semantic_sample = []
+
+    to_classify = top_value + semantic_sample
     to_classify_ids = {id(x) for x in to_classify}
 
     deferred: List[dict] = []
@@ -200,7 +227,7 @@ def _cap_zero_match_pool(
     logger.info(
         f"[CRIT-058] Zero-match pool capped: {len(to_classify)}/{len(pool)} items "
         f"(cap={max_items}). "
-        f"Value split: {n_value} by value + {len(random_sample)} random. "
+        f"Value split: {n_value} by value + {len(semantic_sample)} sector-affinity. "
         f"Classified bands={_count_bands(classified_vals)}, "
         f"Deferred bands={_count_bands(deferred_vals)}, "
         f"Classified total value={sum(classified_vals):,.0f}, "

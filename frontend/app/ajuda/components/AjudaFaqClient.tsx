@@ -281,7 +281,7 @@ function AccordionItem({
 // Renders the full page content: hero section (title + search), FAQ categories, contact section.
 
 export default function AjudaFaqClient() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [openItems, setOpenItems] = useState<Set<string>>(new Set());
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
@@ -496,7 +496,9 @@ export default function AjudaFaqClient() {
             Nossa equipe está pronta para ajudar.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            {user ? (
+            {loading ? (
+              <div className="h-12 w-48 bg-[var(--surface-1)] rounded-lg animate-pulse" />
+            ) : user ? (
               <Link
                 href="/mensagens"
                 className="inline-flex items-center gap-2 px-6 py-3 bg-[var(--brand-navy)] text-white

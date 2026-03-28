@@ -873,9 +873,9 @@ def _dedup_cross_uf(results: list) -> list:
         # Primary key: codigoCompra / numeroControlePNCP
         key = r.get("codigoCompra") or r.get("numeroControlePNCP", "")
         if not key:
-            # Fallback key for non-PNCP sources
-            orgao = r.get("nomeOrgao", "")
-            obj = (r.get("objetoCompra") or "")[:100]
+            # Fallback key for non-PNCP sources (case-insensitive to match consolidation dedup)
+            orgao = (r.get("nomeOrgao") or "").lower().strip()
+            obj = " ".join((r.get("objetoCompra") or "")[:100].lower().split())
             key = f"{orgao}|{obj}" if orgao and obj else ""
 
         if not key:

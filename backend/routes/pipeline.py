@@ -187,39 +187,48 @@ async def create_pipeline_item(
 
     user_id = user["id"]
 
+    data = {
+        "user_id": user_id,
+        "pncp_id": item.pncp_id,
+        "objeto": item.objeto,
+        "orgao": item.orgao,
+        "uf": item.uf,
+        "valor_estimado": float(item.valor_estimado) if item.valor_estimado is not None else None,
+        "data_encerramento": item.data_encerramento,
+        "link_pncp": item.link_pncp,
+        "stage": item.stage or "descoberta",
+        "notes": item.notes,
+        "search_id": item.search_id,
+    }
+
     try:
+        # ISSUE-021: Use upsert for idempotent add (avoids 409 on duplicate)
         result = await sb_execute(
             get_supabase().table("pipeline_items")
-            .insert({
-                "user_id": user_id,
-                "pncp_id": item.pncp_id,
-                "objeto": item.objeto,
-                "orgao": item.orgao,
-                "uf": item.uf,
-                "valor_estimado": float(item.valor_estimado) if item.valor_estimado is not None else None,
-                "data_encerramento": item.data_encerramento,
-                "link_pncp": item.link_pncp,
-                "stage": item.stage or "descoberta",
-                "notes": item.notes,
-                "search_id": item.search_id,
-            })
+            .upsert(data, on_conflict="user_id,pncp_id", ignore_duplicates=True)
         )
 
-        if not result.data or len(result.data) == 0:
-            raise HTTPException(status_code=500, detail="Falha ao criar item no pipeline.")
+        if result.data and len(result.data) > 0:
+            logger.info(f"Pipeline item created for user {mask_user_id(user_id)}: pncp_id={item.pncp_id}")
+            return PipelineItemResponse(**result.data[0])
 
-        logger.info(f"Pipeline item created for user {mask_user_id(user_id)}: pncp_id={item.pncp_id}")
-        return PipelineItemResponse(**result.data[0])
+        # ignore_duplicates returns empty on conflict — fetch existing row
+        existing = await sb_execute(
+            get_supabase().table("pipeline_items")
+            .select("*")
+            .eq("user_id", user_id)
+            .eq("pncp_id", item.pncp_id)
+            .limit(1)
+        )
+        if existing.data and len(existing.data) > 0:
+            logger.info(f"Pipeline item already exists for user {mask_user_id(user_id)}: pncp_id={item.pncp_id}")
+            return PipelineItemResponse(**existing.data[0])
+
+        raise HTTPException(status_code=500, detail="Falha ao criar item no pipeline.")
 
     except HTTPException:
         raise
     except Exception as e:
-        error_msg = str(e)
-        if "duplicate" in error_msg.lower() or "unique" in error_msg.lower() or "23505" in error_msg:
-            raise HTTPException(
-                status_code=409,
-                detail="Esta licitação já está no seu pipeline.",
-            )
         logger.error(f"Error creating pipeline item for user {mask_user_id(user_id)}: {e}")
         raise HTTPException(status_code=500, detail="Erro ao adicionar ao pipeline.")
 

@@ -62,9 +62,11 @@ def _mock_sb(count=0):
     sb.table.return_value = sb
     sb.select.return_value = sb
     sb.insert.return_value = sb
+    sb.upsert.return_value = sb
     sb.update.return_value = sb
     sb.delete.return_value = sb
     sb.eq.return_value = sb
+    sb.limit.return_value = sb
 
     not_mock = Mock()
     not_mock.in_.return_value = sb

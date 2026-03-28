@@ -118,7 +118,11 @@ export function usePipeline() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        if (res.status === 409) throw new Error("Esta licitação já está no seu pipeline.");
+        if (res.status === 409) {
+          // ISSUE-021: Treat duplicate as soft success — refresh and return
+          await mutate();
+          return data as PipelineItem;
+        }
         if (res.status === 403) {
           if (data.detail?.error_code === "PIPELINE_LIMIT_EXCEEDED") {
             const pipelineErr = Object.assign(

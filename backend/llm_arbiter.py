@@ -980,19 +980,26 @@ def _build_zero_match_batch_prompt_terms(
 
     items_text = "\n".join(item_lines)
 
-    return f"""Você classifica licitações públicas em lote. Analise cada contrato e determine se trata ESPECIFICAMENTE do assunto buscado.
+    return f"""Classifique cada licitação: o objeto trata DIRETAMENTE dos termos buscados?
 
-Termos buscados pelo usuário: {termos_display}
+Termos buscados: {termos_display}
 
-REGRA ESTRITA: Responda YES somente se o objeto do contrato está DIRETAMENTE relacionado aos termos buscados. O contrato deve tratar do mesmo tipo de serviço, obra ou aquisição indicado nos termos.
-- Se o contrato é sobre um assunto completamente diferente (ex: termos="pavimentação" mas contrato é sobre "quadros digitais"), responda NO.
-- Se o contrato menciona o termo apenas no nome do órgão ou endereço, responda NO.
-- Se o contrato é genérico (material de escritório, informática) e não trata especificamente dos termos, responda NO.
+REGRAS ESTRITAS:
+- YES SOMENTE se o objeto é sobre o MESMO tipo de produto/serviço/obra dos termos.
+  Exemplo correto: termos="uniformes escolares" e objeto="aquisição de uniformes para alunos" → YES
+- NO se o objeto é sobre OUTRO assunto, mesmo que vagamente relacionado.
+  Exemplo: termos="uniformes escolares" e objeto="construção de escola" → NO
+  Exemplo: termos="pavimentação" e objeto="quadros digitais interativos" → NO
+  Exemplo: termos="uniformes escolares" e objeto="material de informática" → NO
+  Exemplo: termos="uniformes escolares" e objeto="serviços de engenharia" → NO
+- NO se os termos aparecem apenas no nome do órgão, secretaria ou endereço.
+- NO se o objeto é genérico (material de escritório, limpeza, informática, alimentos) e NÃO trata especificamente dos termos.
+- NA DÚVIDA, responda NO.
 
 CONTRATOS:
 {items_text}
 
-Responda APENAS com uma lista numerada de YES ou NO, uma por linha. Exemplo:
+Responda APENAS com lista numerada YES/NO:
 1. YES
 2. NO
 3. YES"""

@@ -118,7 +118,7 @@ def gerar_resumo(licitacoes: list[dict[str, Any]], *, sector_name: str = "licita
     client = OpenAI(api_key=api_key)
 
     # System prompt with expert persona and rules
-    system_prompt = f"""Você é um analista de licitações especializado em {_context_label}.
+    system_prompt = f"""Você é um analista de licitações.
 Analise as licitações fornecidas e gere um resumo executivo.
 
 REGRAS:
@@ -128,10 +128,12 @@ REGRAS:
 - Mencione a distribuição geográfica
 - Use linguagem profissional, não técnica demais
 - Valores sempre em reais (R$) formatados
+- IMPORTANTE: NÃO afirme que todas as licitações são sobre um tema específico a menos que realmente sejam. Descreva o que os objetos REALMENTE tratam, baseado nos textos fornecidos.
+- Se os objetos tratam de assuntos variados, diga isso explicitamente.
 """
 
-    # User prompt with context
-    user_prompt = f"""Analise estas {len(licitacoes)} licitações de {_context_label} e gere um resumo:
+    # User prompt with context — grounded, no assumption of relevance
+    user_prompt = f"""Analise estas {len(licitacoes)} licitações e gere um resumo baseado nos OBJETOS REAIS listados abaixo:
 
 {json.dumps(dados_resumidos, ensure_ascii=False, indent=2)}
 
@@ -382,7 +384,7 @@ def gerar_resumo_fallback(
 
     return ResumoEstrategico(
         resumo_executivo=(
-            f"Encontradas {total} licitações de {display_label} "
+            f"Encontradas {total} licitações no período analisado, "
             f"totalizando R$ {_fmt_brl(valor_total)}."
         ),
         total_oportunidades=total,

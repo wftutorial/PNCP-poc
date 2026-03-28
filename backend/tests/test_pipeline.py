@@ -61,9 +61,11 @@ def _mock_sb():
     sb.table.return_value = sb
     sb.select.return_value = sb
     sb.insert.return_value = sb
+    sb.upsert.return_value = sb
     sb.update.return_value = sb
     sb.delete.return_value = sb
     sb.eq.return_value = sb
+    sb.limit.return_value = sb
 
     # Handle .not_.in_() chain
     not_mock = Mock()
@@ -135,11 +137,17 @@ class TestCreatePipelineItem:
     @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
     @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
     @patch("routes.pipeline.get_supabase")
-    def test_create_duplicate_409(self, mock_get_sb):
-        """Test duplicate pncp_id for same user returns 409."""
+    def test_create_duplicate_returns_existing(self, mock_get_sb):
+        """ISSUE-021: Duplicate pncp_id returns 201 with existing item (idempotent upsert)."""
         sb = _mock_sb()
-        # Simulate unique constraint violation
-        sb.execute.side_effect = Exception("duplicate key value violates unique constraint")
+        # Upsert returns empty on conflict (ignore_duplicates=True)
+        call_count = [0]
+        def _side_effect():
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return Mock(data=[])  # upsert returns empty on conflict
+            return Mock(data=[SAMPLE_ITEM])  # fetch existing returns item
+        sb.execute.side_effect = lambda: _side_effect()
         mock_get_sb.return_value = sb
         client = _create_client()
 
@@ -151,29 +159,8 @@ class TestCreatePipelineItem:
             "link_pncp": "https://pncp.gov.br/test",
         })
 
-        assert resp.status_code == 409
-        assert "já está no seu pipeline" in resp.json()["detail"]
-
-    @patch("routes.pipeline._check_pipeline_limit", _noop_check_pipeline_limit)
-    @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
-    @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
-    @patch("routes.pipeline.get_supabase")
-    def test_create_duplicate_23505_error_code(self, mock_get_sb):
-        """Test PostgreSQL unique violation error code 23505."""
-        sb = _mock_sb()
-        sb.execute.side_effect = Exception("ERROR: duplicate key; sqlstate: 23505")
-        mock_get_sb.return_value = sb
-        client = _create_client()
-
-        resp = client.post("/pipeline", json={
-            "pncp_id": PNCP_ID,
-            "objeto": "Test",
-            "orgao": "Test Org",
-            "uf": "SP",
-            "link_pncp": "https://pncp.gov.br/test",
-        })
-
-        assert resp.status_code == 409
+        assert resp.status_code == 201
+        assert resp.json()["pncp_id"] == PNCP_ID
 
     def test_create_missing_pncp_id_422(self):
         """Test missing required field returns 422."""

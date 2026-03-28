@@ -3054,6 +3054,20 @@ def aplicar_todos_filtros(
                     try:
                         lic_item, llm_result = future.result()
                         is_relevant = llm_result.get("is_primary", False) if isinstance(llm_result, dict) else llm_result
+                        # ISSUE-017: Post-LLM gate — reject if custom terms not in text
+                        if is_relevant and custom_terms:
+                            obj_norm = normalize_text(lic_item.get("objetoCompra", ""))
+                            has_term_evidence = any(
+                                normalize_text(term) in obj_norm
+                                for term in custom_terms
+                            )
+                            if not has_term_evidence:
+                                is_relevant = False
+                                logger.debug(
+                                    f"LLM zero_match: OVERRIDE to NO — no custom term "
+                                    f"found in text. terms={custom_terms}, "
+                                    f"objeto={lic_item.get('objetoCompra', '')[:80]}"
+                                )
                         if is_relevant:
                             stats["llm_zero_match_aprovadas"] += 1
                             # STORY-267 AC16: Track term search metrics
@@ -3404,6 +3418,20 @@ def aplicar_todos_filtros(
                     prompt_level = lic.get("_llm_prompt_level", "standard")
                     objeto = lic.get("objetoCompra", "")
                     is_primary = llm_result.get("is_primary", False) if isinstance(llm_result, dict) else llm_result
+
+                    # ISSUE-017: Post-LLM gate — reject if custom terms not in text
+                    if is_primary and custom_terms:
+                        obj_norm = normalize_text(objeto)
+                        has_term_evidence = any(
+                            normalize_text(term) in obj_norm
+                            for term in custom_terms
+                        )
+                        if not has_term_evidence:
+                            is_primary = False
+                            logger.debug(
+                                f"[{trace_id}] Camada 3A: OVERRIDE to NO — no custom "
+                                f"term in text. terms={custom_terms}, objeto={objeto[:80]}"
+                            )
 
                     if is_primary:
                         with _arbiter_stats_lock:

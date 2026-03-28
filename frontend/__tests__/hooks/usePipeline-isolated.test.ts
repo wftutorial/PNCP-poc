@@ -214,29 +214,29 @@ describe("usePipeline (isolated)", () => {
     const { result } = renderHook(() => usePipeline(), { wrapper });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
+    // ISSUE-021: 409 is now treated as soft success (item already exists)
     mockFetch.mockImplementationOnce(() =>
       Promise.resolve({
         ok: false,
         status: 409,
-        json: async () => ({ detail: "Duplicate" }),
+        json: async () => ({ id: "existing-id", pncp_id: "pncp-dup", stage: "descoberta" }),
       })
     );
 
-    await expect(
-      act(async () => {
-        await result.current.addItem({
-          pncp_id: "pncp-dup",
-          objeto: "Duplicata",
-          orgao: null,
-          uf: null,
-          valor_estimado: null,
-          data_encerramento: null,
-          link_pncp: null,
-          stage: "descoberta",
-          notes: null,
-        });
-      })
-    ).rejects.toThrow("Esta licita\u00e7\u00e3o j\u00e1 est\u00e1 no seu pipeline.");
+    await act(async () => {
+      const returned = await result.current.addItem({
+        pncp_id: "pncp-dup",
+        objeto: "Duplicata",
+        orgao: null,
+        uf: null,
+        valor_estimado: null,
+        data_encerramento: null,
+        link_pncp: null,
+        stage: "descoberta",
+        notes: null,
+      });
+      expect(returned).toBeDefined();
+    });
   });
 
   // 6. addItem 403 pipeline limit exceeded

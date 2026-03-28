@@ -34,9 +34,11 @@ def _mock_sb():
     sb.table.return_value = sb
     sb.select.return_value = sb
     sb.insert.return_value = sb
+    sb.upsert.return_value = sb
     sb.update.return_value = sb
     sb.delete.return_value = sb
     sb.eq.return_value = sb
+    sb.limit.return_value = sb
     not_mock = Mock()
     not_mock.in_.return_value = sb
     not_mock.is_.return_value = sb
@@ -115,7 +117,7 @@ class TestPipelineSearchIdTraceability:
         assert body["search_id"] == "srch_abc123xyz"
 
         # Verify search_id was included in the insert call
-        insert_call = sb.insert.call_args
+        insert_call = sb.upsert.call_args
         assert insert_call is not None
         insert_data = insert_call[0][0]
         assert insert_data["search_id"] == "srch_abc123xyz"
@@ -141,7 +143,7 @@ class TestPipelineSearchIdTraceability:
         assert body["search_id"] is None
 
         # Verify search_id was included as None in the insert
-        insert_call = sb.insert.call_args
+        insert_call = sb.upsert.call_args
         insert_data = insert_call[0][0]
         assert insert_data["search_id"] is None
 

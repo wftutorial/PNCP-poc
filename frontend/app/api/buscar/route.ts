@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
       ufs,
       data_inicial,
       data_final,
-      setor_id: setor_id || "vestuario",
+      setor_id: setor_id || undefined,
       termos_busca: termos_busca || undefined,
       search_id: search_id || undefined,
       // New filter parameters

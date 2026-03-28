@@ -106,7 +106,7 @@ export function PlanProCard({
             : userStatus === "subscriber"
             ? "Gerenciar assinatura"
             : userStatus === "privileged"
-            ? "Acesso completo"
+            ? "Ir para análises"
             : userStatus === "trial_expired"
             ? "Continuar com SmartLic"
             : userStatus === "trial"

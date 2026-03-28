@@ -131,7 +131,7 @@ REGRAS:
 """
 
     # User prompt with context
-    user_prompt = f"""Analise estas {len(licitacoes)} licitações de {sector_name} e gere um resumo:
+    user_prompt = f"""Analise estas {len(licitacoes)} licitações de {_context_label} e gere um resumo:
 
 {json.dumps(dados_resumidos, ensure_ascii=False, indent=2)}
 

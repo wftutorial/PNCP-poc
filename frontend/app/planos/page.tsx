@@ -169,6 +169,11 @@ export default function PlanosPage() {
 
   const handleManageSubscription = useCallback(async () => {
     if (!session?.access_token) return;
+    // Privileged users (admin/master) have no Stripe subscription — redirect to buscar directly
+    if (userStatus === "privileged") {
+      window.location.href = "/buscar";
+      return;
+    }
     setPortalLoading(true);
     try {
       const res = await fetch("/api/billing-portal", { method: "POST", headers: { Authorization: `Bearer ${session.access_token}` } });
@@ -176,7 +181,7 @@ export default function PlanosPage() {
       const data = await res.json();
       window.location.href = data.url;
     } catch (err) { toast.error(getUserFriendlyError(err)); } finally { setPortalLoading(false); }
-  }, [session?.access_token]);
+  }, [session?.access_token, userStatus]);
 
   const handleCheckout = async () => {
     if (!session) { window.location.href = "/login"; return; }

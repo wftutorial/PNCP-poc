@@ -26,7 +26,7 @@ export function AdminSourceHealth({ sourceHealth, sourceHealthLoading, onRefresh
       {sourceHealthLoading && Object.keys(sourceHealth).length === 0 ? (
         <div className="h-12 bg-[var(--surface-1)] rounded animate-pulse" />
       ) : Object.keys(sourceHealth).length === 0 ? (
-        <p className="text-sm text-[var(--ink-muted)]">Status indisponivel</p>
+        <p className="text-sm text-[var(--ink-muted)]">Não disponível — backend indisponível ou sem dados de fontes</p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {Object.entries(sourceHealth).map(([code, info]) => {

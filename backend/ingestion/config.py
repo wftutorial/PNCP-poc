@@ -14,8 +14,8 @@ import os
 # Feature flags
 # ---------------------------------------------------------------------------
 
-DATALAKE_ENABLED = os.getenv("DATALAKE_ENABLED", "false").lower() in ("true", "1")
-DATALAKE_QUERY_ENABLED = os.getenv("DATALAKE_QUERY_ENABLED", "false").lower() in ("true", "1")
+DATALAKE_ENABLED = os.getenv("DATALAKE_ENABLED", "true").lower() in ("true", "1")
+DATALAKE_QUERY_ENABLED = os.getenv("DATALAKE_QUERY_ENABLED", "true").lower() in ("true", "1")
 
 # ---------------------------------------------------------------------------
 # Crawl schedule (UTC hours)

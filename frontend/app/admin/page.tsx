@@ -42,6 +42,7 @@ export default function AdminPage() {
 
   // STORY-352 AC5: Uptime widget state
   const [uptimePct30d, setUptimePct30d] = useState<number | null>(null);
+  const [uptimeLoading, setUptimeLoading] = useState(true);
 
   // STORY-350 AC6: Source health state
   const [sourceHealth, setSourceHealth] = useState<Record<string, {
@@ -99,6 +100,7 @@ export default function AdminPage() {
 
   const fetchSourceHealth = useCallback(async () => {
     setSourceHealthLoading(true);
+    setUptimeLoading(true);
     try {
       const res = await fetch("/api/status");
       if (res.ok) {
@@ -110,6 +112,7 @@ export default function AdminPage() {
       // Non-critical
     } finally {
       setSourceHealthLoading(false);
+      setUptimeLoading(false);
     }
   }, []);
 
@@ -243,7 +246,7 @@ export default function AdminPage() {
           </div>
         </div>
 
-        <AdminUptimeWidget uptimePct30d={uptimePct30d} />
+        <AdminUptimeWidget uptimePct30d={uptimePct30d} loading={uptimeLoading} />
 
         <AdminSourceHealth
           sourceHealth={sourceHealth}

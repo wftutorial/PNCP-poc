@@ -78,16 +78,16 @@
     ]
   },
   "sample_record": {
-    "codigoLicitacao": 372661,
+    "codigoLicitacao": 468167,
     "numeroLicitacao": null,
-    "identificacao": "2025000849.",
-    "numero": "001/2025 SECADM/2025",
-    "resumo": "CREDENCIAMENTO DE LEILOEIROS OFICIAIS PARA A REALIZAÇÃO DE LEILÃO BENS MÓVEIS INSERVÍVEIS DE PROPRIEDADE DA PREFEITURA MUNICIPAL DE PORTO NACIONAL, POR MEIO DE LICITAÇÃO NA MODALIDADE LEILÃO, VIABILIZANDO A EXECUÇÃO DO PROCEDIMENTO, DE ACORDO COM OS...",
-    "razaoSocial": "Secretaria Municipal de Compras e Licitações de Porto Nacional",
-    "nomeUnidade": "SECRETARIA MUNICIPAL DA ADMINISTRAÇÃO",
+    "identificacao": "711/2026",
+    "numero": "4/2026",
+    "resumo": "Chamamento Público para Credenciamento para Contratação de Projetos de Arquitetura, Engenharia, Infraestrutura e Geotecnia no Município de São Francisco de Paula/RS",
+    "razaoSocial": "Prefeitura Municipal de São Francisco de Paula",
+    "nomeUnidade": "Prefeitura Municipal de São Francisco de Paula",
     "status": {
-      "codigo": 18,
-      "descricao": "Não Publicado"
+      "codigo": 1,
+      "descricao": "Recebendo Propostas"
     },
     "situacao": {
       "codigo": 0,
@@ -104,30 +104,30 @@
     },
     "codigoSituacaoEdital": 5,
     "codigoTratamentoDiferenciado": 1,
-    "codigoSituacaoCadastroLicitacao": 3,
-    "dataHoraInicioLances": "2026-03-25T02:59:00Z",
-    "dataHoraInicioPropostas": "2025-04-10T12:00:00Z",
-    "dataHoraFinalPropostas": "2026-03-25T02:59:00Z",
+    "codigoSituacaoCadastroLicitacao": 2,
+    "dataHoraInicioLances": "2026-03-27T20:00:00Z",
+    "dataHoraInicioPropostas": "2026-03-27T20:00:00Z",
+    "dataHoraFinalPropostas": "2027-03-26T20:00:00Z",
     "dataHoraFinalLances": null,
-    "dataHoraPublicacao": "2025-03-25T17:38:00Z",
+    "dataHoraPublicacao": "2026-03-27T13:26:00Z",
     "isPublicado": false,
     "unidadeCompradora": {
-      "codigoUnidadeCompradora": 6655,
-      "nomeUnidadeCompradora": "SECRETARIA MUNICIPAL DA ADMINISTRAÇÃO",
-      "codigoComprador": 1533,
+      "codigoUnidadeCompradora": 5916,
+      "nomeUnidadeCompradora": "Prefeitura Municipal de São Francisco de Paula",
+      "codigoComprador": 3324,
       "nomeComprador": null,
-      "cidade": "Porto Nacional",
+      "cidade": "São Francisco de Paula",
       "codigoMunicipioIbge": null,
-      "uf": "TO"
+      "uf": "RS"
     },
     "comprador": null,
-    "urlReferencia": "/to/secretaria-municipal-de-compras-e-licitacoes-de-porto-nacional-1533/cred-001-2025-secadm-2025-2025-372661",
+    "urlReferencia": "/rs/prefeitura-municipal-de-sao-francisco-de-paula-3324/cred-4-2026-2026-468167",
     "statusProcessoPublico": {
-      "codigo": 18,
-      "descricao": "Não Publicado"
+      "codigo": 1,
+      "descricao": "Recebendo Propostas"
     },
     "isExclusivoME": false,
     "isBeneficoLocal": false
   },
-  "captured_at": "2026-03-24T21:07:46.085922+00:00"
+  "captured_at": "2026-03-28T01:03:22.580318+00:00"
 }

@@ -173,9 +173,11 @@ export default function HistoricoPage() {
   }, [sessions]);
 
   // UX-433: Filter sessions by status
+  // NOTE: old sessions may have null/undefined status — treat them as 'completed'
+  // to match the same fallback used in StatusBadge: s.status || "completed"
   const filteredSessions = useMemo(() => {
     if (statusFilter === 'all') return sessions;
-    if (statusFilter === 'completed') return sessions.filter((s: SearchSession) => s.status === 'completed');
+    if (statusFilter === 'completed') return sessions.filter((s: SearchSession) => (s.status || 'completed') === 'completed');
     // 'failed' shows failed + timed_out
     return sessions.filter((s: SearchSession) => s.status === 'failed' || s.status === 'timed_out');
   }, [sessions, statusFilter]);

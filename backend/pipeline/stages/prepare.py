@@ -35,12 +35,16 @@ async def stage_prepare(pipeline, ctx: SearchContext) -> None:
     ctx.request.data_final = d_fin.isoformat()
     logger.debug(f"stage_prepare: dates normalized to {ctx.request.data_inicial} → {ctx.request.data_final}")
 
-    try:
-        ctx.sector = get_sector(ctx.request.setor_id)
-    except KeyError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-    logger.debug(f"Using sector: {ctx.sector.name} ({len(ctx.sector.keywords)} keywords)")
+    # ISSUE-017: setor_id=None means "Termos Específicos" mode — no sector, custom terms only
+    if ctx.request.setor_id:
+        try:
+            ctx.sector = get_sector(ctx.request.setor_id)
+        except KeyError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        logger.debug(f"Using sector: {ctx.sector.name} ({len(ctx.sector.keywords)} keywords)")
+    else:
+        ctx.sector = None
+        logger.debug("No sector selected — using custom terms only (Termos Específicos mode)")
 
     ctx.custom_terms = []
     ctx.stopwords_removed = []
@@ -79,14 +83,22 @@ async def stage_prepare(pipeline, ctx: SearchContext) -> None:
     if ctx.custom_terms:
         ctx.active_keywords = set(ctx.custom_terms)
         logger.debug(f"Using {len(ctx.custom_terms)} custom search terms: {ctx.custom_terms}")
-    else:
+    elif ctx.sector:
         ctx.active_keywords = set(ctx.sector.keywords)
         logger.debug(f"Using sector keywords ({len(ctx.active_keywords)} terms)")
+    else:
+        # ISSUE-017: No sector + no custom terms — empty keywords (should not happen in practice)
+        ctx.active_keywords = set()
+        logger.warning("No sector and no custom terms — active_keywords is empty")
 
     # Determine exclusions
-    # STORY-267 AC11: Partial exclusions for custom_terms + vestuario
+    # ISSUE-017: When sector is None (Termos Específicos), no sector exclusions apply
     if ctx.request.exclusion_terms:
         ctx.active_exclusions = set(ctx.request.exclusion_terms)
+        ctx.active_context_required = None
+    elif ctx.sector is None:
+        # No sector = no sector exclusions
+        ctx.active_exclusions = set()
         ctx.active_context_required = None
     elif ctx.custom_terms and ctx.request.setor_id and ctx.request.setor_id != "vestuario":
         ctx.active_exclusions = ctx.sector.exclusions
@@ -133,4 +145,8 @@ async def stage_prepare(pipeline, ctx: SearchContext) -> None:
 
     # SSE: Sector ready
     if ctx.tracker:
-        await ctx.tracker.emit("connecting", 8, f"Setor '{ctx.sector.name}' configurado, conectando ao PNCP...")
+        if ctx.sector:
+            await ctx.tracker.emit("connecting", 8, f"Setor '{ctx.sector.name}' configurado, conectando ao PNCP...")
+        else:
+            _terms_label = ctx.request.termos_busca or "termos específicos"
+            await ctx.tracker.emit("connecting", 8, f"Busca por '{_terms_label}' configurada, conectando ao PNCP...")

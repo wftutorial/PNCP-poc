@@ -103,10 +103,11 @@ class BuscaRequest(BaseModel):
     # -------------------------------------------------------------------------
     # Optional Fields (Existing)
     # -------------------------------------------------------------------------
-    setor_id: str = Field(
-        default="vestuario",
-        description="Sector ID for keyword filtering (e.g., 'vestuario', 'alimentos', 'informatica')",
-        examples=["vestuario"],
+    setor_id: Optional[str] = Field(
+        default=None,
+        description="Sector ID for keyword filtering (e.g., 'vestuario', 'alimentos', 'informatica'). "
+                    "None when searching by 'Termos Específicos' (custom keywords only).",
+        examples=["vestuario", None],
     )
     termos_busca: Optional[str] = Field(
         default=None,

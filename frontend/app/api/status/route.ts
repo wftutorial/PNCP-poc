@@ -17,7 +17,8 @@ export async function GET(request: Request) {
   const path = url.searchParams.get("path") || "";
 
   // Allow sub-paths: /api/status?path=incidents, /api/status?path=uptime-history
-  const endpoint = path ? `${backendUrl}/status/${path}` : `${backendUrl}/status`;
+  // Backend registers health routes under /v1/ prefix via startup/routes.py
+  const endpoint = path ? `${backendUrl}/v1/status/${path}` : `${backendUrl}/v1/status`;
 
   try {
     const controller = new AbortController();

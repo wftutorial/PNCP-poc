@@ -2,9 +2,18 @@ import Link from "next/link";
 
 interface AdminUptimeWidgetProps {
   uptimePct30d: number | null;
+  loading?: boolean;
 }
 
-export function AdminUptimeWidget({ uptimePct30d }: AdminUptimeWidgetProps) {
+export function AdminUptimeWidget({ uptimePct30d, loading = false }: AdminUptimeWidgetProps) {
+  const statusLabel = () => {
+    if (loading) return "Carregando...";
+    if (uptimePct30d === null) return "Não disponível";
+    if (uptimePct30d >= 99) return "Alta disponibilidade";
+    if (uptimePct30d >= 95) return "Disponibilidade aceitavel";
+    return "Abaixo do esperado";
+  };
+
   return (
     <div className="mb-8 p-6 bg-[var(--surface-0)] border border-[var(--border)] rounded-card">
       <div className="flex items-center justify-between">
@@ -22,13 +31,7 @@ export function AdminUptimeWidget({ uptimePct30d }: AdminUptimeWidgetProps) {
           {uptimePct30d !== null ? `${uptimePct30d}%` : "\u2014"}
         </div>
         <div className="text-sm text-[var(--ink-secondary)]">
-          {uptimePct30d !== null && uptimePct30d >= 99
-            ? "Alta disponibilidade"
-            : uptimePct30d !== null && uptimePct30d >= 95
-              ? "Disponibilidade aceitavel"
-              : uptimePct30d !== null
-                ? "Abaixo do esperado"
-                : "Carregando..."}
+          {statusLabel()}
         </div>
       </div>
     </div>

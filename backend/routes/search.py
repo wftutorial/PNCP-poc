@@ -491,7 +491,11 @@ async def buscar_licitacoes(
             )
             from llm import gerar_resumo_fallback
             response = BuscaResponse(
-                resumo=gerar_resumo_fallback([], sector_name=request.setor_id or "licitações"),
+                resumo=gerar_resumo_fallback(
+                    [],
+                    sector_name=request.setor_id or "licitações",
+                    termos_busca=request.termos_busca,
+                ),
                 licitacoes=[],
                 excel_base64=None,
                 excel_available=False,
@@ -730,6 +734,7 @@ async def buscar_licitacoes(
             _fb_resumo = gerar_resumo_fallback(
                 ctx.licitacoes_filtradas,
                 sector_name=ctx.sector.name if ctx.sector else "licitações",
+                termos_busca=request.termos_busca,
             )
             _qi = ctx.quota_info
             partial_response = BuscaResponse(

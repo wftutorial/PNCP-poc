@@ -255,10 +255,26 @@ async def refresh_stale_cache_entries() -> dict:
         return {"status": "error", "error": str(e), "refreshed": 0}
 
 
+# ISSUE-015 mitigation: Critical sector+UF combos always warmed regardless of popularity.
+# These are prepended to the warmup queue before popular combos and deduped.
+MANDATORY_WARMUP_COMBOS = [
+    {"setor_id": "engenharia", "ufs": ["SP"]},
+    {"setor_id": "engenharia", "ufs": ["SC", "PR", "RS"]},
+    {"setor_id": "engenharia", "ufs": ["MG", "RJ", "ES"]},
+    {"setor_id": "vestuario", "ufs": ["SP"]},
+    {"setor_id": "saude", "ufs": ["SP"]},
+    {"setor_id": "informatica", "ufs": ["SP"]},
+    {"setor_id": "facilities", "ufs": ["SP"]},
+    {"setor_id": "software", "ufs": ["SP"]},
+]
+
+
 async def warmup_top_params() -> dict:
     """GTM-ARCH-002 AC6/AC7: Pre-warm top 10 popular sector+UF combinations.
 
     Enqueues background revalidation for the most popular search parameters.
+    MANDATORY_WARMUP_COMBOS are always warmed first (ISSUE-015 mitigation),
+    followed by popular combos deduped against the mandatory set.
     Used both on startup (AC7) and periodically via cron (AC6).
     """
     from search_cache import get_top_popular_params, trigger_background_revalidation
@@ -266,12 +282,30 @@ async def warmup_top_params() -> dict:
     try:
         top_params = await get_top_popular_params(limit=30)
 
-        if not top_params:
-            logger.info("Warmup: no popular params found to pre-warm")
+        # Build dedup key for mandatory combos: (setor_id, sorted_ufs_tuple)
+        def _combo_key(params: dict) -> tuple:
+            return (params.get("setor_id", ""), tuple(sorted(params.get("ufs", []))))
+
+        mandatory_keys = {_combo_key(c) for c in MANDATORY_WARMUP_COMBOS}
+
+        # Filter popular params to exclude any already covered by mandatory combos
+        popular_deduped = [p for p in top_params if _combo_key(p) not in mandatory_keys]
+
+        # Mandatory combos come first, then deduped popular params
+        all_params = list(MANDATORY_WARMUP_COMBOS) + popular_deduped
+
+        if not all_params:
+            logger.info("Warmup: no params found to pre-warm")
             return {"status": "no_params", "warmed": 0}
 
+        logger.info(
+            "Warmup: %d mandatory + %d popular combos (%d total, %d popular deduped)",
+            len(MANDATORY_WARMUP_COMBOS), len(popular_deduped),
+            len(all_params), len(top_params) - len(popular_deduped),
+        )
+
         warmed = 0
-        for params in top_params:
+        for params in all_params:
             try:
                 request_data = {
                     "ufs": params.get("ufs", []),
@@ -294,8 +328,8 @@ async def warmup_top_params() -> dict:
             except Exception as e:
                 logger.debug(f"Warmup dispatch failed: {e}")
 
-        logger.info(f"Warmup: {warmed}/{len(top_params)} popular params enqueued")
-        return {"status": "completed", "warmed": warmed, "total": len(top_params)}
+        logger.info(f"Warmup: {warmed}/{len(all_params)} params enqueued")
+        return {"status": "completed", "warmed": warmed, "total": len(all_params)}
 
     except Exception as e:
         logger.error(f"Warmup error: {e}", exc_info=True)

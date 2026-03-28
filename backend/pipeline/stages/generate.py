@@ -79,9 +79,11 @@ async def stage_generate(pipeline, ctx: SearchContext) -> None:
             from progress import remove_tracker
             await remove_tracker(ctx.request.search_id)
 
+        # ISSUE-017: Use termos_busca as label when sector is None
+        _empty_label = ctx.sector.name.lower() if ctx.sector else (ctx.request.termos_busca or "licitações")
         ctx.resumo = ResumoEstrategico(
             resumo_executivo=(
-                f"Nenhuma licitação de {ctx.sector.name.lower()} encontrada "
+                f"Nenhuma licitação de {_empty_label} encontrada "
                 f"nos estados selecionados para o período informado."
             ),
             total_oportunidades=0,
@@ -90,7 +92,7 @@ async def stage_generate(pipeline, ctx: SearchContext) -> None:
             alerta_urgencia=None,
             recomendacoes=[],
             alertas_urgencia=[],
-            insight_setorial=f"Não foram encontradas oportunidades de {ctx.sector.name.lower()} nos filtros selecionados. Considere ampliar o período ou os estados da análise.",
+            insight_setorial=f"Não foram encontradas oportunidades de {_empty_label} nos filtros selecionados. Considere ampliar o período ou os estados da análise.",
         )
 
         new_quota_used = ctx.quota_info.quota_used if ctx.quota_info else 0
@@ -195,7 +197,7 @@ async def stage_generate(pipeline, ctx: SearchContext) -> None:
             "llm_summary_job",
             search_id,
             ctx.licitacoes_filtradas,
-            ctx.sector.name,
+            ctx.sector.name if ctx.sector else "licitações",
             ctx.request.termos_busca,  # GTM-FIX-041
             _job_id=f"llm:{search_id}",
         )
@@ -238,7 +240,7 @@ async def stage_generate(pipeline, ctx: SearchContext) -> None:
                 search_id,
                 ctx.licitacoes_filtradas,
                 user_profile=ctx.user_profile,
-                sector_name=ctx.sector.name,
+                sector_name=ctx.sector.name if ctx.sector else "licitações",
                 _job_id=f"bid_analysis:{search_id}",
             )
             if bid_analysis_enqueued is not None:
@@ -265,7 +267,11 @@ async def stage_generate(pipeline, ctx: SearchContext) -> None:
         }) as llm_span:
             try:
                 _sector = ctx.sector.name if ctx.sector else "licitações"
-                ctx.resumo = gerar_resumo(ctx.licitacoes_filtradas, sector_name=_sector)
+                ctx.resumo = gerar_resumo(
+                    ctx.licitacoes_filtradas,
+                    sector_name=_sector,
+                    termos_busca=ctx.request.termos_busca if hasattr(ctx.request, "termos_busca") else None,
+                )
                 llm_span.set_attribute("llm.status", "success")
                 logger.debug("LLM summary generated successfully")
                 ctx.llm_source = "ai"  # CRIT-005 AC13

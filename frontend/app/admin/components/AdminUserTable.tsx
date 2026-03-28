@@ -22,7 +22,18 @@ interface UserProfile {
 
 const PLAN_OPTIONS = Object.keys(PLAN_CONFIGS);
 
+// Admin-only label map: distinguishes billing periods for the plan dropdown.
+// User-facing pages still show the generic "SmartLic Pro" label via getPlanDisplayName().
+const ADMIN_PLAN_LABELS: Record<string, string> = {
+  free_trial: "Avaliação",
+  smartlic_pro: "SmartLic Pro Mensal (R$ 397/mês)",
+  consultor_agil: "SmartLic Pro Mensal (R$ 397/mês) (legacy)",
+  maquina: "SmartLic Pro Semestral (R$ 357/mês) (legacy)",
+  sala_guerra: "SmartLic Pro Anual (R$ 297/mês) (legacy)",
+};
+
 const getAdminPlanDisplayName = (planId: string): string => {
+  if (ADMIN_PLAN_LABELS[planId]) return ADMIN_PLAN_LABELS[planId];
   const config = PLAN_CONFIGS[planId];
   if (!config) return planId;
   return config.price

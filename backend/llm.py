@@ -33,7 +33,7 @@ def _fmt_brl(value: float) -> str:
     return f"{value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
-def gerar_resumo(licitacoes: list[dict[str, Any]], *, sector_name: str = "licitações") -> ResumoLicitacoes:
+def gerar_resumo(licitacoes: list[dict[str, Any]], *, sector_name: str = "licitações", termos_busca: str | None = None) -> ResumoLicitacoes:
     """
     Generate AI-powered executive summary of procurement bids using GPT-4.1-nano.
 
@@ -72,10 +72,18 @@ def gerar_resumo(licitacoes: list[dict[str, Any]], *, sector_name: str = "licita
         >>> resumo.total_oportunidades
         1
     """
+    # ISSUE-016/017: Resolve display context — prefer termos_busca over sector_name
+    if termos_busca:
+        _context_label = f"busca por termos específicos: {termos_busca}"
+    elif sector_name and sector_name != "licitações":
+        _context_label = sector_name
+    else:
+        _context_label = "licitações"
+
     # Handle empty input
     if not licitacoes:
         return ResumoLicitacoes(
-            resumo_executivo=f"Nenhuma licitação de {sector_name.lower()} encontrada no período selecionado.",
+            resumo_executivo=f"Nenhuma licitação de {_context_label.lower()} encontrada no período selecionado.",
             total_oportunidades=0,
             valor_total=0.0,
             destaques=[],
@@ -110,7 +118,7 @@ def gerar_resumo(licitacoes: list[dict[str, Any]], *, sector_name: str = "licita
     client = OpenAI(api_key=api_key)
 
     # System prompt with expert persona and rules
-    system_prompt = f"""Você é um analista de licitações especializado em {sector_name}.
+    system_prompt = f"""Você é um analista de licitações especializado em {_context_label}.
 Analise as licitações fornecidas e gere um resumo executivo.
 
 REGRAS:

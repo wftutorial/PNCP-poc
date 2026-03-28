@@ -30,7 +30,8 @@ async def stage_persist(pipeline, ctx: SearchContext) -> BuscaResponse:
         from llm import gerar_resumo_fallback
         ctx.resumo = gerar_resumo_fallback(
             ctx.licitacoes_filtradas,
-            sector_name=ctx.sector.name if ctx.sector else "geral",
+            sector_name=ctx.sector.name if ctx.sector else "licitações",
+            termos_busca=ctx.request.termos_busca if hasattr(ctx.request, "termos_busca") else None,
         )
 
     # AC26: Emit structured log per search completion

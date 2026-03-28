@@ -291,9 +291,17 @@ async def stage_generate(pipeline, ctx: SearchContext) -> None:
 
         # Override LLM-generated counts with actual values
         actual_total = len(ctx.licitacoes_filtradas)
-        actual_valor = sum(
-            lic.get("valorTotalEstimado", 0) or 0 for lic in ctx.licitacoes_filtradas
-        )
+        from utils.value_sanitizer import sanitize_valor, compute_robust_total
+        raw_values = [
+            sanitize_valor(lic.get("valorTotalEstimado", 0))
+            for lic in ctx.licitacoes_filtradas
+        ]
+        actual_valor, _median, _outlier_count, _used_sanitized = compute_robust_total(raw_values)
+        if _outlier_count > 0:
+            logger.warning(
+                f"ISSUE-022: {_outlier_count} outlier value(s) excluded from total. "
+                f"sanitized={_used_sanitized}, total=R$ {actual_valor:,.2f}"
+            )
         if ctx.resumo.total_oportunidades != actual_total:
             logger.warning(
                 f"LLM returned total_oportunidades={ctx.resumo.total_oportunidades}, "

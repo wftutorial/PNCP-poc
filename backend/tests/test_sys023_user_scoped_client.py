@@ -303,23 +303,32 @@ class TestPipelineListUserScoped:
         from main import app
         app.dependency_overrides.clear()
 
+    @patch("routes.pipeline.get_supabase")
     @patch("routes.pipeline._check_pipeline_read_access")
-    def test_get_pipeline_uses_user_db(self, mock_access):
-        """GET /v1/pipeline should use user-scoped client for the query."""
+    def test_get_pipeline_uses_admin_client(self, mock_access, mock_get_sb):
+        """ISSUE-021 fix: GET /v1/pipeline uses admin client (get_supabase),
+        consistent with POST/PATCH/DELETE. User-scoped client had fragile
+        JWT header mutation that silently failed, returning 0 rows."""
         mock_access.return_value = None
 
-        mock_user_db = MagicMock()
+        mock_admin = MagicMock()
         mock_result = MagicMock()
         mock_result.data = []
         mock_result.count = 0
+        mock_admin.table.return_value = mock_admin
+        mock_admin.select.return_value = mock_admin
+        mock_admin.eq.return_value = mock_admin
+        mock_admin.order.return_value = mock_admin
+        mock_admin.range.return_value = mock_admin
+        mock_get_sb.return_value = mock_admin
 
-        client = self._setup_client(mock_user_db=mock_user_db)
+        client = self._setup_client()
         try:
-            with patch("routes.pipeline.sb_execute") as mock_sb:
-                mock_sb.return_value = mock_result
+            with patch("routes.pipeline.sb_execute") as mock_sb_exec:
+                mock_sb_exec.return_value = mock_result
                 resp = client.get("/v1/pipeline")
 
             assert resp.status_code == 200
-            mock_user_db.table.assert_called_with("pipeline_items")
+            mock_get_sb.assert_called()
         finally:
             self._cleanup()

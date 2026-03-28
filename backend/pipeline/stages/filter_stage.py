@@ -230,7 +230,7 @@ async def stage_filter(pipeline, ctx: SearchContext) -> None:
         logger.info(f"[STAB-005] filter_summary: {ctx.filter_summary}")
 
     # GTM-STAB-005 AC4: Auto-relaxation for term searches with zero results
-    # Level 0 = normal (no relaxation), 1 = no min_match_floor, 2 = no keyword filter
+    # Level 0 = normal (no relaxation), 1 = no min_match_floor, 2 = substring match, 3 = empty with guidance
     # NOTE: level 1 is already handled above via the min_match relaxation block (ctx.filter_relaxed)
     ctx.relaxation_level = 0
     if ctx.filter_relaxed:
@@ -240,57 +240,48 @@ async def stage_filter(pipeline, ctx: SearchContext) -> None:
         and len(ctx.licitacoes_filtradas) == 0
         and len(ctx.licitacoes_raw) > 0
     ):
-        # Level 2: re-run without any keyword exclusions (accept any UF/valor match)
-        logger.info(
-            "[STAB-005] Zero results with custom_terms — "
-            "attempting keyword-free relaxation (level 2)"
-        )
-        _l2_filtered, _l2_stats = deps.aplicar_todos_filtros(
-            ctx.licitacoes_raw,
-            ufs_selecionadas=set(request.ufs),
-            status=status_filter,
-            modalidades=request.modalidades,
-            valor_min=request.valor_minimo,
-            valor_max=request.valor_maximo,
-            esferas=esferas_values,
-            municipios=request.municipios,
-            keywords=None,  # STAB-005 AC4 level 2: remove keyword filter
-            exclusions=None,
-            context_required=None,
-            min_match_floor=None,
-            setor=ctx.request.setor_id,
-            modo_busca=request.modo_busca or "publicacao",
-            custom_terms=None,  # no keyword matching
-            pncp_degraded="PNCP" in (ctx.sources_degraded or []),  # CRIT-054 AC4
-        )
-        if _l2_filtered:
-            ctx.licitacoes_filtradas = _l2_filtered
-            ctx.filter_stats = _l2_stats
+        # ISSUE-017 FIX: Level 2 — substring matching (looser than word-boundary regex)
+        # Instead of immediately dropping ALL keyword filters and returning garbage,
+        # try a simpler substring match that may catch partial mentions.
+        from filter import normalize_text as _normalize_text_l2
+        _custom_norms = [_normalize_text_l2(t) for t in ctx.custom_terms]
+        _l2_substring = []
+        for _bid in ctx.licitacoes_raw:
+            _obj_norm = _normalize_text_l2(_bid.get("objetoCompra", ""))
+            if any(_term in _obj_norm for _term in _custom_norms):
+                _bid["_relevance_source"] = "substring_relaxation"
+                _bid["_term_density"] = 0.5
+                _bid["_matched_terms"] = ctx.custom_terms
+                _l2_substring.append(_bid)
+
+        if _l2_substring:
+            ctx.licitacoes_filtradas = _l2_substring
             ctx.relaxation_level = 2
             logger.info(
-                f"[STAB-005] Level-2 relaxation recovered {len(_l2_filtered)} results"
+                f"[STAB-005] Level-2 substring relaxation recovered {len(_l2_substring)} results "
+                f"for custom_terms={ctx.custom_terms}"
             )
         else:
-            # Level 3: return top 10 by value without any filter
-            logger.info(
-                "[STAB-005] Level-3 relaxation: top 10 by value (no keyword filter)"
+            # ISSUE-017 FIX: Level 3 — return EMPTY with guidance message.
+            # NEVER return top-by-value irrelevant results. Showing biodescontaminação
+            # for a "uniformes escolares" search destroys user trust.
+            ctx.relaxation_level = 3
+            ctx.filter_summary = (
+                f"Nenhuma licitação encontrada para os termos: "
+                f"{', '.join(ctx.custom_terms)}. "
+                f"Tente termos mais genéricos ou amplie o período de busca."
             )
-            _l3_candidates = sorted(
-                ctx.licitacoes_raw,
-                key=lambda bid: float(bid.get("valorTotalEstimado") or bid.get("valorEstimado") or 0),
-                reverse=True,
-            )[:10]
-            if _l3_candidates:
-                ctx.licitacoes_filtradas = _l3_candidates
-                ctx.relaxation_level = 3
-                logger.info(
-                    f"[STAB-005] Level-3 relaxation returned {len(_l3_candidates)} results by value"
-                )
+            logger.info(
+                f"[STAB-005] Level-3: No results for custom_terms={ctx.custom_terms} "
+                f"in {len(ctx.licitacoes_raw)} bids — returning empty with guidance "
+                f"(NOT top-by-value garbage)"
+            )
 
-    # P0-FIX: Auto-relaxation for sector-based searches with zero results.
-    # The existing relaxation (levels 1-3 above) only triggers for custom_terms searches.
-    # Sector searches (setor_id set, no custom_terms) were returning 0 results because
-    # keyword/exclusion filters are too strict for some UFs.
+    # ISSUE-025 FIX: Auto-relaxation for sector-based searches with zero results.
+    # Progressive relaxation: Level 2A (no keywords) → Level 2B (no keywords + no status).
+    # Root cause: status filter rejects ALL bids before keywords even execute.
+    # The PNCP returns bids with mixed statuses (encerrada, em_julgamento, etc.) but
+    # the default frontend filter is "recebendo_proposta" — rejecting everything.
     if (
         not ctx.custom_terms
         and ctx.request.setor_id
@@ -298,9 +289,21 @@ async def stage_filter(pipeline, ctx: SearchContext) -> None:
         and len(ctx.licitacoes_raw) > 0
         and ctx.relaxation_level == 0
     ):
+        # ISSUE-025 DIAG: Log pre-filter distribution to understand rejection patterns
+        _diag_statuses = {}
+        for _d in ctx.licitacoes_raw[:200]:
+            _s = _d.get("_status_inferido", _d.get("situacaoCompraItemNome", "unknown"))
+            _diag_statuses[_s] = _diag_statuses.get(_s, 0) + 1
+        logger.info(
+            f"[ISSUE-025-DIAG] Pre-filter status distribution (sample {min(200, len(ctx.licitacoes_raw))}/"
+            f"{len(ctx.licitacoes_raw)}): {_diag_statuses}, "
+            f"requested_status={status_filter}, sector={ctx.request.setor_id}"
+        )
+
+        # Level 2A: Remove keyword/sector filter, keep status
         logger.info(
             f"[P0-FIX] Zero results for sector={ctx.request.setor_id} — "
-            f"attempting sector keyword-free relaxation"
+            f"attempting keyword-free relaxation (level 2A)"
         )
         _sector_relaxed, _sector_stats = deps.aplicar_todos_filtros(
             ctx.licitacoes_raw,
@@ -320,6 +323,32 @@ async def stage_filter(pipeline, ctx: SearchContext) -> None:
             custom_terms=None,
             pncp_degraded="PNCP" in (ctx.sources_degraded or []),
         )
+
+        # ISSUE-025 FIX: Level 2B — also relax status filter if Level 2A still yields 0
+        if not _sector_relaxed:
+            logger.info(
+                f"[P0-FIX] Level 2A still zero results — relaxing status filter (level 2B). "
+                f"Status distribution was: {_diag_statuses}"
+            )
+            _sector_relaxed, _sector_stats = deps.aplicar_todos_filtros(
+                ctx.licitacoes_raw,
+                ufs_selecionadas=set(request.ufs),
+                status="todos",          # ISSUE-025: Accept ALL statuses
+                modalidades=request.modalidades,
+                valor_min=request.valor_minimo,
+                valor_max=request.valor_maximo,
+                esferas=None,            # ISSUE-025: Accept all spheres
+                municipios=request.municipios,
+                keywords=set(),
+                exclusions=set(),
+                context_required=None,
+                min_match_floor=None,
+                setor=None,
+                modo_busca=request.modo_busca or "publicacao",
+                custom_terms=None,
+                pncp_degraded="PNCP" in (ctx.sources_degraded or []),
+            )
+
         if _sector_relaxed:
             # Cap at top 20 by estimated value to avoid noise
             _sector_relaxed_sorted = sorted(
@@ -332,7 +361,7 @@ async def stage_filter(pipeline, ctx: SearchContext) -> None:
             ctx.relaxation_level = 2
             ctx.filter_relaxed = True
             ctx.filter_summary = (
-                f"Filtros de setor relaxados: mostrando top {len(_sector_relaxed_sorted)} "
+                f"Filtros relaxados: mostrando top {len(_sector_relaxed_sorted)} "
                 f"resultados por valor de {len(_sector_relaxed)} encontrados"
             )
             logger.info(

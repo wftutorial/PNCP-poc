@@ -200,18 +200,21 @@ class TestCreatePipelineItem:
 
 # ============================================================================
 # GET /pipeline — list pipeline items (AC3)
-# SYS-023: Now uses user_db (user-scoped client) via get_user_db dependency.
-# Tests pass mock_user_db to _create_client instead of patching get_supabase.
+# ISSUE-021 fix: GET now uses admin client (get_supabase) — consistent with
+# POST/PATCH/DELETE. Defense-in-depth via .eq("user_id", user_id).
+# Tests patch get_supabase (same pattern as POST tests).
 # ============================================================================
 
 class TestListPipelineItems:
 
     @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
     @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
-    def test_list_success(self):
+    @patch("routes.pipeline.get_supabase")
+    def test_list_success(self, mock_get_sb):
         sb = _mock_sb()
         sb.execute.return_value = Mock(data=[SAMPLE_ITEM], count=1)
-        client = _create_client(mock_user_db=sb)
+        mock_get_sb.return_value = sb
+        client = _create_client()
 
         resp = client.get("/pipeline")
 
@@ -225,11 +228,13 @@ class TestListPipelineItems:
 
     @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
     @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
-    def test_list_with_stage_filter(self):
+    @patch("routes.pipeline.get_supabase")
+    def test_list_with_stage_filter(self, mock_get_sb):
         sb = _mock_sb()
         item_analise = {**SAMPLE_ITEM, "stage": "analise"}
         sb.execute.return_value = Mock(data=[item_analise], count=1)
-        client = _create_client(mock_user_db=sb)
+        mock_get_sb.return_value = sb
+        client = _create_client()
 
         resp = client.get("/pipeline?stage=analise")
 
@@ -241,7 +246,7 @@ class TestListPipelineItems:
     @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
     @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
     def test_list_invalid_stage_422(self):
-        client = _create_client(mock_user_db=_mock_sb())
+        client = _create_client()
 
         resp = client.get("/pipeline?stage=invalid_stage")
 
@@ -250,10 +255,12 @@ class TestListPipelineItems:
 
     @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
     @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
-    def test_list_with_pagination(self):
+    @patch("routes.pipeline.get_supabase")
+    def test_list_with_pagination(self, mock_get_sb):
         sb = _mock_sb()
         sb.execute.return_value = Mock(data=[SAMPLE_ITEM], count=10)
-        client = _create_client(mock_user_db=sb)
+        mock_get_sb.return_value = sb
+        client = _create_client()
 
         resp = client.get("/pipeline?limit=5&offset=5")
 
@@ -265,10 +272,12 @@ class TestListPipelineItems:
 
     @patch("routes.pipeline._check_pipeline_write_access", _noop_check_pipeline_write_access)
     @patch("routes.pipeline._check_pipeline_read_access", _noop_check_pipeline_read_access)
-    def test_list_empty(self):
+    @patch("routes.pipeline.get_supabase")
+    def test_list_empty(self, mock_get_sb):
         sb = _mock_sb()
         sb.execute.return_value = Mock(data=[], count=0)
-        client = _create_client(mock_user_db=sb)
+        mock_get_sb.return_value = sb
+        client = _create_client()
 
         resp = client.get("/pipeline")
 
@@ -463,14 +472,16 @@ class TestPipelineAlerts:
 
 # ============================================================================
 # Access Control Tests (AC12-13)
-# SYS-023: GET /pipeline tests need mock_user_db for access control tests too.
+# ISSUE-021 fix: GET /pipeline now uses admin client (get_supabase), same as POST.
+# Tests patch get_supabase instead of mock_user_db.
 # ============================================================================
 
 class TestPipelineAccessControl:
 
+    @patch("routes.pipeline.get_supabase")
     @patch("quota.check_quota")
     @patch("authorization.has_master_access")
-    def test_access_smartlic_pro_allowed(self, mock_has_master, mock_check_quota):
+    def test_access_smartlic_pro_allowed(self, mock_has_master, mock_check_quota, mock_get_sb):
         """GTM-FIX-015: SmartLic Pro plan users can access pipeline."""
         mock_has_master.return_value = False
         mock_check_quota.return_value = Mock(
@@ -480,15 +491,17 @@ class TestPipelineAccessControl:
         )
         sb = _mock_sb()
         sb.execute.return_value = Mock(data=[], count=0)
-        client = _create_client(mock_user_db=sb)
+        mock_get_sb.return_value = sb
+        client = _create_client()
 
         resp = client.get("/pipeline")
 
         assert resp.status_code == 200
 
+    @patch("routes.pipeline.get_supabase")
     @patch("quota.check_quota")
     @patch("authorization.has_master_access")
-    def test_access_maquina_allowed(self, mock_has_master, mock_check_quota):
+    def test_access_maquina_allowed(self, mock_has_master, mock_check_quota, mock_get_sb):
         """Maquina plan users can access pipeline."""
         mock_has_master.return_value = False
         mock_check_quota.return_value = Mock(
@@ -498,15 +511,17 @@ class TestPipelineAccessControl:
         )
         sb = _mock_sb()
         sb.execute.return_value = Mock(data=[], count=0)
-        client = _create_client(mock_user_db=sb)
+        mock_get_sb.return_value = sb
+        client = _create_client()
 
         resp = client.get("/pipeline")
 
         assert resp.status_code == 200
 
+    @patch("routes.pipeline.get_supabase")
     @patch("quota.check_quota")
     @patch("authorization.has_master_access")
-    def test_access_sala_guerra_allowed(self, mock_has_master, mock_check_quota):
+    def test_access_sala_guerra_allowed(self, mock_has_master, mock_check_quota, mock_get_sb):
         """Sala de Guerra plan users can access pipeline."""
         mock_has_master.return_value = False
         mock_check_quota.return_value = Mock(
@@ -516,15 +531,17 @@ class TestPipelineAccessControl:
         )
         sb = _mock_sb()
         sb.execute.return_value = Mock(data=[], count=0)
-        client = _create_client(mock_user_db=sb)
+        mock_get_sb.return_value = sb
+        client = _create_client()
 
         resp = client.get("/pipeline")
 
         assert resp.status_code == 200
 
+    @patch("routes.pipeline.get_supabase")
     @patch("quota.check_quota")
     @patch("authorization.has_master_access")
-    def test_access_free_trial_read_allowed(self, mock_has_master, mock_check_quota):
+    def test_access_free_trial_read_allowed(self, mock_has_master, mock_check_quota, mock_get_sb):
         """STORY-265 AC3: Free trial users can READ pipeline (allow_pipeline=True since STORY-264)."""
         mock_has_master.return_value = False
         mock_check_quota.return_value = Mock(
@@ -534,7 +551,8 @@ class TestPipelineAccessControl:
         )
         sb = _mock_sb()
         sb.execute.return_value = Mock(data=[], count=0)
-        client = _create_client(mock_user_db=sb)
+        mock_get_sb.return_value = sb
+        client = _create_client()
 
         resp = client.get("/pipeline")
 
@@ -550,21 +568,22 @@ class TestPipelineAccessControl:
             allowed=True,
             capabilities={"allow_pipeline": False},
         )
-        client = _create_client(mock_user_db=_mock_sb())
+        client = _create_client()
 
         resp = client.get("/pipeline")
 
         assert resp.status_code == 403
 
+    @patch("routes.pipeline.get_supabase")
     @patch("quota.check_quota")
     @patch("authorization.has_master_access")
-    def test_access_master_bypass(self, mock_has_master, mock_check_quota):
+    def test_access_master_bypass(self, mock_has_master, mock_check_quota, mock_get_sb):
         """Master users bypass plan check and can access pipeline."""
         mock_has_master.return_value = True
-        # Don't need to set check_quota since master bypasses it
         sb = _mock_sb()
         sb.execute.return_value = Mock(data=[], count=0)
-        client = _create_client(user=MOCK_MASTER, mock_user_db=sb)
+        mock_get_sb.return_value = sb
+        client = _create_client(user=MOCK_MASTER)
 
         resp = client.get("/pipeline")
 

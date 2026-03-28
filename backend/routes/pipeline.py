@@ -17,7 +17,6 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from auth import require_auth
 from supabase_client import get_supabase, sb_execute
-from database import get_user_db
 from log_sanitizer import mask_user_id
 from schemas import (
     PipelineItemCreate,
@@ -239,12 +238,14 @@ async def list_pipeline_items(
     limit: int = Query(50, ge=1, le=200, description="Items per page"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
     user: dict = Depends(require_auth),
-    user_db=Depends(get_user_db),  # SYS-023: User-scoped client (respects RLS)
 ):
     """List pipeline items for the authenticated user (AC3).
 
-    SYS-023: Uses user-scoped Supabase client. RLS policy on pipeline_items
-    ensures users can only see their own items (WHERE user_id = auth.uid()).
+    ISSUE-021 fix: Switched to admin client (get_supabase) — user-scoped client
+    (get_user_db) had fragile JWT header mutation that silently failed, causing
+    PostgREST to evaluate RLS as anonymous user and return 0 rows.
+    Defense-in-depth: .eq("user_id", user_id) prevents cross-user access,
+    consistent with POST/PATCH/DELETE handlers.
 
     STORY-265 AC3: Trial expired can VIEW pipeline (read-only).
     Supports filtering by stage and pagination via limit/offset.
@@ -267,10 +268,11 @@ async def list_pipeline_items(
         )
 
     try:
+        sb = get_supabase()  # ISSUE-021: Admin client, consistent with POST/PATCH/DELETE
         query = (
-            user_db.table("pipeline_items")
+            sb.table("pipeline_items")
             .select("*", count="exact")
-            .eq("user_id", user_id)
+            .eq("user_id", user_id)  # Defense-in-depth: explicit user filter
             .order("updated_at", desc=True)
         )
 

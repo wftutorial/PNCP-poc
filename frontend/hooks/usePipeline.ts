@@ -139,7 +139,7 @@ export function usePipeline() {
           items: [newItem, ...(current?.items || [])],
           total: (current?.total || 0) + 1,
         }),
-        { revalidate: false }
+        { revalidate: true, rollbackOnError: true }
       );
       return newItem as PipelineItem;
     },
@@ -176,7 +176,7 @@ export function usePipeline() {
             i.id === itemId ? updated : i
           ),
         }),
-        { revalidate: false }
+        { revalidate: true, rollbackOnError: true }
       );
       return updated as PipelineItem;
     },
@@ -201,7 +201,7 @@ export function usePipeline() {
           items: (current?.items || []).filter((i: PipelineItem) => i.id !== itemId),
           total: Math.max(0, (current?.total || 0) - 1),
         }),
-        { revalidate: false }
+        { revalidate: true, rollbackOnError: true }
       );
     },
     [authHeaders, mutate]

@@ -54,7 +54,14 @@ async def _check_pipeline_read_access(user: dict) -> None:
         logger.warning(f"Master access check failed, falling through: {e}")
 
     # Check plan capabilities
-    quota_info = await asyncio.to_thread(check_quota, user_id)
+    try:
+        quota_info = await asyncio.to_thread(check_quota, user_id)
+    except Exception as e:
+        # Fail-open for read access: transient quota/DB errors should not block pipeline reads
+        logger.warning(
+            f"check_quota failed for pipeline read access (fail-open), user={mask_user_id(user_id)}: {e}"
+        )
+        return
     caps = quota_info.capabilities
 
     # STORY-265 AC3: Allow read access for expired trials (read-only incentive)
@@ -231,7 +238,13 @@ async def list_pipeline_items(
     STORY-265 AC3: Trial expired can VIEW pipeline (read-only).
     Supports filtering by stage and pagination via limit/offset.
     """
-    await _check_pipeline_read_access(user)
+    try:
+        await _check_pipeline_read_access(user)
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Transient error in access check (circuit breaker, DB timeout) — fail-open for reads
+        logger.warning(f"Pipeline read access check raised unexpectedly (fail-open), user={mask_user_id(user['id'])}: {e}")
 
     user_id = user["id"]
 
@@ -260,6 +273,8 @@ async def list_pipeline_items(
 
         return PipelineListResponse(items=items, total=total, limit=limit, offset=offset)
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error listing pipeline for user {mask_user_id(user_id)}: {e}")
         raise HTTPException(status_code=500, detail="Erro ao listar pipeline.")
@@ -403,7 +418,13 @@ async def get_pipeline_alerts(
     Returns items where data_encerramento < now() + 7 days
     and stage is NOT in ('enviada', 'resultado').
     """
-    await _check_pipeline_read_access(user)
+    try:
+        await _check_pipeline_read_access(user)
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Transient error in access check — fail-open, return empty alerts instead of 500
+        logger.warning(f"Pipeline alerts access check raised unexpectedly (fail-open), user={mask_user_id(user['id'])}: {e}")
 
     user_id = user["id"]
     sb = get_supabase()
@@ -428,6 +449,8 @@ async def get_pipeline_alerts(
             total=len(items),
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error fetching pipeline alerts for user {mask_user_id(user_id)}: {e}")
-        raise HTTPException(status_code=500, detail="Erro ao buscar alertas do pipeline.")
+        logger.warning(f"Transient error fetching pipeline alerts for user {mask_user_id(user_id)}, returning empty: {e}")
+        return PipelineAlertsResponse(items=[], total=0)

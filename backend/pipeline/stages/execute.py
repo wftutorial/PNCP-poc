@@ -91,7 +91,16 @@ async def stage_execute(pipeline, ctx: SearchContext) -> None:
             logger.info(
                 f"[stage_execute] Datalake returned {len(ctx.licitacoes_raw)} records"
             )
-            return
+            if len(ctx.licitacoes_raw) == 0:
+                logger.warning(
+                    "[stage_execute] Datalake returned 0 records — falling through to live API"
+                )
+                # Reset datalake state so live API sources populate ctx correctly
+                ctx.licitacoes_raw = []
+                ctx.cache_status = None
+                ctx.source_stats_data = []
+            else:
+                return
     except ImportError:
         pass  # ingestion module not installed — fall through to live API
     except Exception as _dl_err:

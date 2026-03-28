@@ -997,6 +997,14 @@ class PNCPClient:
                         f"Reduza o período de busca."
                     )
 
+                # Log 400 response body for diagnostics (page 1 = unexpected; page>1 = past-last-page)
+                if response.status_code == 400:
+                    logger.warning(
+                        "[PNCP] HTTP 400 response body: %s (params: %s)",
+                        response.text[:500] if response.text else "empty",
+                        {k: v for k, v in params.items() if k != "pagina"},
+                    )
+
                 # CRIT-043 AC3+AC4: 400 on page>1 is expected (past last page)
                 if response.status_code == 400 and pagina > 1:
                     logger.debug(
@@ -1768,6 +1776,14 @@ class AsyncPNCPClient:
                         f"PNCP 422 after all {len(format_rotation)} date formats for "
                         f"UF={params.get('uf', '?')} mod={params.get('codigoModalidadeContratacao', '?')}. "
                         f"Reduza o período de busca."
+                    )
+
+                # Log 400 response body for diagnostics (page 1 = unexpected; page>1 = past-last-page)
+                if response.status_code == 400:
+                    logger.warning(
+                        "[PNCP] HTTP 400 response body: %s (params: %s)",
+                        response.text[:500] if response.text else "empty",
+                        {k: v for k, v in params.items() if k != "pagina"},
                     )
 
                 # CRIT-043 AC2: 400 on page>1 = past last page, return empty

@@ -705,6 +705,13 @@ async def buscar_licitacoes(
             )
             http_response.headers["X-Response-State"] = "degraded"
             http_response.headers["X-Cache-Level"] = ctx.cache_level or "none"
+            # ISSUE-014: Update session to "completed" so History filter works
+            if ctx.session_id and user.get("id"):
+                asyncio.create_task(
+                    _update_session_on_complete(
+                        request.search_id, user.get("id"), ctx.response
+                    )
+                )
             return ctx.response
         elif ctx.licitacoes_filtradas:
             # Pipeline generated filtered results but stage_generate/persist failed;
@@ -738,6 +745,13 @@ async def buscar_licitacoes(
             )
             http_response.headers["X-Response-State"] = "degraded"
             http_response.headers["X-Cache-Level"] = ctx.cache_level or "none"
+            # ISSUE-014: Update session to "completed" so History filter works
+            if ctx.session_id and user.get("id"):
+                asyncio.create_task(
+                    _update_session_on_complete(
+                        request.search_id, user.get("id"), partial_response
+                    )
+                )
             return partial_response
 
         if tracker:

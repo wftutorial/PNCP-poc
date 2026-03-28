@@ -983,6 +983,7 @@ def has_red_flags(
     red_flag_sets: List[Set[str]],
     threshold: int = 2,
     setor: Optional[str] = None,
+    custom_terms: Optional[List[str]] = None,  # ISSUE-017
 ) -> Tuple[bool, List[str]]:
     """
     Check if a contract description contains red flag terms (STORY-181 AC6).
@@ -994,12 +995,14 @@ def has_red_flags(
     and saude from RED_FLAGS_MEDICAL, since those terms are the primary
     keywords of those sectors.
     CRIT-024: Extends exemptions to facilities/transporte (medical) and software (admin).
+    ISSUE-017: When user explicitly searched for a term, that term cannot be a red flag.
 
     Args:
         objeto_norm: Normalized procurement object description
         red_flag_sets: List of red flag term sets to check
         threshold: Minimum matches in any single set to trigger flag
         setor: Sector ID — used to skip exempted red flag sets
+        custom_terms: User's explicit search terms — exempted from red flag matching
 
     Returns:
         Tuple of (has_flags, matched_flags)
@@ -1017,6 +1020,13 @@ def has_red_flags(
         matches = [flag for flag in red_flags if flag in objeto_norm]
         if len(matches) >= threshold:
             all_matched.extend(matches)
+
+    # ISSUE-017: When user explicitly searched for a term, it cannot be a red flag
+    if custom_terms and all_matched:
+        from filter.text_utils import normalize_text as _norm_rf
+        custom_norms = {_norm_rf(t) for t in custom_terms}
+        all_matched = [flag for flag in all_matched if not any(cn in flag or flag in cn for cn in custom_norms)]
+
     return len(all_matched) > 0, all_matched
 
 
@@ -2687,6 +2697,12 @@ def aplicar_todos_filtros(
         _sector_overrides = GLOBAL_EXCLUSION_OVERRIDES.get(setor, set())
         _effective_global_exc = GLOBAL_EXCLUSIONS_NORMALIZED - _sector_overrides
 
+    # ISSUE-017: When custom_terms are the search basis, exclude them from global exclusions
+    if custom_terms and _effective_global_exc:
+        from filter.text_utils import normalize_text as _norm_ge
+        _custom_norms = {_norm_ge(t) for t in custom_terms}
+        _effective_global_exc = _effective_global_exc - _custom_norms
+
     # STORY-329 AC1: Progress tracking for keyword matching loop
     _kw_total = len(resultado_valor)
     _kw_progress_step = min(50, max(1, int(_kw_total * 0.05))) if on_progress and _kw_total > 0 else 0
@@ -2952,7 +2968,8 @@ def aplicar_todos_filtros(
         from config import get_feature_flag as _gff_ac2
         _use_term_prompt_zm = _gff_ac2("TERM_SEARCH_LLM_AWARE")
 
-    if LLM_ZERO_MATCH_ENABLED and setor:
+    # ISSUE-017: Also run zero-match LLM when custom_terms present (no sector needed)
+    if LLM_ZERO_MATCH_ENABLED and (setor or custom_terms):
         # Collect bids that were rejected by keyword gate (in resultado_valor but not in resultado_keyword)
         keyword_approved_ids = {id(lic) for lic in resultado_keyword}
         zero_match_pool: List[dict] = []
@@ -2973,11 +2990,15 @@ def aplicar_todos_filtros(
             from sectors import get_sector as _get_sector_zm
             from concurrent.futures import ThreadPoolExecutor, as_completed
 
-            try:
-                setor_config_zm = _get_sector_zm(setor)
-                setor_name_zm = setor_config_zm.name
-            except (KeyError, Exception):
-                setor_name_zm = setor
+            if setor:
+                try:
+                    setor_config_zm = _get_sector_zm(setor)
+                    setor_name_zm = setor_config_zm.name
+                except (KeyError, Exception):
+                    setor_name_zm = setor
+            elif custom_terms:
+                # ISSUE-017: No sector — use custom_terms as context for LLM
+                setor_name_zm = ", ".join(custom_terms[:3])
 
             # AC6: Concurrent LLM calls with max 10 threads (equivalent to Semaphore(10))
             def _classify_one(lic_item: dict) -> tuple[dict, dict]:
@@ -3215,10 +3236,12 @@ def aplicar_todos_filtros(
 
             # STORY-181 AC6: Generic red flags (threshold=2)
             # CRIT-020: Pass setor to exempt infrastructure/medical sectors
+            # ISSUE-017: Pass custom_terms to exempt user's explicit search terms
             flagged, flag_terms = has_red_flags(
                 objeto_norm,
                 [RED_FLAGS_MEDICAL, RED_FLAGS_ADMINISTRATIVE, RED_FLAGS_INFRASTRUCTURE],
                 setor=setor,
+                custom_terms=custom_terms,
             )
             if flagged:
                 stats["rejeitadas_red_flags"] += 1
@@ -3256,10 +3279,12 @@ def aplicar_todos_filtros(
 
             # STORY-181 AC6: Generic red flags (threshold=2)
             # CRIT-020: Pass setor to exempt infrastructure/medical sectors
+            # ISSUE-017: Pass custom_terms to exempt user's explicit search terms
             flagged, flag_terms = has_red_flags(
                 objeto_norm,
                 [RED_FLAGS_MEDICAL, RED_FLAGS_ADMINISTRATIVE, RED_FLAGS_INFRASTRUCTURE],
                 setor=setor,
+                custom_terms=custom_terms,
             )
             if flagged:
                 stats["rejeitadas_red_flags"] += 1

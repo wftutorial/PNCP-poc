@@ -24,15 +24,18 @@ interface UseSessionsOptions {
   limit?: number;
   /** Polling interval in ms (0 to disable) */
   refreshInterval?: number;
+  /** Server-side status filter (completed, failed, all) */
+  status?: string;
 }
 
-export function useSessions({ page, limit = 20, refreshInterval = 0 }: UseSessionsOptions) {
+export function useSessions({ page, limit = 20, refreshInterval = 0, status }: UseSessionsOptions) {
   const { session } = useAuth();
   const accessToken = session?.access_token;
 
+  const statusParam = status && status !== 'all' ? `&status=${status}` : '';
   const { data, error, isLoading, mutate } = useSWR(
     accessToken
-      ? [`/api/sessions?limit=${limit}&offset=${page * limit}`, accessToken]
+      ? [`/api/sessions?limit=${limit}&offset=${page * limit}${statusParam}`, accessToken]
       : null,
     ([url, token]: [string, string]) => fetchSessionsWithAuth(url, token),
     {

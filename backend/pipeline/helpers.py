@@ -100,6 +100,7 @@ def _map_confidence(relevance_source: str | None) -> str | None:
         return None
     mapping = {
         "keyword": "high",
+        "keyword_peripheral": "low",  # ISSUE-029: keyword match but not primary sector
         "llm_standard": "medium",
         "llm_conservative": "low",
         "llm_zero_match": "low",

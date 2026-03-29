@@ -10,6 +10,7 @@ from pipeline.stages.prepare import stage_prepare
 from pipeline.stages.execute import stage_execute
 from pipeline.stages.filter_stage import stage_filter
 from pipeline.stages.enrich import stage_enrich
+from pipeline.stages.post_filter_llm import stage_post_filter_llm
 from pipeline.stages.generate import stage_generate
 from pipeline.stages.persist import stage_persist
 
@@ -19,6 +20,7 @@ __all__ = [
     "stage_execute",
     "stage_filter",
     "stage_enrich",
+    "stage_post_filter_llm",
     "stage_generate",
     "stage_persist",
 ]

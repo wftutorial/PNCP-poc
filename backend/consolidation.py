@@ -997,17 +997,19 @@ class ConsolidationService:
                     if lot_b is not None:
                         records[idx_b]._lot_number = lot_b  # type: ignore[attr-defined]
 
-                    # ISSUE-027 fix: Sequential edital numbers (diff <= 2) from the
-                    # same org with very similar objects (Jaccard >= 0.85) and NO
-                    # explicit lot markers are the same project split into lots by
-                    # the portal — always deduplicate regardless of value difference.
-                    if sim >= 0.85 and lot_a is None and lot_b is None:
+                    # ISSUE-027 fix (v2): Sequential edital numbers from the same
+                    # org with similar objects and NO explicit lot markers are the
+                    # same project split into lots — collapse them.
+                    # Relaxed thresholds: Jaccard >= 0.60 + gap <= 3 (was 0.85/2)
+                    # because same-CNPJ + sequential editals provide strong anchor.
+                    if lot_a is None and lot_b is None:
                         num_a = self._extract_edital_number(records[idx_a].source_id)
                         num_b = self._extract_edital_number(records[idx_b].source_id)
                         if (
                             num_a is not None
                             and num_b is not None
-                            and abs(num_a - num_b) <= 2
+                            and abs(num_a - num_b) <= 3
+                            and sim >= 0.60
                         ):
                             # Sequential editals — collapse as duplicate lot
                             to_remove.add(idx_b)
@@ -1016,7 +1018,7 @@ class ConsolidationService:
                                 f"[FUZZY-DEDUP] Collapsed sequential lot (Jaccard={sim:.2f}): "
                                 f"cnpj={cnpj}, kept={records[idx_a].source_id}, "
                                 f"removed={records[idx_b].source_id} "
-                                f"(edital_nums={num_a}/{num_b})"
+                                f"(edital_nums={num_a}/{num_b}, gap={abs(num_a - num_b)})"
                             )
                             continue
 

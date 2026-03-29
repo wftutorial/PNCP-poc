@@ -13,7 +13,7 @@ from metrics import SEARCH_DURATION, ACTIVE_SEARCHES, SEARCHES
 from telemetry import get_tracer, optional_span
 from pipeline.stages import (
     stage_validate, stage_prepare, stage_execute,
-    stage_filter, stage_enrich, stage_generate, stage_persist,
+    stage_filter, stage_enrich, stage_post_filter_llm, stage_generate, stage_persist,
 )
 from pipeline.tracing import traced_stage, validate_stage_outputs
 
@@ -28,6 +28,7 @@ _STAGE_TABLE = [
     ("FILTERING", "pipeline.filter", "stage_filter"),
     (None, None, "_time_budget_check"),  # synthetic entry for time budget
     ("ENRICHING", "pipeline.enrich", "stage_enrich"),
+    (None, "pipeline.post_filter_llm", "stage_post_filter_llm"),
     ("GENERATING", "pipeline.generate", "stage_generate"),
     ("PERSISTING", "pipeline.persist", "stage_persist"),
 ]
@@ -52,6 +53,7 @@ class SearchPipeline:
     async def stage_execute(self, ctx): return await stage_execute(self, ctx)
     async def stage_filter(self, ctx): return await stage_filter(self, ctx)
     async def stage_enrich(self, ctx): return await stage_enrich(self, ctx)
+    async def stage_post_filter_llm(self, ctx): return await stage_post_filter_llm(self, ctx)
     async def stage_generate(self, ctx): return await stage_generate(self, ctx)
     async def stage_persist(self, ctx): return await stage_persist(self, ctx)
 
@@ -91,6 +93,7 @@ class SearchPipeline:
             "stage_execute": self.stage_execute,
             "stage_filter": self.stage_filter,
             "stage_enrich": self.stage_enrich,
+            "stage_post_filter_llm": self.stage_post_filter_llm,
             "stage_generate": self.stage_generate,
             "stage_persist": self.stage_persist,
         }

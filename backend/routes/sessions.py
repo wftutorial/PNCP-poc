@@ -5,6 +5,8 @@ Extracted from main.py as part of STORY-202 monolith decomposition.
 
 import logging
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends, Query
 from auth import require_auth
 from database import get_db
@@ -21,15 +23,26 @@ async def get_sessions(
     user: dict = Depends(require_auth),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    status: Optional[str] = Query(default=None, description="Filter by session status (completed, failed, timed_out)"),
     db=Depends(get_db),
 ):
     """Get user's search session history."""
     try:
-        result = await sb_execute(
+        query = (
             db.table("search_sessions")
             .select("*", count="exact")
             .eq("user_id", user["id"])
-            .order("created_at", desc=True)
+        )
+
+        if status and status != "all":
+            if status == "failed":
+                # "failed" filter includes both failed and timed_out
+                query = query.in_("status", ["failed", "timed_out"])
+            else:
+                query = query.eq("status", status)
+
+        result = await sb_execute(
+            query.order("created_at", desc=True)
             .range(offset, offset + limit - 1)
         )
 

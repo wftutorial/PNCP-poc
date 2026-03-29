@@ -164,6 +164,7 @@ export default function HistoricoPage() {
     page,
     limit,
     refreshInterval: pollInterval,
+    status: statusFilter,
   });
 
   // UX-351 AC3-AC5: Poll when sessions are in non-terminal state
@@ -172,15 +173,9 @@ export default function HistoricoPage() {
     setPollInterval(hasActive ? 5000 : 0);
   }, [sessions]);
 
-  // UX-433: Filter sessions by status
-  // NOTE: old sessions may have null/undefined status — treat them as 'completed'
-  // to match the same fallback used in StatusBadge: s.status || "completed"
-  const filteredSessions = useMemo(() => {
-    if (statusFilter === 'all') return sessions;
-    if (statusFilter === 'completed') return sessions.filter((s: SearchSession) => (s.status || 'completed') === 'completed');
-    // 'failed' shows failed + timed_out
-    return sessions.filter((s: SearchSession) => s.status === 'failed' || s.status === 'timed_out');
-  }, [sessions, statusFilter]);
+  // UX-433 + ISSUE-040: Status filter is now server-side via useSessions({ status })
+  // Sessions are already filtered by the backend — no client-side filtering needed
+  const filteredSessions = sessions;
 
   // Handle re-run search navigation (AC17: "Tentar novamente" for failed/timed_out)
   const handleRerunSearch = useCallback((searchSession: SearchSession) => {
@@ -262,10 +257,7 @@ export default function HistoricoPage() {
       />
       <div className="max-w-4xl mx-auto py-8 px-4">
         <p className="text-[var(--ink-secondary)] mb-2">
-          {statusFilter === 'all'
-            ? `${total} análise${total !== 1 ? "s" : ""} realizada${total !== 1 ? "s" : ""}`
-            : `${filteredSessions.length} de ${sessions.length} análise${sessions.length !== 1 ? "s" : ""}`
-          }
+          {`${total} análise${total !== 1 ? "s" : ""} ${statusFilter === 'completed' ? 'concluída' : statusFilter === 'failed' ? 'com falha' : 'realizada'}${total !== 1 ? "s" : ""}`}
         </p>
 
         {/* UX-433: Status filter */}
@@ -317,7 +309,7 @@ export default function HistoricoPage() {
           />
         ) : (
           <>
-            {filteredSessions.length === 0 && sessions.length > 0 && (
+            {filteredSessions.length === 0 && statusFilter !== 'all' && (
               <div className="text-center py-8 text-[var(--ink-secondary)]">
                 <p className="text-sm">Nenhuma análise {statusFilter === 'completed' ? 'concluída' : 'com falha'} neste período.</p>
                 <button onClick={() => setStatusFilter('all')} className="text-sm text-[var(--brand-blue)] hover:underline mt-2">

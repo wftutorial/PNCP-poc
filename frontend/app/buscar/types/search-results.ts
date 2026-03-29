@@ -16,6 +16,7 @@ import type {
 } from "../../../hooks/useSearchSSE";
 import type { SearchError } from "../hooks/useSearch";
 import type { OrdenacaoOption } from "../../components/OrdenacaoSelect";
+import type { StatusLicitacao } from "../components/StatusFilter";
 
 // ---------------------------------------------------------------------------
 // Group 1: SearchResultsData — results, counts, metadata
@@ -75,6 +76,7 @@ export interface SearchResultsFilters {
   searchMode: "setor" | "termos";
   termosArray: string[];
   ordenacao: OrdenacaoOption;
+  status?: StatusLicitacao;
 }
 
 // ---------------------------------------------------------------------------

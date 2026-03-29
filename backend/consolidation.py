@@ -888,6 +888,21 @@ class ConsolidationService:
             return 0.0
         return len(a & b) / len(a | b)
 
+    @staticmethod
+    def _extract_edital_number(source_id: str) -> int | None:
+        """Extract numeric edital number from source_id for proximity comparison.
+
+        ISSUE-027: Editals like '/000037/2026' and '/000039/2026' from same org
+        are likely related procurements (same batch, different lots).
+        """
+        match = re.search(r"/(\d{4,6})/", source_id or "")
+        if match:
+            try:
+                return int(match.group(1))
+            except (ValueError, TypeError):
+                return None
+        return None
+
     def _deduplicate_fuzzy(
         self, records: List[UnifiedProcurement]
     ) -> List[UnifiedProcurement]:
@@ -939,7 +954,7 @@ class ConsolidationService:
                         tokens_cache[idx_b] = self._tokenize_objeto(records[idx_b].objeto)
 
                     sim = self._jaccard(tokens_cache[idx_a], tokens_cache[idx_b])
-                    if sim < 0.85:
+                    if sim < 0.70:
                         continue
 
                     # Value proximity check (within 5%, or both zero/missing)
@@ -949,6 +964,16 @@ class ConsolidationService:
                         diff = abs(val_a - val_b) / max(val_a, val_b)
                         if diff > 0.05:
                             continue  # Different values = likely different lots
+
+                    # ISSUE-027: For Jaccard 0.70-0.85, require edital number proximity
+                    if sim < 0.85:
+                        num_a = self._extract_edital_number(records[idx_a].source_id)
+                        num_b = self._extract_edital_number(records[idx_b].source_id)
+                        if num_a is not None and num_b is not None:
+                            if abs(num_a - num_b) > 5:
+                                continue
+                        else:
+                            continue
 
                     # Match confirmed — remove the later one (keep first/higher-priority)
                     to_remove.add(idx_b)

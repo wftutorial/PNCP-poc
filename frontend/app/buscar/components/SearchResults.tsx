@@ -82,7 +82,7 @@ export function TourInviteBanner({ isCompleted, onStartTour }: { isCompleted?: (
  * ResultCard, ResultsList, ResultsFooter.
  */
 export default function SearchResults(props: SearchResultsProps) {
-  const { loading, result, ufsSelecionadas, sectorName, searchMode, ordenacao, rawCount,
+  const { loading, result, ufsSelecionadas, sectorName, searchMode, ordenacao, rawCount, status,
     error, quotaError, onSearch, onCancel, onOrdenacaoChange,
     ufStatuses, ufTotalFound = 0, searchElapsedSeconds = 0,
     isReconnecting, retryCountdown, retryMessage, retryExhausted, onRetryNow, onCancelRetry,
@@ -237,7 +237,7 @@ export default function SearchResults(props: SearchResultsProps) {
             </div>
           )}
 
-          <ResultsFilters ufsSelecionadas={ufsSelecionadas} searchMode={searchMode} sectorName={sectorName} />
+          <ResultsFilters ufsSelecionadas={ufsSelecionadas} searchMode={searchMode} sectorName={sectorName} status={status} />
 
           {(result.metadata || result.termos_utilizados || result.stopwords_removidas) && (
             <div className="bg-surface-1 border border-border rounded-card p-4">

@@ -489,10 +489,13 @@ Este contrato é sobre {setor_name}?{suffix}"""
 
     return f"""Você classifica licitações públicas. Este contrato NÃO contém palavras-chave do setor — analise o OBJETO para determinar se é relevante.
 
+REGRA CRÍTICA: É MUITO PIOR marcar um contrato irrelevante como SIM do que perder um contrato relevante. Na dúvida, responda NAO.
+
 SETOR: {setor_name}
 DESCRIÇÃO: {description}
 
 ATENÇÃO CRÍTICA: O campo 'Objeto' pode conter o nome do órgão comprador (ex: 'Secretaria de Saúde', 'Secretaria de Tecnologia', 'Prefeitura Municipal'). IGNORE completamente nomes de órgãos, secretarias, hospitais, universidades e institutos. Foque EXCLUSIVAMENTE no que está sendo CONTRATADO ou ADQUIRIDO.
+O contrato DEVE ser DIRETAMENTE sobre aquisição, fornecimento ou confecção de itens do setor como OBJETO PRINCIPAL. Contratos onde o setor aparece apenas como item secundário, acessório ou condição NÃO são relevantes.
 
 Exemplos de SIM (é sobre o setor):
 {sim_lines}
@@ -503,7 +506,7 @@ CONTRATO:
 Valor: {valor_display}
 Objeto: {objeto_truncated}
 
-Este contrato é sobre {setor_name}?{suffix}"""
+Este contrato é DIRETAMENTE e PRINCIPALMENTE sobre {setor_name}?{suffix}"""
 
 
 # ============================================================================
@@ -617,15 +620,17 @@ def _parse_structured_response(
             _parse_stats[search_id]["fallback"] += 1
 
         raw_upper = raw_content.strip().upper()
-        if "SIM" in raw_upper:
+        has_sim = "SIM" in raw_upper
+        has_nao = "NAO" in raw_upper or "NÃO" in raw_content.strip().upper()
+        if has_sim and not has_nao:
             return LLMClassification(
-                classe="SIM", confianca=60, evidencias=[],
+                classe="SIM", confianca=45, evidencias=[],
                 motivo_exclusao=None, precisa_mais_dados=False,
             )
         else:
             return LLMClassification(
                 classe="NAO", confianca=40, evidencias=[],
-                motivo_exclusao="Fallback: LLM returned non-JSON response",
+                motivo_exclusao="Fallback: LLM returned non-JSON response or ambiguous SIM/NAO",
                 precisa_mais_dados=False,
             )
 

@@ -169,10 +169,10 @@ class TestStructuredParser:
         assert "uniformes escolares" in result.evidencias
 
     def test_fallback_on_plain_text_sim(self):
-        """AC10.3: Plain text 'SIM' falls back to SIM with confidence=60."""
+        """AC10.3: Plain text 'SIM' falls back to SIM with confidence=45 (ISSUE-029: precision-biased)."""
         result = _parse_structured_response("SIM", "objeto teste")
         assert result.classe == "SIM"
-        assert result.confianca == 60
+        assert result.confianca == 45
 
     def test_fallback_on_plain_text_nao(self):
         """AC10.3: Plain text 'NAO' falls back to NAO with confidence=40."""

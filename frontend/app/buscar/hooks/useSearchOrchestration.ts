@@ -465,6 +465,7 @@ export function useSearchOrchestration() {
     searchMode: filters.searchMode,
     termosArray: filters.termosArray,
     ordenacao: filters.ordenacao,
+    status: filters.status,
 
     // Group 4: SearchResultsActions
     onCancel: search.cancelSearch,
@@ -537,7 +538,7 @@ export function useSearchOrchestration() {
     search.estimateSearchTime,
     filters.ufsSelecionadas, filters.sectorName, filters.searchMode, filters.termosArray,
     filters.ordenacao, filters.setOrdenacao, filters.dataInicial, filters.dataFinal,
-    filters.setorId,
+    filters.setorId, filters.status,
     trackEvent, handleShowUpgradeModal, handleLoadLastSearch, handleRetryWithUfs, startResultsTour,
     isResultsTourCompleted, searchElapsed, partialDismissed, lastSearchAvailable,
     pdfLoading, planInfo, session, isTrialExpiredOrQuota, trialPhase, isProfileComplete,

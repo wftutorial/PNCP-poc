@@ -1,9 +1,19 @@
 "use client";
 
+import type { StatusLicitacao } from "../StatusFilter";
+
+const STATUS_LABELS: Record<StatusLicitacao, string> = {
+  recebendo_proposta: "Licitações abertas",
+  em_julgamento: "Em Julgamento",
+  encerrada: "Encerradas",
+  todos: "Todas as licitações",
+};
+
 interface ResultsFiltersProps {
   ufsSelecionadas: Set<string>;
   searchMode: "setor" | "termos";
   sectorName: string;
+  status?: StatusLicitacao;
 }
 
 /**
@@ -14,6 +24,7 @@ export function ResultsFilters({
   ufsSelecionadas,
   searchMode,
   sectorName,
+  status = "recebendo_proposta",
 }: ResultsFiltersProps) {
   return (
     <div className="flex flex-wrap items-center gap-2 text-sm text-ink-secondary">
@@ -26,7 +37,7 @@ export function ResultsFilters({
       </span>
       <span className="text-ink-faint">•</span>
       <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-brand-blue-subtle text-brand-navy text-xs font-medium">
-        Licitações abertas
+        {STATUS_LABELS[status]}
       </span>
       {searchMode === 'setor' && (
         <>

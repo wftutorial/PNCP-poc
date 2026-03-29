@@ -877,8 +877,23 @@ class ConsolidationService:
 
     @staticmethod
     def _tokenize_objeto(texto: str) -> frozenset:
-        """Tokenize and normalize procurement object for Jaccard similarity."""
-        texto = re.sub(r"[^\w\s]", " ", texto.lower())
+        """Tokenize and normalize procurement object for Jaccard similarity.
+
+        ISSUE-027 fix: Strip accents (NFD + remove combining marks) before
+        tokenizing so that "contratação" and "contratacao" produce the same
+        token.  Without this, Jaccard drops for accent-variant duplicates
+        (e.g. Policlínica Montes Claros with/without accents).
+        """
+        import unicodedata
+
+        texto = texto.lower()
+        # Strip accents — same approach as filter_keywords.normalize_text()
+        texto = "".join(
+            c
+            for c in unicodedata.normalize("NFD", texto)
+            if unicodedata.category(c) != "Mn"
+        )
+        texto = re.sub(r"[^\w\s]", " ", texto)
         return frozenset(
             t for t in texto.split()
             if len(t) > 2 and t not in ConsolidationService._FUZZY_STOPWORDS

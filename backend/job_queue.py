@@ -472,6 +472,12 @@ async def llm_summary_job(ctx: dict, search_id: str, licitacoes: list, sector_na
     resumo.total_oportunidades = len(licitacoes)
     resumo.valor_total = sum(lic.get("valorTotalEstimado", 0) or 0 for lic in licitacoes)
 
+    # ISSUE-039 v2: Fix free-text summary to match ground-truth values
+    from llm import _ground_truth_summary, recompute_temporal_alerts
+    _ground_truth_summary(resumo)
+    # ISSUE-042: Recompute time-sensitive fields with current datetime
+    recompute_temporal_alerts(resumo, licitacoes)
+
     result_data = resumo.model_dump()
 
     # Persist result

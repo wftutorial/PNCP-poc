@@ -2985,6 +2985,51 @@ def aplicar_todos_filtros(
             pass  # Sector not found — skip co-occurrence
 
     # ========================================================================
+    # ISSUE-029 v6: Negative-keyword POST-FILTER on keyword-matched results
+    # ========================================================================
+    # Previous fixes only applied negative_keywords to the zero_match_pool
+    # (bids with 0% keyword match).  But bids that PASSED keyword matching
+    # (e.g., "avental" in a nursing supply contract) also need this filter.
+    # The heuristic: if a negative keyword appears in the FIRST 80 chars of
+    # the procurement object, the bid's PRIMARY subject is NOT this sector
+    # even if a sector keyword appears later as an accessory item.
+    stats["negative_keyword_postfilter"] = 0
+    if setor and resultado_keyword:
+        try:
+            from sectors import get_sector as _get_sector_negpost
+            from filter_keywords import normalize_text as _normalize_negpost
+            _neg_post_sec = _get_sector_negpost(setor)
+            _neg_post_kws = [
+                _normalize_negpost(kw)
+                for kw in getattr(_neg_post_sec, "negative_keywords", [])
+            ]
+        except Exception:
+            _neg_post_kws = []
+
+        if _neg_post_kws:
+            _pre_count = len(resultado_keyword)
+            _filtered_keyword = []
+            for lic in resultado_keyword:
+                obj_raw = lic.get("objetoCompra", "")
+                from filter_keywords import normalize_text as _norm_np
+                obj_norm = _norm_np(obj_raw)
+                head = obj_norm[:80]
+                if any(neg in head for neg in _neg_post_kws):
+                    stats["negative_keyword_postfilter"] += 1
+                    logger.debug(
+                        f"[ISSUE-029] Keyword post-filter: REMOVED "
+                        f"(negative in head) objeto={obj_raw[:80]}"
+                    )
+                else:
+                    _filtered_keyword.append(lic)
+            resultado_keyword = _filtered_keyword
+            if stats["negative_keyword_postfilter"] > 0:
+                logger.info(
+                    f"[ISSUE-029] Keyword-match negative post-filter: removed "
+                    f"{stats['negative_keyword_postfilter']}/{_pre_count} bids"
+                )
+
+    # ========================================================================
     # GTM-FIX-028: LLM Zero Match Classification
     # ========================================================================
     # Instead of auto-rejecting bids with 0 keyword matches, collect them

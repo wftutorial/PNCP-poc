@@ -27,10 +27,122 @@ from openai import OpenAI
 from schemas import ResumoLicitacoes, ResumoEstrategico, Recomendacao
 from excel import parse_datetime
 
+import re as _re_llm
+
 
 def _fmt_brl(value: float) -> str:
     """Format float as pt-BR currency (e.g., 360.366,00)."""
     return f"{value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _ground_truth_summary(resumo: "ResumoLicitacoes") -> None:
+    """ISSUE-039 v2: Replace LLM-hallucinated numbers in free-text fields.
+
+    The LLM may write "totalizando R$ 386.000.000,00" in resumo_executivo
+    while the ground-truth valor_total is R$ 11.831.152,97.  This function
+    patches the free-text so both the stats box and the paragraph agree.
+
+    Also fixes the bid count (e.g., "15 licitações" → actual count).
+    """
+    if not resumo.resumo_executivo:
+        return
+
+    # 1. Replace monetary values in resumo_executivo with ground truth
+    _money_pat = r"R\$\s*[\d.,]+(?:\s*(?:mil|milh[oõ]es|bilh[oõ]es|bi))?"
+    _correct_valor = _fmt_brl(resumo.valor_total) if resumo.valor_total > 0 else "0,00"
+    resumo.resumo_executivo = _re_llm.sub(
+        _money_pat,
+        f"R$ {_correct_valor}",
+        resumo.resumo_executivo,
+        count=1,
+        flags=_re_llm.IGNORECASE,
+    )
+
+    # 2. Replace bid count in resumo_executivo
+    _count_pat = r"\b(\d+)\s+licita[çc][oõã]es?\b"
+    resumo.resumo_executivo = _re_llm.sub(
+        _count_pat,
+        f"{resumo.total_oportunidades} licitações",
+        resumo.resumo_executivo,
+        count=1,
+        flags=_re_llm.IGNORECASE,
+    )
+
+
+def recompute_temporal_alerts(
+    resumo: "ResumoLicitacoes",
+    licitacoes: list[dict],
+) -> None:
+    """ISSUE-042: Recompute time-sensitive fields based on current datetime.
+
+    LLM-generated destaques and alerta_urgencia contain absolute dates that
+    become stale when served from cache.  This function replaces them with
+    deterministic computations using actual bid deadlines vs now().
+    """
+    from datetime import timedelta, timezone as _tz
+
+    now = datetime.now(_tz.utc)
+
+    urgent_bids: list[tuple[dict, datetime]] = []
+    closing_soon: list[tuple[dict, datetime]] = []
+
+    for lic in licitacoes:
+        deadline_str = (
+            lic.get("dataEncerramentoProposta")
+            or lic.get("dataAberturaProposta")
+        )
+        if not deadline_str:
+            continue
+        try:
+            deadline = parse_datetime(deadline_str)
+            if deadline.tzinfo is None:
+                deadline = deadline.replace(tzinfo=_tz.utc)
+            delta = deadline - now
+            if timedelta(0) < delta <= timedelta(hours=24):
+                urgent_bids.append((lic, deadline))
+            elif timedelta(hours=24) < delta <= timedelta(days=7):
+                closing_soon.append((lic, deadline))
+        except (ValueError, TypeError, AttributeError):
+            continue
+
+    # Replace alerta_urgencia with ground-truth
+    if urgent_bids:
+        resumo.alerta_urgencia = (
+            f"\u26a0\ufe0f {len(urgent_bids)} "
+            f"licita\u00e7\u00f5es encerram nas pr\u00f3ximas 24 horas."
+        )
+    elif closing_soon:
+        resumo.alerta_urgencia = (
+            f"\u26a0\ufe0f {len(closing_soon)} "
+            f"licita\u00e7\u00f5es encerram em at\u00e9 7 dias."
+        )
+    else:
+        resumo.alerta_urgencia = None
+
+    # Filter date-containing destaques and replace with computed ones
+    if resumo.destaques:
+        _date_re = _re_llm.compile(
+            r"\d{2}/\d{2}/\d{4}|encerram?\b|prazo de abertura|vence",
+            _re_llm.IGNORECASE,
+        )
+        resumo.destaques = [
+            d for d in resumo.destaques if not _date_re.search(d)
+        ]
+
+    if not resumo.destaques:
+        resumo.destaques = []
+
+    if urgent_bids:
+        for lic, dl in urgent_bids[:3]:
+            obj = (lic.get("objetoCompra") or "")[:60]
+            resumo.destaques.append(
+                f"URGENTE: \"{obj}\" encerra em {dl.strftime('%d/%m/%Y')}"
+            )
+    elif closing_soon:
+        count_7d = len(closing_soon)
+        resumo.destaques.append(
+            f"{count_7d} licita\u00e7\u00f5es com abertura nos pr\u00f3ximos 7 dias"
+        )
 
 
 def gerar_resumo(licitacoes: list[dict[str, Any]], *, sector_name: str = "licitações", termos_busca: str | None = None, setor_id: str | None = None) -> ResumoLicitacoes:
@@ -182,6 +294,15 @@ Data atual: {datetime.now().strftime("%d/%m/%Y")}
     resumo.valor_total = sum(
         float(lic.get("valorTotalEstimado") or 0) for lic in licitacoes
     )
+
+    # ISSUE-039 v2: Also fix the free-text resumo_executivo which may contain
+    # LLM-hallucinated monetary values different from the ground-truth total.
+    # The frontend displays BOTH the stats box (correct) and the paragraph text
+    # (potentially wrong) — they must agree.
+    _ground_truth_summary(resumo)
+
+    # ISSUE-042: Recompute time-sensitive fields with current datetime
+    recompute_temporal_alerts(resumo, licitacoes)
 
     return resumo
 

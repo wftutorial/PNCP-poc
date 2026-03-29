@@ -173,6 +173,15 @@ export default function SearchResults(props: SearchResultsProps) {
 
       <SearchStateManager phase={searchPhase} error={error} quotaError={quotaError} retryCountdown={retryCountdown ?? null} retryMessage={retryMessage ?? null} retryExhausted={!!retryExhausted} onRetry={onSearch} onRetryNow={onRetryNow || onSearch} onCancelRetry={onCancelRetry || (() => {})} onCancel={onCancel} loading={loading} hasPartialResults={!!(result && result.resumo && result.resumo.total_oportunidades > 0)} ufsSelecionadas={ufsSelecionadas} onRetryWithUfs={onRetryWithUfs} />
 
+      {/* Restore last search banner — shown when returning to /buscar with no active results */}
+      {!loading && !result && !error && !!hasLastSearch && onLoadLastSearch && (
+        <div className="mt-6 flex flex-col items-center justify-center py-8 px-4 rounded-card border border-[var(--border)] bg-surface-1" data-testid="restore-last-search-banner">
+          <svg className="w-10 h-10 text-ink-muted mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          <p className="text-sm text-ink-secondary mb-3">Voce tem uma analise recente salva.</p>
+          <button onClick={onLoadLastSearch} className="px-4 py-2 text-sm font-medium rounded-button bg-brand-blue text-white hover:bg-blue-700 transition-colors" data-testid="restore-last-search-button">Restaurar ultima busca</button>
+        </div>
+      )}
+
       {/* Empty/error states */}
       {!loading && result && result.response_state === "empty_failure" && <SourcesUnavailable onRetry={onSearch} onLoadLastSearch={onLoadLastSearch || (() => {})} hasLastSearch={!!hasLastSearch} retrying={loading} degradationGuidance={result.degradation_guidance} />}
       {!loading && result && result.response_state !== "empty_failure" && result.response_state !== "degraded_expired" && result.is_partial && (result.total_raw || 0) === 0 && result.resumo.total_oportunidades === 0 && !result.cached && <SourcesUnavailable onRetry={onSearch} onLoadLastSearch={onLoadLastSearch || (() => {})} hasLastSearch={!!hasLastSearch} retrying={loading} degradationGuidance={result.degradation_guidance} />}

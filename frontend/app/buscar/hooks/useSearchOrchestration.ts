@@ -283,19 +283,10 @@ export function useSearchOrchestration() {
     }
   }, [search.loading]);
 
-  // UX-432: Auto-restore last search results when returning to /buscar
-  useEffect(() => {
-    // Only restore if: not loading, no current result, and has cached results
-    if (!search.loading && !search.result && !search.error) {
-      const cached = getLastSearch();
-      if (cached?.result) {
-        search.setResult(cached.result as BuscaResult);
-        setLastSearchAvailable(false); // Already loaded, hide "Ver ultima busca" button
-        toast.info("Resultados da analise anterior restaurados.", { duration: 4000 });
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- run only on mount
-  }, []);
+  // UX-432: Show "Restaurar última busca" button instead of auto-restoring
+  // Auto-restore caused ISSUE-037: mismatch between form state and cached results
+  // Now we just keep lastSearchAvailable=true (set in useState initializer) so the
+  // empty state can render a restore button via onLoadLastSearch.
 
   const originalBuscar = search.buscar;
   const buscarWithCollapse = useCallback(() => {

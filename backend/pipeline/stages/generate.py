@@ -314,6 +314,15 @@ async def stage_generate(pipeline, ctx: SearchContext) -> None:
         ctx.resumo.valor_total = actual_valor
         ctx.resumo.outlier_count = _outlier_count
         ctx.resumo.valor_sanitizado = _used_sanitized
+
+        # ISSUE-039: Re-patch free text AFTER outlier-sanitized override.
+        # Previously, _ground_truth_summary() ran inside gerar_resumo() with the
+        # naive sum, then generate.py overrode valor_total with compute_robust_total().
+        # This left the free text with R$1.38B while the stats box showed R$277M.
+        # Now we re-patch so both agree on the sanitized value.
+        from llm import _ground_truth_summary
+        _ground_truth_summary(ctx.resumo)
+
         ctx.llm_status = "ready"
 
         # SSE: Starting Excel

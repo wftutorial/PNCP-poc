@@ -58,11 +58,12 @@ def _ground_truth_summary(resumo: "ResumoLicitacoes") -> None:
         flags=_re_llm.IGNORECASE,
     )
 
-    # 2. Replace bid count in resumo_executivo
+    # 2. Replace bid count in resumo_executivo (ISSUE-046: singular/plural)
     _count_pat = r"\b(\d+)\s+licita[çc][oõã]es?\b"
+    _lic_word = "licitação" if resumo.total_oportunidades == 1 else "licitações"
     resumo.resumo_executivo = _re_llm.sub(
         _count_pat,
-        f"{resumo.total_oportunidades} licitações",
+        f"{resumo.total_oportunidades} {_lic_word}",
         resumo.resumo_executivo,
         count=1,
         flags=_re_llm.IGNORECASE,
@@ -528,9 +529,12 @@ def gerar_resumo_fallback(
     else:
         insight = f"Setor de {sector_name}: {total} oportunidade(s) encontrada(s) totalizando R$ {_fmt_brl(valor_total)}."
 
+    # ISSUE-046: singular/plural concordance
+    _lic_word_fb = "licitação" if total == 1 else "licitações"
+    _encontradas_fb = "Encontrada" if total == 1 else "Encontradas"
     return ResumoEstrategico(
         resumo_executivo=(
-            f"Encontradas {total} licitações no período analisado, "
+            f"{_encontradas_fb} {total} {_lic_word_fb} no período analisado, "
             f"totalizando R$ {_fmt_brl(valor_total)}."
         ),
         total_oportunidades=total,

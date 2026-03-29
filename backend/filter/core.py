@@ -2682,29 +2682,39 @@ def aplicar_todos_filtros(
             logger.warning(f"Setor '{setor}' não encontrado - pulando Camada 1A")
 
     # Etapa 8: Filtro de Keywords (mais lento - regex)
-    # RC1-FIX: When keywords is empty/None, skip keyword filter entirely.
-    # Previously defaulted to KEYWORDS_UNIFORMES (vestuário) which caused
-    # P0-FIX sector relaxation to filter engineering bids by clothing keywords.
-    kw = keywords if keywords else set()
-    exc = exclusions if exclusions else set()
+    # When keywords=None and setor is given, auto-populate from sector config.
+    # When keywords=set() (explicitly empty), skip keyword filter.
+    kw: Set[str] = set()
+    exc: Set[str] = set()
+    if keywords is not None:
+        kw = keywords
+    elif setor:
+        # Auto-populate keywords from sector config when not explicitly provided
+        try:
+            from sectors import get_sector as _get_sector_kw
+            _sector_kw = _get_sector_kw(setor)
+            kw = set(_sector_kw.keywords) if _sector_kw.keywords else set()
+            exc = set(_sector_kw.exclusions) if _sector_kw.exclusions else set()
+            if not context_required and hasattr(_sector_kw, "context_required_keywords") and _sector_kw.context_required_keywords:
+                context_required = _sector_kw.context_required_keywords
+        except (KeyError, Exception):
+            pass
+    if exclusions is not None:
+        exc = exclusions
 
-    # RC1-FIX: When no keywords provided, accept ALL bids from previous stages.
-    # This is used by P0-FIX sector relaxation (filter_stage.py) to return
-    # UF+status+value-only results when sector keyword matching is too strict.
-    # RC1-FIX: When no keywords provided, accept ALL bids from previous stages.
-    # This is used by P0-FIX sector relaxation (filter_stage.py) to return
-    # UF+status+value-only results when sector keyword matching is too strict.
+    # ISSUE-044: When keywords explicitly empty (relaxation path), accept ALL bids
+    # but mark with HONEST metadata (density=0, source=unfiltered).
     if not kw:
         resultado_keyword: List[dict] = []
         for lic in resultado_valor:
-            lic["_term_density"] = 1.0  # Bypass Camada 2A density check
+            lic["_term_density"] = 0.0  # ISSUE-044: honest — no keywords matched
             lic["_matched_terms"] = []
-            lic["_relevance_source"] = "sector_relaxation"
+            lic["_relevance_source"] = "unfiltered"  # ISSUE-044: honest source
             lic["_org_context_stripped"] = False
             resultado_keyword.append(lic)
         logger.info(
-            f"RC1-FIX: Keywords empty — skipping keyword filter, "
-            f"accepting all {len(resultado_keyword)} bids from prior stages"
+            f"ISSUE-044: Keywords empty — skipping keyword filter, "
+            f"accepting all {len(resultado_keyword)} bids from prior stages (unfiltered)"
         )
 
     # Normal keyword matching when keywords are provided

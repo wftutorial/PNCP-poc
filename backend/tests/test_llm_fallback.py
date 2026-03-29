@@ -39,7 +39,7 @@ class TestGerarResumoFallback:
 
         assert resumo.total_oportunidades == 1
         assert resumo.valor_total == 150_000.0
-        assert "1 licitações" in resumo.resumo_executivo
+        assert "1 licitação" in resumo.resumo_executivo
         assert "150" in resumo.resumo_executivo  # Value in summary
         assert len(resumo.destaques) == 1
         assert "Prefeitura de São Paulo" in resumo.destaques[0]
@@ -481,5 +481,5 @@ class TestGerarResumoOpenAIIntegration:
         ]
 
         resumo = gerar_resumo_fallback(licitacoes)
-        assert "1 licitações" in resumo.resumo_executivo
+        assert "1 licitação" in resumo.resumo_executivo
         assert "100" in resumo.resumo_executivo

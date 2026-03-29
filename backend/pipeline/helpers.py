@@ -104,6 +104,10 @@ def _map_confidence(relevance_source: str | None) -> str | None:
         "llm_standard": "medium",
         "llm_conservative": "low",
         "llm_zero_match": "low",
+        # ISSUE-044: sources that indicate no keyword validation occurred
+        "sector_relaxation": "low",
+        "unfiltered": "low",
+        "substring_relaxation": "low",
     }
     return mapping.get(relevance_source)
 

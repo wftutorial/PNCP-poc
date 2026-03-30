@@ -18,6 +18,11 @@ LLM_ARBITER_MODEL: str = os.getenv("LLM_ARBITER_MODEL", "gpt-4.1-nano")
 LLM_ARBITER_MAX_TOKENS: int = int(os.getenv("LLM_ARBITER_MAX_TOKENS", "1"))
 LLM_ARBITER_TEMPERATURE: float = float(os.getenv("LLM_ARBITER_TEMPERATURE", "0"))
 
+# DEBT-SYS-008: Centralized LLM timeout (was hardcoded in llm_arbiter.py)
+# GPT-4.1-nano p99 ≈ 1s; 5s = 5× p99. Prevents thread starvation on LLM hangs.
+# Accepts OPENAI_TIMEOUT_S (preferred) or LLM_TIMEOUT_S (legacy alias).
+LLM_TIMEOUT_S: float = float(os.getenv("OPENAI_TIMEOUT_S", os.getenv("LLM_TIMEOUT_S", "5")))
+
 # Term density thresholds (STORY-248 reviewed 2026-02-14 — kept unchanged)
 TERM_DENSITY_HIGH_THRESHOLD: float = float(os.getenv("TERM_DENSITY_HIGH_THRESHOLD", "0.05"))
 TERM_DENSITY_MEDIUM_THRESHOLD: float = float(os.getenv("TERM_DENSITY_MEDIUM_THRESHOLD", "0.02"))

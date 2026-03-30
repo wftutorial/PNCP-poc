@@ -1,8 +1,9 @@
 """
 DEBT-101: Security Critical — Token Hash, SIGSEGV & LLM Truncation
 
-Tests for all 3 debt items:
-- SYS-004: Token hash dual-lookup transition (AC1, AC2)
+Tests for debt items:
+- SYS-004: Token hash full SHA256 (AC1) + cache isolation
+  (DEBT-SYS-015: dual-hash transition removed — window long expired)
 - SYS-001: faulthandler disabled in production (AC3)
 - SYS-002: LLM_STRUCTURED_MAX_TOKENS >= 800 (AC5, AC6)
 """
@@ -17,7 +18,7 @@ import pytest
 
 
 # =============================================================================
-# SYS-004: Token Hash — Full SHA256 + Dual-Hash Transition (AC1, AC2)
+# SYS-004: Token Hash — Full SHA256 + Cache Isolation (AC1)
 # =============================================================================
 
 
@@ -50,8 +51,8 @@ class TestTokenHashFullSHA256:
         assert partial_h1 == partial_h2, "Partial hash SHOULD collide (the old bug)"
 
 
-class TestDualHashTransition:
-    """AC2: Dual-hash lookup during 1h transition window after deploy."""
+class TestCacheIsolation:
+    """DEBT-SYS-015: Verify tokens don't cross-pollute cache (dual-hash removed)."""
 
     @pytest.fixture(autouse=True)
     def clear_cache(self):
@@ -59,67 +60,6 @@ class TestDualHashTransition:
         _token_cache.clear()
         yield
         _token_cache.clear()
-
-    def test_deploy_timestamp_is_set(self):
-        """Module-level _deploy_timestamp should be set at import time."""
-        from auth import _deploy_timestamp
-        assert isinstance(_deploy_timestamp, float)
-        assert _deploy_timestamp > 0
-
-    def test_transition_window_constant(self):
-        """Transition window should be 3600 seconds (1 hour)."""
-        from auth import _DUAL_HASH_TRANSITION_SECONDS
-        assert _DUAL_HASH_TRANSITION_SECONDS == 3600
-
-    @pytest.mark.asyncio
-    async def test_dual_hash_finds_legacy_cached_entry(self):
-        """During transition, a session cached under legacy hash is found."""
-        from auth import _cache_store_memory, get_current_user
-
-        token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyLWxlZ2FjeSJ9.sig"
-        legacy_hash = hashlib.sha256(token[:16].encode("utf-8")).hexdigest()
-
-        # Simulate legacy cache entry (from old code that hashed prefix only)
-        legacy_user_data = {"id": "user-legacy", "email": "legacy@test.com", "role": "authenticated", "aal": "aal1"}
-        _cache_store_memory(legacy_hash, legacy_user_data)
-
-        creds = Mock()
-        creds.credentials = token
-
-        # Ensure we're within transition window
-        with patch("auth._deploy_timestamp", time.time()), \
-             patch("auth._redis_cache_get", new_callable=AsyncMock, return_value=None), \
-             patch("auth._redis_cache_set", new_callable=AsyncMock):
-            user = await get_current_user(creds)
-
-        assert user["id"] == "user-legacy"
-
-    @pytest.mark.asyncio
-    async def test_outside_transition_window_no_legacy_lookup(self):
-        """After transition window expires, legacy hash is NOT checked."""
-        from auth import _cache_store_memory
-
-        token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyLW91dHNpZGUifQ.sig"
-        legacy_hash = hashlib.sha256(token[:16].encode("utf-8")).hexdigest()
-
-        legacy_user_data = {"id": "user-outside", "email": "out@test.com", "role": "authenticated", "aal": "aal1"}
-        _cache_store_memory(legacy_hash, legacy_user_data)
-
-        # Deploy was 2 hours ago (past transition window)
-        past_deploy = time.time() - 7200
-
-        creds = Mock()
-        creds.credentials = token
-
-        secret = "test-secret-key-for-testing-12345678"
-        # Since token is fake, it will fail JWT validation → 401
-        # The point is that it does NOT find legacy cache
-        with patch("auth._deploy_timestamp", past_deploy), \
-             patch("auth._redis_cache_get", new_callable=AsyncMock, return_value=None), \
-             patch.dict(os.environ, {"SUPABASE_JWT_SECRET": secret}):
-            with pytest.raises(Exception):
-                from auth import get_current_user
-                await get_current_user(creds)
 
     @pytest.mark.asyncio
     async def test_concurrent_tokens_no_cross_pollution(self):

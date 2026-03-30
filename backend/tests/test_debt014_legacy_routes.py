@@ -24,7 +24,7 @@ class TestLegacyRouteMetric:
 
     def test_allowed_root_paths_defined(self):
         """_ALLOWED_ROOT_PATHS should include health and doc endpoints."""
-        from main import _ALLOWED_ROOT_PATHS
+        from startup.middleware_setup import _ALLOWED_ROOT_PATHS
         assert "/health" in _ALLOWED_ROOT_PATHS
         assert "/docs" in _ALLOWED_ROOT_PATHS
         assert "/metrics" in _ALLOWED_ROOT_PATHS
@@ -37,7 +37,7 @@ class TestLegacyRouteMiddleware:
     @pytest.mark.asyncio
     async def test_legacy_route_increments_counter(self):
         """Non-/v1/ route should increment the deprecation counter."""
-        from main import track_legacy_routes
+        from startup.middleware_setup import track_legacy_routes
         from unittest.mock import AsyncMock
 
         mock_request = MagicMock()
@@ -58,7 +58,7 @@ class TestLegacyRouteMiddleware:
     @pytest.mark.asyncio
     async def test_allowed_root_path_not_tracked(self):
         """Allowed root paths (e.g. /health) should NOT increment counter."""
-        from main import track_legacy_routes
+        from startup.middleware_setup import track_legacy_routes
         from unittest.mock import AsyncMock
 
         mock_request = MagicMock()
@@ -74,7 +74,7 @@ class TestLegacyRouteMiddleware:
     @pytest.mark.asyncio
     async def test_v1_route_not_tracked(self):
         """Routes starting with /v1/ should NOT increment counter."""
-        from main import track_legacy_routes
+        from startup.middleware_setup import track_legacy_routes
         from unittest.mock import AsyncMock
 
         mock_request = MagicMock()
@@ -90,7 +90,7 @@ class TestLegacyRouteMiddleware:
     @pytest.mark.asyncio
     async def test_legacy_path_truncated_to_2_segments(self):
         """Long legacy paths should be truncated to 2 segments."""
-        from main import track_legacy_routes
+        from startup.middleware_setup import track_legacy_routes
         from unittest.mock import AsyncMock
 
         mock_request = MagicMock()

@@ -1,724 +1,650 @@
-# SmartLic -- System Architecture Document
+# SmartLic — System Architecture Assessment
 
-**Date:** 2026-03-23 | **Author:** @architect (Aria) | **Phase:** Brownfield Discovery Phase 1 (refresh)
-**Codebase:** `main` branch HEAD | **Version:** 5.0 (supersedes v4.0 from 2026-03-21)
+**Data:** 2026-03-30 | **Autor:** @architect (Aria) | **Fase:** Brownfield Discovery Phase 1
+**Codebase:** branch `main` HEAD | **Versao:** 6.0
 
 ---
 
-## 1. System Overview
+## 1. Resumo Executivo
 
-### 1.1 What SmartLic Does
+SmartLic e uma plataforma de inteligencia em licitacoes publicas (B2G) que automatiza a descoberta, analise e qualificacao de oportunidades para empresas que participam de compras governamentais no Brasil. Desenvolvida pela CONFENGE Avaliacoes e Inteligencia Artificial LTDA, o sistema agrega dados de 3 fontes governamentais (PNCP, PCP v2, ComprasGov v3), aplica classificacao IA por setor (GPT-4.1-nano), calcula viabilidade em 4 fatores, e oferece um pipeline kanban para gestao de oportunidades.
 
-SmartLic is a B2G (Business-to-Government) intelligence platform that automates discovery, analysis, and qualification of public procurement opportunities (licitacoes) in Brazil. Built by CONFENGE Avaliacoes e Inteligencia Artificial LTDA, it targets construction, engineering, and service companies that participate in government bids, as well as consultancies and assessorias that support them.
-
-**Core Value Proposition:**
-- Aggregates procurement data from 3 government sources (PNCP, PCP v2, ComprasGov v3) into a unified search
-- AI-powered sectoral classification using GPT-4.1-nano eliminates irrelevant results
-- 4-factor viability assessment helps users prioritize high-probability opportunities
-- Kanban pipeline for opportunity tracking from discovery to bid submission
-- PDF diagnostic reports and Excel exports for decision support
-
-**Current Stage:** POC v0.5 in production (beta with trials, pre-revenue)
+**Estagio:** POC avancado (v0.5) em producao, beta com trials, pre-revenue.
 **URL:** https://smartlic.tech
-**Pricing:** SmartLic Pro R$397/month (monthly), R$357/month (semiannual), R$297/month (annual). Consultoria tier also available.
 
-### 1.2 Codebase Statistics
+### Numeros do Codebase
 
-| Metric | Count |
-|--------|-------|
-| **Backend source files** | 199 Python files |
-| **Backend source LOC** | 77,364 lines |
-| **Backend test files** | 344 files |
-| **Backend test LOC** | 140,199 lines |
-| **Backend test passing** | 7,332+ (0 failures baseline) |
-| **Backend API endpoints** | 126 (119 in routes/ + 7 in main.py) |
-| **Backend route modules** | 35 |
-| **Frontend pages** | 47 |
-| **Frontend API proxies** | 58 route handlers |
-| **Frontend components** | ~241 (41 in buscar/, ~32 shared, rest page-specific) |
-| **Frontend hooks** | 36 (27 shared + 9 buscar-specific) |
-| **Frontend test files** | 300+ files |
-| **Frontend test passing** | 5,583+ (0 failures baseline) |
-| **E2E tests** | 60 critical user flows |
-| **Database migrations** | 90 SQL files |
-| **Database tables** | 29 (28 created + profiles) |
-| **RLS policies** | 105 |
-| **Database indexes** | 95 |
-| **Database functions** | 32 |
-| **CI/CD workflows** | 17 GitHub Actions |
-| **Environment variables** | 356 lines in .env.example |
-
-### 1.3 Tech Stack Summary
-
-| Layer | Technology | Version |
-|-------|-----------|---------|
-| **Backend runtime** | Python | 3.12 |
-| **Backend framework** | FastAPI | 0.129.0 |
-| **ASGI server** | Uvicorn (via Gunicorn) | 0.41.0 |
-| **Process manager** | Gunicorn | 23.0.0 |
-| **Validation** | Pydantic v2 | 2.12.5 |
-| **HTTP client** | httpx | 0.28.1 |
-| **LLM** | OpenAI SDK (GPT-4.1-nano) | 1.109.1 |
-| **Database** | Supabase (PostgreSQL 17) | Cloud |
-| **Cache** | Redis (redis-py 5.3.1) | 5.x |
-| **Job queue** | ARQ | via pip |
-| **Billing** | Stripe | 11.4.1 |
-| **Email** | Resend | via REST |
-| **Auth** | Supabase Auth + PyJWT | 2.11.0 |
-| **Monitoring** | Prometheus + OpenTelemetry + Sentry | 10.38.0 (Sentry) |
-| **PDF** | ReportLab | 4.4.0 |
-| **Excel** | openpyxl | 3.1.5 |
-| **Frontend framework** | Next.js | 16.1.6 |
-| **UI library** | React | 18.3.1 |
-| **Language** | TypeScript | 5.9 |
-| **Styling** | Tailwind CSS | 3.x |
-| **State/Fetching** | SWR | 2.4.1 |
-| **Forms** | react-hook-form + zod | 4.3.6 (zod) |
-| **Animation** | Framer Motion | 12.33.0 |
-| **Charts** | Recharts | 3.7.0 |
-| **Drag-and-drop** | @dnd-kit | 6.3.1 |
-| **Onboarding** | Shepherd.js | 14.5.1 |
-| **Analytics** | Mixpanel | 2.74.0 |
+| Metrica | Valor |
+|---------|-------|
+| Arquivos Python (backend, excl. testes) | ~266 |
+| LOC Python (backend, excl. testes) | ~81.800 |
+| Arquivos de teste backend | 169 (5.131+ testes) |
+| Arquivos de teste frontend | 135 (2.681+ testes) |
+| Testes E2E (Playwright) | 60 |
+| Migrations Supabase | 99 |
+| Feature flags registradas | 30+ |
+| Endpoints API | 49+ em 36 route modules |
+| Paginas frontend | 22+ |
 
 ---
 
-## 2. Deployment Topology
+## 2. Analise do Tech Stack
 
-```
-                          ┌─────────────────────┐
-                          │   smartlic.tech      │
-                          │   (Cloudflare DNS)   │
-                          └──────────┬──────────┘
-                                     │
-                   ┌─────────────────┼─────────────────┐
-                   │                 │                  │
-          ┌────────▼───────┐  ┌─────▼──────┐   ┌──────▼──────┐
-          │  Railway:       │  │  Railway:   │   │  Railway:    │
-          │  Frontend       │  │  Backend    │   │  Worker      │
-          │  (Next.js 16)   │  │  (Gunicorn  │   │  (ARQ)       │
-          │  Port 8080      │  │   +Uvicorn) │   │  LLM+Excel   │
-          │                 │  │  Port 8000  │   │  bg jobs      │
-          └────────┬───────┘  └──────┬──────┘   └──────┬──────┘
-                   │                 │                  │
-                   │          ┌──────┼──────┐           │
-                   │          │      │      │           │
-              ┌────▼──────┐  ┌▼─────┐ ┌────▼──┐  ┌────▼──────┐
-              │ Supabase   │  │Redis │ │OpenAI │  │  Stripe   │
-              │ Cloud      │  │(UP/  │ │GPT-4.1│  │  (billing)│
-              │ PG17+Auth  │  │RW)   │ │-nano  │  │           │
-              │ +RLS       │  │      │ │       │  │           │
-              └────────────┘  └──────┘ └───────┘  └───────────┘
-                                │
-                          ┌─────┴─────┐
-                          │  External  │
-                          │  APIs      │
-                          ├───────────┤
-                          │ PNCP v1   │ (priority 1)
-                          │ PCP v2    │ (priority 2)
-                          │ ComprasGov│ (priority 3, currently down)
-                          │ Resend    │ (email)
-                          └───────────┘
-```
+### 2.1 Backend
 
-### 2.1 Railway Services
+| Componente | Tecnologia | Versao | Proposito |
+|------------|------------|--------|-----------|
+| Framework Web | FastAPI | 0.129.0 | API async com Pydantic v2 |
+| Runtime | Python | 3.12 | Linguagem principal |
+| ASGI Server | Uvicorn | 0.41.0 | Sem extras [standard] (CRIT-SIGSEGV) |
+| Process Manager | Gunicorn | 23.0.0 | Multi-worker (timeout 180s) |
+| Validacao | Pydantic | 2.12.5 | Schemas tipados, validacao de input |
+| HTTP Client | httpx | 0.28.1 | Async HTTP para APIs externas |
+| LLM | OpenAI SDK | 1.109.1 | GPT-4.1-nano classificacao + resumos |
+| Database Client | Supabase | 2.28.0 | PostgreSQL + Auth + RLS |
+| Cache | Redis | 5.3.1 | Cache distribuido + rate limiting |
+| Job Queue | ARQ | >=0.26 | Background jobs async |
+| Billing | Stripe | 11.4.1 | Subscriptions, checkout, webhooks |
+| Email | Resend | >=2.0 | Emails transacionais |
+| Excel | openpyxl | 3.1.5 | Geracao de planilhas |
+| PDF | ReportLab | 4.4.0 | Relatorios diagnostico |
+| Metricas | prometheus_client | >=0.20 | Metricas Prometheus |
+| Tracing | OpenTelemetry | >=1.25 | Distributed tracing (OTLP HTTP) |
+| Error Tracking | Sentry SDK | >=2.0 | Captura de excecoes |
+| JWT | PyJWT | 2.11.0 | Validacao local ES256+JWKS |
+| Crypto | cryptography | >=46.0.5,<47.0 | Pinned por fork-safety (CRIT-SIGSEGV) |
+| Logging | python-json-logger | >=2.0.4 | JSON structured logs em producao |
 
-| Service | Process Type | Workers | Memory | Timeout |
-|---------|-------------|---------|--------|---------|
-| **Backend (web)** | `PROCESS_TYPE=web` | 2 Gunicorn/Uvicorn | 1GB | 120s (Gunicorn), ~300s (Railway proxy) |
-| **Worker** | `PROCESS_TYPE=worker` | ARQ single-process | 512MB | per-job limits |
-| **Frontend** | Next.js standalone | Node.js | 512MB | - |
+**Notas criticas:**
+- Uvicorn sem extras `[standard]` pois uvloop causa SIGSEGV intermitente em producao (interacao chardet/hiredis/cryptography).
+- cryptography pinada em `>=46.0.5,<47.0` por fork-safety com Gunicorn preload.
+- OpenAI client com timeout de 5s (5x p99 do GPT-4.1-nano) para evitar thread starvation.
 
-**Key operational parameters:**
-- Gunicorn keep-alive: 75s (> Railway proxy 60s to prevent 502s)
-- Gunicorn max-requests: 1000 + jitter 50 (memory leak prevention)
-- jemalloc enabled via `LD_PRELOAD` (reduces RSS fragmentation)
-- `--preload` disabled by default (OpenSSL fork-safety issue with cryptography>=46.0.5)
-- ARQ worker has restart wrapper: max 10 restarts with 5s delay
+### 2.2 Frontend
+
+| Componente | Tecnologia | Versao | Proposito |
+|------------|------------|--------|-----------|
+| Framework | Next.js | 16.1.6 | SSR + routing |
+| UI Library | React | 18.3.1 | Componentes |
+| Linguagem | TypeScript | 5.9 | Type safety |
+| Styling | Tailwind CSS | 3.x | Utility-first CSS |
+| Animacoes | Framer Motion | 12.33.0 | Transicoes/animacoes |
+| Charts | Recharts | 3.7.0 | Visualizacoes analytics |
+| Auth | Supabase SSR | 0.8.0 | Auth client-side |
+| Kanban | @dnd-kit | 6.3.1 | Drag-and-drop pipeline |
+| Onboarding | Shepherd.js | 14.5.1 | Tours guiados |
+| Forms | React Hook Form + Zod | 7.71 / 4.3 | Validacao de formularios |
+| Data Fetching | SWR | 2.4.1 | Stale-while-revalidate |
+| Analytics | Mixpanel | 2.74.0 | Product analytics |
+| Error Tracking | Sentry | 10.38.0 | Error monitoring |
+| Testing | Jest + Testing Library | 29.7 | Unit tests |
+| E2E | Playwright | 1.58.2 | Testes end-to-end |
+
+### 2.3 Infraestrutura
+
+| Componente | Servico | Detalhes |
+|------------|---------|----------|
+| Backend Hosting | Railway | Web + Worker (monorepo com `RAILWAY_SERVICE_ROOT_DIRECTORY`) |
+| Frontend Hosting | Railway | Standalone Next.js |
+| Database | Supabase Cloud | PostgreSQL 17 + RLS + Edge Functions |
+| Cache/Queue | Redis (Upstash/Railway) | Cache L1, rate limiting, ARQ broker, SSE Streams |
+| CI/CD | GitHub Actions | 6+ workflows (tests, migration gate, deploy, E2E) |
+| DNS/CDN | Cloudflare (inferido) | HTTPS + edge caching |
+
+**Limites Railway:**
+- Hard timeout: ~120s para requests HTTP.
+- Gunicorn timeout: 180s (env `GUNICORN_TIMEOUT`).
+- Deploy auto via push em `main`, watch patterns por servico.
+
+### 2.4 Servicos Externos
+
+| Servico | Uso | SLA/Notas |
+|---------|-----|-----------|
+| PNCP API | Fonte primaria de licitacoes | Max 50 items/pagina, rate limiting ativo |
+| PCP v2 API | Fonte secundaria (publica, sem auth) | 10/pagina, sem filtro UF server-side |
+| ComprasGov v3 | Fonte terciaria (dados abertos) | Dual-endpoint (legacy + Lei 14.133) |
+| OpenAI API | GPT-4.1-nano classificacao + resumos | ~R$0.00007/classificacao, timeout 5s |
+| Stripe | Billing, subscriptions, webhooks | Webhook signature verification |
+| Resend | Emails transacionais | Trial sequences, alertas |
+| Supabase Auth | Autenticacao JWT (ES256+JWKS) | Validacao local, sem API call |
+| IBGE API | Dados geograficos (cache) | Usado para contexto de localizacao |
 
 ---
 
-## 3. Backend Architecture
+## 3. Padroes Arquiteturais
 
-### 3.1 Directory Structure
+### 3.1 Arquitetura de Dados (3 Camadas)
 
-```
-backend/
-├── main.py              (103 LOC) — Thin entrypoint, delegates to startup/ (DEBT-107 SYS-020)
-├── schemas.py           (2121 LOC) — All Pydantic models
-├── config/              — Decomposed config (DEBT-015)
-│   ├── base.py          — Core utilities, logging
-│   ├── features.py      — 40+ feature flags
-│   ├── pncp.py          — Source-specific timeouts, circuit breakers
-│   ├── cors.py          — CORS origins
-│   └── pipeline.py      — Pipeline, cache, cron config
-├── routes/              — 35 route modules, 119 endpoints
-├── clients/             — External API clients
-│   ├── portal_compras_client.py   (646 LOC) — PCP v2
-│   ├── compras_gov_client.py      (838 LOC) — ComprasGov v3
-│   ├── portal_transparencia_client.py (938 LOC)
-│   ├── querido_diario_client.py   (801 LOC)
-│   └── sanctions.py               (639 LOC)
-├── pipeline/            — 7-stage search pipeline
-│   ├── stages/          — validate, prepare, execute, filter, enrich, generate, persist
-│   ├── tracing.py
-│   └── cache_manager.py
-├── services/            — Business logic services
-│   ├── billing.py, alert_service.py, alert_matcher.py
-│   ├── organization_service.py, partner_service.py
-│   ├── dunning.py, trial_email_sequence.py
-│   └── stripe_reconciliation.py
-├── models/              — Domain models (cache, search_state, stripe)
-├── webhooks/            — Stripe webhook handler (1192 LOC)
-├── templates/emails/    — HTML email templates
-├── startup/             — App factory decomposition (DEBT-107)
-│   ├── app_factory.py   — create_app() builds FastAPI instance (94 LOC)
-│   ├── routes.py        — register_routes() wires 36 routers (71 LOC)
-│   ├── middleware_setup.py — 6 middlewares + Prometheus mount (143 LOC)
-│   ├── lifespan.py      — Startup/shutdown lifecycle (cache schema, sessions)
-│   ├── sentry.py        — Sentry SDK initialization
-│   ├── endpoints.py     — Root endpoints (/, /v1/setores, /debug/pncp-test)
-│   ├── exception_handlers.py — Global exception handlers
-│   └── state.py         — Module-level state (shutting_down, startup_time)
-├── utils/               — cnae_mapping, date_parser, phone_normalizer
-├── source_config/       — Data source configuration
-├── unified_schemas/     — Cross-source schema normalization
-├── filter*.py           — 11 filter modules (3871 LOC in filter.py alone)
-├── pncp_client.py       (2515 LOC) — PNCP API client
-├── search_cache.py      (2512 LOC) — Two-level cache
-├── job_queue.py         (2152 LOC) — ARQ job definitions
-├── cron_jobs.py         (2039 LOC) — Scheduled tasks
-├── quota.py             (1622 LOC) — Plan quota enforcement
-├── llm_arbiter.py       (1269 LOC) — LLM classification engine
-├── auth.py              (519 LOC)  — JWT validation + cache
-├── metrics.py           (1002 LOC) — Prometheus metrics
-├── health.py            (960 LOC)  — Health checks
-└── ...69 total top-level .py files
-```
-
-### 3.2 Middleware Stack (startup/middleware_setup.py:38-141)
-
-Order matters -- last added is outermost:
-
-| Layer | Middleware | Source | Purpose |
-|-------|-----------|--------|---------|
-| 1 (outermost) | `metrics_auth` | middleware_setup.py:131 | Protect /metrics with Bearer token |
-| 2 | `track_legacy_routes` | middleware_setup.py:102 | Track non-/v1/ calls (Prometheus counter) |
-| 3 | `http_response_counter` | middleware_setup.py:87 | SLO availability metric by status class |
-| 4 | `docs_access_guard` | middleware_setup.py:72 | Gate /docs behind DOCS_ACCESS_TOKEN |
-| 5 | `shutdown_drain_middleware` | middleware_setup.py:55 | 503 + Retry-After during graceful shutdown |
-| 6 | `RateLimitMiddleware` | middleware.py | Redis token-bucket rate limiting |
-| 7 | `DeprecationMiddleware` | middleware.py | Deprecation header for sunset endpoints |
-| 8 | `SecurityHeadersMiddleware` | middleware.py | X-Content-Type-Options, etc. |
-| 9 | `CorrelationIDMiddleware` | middleware.py | X-Request-ID + search_id + correlation_id propagation |
-| 10 (innermost) | `CORSMiddleware` | Starlette built-in | CORS policy enforcement |
-
-Context variables for distributed tracing (middleware.py:26-30):
-- `request_id_var`: Per-request UUID
-- `search_id_var`: End-to-end search journey (CRIT-004)
-- `correlation_id_var`: Browser per-tab session ID
-
-### 3.3 Search Pipeline (Core Architecture)
-
-The search pipeline is a 7-stage orchestrator defined in `search_pipeline.py` (thin wrapper, `_STAGE_TABLE` at line 24) with stage logic in `pipeline/stages/`. All stages communicate through `SearchContext` (`search_context.py`), a `@dataclass` with ~40+ fields of intermediate state (raw results, filtered results, scores, tracker, deadline, etc.):
+O SmartLic implementa uma arquitetura de dados em 3 camadas que separa ingestao, busca e cache:
 
 ```
-[1] VALIDATE   → Input validation, auth, quota check
-[2] PREPARE    → Build search parameters, resolve sectors
-[3] EXECUTE    → Datalake query (pncp_raw_bids via search_datalake RPC); fallback to live multi-source fetch
-[4] FILTER     → UF → Value → Keywords → LLM zero-match → Status
-[5] ENRICH     → Viability scoring, item inspection
-[6] GENERATE   → Excel + LLM summary (via ARQ background jobs)
-[7] PERSIST    → Cache results, record search session
+┌─────────────────────────────────────────────────────────────────┐
+│                    CAMADA 1: INGESTAO (ETL)                     │
+│                                                                 │
+│  ARQ Cron Jobs ──> PNCP API ──> Transformer ──> Loader         │
+│  (full diario 2am BRT, incremental 3x/dia)                     │
+│                          ↓                                      │
+│               pncp_raw_bids (~40K+ rows)                        │
+│        GIN full-text index (Portuguese), 12-dia retention       │
+└─────────────────────────────────────────────────────────────────┘
+                           ↓
+┌─────────────────────────────────────────────────────────────────┐
+│                  CAMADA 2: SEARCH PIPELINE                      │
+│                                                                 │
+│  POST /buscar ──> SearchPipeline.run() ──> 7 stages             │
+│  VALIDATE → PREPARE → EXECUTE → FILTER → ENRICH →              │
+│  POST_FILTER_LLM → GENERATE → PERSIST                          │
+│                                                                 │
+│  Execute: query_datalake() (tsquery PostgreSQL)                 │
+│  Fallback: live API fetch se datalake retorna 0                 │
+└─────────────────────────────────────────────────────────────────┘
+                           ↓
+┌─────────────────────────────────────────────────────────────────┐
+│                   CAMADA 3: CACHE (SWR)                         │
+│                                                                 │
+│  L1: InMemory/Redis (4h TTL, hot/warm/cold priority)            │
+│  L2: Supabase search_results_cache (24h TTL, persistent)        │
+│  L3: Local File (24h TTL, emergency fallback)                   │
+│                                                                 │
+│  SWR: serve stale + revalidate background                       │
+│  (max 3 concurrent, 180s timeout)                               │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-**Timeout chain (strict decreasing):**
+### 3.2 Search Pipeline (7 Estagios)
+
+O `SearchPipeline` (em `search_pipeline.py`) e o orquestrador principal. Cada estagio e um modulo isolado em `pipeline/stages/`:
+
+| Estagio | Modulo | Responsabilidade |
+|---------|--------|------------------|
+| 1. VALIDATE | `validate.py` | Valida request (UFs, datas, setor), normaliza inputs |
+| 2. PREPARE | `prepare.py` | Carrega config do setor, keywords, prepara contexto |
+| 3. EXECUTE | `execute.py` | Busca dados: datalake query ou multi-source API fetch |
+| 4. FILTER | `filter_stage.py` | Aplica filtros: UF, valor, keywords, density scoring |
+| 5. ENRICH | `enrich.py` | Viability assessment, status inference, urgencia |
+| 6. POST_FILTER_LLM | `post_filter_llm.py` | LLM zero-match classification para density 0% |
+| 7. GENERATE | `generate.py` | Gera resumo LLM + Excel (inline ou ARQ background) |
+| 8. PERSIST | `persist.py` | Salva resultados no cache + search_results_cache |
+
+**State Machine:** Cada busca tem um state machine (`search_state_manager.py`) que rastreia transicoes e permite SSE progress tracking.
+
+**Timeout Chain (mais restritivo ao mais amplo):**
 ```
-ARQ Job(300s) > Pipeline(110s) > Consolidation(100s) > PerSource(80s) > PerUF(30s) > HTTP(10s)
-```
-
-**Filter pipeline (fail-fast ordering):**
-1. UF check (fastest, O(1) set lookup)
-2. Value range check (simple numeric comparison)
-3. Keyword matching (density scoring with 3 thresholds: high >5%, medium 2-5%, low 1-2%)
-4. LLM zero-match classification (for 0% keyword density, GPT-4.1-nano YES/NO)
-5. Status/date validation
-6. Viability assessment (post-filter, 4-factor weighted score)
-
-### 3.3a Ingestion Pipeline (Primary Data Source)
-
-When `DATALAKE_ENABLED=true` (default), ARQ cron jobs periodically crawl PNCP and store results in `pncp_raw_bids`:
-
-| Job | Schedule (UTC) | Window | Purpose |
-|-----|----------------|--------|---------|
-| `ingestion_full_crawl_job` | 05:00 (2am BRT) | 10 days | Full crawl: all 27 UFs × 6 modalidades |
-| `ingestion_incremental_job` | 11:00, 17:00, 23:00 | 3 days + 1d overlap | Delta crawl from last checkpoint |
-| `ingestion_purge_job` | 07:00 (4am BRT) | N/A | Soft-delete rows > 12 days old |
-
-**ETL Pipeline** (`backend/ingestion/`):
-- **crawler.py**: Fetches from PNCP API (5 concurrent UFs, 2s batch delay, max 50 pages)
-- **transformer.py**: Normalizes to flat dict, computes `content_hash` (MD5)
-- **loader.py**: Bulk upsert via `upsert_pncp_raw_bids` RPC (500 rows/batch, hash-based dedup)
-- **checkpoint.py**: Per-(UF, modalidade) progress tracking for resumable crawls
-
-**Tables**: `pncp_raw_bids` (~40K+ active rows, GIN full-text index), `ingestion_checkpoints`, `ingestion_runs`
-
-When `DATALAKE_QUERY_ENABLED=true` (default), stage [3] EXECUTE calls `query_datalake()` → `search_datalake` RPC (PostgreSQL tsquery) instead of live APIs. Returns records in identical format to `PNCPClient._normalize_item()` so all downstream stages work unchanged. Falls through to live API only if datalake returns 0 results.
-
-### 3.3b Data Source Clients (Legacy Fallback)
-
-Only used when `DATALAKE_QUERY_ENABLED=false` OR datalake returns 0 results:
-
-| Source | File | Priority | Auth | Page Size | Notes |
-|--------|------|----------|------|-----------|-------|
-| **PNCP** | `pncp_client.py` | 1 | None | 50 max | Also used by ingestion pipeline |
-| **PCP v2** | `clients/portal_compras_client.py` | 2 | None (public) | 10/page | Client-side UF filtering only. `valor_estimado=0.0` always |
-| **ComprasGov v3** | `clients/compras_gov_client.py` | 3 | None | varies | Dual-endpoint (legacy + Lei 14.133). Currently down since Mar 2026 |
-
-Each source has independent circuit breakers (sliding window, configurable thresholds and cooldowns -- all defined in `pncp_client.py:48-71`) and per-source bulkhead concurrency limits (`bulkhead.py`). Source adapters implement `SourceAdapter` ABC from `clients/base.py`, producing `UnifiedProcurement` dataclass with standardized fields and `dedup_key` generation. Source health registry in `source_config/sources.py` tracks `SourceHealthStatus` (healthy/degraded/down) with 5-minute TTL.
-
-### 3.4 Cache Architecture (Two-Level SWR on Search Results)
-
-**Note:** This cache layer caches *search results* (filtered, enriched), NOT raw bids. Raw bids live in `pncp_raw_bids` (see 3.3a).
-
-```
-Request → L1 InMemory (4h TTL, hot/warm/cold) → L2 Supabase (24h TTL)
-                ↓ miss                                    ↓ miss
-          Datalake query (pncp_raw_bids) → fallback: Live API fetch
-                ↓ result
-          Write-through to L1 + L2
+Per-UF fetch: 30s → Per-Source: 80s → Consolidation: 100s → Pipeline: 110s → ARQ Job: 300s
 ```
 
-- **Fresh (0-6h):** Serve immediately
-- **Stale (6-24h):** Serve stale, trigger background revalidation (max 3 concurrent, 180s timeout)
-- **Expired (>24h):** Not served, force fresh fetch
-- L1 uses priority tiers: hot (recently accessed) > warm > cold (evicted first)
-- L2 is Supabase `search_results_cache` table (persistent across restarts)
+### 3.3 Pipeline de Ingestao (ETL)
 
-### 3.5 LLM Integration
+O modulo `ingestion/` implementa um ETL completo para popular o datalake local:
 
-| Use Case | Model | Module | Pattern |
-|----------|-------|--------|---------|
-| Sectoral classification | GPT-4.1-nano | `llm_arbiter.py` | Keyword density > threshold = keyword; else LLM YES/NO |
-| Zero-match rescue | GPT-4.1-nano | `llm_arbiter.py` | Items with 0% keyword density get LLM review |
-| Executive summary | GPT-4.1-nano | `llm.py` | ARQ background job; immediate fallback summary |
-| Bid analysis | GPT-4.1-nano | `bid_analyzer.py` | Deep analysis of individual bids |
+```
+ingestion/
+├── config.py        # Feature flags, schedule, rate limits
+├── crawler.py       # Orquestra crawl full/incremental por UF x modalidade
+├── transformer.py   # Normaliza dados PNCP para formato pncp_raw_bids
+├── loader.py        # Bulk upsert via RPC (500 rows/batch, content_hash dedup)
+├── checkpoint.py    # Tracking de progresso: ingestion_checkpoints + ingestion_runs
+├── scheduler.py     # Registro de cron jobs no ARQ
+└── metrics.py       # Prometheus counters especificos de ingestao
+```
 
-**Failure mode:** REJECT on LLM failure (zero noise philosophy). No hallucinated approvals.
+**Schedule (UTC):**
+- Full crawl: 05:00 diario (2am BRT) — 27 UFs x 6 modalidades, 10 dias
+- Incremental: 11:00, 17:00, 23:00 (8am, 2pm, 8pm BRT) — 3 dias + 1 dia overlap
+- Purge: 07:00 diario (soft-delete, 12 dias retention)
 
-### 3.6 Auth and Billing
+**Concurrency:** 5 UFs paralelas, 2s delay entre batches, max 50 paginas por (UF, modalidade).
 
-- **Auth:** Supabase Auth with local JWT validation (ES256+JWKS, backward compatible HS256). Token cache: L1 in-memory (60s TTL, LRU 1000 entries) + L2 Redis (5min TTL).
-- **Billing:** Stripe with 3 billing periods (monthly/semiannual/annual). 14-day free trial (no credit card). "Fail to last known plan" policy on DB errors.
-- **Quotas:** `check_and_increment_quota_atomic` with Redis token bucket rate limiting. In-memory plan cache (5min TTL).
-- **Grace period:** 3 days for subscription gaps (`SUBSCRIPTION_GRACE_DAYS`).
+### 3.4 Classificacao LLM
+
+A classificacao IA opera em 4 niveis no `llm_arbiter.py`:
+
+| Nivel | Densidade Keywords | Fonte | Acao |
+|-------|-------------------|-------|------|
+| Alta | >5% | "keyword" | ACCEPT direto |
+| Media | 2-5% | "llm_standard" | LLM arbiter SIM/NAO |
+| Baixa | 1-2% | "llm_conservative" | LLM arbiter conservador |
+| Zero | 0% | "llm_zero_match" | LLM zero-match YES/NO |
+
+**Modelo:** GPT-4.1-nano (33% mais barato que gpt-4o-mini)
+- Custo: ~R$0.00007/classificacao (structured output)
+- Latencia: ~60ms/chamada
+- Timeout: 5s (5x p99)
+- Max tokens structured: 800 (evita JSON truncation)
+- Cache: LRU in-memory MD5-based (evita chamadas duplicadas)
+
+**Fallback:** Quando LLM falha:
+- `LLM_FALLBACK_PENDING_ENABLED=true`: PENDING_REVIEW (gray zone + zero-match)
+- `LLM_FALLBACK_PENDING_ENABLED=false`: REJECT hard
+
+**Item Inspection (D-01):** Para items na "gray zone", o sistema inspeciona items individuais da licitacao via API PNCP de itens, com concurrency 5 e timeout 5s/item.
+
+### 3.5 Estrategia de Cache (SWR)
+
+Implementada em `search_cache.py` (2.564 LOC), a estrategia usa 3 niveis com Stale-While-Revalidate:
+
+```
+┌───────────┬──────┬─────────────┬──────────────────────────────────┐
+│ Camada    │ TTL  │ Status      │ Comportamento                    │
+├───────────┼──────┼─────────────┼──────────────────────────────────┤
+│ L1 Memory │ 4h   │ Fresh 0-4h  │ Serve direto, mais rapido        │
+│ L2 Supa   │ 24h  │ Stale 4-24h │ Serve + revalidacao background   │
+│ L3 File   │ 24h  │ Emergency   │ Serve apenas se Supabase down    │
+└───────────┴──────┴─────────────┴──────────────────────────────────┘
+```
+
+**Cache Key:** Inclui setor, UFs, date_from, date_to, modalidades, filtros. STORY-306 adicionou datas ao key para evitar resultados de periodos diferentes.
+
+**Dual-read:** Exact key + legacy key (sem datas) para mitigar thundering herd durante migracao.
+
+**Prioridade:** Hot/warm/cold tiering para otimizar eviction.
+
+### 3.6 SSE Progress Tracking
+
+O modulo `progress.py` (888 LOC) implementa tracking em tempo real com dois modos:
+
+1. **Redis Streams** (producao, multi-worker): Append-only log com replay para cross-worker SSE. Migrado de Pub/Sub (STORY-276) que perdia eventos fire-and-forget.
+
+2. **In-memory fallback** (single instance): `asyncio.Queue` quando Redis indisponivel.
+
+**Fluxo:**
+```
+POST /buscar → SearchPipeline emite ProgressEvents → Redis Streams
+GET /buscar-progress/{id} (SSE) → Le do Redis Stream → Server-Sent Events
+```
+
+**Resiliencia SSE:**
+- `bodyTimeout(0)` + heartbeat 15s > Railway idle 60s
+- Inactivity timeout: 120s
+- Last-Event-ID resumption (STORY-297): replay ate 200 eventos
+- Frontend fallback: simulacao baseada em tempo se SSE falhar
 
 ### 3.7 Background Jobs (ARQ)
 
-The worker process runs ARQ for async tasks:
-- LLM summary generation (with immediate fallback response)
-- Excel file generation
-- Zero-match LLM classification batches
-- Trial email sequences
-- Alert matching and delivery
+O sistema usa ARQ para processamento assincrono via `job_queue.py` (2.229 LOC):
 
-SSE events (`llm_ready`, `excel_ready`) push updates to the frontend in real-time.
+**Separacao Web/Worker:** Controlada por `PROCESS_TYPE` em `start.sh`:
+- Web: `gunicorn main:app` — atende requests HTTP
+- Worker: `arq job_queue.WorkerSettings` — executa background jobs
 
-### 3.8.1 SSE Progress Tracking (progress.py)
+**Jobs registrados:**
+- `llm_summary_job`: Gera resumo executivo LLM (post-search)
+- `excel_generation_job`: Gera planilha Excel estilizada
+- `ingestion_full_crawl_job`: ETL completo diario
+- `ingestion_incremental_job`: ETL incremental 3x/dia
+- `ingestion_purge_job`: Limpeza de registros expirados
+- `cache_warming_job`: Pre-aquecimento de cache (STORY-226)
+- `trial_email_sequence_job`: Sequencia de emails trial
 
-Dual-mode real-time progress system:
-
-- **Redis Streams mode** (horizontal scaling, STORY-276): Append-only log per `search_id`. Cross-worker SSE: Worker A creates tracker, Worker B reads from Streams. Terminal events trigger `EXPIRE` (5min TTL, `_STREAM_EXPIRE_TTL` at progress.py:38). Last-Event-ID resumption support (STORY-297): replay list with 10min TTL, max 200 events (`_REPLAY_MAX_EVENTS` at progress.py:42).
-- **In-memory fallback** (single instance): `asyncio.Queue` per search_id when Redis unavailable.
-- **Events:** `connecting`, `fetching`, `filtering`, `llm`, `excel`, `complete`, `degraded`, `error`, `llm_ready`, `excel_ready`, `shutdown` (DEBT-124 graceful shutdown).
-- **Heartbeat:** 15s interval. Wait-for-tracker yields `: waiting\n\n` comments every 5s to prevent undici BodyTimeoutError (CRIT-012).
-
-### 3.8 Observability Stack
-
-| Tool | Purpose | Integration |
-|------|---------|-------------|
-| **Sentry** | Error tracking + performance | FastAPI + Starlette integrations, PII scrubbing |
-| **Prometheus** | Metrics (counters, histograms, gauges) | 1002-line metrics.py, `/metrics` endpoint |
-| **OpenTelemetry** | Distributed tracing | Pipeline stage spans, custom tracer |
-| **Structured logging** | JSON logs to stdout | `log_sanitizer.py` masks PII in all log output |
-
-### 3.9 API Endpoints Inventory
-
-**126 total endpoints** across 35 route modules + main.py:
-
-| Category | Endpoints | Key Routes |
-|----------|-----------|------------|
-| **Search** | 10 | `POST /buscar`, `GET /buscar-progress/{id}` (SSE), `/search/{id}/status`, `/search/{id}/retry` |
-| **Pipeline** | 5 | CRUD + `/pipeline/alerts` |
-| **Billing** | 6 | `/checkout`, `/billing-portal`, `/subscription/status`, `/plans` |
-| **User/Auth** | 12 | `/me`, `/change-password`, `/trial-status`, `/profile/context`, Google OAuth |
-| **Analytics** | 6 | `/summary`, `/searches-over-time`, `/top-dimensions`, `/trial-value` |
-| **Alerts** | 7 | CRUD + `/history`, `/preview`, `/unsubscribe` |
-| **Admin** | 8 | `/admin/feedback/patterns`, `/admin/partners`, `/search-trace/{id}` |
-| **Messages** | 5 | Conversations CRUD + replies |
-| **Organizations** | 6 | CRUD + invite/accept + dashboard |
-| **Health** | 8 | `/health`, `/health/live`, `/health/ready`, `/health/cache`, `/status` |
-| **Content** | 10 | SEO pages (`/setores`, `/setor/{id}`, `/panorama/{id}`), blog stats |
-| **Other** | 43 | Sessions, feedback, MFA, partners, reports, emails, feature flags, SLO |
+**Fallback:** Se Redis/ARQ indisponivel, `is_queue_available()` retorna False e LLM/Excel executam inline (zero regressao).
 
 ---
 
-## 4. Frontend Architecture
+## 4. Superficie API
 
-### 4.1 App Router Structure (47 Pages)
+### 4.1 Rotas de Busca
 
-| Category | Routes | Count |
-|----------|--------|-------|
-| **Core app** | `/buscar`, `/dashboard`, `/historico`, `/pipeline`, `/mensagens`, `/alertas`, `/status` | 7 |
-| **Auth** | `/login`, `/signup`, `/auth/callback`, `/recuperar-senha`, `/redefinir-senha`, `/onboarding` | 6 |
-| **Account** | `/conta`, `/conta/dados`, `/conta/perfil`, `/conta/plano`, `/conta/equipe`, `/conta/seguranca` | 6 |
-| **Admin** | `/admin`, `/admin/cache`, `/admin/emails`, `/admin/metrics`, `/admin/partners`, `/admin/slo` | 6 |
-| **Marketing** | `/`, `/planos`, `/pricing`, `/features`, `/sobre`, `/planos/obrigado` | 6 |
-| **Blog/SEO** | `/blog`, `/blog/[slug]`, `/blog/licitacoes/*`, `/blog/panorama/*`, `/blog/programmatic/*`, `/licitacoes/*` | 8 |
-| **Content** | `/ajuda`, `/termos`, `/privacidade`, `/como-avaliar-*`, `/como-evitar-*`, `/como-filtrar-*`, `/como-priorizar-*` | 6 |
-| **Legal** | `/termos`, `/privacidade` | 2 |
+| Metodo | Rota | Modulo | Proposito |
+|--------|------|--------|-----------|
+| POST | `/buscar` | `search.py` | Busca principal de licitacoes |
+| GET | `/buscar-progress/{id}` | `search_sse.py` | SSE stream de progresso |
+| GET | `/v1/search/{id}/status` | `search_status.py` | Status da busca (polling) |
+| GET | `/v1/search/{id}/results` | `search_status.py` | Resultados da busca |
+| POST | `/v1/search/{id}/retry` | `search_status.py` | Retry de busca falha |
+| POST | `/v1/search/{id}/cancel` | `search_status.py` | Cancela busca ativa |
 
-### 4.2 Component Architecture
+### 4.2 Pipeline (Kanban)
 
-**Buscar (search page) components: 41 files**
-- Search: `SearchForm`, `SearchResults`, `FilterPanel`, `UfProgressGrid`, `SearchProgressBanner`
-- Resilience: `CacheBanner`, `DegradationBanner`, `PartialResultsPrompt`, `SourcesUnavailable`, `DataQualityBanner`
-- AI: `LlmSourceBadge`, `ViabilityBadge`, `FeedbackButtons`, `ReliabilityBadge`
-- Loading: `EnhancedLoadingProgress`, `LoadingProgress`
+| Metodo | Rota | Modulo | Proposito |
+|--------|------|--------|-----------|
+| POST | `/pipeline` | `pipeline.py` | Adiciona oportunidade ao pipeline |
+| GET | `/pipeline` | `pipeline.py` | Lista items do pipeline |
+| PATCH | `/pipeline/{id}` | `pipeline.py` | Move/atualiza item |
+| DELETE | `/pipeline/{id}` | `pipeline.py` | Remove item |
+| GET | `/pipeline/alerts` | `alerts.py` | Alertas de prazo/atualizacao |
 
-**Shared components: ~32 files** in `components/`
-- Layout: `NavigationShell`, `Sidebar`, `BottomNav`, `PageHeader`, `MobileDrawer`
-- Billing: `PlanCard`, `PlanToggle`, `PaymentFailedBanner`, `CancelSubscriptionModal` (in `billing/`)
-- Error handling: `ErrorBoundary`, `PageErrorBoundary`, `ErrorStateWithRetry`
-- User: `ProfileCompletionPrompt`, `ProfileProgressBar`, `AuthLoadingScreen`
+### 4.3 Billing & Subscriptions
 
-### 4.3 Hooks Architecture
+| Metodo | Rota | Modulo | Proposito |
+|--------|------|--------|-----------|
+| GET | `/plans` | `plans.py` | Lista planos disponiveis |
+| POST | `/checkout` | `billing.py` | Cria sessao Stripe Checkout |
+| POST | `/billing-portal` | `billing.py` | Porta para billing portal Stripe |
+| GET | `/subscription/status` | `subscriptions.py` | Status da subscription ativa |
+| POST | `/webhooks/stripe` | `stripe.py` | Webhook handler Stripe |
 
-**Shared hooks (27):** `useAlerts`, `useAnalytics`, `useConversations`, `useFeatureFlags`, `useFetchWithBackoff`, `useKeyboardShortcuts`, `useOrganization`, `usePipeline`, `usePlan`, `usePlans`, `useProfileContext`, `useQuota`, `useSearchSSE`, `useSessions`, `useTrialPhase`, etc.
+### 4.4 User & Auth
 
-**Buscar hooks (9):** `useSearch` (main orchestrator), `useSearchExecution`, `useSearchExport`, `useSearchFilters`, `useSearchOrchestration`, `useSearchPersistence`, `useSearchRetry`, `useSearchSSEHandler`, `useUfProgress`
+| Metodo | Rota | Modulo | Proposito |
+|--------|------|--------|-----------|
+| GET | `/me` | `user.py` | Perfil do usuario autenticado |
+| POST | `/change-password` | `user.py` | Alterar senha |
+| GET | `/trial-status` | `user.py` | Status do trial (dias restantes) |
+| PUT | `/profile/context` | `user.py` | Atualizar contexto (setor, UFs) |
+| GET | `/auth/google` | `auth_oauth.py` | Inicio OAuth Google |
+| GET | `/auth/google/callback` | `auth_oauth.py` | Callback OAuth |
+| POST | `/auth/email/login` | `auth_email.py` | Login por email |
+| POST | `/auth/email/signup` | `auth_email.py` | Cadastro por email |
+| POST | `/auth/mfa/setup` | `mfa.py` | Setup MFA TOTP |
 
-### 4.4 API Proxy Pattern
+### 4.5 Analytics & Feedback
 
-The frontend uses Next.js API routes as proxies to the backend (58 route handlers in `app/api/`). This provides:
-- Cookie-based auth forwarding (Supabase SSR tokens)
-- CORS isolation (frontend domain only talks to itself)
-- Backend URL hidden from client
-- Structured error extraction and forwarding
+| Metodo | Rota | Modulo | Proposito |
+|--------|------|--------|-----------|
+| GET | `/analytics/summary` | `analytics.py` | Resumo de uso |
+| GET | `/analytics/searches-over-time` | `analytics.py` | Historico de buscas |
+| GET | `/analytics/top-dimensions` | `analytics.py` | Top UFs/setores |
+| POST | `/feedback` | `feedback.py` | Feedback de relevancia |
+| DELETE | `/feedback/{id}` | `feedback.py` | Remove feedback |
+| GET | `/admin/feedback/patterns` | `feedback.py` | Analise de padroes |
 
-### 4.5 Security Headers
+### 4.6 Outros
 
-The `middleware.ts` implements comprehensive security:
-- **CSP:** Nonce-based `script-src` with `strict-dynamic` (DEBT-108)
-- **HSTS:** Preload enabled
-- **COOP:** `same-origin`
-- **X-DNS-Prefetch-Control:** off
-- **Frame protection:** Stripe only
-- CSP violation reporting to `/api/csp-report`
-
----
-
-## 5. Database Architecture
-
-### 5.1 Tables (29)
-
-| Table | Purpose | RLS |
-|-------|---------|-----|
-| `profiles` | User profiles (extends auth.users) | Yes |
-| `search_sessions` | Search history and results | Yes |
-| `search_results_cache` | L2 cache for search results | Yes |
-| `search_results_store` | Persistent search result storage | Yes |
-| `search_state_transitions` | Search state machine audit trail | Yes |
-| `pipeline_items` | Kanban pipeline opportunities | Yes |
-| `monthly_quota` | Per-user monthly search quota tracking | Yes |
-| `plan_features` | Plan capability definitions | Yes |
-| `plan_billing_periods` | Stripe price IDs per billing period | Yes |
-| `stripe_webhook_events` | Idempotent webhook event log | Yes |
-| `classification_feedback` | User feedback on LLM classifications | Yes |
-| `conversations` / `messages` | In-app messaging | Yes |
-| `user_oauth_tokens` | Google OAuth tokens | Yes |
-| `google_sheets_exports` | Export history | Yes |
-| `alerts` / `alert_runs` / `alert_sent_items` / `alert_preferences` | Email alert system | Yes |
-| `health_checks` / `incidents` | Status page data | Yes |
-| `mfa_recovery_codes` / `mfa_recovery_attempts` | MFA support | Yes |
-| `organizations` / `organization_members` | Multi-tenant orgs | Yes |
-| `partners` / `partner_referrals` | Revenue share program | Yes |
-| `trial_email_log` | Trial email sequence tracking | Yes |
-| `reconciliation_log` | Stripe reconciliation audit | Yes |
-| `audit_events` | General audit trail | Yes |
-
-### 5.2 Key Schema Patterns
-
-- **All tables have RLS enabled** (28 tables confirmed)
-- **105 RLS policies** with consistent patterns: user_id match for user data, service_role bypass for admin operations
-- **95 indexes** covering user_id foreign keys, search parameters, and time-based queries
-- **32 database functions** including `check_and_increment_quota` (atomic), plan sync triggers, and retention policies
-- **Foreign keys standardized** to `profiles(id)` via multiple migration passes (DEBT-001, DEBT-104)
+| Metodo | Rota | Modulo | Proposito |
+|--------|------|--------|-----------|
+| GET | `/health` | `health_core.py` | Health check (dependencias) |
+| GET | `/health/cache` | `health.py` | Status do cache |
+| GET | `/metrics` | middleware | Prometheus metrics (token auth) |
+| GET | `/sessions` | `sessions.py` | Historico de buscas |
+| POST | `/conversations` | `messages.py` | Criar conversa |
+| GET | `/setores` | `sectors_public.py` | Lista setores disponiveis |
+| POST | `/onboarding/first-analysis` | `onboarding.py` | Primeira analise trial |
+| GET | `/admin/search-trace/{id}` | `admin_trace.py` | Trace de busca (admin) |
+| GET | `/admin/feature-flags` | `feature_flags.py` | Lista feature flags |
 
 ---
 
-## 6. CI/CD and Infrastructure
+## 5. Diagramas de Fluxo de Dados
 
-### 6.1 GitHub Actions Workflows (17)
-
-| Workflow | Trigger | Purpose |
-|----------|---------|---------|
-| `backend-tests.yml` | PR + push | 7332+ backend tests with pytest |
-| `frontend-tests.yml` | PR + push | 5583+ frontend tests with Jest |
-| `e2e.yml` | PR + push | 60 Playwright E2E tests |
-| `deploy.yml` | Push to main | Deploy backend + frontend to Railway |
-| `staging-deploy.yml` | Push to staging | Deploy to staging environment |
-| `pr-validation.yml` | PR | Lint, type-check, schema validation |
-| `migration-gate.yml` | PR (migrations) | Warning comment on unapplied migrations |
-| `migration-check.yml` | Push + daily | Block if unapplied migrations |
-| `codeql.yml` | Schedule | Security scanning |
-| `lighthouse.yml` | PR | Performance auditing |
-| `load-test.yml` | Manual | Locust load testing |
-| `cleanup.yml` | Schedule | Resource cleanup |
-| `dependabot-auto-merge.yml` | Dependabot PRs | Auto-merge patch updates |
-| `sync-sectors.yml` | Manual | Sync sector data frontend-backend |
-| Others | Various | handle_new_user guard, backend-ci |
-
-### 6.2 Three-Layer Migration Defense
-
-1. **PR Warning** (`migration-gate.yml`): Lists pending migrations, posts comment
-2. **Push Alert** (`migration-check.yml`): Blocks (exit 1) if unapplied migrations
-3. **Auto-Apply on Deploy** (`deploy.yml`): Runs `supabase db push --include-all` after deploy
-
----
-
-## 7. Architecture Patterns Assessment
-
-### 7.1 Patterns Used Well
-
-| Pattern | Implementation | Quality |
-|---------|---------------|---------|
-| **Circuit breaker** | Per-source (PNCP, PCP, ComprasGov) + Supabase | Sliding window, configurable thresholds |
-| **Bulkhead isolation** | Per-source concurrency limits | Prevents one slow source from starving others |
-| **SWR cache** | Two-level (InMemory + Supabase) | Graceful degradation, background revalidation |
-| **Pipeline architecture** | 7-stage with thin orchestrator + stage modules | Clean separation, testable stages |
-| **Fail-fast filtering** | Cheapest checks first, expensive (LLM) last | Optimal resource usage |
-| **Zero noise philosophy** | LLM failure = REJECT | No false positives from AI errors |
-| **Proxy pattern** | Next.js API routes proxy all backend calls | Security isolation, CORS clean |
-| **CSP nonce** | Per-request nonce with strict-dynamic | Strong XSS prevention |
-| **PII scrubbing** | Sentry before_send + log_sanitizer | Consistent masking across all outputs |
-| **Feature flags** | 40+ flags with runtime toggle capability | Gradual rollout, kill switches |
-| **Timeout chain** | Strictly decreasing per level | No unbounded waits |
-
-### 7.2 Patterns Concerns
-
-| Concern | Description |
-|---------|-------------|
-| **Monolithic filter.py** | 3,871 lines despite decomposition into 11 filter_*.py files. `filter.py` still contains substantial logic alongside the submodules |
-| **Flat backend structure** | 69 top-level .py files. Some logical groupings (filter, pncp, search) span multiple files at the same directory level |
-| **Dual search path** | Some endpoints in `main.py` (7) coexist with 119 in `routes/`. Incremental migration from monolith is complete but main.py still has legacy endpoints |
-| **Schema monolith** | `schemas.py` at 2,121 lines contains all Pydantic models. Could benefit from per-domain schema files |
-| **Config explosion** | 40+ feature flags + extensive env vars (356 lines in .env.example). Operational complexity |
-
----
-
-## 8. Technical Debt Register
-
-### Critical
-
-| ID | Category | Description | Impact | Est. Effort |
-|----|----------|-------------|--------|-------------|
-| DEBT-301 | Architecture | `filter.py` at 3,871 LOC is the largest file despite 11 filter submodules existing. Core matching logic should be fully migrated to submodules, leaving filter.py as a thin orchestrator | Maintenance burden, merge conflicts, hard to reason about filtering behavior | 8h |
-| DEBT-302 | Architecture | `schemas.py` at 2,121 LOC is a monolithic Pydantic model file. All request/response models for 126 endpoints live in one file | Slow IDE navigation, merge conflicts, no domain boundary enforcement | 6h |
-| DEBT-303 | Performance | `pncp_client.py` still imports sync `requests` library alongside async `httpx`. The sync fallback is wrapped in `asyncio.to_thread()` but the dual-client pattern adds complexity | Code duplication between sync/async paths, potential thread pool exhaustion under load | 4h |
-
-### High
-
-| ID | Category | Description | Impact | Est. Effort |
-|----|----------|-------------|--------|-------------|
-| DEBT-304 | Architecture | 69 top-level Python files in `backend/`. Logical groupings like filtering (11 files), search (4 files), PNCP (3 files) should be packages | Developer onboarding friction, hard to navigate codebase | 12h |
-| DEBT-305 | Architecture | `job_queue.py` at 2,152 LOC and `cron_jobs.py` at 2,039 LOC are both large monoliths handling all background task definitions | Hard to test individual jobs, risk of import side effects | 6h |
-| DEBT-306 | Maintainability | `search_cache.py` at 2,512 LOC handles L1, L2, SWR logic, cache key generation, and serialization all in one file | Complex state management in a single module | 4h |
-| DEBT-307 | Security | `webhooks/stripe.py` at 1,192 LOC handles all Stripe webhook events in a single handler function. Complex branching for 10+ event types | Hard to audit security-critical billing logic, risk of missed edge cases | 6h |
-| DEBT-308 | Performance | Frontend `api-types.generated.ts` at 5,177 LOC is a generated type file. If it's not tree-shaken, it bloats the client bundle | Larger bundle size, slower page loads | 2h |
-| DEBT-309 | Architecture | `quota.py` at 1,622 LOC mixes plan definition, quota checking, rate limiting, and trial logic | Multiple responsibilities in one module, hard to modify billing rules | 4h |
-
-### Medium
-
-| ID | Category | Description | Impact | Est. Effort |
-|----|----------|-------------|--------|-------------|
-| DEBT-310 | Maintainability | `main.py` reduced to 103 LOC (DEBT-107 completed) but retains ~75 lines of backward-compat re-exports and proxy classes for test compatibility (`main.py:28-102`). Tests should import from actual module locations (`startup.state`, `startup.lifespan`, etc.) | Test coupling to legacy import paths, confusing proxy classes | 3h |
-| DEBT-311 | Testing | Backend test LOC (140,199) is 1.8x the source LOC (77,364). While high coverage is good, the test-to-source ratio suggests potential test duplication or over-specification | Slower CI, test maintenance burden, brittle tests that break on refactoring | 8h (audit) |
-| DEBT-312 | Maintainability | 11 filter_*.py files + filter.py creates ambiguity about which file owns which filtering responsibility. `filter.py` header says "Keyword matching engine for uniform/apparel procurement" but it's used for all sectors | Confusing module naming, stale docstrings | 3h |
-| DEBT-313 | Infrastructure | ComprasGov v3 data source has been down since March 2026. The client code (838 LOC) and circuit breaker config remain active. Priority should be formally demoted or the source should be disabled | Wasted timeout budget on dead source, confusing source health dashboard | 2h |
-| DEBT-314 | Maintainability | `config/features.py` exports 40+ feature flags. Several may be permanently enabled/disabled but are still treated as toggleable | Configuration complexity, dead feature flag accumulation | 3h |
-| DEBT-315 | Architecture | Frontend has 58 API proxy routes. Many follow identical patterns (forward auth, proxy to backend, extract errors). A generic proxy factory exists (`create-proxy-route.ts`) but not all routes use it | Code duplication across proxy routes | 4h |
-| DEBT-316 | UX | Frontend `onboarding/page.tsx` at 783 LOC and `signup/page.tsx` at 703 LOC are large single-file pages without component decomposition | Hard to test individual form steps, maintenance burden | 4h |
-
-### Low
-
-| ID | Category | Description | Impact | Est. Effort |
-|----|----------|-------------|--------|-------------|
-| DEBT-317 | Maintainability | `backend/clients/` has 5 client modules with varying structure. No shared base class despite `base.py` existing | Inconsistent error handling across data sources | 4h |
-| DEBT-318 | Documentation | Backend has `docs/` and `examples/` directories. Content currency is unknown | Potentially stale documentation | 2h (audit) |
-| DEBT-319 | Testing | Backend `scripts/` contains 12 utility scripts, some with their own test files (`test_audit_pipeline.py`). These aren't part of the main test suite | Script quality not validated in CI | 2h |
-| DEBT-320 | Architecture | `startup/` decomposition is COMPLETE (DEBT-107). `main.py` now delegates all init to `startup/app_factory.py:create_app()`. Remaining issue: `main.py:82-102` has a `track_legacy_routes()` shim that duplicates logic from `startup/middleware_setup.py:103-119` for backward-compat tests | Minor duplication, test coupling | 1h |
-| DEBT-321 | Performance | `blog.ts` at 785 LOC in the frontend lib suggests blog content may be hardcoded or statically defined rather than CMS-driven | Content updates require code deployments | N/A (design choice) |
-| DEBT-322 | Architecture | Circuit breaker configs for PCP and ComprasGov are defined in `pncp_client.py:56-71` despite those sources having their own client modules in `clients/`. Should live in `source_config/sources.py` or respective client files | Misleading code location, maintenance confusion | 1h |
-| DEBT-323 | Security | `_plan_status_cache` in `quota.py:44` is an unbounded `dict`. Unlike `_token_cache` (LRU 1000 entries) and `_arbiter_cache` (LRU 5000), this grows without limit. Under high user count, memory exhaustion possible | Memory safety gap | 1h |
-| DEBT-324 | Architecture | Dual Stripe webhook router registration in `startup/routes.py:62+70` -- included both at `/v1/` prefix (line 62 via `_v1_routers`) and at root (line 70). Creates ambiguous routing | Potential double-processing of webhooks | 1h |
-| DEBT-325 | Maintainability | `llm_arbiter.py:73` hardcodes `_USD_TO_BRL = 5.0` for cost estimation. Should be configurable or fetched | Inaccurate cost tracking as exchange rate drifts | 0.5h |
-
----
-
-## 9. Scalability Assessment
-
-### 9.1 Current Bottlenecks
-
-| Resource | Current Limit | Concern |
-|----------|--------------|---------|
-| **Railway memory** | 1GB (backend) | 2 Gunicorn workers with in-memory caches. OOM risk under load (WEB_CONCURRENCY reduced from 4 to 2) |
-| **PNCP API** | 50 items/page, rate limits | Phased UF batching (batch_size=5, delay=2s) mitigates but limits throughput |
-| **LLM calls** | ThreadPoolExecutor(max_workers=10) | Parallel but bounded. GPT-4.1-nano latency adds 1-3s per classification |
-| **Redis** | Single instance (Upstash/Railway) | No cluster. Single point of failure (mitigated by in-memory L1 fallback) |
-| **Supabase** | Cloud free/pro tier | Connection pooling via Supavisor. No read replicas |
-
-### 9.2 Horizontal Scaling Path
-
-The architecture supports horizontal scaling at the web tier (add Gunicorn workers or Railway replicas) but has shared-state constraints:
-- L1 cache is per-worker (not shared between Gunicorn workers)
-- SSE progress tracking uses in-memory asyncio.Queue (not shared)
-- Feature flags cached per-process
-- To scale beyond 1 Railway instance: move SSE to Redis Pub/Sub, move progress tracking to Redis
-
-### 9.3 Reliability Patterns
-
-- **Fallback cascade:** Live fetch -> Partial results -> Stale cache -> Empty (with degradation banners)
-- **Circuit breakers:** Per-source with independent thresholds and cooldowns
-- **Auto-retry:** Frontend exponential backoff [10s, 20s, 30s] for transient errors
-- **Graceful degradation:** SSE failure -> time-based simulation; Backend offline -> queued searches
-- **Health checks:** `/health/live` (liveness), `/health/ready` (readiness), `/health/cache` (cache status)
-
----
-
-## 10. Security Posture
-
-### 10.1 Strengths
-
-- RLS on all 29 tables (105 policies)
-- JWT validation with ES256+JWKS support
-- CSP nonce-based with strict-dynamic
-- PII scrubbing in Sentry + structured logs
-- Input validation via Pydantic on all endpoints
-- UUID pattern validation on all ID parameters
-- Search query sanitization regex (SAFE_SEARCH_PATTERN)
-- Rate limiting (Redis token bucket)
-- Stripe webhook signature verification
-- API docs disabled in production
-- Security headers (HSTS, COOP, X-DNS-Prefetch-Control)
-- CodeQL security scanning in CI
-
-### 10.2 Areas to Monitor
-
-- `.env` files exist locally but are properly gitignored
-- `SUPABASE_SERVICE_ROLE_KEY` bypasses RLS (used by backend only)
-- `style-src 'unsafe-inline'` in CSP (accepted risk for Tailwind, documented)
-- No WAF in front of Railway (relies on Railway proxy + Cloudflare DNS)
-- MFA is optional (TOTP + recovery codes implemented but not enforced)
-
----
-
-## 11. Data Flow Diagram
-
-### 11.1 Search Request Flow
+### 5.1 Fluxo de Busca Principal
 
 ```
-User clicks "Buscar"
-    ↓
-Frontend: POST /api/buscar (Next.js proxy)
-    ↓
-Backend: POST /v1/buscar
-    ├── Auth (JWT validation, quota check)
-    ├── Check cache (L1 → L2 → miss)
-    ├── If cache hit (fresh): return immediately
-    ├── If cache stale: serve stale + background revalidation
-    ├── If cache miss:
-    │   ├── [Parallel] PNCP API (batched UFs, phased modalities)
-    │   ├── [Parallel] PCP v2 API (all UFs, client-side filter)
-    │   ├── [Parallel] ComprasGov v3 (if enabled)
-    │   ├── Consolidation (dedup by priority, normalize schemas)
-    │   ├── Filter pipeline (UF → Value → Keywords → LLM → Status)
-    │   ├── Viability scoring (4 factors)
-    │   ├── [ARQ Job] LLM summary + Excel generation
-    │   └── Cache write (L1 + L2)
-    └── Return BuscaResponse (202 if async, 200 if sync)
-
-[Parallel] SSE: GET /v1/buscar-progress/{search_id}
-    ├── Wait-for-tracker (heartbeat every 15s)
-    ├── Per-UF progress events
-    ├── source_complete events
-    ├── llm_ready / excel_ready events (from ARQ)
-    └── done event
+Usuario (Frontend)
+    │
+    ├── POST /buscar ──────────────────────────┐
+    │                                           ▼
+    │   ┌─────────── SearchPipeline ───────────────────────┐
+    │   │ 1. VALIDATE: UFs, datas, setor, rate limit       │
+    │   │ 2. PREPARE: keywords do setor, config            │
+    │   │ 3. EXECUTE:                                      │
+    │   │    ├── Cache hit? → serve + SWR background       │
+    │   │    ├── DATALAKE_QUERY? → query_datalake() (SQL)  │
+    │   │    └── Fallback → multi-source API fetch         │
+    │   │        ├── PNCP (priority 1)                     │
+    │   │        ├── PCP v2 (priority 2)                   │
+    │   │        └── ComprasGov (priority 3)               │
+    │   │ 4. FILTER: UF → valor → keywords → density      │
+    │   │ 5. ENRICH: viability, status, urgencia           │
+    │   │ 6. POST_FILTER_LLM: zero-match classification   │
+    │   │ 7. GENERATE: LLM resumo + Excel (ou ARQ job)    │
+    │   │ 8. PERSIST: cache + DB                           │
+    │   └──────────────────────────────────────────────────┘
+    │                    │
+    │                    ▼
+    │              BuscaResponse (JSON)
+    │
+    └── GET /buscar-progress/{id} (SSE) ──> ProgressEvents
 ```
 
-### 11.2 Billing Flow
+### 5.2 Fluxo de Ingestao
 
 ```
-User selects plan → POST /v1/checkout → Stripe Checkout Session
-    ↓ (redirect to Stripe)
-Stripe payment → Webhook → POST /v1/stripe/webhook
-    ├── checkout.session.completed → activate plan, sync profiles.plan_type
-    ├── invoice.paid → extend subscription
-    ├── invoice.payment_failed → dunning emails
-    ├── customer.subscription.updated → plan change, sync
-    └── customer.subscription.deleted → downgrade to free
+ARQ Cron Scheduler
+    │
+    ├── 05:00 UTC (diario) ──> ingestion_full_crawl_job
+    │   │
+    │   ▼
+    │   crawl_full()
+    │   ├── Para cada UF (5 paralelas):
+    │   │   └── Para cada modalidade (6):
+    │   │       └── crawl_uf_modalidade()
+    │   │           ├── AsyncPNCPClient._fetch_page_async() (ate 50 paginas)
+    │   │           ├── transform_batch() → normaliza para schema pncp_raw_bids
+    │   │           └── bulk_upsert() → RPC upsert_pncp_raw_bids (500 rows/batch)
+    │   └── save_checkpoint() + complete_ingestion_run()
+    │
+    ├── 11/17/23 UTC ──> ingestion_incremental_job
+    │   └── crawl_incremental() (mesma logica, 3 dias + overlap)
+    │
+    └── 07:00 UTC ──> ingestion_purge_job
+        └── purge_old_bids() (soft-delete >12 dias)
+```
+
+### 5.3 Fluxo de Classificacao LLM
+
+```
+Lista de licitacoes (pos-fetch)
+    │
+    ▼
+filter/core.py: aplicar_todos_filtros()
+    │
+    ├── UF check (fail-fast)
+    ├── Value range check
+    ├── Keyword matching + density scoring
+    │   │
+    │   ├── density > 5% → ACCEPT (source: "keyword")
+    │   ├── density 2-5% → LLM arbiter standard
+    │   ├── density 1-2% → LLM arbiter conservative
+    │   └── density 0% → LLM zero-match (se habilitado)
+    │       │
+    │       ▼
+    │   llm_arbiter.py: classify_bid()
+    │   ├── Check MD5 cache (in-memory)
+    │   ├── GPT-4.1-nano API call (5s timeout)
+    │   │   └── Structured output: {classe, confianca, evidencias, motivo_exclusao}
+    │   ├── Sucesso: SIM/NAO com score
+    │   └── Falha: PENDING_REVIEW ou REJECT (config)
+    │
+    ├── Status/date validation
+    └── Viability assessment (4 fatores, post-filter)
 ```
 
 ---
 
-## Appendix A: Key Configuration Constants
+## 6. Arquitetura de Seguranca
 
-| Constant | Value | Source |
-|----------|-------|--------|
-| `PNCP_MAX_PAGE_SIZE` | 50 | PNCP API limit (was 500, reduced Feb 2026) |
-| `PNCP_BATCH_SIZE` | 5 UFs per batch | Rate limit mitigation |
-| `PNCP_BATCH_DELAY_S` | 2.0s | Inter-batch delay |
-| `PIPELINE_TIMEOUT` | 110s | Total pipeline timeout |
-| `CONSOLIDATION_TIMEOUT` | 100s | Multi-source consolidation |
-| `PNCP_TIMEOUT_PER_SOURCE` | 80s | Per-source fetch timeout |
-| `PNCP_TIMEOUT_PER_UF` | 30s | Per-UF fetch timeout |
-| `PIPELINE_SKIP_LLM_AFTER_S` | 90s | Skip LLM if pipeline running long |
-| `PIPELINE_SKIP_VIABILITY_AFTER_S` | 100s | Skip viability scoring |
-| `GUNICORN_TIMEOUT` | 120s | Worker request timeout |
-| `GUNICORN_KEEP_ALIVE` | 75s | > Railway proxy 60s |
-| `WEB_CONCURRENCY` | 2 | Workers (Railway 1GB limit) |
-| `CACHE_L1_TTL` | 4h | In-memory cache TTL |
-| `CACHE_L2_TTL` | 24h | Supabase cache TTL |
-| `TRIAL_DURATION_DAYS` | 14 | Free trial length |
-| `MAX_CACHE_ENTRIES` | 1000 | L1 auth token cache |
-| `SSE_HEARTBEAT_INTERVAL` | 15s | SSE keep-alive |
-| `SEARCH_DEFAULT_PERIOD` | 10 days | Default search date range |
+### 6.1 Autenticacao & Autorizacao
 
-## Appendix B: Environment Variables (Key)
+- **Supabase Auth** com JWT (ES256+JWKS): validacao local sem API call (rapida e confiavel)
+- **Token cache L1/L2**: OrderedDict LRU (1000 entries, 60s TTL) + Redis (5min TTL, shared entre workers)
+- **RLS (Row Level Security)**: Ativo em todas as tabelas Supabase — dados isolados por usuario
+- **Role check**: `is_admin` e `is_master` para endpoints administrativos
+- **OAuth**: Google login + Google Sheets export
+- **MFA**: TOTP com bcrypt hashing de recovery codes (STORY-317)
 
-| Variable | Purpose | Default |
-|----------|---------|---------|
-| `SUPABASE_URL` | Supabase project URL | Required |
-| `SUPABASE_SERVICE_ROLE_KEY` | Admin key (bypasses RLS) | Required |
-| `OPENAI_API_KEY` | GPT-4.1-nano API key | Required |
-| `REDIS_URL` | Redis connection URL | Optional (fallback to in-memory) |
-| `STRIPE_SECRET_KEY` | Stripe billing | Required for billing |
-| `RESEND_API_KEY` | Email sending | Required for emails |
-| `PROCESS_TYPE` | `web` or `worker` | `web` |
-| `RUNNER` | `gunicorn` or `uvicorn` | `gunicorn` |
-| `WEB_CONCURRENCY` | Gunicorn workers | 2 |
-| `GUNICORN_TIMEOUT` | Worker timeout | 120s |
-| `GUNICORN_KEEP_ALIVE` | Keep-alive timeout | 75s |
-| `LLM_ARBITER_ENABLED` | Enable LLM classification | `true` |
-| `LLM_ZERO_MATCH_ENABLED` | Enable zero-match LLM | `true` |
-| `VIABILITY_ASSESSMENT_ENABLED` | Enable viability scoring | `true` |
-| `SEARCH_RATE_LIMIT_PER_MINUTE` | Per-user search rate limit | 10 |
-| `SEARCH_ASYNC_ENABLED` | Enable async search via ARQ | `false` |
-| `METRICS_ENABLED` | Enable Prometheus metrics | `true` |
-| `SENTRY_DSN` | Sentry error tracking URL | Optional |
-| `APP_VERSION` | Release version tag | `dev` |
+### 6.2 Rate Limiting
+
+- **Token bucket** via Redis + in-memory fallback:
+  - Search: 10 req/min por usuario
+  - Auth: 5 req/5min por IP
+  - Signup: 3 req/10min por IP
+  - SSE: max 3 conexoes simultaneas, 10 reconnects/60s
+
+### 6.3 Input Validation
+
+- **Pydantic v2** em todos os endpoints: validacao tipada com pattern matching para datas
+- **Zod** no frontend: validacao client-side de formularios
+- **CORS**: Configuravel via `CORS_ORIGINS`
+- **Log sanitization**: `log_sanitizer.py` mascara tokens, user IDs, e dados sensiveis
+
+### 6.4 Protecao de APIs Externas
+
+- **Circuit breakers**: 15 failures threshold, 60s cooldown (PNCP, PCP, ComprasGov)
+- **Bulkhead pattern**: Semaforos por fonte (concurrency isolation) — evita que uma fonte degradada afete as outras
+- **Stripe webhook verification**: Signature check em todos os webhooks
+- **API keys em env vars**: Nunca commitados no codigo
+
+### 6.5 Quota & Billing
+
+- **Atomic quota check**: `check_and_increment_quota_atomic()` — single DB transaction (TOCTOU prevention)
+- **Fail-open on CB**: Se circuit breaker aberto, permite busca e loga para reconciliacao
+- **Grace period**: 3 dias apos expiracao de subscription
+- **Trial paywall**: Apos dia 7, limita a 10 resultados e 5 pipeline items
 
 ---
 
-*Document v5.0 updated 2026-03-23 by @architect (Aria) during Brownfield Discovery Phase 1 refresh.*
-*Codebase analysis based on actual file reads -- all numbers and file:line references verified against source.*
-*Previous version: v4.0 (2026-03-21, Atlas). Changes in v5.0: corrected main.py LOC (103, not 1212), added startup/ decomposition detail, added middleware stack section, added SSE progress tracking detail, added source adapter pattern, added 4 new DEBT items (322-325), updated DEBT-310/320 to reflect DEBT-107 completion.*
+## 7. Observabilidade
+
+### 7.1 Metricas (Prometheus)
+
+Definidas em `metrics.py` (1.037 LOC) com graceful degradation (no-op se prometheus_client ausente):
+
+| Categoria | Metricas Exemplares |
+|-----------|-------------------|
+| Search | `SEARCH_DURATION`, `ACTIVE_SEARCHES`, `SEARCHES`, `BIDS_PROCESSED_TOTAL` |
+| Cache | `CACHE_HITS`, `CACHE_MISSES`, `ARBITER_CACHE_SIZE` |
+| LLM | `LLM_CALLS`, `LLM_DURATION`, `LLM_FALLBACK_REJECTS_TOTAL` |
+| Sources | `FETCH_DURATION`, `API_ERRORS`, `SOURCES_BIDS_FETCHED`, `SOURCE_DEGRADATION_TOTAL` |
+| Bulkhead | `BULKHEAD_ACQUIRE_TIMEOUT`, `SOURCE_ACTIVE_REQUESTS`, `SOURCE_POOL_EXHAUSTED` |
+| Ingestion | `INGESTION_RECORDS_FETCHED`, `INGESTION_RECORDS_UPSERTED`, `INGESTION_RUN_DURATION` |
+| Auth | `AUTH_CACHE_EVICTIONS` |
+| Rate Limit | Counters por endpoint |
+
+Endpoint: `GET /metrics` (protegido por `METRICS_TOKEN`).
+
+### 7.2 Logging Estruturado
+
+- **Producao**: JSON format via `python-json-logger` com campos: timestamp, level, logger_name, request_id, search_id, correlation_id
+- **Desenvolvimento**: Text format com request_id
+- **Request ID**: `RequestIDFilter` middleware injeta UUID em todos os logs
+- **Sanitizacao**: `log_sanitizer.py` mascara tokens e PII automaticamente
+- **SECURITY**: DEBUG logs suprimidos em producao (Issue #168)
+
+### 7.3 Distributed Tracing (OpenTelemetry)
+
+- **Tracer**: `telemetry.py` com init no startup (antes da criacao do FastAPI app)
+- **Sampling**: 10% default (configuravel via `OTEL_SAMPLING_RATE`)
+- **Instrumentacao**: FastAPI + httpx automaticos
+- **Spans customizados**: `pipeline.validate`, `pipeline.fetch`, `pipeline.filter`, etc.
+- **No-op mode**: Zero overhead quando `OTEL_EXPORTER_OTLP_ENDPOINT` nao configurado
+
+### 7.4 Error Tracking (Sentry)
+
+- **SDK**: `sentry-sdk[fastapi]` com integracao automatica
+- **Centralized error reporting**: `utils/error_reporting.py` padroniza emissao de erros
+- **Environment-aware**: DSN configuravel, sampling em producao
+
+### 7.5 Health Checks
+
+- `GET /health`: Status geral com checks de: database, cache, Redis, PNCP API canary
+- **PNCP cron canary**: Task periodica que testa conectividade com PNCP API
+- **Recovery epoch**: Incrementa quando PNCP transiciona degraded/down → healthy (CRIT-056)
+- **3 estados**: `healthy`, `degraded`, `unhealthy`
+
+---
+
+## 8. Divida Tecnica Identificada
+
+### 8.1 Critica
+
+| ID | Descricao | Impacto | Arquivo |
+|----|-----------|---------|---------|
+| DEBT-301 | `filter/core.py` com 4.105 LOC — funcao `aplicar_todos_filtros()` monolitica | Dificulta manutencao, testes isolados, e debug. Decomposicao iniciada (filter_*.py) mas core.py ainda e o maior arquivo. | `filter/core.py` |
+| CRIT-SIGSEGV | Restricoes de C extensions por SIGSEGV intermitente em producao | Impede uso de uvloop, limita upgrades de cryptography, requer testes manuais de fork-safety | `requirements.txt`, `gunicorn_conf.py` |
+
+### 8.2 Alta
+
+| ID | Descricao | Impacto | Arquivo |
+|----|-----------|---------|---------|
+| DEBT-115 | `search_cache.py` com 2.564 LOC — logica multi-level complexa | Dificil de testar e manter. Cache key migration (STORY-306) adicionou dual-read complexity | `search_cache.py` |
+| DEBT-015 | `pncp_client.py` com 2.559 LOC — sync + async em um arquivo | Client legado com sync fallback, circuit breaker, retry logic, tudo no mesmo modulo | `pncp_client.py` |
+| -- | `cron_jobs.py` com 2.251 LOC — multiplas responsabilidades | Cache cleanup, PNCP canary, session cleanup, cache warming, trial emails — tudo junto | `cron_jobs.py` |
+| -- | `job_queue.py` com 2.229 LOC — pool management + worker settings + jobs | Mistura configuracao ARQ, gerenciamento de pool Redis, e definicoes de jobs | `job_queue.py` |
+
+### 8.3 Media
+
+| ID | Descricao | Impacto | Arquivo |
+|----|-----------|---------|---------|
+| -- | Duplicacao filter_*.py (raiz) vs filter/ (pacote) | Arquivos legados na raiz (`filter_keywords.py`, `filter_llm.py`, etc.) coexistem com pacote `filter/`. Imports indiretos via `filter/__init__.py` | Raiz backend |
+| DEBT-103 | LLM timeout hardcoded em multiplos locais | OpenAI timeout em llm_arbiter.py + config separado. Nem sempre consistente | `llm_arbiter.py`, `config/features.py` |
+| -- | 99 migrations Supabase | Volume alto de migrations sugere schema evolving rapidamente. Pode impactar deploy time | `supabase/migrations/` |
+| -- | Feature flag sprawl: 30+ flags sem governance | Flags acumuladas ao longo do tempo. Sem processo de deprecacao ou cleanup | `config/features.py` |
+| -- | `schemas/` directory com 12 files + `schemas_stats.py` + `schema_contract.py` na raiz | Schemas espalhados entre diretorio e raiz | Backend raiz |
+
+### 8.4 Baixa
+
+| ID | Descricao | Impacto | Arquivo |
+|----|-----------|---------|---------|
+| -- | Backward-compat shims em `main.py` | Re-exports para testes legados. Funcional mas adiciona indiracao | `main.py` |
+| -- | `portal_transparencia_client.py` (938 LOC) sem evidencia de uso ativo | Client parece ser preparacao futura ou experimental | `clients/portal_transparencia_client.py` |
+| -- | `querido_diario_client.py` e `qd_extraction.py` em clients/ | Integracao com Querido Diario aparenta ser experimental | `clients/` |
+| -- | Dual-hash transition em auth.py | Window de 1h para compatibilidade de cache keys. Pode ser removido apos estabilizacao | `auth.py` |
+
+---
+
+## 9. Pontos Fortes da Arquitetura
+
+### 9.1 Resiliencia Exemplar
+
+O sistema demonstra maturidade significativa em resiliencia:
+- **Circuit breakers** em todas as fontes externas com cooldown configuravel
+- **Bulkhead pattern** isola fontes de dados com semaforos independentes
+- **Graceful degradation** em todos os niveis: cache fallback, LLM fallback, source fallback
+- **Fail-open policy** para billing (CB open permite busca com log para reconciliacao)
+- **Multi-level cache** com SWR impede que falhas transientes impactem usuarios
+
+### 9.2 Pipeline Bem Estruturado
+
+- 7 estagios claros com separacao de responsabilidades
+- State machine para rastreamento de progresso
+- SSE real-time com Redis Streams (at-least-once delivery)
+- Timeout chain hierarquico que previne cascading failures
+
+### 9.3 Observabilidade Completa
+
+- Stack completa: Prometheus + OpenTelemetry + Sentry + structured logging
+- Request ID propagado em todos os logs
+- Metricas granulares por fonte, por estagio, por operacao LLM
+- Health checks com canary proativo
+
+### 9.4 Datalake Strategy
+
+- Ingestao periodica desacopla busca de APIs externas instáveis
+- Full-text search PostgreSQL com GIN index elimina dependencia de APIs para buscas comuns
+- Checkpoint tracking permite crawls resumiveis
+- Fallback transparente para live API quando datalake vazio
+
+### 9.5 Seguranca Robusta
+
+- JWT validation local (sem API call) com suporte ES256+JWKS
+- RLS em todas as tabelas
+- Atomic quota operations (TOCTOU prevention)
+- Rate limiting multi-camada (Redis + in-memory fallback)
+- Log sanitization automatica
+
+### 9.6 Test Coverage Solida
+
+- 5.131+ testes backend, 2.681+ testes frontend, 60 testes E2E
+- Zero-failure policy estrita
+- Anti-hang rules com pytest-timeout em todos os testes
+- Snapshot testing para contratos API
+
+---
+
+## 10. Recomendacoes
+
+### 10.1 Prioridade Alta
+
+1. **Decompor `filter/core.py` (4.105 LOC):** A funcao `aplicar_todos_filtros()` e o maior gargalo de manutencao. Continuar a decomposicao iniciada com DEBT-301, movendo logica para sub-modulos tematicos. Target: nenhum modulo acima de 500 LOC.
+
+2. **Refatorar `search_cache.py` (2.564 LOC):** Separar logica por camada (L1, L2, L3) em modulos distintos. O modulo mistura logica de InMemory, Redis, Supabase e Local File em um unico arquivo.
+
+3. **Decompor `pncp_client.py` (2.559 LOC):** Separar sync client (legado), async client, circuit breaker, e retry logic em modulos distintos. O `pncp_client_resilient.py` ja existe como tentativa parcial.
+
+### 10.2 Prioridade Media
+
+4. **Governance de feature flags:** Implementar processo de lifecycle (create → active → deprecated → removed) com datas de expiracao. 30+ flags sem cleanup cria "flag debt".
+
+5. **Consolidar filter_*.py:** Resolver a duplicacao entre arquivos na raiz (`filter_keywords.py`, `filter_llm.py`, etc.) e o pacote `filter/`. Os arquivos raiz devem ser removidos ou transformados em re-exports puros.
+
+6. **Decompor `cron_jobs.py` e `job_queue.py`:** Cada cron job e cada tipo de job background deveria estar em seu proprio modulo dentro de `jobs/` (diretorio ja existe).
+
+### 10.3 Prioridade Baixa
+
+7. **Audit de clients/ experimentais:** Avaliar se `portal_transparencia_client.py`, `querido_diario_client.py` e `licitaja_client.py` devem ser mantidos ou movidos para uma branch experimental.
+
+8. **Compactar migrations:** 99 migrations Supabase podem ser squashed em batches para reduzir overhead de deploy. Manter historico original em archive.
+
+9. **Remover dual-hash transition em auth.py:** Apos periodo de estabilizacao, remover logica de compatibilidade que suporta dois formatos de cache key.
+
+10. **Padronizar schemas:** Mover `schemas_stats.py` e `schema_contract.py` da raiz para o diretorio `schemas/`.

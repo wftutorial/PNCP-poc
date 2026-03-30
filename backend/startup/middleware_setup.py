@@ -35,6 +35,28 @@ _SHUTDOWN_EXEMPT_PATHS = frozenset({
 })
 
 
+async def track_legacy_routes(request, call_next):
+    """TD-004 AC4: Track calls to removed legacy (non-/v1/) routes.
+
+    DEBT-SYS-012: Extracted as module-level function for testability.
+    """
+    path = request.url.path
+    if (
+        not path.startswith("/v1/")
+        and not path.startswith("/metrics")
+        and not path.startswith("/webhooks/")
+        and path not in _ALLOWED_ROOT_PATHS
+    ):
+        try:
+            from metrics import LEGACY_ROUTE_CALLS
+            segments = path.strip("/").split("/")[:2]
+            truncated = "/" + "/".join(segments)
+            LEGACY_ROUTE_CALLS.labels(method=request.method, path=truncated).inc()
+        except Exception:
+            pass
+    return await call_next(request)
+
+
 def setup_middleware(app: FastAPI) -> None:
     """Attach all middleware to *app* (order matters — last added = outermost)."""
     cors_origins = get_cors_origins()
@@ -100,23 +122,8 @@ def setup_middleware(app: FastAPI) -> None:
 
     # TD-004 AC4: Track calls to removed legacy (non-/v1/) routes
     @app.middleware("http")
-    async def track_legacy_routes(request: Request, call_next):
-        """Track calls to removed legacy (non-/v1/) routes."""
-        path = request.url.path
-        if (
-            not path.startswith("/v1/")
-            and not path.startswith("/metrics")
-            and not path.startswith("/webhooks/")
-            and path not in _ALLOWED_ROOT_PATHS
-        ):
-            try:
-                from metrics import LEGACY_ROUTE_CALLS
-                segments = path.strip("/").split("/")[:2]
-                truncated = "/" + "/".join(segments)
-                LEGACY_ROUTE_CALLS.labels(method=request.method, path=truncated).inc()
-            except Exception:
-                pass
-        return await call_next(request)
+    async def _track_legacy_routes_mw(request: Request, call_next):
+        return await track_legacy_routes(request, call_next)
 
 
 def setup_metrics_endpoint(app: FastAPI) -> None:

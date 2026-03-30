@@ -81,7 +81,7 @@ export default async function SectorPage({
   const relatedSectors = getRelatedSectors(setor);
 
   return (
-    <main className="min-h-screen bg-white dark:bg-gray-950">
+    <main id="main-content" className="min-h-screen bg-white dark:bg-gray-950">
       {/* AC6: Hero */}
       <section className="bg-gradient-to-br from-brand-blue to-blue-700 text-white py-16 px-4">
         <div className="max-w-5xl mx-auto text-center">

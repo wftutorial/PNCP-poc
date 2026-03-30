@@ -193,7 +193,7 @@ function AlertasPageInner() {
   return (
     <>
       <PageHeader title="Alertas" />
-      <main className="max-w-3xl mx-auto px-4 py-6">
+      <main id="main-content" className="max-w-3xl mx-auto px-4 py-6">
         <AlertsPageHeader alerts={alerts} onCreateClick={handleCreateClick} />
 
         {/* Content: loading / error / empty / list */}

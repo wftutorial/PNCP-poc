@@ -31,7 +31,7 @@ export default function StatusPage() {
       </header>
 
       {/* Dynamic status content — fetches live data, auto-refreshes */}
-      <main className="max-w-3xl mx-auto px-4 py-8">
+      <main id="main-content" className="max-w-3xl mx-auto px-4 py-8">
         <StatusContent />
       </main>
     </div>

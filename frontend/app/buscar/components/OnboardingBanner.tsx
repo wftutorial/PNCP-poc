@@ -6,7 +6,7 @@ interface OnboardingBannerProps {
 
 export function OnboardingBanner({ message }: OnboardingBannerProps) {
   return (
-    <div className="mb-4 p-4 rounded-lg bg-[var(--brand-blue)]/5 border border-[var(--brand-blue)]/20 flex items-center gap-3">
+    <div className="mb-4 p-4 rounded-lg bg-[var(--brand-blue)]/5 border border-[var(--brand-blue)]/20 flex items-center gap-3" aria-live="polite">
       <div className="w-5 h-5 border-2 border-[var(--brand-blue)] border-t-transparent rounded-full animate-spin flex-shrink-0" />
       <div>
         <p className="text-sm font-medium text-[var(--brand-blue)]">

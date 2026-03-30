@@ -93,7 +93,7 @@ export default function ContaLayout({ children }: { children: React.ReactNode })
           </nav>
 
           {/* Content area — DEBT-011 FE-030: Suspense boundary + DEBT-105 AC4: Error boundary */}
-          <main className="flex-1 min-w-0">
+          <main id="main-content" className="flex-1 min-w-0">
             <ErrorBoundary pageName="conta">
               <Suspense fallback={<div className="space-y-4 animate-pulse"><div className="h-48 bg-[var(--surface-1)] rounded-card" /><div className="h-32 bg-[var(--surface-1)] rounded-card" /></div>}>
                 {children}

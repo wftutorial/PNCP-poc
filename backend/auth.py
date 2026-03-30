@@ -58,13 +58,6 @@ REDIS_CACHE_TTL = 300  # L2 Redis TTL (5 minutes, shared between workers)
 MAX_CACHE_ENTRIES = 1000  # Max L1 entries (LRU eviction when exceeded)
 _REDIS_KEY_PREFIX = "smartlic:auth:"
 
-# DEBT-101 AC2: Dual-hash transition window.
-# After deploy, accept BOTH old partial-prefix hash and new full-token hash
-# for up to 1 hour. This prevents cache misses for sessions cached under the
-# old (partial) key format. After the window expires, only full hash is used.
-_DUAL_HASH_TRANSITION_SECONDS = 3600  # 1 hour
-_deploy_timestamp = time.time()  # set once at module load (deploy time)
-
 
 def _cache_store_memory(token_hash: str, user_data: dict) -> None:
     """Store in L1 with LRU eviction."""
@@ -310,45 +303,29 @@ async def get_current_user(
         return None
 
     token = credentials.credentials
-    # STORY-210 AC3 + DEBT-101 AC1: Hash FULL token (SHA256) to prevent
-    # identity collision (CVSS 9.1). Collision probability < 2^-128.
-    # Previously hashed only first 16 chars, which are identical for all Supabase JWTs.
+    # STORY-210 AC3: Hash FULL token (SHA256) to prevent identity collision.
+    # Collision probability < 2^-128.
     token_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()
 
-    # DEBT-101 AC2: During transition window, also compute old partial hash
-    # so we can find sessions cached under the legacy key format.
-    _in_transition = (time.time() - _deploy_timestamp) < _DUAL_HASH_TRANSITION_SECONDS
-    legacy_hash = hashlib.sha256(token[:16].encode('utf-8')).hexdigest() if _in_transition else None
-
     # FAST PATH 1: Check L1 in-memory cache (no I/O)
-    _l1_hit_hash = None
-    for _check_hash in ([token_hash, legacy_hash] if legacy_hash else [token_hash]):
-        if _check_hash in _token_cache:
-            user_data, cached_at = _token_cache[_check_hash]
-            age = time.time() - cached_at
-            if age < CACHE_TTL:
-                _token_cache.move_to_end(_check_hash)  # LRU refresh
-                logger.debug(f"Auth cache L1 HIT (age={age:.1f}s, user={user_data['id'][:8]}, legacy={_check_hash == legacy_hash})")
-                try:
-                    from metrics import AUTH_CACHE_HITS
-                    AUTH_CACHE_HITS.labels(level="memory").inc()
-                except Exception:
-                    pass
-                # If found via legacy hash, promote to new hash key
-                if _check_hash == legacy_hash and _check_hash != token_hash:
-                    _cache_store_memory(token_hash, user_data)
-                return user_data
-            else:
-                del _token_cache[_check_hash]
-                logger.debug(f"Auth cache L1 EXPIRED (age={age:.1f}s)")
+    if token_hash in _token_cache:
+        user_data, cached_at = _token_cache[token_hash]
+        age = time.time() - cached_at
+        if age < CACHE_TTL:
+            _token_cache.move_to_end(token_hash)  # LRU refresh
+            logger.debug(f"Auth cache L1 HIT (age={age:.1f}s, user={user_data['id'][:8]})")
+            try:
+                from metrics import AUTH_CACHE_HITS
+                AUTH_CACHE_HITS.labels(level="memory").inc()
+            except Exception:
+                pass
+            return user_data
+        else:
+            del _token_cache[token_hash]
+            logger.debug(f"Auth cache L1 EXPIRED (age={age:.1f}s)")
 
     # FAST PATH 2: Check L2 Redis cache (shared between workers)
     redis_data = await _redis_cache_get(token_hash)
-    if not redis_data and legacy_hash:
-        redis_data = await _redis_cache_get(legacy_hash)
-        if redis_data:
-            logger.debug("Auth cache L2 HIT via legacy hash — promoting to full hash")
-            await _redis_cache_set(token_hash, redis_data)
     if redis_data:
         logger.debug(f"Auth cache L2 HIT (redis, user={redis_data.get('id', '?')[:8]})")
         _cache_store_memory(token_hash, redis_data)  # Promote to L1

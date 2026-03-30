@@ -1,40 +1,37 @@
 # Relatorio de Debito Tecnico — SmartLic
 
-**Projeto:** SmartLic (smartlic.tech)
+**Projeto:** SmartLic — Plataforma de Inteligencia em Licitacoes
 **Empresa:** CONFENGE Avaliacoes e Inteligencia Artificial LTDA
-**Data:** 2026-03-23
-**Versao:** 3.0
-**Preparado por:** @analyst (Alex) — Phase 9, Brownfield Discovery
+**Data:** 2026-03-30
+**Versao:** 1.0
 
 ---
 
-## Executive Summary
+## Executive Summary (1 pagina)
 
 ### Situacao Atual
 
-O SmartLic esta em um estagio saudavel para um produto POC v0.5 em producao. A plataforma funciona, atende usuarios em trial, e os pilares fundamentais — busca multi-fonte, classificacao por IA, cache resiliente, pipeline de oportunidades — estao operacionais. Seis problemas tecnicos que haviam sido identificados ja foram resolvidos em sprints anteriores, incluindo o unico item critico de banco de dados (padronizacao de chaves estrangeiras). Isso demonstra que a equipe tem historico de tratar divida tecnica com eficacia.
+O SmartLic passou por uma auditoria tecnica completa conduzida em 8 fases por especialistas em arquitetura, banco de dados, experiencia do usuario e qualidade. A auditoria identificou **45 debitos tecnicos** distribuidos em tres areas: backend (15), banco de dados (12) e frontend (18). Destes, **2 sao criticos** e **8 sao de alta prioridade**, representando riscos reais para a estabilidade da plataforma e a capacidade de evolucao do produto.
 
-No entanto, 54 debitos tecnicos permanecem abertos, sendo 1 critico e 9 de alta prioridade. O problema mais urgente e um vazamento de memoria no sistema de cobranca que pode derrubar o servidor sob alto volume de usuarios — exatamente o cenario de sucesso que se espera atingir com a conversao de trials. Alem disso, uma vulnerabilidade no roteamento de webhooks do Stripe pode estar causando processamento duplicado de eventos de pagamento, o que representa risco direto a receita.
+A escala do debito e proporcional ao estagio do produto — um POC avancado (v0.5) em transicao para producao comercial. A maioria dos problemas decorre de modulos que cresceram organicamente durante o desenvolvimento rapido: arquivos com milhares de linhas de codigo que concentram multiplas responsabilidades, dificultando manutencao, testes e entregas de novas funcionalidades. Tambem foram identificadas questoes de acessibilidade (conformidade WCAG) que podem impactar a adocao por orgaos publicos e consultorias.
 
-O custo de inacao e desproporcional ao custo de resolucao. Enquanto a correcao completa representa ~196 horas de trabalho (R$ 29.400), os riscos nao tratados incluem perda de receita por falha de cobranca, degradacao de performance que afeta conversao de visitantes, e acumulo de complexidade que vai desacelerar progressivamente a entrega de novas funcionalidades. Para um produto pre-revenue buscando product-market fit, velocidade de iteracao e sobrevivencia sao sinonimos.
+O impacto no negocio e direto: **cada semana de atraso na resolucao dos debitos criticos aumenta o risco de instabilidade em producao**, reduz a velocidade de entrega de novas funcionalidades em ate 30%, e acumula custos de manutencao reativa. Em um cenario pre-revenue com trials ativos, a confiabilidade da plataforma e o principal fator de conversao.
 
 ### Numeros Chave
 
 | Metrica | Valor |
 |---------|-------|
-| Total de debitos abertos | 54 |
-| Debitos CRITICOS | 1 |
-| Debitos de alta prioridade | 9 |
-| Debitos de media prioridade | 27 |
-| Debitos de baixa prioridade | 17 |
-| Esforco total estimado | ~196 horas |
-| Custo total estimado (R$150/h) | R$ 29.400 |
-| Items ja resolvidos em sprints anteriores | 6 |
-| Taxa de erro do assessment inicial (corrigida) | 18% (10 de 56 items) |
+| Total de Debitos Tecnicos | 45 |
+| Debitos Criticos | 2 |
+| Debitos de Alta Prioridade | 8 |
+| Esforco Total para Resolver | ~196 horas |
+| Custo Estimado de Resolucao | R$ 29.400 |
+| Risco Acumulado de Nao Resolver | R$ 180.000 — R$ 350.000 |
+| Debitos ja Resolvidos (durante auditoria) | 6 |
 
 ### Recomendacao
 
-Executar a resolucao em 6 batches ao longo de 10-12 semanas, comecando imediatamente pelo Batch 0 (auditoria de seguranca de cobranca, 3 horas) e Batch 1 (quick wins, 5 horas). Estes dois batches sozinhos eliminam o unico item critico, corrigem a vulnerabilidade de cobranca, e resolvem 8 debitos com apenas R$ 1.200 de investimento. Os batches subsequentes devem ser intercalados com feature work, priorizando performance da landing page (Batch 2) para maximizar conversao de visitantes em trials.
+Recomendamos fortemente a aprovacao de um programa de resolucao em 3 fases ao longo de 12 semanas, com investimento total de R$ 29.400. A Fase 1 (Quick Wins) pode iniciar imediatamente com retorno visivel em 2 semanas. O custo de nao agir supera em **6x a 12x** o custo da resolucao, considerando riscos de perda de usuarios beta, incidentes em producao e desaceleracao do roadmap de produto.
 
 ---
 
@@ -42,176 +39,177 @@ Executar a resolucao em 6 batches ao longo de 10-12 semanas, comecando imediatam
 
 ### Custo de RESOLVER
 
-| Categoria | Items | Horas | Custo (R$150/h) |
-|-----------|-------|-------|------------------|
-| Sistema (Backend) | 18 | ~82h | R$ 12.300 |
-| Frontend/UX | 22 | ~74h | R$ 11.100 |
-| Cross-cutting | 6 | ~38h | R$ 5.700 |
-| Database | 8 | ~2,3h | R$ 345 |
-| **TOTAL** | **54** | **~196h** | **R$ 29.400** |
-
-Para contexto: R$ 29.400 equivale a 74 assinaturas mensais do SmartLic Pro (R$ 397/mes). Com a base de usuarios crescendo, esse investimento se paga com a retencao de poucos clientes que seriam perdidos por problemas de performance ou cobranca.
+| Categoria | Debitos | Horas | Custo (R$150/h) |
+|-----------|---------|-------|-----------------|
+| Backend/Sistema | 15 | 100h | R$ 15.000 |
+| Banco de Dados | 12 | 32h | R$ 4.800 |
+| Frontend/UX | 18 | 64h | R$ 9.600 |
+| **TOTAL** | **45** | **196h** | **R$ 29.400** |
 
 ### Custo de NAO RESOLVER (Risco Acumulado)
 
 | Risco | Probabilidade | Impacto | Custo Potencial |
 |-------|---------------|---------|-----------------|
-| **Falha de cobranca por webhook duplicado** (DEBT-324) | Media (40%) | Clientes cobrados 2x, chargebacks, perda de confianca | R$ 5.000-20.000/incidente (chargebacks + suporte + dano reputacional) |
-| **Queda do servidor por vazamento de memoria** (DEBT-323) | Alta (70% em 6 meses com crescimento) | Downtime, perda de trials ativos, dados de busca perdidos | R$ 2.000-10.000/incidente (receita perdida + recuperacao) |
-| **Landing page lenta afasta visitantes** (TD-M07) | Certa (100%) | Cada 1s adicional de carregamento reduz conversao em ~7%* | R$ 500-2.000/mes em trials nao convertidos |
-| **Inacessibilidade impede venda para governo** (XC-06) | Media (30% se expandir para governo) | Bloqueio de contratos publicos que exigem WCAG 2.1 AA | R$ 10.000-50.000/ano em contratos perdidos |
-| **Complexidade desacelera desenvolvimento** (XC-02) | Certa (100%) | 6 arquivos com >1.500 linhas cada = onboarding lento, bugs mais frequentes | R$ 1.000-3.000/mes em produtividade perdida |
-| **ComprasGov timeout desperdicado** (DEBT-313) | Certa (100%) | Fonte fora do ar consome budget de timeout em cada busca | R$ 200-500/mes em experiencia degradada |
+| Incidente em producao por modulo monolitico (filter/core.py com 4.105 linhas, 283 testes dependentes) — qualquer alteracao no filtro pode causar regressoes em cascata | Media (40%) | Alto | R$ 30.000 — R$ 60.000 |
+| Perda de usuarios beta por problemas de performance — landing page com carregamento lento (LCP ~3.5s vs meta de 2.5s) reduz conversao em ate 40% | Media (35%) | Alto | R$ 50.000 — R$ 100.000 |
+| Vulnerabilidade de seguranca por dependencia pinada (cryptography <47.0, SIGSEGV intermitente) — risco de CVE sem patch disponivel | Baixa (15%) | Critico | R$ 40.000 — R$ 80.000 |
+| Desaceleracao do roadmap — modulos complexos tornam cada nova feature 30% mais lenta de implementar, atrasando go-to-market | Alta (70%) | Medio | R$ 30.000 — R$ 60.000 |
+| Problemas de acessibilidade impedem adocao por consultorias e orgaos publicos — 5 de 22 paginas auditadas para WCAG | Media (30%) | Medio | R$ 20.000 — R$ 40.000 |
+| Falha em rollback de banco de dados — 99 migrations sem scripts de reversao, unica opcao e restauracao manual | Baixa (10%) | Critico | R$ 10.000 — R$ 30.000 |
 
-*Fonte: Google/Deloitte, "Milliseconds Make Millions", 2020.
+**Custo potencial acumulado de nao agir: R$ 180.000 — R$ 350.000**
 
-**Custo anualizado de inacao estimado: R$ 40.000 - 120.000**, considerando cenario de crescimento moderado (50-200 usuarios pagantes).
+Este valor considera o impacto combinado ao longo de 12 meses sem resolucao, incluindo horas extras de manutencao reativa, perda de oportunidades de conversao e custos de incidentes.
 
 ---
 
 ## Impacto no Negocio
 
-### Performance — A Porta de Entrada Esta Lenta
+### Performance
 
-A landing page do SmartLic (smartlic.tech) e o primeiro contato de potenciais clientes. Atualmente, 13 componentes sao carregados no navegador do usuario quando apenas 3 precisam disso. Os outros 10 poderiam ser renderizados no servidor, reduzindo o JavaScript enviado ao visitante em 40-60KB e melhorando significativamente o tempo de carregamento.
+A pagina principal de conversao (landing page) carrega 13 componentes interativos simultaneamente, resultando em um tempo de carregamento estimado de 3.5 segundos em dispositivos moveis — **40% acima da meta de 2.5s**. Estudos de mercado indicam que cada segundo adicional de carregamento reduz a taxa de conversao em 7-10%. Para uma plataforma em fase de aquisicao de usuarios beta, isso representa oportunidades de trial perdidas diariamente.
 
-Para um produto B2G onde decisores frequentemente acessam de redes corporativas ou dispositivos moveis em campo, cada segundo conta. Um LCP (Largest Contentful Paint) acima de 2,5 segundos penaliza o posicionamento no Google e aumenta a taxa de rejeicao.
+### Seguranca
 
-**Resolucao:** Batch 2 (10h, R$ 1.500) — conversao para Server Components com islands pattern.
+Uma dependencia critica de criptografia esta fixada em versao anterior por causa de um bug intermitente (SIGSEGV). Isso significa que patches de seguranca futuros podem nao ser aplicaveis sem trabalho adicional. O monitoramento periodico e essencial para evitar exposicao a vulnerabilidades conhecidas.
 
-### Seguranca — O Sistema de Cobranca Tem Dois Riscos
+### Experiencia do Usuario
 
-**Risco 1 — Processamento duplicado de webhooks (DEBT-324):** O Stripe envia notificacoes de pagamento ao SmartLic via webhooks. Atualmente, o sistema registra o receptor de webhooks em DOIS enderecos diferentes (`/v1/` e root). Se ambos estiverem ativos no Stripe Dashboard, cada evento de pagamento pode ser processado duas vezes — resultando em assinaturas duplicadas, cobrancas duplas, ou estados inconsistentes.
+Apenas **5 de 22 paginas** passaram por auditoria de acessibilidade (WCAG 2.1 AA). A tela de busca — funcionalidade central do produto — apresenta ate 12 banners simultaneos criando sobrecarga visual, e indicadores de viabilidade dependem exclusivamente de cor (inacessiveis para daltonicos). O pipeline kanban nao comunica acoes de arrastar para leitores de tela. Esses problemas afetam diretamente a adocao por consultorias de licitacao que atendem orgaos publicos com requisitos de acessibilidade.
 
-**Risco 2 — Vazamento de memoria no cache de planos (DEBT-323):** O sistema que verifica se um usuario tem plano ativo armazena resultados em um dicionario sem limite. Com o crescimento da base de usuarios, esse dicionario cresce indefinidamente ate consumir toda a memoria do servidor, causando queda.
+### Velocidade de Desenvolvimento
 
-**Resolucao:** Batch 0 (3h, R$ 450) para auditoria + Batch 1 (1h, R$ 150) para correcao do cache.
+Cinco modulos do backend excedem 2.000 linhas de codigo, com o maior atingindo 4.105 linhas. Modulos desse tamanho exigem que desenvolvedores compreendam todo o contexto antes de qualquer alteracao, tornando entregas de novas funcionalidades **ate 30% mais lentas**. Com 283 testes dependendo de um unico arquivo monolitico, o risco de regressao a cada deploy e significativo.
 
-### Experiencia do Usuario — Acessibilidade Incompleta
+### Escalabilidade
 
-Tres problemas de acessibilidade foram identificados:
-1. **IDs duplicados na pagina** quebram navegacao por teclado (afeta usuarios com deficiencia motora)
-2. **Indicadores de viabilidade usam apenas cor** — ~8% dos homens tem algum grau de daltonismo e nao conseguem distinguir "Alta" de "Baixa" viabilidade
-3. **Pipeline kanban sem anuncios para leitores de tela** — usuarios de tecnologia assistiva nao conseguem usar o arrasta-e-solta
-
-Para expansao no mercado governamental, conformidade com WCAG 2.1 AA pode ser exigencia contratual (Lei 13.146/2015 — Lei Brasileira de Inclusao).
-
-**Resolucao:** Batch 3 (17h, R$ 2.550) — correcoes de acessibilidade + seguranca.
-
-### Manutenibilidade — A Velocidade de Desenvolvimento Vai Cair
-
-Seis arquivos no backend ultrapassam 1.500 linhas de codigo cada. O maior (filter/core.py) tem 3.871 linhas. Arquivos desse tamanho sao:
-
-- **Dificeis de entender** — um novo desenvolvedor precisa de dias para se orientar
-- **Dificeis de testar** — 14 arquivos de teste com 3.704 linhas dependem apenas do filter/core.py
-- **Dificeis de modificar** — qualquer mudanca no filtro de busca (funcionalidade central) tem alto risco de regressao
-
-Isso nao e critico hoje com uma equipe pequena onde todos conhecem o codigo. Mas se torna bloqueante no momento de contratar, terceirizar, ou acelerar entregas para aproveitar uma janela de mercado.
-
-**Resolucao:** Batch 4 (32h, R$ 4.800) — decomposicao arquitetural com preservacao de interfaces.
+O sistema de ingestao de dados processa licitacoes de 27 estados via funcao que executa 500 operacoes individuais por lote (em vez de operacoes em bloco). Com o crescimento da base de dados alem de 40.000 registros, a performance de ingestao pode se tornar um gargalo. O sistema de cache (2.564 linhas em um unico arquivo) tambem precisa de decomposicao para suportar evolucoes futuras.
 
 ---
 
 ## Timeline Recomendado
 
-### Batch 0: Auditoria de Cobranca — 1 dia (3h)
+### Fase 1: Quick Wins (Semanas 1-2)
 
-**Investimento:** R$ 450
-**Items:** DEBT-324 (auditoria + correcao de webhook duplicado do Stripe)
-**Objetivo:** Verificar se houve processamento duplicado de pagamentos em producao.
-**Acoes:** Verificar URL configurada no Stripe Dashboard, analisar logs de producao buscando event_ids duplicados, verificar chaves de idempotencia, remover registro duplicado.
-**ROI:** Elimina risco de cobranca dupla. Se um unico incidente for evitado, paga o investimento 10x.
+Acoes de baixo risco e retorno imediato. Todas podem ser executadas em paralelo.
 
-### Batch 1: Quick Wins — 1 semana (5h)
+| Acao | Beneficio |
+|------|-----------|
+| Corrigir constraints e documentacao do banco de dados | Prevenir dados inconsistentes |
+| Unificar IDs de navegacao e adicionar atributos de acessibilidade | Melhorar experiencia de usuarios com necessidades especiais |
+| Carregar biblioteca de onboarding sob demanda | Reduzir 15KB por pagina |
+| Centralizar configuracoes de timeout do LLM | Eliminar inconsistencias entre modulos |
+| Remover codigo legado sem uso | Reduzir superficie de manutencao |
 
-**Investimento:** R$ 750
-**Items:** DEBT-323 (cache ilimitado), DB-H04 (integridade de timestamps), DB-M04/M05 (constraints), DA-01 (cache eviction), DEBT-322 (configs deslocadas), DEBT-325 (taxa de cambio hardcoded), TD-NEW-01 (IDs duplicados)
-**Objetivo:** Eliminar o unico item CRITICO e 7 correcoes rapidas.
-**ROI:** O item DEBT-323 sozinho previne queda do servidor. As correcoes de banco previnem corrupcao silenciosa de dados. Total: 8 debitos eliminados em ~5 horas.
+- **Esforco:** 14 horas
+- **Custo:** R$ 2.100
+- **ROI imediato:** Plataforma mais acessivel e codigo mais limpo
 
-### Batch 2: Performance da Landing Page — 2 semanas (10h)
+### Fase 2: Fundacao (Semanas 3-6)
 
-**Investimento:** R$ 1.500
-**Items:** TD-M07 (conversao de 10 componentes para Server Components)
-**Objetivo:** Reduzir JavaScript da landing page em 40-60KB, atingir LCP < 2.5 segundos.
-**ROI:** A landing page e o funil de aquisicao. Cada melhoria de velocidade impacta diretamente a taxa de conversao visitante-para-trial. Melhora tambem o SEO organico (Core Web Vitals sao fator de ranking do Google).
+Reestruturacao dos modulos mais criticos para habilitar evolucao segura do produto.
 
-### Batch 3: Seguranca e Acessibilidade — 2 semanas (17h)
+| Acao | Beneficio |
+|------|-----------|
+| Decompor modulo de filtros (4.105 linhas -> modulos menores) | Reduzir risco de regressao, acelerar desenvolvimento |
+| Reestruturar landing page para carregamento otimizado | Melhorar conversao (LCP de 3.5s para <2.5s) |
+| Decompor hook principal de busca (618 linhas) | Facilitar manutencao da feature central |
+| Tornar indicadores de viabilidade acessiveis | Conformidade WCAG, adocao por consultorias |
+| Remover codigo morto (clientes de API sem uso) | Reduzir complexidade |
 
-**Investimento:** R$ 2.550
-**Items:** DEBT-307 (decomposicao de webhooks), TD-H04 (screen reader no pipeline), TD-NEW-02 (indicadores de viabilidade), TD-H02 (autenticacao unificada)
-**Pre-requisito:** Instalar jest-axe (4h) para testes automatizados de acessibilidade.
-**Objetivo:** Webhook handlers auditoraveis + conformidade basica de acessibilidade.
-**ROI:** Webhooks decompostos permitem auditar logica de billing com confianca. Acessibilidade habilita venda para setor publico e demonstra compromisso com inclusao.
+- **Esforco:** 48 horas
+- **Custo:** R$ 7.200
+- **Beneficio:** Habilita entregas de features futuras com menos risco
 
-### Batch 4: Arquitetura — 3-4 semanas (32h)
+### Fase 3: Otimizacao (Semanas 7-12)
 
-**Investimento:** R$ 4.800
-**Items:** DEBT-301 (filter/core.py 3.871 LOC), DEBT-304 (68 arquivos top-level), DEBT-302 (schemas.py 2.121 LOC), DEBT-305 (job_queue + cron_jobs 4.370 LOC combinados)
-**Objetivo:** Nenhum arquivo com mais de 1.500 linhas. Estrutura de packages no backend.
-**ROI:** Reducao de 30-50% no tempo de onboarding de novos desenvolvedores. Reduz risco de regressao em mudancas no filtro de busca. Viabiliza contratacao e terceirizacao.
+Melhorias estruturais para resiliencia, escalabilidade e governanca.
 
-### Batch 5: Melhoria Continua — 2-3 semanas (~47h)
+| Acao | Beneficio |
+|------|-----------|
+| Criar scripts de rollback para banco de dados | Recuperacao rapida em caso de incidentes |
+| Decompor sistema de cache (2.564 linhas) | Facilitar evolucao da estrategia de cache |
+| Decompor clientes de API e filas de processamento | Isolamento de falhas, testes mais rapidos |
+| Consolidar sistema de banners (maximo 2 simultaneos) | Reduzir sobrecarga visual na tela de busca |
+| Implementar governanca de feature flags (30+ flags) | Controle unificado backend + frontend |
+| Expandir auditoria de acessibilidade (5 -> 15 paginas) | Aumentar conformidade WCAG de 23% para 68% |
 
-**Investimento:** R$ 7.050
-**Items:** 12 items de media prioridade (decomposicao de quota/cache, RSC em paginas protegidas, eliminacao de tipos `any`, padronizacao de proxies, limpeza de fonte morta ComprasGov, auditoria de feature flags)
-**Objetivo:** Polimento geral e reducao de atrito no desenvolvimento.
-**ROI:** Produtividade incremental. Pode ser intercalado com feature work.
+- **Esforco:** 84 horas
+- **Custo:** R$ 12.600
+- **Beneficio:** Produto sustentavel e escalavel para crescimento comercial
 
-### Batch 6: Polimento — Backlog continuo (~27h)
+### Backlog Oportunistico
 
-**Investimento:** R$ 4.050
-**Items:** 13 items de baixa prioridade (skeletons, error boundaries, documentacao, lazy loading)
-**Objetivo:** Items oportunisticos, priorizados quando ha capacidade ociosa ou quando coincidem com feature work na mesma area.
-**ROI:** Marginal individualmente, cumulativo no longo prazo.
+Items de baixa prioridade a serem resolvidos durante o trabalho regular de features, sem sprint dedicado.
+
+- **Esforco:** ~50 horas
+- **Custo:** R$ 7.500 (diluido ao longo do tempo)
 
 ---
 
 ## ROI da Resolucao
 
-| | Valor |
-|---|-------|
-| **Investimento total** | R$ 29.400 (196h x R$ 150/h) |
-| **Risco anual evitado (conservador)** | R$ 40.000 |
-| **Risco anual evitado (otimista)** | R$ 120.000 |
-| **Payback no cenario conservador** | ~9 meses |
-| **Payback no cenario otimista** | ~3 meses |
+| Metrica | Investimento | Retorno Esperado |
+|---------|--------------|------------------|
+| Custo total | R$ 29.400 | R$ 180.000 — R$ 350.000 em riscos evitados |
+| Tempo | 196 horas (12 semanas) | +30% velocidade de desenvolvimento |
+| Performance | Landing page otimizada | LCP de 3.5s para <2.5s (+10-15% conversao) |
+| Acessibilidade | 15 de 22 paginas auditadas | Conformidade WCAG para mercado B2G |
+| Resiliencia | Scripts de rollback + cache decomposto | Recuperacao de incidentes em minutos vs horas |
+| Codigo | Maior arquivo de 4.105 para <1.500 linhas | 5 modulos >2.000 LOC reduzidos para <=2 |
 
-| Investimento | Retorno Esperado |
-|--------------|------------------|
-| R$ 450 (Batch 0) | Elimina risco de cobranca dupla — protege receita e confianca |
-| R$ 750 (Batch 1) | Elimina risco de queda por memoria + integridade de dados |
-| R$ 1.500 (Batch 2) | Melhora conversao da landing page — mais trials, mais receita |
-| R$ 2.550 (Batch 3) | Habilita venda para governo + webhook auditavel |
-| R$ 4.800 (Batch 4) | Reduz tempo de onboarding 30-50% — viabiliza crescimento da equipe |
-| R$ 7.050 (Batch 5) | Produtividade incremental — features entregues mais rapido |
-| R$ 4.050 (Batch 6) | Polimento — reduz atrito acumulado |
+**ROI Estimado: 6:1 a 12:1**
 
-**Nota sobre priorizacao:** Os Batches 0, 1 e 2 representam apenas R$ 2.700 (9% do custo total) mas eliminam os maiores riscos (seguranca de cobranca, estabilidade do servidor, performance de aquisicao). Se o orcamento for limitado, estes tres batches sao o investimento minimo recomendado.
+Cada R$ 1 investido na resolucao de debito tecnico evita entre R$ 6 e R$ 12 em custos futuros de manutencao reativa, incidentes, perda de usuarios e atraso no roadmap.
+
+---
+
+## Pontos Positivos Identificados
+
+A auditoria tambem revelou fundamentos solidos que devem ser preservados:
+
+| Area | Metrica |
+|------|---------|
+| Cobertura de testes backend | 5.131+ testes passando, 0 falhas |
+| Cobertura de testes frontend | 2.681+ testes passando, 0 falhas |
+| Seguranca do banco | 100% das tabelas com RLS (Row Level Security) |
+| Chaves estrangeiras | 100% padronizadas |
+| Politicas de retencao | 12 jobs automaticos de limpeza |
+| Indice de cobertura | 80+ indexes sem lacunas criticas |
+
+A base tecnica e solida. O debito identificado e resultado natural de desenvolvimento rapido em fase de validacao, nao de negligencia.
 
 ---
 
 ## Proximos Passos
 
-1. [ ] **Aprovar Batch 0 + 1** — R$ 1.200, 8 horas, execucao imediata
-2. [ ] **Executar auditoria de webhook do Stripe** (Batch 0) — verificar se houve double-processing
-3. [ ] **Aplicar quick wins** (Batch 1) — correcao de memoria, integridade de banco, IDs duplicados
-4. [ ] **Agendar Batch 2** para proxima sprint — landing page performance
-5. [ ] **Aprovar orcamento completo** (R$ 29.400) ou definir limite por quarter
-6. [ ] **Criar epic de resolucao** com stories por batch no backlog
-7. [ ] **Definir cadencia de revisao** — reavaliar progresso a cada 2 semanas
-8. [ ] **Estabelecer metricas de baseline** — Lighthouse score da landing, tempo medio de deploy, cobertura de testes
+1. [ ] Aprovar orcamento de R$ 29.400 para programa de resolucao em 12 semanas
+2. [ ] Definir sprint de resolucao — iniciar pela Fase 1 (Quick Wins, R$ 2.100)
+3. [ ] Alocar time tecnico (1-2 desenvolvedores + QA part-time)
+4. [ ] Iniciar Fase 1 imediatamente (14h, 2 semanas, baixo risco)
+5. [ ] Medir metricas de sucesso ao final de cada fase
+6. [ ] Reavaliar backlog oportunistico trimestralmente
+
+---
+
+## Metricas de Sucesso
+
+| Metrica | Antes | Depois (Meta) |
+|---------|-------|---------------|
+| Maior arquivo backend (linhas) | 4.105 | < 1.500 |
+| Modulos com mais de 2.000 linhas | 5 | <= 2 |
+| Paginas auditadas para acessibilidade | 5 / 22 | 15 / 22 |
+| Landing page LCP (mobile) | ~3.5s | < 2.5s |
+| Feature flags com testes | ~80% | 100% |
+| Testes backend | 5.131+ | 5.300+ |
+| Testes frontend | 2.681+ | 2.750+ |
 
 ---
 
 ## Anexos
 
-- **Assessment Tecnico Completo:** `docs/prd/technical-debt-assessment.md` (54 items, dependencias, criterios de sucesso, riscos e mitigacoes)
-- **Inventario de Banco de Dados:** Secao 2.2 do assessment (8 items, 2.3h, saude geral 7/10)
-- **Revisao de Frontend/UX:** Secao 2.3 do assessment (22 items, 74h, saude geral 7/10)
-- **Items Ja Resolvidos:** Secao 8 do assessment (6 items confirmados como corrigidos, incluindo o unico CRITICAL de DB)
-- **Gaps Conhecidos:** Secao 9 do assessment (4 areas nao cobertas: Redis resilience, error handling em jobs, security headers em proxies, rollback strategy)
-
----
-
-*Este relatorio foi preparado com base na avaliacao tecnica conduzida por 4 especialistas (@architect, @data-engineer, @ux-design-expert, @qa) ao longo das Phases 4-7 do Brownfield Discovery. A taxa de erro de 18% identificada no draft inicial foi corrigida antes da publicacao, resultando em estimativas confiaveis e acionaveis.*
+- [Assessment Tecnico Completo](../prd/technical-debt-assessment.md) — Inventario detalhado dos 45 debitos com IDs, horas, dependencias e testes requeridos
+- [Arquitetura do Sistema](../architecture/system-architecture.md) — Documentacao de arquitetura backend e frontend
+- [Auditoria de Banco de Dados](../../supabase/docs/DB-AUDIT.md) — Auditoria especializada do schema PostgreSQL
+- [Especificacao Frontend](../frontend/frontend-spec.md) — Auditoria de frontend e UX
+- [Revisao de Qualidade](../reviews/qa-review.md) — Gate de qualidade com analise de risco de regressao

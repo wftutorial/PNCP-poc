@@ -190,7 +190,7 @@ export default function PipelinePage() {
   return (
     <PageErrorBoundary pageName="pipeline">
       <PageHeader title="Pipeline" />
-      <main className="max-w-[1600px] mx-auto px-4 py-6">
+      <main id="main-content" className="max-w-[1600px] mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-[var(--text-primary)]">Pipeline de Oportunidades</h1>

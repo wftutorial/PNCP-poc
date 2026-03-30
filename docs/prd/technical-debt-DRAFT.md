@@ -1,305 +1,397 @@
-# Technical Debt Assessment - DRAFT
+# Technical Debt Assessment -- DRAFT
 
-**Data:** 2026-03-23 | **Consolidado por:** @architect (Aria) — Brownfield Discovery Phase 4
-**Status:** DRAFT — Pendente revisao dos especialistas
+## SmartLic v0.5
+**Data:** 2026-03-30
+**Consolidado por:** @architect (Aria) -- Brownfield Discovery Phase 4
+**Status:** DRAFT -- Pendente revisao dos especialistas
+
+**Fontes:**
+- `docs/architecture/system-architecture.md` (Phase 1 -- @architect)
+- `supabase/docs/SCHEMA.md` (Phase 2 -- @data-engineer)
+- `supabase/docs/DB-AUDIT.md` (Phase 2 -- @data-engineer)
+- `docs/frontend/frontend-spec.md` (Phase 3 -- @ux-design-expert)
 
 ---
 
-## 1. Resumo Executivo
+## Resumo Executivo
 
 | Metrica | Valor |
 |---------|-------|
-| **Total de debitos** | 56 |
-| **CRITICAL** | 2 |
-| **HIGH** | 12 |
-| **MEDIUM** | 25 |
-| **LOW** | 17 |
-| **Esforco total estimado** | ~246h |
-| **Distribuicao** | Sistema: ~84h / Database: ~4h / Frontend: ~88h / Cross-cutting: ~70h |
-
-### Top 10 Itens Mais Urgentes
-
-| # | ID | Debito | Severidade | Area | Horas |
-|---|-----|--------|-----------|------|-------|
-| 1 | DB-C01 | 3 tabelas FK para auth.users ao inves de profiles | CRITICAL | Database | 0.5 |
-| 2 | DEBT-323 | `_plan_status_cache` unbounded dict (memory leak) | CRITICAL | Backend | 1 |
-| 3 | TD-H01 | Zero Server Components — todas as paginas "use client" | HIGH | Frontend | 16 |
-| 4 | TD-H03 | Sem `aria-live` para SSE updates (WCAG 4.1.3) | HIGH | Frontend | 6 |
-| 5 | TD-H04 | Pipeline kanban sem keyboard DnD / screen reader | HIGH | Frontend | 8 |
-| 6 | DEBT-307 | Stripe webhook handler 1192 LOC monolitico | HIGH | Backend | 6 |
-| 7 | DEBT-301 | filter.py 3871 LOC — maior arquivo do backend | HIGH | Backend | 8 |
-| 8 | DEBT-324 | Dual Stripe webhook router registration | HIGH | Backend | 1 |
-| 9 | DB-H01 | RLS usa auth.role() em 6 policies (pattern deprecated) | HIGH | Database | 0.33 |
-| 10 | DB-H04 | Missing NOT NULL em created_at/updated_at | HIGH | Database | 0.25 |
+| Total de debitos identificados | 38 |
+| Criticos | 3 |
+| Altos | 10 |
+| Medios | 14 |
+| Baixos | 11 |
+| Esforco total estimado | ~180h |
+| Debitos resolvidos (excluidos) | 3 (DB-TD-008, DB-TD-010, DB-TD-011) |
 
 ---
 
-## 2. Debitos de Sistema (da system-architecture.md)
+## 1. Debitos de Sistema (fonte: system-architecture.md)
 
-Revisado por @architect (auto-review)
+### DEBT-SYS-001 -- `filter/core.py` monolitico (4.105 LOC)
+- **Severidade:** Critica
+- **Descricao:** Funcao `aplicar_todos_filtros()` e monolitica com 4.105 LOC. Decomposicao iniciada (filter_*.py) mas core.py continua sendo o maior arquivo do backend. Dificulta manutencao, testes isolados e debug.
+- **Esforco estimado:** 16h
+- **Area de impacto:** Backend -- pipeline de filtragem, testabilidade
 
-### CRITICAL
+### DEBT-SYS-002 -- SIGSEGV intermitente com C extensions (CRIT-SIGSEGV)
+- **Severidade:** Critica
+- **Descricao:** Restricoes de C extensions (uvloop, cryptography >= 47.0) por SIGSEGV intermitente em producao. Impede uso de uvloop, limita upgrades de cryptography, requer testes manuais de fork-safety com Gunicorn preload.
+- **Esforco estimado:** 8h (investigacao periodica + testes de regressao)
+- **Area de impacto:** Infra -- performance, seguranca (cryptography pinada)
 
-| ID | Debito | Esforco | Impacto | Descricao |
-|----|--------|---------|---------|-----------|
-| DEBT-323 | `_plan_status_cache` unbounded | 1h | Seguranca/Memoria | `quota.py:44` — dict cresce sem limite. Diferente de `_token_cache` (LRU 1000) e `_arbiter_cache` (LRU 5000). Pode causar OOM sob alto volume de usuarios. |
+### DEBT-SYS-003 -- `search_cache.py` complexo (2.564 LOC)
+- **Severidade:** Alta
+- **Descricao:** Logica multi-level (InMemory, Redis, Supabase, Local File) em um unico arquivo. Cache key migration (STORY-306) adicionou dual-read complexity. Dificil de testar e manter.
+- **Esforco estimado:** 12h
+- **Area de impacto:** Backend -- cache, resiliencia
 
-### HIGH
+### DEBT-SYS-004 -- `pncp_client.py` sobrecarregado (2.559 LOC)
+- **Severidade:** Alta
+- **Descricao:** Sync + async client, circuit breaker, retry logic, tudo no mesmo modulo. `pncp_client_resilient.py` existe como tentativa parcial de decomposicao.
+- **Esforco estimado:** 10h
+- **Area de impacto:** Backend -- data sources, resiliencia
 
-| ID | Debito | Esforco | Impacto | Descricao |
-|----|--------|---------|---------|-----------|
-| DEBT-301 | filter.py monolitico (3871 LOC) | 8h | Manutencao | Maior arquivo apesar de 11 submodules existirem. Core matching deveria ser migrado. |
-| DEBT-302 | schemas.py monolitico (2121 LOC) | 6h | Manutencao | Todos os Pydantic models de 126 endpoints em um arquivo. |
-| DEBT-305 | job_queue.py (2152) + cron_jobs.py (2039) | 6h | Manutencao | Monolitos de jobs/crons. |
-| DEBT-307 | Stripe webhooks monolitico (1192 LOC) | 6h | Seguranca | 10+ event types em uma handler function. Dificil auditar logica de billing. |
-| DEBT-324 | Dual Stripe webhook router | 1h | Seguranca | `startup/routes.py:62+70` — registra router em `/v1/` E root. Possivel double-processing. |
-| DEBT-304 | 69 top-level .py files | 12h | Onboarding | Faltam packages para filtering (11), search (4), PNCP (3). |
+### DEBT-SYS-005 -- `cron_jobs.py` com multiplas responsabilidades (2.251 LOC)
+- **Severidade:** Alta
+- **Descricao:** Cache cleanup, PNCP canary, session cleanup, cache warming, trial emails -- tudo em um unico modulo.
+- **Esforco estimado:** 8h
+- **Area de impacto:** Backend -- jobs, manutencao
 
-### MEDIUM
+### DEBT-SYS-006 -- `job_queue.py` sobrecarregado (2.229 LOC)
+- **Severidade:** Alta
+- **Descricao:** Mistura configuracao ARQ, gerenciamento de pool Redis e definicoes de jobs no mesmo arquivo.
+- **Esforco estimado:** 6h
+- **Area de impacto:** Backend -- jobs, worker
 
-| ID | Debito | Esforco | Impacto | Descricao |
-|----|--------|---------|---------|-----------|
-| DEBT-303 | pncp_client.py sync + async dual | 4h | Performance | Importa `requests` junto com `httpx`. Fallback via `asyncio.to_thread()`. |
-| DEBT-306 | search_cache.py (2512 LOC) | 4h | Manutencao | L1, L2, SWR, key gen, serialization em um arquivo. |
-| DEBT-309 | quota.py (1622 LOC) mixed concerns | 4h | Manutencao | Plan definition + quota + rate limiting + trial em um modulo. |
-| DEBT-310 | main.py backward-compat re-exports | 3h | Manutencao | ~75 linhas de proxy classes para testes. |
-| DEBT-312 | filter_*.py naming ambiguity | 3h | Manutencao | 11 filter files + filter.py com docstring enganosa. |
-| DEBT-313 | ComprasGov v3 dead source | 2h | Performance | Fonte fora do ar desde marco 2026. Timeout budget desperdicado. |
-| DEBT-314 | 40+ feature flags, possiveis dead flags | 3h | Manutencao | `config/features.py` — flags que podem ser permanentes. |
-| DEBT-315 | 58 API proxies, nem todos usam factory | 4h | Manutencao | `create-proxy-route.ts` existe mas nao e universal. |
-| DEBT-316 | Onboarding (783) + signup (703) LOC | 4h | Manutencao | Paginas grandes sem decomposicao de componentes. |
-| DEBT-317 | clients/ inconsistente | 4h | Manutencao | 5 clients com estrutura variada apesar de `base.py` existir. |
-| DEBT-322 | CB configs mislocated | 1h | Manutencao | PCP/ComprasGov circuit breaker configs em `pncp_client.py:56-71`. |
-| DEBT-325 | Hardcoded USD_TO_BRL = 5.0 | 0.5h | Manutencao | `llm_arbiter.py:73` — cost tracking impreciso. |
+### DEBT-SYS-007 -- Duplicacao filter_*.py (raiz vs pacote)
+- **Severidade:** Media
+- **Descricao:** Arquivos legados na raiz (`filter_keywords.py`, `filter_llm.py`, etc.) coexistem com pacote `filter/`. Imports indiretos via `filter/__init__.py`.
+- **Esforco estimado:** 4h
+- **Area de impacto:** Backend -- organizacao de codigo
 
-### LOW
+### DEBT-SYS-008 -- LLM timeout hardcoded em multiplos locais (DEBT-103)
+- **Severidade:** Media
+- **Descricao:** OpenAI timeout em `llm_arbiter.py` e config separado, nem sempre consistente.
+- **Esforco estimado:** 2h
+- **Area de impacto:** Backend -- LLM, configuracao
 
-| ID | Debito | Esforco | Impacto | Descricao |
-|----|--------|---------|---------|-----------|
-| DEBT-308 | api-types.generated.ts (5177 LOC) | 2h | Performance | Verificar tree-shaking. |
-| DEBT-311 | Test LOC 1.8x source | 8h audit | Manutencao | Possivel duplicacao ou over-specification. |
-| DEBT-318 | docs/ content currency unknown | 2h audit | Manutencao | Documentacao potencialmente stale. |
-| DEBT-319 | scripts/ fora do CI | 2h | Qualidade | 12 utility scripts sem validacao em CI. |
-| DEBT-320 | startup/ compat shim | 1h | Manutencao | `main.py:82-102` track_legacy_routes() duplica logica. |
-| DEBT-321 | blog.ts hardcoded (785 LOC) | N/A | Design choice | Conteudo do blog estatico no codigo. |
+### DEBT-SYS-009 -- Feature flag sprawl (30+ flags sem governance)
+- **Severidade:** Media
+- **Descricao:** Flags acumuladas ao longo do tempo sem processo de lifecycle (create -> active -> deprecated -> removed) ou cleanup.
+- **Esforco estimado:** 8h (implementar governance + audit inicial)
+- **Area de impacto:** Backend -- config, manutencao
 
----
+### DEBT-SYS-010 -- 99 migrations Supabase
+- **Severidade:** Media
+- **Descricao:** Volume alto de migrations sugere schema evolving rapidamente. Pode impactar deploy time e dificultar onboarding de devs.
+- **Esforco estimado:** 16h (squash plan)
+- **Area de impacto:** Infra -- deploy, DX
 
-## 3. Debitos de Database (do DB-AUDIT.md)
+### DEBT-SYS-011 -- Schemas espalhados entre diretorio e raiz
+- **Severidade:** Media
+- **Descricao:** `schemas/` directory com 12 files + `schemas_stats.py` + `schema_contract.py` na raiz do backend.
+- **Esforco estimado:** 2h
+- **Area de impacto:** Backend -- organizacao
 
-PENDENTE: Revisao do @data-engineer
+### DEBT-SYS-012 -- Backward-compat shims em `main.py`
+- **Severidade:** Baixa
+- **Descricao:** Re-exports para testes legados. Funcional mas adiciona indiracao desnecessaria.
+- **Esforco estimado:** 1h
+- **Area de impacto:** Backend -- DX
 
-### CRITICAL
+### DEBT-SYS-013 -- `portal_transparencia_client.py` sem uso ativo (938 LOC)
+- **Severidade:** Baixa
+- **Descricao:** Client parece ser preparacao futura ou experimental. Sem evidencia de uso em rotas ativas.
+- **Esforco estimado:** 1h (remover ou mover para branch experimental)
+- **Area de impacto:** Backend -- dead code
 
-| ID | Debito | Esforco | Impacto | Descricao |
-|----|--------|---------|---------|-----------|
-| DB-C01 | 3 tabelas FK para auth.users | 0.5h | Integridade | `search_results_store`, `mfa_recovery_codes`, `mfa_recovery_attempts`. Profile deletion orphana rows. Fix: NOT VALID + VALIDATE pattern (ja usado em 10+ tabelas). |
+### DEBT-SYS-014 -- Clients experimentais em clients/
+- **Severidade:** Baixa
+- **Descricao:** `querido_diario_client.py` e `qd_extraction.py` aparentam ser experimentais. Sem rota ativa que os consuma.
+- **Esforco estimado:** 1h
+- **Area de impacto:** Backend -- dead code
 
-### HIGH
+### DEBT-SYS-015 -- Dual-hash transition em auth.py
+- **Severidade:** Baixa
+- **Descricao:** Window de 1h para compatibilidade de cache keys durante migracao. Pode ser removido apos estabilizacao.
+- **Esforco estimado:** 1h
+- **Area de impacto:** Backend -- auth, cache
 
-| ID | Debito | Esforco | Impacto | Descricao |
-|----|--------|---------|---------|-----------|
-| DB-H01 | auth.role() em 6 RLS policies | 0.33h | Seguranca | Pattern deprecated em `organizations`, `organization_members`, `partners`, `partner_referrals`, `reconciliation_log`, `search_results_store`. |
-| DB-H02 | health/incidents sem user RLS | 0.25h | Seguranca | So service_role pode ler. Futuro status page ficaria bloqueado. |
-| DB-H03 | 3 duplicate updated_at functions | 0.33h | Manutencao | `pipeline_items`, `alert_preferences`, `alerts` usam funcoes proprias ao inves de `set_updated_at()`. |
-| DB-H04 | Missing NOT NULL em created_at | 0.25h | Integridade | `classification_feedback`, `user_oauth_tokens` — INSERT com NULL quebraria ORDER BY e pg_cron. |
-
-### MEDIUM
-
-| ID | Debito | Esforco | Impacto | Descricao |
-|----|--------|---------|---------|-----------|
-| DB-M02 | organizations.owner_id FK design | 0.5h | Manutencao | ON DELETE RESTRICT para auth.users (intencional mas inconsistente com padrao profiles). |
-| DB-M03 | partner_referrals FK behavior | 0.5h | Integridade | Verificar se CASCADE vs SET NULL esta correto apos DEBT-104. |
-| DB-M04 | Sem CHECK em response_state | 0.17h | Integridade | search_sessions aceita qualquer string. |
-| DB-M05 | Sem CHECK em pipeline_stage | 0.17h | Integridade | search_sessions aceita qualquer string. |
-| DB-M07 | subscription_status enum mapping docs | 0.17h | Manutencao | profiles vs user_subscriptions usam valores diferentes. Trigger existe mas undocumented. |
-
-### LOW
-
-| ID | Debito | Esforco | Impacto | Descricao |
-|----|--------|---------|---------|-----------|
-| DB-L01 | Migration naming inconsistency | 0.08h | Manutencao | Dois padroes: sequential + timestamp. `.bak` file no diretorio. |
-| DB-L02 | Redundant update_updated_at() | 0.17h | Manutencao | Pode co-existir com set_updated_at() sem dependentes. |
-| DB-L03 | Missing COMMENTs em tabelas antigas | 0.25h | Manutencao | profiles, user_subscriptions, etc. sem COMMENT. |
-| DB-L04 | alert_runs RLS granularity | Futuro | Performance | Correlated subquery pode ficar lento em >10K rows. |
-| DB-L05 | Cache cleanup limit 5 vs 10 | 0.17h | Performance | debt017 reverteu de 10 para 5. Pode evictar hot entries prematuramente. |
-
----
-
-## 4. Debitos de Frontend/UX (do frontend-spec.md)
-
-PENDENTE: Revisao do @ux-design-expert
-
-### HIGH
-
-| ID | Debito | Esforco | Impacto | Descricao |
-|----|--------|---------|---------|-----------|
-| TD-H01 | Zero Server Components | 16h | Performance/SEO | Todas as paginas "use client". Landing, blog, legal, pricing deveriam ser RSC. ~40% TTFB improvement esperado. |
-| TD-H02 | Dual header/auth pattern | 4h | Manutencao | `/buscar` bypassa `(protected)/layout.tsx`. Logica duplicada, UI inconsistente. |
-| TD-H03 | Sem `aria-live` para SSE | 6h | Acessibilidade | Progresso de busca e resultados invisiveis para screen readers. WCAG 4.1.3. |
-| TD-H04 | Pipeline kanban sem keyboard DnD | 8h | Acessibilidade | Sem drag via teclado, sem anuncios de screen reader para moves. |
-
-### MEDIUM
-
-| ID | Debito | Esforco | Impacto | Descricao |
-|----|--------|---------|---------|-----------|
-| TD-M01 | 22 `any` types em 15 arquivos | 4h | Type Safety | SavedSearchesDropdown, OrgaoFilter, MunicipioFilter, AnalyticsProvider, LoginForm, ErrorDetail. |
-| TD-M02 | ValorFilter.tsx (478 LOC) | 3h | Manutencao | Mixing currency formatting + dual-slider + presets. |
-| TD-M03 | EnhancedLoadingProgress (391 LOC) | 3h | Manutencao | Multi-phase loading + UF grid + fallback em um componente. |
-| TD-M04 | useFeatureFlags custom cache | 2h | Manutencao | Implementa cache proprio ao inves de usar SWR (ja disponivel). |
-| TD-M05 | Raw CSS var usage (~40 instancias) | 3h | Manutencao | `bg-[var(--surface-0)]` ao inves de `bg-surface-0`. Quebra Tailwind intellisense. |
-| TD-M06 | 87 localStorage sem registry | 2h | Manutencao | Sem constantes centralizadas. Risco de colisao. |
-| TD-M07 | Landing fully client-rendered | 8h | Performance | 13 componentes estaticos forcados a client por Framer Motion. |
-| TD-M08 | ProfileCompletionPrompt (21KB) | 3h | Manutencao | Componente muito grande precisa decomposicao. |
-| TD-M09 | Feature-gated pages routable | 2h | UX | `/alertas`, `/mensagens` acessiveis por URL mas API retorna 404. |
-
-### LOW
-
-| ID | Debito | Esforco | Impacto | Descricao |
-|----|--------|---------|---------|-----------|
-| TD-L01 | Sem a11y unit tests | 4h | Acessibilidade | Sem jest-axe. So 2 Playwright axe-core E2E specs. |
-| TD-L02 | Skeleton coverage gaps | 4h | UX | Admin sub-pages, alertas, mensagens sem skeletons. |
-| TD-L03 | useOnboarding.tsx extension | 0.5h | Manutencao | Hook sem JSX deveria ser `.ts`. |
-| TD-L04 | Missing error.tsx | 3h | UX | Onboarding, signup, login sem error boundaries proprios. |
-| TD-L05 | TourInviteBanner inline | 0.5h | Manutencao | Definido dentro de SearchResults.tsx. |
-| TD-L06 | Blog TODO placeholders | 4h | Conteudo | 60+ TODOs de internal linking em 30 artigos. |
-| TD-L07 | Search hooks complexidade | 4h docs | Manutencao | 3287 LOC em 9 hooks. Falta dependency graph documentado. |
+> PENDENTE: Validacao final do @architect
 
 ---
 
-## 5. Debitos Cross-Cutting
+## 2. Debitos de Database (fonte: DB-AUDIT.md)
 
-Itens que afetam multiplas areas e requerem coordenacao:
+### DEBT-DB-001 -- `alerts.filters` JSONB sem CHECK constraint de tamanho
+- **Severidade:** Baixa
+- **Descricao:** Coluna JSONB sem governance de tamanho. Possivel bloat se filtros crescerem sem limite.
+- **Esforco estimado:** 1h
+- **Area de impacto:** Database -- storage, performance
 
-| ID | Debito | Areas | Impacto | Descricao |
-|----|--------|-------|---------|-----------|
-| XC-01 | FK standardization | DB + Backend | Integridade | DB-C01 afeta `search_results_store` (usada pelo backend pipeline). Backend code pode assumir CASCADE que nao existe. |
-| XC-02 | Monolith decomposition | Backend + Tests | Manutencao | DEBT-301/302/305/306/307/309 sao todos >1500 LOC. Decomposicao afeta 140K LOC de testes. |
-| XC-03 | Server Components migration | Frontend + Backend | Performance | TD-H01 + TD-M07 requerem repensar data fetching. RSC precisa de server-side data access. |
-| XC-04 | Feature flags cleanup | Backend + Frontend | Manutencao | DEBT-314 (40+ flags) + TD-M09 (routable gated pages). Frontend e backend devem estar sincronizados. |
-| XC-05 | API proxy standardization | Frontend + Backend | Manutencao | DEBT-315 (58 proxies) + proxy patterns. Padronizar com `create-proxy-route.ts`. |
-| XC-06 | A11y compliance | Frontend + Legal | Acessibilidade | TD-H03 + TD-H04 + TD-L01 representam gap WCAG 2.1 AA. Pode ter implicacoes para contratos B2G. |
-| XC-07 | Dead source cleanup | Backend + Frontend | Performance | DEBT-313 (ComprasGov down). Frontend source indicators, backend timeouts, health dashboard. |
+### DEBT-DB-002 -- `ingestion_runs.metadata` JSONB sem CHECK constraint
+- **Severidade:** Baixa
+- **Descricao:** Metadata pode crescer sem limite. 85% das colunas JSONB criticas tem CHECK, estas 2 faltam.
+- **Esforco estimado:** 1h
+- **Area de impacto:** Database -- storage
 
----
+### DEBT-DB-003 -- Trigger prefix inconsistente (tr_/trg_/trigger_)
+- **Severidade:** Baixa
+- **Descricao:** 3 prefixos diferentes para triggers. Consolidado parcialmente em DEBT-001 mas nao completamente padronizado.
+- **Esforco estimado:** 2h
+- **Area de impacto:** Database -- manutencao, convencoes
 
-## 6. Matriz Preliminar de Priorizacao
+### DEBT-DB-004 -- RLS policy naming inconsistente
+- **Severidade:** Baixa
+- **Descricao:** Mix de snake_case e descritivo em ingles para nomes de RLS policies. Dificulta auditoria.
+- **Esforco estimado:** 3h
+- **Area de impacto:** Database -- governanca, auditoria
 
-Classificacao: Impacto (1-5) x Urgencia (1-5) / Esforco normalizado
+### DEBT-DB-005 -- Hardcoded Stripe price IDs em migrations
+- **Severidade:** Media
+- **Descricao:** Stripe price IDs hardcoded em migrations. Impede staging/dev automatico. Seed script existe mas IDs em producao estao embutidos.
+- **Esforco estimado:** 4h
+- **Area de impacto:** Database -- billing, ambientes dev/staging
 
-### Quick Wins (Alto impacto, baixo esforco — fazer AGORA)
+### DEBT-DB-006 -- Inconsistencia semantica soft/hard delete em pncp_raw_bids
+- **Severidade:** Baixa
+- **Descricao:** `pncp_raw_bids` usa soft delete (is_active=false) mas `purge_old_bids` faz hard delete em registros antigos. Semantica mista.
+- **Esforco estimado:** 2h
+- **Area de impacto:** Database -- datalake, retencao
 
-| Rank | ID | Debito | Sev. | Horas | ROI |
-|------|-----|--------|------|-------|-----|
-| 1 | DB-C01 | FK standardization (3 tabelas) | CRIT | 0.5 | 5/5 |
-| 2 | DEBT-323 | Unbounded plan cache | CRIT | 1 | 5/5 |
-| 3 | DEBT-324 | Dual webhook router | HIGH | 1 | 5/5 |
-| 4 | DB-H04 | NOT NULL em created_at | HIGH | 0.25 | 5/5 |
-| 5 | DB-H01 | auth.role() para TO service_role | HIGH | 0.33 | 5/5 |
-| 6 | DB-H02 | health/incidents user RLS | HIGH | 0.25 | 4/5 |
-| 7 | DB-H03 | Consolidar updated_at triggers | HIGH | 0.33 | 4/5 |
-| 8 | DEBT-322 | Mover CB configs | MED | 1 | 4/5 |
-| 9 | DEBT-325 | USD_TO_BRL configuravel | MED | 0.5 | 4/5 |
-| 10 | DB-M04+M05 | CHECK constraints | MED | 0.34 | 4/5 |
+### DEBT-DB-007 -- health_checks e incidents sem policies de usuario admin
+- **Severidade:** Baixa
+- **Descricao:** Admin nao pode ver dados via dashboard -- precisa de service_role. Falta policy SELECT para admin.
+- **Esforco estimado:** 1h
+- **Area de impacto:** Database -- admin, observabilidade
 
-### Valor Estrategico (Alto impacto, esforco moderado)
+### DEBT-DB-009 -- Nenhuma migration tem rollback formal
+- **Severidade:** Media
+- **Descricao:** Apenas migration 010 tem rollback documentado. 99 migrations sem rollback script dificultam reversao em emergencia.
+- **Esforco estimado:** 8h+ (rollback para 5 tabelas criticas)
+- **Area de impacto:** Database -- resiliencia, deploy
 
-| Rank | ID | Debito | Sev. | Horas | ROI |
-|------|-----|--------|------|-------|-----|
-| 11 | TD-H01 | Server Components | HIGH | 16 | 4/5 |
-| 12 | TD-H03 | aria-live para SSE | HIGH | 6 | 4/5 |
-| 13 | DEBT-307 | Decomp stripe webhooks | HIGH | 6 | 4/5 |
-| 14 | DEBT-301 | Decomp filter.py | HIGH | 8 | 3/5 |
-| 15 | TD-H04 | Keyboard DnD a11y | HIGH | 8 | 3/5 |
-| 16 | TD-H02 | Unificar /buscar auth | HIGH | 4 | 3/5 |
-| 17 | DEBT-304 | Backend packaging | HIGH | 12 | 3/5 |
-
-### Melhoria Continua (Medio impacto)
-
-| Rank | ID(s) | Debito | Sev. | Horas |
-|------|-------|--------|------|-------|
-| 18 | DEBT-302 | Decomp schemas.py | MED | 6 |
-| 19 | DEBT-305 | Decomp job_queue + cron_jobs | MED | 6 |
-| 20 | DEBT-309 | Decomp quota.py | MED | 4 |
-| 21 | TD-M01 | Eliminar `any` types | MED | 4 |
-| 22 | TD-M05 | Tailwind tokens | MED | 3 |
-| 23 | TD-M04 | useFeatureFlags para SWR | MED | 2 |
-| 24 | DEBT-313 | ComprasGov cleanup | MED | 2 |
-| 25 | TD-M07 | Landing page RSC | MED | 8 |
-
-### Backlog (Baixa urgencia)
-
-Todos os itens LOW ficam no backlog para serem priorizados oportunisticamente.
+> PENDENTE: Revisao do @data-engineer (Fase 5)
 
 ---
 
-## 7. Dependencias entre Debitos
+## 3. Debitos de Frontend/UX (fonte: frontend-spec.md)
 
-```mermaid
-graph TD
-    DB_C01[DB-C01: FK fix] --> XC01[XC-01: Backend assumes CASCADE]
+### DEBT-FE-001 -- `useSearchOrchestration` mega-hook (TD-001)
+- **Severidade:** Alta
+- **Descricao:** Mega-hook com 200+ linhas que orquestra 9+ sub-hooks, estado de trial, modais, tours e mais. Risco de regressao alto. Dificil de testar unitariamente.
+- **Esforco estimado:** 12h
+- **Impacto UX:** Risco de regressao em feature principal
 
-    TD_H01[TD-H01: Server Components] --> TD_M07[TD-M07: Landing RSC]
-    TD_H01 --> XC03[XC-03: Data fetching redesign]
+### DEBT-FE-002 -- ViabilityBadge usa `title` para dados criticos (TD-008 + A11Y-002)
+- **Severidade:** Alta
+- **Descricao:** Breakdown de fatores de viabilidade (informacao critica para decisao do usuario) depende de `title` tooltip, que nao funciona em mobile/touch e nao e acessivel.
+- **Esforco estimado:** 4h
+- **Impacto UX:** Acessibilidade -- usuarios mobile e screen readers nao acessam dados de viabilidade
 
-    DEBT_304[DEBT-304: Backend packaging] --> DEBT_301[DEBT-301: filter.py decomp]
-    DEBT_304 --> DEBT_302[DEBT-302: schemas.py decomp]
-    DEBT_304 --> DEBT_305[DEBT-305: job/cron decomp]
+### DEBT-FE-003 -- Sem `aria-live` para resultados de busca (TD-009 + A11Y-004)
+- **Severidade:** Media
+- **Descricao:** Resultados de busca nao anunciam dinamicamente numero de resultados via `aria-live`. 12 banners de status nao usam `role="alert"` ou `aria-live` consistentemente.
+- **Esforco estimado:** 4h
+- **Impacto UX:** Acessibilidade -- screen readers nao recebem feedback de busca
 
-    DEBT_314[DEBT-314: Feature flag cleanup] --> TD_M09[TD-M09: Gated pages]
-    DEBT_314 --> XC04[XC-04: FE/BE flag sync]
+### DEBT-FE-004 -- 12 banners na busca -- cognitive overload (TD-002)
+- **Severidade:** Media
+- **Descricao:** 12 tipos de banners contextuais na pagina de busca. Excesso de informacao para usuario medio. Sem sistema de prioridade entre banners.
+- **Esforco estimado:** 8h
+- **Impacto UX:** Sobrecarga cognitiva, confusao
 
-    DEBT_315[DEBT-315: Proxy factory] --> XC05[XC-05: API standardization]
+### DEBT-FE-005 -- /admin usa useState + fetch manual (TD-003)
+- **Severidade:** Media
+- **Descricao:** Inconsistente com resto do app que usa SWR. Risco de stale data e falta de revalidation automatica.
+- **Esforco estimado:** 4h
+- **Impacto UX:** Dados desatualizados para admin
 
-    TD_H03[TD-H03: aria-live] --> TD_L01[TD-L01: a11y tests]
-    TD_H04[TD-H04: Keyboard DnD] --> TD_L01
+### DEBT-FE-006 -- Landmarks HTML inconsistentes (A11Y-003)
+- **Severidade:** Media
+- **Descricao:** Nem todas as paginas protegidas tem `<main>`, `<nav>` e `<footer>` marcados corretamente. `/buscar` usa `<main id="buscar-content">` mas padrao nao e consistente.
+- **Esforco estimado:** 3h
+- **Impacto UX:** Acessibilidade -- navegacao por landmarks prejudicada
+
+### DEBT-FE-007 -- Campos de busca sem `aria-describedby` (A11Y-008)
+- **Severidade:** Media
+- **Descricao:** Hints como "Selecione um setor para iniciar" e "Minimo 3 caracteres" nao estao linkados via `aria-describedby` aos inputs.
+- **Esforco estimado:** 2h
+- **Impacto UX:** Acessibilidade -- falta de contexto para screen readers
+
+### DEBT-FE-008 -- Feature gates hardcoded (DEBT-FE-012)
+- **Severidade:** Media
+- **Descricao:** Apenas `alertas` e gated. Sem feature flag service para controle dinamico no frontend.
+- **Esforco estimado:** 6h
+- **Impacto UX:** Nenhum direto (impacto em DX e flexibilidade)
+
+### DEBT-FE-009 -- SVGs inline vs icon library (TD-004)
+- **Severidade:** Baixa
+- **Descricao:** SVGs inline em MobileDrawer, BottomNav, ErrorStates ao inves de lucide-react (ja e dependencia).
+- **Esforco estimado:** 3h
+- **Impacto UX:** Bundle size, manutencao
+
+### DEBT-FE-010 -- Raw hex values ao inves de tokens semanticos (DEBT-012)
+- **Severidade:** Baixa
+- **Descricao:** Alguns componentes usam raw hex ao inves dos tokens semanticos definidos no tailwind.config.ts.
+- **Esforco estimado:** 4h
+- **Impacto UX:** Inconsistencia visual sutil
+
+### DEBT-FE-011 -- Tipo `any` em API proxy routes (TD-005)
+- **Severidade:** Media
+- **Descricao:** Potencial uso de `any` em rotas de proxy API, quebrando type safety.
+- **Esforco estimado:** 4h
+- **Impacto UX:** Nenhum direto (impacto em seguranca de tipos)
+
+### DEBT-FE-012 -- Focus order em BuscarModals (A11Y-006)
+- **Severidade:** Baixa
+- **Descricao:** Multiplos modais potencialmente sobrepostos podem confundir focus management.
+- **Esforco estimado:** 2h
+- **Impacto UX:** Acessibilidade -- foco perdido em cenarios edge
+
+### DEBT-FE-013 -- Sem testes de acessibilidade automatizados
+- **Severidade:** Media
+- **Descricao:** `@axe-core/playwright` e devDependency mas nao ha evidencia de uso sistematico nos E2E tests. Gaps de a11y nao sao detectados automaticamente.
+- **Esforco estimado:** 6h (integrar em testes criticos)
+- **Impacto UX:** Regressoes de acessibilidade nao detectadas
+
+### DEBT-FE-014 -- Sem suporte a prefers-reduced-motion
+- **Severidade:** Baixa
+- **Descricao:** Animacoes Framer Motion e CSS nao verificam `prefers-reduced-motion` sistematicamente. Usuarios com sensibilidade a movimento afetados.
+- **Esforco estimado:** 3h
+- **Impacto UX:** Acessibilidade -- desconforto para usuarios sensiveis
+
+### DEBT-FE-015 -- SEO pages programaticas com conteudo thin (TD-006)
+- **Severidade:** Baixa
+- **Descricao:** Paginas `/como-*` podem ter conteudo duplicado ou thin, arriscando penalidade de SEO.
+- **Esforco estimado:** 4h
+- **Impacto UX:** SEO
+
+> PENDENTE: Revisao do @ux-design-expert (Fase 6)
+
+---
+
+## 4. Matriz Preliminar de Priorizacao
+
+| ID | Debito | Area | Severidade | Impacto | Esforco (h) | Prioridade |
+|----|--------|------|------------|---------|-------------|------------|
+| DEBT-SYS-001 | filter/core.py monolitico (4.105 LOC) | Backend | Critica | Manutencao, testes | 16 | P0 |
+| DEBT-SYS-002 | SIGSEGV C extensions (CRIT-SIGSEGV) | Infra | Critica | Estabilidade producao | 8 | P0 |
+| DEBT-FE-002 | ViabilityBadge title inacessivel | Frontend | Alta | A11y critica | 4 | P0 |
+| DEBT-SYS-003 | search_cache.py (2.564 LOC) | Backend | Alta | Cache, resiliencia | 12 | P1 |
+| DEBT-SYS-004 | pncp_client.py (2.559 LOC) | Backend | Alta | Data sources | 10 | P1 |
+| DEBT-FE-001 | useSearchOrchestration mega-hook | Frontend | Alta | Regressao busca | 12 | P1 |
+| DEBT-SYS-005 | cron_jobs.py multiplas responsabilidades | Backend | Alta | Jobs | 8 | P1 |
+| DEBT-SYS-006 | job_queue.py sobrecarregado | Backend | Alta | Worker | 6 | P1 |
+| DEBT-DB-009 | Nenhuma migration com rollback | Database | Media | Resiliencia deploy | 8 | P1 |
+| DEBT-DB-005 | Stripe price IDs hardcoded | Database | Media | Ambientes dev | 4 | P1 |
+| DEBT-FE-003 | Sem aria-live para resultados busca | Frontend | Media | A11y | 4 | P2 |
+| DEBT-FE-004 | 12 banners na busca | Frontend | Media | Cognitive overload | 8 | P2 |
+| DEBT-FE-005 | /admin sem SWR | Frontend | Media | Stale data | 4 | P2 |
+| DEBT-FE-006 | Landmarks HTML inconsistentes | Frontend | Media | A11y | 3 | P2 |
+| DEBT-FE-007 | Campos sem aria-describedby | Frontend | Media | A11y | 2 | P2 |
+| DEBT-FE-008 | Feature gates hardcoded | Frontend | Media | DX | 6 | P2 |
+| DEBT-FE-011 | Tipo any em API proxies | Frontend | Media | Type safety | 4 | P2 |
+| DEBT-FE-013 | Sem testes a11y automatizados | Frontend | Media | Regressao a11y | 6 | P2 |
+| DEBT-SYS-007 | Duplicacao filter_*.py | Backend | Media | Organizacao | 4 | P2 |
+| DEBT-SYS-008 | LLM timeout hardcoded | Backend | Media | Config | 2 | P2 |
+| DEBT-SYS-009 | Feature flag sprawl | Backend | Media | Manutencao | 8 | P2 |
+| DEBT-SYS-010 | 99 migrations Supabase | Infra | Media | Deploy, DX | 16 | P2 |
+| DEBT-SYS-011 | Schemas espalhados | Backend | Media | Organizacao | 2 | P2 |
+| DEBT-DB-001 | alerts.filters JSONB sem CHECK | Database | Baixa | Storage | 1 | P3 |
+| DEBT-DB-002 | ingestion_runs.metadata sem CHECK | Database | Baixa | Storage | 1 | P3 |
+| DEBT-DB-003 | Trigger prefix inconsistente | Database | Baixa | Convencoes | 2 | P3 |
+| DEBT-DB-004 | RLS policy naming inconsistente | Database | Baixa | Auditoria | 3 | P3 |
+| DEBT-DB-006 | Soft/hard delete inconsistente | Database | Baixa | Semantica | 2 | P3 |
+| DEBT-DB-007 | health_checks sem policy admin | Database | Baixa | Admin | 1 | P3 |
+| DEBT-FE-009 | SVGs inline vs lucide-react | Frontend | Baixa | Bundle | 3 | P3 |
+| DEBT-FE-010 | Raw hex vs tokens semanticos | Frontend | Baixa | Consistencia visual | 4 | P3 |
+| DEBT-FE-012 | Focus order em modais | Frontend | Baixa | A11y edge case | 2 | P3 |
+| DEBT-FE-014 | Sem prefers-reduced-motion | Frontend | Baixa | A11y | 3 | P3 |
+| DEBT-FE-015 | SEO pages thin content | Frontend | Baixa | SEO | 4 | P3 |
+| DEBT-SYS-012 | Backward-compat shims main.py | Backend | Baixa | DX | 1 | P3 |
+| DEBT-SYS-013 | portal_transparencia_client sem uso | Backend | Baixa | Dead code | 1 | P3 |
+| DEBT-SYS-014 | Clients experimentais | Backend | Baixa | Dead code | 1 | P3 |
+| DEBT-SYS-015 | Dual-hash transition auth.py | Backend | Baixa | Cleanup | 1 | P3 |
+
+---
+
+## 5. Dependencias entre Debitos
+
+### Cadeia 1: Decomposicao de Modulos Backend
+```
+DEBT-SYS-001 (filter/core.py) ──depende de──> DEBT-SYS-007 (resolver duplicacao filter_*.py primeiro)
+DEBT-SYS-004 (pncp_client.py) ──independente── (pode ser feito em paralelo)
+DEBT-SYS-005 (cron_jobs.py) ──depende de──> DEBT-SYS-006 (job_queue.py -- ambos compartilham logica ARQ)
 ```
 
-**Ordem recomendada:**
-1. **Batch 1 (Quick Wins):** DB-C01, DEBT-323, DEBT-324, DB-H01-H04 — 1 migration, ~4h
-2. **Batch 2 (Security/A11y):** DEBT-307, TD-H03, TD-H02 — ~16h
-3. **Batch 3 (Performance):** TD-H01, TD-M07 — ~24h
-4. **Batch 4 (Architecture):** DEBT-301, DEBT-302, DEBT-304, DEBT-305 — ~32h
-5. **Batch 5 (Polish):** Restante dos MEDIUM + LOW
+### Cadeia 2: Acessibilidade Frontend
+```
+DEBT-FE-002 (ViabilityBadge) ──independente──
+DEBT-FE-003 (aria-live) ──depende de──> DEBT-FE-004 (consolidar banners antes de adicionar aria-live)
+DEBT-FE-006 (landmarks) ──independente──
+DEBT-FE-013 (testes a11y) ──deve ser feito APOS todos os outros a11y debts──
+```
+
+### Cadeia 3: Database Governance
+```
+DEBT-DB-001/002 (JSONB CHECK) ──independentes── (podem ser feitos juntos em 1 migration)
+DEBT-DB-009 (rollback scripts) ──depende de──> DEBT-SYS-010 (squash migrations -- mais facil criar rollbacks apos squash)
+DEBT-DB-005 (Stripe IDs) ──independente──
+```
+
+### Cadeia 4: Feature Flag Governance
+```
+DEBT-SYS-009 (backend flag sprawl) ──complementa──> DEBT-FE-008 (frontend feature gates)
+```
+Idealmente resolvidos juntos para criar um sistema unificado de feature flags.
 
 ---
 
-## 8. Perguntas para Especialistas
+## 6. Perguntas para Especialistas
 
-### Para @data-engineer:
+### Para @data-engineer (Fase 5):
 
-1. **DB-C01:** Confirma que o fix NOT VALID + VALIDATE e seguro para as 3 tabelas restantes? Algum volume de dados que possa causar lock extenso?
-2. **DB-M03:** `partner_referrals.referred_user_id` — o comportamento correto e CASCADE ou SET NULL? A migracao DEBT-104 pode ter alterado o intento original.
-3. **DB-L05:** O limite de cache cleanup deveria ser 5 (debt017) ou 10 (migration 032 com prioridade hot/warm/cold)? Qual e o comportamento desejado?
-4. **DB-M02:** `organizations.owner_id` com ON DELETE RESTRICT para `auth.users` — devemos manter ou migrar para `profiles` como padrao?
-5. Existem queries lentas em producao que nao foram capturadas neste audit?
+1. **DEBT-DB-009 (rollback):** Qual e a estrategia de rollback atual para emergencias? Ha algum procedimento manual documentado? Quais sao as 5 tabelas mais criticas que precisam de rollback first?
 
-### Para @ux-design-expert:
+2. **DEBT-DB-005 (Stripe IDs):** O seed script existente cobre todos os cenarios de staging? O que falta para que um ambiente de dev tenha precos Stripe funcionais sem hardcode?
 
-1. **TD-H01:** A migracao para Server Components impactaria algum pattern UX existente? Framer Motion requer "use client" — como isolar?
-2. **TD-H03/TD-H04:** Qual e o impacto real em usuarios com deficiencia no contexto B2G? Existe obrigacao legal (acessibilidade em sites governamentais)?
-3. **TD-M07:** A landing page precisa de animacoes Framer Motion ou CSS animations seriam suficientes?
-4. **TD-M09:** Para as paginas feature-gated (`/alertas`, `/mensagens`) — "Em breve" ou redirect para dashboard?
-5. O design system (6 primitivos) e suficiente ou devemos expandir para componentes compostos (Select, Modal, Tooltip)?
+3. **DEBT-DB-006 (soft/hard delete):** A inconsistencia entre is_active=false (soft) e hard delete via purge causa algum problema real em queries ou metricas de observabilidade? Ou e apenas incoerencia semantica?
 
-### Para @qa:
+4. **DEBT-SYS-010 (99 migrations):** Ha algum risco em fazer squash de migrations? Alguma migration tem side-effects (data migration, seed data) que seriam perdidos?
 
-1. **DEBT-311:** O ratio test/source de 1.8x indica over-specification? Quais areas tem testes duplicados?
-2. Quais debitos representam maior risco de regressao se resolvidos?
-3. A cobertura de testes atual (70% backend, 60% frontend) e adequada para as areas com mais debitos?
-4. DEBT-319 — os 12 scripts em `scripts/` deveriam ter testes no CI?
-5. Qual seria a estrategia de teste para a migracao Server Components (TD-H01)?
+5. **DEBT-DB-001/002 (JSONB):** Qual tamanho maximo razoavel para `alerts.filters` e `ingestion_runs.metadata`? 512 KB como as outras colunas ou valor diferente?
+
+### Para @ux-design-expert (Fase 6):
+
+1. **DEBT-FE-004 (12 banners):** Qual e a hierarquia de prioridade recomendada para os banners? Quais podem ser consolidados? Algum pode ser removido sem perda de valor?
+
+2. **DEBT-FE-002 (ViabilityBadge):** Qual padrao de tooltip acessivel recomendado? Radix Tooltip, popover customizado, ou expandir inline? O breakdown precisa estar visivel sem interacao?
+
+3. **DEBT-FE-001 (useSearchOrchestration):** A decomposicao sugerida (useSearchModals, useSearchTours, useTrialOrchestration) faz sentido do ponto de vista de UX? Algum estado compartilhado entre essas areas impede a separacao?
+
+4. **DEBT-FE-014 (prefers-reduced-motion):** Quais animacoes sao essenciais para feedback de interacao e quais sao puramente decorativas? Desabilitar TODAS com reduced-motion ou manter animacoes funcionais?
+
+5. **DEBT-FE-010 (tokens semanticos):** Quais componentes tem as maiores inconsistencias visuais por usar raw hex? Existe um inventory dos offenders?
+
+### Para @qa (Fase 7):
+
+1. **Cobertura de testes dos modulos grandes:** `filter/core.py` (4.105 LOC), `search_cache.py` (2.564 LOC) e `pncp_client.py` (2.559 LOC) tem cobertura adequada? A decomposicao pode ser feita com seguranca?
+
+2. **Feature flags em testes:** Os 30+ feature flags sao testados em ambos os estados (on/off)? Ha risco de combinacoes nao testadas?
+
+3. **Testes de acessibilidade:** `@axe-core/playwright` esta instalado mas sem uso sistematico. Qual seria o subconjunto minimo de paginas para adicionar assertions de a11y?
+
+4. **Rollback testing:** Se criarmos rollback scripts (DEBT-DB-009), como validamos que o rollback funciona sem afetar dados de producao?
+
+5. **Regression risk:** Quais dos 38 debitos tem maior risco de causar regressao ao serem corrigidos? Que testes adicionais seriam necessarios?
 
 ---
 
-## Notas do Consolidador
-
-- **Saude geral do banco:** 7/10 — Sprints DEBT anteriores resolveram os maiores problemas. Itens restantes sao gerenciaveis.
-- **Frontend e a maior divida:** 88h de esforco estimado, dominado por TD-H01 (Server Components, 16h) e TD-H04 (a11y DnD, 8h).
-- **Backend tem mais itens mas menores:** Maioria sao decomposicoes de arquivos grandes — melhoria de manutenibilidade, nao de funcionalidade.
-- **Quick Wins totais:** ~5h de trabalho para resolver 10 itens (todos DB + DEBT-323/324). Recomendo executar como primeiro batch.
-- **Risk assessment:** Nenhum debito CRITICAL afeta funcionalidade em producao *agora*. DB-C01 so causa problema em delecao de profiles (raro). DEBT-323 so causa problema com alto volume (ainda nao atingido).
-
----
-
-*Este documento sera revisado pelos especialistas nas Fases 5 (DB), 6 (UX) e 7 (QA) do workflow Brownfield Discovery.*
+**Proximo passo:** Este DRAFT sera revisado por cada especialista em suas respectivas fases:
+- Fase 5: @data-engineer valida debitos de database
+- Fase 6: @ux-design-expert valida debitos de frontend/UX
+- Fase 7: @qa avalia risco de regressao e prioriza testes
+- Fase 8: @analyst + @pm consolidam versao final com ROI estimado

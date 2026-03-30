@@ -30,6 +30,7 @@ export function FilterRelaxedBanner({
     <div
       className="mt-4 p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 flex items-start gap-3"
       role="status"
+      aria-live="polite"
       data-testid="filter-relaxed-banner"
     >
       {/* Info icon */}

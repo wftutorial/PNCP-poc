@@ -210,6 +210,7 @@ export default function SearchFormHeader({
                 id="termos-busca"
                 type="text"
                 aria-label="Adicionar termos de busca"
+                aria-describedby="termos-busca-hint"
                 value={termoInput}
                 onChange={e => {
                   const val = e.target.value;
@@ -258,7 +259,7 @@ export default function SearchFormHeader({
                            placeholder:text-ink-faint py-1"
               />
             </div>
-            <p className="text-sm text-ink-muted mt-1.5">
+            <p id="termos-busca-hint" className="text-sm text-ink-muted mt-1.5">
               Dica: digite frases completas e separe com <kbd className="px-1.5 py-0.5 bg-surface-2 rounded text-xs font-mono border">vírgula</kbd> ou <kbd className="px-1.5 py-0.5 bg-surface-2 rounded text-xs font-mono border">Enter</kbd>. Ex: levantamento topográfico, pavimentação
               {termosArray.length > 0 && (
                 <span className="text-brand-blue font-medium">

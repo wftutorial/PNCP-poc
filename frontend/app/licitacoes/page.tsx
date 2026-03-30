@@ -48,7 +48,7 @@ export default async function LicitacoesIndexPage() {
   const statsResults = await Promise.all(statsPromises);
 
   return (
-    <main className="min-h-screen bg-white dark:bg-gray-950">
+    <main id="main-content" className="min-h-screen bg-white dark:bg-gray-950">
       {/* Hero */}
       <section className="bg-gradient-to-br from-brand-blue to-blue-700 text-white py-16 px-4">
         <div className="max-w-6xl mx-auto text-center">

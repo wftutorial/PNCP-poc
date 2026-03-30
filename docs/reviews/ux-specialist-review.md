@@ -1,295 +1,299 @@
 # UX Specialist Review
 
-**Date:** 2026-03-23 | **Reviewer:** @ux-design-expert (Uma)
-**Status:** Phase 6 — Brownfield Discovery
+**Revisor:** @ux-design-expert (Uma)
+**Data:** 2026-03-30
+**Documento revisado:** docs/prd/technical-debt-DRAFT.md (Section 3 + Section 6)
 
 ---
 
-## Summary
+## Resumo
 
-The DRAFT's frontend debt section (Section 4) is directionally correct but contains **3 factual inaccuracies** that materially change severity and effort estimates. The most significant: the claim of "zero Server Components" and "no aria-live for SSE" are both false based on current code inspection. The codebase shows evidence of progressive accessibility work (16+ aria-live regions in the search module alone) and partial RSC adoption (landing page, legal pages, blog, pricing, features are already Server Component pages).
+A Secao 3 do DRAFT (Debitos de Frontend/UX) esta **direccionalmente correta**, mas contem **2 imprecisoes factuais** que alteram severidade e esforco. O codebase demonstra trabalho progressivo de acessibilidade (28+ usos de `aria-live`/`role="alert"` so no modulo de busca), e `prefers-reduced-motion` ja esta implementado globalmente em `globals.css`. A saude geral do frontend e **7.5/10** para um produto POC-to-production.
 
-**Overall frontend health: 7/10.** The core UX patterns (loading states, error handling, resilience banners, onboarding) are solid for a POC-to-production transition. The real debts are: (1) all 13 landing child components using "use client" unnecessarily, (2) missing screen reader announcements for pipeline drag operations, (3) large component decomposition backlog, and (4) incomplete design system primitives.
-
-**Adjusted total frontend effort: ~68h** (down from 88h in DRAFT due to corrected assessments).
+**Esforco total ajustado:** ~63h (vs ~71h no DRAFT, reducao de 8h por correcoes factuais).
 
 ---
 
 ## Debitos Validados
 
-| ID | Debito | Sev. Original | Sev. Ajustada | Horas Orig. | Horas Ajust. | Prioridade | Impacto UX |
-|----|--------|---------------|---------------|-------------|--------------|------------|------------|
-| TD-H01 | Zero Server Components | HIGH | **MEDIUM** | 16h | **10h** | 2 | Moderate |
-| TD-H02 | Dual header/auth pattern | HIGH | HIGH (confirmed) | 4h | 4h | 3 | Minor |
-| TD-H03 | Sem aria-live para SSE | HIGH | **LOW** | 6h | **2h** | 5 | Minor |
-| TD-H04 | Pipeline kanban sem keyboard DnD / screen reader | HIGH | **MEDIUM** | 8h | **4h** | 4 | Moderate |
-| TD-M01 | 22 `any` types em 15 arquivos | MEDIUM | MEDIUM (confirmed) | 4h | 4h | 7 | None |
-| TD-M02 | ValorFilter.tsx (478 LOC) | MEDIUM | MEDIUM (confirmed) | 3h | 3h | 9 | None |
-| TD-M03 | EnhancedLoadingProgress (391 LOC) | MEDIUM | MEDIUM (confirmed) | 3h | 3h | 10 | None |
-| TD-M04 | useFeatureFlags custom cache | MEDIUM | MEDIUM (confirmed) | 2h | 2h | 8 | None |
-| TD-M05 | Raw CSS var usage (~40 instances) | MEDIUM | MEDIUM (confirmed) | 3h | 3h | 11 | None |
-| TD-M06 | 87 localStorage sem registry | MEDIUM | MEDIUM (confirmed) | 2h | 2h | 12 | None |
-| TD-M07 | Landing fully client-rendered | MEDIUM | **HIGH** | 8h | **10h** | 1 | Major |
-| TD-M08 | ProfileCompletionPrompt (21KB) | MEDIUM | MEDIUM (638 LOC confirmed) | 3h | 3h | 13 | None |
-| TD-M09 | Feature-gated pages routable | MEDIUM | **RESOLVED** | 2h | **0h** | N/A | None |
-| TD-L01 | Sem a11y unit tests | LOW | LOW (confirmed) | 4h | 4h | 6 | Minor |
-| TD-L02 | Skeleton coverage gaps | LOW | LOW (confirmed) | 4h | 4h | 14 | Minor |
-| TD-L03 | useOnboarding.tsx extension | LOW | LOW (confirmed) | 0.5h | 0.5h | 15 | None |
-| TD-L04 | Missing error.tsx | LOW | LOW (confirmed) | 3h | **2h** | 14 | Minor |
-| TD-L05 | TourInviteBanner inline | LOW | LOW (confirmed) | 0.5h | 0.5h | 16 | None |
-| TD-L06 | Blog TODO placeholders | LOW | LOW (confirmed) | 4h | 4h | 17 | None |
-| TD-L07 | Search hooks complexity | LOW | LOW (confirmed) | 4h | 4h | 15 | None |
+| ID | Debito | Severidade Original | Severidade Ajustada | Horas Orig. | Horas Ajust. | Impacto UX | Notas |
+|----|--------|---------------------|---------------------|-------------|--------------|------------|-------|
+| DEBT-FE-001 | useSearchOrchestration mega-hook | Alta | **Alta (confirmada)** | 12h | 12h | Risco de regressao na feature principal | 618 LOC, orquestra 12+ sub-hooks. Confirmado no codigo. |
+| DEBT-FE-002 | ViabilityBadge usa `title` para dados criticos | Alta | **Alta (confirmada)** | 4h | 4h | Dados de viabilidade inacessiveis em mobile/touch | `title` attr confirmado em L105. `aria-label` existe mas so com nivel, nao breakdown. |
+| DEBT-FE-003 | Sem `aria-live` para resultados de busca | Media | **Baixa** | 4h | **2h** | Parcialmente resolvido | **VER DETALHES ABAIXO** |
+| DEBT-FE-004 | 12 banners na busca — cognitive overload | Media | **Media (confirmada)** | 8h | 8h | Sobrecarga cognitiva real | 12 banners confirmados no diretorio de componentes. |
+| DEBT-FE-005 | /admin usa useState + fetch manual | Media | **Media (confirmada)** | 4h | 4h | Dados desatualizados para admin | 20+ chamadas fetch manuais confirmadas nos arquivos de admin. |
+| DEBT-FE-006 | Landmarks HTML inconsistentes | Media | **Baixa** | 3h | **2h** | Menos grave do que reportado | **VER DETALHES ABAIXO** |
+| DEBT-FE-007 | Campos sem `aria-describedby` | Media | **Media (confirmada)** | 2h | 2h | Falta de contexto para screen readers | Apenas ValorFilter tem `aria-describedby` parcial. |
+| DEBT-FE-008 | Feature gates hardcoded | Media | **Media (confirmada)** | 6h | 6h | Nenhum impacto direto em UX | Impacto em DX e flexibilidade. |
+| DEBT-FE-009 | SVGs inline vs lucide-react | Baixa | **Baixa (confirmada)** | 3h | 3h | Bundle size, manutencao | MobileDrawer tem 10+ SVGs inline. BottomNav ja migrou para lucide-react. |
+| DEBT-FE-010 | Raw hex values vs tokens semanticos | Baixa | **Baixa (confirmada)** | 4h | 4h | Inconsistencia visual sutil | Hex encontrados em KeyboardShortcutsHelp, ProfileCongratulations, TestimonialSection. |
+| DEBT-FE-011 | Tipo `any` em API proxy routes | Media | **Removido** | 4h | **0h** | Nenhum | **VER DETALHES ABAIXO** |
+| DEBT-FE-012 | Focus order em BuscarModals | Baixa | **Baixa (confirmada)** | 2h | 2h | Edge case de acessibilidade | BuscarModals usa `<Dialog>` component; risco e de modais sobrepostos. |
+| DEBT-FE-013 | Sem testes a11y automatizados | Media | **Baixa** | 6h | **3h** | Regressoes de a11y nao detectadas | **VER DETALHES ABAIXO** |
+| DEBT-FE-014 | Sem prefers-reduced-motion | Baixa | **Removido** | 3h | **0h** | Nenhum — ja implementado | **VER DETALHES ABAIXO** |
+| DEBT-FE-015 | SEO pages thin content | Baixa | **Baixa (confirmada)** | 4h | 4h | SEO | Sem impacto direto na UX do produto. |
 
-### Detailed Adjustments
+### Detalhes dos Ajustes
 
-**TD-H01 (Zero Server Components) -- DOWNGRADED to MEDIUM, 10h**
+**DEBT-FE-003 (aria-live) -- REBAIXADA para Baixa, 2h**
 
-The DRAFT states "todas as paginas 'use client'". This is **factually incorrect**. Code inspection reveals:
+O DRAFT afirma que "resultados de busca nao anunciam dinamicamente". Isso e **parcialmente incorreto**. Verificacao no codigo encontrou **28+ usos de `aria-live` e `role="alert"`** no modulo de busca:
 
-- `app/page.tsx` (landing) -- **NO** `"use client"` directive. It IS a Server Component.
-- `app/termos/page.tsx`, `app/privacidade/page.tsx` -- Server Components (use `export const metadata`).
-- `app/blog/page.tsx`, `app/features/page.tsx`, `app/pricing/page.tsx`, `app/sobre/page.tsx` -- All Server Components.
+- `ResultsHeader.tsx` — `aria-live="polite" aria-atomic="true"` no contador de resultados
+- `EnhancedLoadingProgress.tsx` — `aria-live="polite"` no container de progresso
+- `SearchStateManager.tsx` — 4x `aria-live="assertive"` para transicoes de estado
+- `DataQualityBanner.tsx`, `ExpiredCacheBanner.tsx`, `RefreshBanner.tsx` — todos com `aria-live="polite"`
+- `SearchErrorBanner.tsx`, `SearchErrorBoundary.tsx` — `role="alert" aria-live="assertive"`
+- `EmptyResults.tsx`, `ResultsLoadingSection.tsx` — `aria-live="polite"`
 
-26 pages have `"use client"`, but these are primarily protected pages that genuinely need client interactivity (auth state, hooks, event handlers). The real debt is not "zero RSC" but rather "protected pages that could partially benefit from RSC data fetching." The effort drops from 16h to 10h because the static/marketing pages are already RSC. The remaining work is extracting RSC data fetching for dashboard/search where appropriate, which is a Next.js 16 best practice but not a critical gap.
+O gap restante e estreito: (1) nem todos os 12 banners tem `aria-live` consistente (CacheBanner, FilterRelaxedBanner, TruncationWarningBanner, OnboardingBanner, SourcesUnavailable, PartialResultsPrompt faltam), e (2) o anuncio de "X oportunidades encontradas" apos conclusao da busca poderia ser mais explicitamente marcado. Isso e 2h de trabalho, nao 4h.
 
-**TD-H03 (No aria-live for SSE) -- DOWNGRADED to LOW, 2h**
+**DEBT-FE-006 (Landmarks) -- REBAIXADA para Baixa, 2h**
 
-The DRAFT claims "progresso de busca e resultados invisiveis para screen readers." This is **factually incorrect**. Code inspection found **16 aria-live regions** already present across the search module:
+Verificacao no codigo encontrou `<main>` em **25+ paginas**, incluindo:
+- `(protected)/layout.tsx` — `<main id="main-content">`
+- `buscar/page.tsx` — `<main id="buscar-content">`
+- `pipeline/page.tsx`, `alertas/page.tsx`, `status/page.tsx`, `conta/layout.tsx` — todos com `<main>`
+- Todas as paginas de landing, blog, sobre — `<main>` presente
 
-- `EnhancedLoadingProgress.tsx` -- `aria-live="polite"` on progress container
-- `SearchStateManager.tsx` -- 4x `aria-live="assertive"` for state transitions
-- `ResultsHeader.tsx` -- `aria-live="polite" aria-atomic="true"` on results count
-- `ResultsLoadingSection.tsx` -- `aria-live="polite"` on loading state
-- `UfProgressGrid.tsx` -- `aria-live="polite"` on UF progress
-- `SearchErrorBanner.tsx`, `SearchErrorBoundary.tsx` -- `role="alert" aria-live="assertive"`
-- `EmptyResults.tsx`, `DataQualityBanner.tsx`, `ExpiredCacheBanner.tsx`, `RefreshBanner.tsx`, `ValorFilter.tsx` -- all have `aria-live="polite"`
+O gap real e menor: algumas paginas de `conta/equipe/` tem multiplos `<main>` em branches condicionais, e o `id` nao e padronizado (alguns `main-content`, outros `buscar-content`, outros sem id). Isso e 2h, nao 3h.
 
-Additionally, `SearchForm.tsx` already has `role="search" aria-label="Buscar licitacoes"`, contradicting the DRAFT's claim that it "lacks role='search'."
+**DEBT-FE-011 (Tipo `any`) -- REMOVIDO, 0h**
 
-The remaining gap is narrow: (1) the SSE progress percentage itself could use more granular screen reader announcements (e.g., announcing when each UF completes), and (2) the "new results available" event from SSE could be more prominently announced. This is 2h of work, not 6h.
+Busca por `: any` nos arquivos de API proxy (`frontend/app/api/**/*.ts`) retornou **zero resultados**. O DRAFT usa linguagem especulativa ("potencial uso de any") e a verificacao no codigo nao confirma o problema. Se `any` existir em outros locais, deve ser catalogado como debito de type safety geral, nao especifico a API proxies.
 
-**TD-H04 (Pipeline kanban a11y) -- DOWNGRADED to MEDIUM, 4h**
+**DEBT-FE-013 (Testes a11y) -- REBAIXADA para Baixa, 3h**
 
-The DRAFT claims "sem keyboard DnD". This is **partially incorrect**. `PipelineKanban.tsx` already imports and configures `KeyboardSensor` with `sortableKeyboardCoordinates` from `@dnd-kit`. Users CAN drag items via keyboard (Tab to focus, Space to pick up, arrow keys to move, Space to drop).
+O DRAFT afirma "nao ha evidencia de uso sistematico". Isso e **parcialmente incorreto**. O arquivo `frontend/e2e-tests/accessibility-audit.spec.ts` existe e implementa auditorias axe-core em 5 paginas criticas (login, buscar, dashboard, pipeline, planos). O arquivo importa `AxeBuilder` de `@axe-core/playwright` e valida zero violacoes criticas.
 
-What IS missing: screen reader announcements for drag operations (`aria-roledescription`, `announcements` prop on `DndContext`). The `@dnd-kit` library supports an `accessibility` prop with custom announcements -- this is a 4h task, not 8h, because the keyboard mechanics already work.
+O gap restante: expandir a cobertura para mais paginas (onboarding, conta, mensagens, admin) e integrar no CI pipeline se ainda nao estiver. Isso e 3h, nao 6h.
 
-**TD-M07 (Landing fully client-rendered) -- UPGRADED to HIGH, 10h**
+**DEBT-FE-014 (prefers-reduced-motion) -- REMOVIDO, 0h**
 
-While the landing `page.tsx` itself is a Server Component, all 13 child components use `"use client"`. Only 3 of 13 actually need `framer-motion`. The other 10 use `"use client"` solely for `useState`/`useEffect`/`useInView` hooks. This is the single most impactful performance debt: the entire landing page content is hydrated client-side despite being largely static marketing content.
+O DRAFT afirma que animacoes "nao verificam prefers-reduced-motion sistematicamente". Isso e **factualmente incorreto**. Verificacao no codigo encontrou:
 
-The fix involves: (1) extracting static content into Server Components, (2) creating thin client wrappers ("islands") only for interactive/animated parts, (3) replacing `useInView` with CSS `@starting-style` or Intersection Observer patterns that work in RSC boundaries. This is the highest-priority UX debt because it directly impacts first-visit performance and SEO -- the landing page is the primary acquisition surface.
+1. `globals.css` L349-355: Media query global `@media (prefers-reduced-motion: reduce)` que desabilita **todas** as animacoes e transicoes via `animation-duration: 0.01ms !important` e `transition-duration: 0.01ms !important`.
+2. `AnimateOnScroll.tsx`: Verifica `prefers-reduced-motion` via `window.matchMedia`.
+3. `useInView.ts`: Verifica `prefers-reduced-motion` via `window.matchMedia`.
+4. `SectorsGrid.tsx`: Documenta respeito a `prefers-reduced-motion`.
 
-**TD-M09 (Feature-gated pages) -- RESOLVED, 0h**
+A implementacao global em CSS e a abordagem mais robusta possivel — afeta todas as animacoes CSS e Tailwind. Animacoes Framer Motion sao parcialmente cobertas (o CSS override funciona para `transition` mas nao para transforms puros do Framer). O gap residual e minimo e nao justifica um debito separado.
 
-Code inspection shows this is **already fixed**. Both `/alertas/page.tsx` and `/mensagens/page.tsx` check `isFeatureGated()` and render `<ComingSoonPage>` with descriptive text when gated. The DRAFT's description of "API returns 404, showing confusing error states" is outdated. No work needed.
+---
 
-**TD-L04 (Missing error.tsx) -- REDUCED to 2h**
+## Debitos Removidos
 
-9 error.tsx files exist (app root, admin, buscar, conta, dashboard, alertas, pipeline, historico, mensagens). Only `/onboarding`, `/signup`, and `/login` are missing dedicated error boundaries. These are lower-risk pages (simpler state, less likely to crash). 2h instead of 3h.
+| ID | Debito | Justificativa |
+|----|--------|---------------|
+| DEBT-FE-011 | Tipo `any` em API proxy routes | Busca no codigo retornou zero ocorrencias de `: any` em `frontend/app/api/**/*.ts`. Debito especulativo nao confirmado. |
+| DEBT-FE-014 | Sem prefers-reduced-motion | Implementacao global ja existe em `globals.css` + verificacoes em `AnimateOnScroll.tsx` e `useInView.ts`. |
 
 ---
 
 ## Debitos Adicionados
 
-| ID | Debito | Severidade | Horas | Prioridade | Impacto UX |
-|----|--------|-----------|-------|------------|------------|
-| TD-NEW-01 | Duplicate `id="main-content"` | MEDIUM | 1h | 3 | Moderate |
-| TD-NEW-02 | Color-only viability indicators | MEDIUM | 3h | 4 | Moderate |
-| TD-NEW-03 | Shepherd.js loaded eagerly on all protected pages | LOW | 2h | 8 | Minor |
-| TD-NEW-04 | Landing components overuse "use client" | HIGH | (included in TD-M07 adjusted) | 1 | Major |
+| ID | Debito | Severidade | Horas | Impacto UX |
+|----|--------|-----------|-------|-----------|
+| DEBT-FE-016 | IDs duplicados de main-content | Media | 1h | Skip navigation quebrado em /buscar |
+| DEBT-FE-017 | Landing page com 13 child components "use client" | Alta | 10h | Performance de aquisicao degradada |
+| DEBT-FE-018 | Indicadores de viabilidade apenas por cor | Media | 3h | WCAG 1.4.1 — informacao inacessivel para daltonicos |
+| DEBT-FE-019 | Shepherd.js carregado eagerly em todas as paginas protegidas | Baixa | 2h | ~15KB JS desnecessario por pagina |
+| DEBT-FE-020 | Pipeline kanban sem anuncios de drag para screen readers | Media | 4h | Drag-and-drop indescoberto para usuarios de screen reader |
 
-### TD-NEW-01: Duplicate `id="main-content"` (MEDIUM, 1h)
+### DEBT-FE-016: IDs duplicados de main-content (Media, 1h)
 
-Three files define `<main id="main-content">`: `app/(protected)/layout.tsx`, `app/page.tsx`, and `app/buscar/page.tsx`. When `/buscar` renders outside the `(protected)` route group, this creates a duplicate ID in the DOM, which violates HTML spec and breaks the skip navigation link (WCAG 2.4.1). Fix: remove the ID from `/buscar` and either move it into `(protected)` or use a shared layout that provides the landmark.
+Tres arquivos definem `<main id="main-content">` ou similar: `(protected)/layout.tsx`, `page.tsx` (landing), e `buscar/page.tsx` usa `<main id="buscar-content">`. Quando `/buscar` renderiza fora do route group `(protected)`, pode criar conflito de landmarks. Solucao: unificar a estrategia de `id` para o skip navigation link.
 
-### TD-NEW-02: Color-only viability indicators (MEDIUM, 3h)
+### DEBT-FE-017: Landing page hydration excessiva (Alta, 10h)
 
-Viability badges and reliability indicators use color as the sole differentiator (green/yellow/red). While contrast ratios meet AA, WCAG 1.4.1 requires that color is not the only visual means of conveying information. These need text labels, icons, or patterns alongside color. This affects the core search results view, which is the primary product surface.
+A `page.tsx` da landing e um Server Component, mas **todos os 13 child components** usam `"use client"`. Apenas 3 realmente precisam de Framer Motion. Os outros 10 usam `"use client"` apenas para `useState`/`useEffect`/`useInView`. Isso forca hydration de todo o conteudo de marketing no client-side, degradando TTFB, LCP e SEO — a landing page e a principal superficie de aquisicao.
 
-### TD-NEW-03: Shepherd.js loaded eagerly (LOW, 2h)
+### DEBT-FE-018: Indicadores apenas por cor (Media, 3h)
 
-`shepherd.js` (~15KB) is imported in `useShepherdTour.ts` and `useOnboarding.tsx`, which are loaded on protected pages regardless of whether the user has already completed the tour. Should use `next/dynamic` to lazy-load only when tour triggers. Minor bundle impact but easy fix.
+ViabilityBadge ja exibe texto ("Viabilidade alta/media/baixa") ao lado da cor, o que e positivo. Porem, o `score` numerico e o breakdown de fatores so aparecem no `title` tooltip (inacessivel em mobile). Alem disso, ReliabilityBadge e LlmSourceBadge podem ter dependencia de cor sem texto complementar suficiente. Requer auditoria e ajuste WCAG 1.4.1.
+
+### DEBT-FE-019: Shepherd.js eager loading (Baixa, 2h)
+
+`shepherd.js` (~15KB) e importado em `useShepherdTour.ts` e `useOnboarding.tsx`, carregados em todas as paginas protegidas independente de o usuario ja ter completado o tour. Deveria usar `next/dynamic` para lazy-load apenas quando o tour e ativado.
+
+### DEBT-FE-020: Pipeline kanban sem anuncios de drag (Media, 4h)
+
+`PipelineKanban.tsx` ja configura `KeyboardSensor` com `sortableKeyboardCoordinates` (keyboard DnD funciona). O que falta: anuncios para screen readers via `accessibility` prop do `DndContext` (`onDragStart`, `onDragOver`, `onDragEnd`, `onDragCancel`) e `aria-roledescription="sortable"` nos cards.
 
 ---
 
 ## Respostas ao Architect
 
-### 1. TD-H01: RSC migration impact on UX patterns / Framer Motion isolation
+### 1. DEBT-FE-004 (12 banners): Hierarquia de prioridade recomendada
 
-**Impact on existing UX patterns:** Minimal for the pages that are already Server Components (landing, legal, blog, pricing, features, sobre). For protected pages, RSC migration would primarily affect data fetching patterns -- moving initial data loads to the server layer. This does NOT require changing any visual UX patterns; it changes where data is fetched, not how it is displayed.
+**Hierarquia proposta (alta para baixa):**
 
-**Framer Motion isolation strategy:** Only 3 of 13 landing components actually import `framer-motion` (HeroSection, SectorsGrid, AnalysisExamplesCarousel). The recommended approach:
+| Prioridade | Banners | Comportamento |
+|------------|---------|---------------|
+| P0 — Bloqueante | SearchErrorBanner, SourcesUnavailable | Exibir SEMPRE, suprimir todos abaixo |
+| P1 — Acao necessaria | PartialResultsPrompt, PartialTimeoutBanner, UfFailureDetail | Exibir se P0 ausente |
+| P2 — Informativo importante | CacheBanner, ExpiredCacheBanner, DataQualityBanner | Exibir se P0 e P1 ausentes, maximo 1 |
+| P3 — Informativo secundario | FilterRelaxedBanner, TruncationWarningBanner, RefreshBanner | Exibir em area separada (inline/tooltip) |
+| P4 — Onboarding | OnboardingBanner | Exibir apenas para novos usuarios, dismissible permanente |
 
-1. Extract static content (text, images, layout) into Server Components.
-2. Create thin `<ClientAnimation>` wrapper components that accept `children` and add motion props.
-3. Use the "islands" pattern: `<ServerContent><ClientMotionWrapper>{staticContent}</ClientMotionWrapper></ServerContent>`.
-4. For the 10 non-Framer landing components, replace `useInView` with CSS `animation-timeline: view()` (supported in Chrome 115+, Safari 18+) or use a lightweight intersection observer utility that works with RSC.
+**Consolidacoes possiveis:**
+- `CacheBanner` + `ExpiredCacheBanner` + `RefreshBanner` podem ser um unico `CacheStatusBanner` com 3 estados
+- `PartialResultsPrompt` + `PartialTimeoutBanner` podem ser um unico `PartialBanner` com variantes
 
-This is a phased migration -- no big-bang rewrite needed. Start with components that have zero hooks (FinalCTA after extracting its form), then progressively convert components that only use `useInView`.
+**Pode ser removido:** `OnboardingBanner` pode ser substituido pelo tour Shepherd.js que ja existe, evitando duplicacao de onboarding.
 
-### 2. TD-H03/TD-H04: Real impact on disabled users in B2G context / Legal obligations
+**Recomendacao:** Implementar um `BannerStack` component que recebe todos os banners e exibe apenas os de maior prioridade (maximo 2 simultaneos). Isso reduz cognitive overload sem perder informacao.
 
-**Real impact:** The search module already has strong aria-live coverage (16 regions). The remaining gaps (pipeline drag announcements, granular SSE progress updates) affect a narrow user population. In the B2G context, the primary users are procurement professionals at construction companies, not government employees using government-mandated accessible systems.
+### 2. DEBT-FE-002 (ViabilityBadge): Padrao de tooltip acessivel
 
-**Legal obligations:** SmartLic is a private B2B SaaS product, not a government portal. Brazilian accessibility law (Lei 13.146/2015 - Estatuto da Pessoa com Deficiencia) and Decreto 5.296/2004 mandate accessibility for government websites and "sites of general interest." SmartLic could be argued to fall outside this mandate as a specialized B2B tool. However:
+**Recomendacao: Radix Tooltip com fallback expandivel.**
 
-- **Risk consideration:** If SmartLic expands to sell to government entities directly, WCAG 2.1 AA compliance becomes mandatory under government procurement rules.
-- **Practical impact:** The missing pipeline drag announcements affect 0 known current users (based on the B2G target audience demographics). But the fix is relatively low-effort (4h) and demonstrates product maturity.
-- **Recommendation:** Fix TD-H04 (pipeline announcements) as a quality investment, not a compliance urgency. Prioritize it after landing page performance work.
+Opcoes analisadas:
 
-### 3. TD-M07: Landing Framer Motion vs CSS animations
+| Opcao | Pros | Contras | Veredicto |
+|-------|------|---------|-----------|
+| Radix Tooltip (`@radix-ui/react-tooltip`) | Acessivel (aria-describedby automatico), keyboard support, delay configuravel | Nao funciona em touch-only devices (requer hover intent) | **Melhor para desktop** |
+| Popover customizado | Funciona em touch (tap to open), pode ter close button | Mais complexo, precisa gerenciar focus | **Melhor para mobile** |
+| Expandir inline (click to toggle) | Funciona em todos os devices, sem overlay | Ocupa espaco, pode poluir a lista de resultados | **Melhor para a11y pura** |
 
-**Recommendation: CSS animations would suffice for 10 of 13 components.**
+**Recomendacao final:** Combinacao de Radix Tooltip (desktop hover) + tap-to-expand (mobile). O `@radix-ui/react-slot` ja e dependencia do projeto, entao adicionar `@radix-ui/react-tooltip` e trivial. Para mobile, ao detectar touch device, converter para `<details><summary>` pattern nativo que e totalmente acessivel.
 
-Only 3 components genuinely need Framer Motion's capabilities:
-- `HeroSection` -- uses `motion.div` for staggered entrance animations
-- `SectorsGrid` -- uses `motion.div` with `whileInView`
-- `AnalysisExamplesCarousel` -- uses `AnimatePresence` for carousel transitions
+O breakdown **precisa** estar visivel sem interacao em cenarios de comparacao (quando usuario esta decidindo entre oportunidades). Considerar adicionar um mini bar chart visual inline que mostra os 4 fatores sem precisar de tooltip.
 
-The other 10 components use `"use client"` for hooks like `useInView`, `useState`, and `useEffect` -- none of which require Framer Motion. Their animations (fade-in-up, scroll-triggered reveals) can be achieved with:
+### 3. DEBT-FE-001 (useSearchOrchestration): Decomposicao sugerida
 
-1. CSS `@keyframes` + Tailwind's existing 8 custom animations
-2. CSS `animation-timeline: view()` for scroll-triggered animations (progressive enhancement)
-3. The `IntersectionObserver` API wrapped in a small utility (3KB vs 32-50KB for framer-motion)
+**A decomposicao faz sentido do ponto de vista de UX.** Analise do hook (618 LOC):
 
-For the 3 components that do use Framer Motion, isolate them as client islands within an otherwise server-rendered landing page. This would reduce the landing page's client-side JavaScript by approximately 40-60KB gzipped.
+| Bloco | LOC | Dependencias compartilhadas | Pode separar? |
+|-------|-----|---------------------------|---------------|
+| Trial/Plan state | ~80 | `planInfo`, `session` | **Sim** — `useTrialOrchestration` |
+| Tours (search + results) | ~70 | `session`, `trackEvent` | **Sim** — `useSearchTours` |
+| UI state (modais, drawer, tips) | ~40 | `planInfo` (upgrade modal) | **Sim** — `useSearchUIState` |
+| PDF generation | ~40 | `session`, `search.searchId`, `filters.sectorName` | **Sim** — `usePdfGeneration` |
+| Search core + cross-tab | ~60 | `filters`, `search` | **Nao** — core, manter |
+| Computed searchResultsProps | ~120 | Tudo acima | **Nao** — aggregator, manter |
+| Keyboard shortcuts | ~10 | `filters`, `search` | Ja e hook separado (useKeyboardShortcuts) |
 
-### 4. TD-M09: Feature-gated pages -- "Em breve" or redirect?
+**Estado compartilhado que impede separacao total:** `isTrialExpired` afeta tanto a logica de trial conversion quanto o `searchResultsProps`. `session` e usado por trial, tours, PDF, e busca. Porem, esses valores podem ser passados como parametros para os sub-hooks.
 
-**Already resolved.** Both `/alertas` and `/mensagens` already implement the "Em breve" pattern via `<ComingSoonPage>` with contextual descriptions. The DRAFT's question is based on outdated information. No action needed.
+**Decomposicao recomendada:**
+1. `useTrialOrchestration(planInfo, session)` — trial days, expired, conversion modal, grace period
+2. `useSearchTours(session, trackEvent)` — search tour, results tour, onboarding coordination
+3. `usePdfGeneration(session, searchId, sectorName)` — PDF modal, loading, download
+4. `useSearchUIState()` — upgrade modal, keyboard help, customize panel, first use tip, drawer
 
-If the question is about future feature-gated pages: the `<ComingSoonPage>` pattern is superior to redirect because:
-- It confirms to the user that the URL is valid and the feature exists
-- It sets expectations ("coming soon" vs mysterious redirect)
-- It provides an opportunity to collect interest (e.g., "notify me when available")
-- It avoids confusing the user about whether they typed the wrong URL
+O `useSearchOrchestration` final ficaria como **compositor** com ~200 LOC que importa esses 4 hooks + `useSearchFilters` + `useSearch` e monta o `searchResultsProps`. Reducao de 618 para ~200 LOC no hook principal.
 
-### 5. Design system -- expand primitives or keep current set?
+### 4. DEBT-FE-014 (prefers-reduced-motion): Quais animacoes sao essenciais
 
-**Recommendation: Targeted expansion to 12 primitives (from 6).**
+**Debito removido** — ja implementado globalmente via `globals.css`. Porem, para referencia futura:
 
-Current primitives (6): Button, Input, Label, CurrencyInput, Pagination, (examples).
+**Essenciais (manter com reduced-motion):**
+- Loading spinners em botoes (feedback de acao em progresso)
+- Progress bar da busca (feedback de operacao longa)
+- Focus ring transitions (feedback de navegacao por teclado)
 
-The codebase has ad-hoc implementations of these missing primitives scattered across pages:
+**Decorativas (desabilitar com reduced-motion):**
+- Landing page scroll animations (fade-in-up, stagger)
+- Gradient animations em hero
+- Float/bounce animations em icones
+- Slide-in de modais (pode substituir por fade instantaneo)
 
-| Missing Primitive | Current ad-hoc locations | Priority |
-|-------------------|-------------------------|----------|
-| **Select/Dropdown** | CustomSelect in buscar, UFMultiSelect in alertas, RegionSelector | HIGH -- 3+ inconsistent implementations |
-| **Modal/Dialog** | CancelSubscriptionModal, PdfOptionsModal, AlertFormModal, DeepAnalysisModal | HIGH -- 4+ implementations with varying overlay/focus-trap patterns |
-| **Badge** | ViabilityBadge, ReliabilityBadge, LlmSourceBadge, plan badges | MEDIUM -- visual consistency gap |
-| **Checkbox** | Inline implementations in filters | MEDIUM |
-| **Tooltip** | Currently using title attributes in some places | LOW |
-| **Skeleton** | 3 exist but pattern not standardized | LOW |
+A implementacao atual em `globals.css` desabilita **todas** as animacoes com `animation-duration: 0.01ms !important`, o que e a abordagem mais segura. Para preservar animacoes essenciais, seria necessario exempta-las com `@media (prefers-reduced-motion: no-preference)` wrapper, mas isso e refinamento futuro, nao debito.
 
-Do NOT attempt a full design system buildout (that is a 40+ hour project). Instead:
+### 5. DEBT-FE-010 (tokens semanticos): Componentes com maiores inconsistencias
 
-1. **Phase 1 (4h):** Extract Select and Modal as shared primitives from existing implementations. Use Radix UI primitives (`@radix-ui/react-select`, `@radix-ui/react-dialog`) since `@radix-ui/react-slot` is already a dependency.
-2. **Phase 2 (3h):** Standardize Badge with consistent size/color variants.
-3. **Phase 3 (future):** Checkbox, Tooltip, Skeleton when touched during feature work.
+**Componentes com raw hex/var() confirmados:**
 
-This approach avoids the "build it and they will come" anti-pattern while addressing the most impactful inconsistencies.
+| Componente | Ocorrencias | Severidade Visual |
+|-----------|-------------|-------------------|
+| `KeyboardShortcutsHelp.tsx` | 2 (raw hex em bg e hover) | Baixa — modal pouco visivel |
+| `ProfileCongratulations.tsx` | 5 (confetti colors com fallback hex) | Minima — animacao momentanea |
+| `TestimonialSection.tsx` | 1 (badge bg com fallback hex) | Baixa — secao de marketing |
+| `ViabilityBadge.tsx` | 0 (usa Tailwind tokens corretamente) | N/A |
+
+**Inventory:** A maioria dos componentes criticos (SearchForm, ResultCard, FilterPanel, etc.) usam tokens semanticos corretamente via classes Tailwind (`text-ink`, `bg-canvas`, `border-strong`, etc.). As inconsistencias estao concentradas em componentes secundarios e usam `var()` com fallback hex, o que significa que **funcionam corretamente** mesmo sem o token — o hex e apenas fallback. Isso reduz a urgencia deste debito.
+
+---
+
+## Analise de Impacto UX
+
+### Jornadas Afetadas
+
+| Jornada | Debitos que Impactam | Severidade do Impacto |
+|---------|---------------------|----------------------|
+| **Primeiro acesso (landing -> signup)** | DEBT-FE-017 (hydration excessiva) | Alta — LCP degradado, conversao afetada |
+| **Busca de licitacoes** | DEBT-FE-001 (mega-hook), DEBT-FE-002 (tooltip), DEBT-FE-004 (banners) | Media — funcional mas com riscos de regressao e sobrecarga |
+| **Analise de resultados** | DEBT-FE-002 (viabilidade inacessivel), DEBT-FE-018 (cor-only) | Media — dados criticos dependem de hover |
+| **Pipeline de oportunidades** | DEBT-FE-020 (drag a11y) | Baixa — funciona para 95%+ dos usuarios |
+| **Administracao** | DEBT-FE-005 (stale data) | Baixa — afeta apenas admins internos |
+| **Navegacao por screen reader** | DEBT-FE-003, DEBT-FE-006, DEBT-FE-007, DEBT-FE-016 | Media — gaps pontuais mas nao bloqueantes |
+
+### Metricas de UX Esperadas apos Resolucao
+
+| Metrica | Antes | Depois (estimado) | Debitos Relacionados |
+|---------|-------|-------------------|---------------------|
+| Landing LCP | ~3.5s (estimado) | ~2.0s | DEBT-FE-017 |
+| Landing TTI | ~4.5s (estimado) | ~2.5s | DEBT-FE-017 |
+| WCAG 2.1 AA compliance | ~85% | ~95% | DEBT-FE-002, FE-003, FE-007, FE-016, FE-018, FE-020 |
+| Cognitive load score (busca) | 7/10 (alto) | 4/10 (medio) | DEBT-FE-004 |
+| Risco de regressao (busca) | Alto | Medio | DEBT-FE-001 |
 
 ---
 
 ## Recomendacoes de Design
 
-### Priority 1: Landing Page Performance (TD-M07 adjusted, 10h)
+### Quick Wins (< 4h cada)
 
-This is the single highest-ROI UX improvement. The landing page is the acquisition funnel entry point. Every millisecond of TTFB matters for conversion. Converting 10 of 13 landing components from client to server rendering would:
-- Reduce Time to First Byte by ~40%
-- Eliminate ~40-60KB of client JavaScript
-- Improve Largest Contentful Paint (LCP) significantly
-- Improve SEO ranking signals
+1. **DEBT-FE-016 — Unificar IDs de main-content** (1h): Padronizar `id="main-content"` em um unico local. Quick win com impacto real em acessibilidade.
 
-**Approach:** Start with the simplest components (those using only `useInView`), validate with Lighthouse, then progressively convert the rest.
+2. **DEBT-FE-007 — Adicionar aria-describedby em campos de busca** (2h): Linkar hints existentes ("Selecione um setor", "Minimo 3 caracteres") aos inputs. Ja existem os textos, falta o atributo.
 
-### Priority 2: Pipeline Screen Reader Announcements (TD-H04 adjusted, 4h)
+3. **DEBT-FE-003 — Completar aria-live nos banners faltantes** (2h): Adicionar `aria-live="polite"` nos 6 banners que ainda nao tem.
 
-Add the `accessibility` prop to `DndContext` in `PipelineKanban.tsx`:
+4. **DEBT-FE-019 — Lazy-load Shepherd.js** (2h): Envolver import em `next/dynamic` para carregar apenas quando tour e ativado.
 
-```typescript
-const announcements = {
-  onDragStart: ({ active }) => `Picked up item ${active.data.current?.title}`,
-  onDragOver: ({ active, over }) => `Moved to ${STAGE_LABELS[over?.id]}`,
-  onDragEnd: ({ active, over }) => `Dropped ${active.data.current?.title} in ${STAGE_LABELS[over?.id]}`,
-  onDragCancel: ({ active }) => `Cancelled moving ${active.data.current?.title}`,
-};
-```
+5. **DEBT-FE-018 — Auditoria de cor-only nos badges** (3h): Verificar e adicionar texto complementar onde necessario.
 
-Also add `aria-roledescription="sortable"` to pipeline cards.
+### Melhorias Estruturais
 
-### Priority 3: Duplicate main-content ID (TD-NEW-01, 1h)
+6. **DEBT-FE-001 — Decompor useSearchOrchestration** (12h): Extrair 4 sub-hooks conforme analise acima. Reduzir hook principal de 618 para ~200 LOC. Requer cobertura de testes antes.
 
-Quick fix with significant a11y impact. The skip navigation link is broken for `/buscar` users. Either move `/buscar` into `(protected)` route group (addresses TD-H02 simultaneously) or add a shared `MainContentWrapper` component.
+7. **DEBT-FE-004 — BannerStack com sistema de prioridade** (8h): Implementar hierarquia de banners. Consolidar CacheBanner + ExpiredCacheBanner + RefreshBanner. Limitar a 2 banners simultaneos.
 
-### Priority 4: Viability badge text alternatives (TD-NEW-02, 3h)
+8. **DEBT-FE-002 — Tooltip acessivel para ViabilityBadge** (4h): Radix Tooltip (desktop) + tap-to-expand (mobile). Considerar mini bar chart inline para comparacao rapida.
 
-Add text labels alongside color indicators. For example, viability "green" should also show "Alta" text, "yellow" should show "Media", "red" should show "Baixa". This is WCAG 1.4.1 compliance and improves usability for all users (color-blind users are ~8% of male population).
+9. **DEBT-FE-017 — Landing page RSC islands** (10h): Converter 10 de 13 child components para Server Components. Manter 3 como client islands (HeroSection, SectorsGrid, AnalysisExamplesCarousel).
 
-### Priority 5: Design System Select + Modal (new, 7h)
+10. **DEBT-FE-020 — Pipeline drag announcements** (4h): Adicionar `accessibility` prop no `DndContext` + `aria-roledescription` nos cards.
 
-Extract from existing implementations. Do not build from scratch. Adopt Radix UI primitives for consistency with existing `@radix-ui/react-slot` usage.
+### Design System Evolution
+
+11. **Extrair Select/Modal como primitivos compartilhados** (7h): Usar Radix UI primitives. 3+ implementacoes inconsistentes de Select e 4+ de Modal no codebase. `@radix-ui/react-slot` ja e dependencia.
+
+12. **Padronizar Badge component** (3h): Extrair variantes de ViabilityBadge, ReliabilityBadge, LlmSourceBadge, plan badges em um Badge generico com props de cor, icone e tamanho.
 
 ---
 
-## UX Impact Matrix
+## Parecer
 
-| ID | Debito | User-Facing Impact | Justification |
-|----|--------|-------------------|---------------|
-| TD-M07 | Landing client-rendered | **Major** | Slower landing = lower conversion rate. Every 100ms of LCP delay costs ~1% conversion. |
-| TD-NEW-01 | Duplicate main-content ID | **Moderate** | Skip navigation broken on primary product page |
-| TD-NEW-02 | Color-only viability | **Moderate** | Information inaccessible to ~8% of male users (color blindness) |
-| TD-H01 | RSC for protected pages | **Moderate** | Faster initial data load on dashboard/search, but SWR already handles hydration |
-| TD-H02 | Dual header pattern | **Minor** | UI inconsistency between /buscar and other protected pages |
-| TD-H04 | Pipeline drag announcements | **Moderate** | Keyboard drag works but is undiscoverable without announcements |
-| TD-H03 | aria-live gaps (remaining) | **Minor** | 16 regions already exist; gaps are in granular SSE updates |
-| TD-M01 | any types | **None** | Developer DX only |
-| TD-M02 | ValorFilter size | **None** | Developer DX only |
-| TD-M03 | EnhancedLoadingProgress size | **None** | Developer DX only |
-| TD-M04 | useFeatureFlags cache | **None** | Developer DX only |
-| TD-M05 | Raw CSS vars | **None** | Developer DX only |
-| TD-M06 | localStorage registry | **None** | Developer DX only |
-| TD-M08 | ProfileCompletionPrompt size | **None** | Developer DX only |
-| TD-M09 | Feature-gated pages | **None** | Already resolved |
-| TD-L01 | a11y unit tests | **Minor** | Prevents regressions, does not fix current issues |
-| TD-L02 | Skeleton gaps | **Minor** | Affects perceived performance on less-used pages |
-| TD-L03 | .tsx extension | **None** | Cosmetic |
-| TD-L04 | Missing error.tsx | **Minor** | Errors on onboarding/login lose navigation context |
-| TD-L05 | TourInviteBanner inline | **None** | Cosmetic |
-| TD-L06 | Blog TODO placeholders | **None** | Content, not UX |
-| TD-L07 | Search hooks complexity | **None** | Developer DX only |
-| TD-NEW-03 | Shepherd.js eager load | **Minor** | ~15KB unnecessary JS on every protected page load |
+O frontend do SmartLic esta em **bom estado para um produto POC-to-production (v0.5)**. Os padroes de UX criticos estao bem implementados: loading states robustos, error handling multi-nivel, onboarding completo, responsividade mobile, e trabalho progressivo de acessibilidade.
+
+Os debitos reais se dividem em 3 categorias:
+
+1. **Performance de aquisicao** (DEBT-FE-017): A landing page com hydration excessiva e o debito de maior impacto no negocio. Resolucao direta em metricas de conversao.
+
+2. **Acessibilidade pontual** (DEBT-FE-002, FE-003, FE-007, FE-016, FE-018, FE-020): Gaps reais mas nao bloqueantes. Nenhum viola WCAG criticamente — sao melhorias de AA para AAA. Priorizar se houver planos de vender para orgaos publicos.
+
+3. **Manutencao e risco de regressao** (DEBT-FE-001, FE-004, FE-005): Debitos de codigo que nao afetam o usuario diretamente mas aumentam custo de mudanca e risco de bugs. Resolver oportunisticamente durante feature work.
+
+**Recomendacao de execucao:**
+- **Sprint 1 (16h):** DEBT-FE-017 (landing RSC) + quick wins (FE-016, FE-007, FE-003, FE-019)
+- **Sprint 2 (16h):** DEBT-FE-001 (decomposicao hook) + DEBT-FE-004 (banner stack)
+- **Sprint 3 (12h):** DEBT-FE-002 (tooltip acessivel) + DEBT-FE-020 (pipeline a11y) + DEBT-FE-018 (cor-only audit)
+- **Backlog:** FE-005, FE-008, FE-009, FE-010, FE-012, FE-015 — resolver durante feature work
 
 ---
 
-## Adjusted Effort Summary
-
-| Severity | DRAFT Hours | Adjusted Hours | Delta |
-|----------|-------------|----------------|-------|
-| HIGH | 34h | 14h + 10h (TD-M07 upgraded) = 24h | -10h |
-| MEDIUM | 30h | 28h | -2h |
-| LOW | 24h | 21h | -3h |
-| NEW items | 0h | 6h | +6h |
-| **TOTAL** | **88h** | **~68h** | **-20h** |
-
-The 20h reduction comes primarily from correcting the factual inaccuracies in TD-H01 (RSC already partially adopted), TD-H03 (aria-live already extensive), TD-H04 (keyboard DnD already works), and TD-M09 (already resolved).
-
----
-
-## Recommended Execution Order (UX perspective)
-
-1. **TD-M07 + TD-NEW-04** (10h) -- Landing page RSC islands. Highest acquisition impact.
-2. **TD-NEW-01** (1h) -- Fix duplicate main-content ID. Quick win, a11y fix.
-3. **TD-H02** (4h) -- Unify /buscar into (protected) route group. Fixes TD-NEW-01 simultaneously.
-4. **TD-H04** (4h) -- Pipeline drag announcements. Quality investment.
-5. **TD-NEW-02** (3h) -- Viability badge text alternatives. WCAG 1.4.1.
-6. **TD-H03** (2h) -- Remaining aria-live gaps (granular SSE announcements).
-7. **TD-L01** (4h) -- jest-axe setup to prevent regression on items 2-6.
-8. Design system expansion (7h) -- Select + Modal + Badge extraction.
-9. Component decomposition backlog (TD-M02/M03/M08) as part of regular feature work.
-10. Everything else in backlog, addressed opportunistically.
-
----
-
-*Review complete. Ready for Phase 7 (@qa gate).*
+*Revisao completa. Pronto para Fase 7 (@qa gate).*

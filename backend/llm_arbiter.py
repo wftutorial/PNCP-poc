@@ -35,9 +35,8 @@ from metrics import (
 logger = logging.getLogger(__name__)
 
 # HARDEN-001 / DEBT-103 AC1: OpenAI client timeout (default 600s → 15s → 5s)
-# GPT-4.1-nano p99 ≈ 1s; 5s = 5× p99. Prevents thread starvation on LLM hangs.
-# Configurable via OPENAI_TIMEOUT_S (preferred) or LLM_TIMEOUT_S (legacy alias).
-_LLM_TIMEOUT = float(os.getenv("OPENAI_TIMEOUT_S", os.getenv("LLM_TIMEOUT_S", "5")))
+# DEBT-SYS-008: Centralized to config.features.LLM_TIMEOUT_S
+from config.features import LLM_TIMEOUT_S as _LLM_TIMEOUT
 
 # OpenAI client (initialized lazily to avoid import-time errors in tests)
 _client: Optional[OpenAI] = None

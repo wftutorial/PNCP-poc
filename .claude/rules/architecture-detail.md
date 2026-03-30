@@ -8,7 +8,8 @@
 |----------|---------|---------|
 | **Entry** | `main.py`, `config.py`, `schemas.py` | App setup, env config, Pydantic models |
 | **Search Pipeline** | `search_pipeline.py`, `consolidation.py`, `search_context.py`, `search_state_manager.py` | Multi-source orchestration, state machine |
-| **Data Sources** | `pncp_client.py`, `portal_compras_client.py`, `compras_gov_client.py` + 4 others in `clients/` | PNCP, PCP v2, ComprasGov v3 |
+| **Ingestion/DataLake** | `ingestion/` (config, crawler, transformer, loader, checkpoint, scheduler), `datalake_query.py` | ETL pipeline: periodic PNCP crawl → `pncp_raw_bids` table, `search_datalake` RPC query |
+| **Data Sources (legacy fallback)** | `pncp_client.py`, `portal_compras_client.py`, `compras_gov_client.py` + 4 others in `clients/` | PNCP, PCP v2, ComprasGov v3 — only used when datalake returns 0 |
 | **Filtering** | `filter.py`, `filter_stats.py`, `term_parser.py`, `synonyms.py`, `status_inference.py` | Keyword matching, density scoring |
 | **AI/LLM** | `llm.py`, `llm_arbiter.py`, `relevance.py`, `viability.py` | Classification, summaries, viability |
 | **Cache** | `search_cache.py`, `cache.py`, `redis_client.py`, `redis_pool.py` | Two-level cache (InMemory + Supabase), SWR |

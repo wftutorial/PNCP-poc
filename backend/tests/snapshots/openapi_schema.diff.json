@@ -798,13 +798,20 @@
               "title": "Search Id"
             },
             "setor_id": {
-              "default": "vestuario",
-              "description": "Sector ID for keyword filtering (e.g., 'vestuario', 'alimentos', 'informatica')",
-              "examples": [
-                "vestuario"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
               ],
-              "title": "Setor Id",
-              "type": "string"
+              "description": "Sector ID for keyword filtering (e.g., 'vestuario', 'alimentos', 'informatica'). None when searching by 'Termos Espec\u00edficos' (custom keywords only).",
+              "examples": [
+                "vestuario",
+                null
+              ],
+              "title": "Setor Id"
             },
             "show_all_matches": {
               "anyOf": [
@@ -4684,6 +4691,12 @@
               "title": "Insight Setorial",
               "type": "string"
             },
+            "outlier_count": {
+              "default": 0,
+              "description": "Number of outlier values excluded from valor_total computation",
+              "title": "Outlier Count",
+              "type": "integer"
+            },
             "recomendacoes": {
               "description": "Prioritized list of recommended opportunities with concrete actions",
               "items": {
@@ -4705,6 +4718,12 @@
               "minimum": 0.0,
               "title": "Total Oportunidades",
               "type": "integer"
+            },
+            "valor_sanitizado": {
+              "default": false,
+              "description": "Whether outlier-robust sanitization was applied to valor_total",
+              "title": "Valor Sanitizado",
+              "type": "boolean"
             },
             "valor_total": {
               "description": "Total value of all opportunities in BRL",
@@ -4729,8 +4748,10 @@
               "3 licita\u00e7\u00f5es com prazo at\u00e9 48h",
               "Maior valor: R$ 500k em SP"
             ],
+            "outlier_count": 0,
             "resumo_executivo": "Encontradas 15 licita\u00e7\u00f5es de uniformes em SP e RJ.",
             "total_oportunidades": 15,
+            "valor_sanitizado": false,
             "valor_total": 2300000.0
           },
           "properties": {
@@ -4763,6 +4784,12 @@
               "title": "Destaques",
               "type": "array"
             },
+            "outlier_count": {
+              "default": 0,
+              "description": "Number of outlier values excluded from valor_total computation",
+              "title": "Outlier Count",
+              "type": "integer"
+            },
             "resumo_executivo": {
               "description": "1-2 sentence executive summary",
               "examples": [
@@ -4776,6 +4803,12 @@
               "minimum": 0.0,
               "title": "Total Oportunidades",
               "type": "integer"
+            },
+            "valor_sanitizado": {
+              "default": false,
+              "description": "Whether outlier-robust sanitization was applied to valor_total",
+              "title": "Valor Sanitizado",
+              "type": "boolean"
             },
             "valor_total": {
               "description": "Total value of all opportunities in BRL",
@@ -10612,7 +10645,7 @@
       },
       "/v1/pipeline": {
         "get": {
-          "description": "List pipeline items for the authenticated user (AC3).\n\nSYS-023: Uses user-scoped Supabase client. RLS policy on pipeline_items\nensures users can only see their own items (WHERE user_id = auth.uid()).\n\nSTORY-265 AC3: Trial expired can VIEW pipeline (read-only).\nSupports filtering by stage and pagination via limit/offset.",
+          "description": "List pipeline items for the authenticated user (AC3).\n\nISSUE-021 fix: Switched to admin client (get_supabase) \u2014 user-scoped client\n(get_user_db) had fragile JWT header mutation that silently failed, causing\nPostgREST to evaluate RLS as anonymous user and return 0 rows.\nDefense-in-depth: .eq(\"user_id\", user_id) prevents cross-user access,\nconsistent with POST/PATCH/DELETE handlers.\n\nSTORY-265 AC3: Trial expired can VIEW pipeline (read-only).\nSupports filtering by stage and pagination via limit/offset.",
           "operationId": "list_pipeline_items_v1_pipeline_get",
           "parameters": [
             {
@@ -10694,7 +10727,7 @@
           ]
         },
         "post": {
-          "description": "Add a procurement opportunity to the user's pipeline (AC2).\n\nSTORY-265 AC2: Trial expired cannot add items.\nSTORY-356: Enforce pipeline item limit (trial: 5 items max).\nReturns 409 if the item already exists (UNIQUE constraint on user_id + pncp_id).",
+          "description": "Add a procurement opportunity to the user's pipeline (AC2).\n\nISSUE-021 fix: Reverted to admin client (get_supabase) \u2014 user-scoped client\ncaused HTTP 500 due to fragile session header mutation in get_user_db.\nDefense-in-depth: .eq(\"user_id\", user_id) prevents cross-user access.\nSTORY-265 AC2: Trial expired cannot add items.\nSTORY-356: Enforce pipeline item limit (trial: 5 items max).\nReturns 409 if the item already exists (UNIQUE constraint on user_id + pncp_id).",
           "operationId": "create_pipeline_item_v1_pipeline_post",
           "requestBody": {
             "content": {
@@ -10766,7 +10799,7 @@
       },
       "/v1/pipeline/{item_id}": {
         "delete": {
-          "description": "Remove an item from the pipeline (AC5).\n\nSTORY-265 AC2: Trial expired cannot delete items.\nReturns 404 if item doesn't exist or doesn't belong to user.",
+          "description": "Remove an item from the pipeline (AC5).\n\nISSUE-021 fix: Reverted to admin client \u2014 user-scoped client caused HTTP 500.\nDefense-in-depth: .eq(\"user_id\", user_id) prevents cross-user access.\nSTORY-265 AC2: Trial expired cannot delete items.\nReturns 404 if item doesn't exist or doesn't belong to user.",
           "operationId": "delete_pipeline_item_v1_pipeline__item_id__delete",
           "parameters": [
             {
@@ -10810,7 +10843,7 @@
           ]
         },
         "patch": {
-          "description": "Update stage and/or notes of a pipeline item (AC4).\n\nSTORY-265 AC2: Trial expired cannot modify items.\nValidates that stage is a valid enum value.\nReturns 404 if item doesn't exist or doesn't belong to user.",
+          "description": "Update stage and/or notes of a pipeline item (AC4).\n\nISSUE-021 fix: Reverted to admin client \u2014 user-scoped client caused HTTP 500.\nDefense-in-depth: .eq(\"user_id\", user_id) prevents cross-user access.\nSTORY-265 AC2: Trial expired cannot modify items.\nValidates that stage is a valid enum value.\nReturns 404 if item doesn't exist or doesn't belong to user.",
           "operationId": "update_pipeline_item_v1_pipeline__item_id__patch",
           "parameters": [
             {
@@ -11528,6 +11561,24 @@
                 "minimum": 0,
                 "title": "Offset",
                 "type": "integer"
+              }
+            },
+            {
+              "description": "Filter by session status (completed, failed, timed_out)",
+              "in": "query",
+              "name": "status",
+              "required": false,
+              "schema": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Filter by session status (completed, failed, timed_out)",
+                "title": "Status"
               }
             }
           ],

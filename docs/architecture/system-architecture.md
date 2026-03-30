@@ -224,7 +224,7 @@ The search pipeline is a 7-stage orchestrator defined in `search_pipeline.py` (t
 ```
 [1] VALIDATE   → Input validation, auth, quota check
 [2] PREPARE    → Build search parameters, resolve sectors
-[3] EXECUTE    → Parallel multi-source fetch (PNCP + PCP + ComprasGov)
+[3] EXECUTE    → Datalake query (pncp_raw_bids via search_datalake RPC); fallback to live multi-source fetch
 [4] FILTER     → UF → Value → Keywords → LLM zero-match → Status
 [5] ENRICH     → Viability scoring, item inspection
 [6] GENERATE   → Excel + LLM summary (via ARQ background jobs)
@@ -244,24 +244,46 @@ ARQ Job(300s) > Pipeline(110s) > Consolidation(100s) > PerSource(80s) > PerUF(30
 5. Status/date validation
 6. Viability assessment (post-filter, 4-factor weighted score)
 
-### 3.3 Data Source Clients
+### 3.3a Ingestion Pipeline (Primary Data Source)
+
+When `DATALAKE_ENABLED=true` (default), ARQ cron jobs periodically crawl PNCP and store results in `pncp_raw_bids`:
+
+| Job | Schedule (UTC) | Window | Purpose |
+|-----|----------------|--------|---------|
+| `ingestion_full_crawl_job` | 05:00 (2am BRT) | 10 days | Full crawl: all 27 UFs × 6 modalidades |
+| `ingestion_incremental_job` | 11:00, 17:00, 23:00 | 3 days + 1d overlap | Delta crawl from last checkpoint |
+| `ingestion_purge_job` | 07:00 (4am BRT) | N/A | Soft-delete rows > 12 days old |
+
+**ETL Pipeline** (`backend/ingestion/`):
+- **crawler.py**: Fetches from PNCP API (5 concurrent UFs, 2s batch delay, max 50 pages)
+- **transformer.py**: Normalizes to flat dict, computes `content_hash` (MD5)
+- **loader.py**: Bulk upsert via `upsert_pncp_raw_bids` RPC (500 rows/batch, hash-based dedup)
+- **checkpoint.py**: Per-(UF, modalidade) progress tracking for resumable crawls
+
+**Tables**: `pncp_raw_bids` (~40K+ active rows, GIN full-text index), `ingestion_checkpoints`, `ingestion_runs`
+
+When `DATALAKE_QUERY_ENABLED=true` (default), stage [3] EXECUTE calls `query_datalake()` → `search_datalake` RPC (PostgreSQL tsquery) instead of live APIs. Returns records in identical format to `PNCPClient._normalize_item()` so all downstream stages work unchanged. Falls through to live API only if datalake returns 0 results.
+
+### 3.3b Data Source Clients (Legacy Fallback)
+
+Only used when `DATALAKE_QUERY_ENABLED=false` OR datalake returns 0 results:
 
 | Source | File | Priority | Auth | Page Size | Notes |
 |--------|------|----------|------|-----------|-------|
-| **PNCP** | `pncp_client.py` | 1 | None | 50 max | Primary. `codigoModalidadeContratacao` required since ~Mar 2026 |
+| **PNCP** | `pncp_client.py` | 1 | None | 50 max | Also used by ingestion pipeline |
 | **PCP v2** | `clients/portal_compras_client.py` | 2 | None (public) | 10/page | Client-side UF filtering only. `valor_estimado=0.0` always |
 | **ComprasGov v3** | `clients/compras_gov_client.py` | 3 | None | varies | Dual-endpoint (legacy + Lei 14.133). Currently down since Mar 2026 |
 
 Each source has independent circuit breakers (sliding window, configurable thresholds and cooldowns -- all defined in `pncp_client.py:48-71`) and per-source bulkhead concurrency limits (`bulkhead.py`). Source adapters implement `SourceAdapter` ABC from `clients/base.py`, producing `UnifiedProcurement` dataclass with standardized fields and `dedup_key` generation. Source health registry in `source_config/sources.py` tracks `SourceHealthStatus` (healthy/degraded/down) with 5-minute TTL.
 
-Available sources (from `source_config/sources.py:40-50` `SourceCode` enum): PNCP, Portal (PCP), Licitar, ComprasGov, PortalTransparencia, BLL (disabled), BNC (disabled), QueridoDiario (experimental).
+### 3.4 Cache Architecture (Two-Level SWR on Search Results)
 
-### 3.4 Cache Architecture (Two-Level SWR)
+**Note:** This cache layer caches *search results* (filtered, enriched), NOT raw bids. Raw bids live in `pncp_raw_bids` (see 3.3a).
 
 ```
 Request → L1 InMemory (4h TTL, hot/warm/cold) → L2 Supabase (24h TTL)
                 ↓ miss                                    ↓ miss
-          Live fetch from sources ← ← ← ← ← ← ← ← ← ←
+          Datalake query (pncp_raw_bids) → fallback: Live API fetch
                 ↓ result
           Write-through to L1 + L2
 ```

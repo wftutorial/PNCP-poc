@@ -201,19 +201,31 @@ npm run test:e2e:headed             # Debug mode
 
 ## Key Architecture Patterns
 
-### Multi-Source Pipeline
-- 3 data sources with per-source circuit breakers
-- Priority-based dedup (PNCP=1 wins over PCP=2)
-- Fallback cascade: Live -> Partial -> Stale cache -> Empty
+### Data Architecture (3 Layers)
+
+**Layer 1: Periodic Ingestion (ETL → pncp_raw_bids)**
+- ARQ cron jobs: full daily (2am BRT), incremental 3x/day (8am/2pm/8pm BRT), purge daily (4am BRT)
+- Table `pncp_raw_bids` (~40K+ rows): content_hash dedup, GIN full-text index (Portuguese), 12-day retention
+- Config: `backend/ingestion/` (config, crawler, transformer, loader, checkpoint, scheduler)
+- Checkpoint tracking: `ingestion_checkpoints` + `ingestion_runs` tables for resumable crawls
+- Feature flag: `DATALAKE_ENABLED` (default true)
+
+**Layer 2: Search Pipeline (queries local DB, NOT live APIs)**
+- `DATALAKE_QUERY_ENABLED=true` (default): `execute.py` → `query_datalake()` → `search_datalake` RPC
+- PostgreSQL full-text search (tsquery Portuguese) with UF/date/modality/value/esfera filters
+- Fallback: if datalake returns 0 results, falls through to live multi-source API fetch
 - Async-first (CRIT-072): POST /buscar → 202 in <2s, results via SSE + polling
-- Timeout chain: ARQ Job(300s) > Pipeline(110s) > Consolidation(100s) > PerSource(80s) > PerUF(30s)
 - SSE chain: bodyTimeout(0) + heartbeat(15s) > Railway idle(60s) | SSE inactivity timeout(120s)
 
-### Two-Level Cache (SWR)
-- L1: InMemoryCache (4h, proactive) — hot/warm/cold priority
-- L2: Supabase (24h, failover) — persistent across restarts
-- Stale-While-Revalidate: serves stale, refreshes in background
-- Background revalidation: max 3 concurrent, 180s timeout
+**Layer 3: Search Results Cache (SWR)**
+- L1: InMemoryCache (4h, hot/warm/cold priority)
+- L2: Supabase `search_results_cache` (24h, persistent)
+- SWR: serve stale, revalidate in background (max 3 concurrent, 180s timeout)
+
+**Legacy Fallback: Live API Fetch (only when datalake returns 0 or DATALAKE_QUERY_ENABLED=false)**
+- `pncp_client.py` (PNCP), `portal_compras_client.py` (PCP v2), `compras_gov_client.py` (ComprasGov v3)
+- Per-source circuit breakers, priority-based dedup (PNCP=1 > PCP=2), phased UF batching
+- Timeout chain: ARQ Job(300s) > Pipeline(110s) > Consolidation(100s) > PerSource(80s) > PerUF(30s)
 
 ### LLM Classification
 - Keywords match -> "keyword" source (>5% density)
@@ -239,7 +251,16 @@ For detailed module tables and route maps, see `.claude/rules/architecture-detai
 
 ## Critical Implementation Notes
 
-### PNCP API (Primary)
+### Ingestion Pipeline (Layer 1)
+- **Schedule:** Full crawl daily 5 UTC (2am BRT), incremental 11/17/23 UTC, purge 7 UTC
+- **Scope:** 27 UFs × 6 modalidades (4,5,6,7,8,12), 10-day window (full), 3-day (incremental)
+- **Concurrency:** 5 UFs parallel, 2s delay between batches, max 50 pages per (UF, modalidade)
+- **Upsert:** 500 rows/batch via `upsert_pncp_raw_bids` RPC with content_hash dedup
+- **Retention:** 12 days (purge sets `is_active=false`, soft-delete)
+- **Tables:** `pncp_raw_bids` (data), `ingestion_checkpoints` (progress), `ingestion_runs` (audit)
+- **Worker:** `PROCESS_TYPE=worker` → `arq job_queue.WorkerSettings`
+
+### PNCP API (used by ingestion + legacy fallback)
 - **Max tamanhoPagina = 50** (reduced from 500 in Feb 2026, >50 -> HTTP 400 silent)
 - Search period default: 10 days (frontend + backend)
 - Phased UF batching: PNCP_BATCH_SIZE=5, PNCP_BATCH_DELAY_S=2.0
@@ -265,7 +286,7 @@ For detailed module tables and route maps, see `.claude/rules/architecture-detai
 5. Status/date validation
 6. Viability assessment (post-filter)
 
-**Feature Flags:** `LLM_ZERO_MATCH_ENABLED`, `LLM_ARBITER_ENABLED`, `VIABILITY_ASSESSMENT_ENABLED`, `SYNONYM_MATCHING_ENABLED`
+**Feature Flags:** `DATALAKE_ENABLED`, `DATALAKE_QUERY_ENABLED`, `LLM_ZERO_MATCH_ENABLED`, `LLM_ARBITER_ENABLED`, `VIABILITY_ASSESSMENT_ENABLED`, `SYNONYM_MATCHING_ENABLED`
 
 ### LLM Integration
 - GPT-4.1-nano for classification + summaries
@@ -274,9 +295,9 @@ For detailed module tables and route maps, see `.claude/rules/architecture-detai
 - ARQ background jobs for summaries (immediate fallback response)
 - ThreadPoolExecutor(max_workers=10) for parallel LLM calls
 
-### Cache Strategy
+### Cache Strategy (Layer 3 — caches search results, NOT raw bids)
 - L1 InMemoryCache: 4h TTL, hot/warm/cold priority
-- L2 Supabase: 24h TTL, persistent
+- L2 Supabase `search_results_cache`: 24h TTL, persistent
 - Fresh (0-6h) -> Stale (6-24h, served + background refresh) -> Expired (>24h, not served)
 - Patch `supabase_client.get_supabase` for cache tests (not `search_cache.get_supabase`)
 
@@ -359,7 +380,8 @@ Supabase Auth with RLS on all tables. Input validation via Pydantic (backend) an
 |----------|-------|
 | **Docs** | `PRD.md`, `ROADMAP.md`, `CHANGELOG.md`, `docs/summaries/gtm-resilience-summary.md`, `docs/summaries/gtm-fixes-summary.md` |
 | **Config** | `.env.example`, `backend/requirements.txt`, `frontend/package.json`, `backend/sectors_data.yaml`, `backend/config.py` |
-| **Database** | `supabase/migrations/` (35), `backend/migrations/` (7) |
+| **Database** | `supabase/migrations/` (35), `backend/migrations/` (7+) |
+| **Ingestion** | `backend/ingestion/` (config, crawler, transformer, loader, checkpoint, scheduler), `backend/datalake_query.py` |
 | **AIOS** | `.aios-core/development/agents/` (11), `.aios-core/development/tasks/` (115+), `.aios-core/development/workflows/` (7) |
 
 ## Git Workflow

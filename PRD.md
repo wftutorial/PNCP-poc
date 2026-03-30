@@ -41,10 +41,16 @@ Plataforma de inteligencia em licitacoes publicas que automatiza a descoberta, a
 │                     BACKEND (FastAPI 0.129 — 65+ modulos)            │
 │                                                                      │
 │  ┌─────────────────────────────────────────────────────────────────┐ │
-│  │ INGESTAO MULTI-FONTE                                            │ │
-│  │  PNCP (prio 1) + PCP v2 (prio 2) + ComprasGov v3 (prio 3)     │ │
-│  │  Per-source circuit breakers | Phased UF batching               │ │
-│  │  Consolidation + priority-based dedup                           │ │
+│  │ INGESTAO PERIODICA (ARQ Worker — background)                    │ │
+│  │  Full daily 2am BRT + Incremental 3x/day (8am/2pm/8pm BRT)    │ │
+│  │  PNCP API → transformer → upsert pncp_raw_bids (Supabase)     │ │
+│  │  ~40K+ rows ativas | 12-day retention | content_hash dedup     │ │
+│  └─────────────────────────────────────────────────────────────────┘ │
+│                                                                      │
+│  ┌─────────────────────────────────────────────────────────────────┐ │
+│  │ BUSCA (queries pncp_raw_bids via search_datalake RPC)           │ │
+│  │  PostgreSQL full-text search (tsquery Portuguese)               │ │
+│  │  Fallback: live API fetch se datalake retorna 0                 │ │
 │  └──────────────────────────────┬──────────────────────────────────┘ │
 │                                 │                                    │
 │  ┌──────────────────────────────▼──────────────────────────────────┐ │
@@ -111,7 +117,7 @@ Cada setor tem keywords, exclusoes, e viability_value_range definidos em `backen
 
 ## 1. ESCOPO FUNCIONAL
 
-### 1.1 Fluxo de execucao (v0.5 — multi-fonte)
+### 1.1 Fluxo de execucao (v0.5 — datalake + fallback multi-fonte)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -122,14 +128,14 @@ Cada setor tem keywords, exclusoes, e viability_value_range definidos em `backen
                                │
                                ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                   INGESTAO MULTI-FONTE                           │
-│  ┌──────────┐  ┌──────────┐  ┌──────────────┐                  │
-│  │ PNCP     │  │ PCP v2   │  │ ComprasGov   │                  │
-│  │ prio 1   │  │ prio 2   │  │ v3 prio 3    │                  │
-│  │ 50/page  │  │ 10/page  │  │ dual-endpoint│                  │
-│  └────┬─────┘  └────┬─────┘  └──────┬───────┘                  │
-│       └──────────────┼───────────────┘                          │
-│              Consolidation + Dedup (cnpj:edital:ano)            │
+│                   BUSCA NO DATALAKE (caminho primario)            │
+│  search_datalake RPC → pncp_raw_bids (PostgreSQL tsquery)       │
+│  Full-text search (Portuguese) + UF/date/modality/value filters │
+│  ~40K+ rows ativas | Atualizado 4x/dia via ingestao periodica   │
+│                                                                  │
+│  Se 0 resultados → fallback para live API multi-fonte:          │
+│  PNCP (prio 1, 50/pg) + PCP v2 (prio 2, 10/pg) + ComprasGov   │
+│  Consolidation + Dedup (cnpj:edital:ano)                        │
 └──────────────────────────────┬──────────────────────────────────┘
                                │
                                ▼

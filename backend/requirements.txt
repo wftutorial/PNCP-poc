@@ -47,6 +47,9 @@ google-api-python-client==2.190.0  # Google Sheets API client
 google-auth==2.48.0                # OAuth 2.0 authentication
 google-auth-oauthlib==1.2.4        # OAuth flow helpers
 google-auth-httplib2==0.3.0        # HTTP transport for Google APIs
+# cryptography pinned <47.0 due to SIGSEGV with C extensions in some environments.
+# See docs/security/cryptography-sigsegv-status.md for monitoring status.
+# Upgrade procedure: run scripts/security/check_cryptography_cves.py quarterly.
 # STORY-303: Pin exact — cryptography uses OpenSSL C bindings that are NOT fork-safe
 # with Gunicorn --preload. Any upgrade MUST be tested with:
 #   gunicorn main:app -k uvicorn.workers.UvicornWorker -w 2 --preload --timeout 30

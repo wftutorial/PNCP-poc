@@ -11,6 +11,7 @@ import time as sync_time_module
 
 from search_context import SearchContext
 from metrics import FILTER_DECISIONS, FILTER_INPUT_TOTAL, FILTER_OUTPUT_TOTAL, FILTER_DISCARD_RATE
+from status_inference import enriquecer_com_status_inferido
 
 import quota
 
@@ -19,6 +20,13 @@ logger = logging.getLogger(__name__)
 
 async def stage_filter(pipeline, ctx: SearchContext) -> None:
     """Apply all filters (UF, status, esfera, modalidade, municipio, valor, keyword)."""
+
+    # ISSUE-047 FIX: Always enrich with inferred status before filtering.
+    # Cache paths in execute.py return before calling this, so bids from cache
+    # arrive without _status_inferido. Re-inferring is safe and correct because
+    # status inference is time-dependent (compares deadlines to now()).
+    if ctx.licitacoes_raw:
+        enriquecer_com_status_inferido(ctx.licitacoes_raw)
 
     # CRIT-002 AC9: Track pipeline stage
     if ctx.session_id:

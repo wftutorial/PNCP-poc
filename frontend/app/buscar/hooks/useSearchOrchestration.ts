@@ -5,29 +5,25 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useAnalytics } from "../../../hooks/useAnalytics";
 import { useOnboarding } from "../../../hooks/useOnboarding";
 import { useShepherdTour } from "../../../hooks/useShepherdTour";
-import { useKeyboardShortcuts, type KeyboardShortcut } from "../../../hooks/useKeyboardShortcuts";
-import { usePlan } from "../../../hooks/usePlan";
-import { useTrialPhase } from "../../../hooks/useTrialPhase";
+import { useKeyboardShortcuts } from "../../../hooks/useKeyboardShortcuts";
 import { useAuth } from "../../components/AuthProvider";
 import { useSearchFilters } from "./useSearchFilters";
 import { useSearch } from "./useSearch";
+import { useSearchBillingState } from "./useSearchBillingState";
+import { useSearchComputedProps } from "./useSearchComputedProps";
 import { useNavigationGuard } from "../../../hooks/useNavigationGuard";
 import { useBackendStatusContext } from "../../components/BackendStatusIndicator";
 import { useBroadcastChannel } from "../../../hooks/useBroadcastChannel";
 
-import { dateDiffInDays } from "../../../lib/utils/dateDiffInDays";
 import { toast } from "sonner";
 import { checkHasLastSearch, getLastSearch } from "../../../lib/lastSearchCache";
 import type { BuscaResult } from "../../types";
-import { safeSetItem, safeGetItem, safeRemoveItem } from "../../../lib/storage";
+import { safeSetItem, safeGetItem } from "../../../lib/storage";
 
-import { SEARCH_TOUR_STEPS, RESULTS_TOUR_STEPS, type TrialValue } from "../constants/tour-steps";
-import type { SearchResultsProps } from "../types/search-results";
+import { SEARCH_TOUR_STEPS, RESULTS_TOUR_STEPS } from "../constants/tour-steps";
 
 export function useSearchOrchestration() {
   const { session, loading: authLoading } = useAuth();
-  const { planInfo } = usePlan();
-  const { phase: trialPhase } = useTrialPhase();
   const { trackEvent } = useAnalytics();
   // Ref for trackEvent — it is not memoized in useAnalytics, so effects that
   // should run only once access it via this ref instead of adding it to deps.
@@ -43,62 +39,8 @@ export function useSearchOrchestration() {
     }
   }, [authLoading, session, router]);
 
-  // ── Trial / Plan State ──────────────────────────────────────────────
-  const [showTrialConversion, setShowTrialConversion] = useState(false);
-  const [trialValue, setTrialValue] = useState<TrialValue | null>(null);
-  const [trialValueLoading, setTrialValueLoading] = useState(false);
-
-  const trialDaysRemaining = useMemo(() => {
-    if (!planInfo?.trial_expires_at) return null;
-    const expiryDate = new Date(planInfo.trial_expires_at);
-    const now = new Date();
-    const diffTime = expiryDate.getTime() - now.getTime();
-    return Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
-  }, [planInfo?.trial_expires_at]);
-
-  const isTrialExpired = useMemo(() => {
-    return planInfo?.plan_id === "free_trial" && planInfo?.subscription_status === "expired";
-  }, [planInfo?.plan_id, planInfo?.subscription_status]);
-
-  const isGracePeriod = useMemo(() => {
-    return planInfo?.dunning_phase === "grace_period";
-  }, [planInfo?.dunning_phase]);
-
-  const graceDaysRemaining = useMemo(() => {
-    if (!isGracePeriod || planInfo?.days_since_failure == null) return 0;
-    return Math.max(0, 21 - planInfo.days_since_failure);
-  }, [isGracePeriod, planInfo?.days_since_failure]);
-
-  const [showPaymentRecovery, setShowPaymentRecovery] = useState(false);
-
-  useEffect(() => {
-    setShowPaymentRecovery(isGracePeriod);
-  }, [isGracePeriod]);
-
-  const fetchTrialValue = useCallback(async () => {
-    if (!session?.access_token) return;
-    setTrialValueLoading(true);
-    try {
-      const res = await fetch("/api/analytics?endpoint=trial-value", {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setTrialValue(data);
-      }
-    } catch (err) {
-      if (process.env.NODE_ENV !== "production") console.error("[GTM-010] Failed to fetch trial value:", err);
-    } finally {
-      setTrialValueLoading(false);
-    }
-  }, [session?.access_token]);
-
-  useEffect(() => {
-    if (isTrialExpired) {
-      setShowTrialConversion(true);
-      fetchTrialValue();
-    }
-  }, [isTrialExpired, fetchTrialValue]);
+  // ── Trial / Plan / Billing State ────────────────────────────────────
+  const billing = useSearchBillingState();
 
   // ── Backend Status ──────────────────────────────────────────────────
   const backendStatus = useBackendStatusContext();
@@ -263,10 +205,10 @@ export function useSearchOrchestration() {
 
   useEffect(() => {
     if (search.quotaError === "trial_expired") {
-      setShowTrialConversion(true);
-      fetchTrialValue();
+      billing.setShowTrialConversion(true);
+      billing.fetchTrialValue();
     }
-  }, [search.quotaError, fetchTrialValue]);
+  }, [search.quotaError, billing.fetchTrialValue, billing.setShowTrialConversion]);
 
   // ── Search Actions ──────────────────────────────────────────────────
   const handleLoadLastSearch = useCallback(() => {
@@ -419,141 +361,48 @@ export function useSearchOrchestration() {
   }, []);
 
   // ── Computed: SearchResults props ───────────────────────────────────
-  const isTrialExpiredOrQuota = isTrialExpired || search.quotaError === "trial_expired";
+  const isTrialExpiredOrQuota = billing.isTrialExpired || search.quotaError === "trial_expired";
 
-  const searchResultsProps = useMemo((): SearchResultsProps => ({
-    // Group 1: SearchResultsData
-    result: search.result,
-    rawCount: search.rawCount,
-    filterSummary: search.filterSummary,
-    pendingReviewCount: search.result?.pending_review_count ?? 0,
-    pendingReviewUpdate: search.pendingReviewUpdate,
-    zeroMatchProgress: search.zeroMatchProgress,
-
-    // Group 2: SearchLoadingState
-    loading: search.loading,
-    loadingStep: search.loadingStep,
-    estimatedTime: search.estimateSearchTime(filters.ufsSelecionadas.size, dateDiffInDays(filters.dataInicial, filters.dataFinal)),
-    stateCount: filters.ufsSelecionadas.size,
-    statesProcessed: search.statesProcessed,
-    sseEvent: search.sseEvent,
-    useRealProgress: search.useRealProgress,
-    sseAvailable: search.sseAvailable,
-    sseDisconnected: search.sseDisconnected,
-    isReconnecting: search.isReconnecting,
-    isDegraded: search.isDegraded,
-    degradedDetail: search.degradedDetail,
-    skeletonTimeoutReached: search.skeletonTimeoutReached,
-    ufStatuses: search.ufStatuses,
-    ufTotalFound: search.ufTotalFound,
-    ufAllComplete: search.ufAllComplete,
-    sourceStatuses: search.sourceStatuses,
-    partialProgress: search.partialProgress,
-
-    // Group 3: SearchResultsFilters
-    ufsSelecionadas: filters.ufsSelecionadas,
-    sectorName: filters.sectorName,
-    searchMode: filters.searchMode,
-    termosArray: filters.termosArray,
-    ordenacao: filters.ordenacao,
-    status: filters.status,
-
-    // Group 4: SearchResultsActions
-    onCancel: search.cancelSearch,
-    onStageChange: (stage: number) => trackEvent('search_progress_stage', { stage, is_sse: search.useRealProgress && search.sseAvailable }),
-    onOrdenacaoChange: filters.setOrdenacao,
-    onDownload: search.handleDownload,
-    onSearch: search.buscar,
-    onRegenerateExcel: search.handleRegenerateExcel,
-    onShowUpgradeModal: handleShowUpgradeModal,
-    onTrackEvent: trackEvent,
-    onViewPartial: search.viewPartialResults,
-    onDismissPartial: () => setPartialDismissed(true),
-    onRetryForceFresh: search.buscarForceFresh,
-    onRetryWithUfs: handleRetryWithUfs,
-    onLoadLastSearch: handleLoadLastSearch,
-    onRefreshResults: search.handleRefreshResults,
-    onRetryNow: search.retryNow,
-    onCancelRetry: search.cancelRetry,
-    onAdjustPeriod: undefined,
-    onAddNeighborStates: undefined,
-    onViewNearbyResults: undefined,
-    onGeneratePdf: () => setPdfModalOpen(true),
-    onStartResultsTour: () => {
-      startResultsTour();
-      trackEvent('onboarding_tour_started', { tour: 'results' });
-    },
-
-    // Group 5: SearchDisplayState
-    error: search.error,
-    quotaError: search.quotaError,
-    downloadLoading: search.downloadLoading,
-    downloadError: search.downloadError,
-    excelFailCount: search.excelFailCount,
-    searchElapsedSeconds: searchElapsed,
-    partialDismissed,
-    liveFetchInProgress: search.liveFetchInProgress,
-    refreshAvailable: search.refreshAvailable,
-    hasLastSearch: lastSearchAvailable,
-    retryCountdown: search.retryCountdown,
-    retryMessage: search.retryMessage,
-    retryExhausted: search.retryExhausted,
-    nearbyResultsCount: undefined,
-    pdfLoading,
-
-    // Group 6: SearchAuthState
-    planInfo,
+  const { searchResultsProps } = useSearchComputedProps({
+    search,
+    filters,
+    billing: { planInfo: billing.planInfo, trialPhase: billing.trialPhase },
     session,
-    isTrialExpired: isTrialExpiredOrQuota,
-    trialPhase,
-    paywallApplied: search.result?.paywall_applied,
-    totalBeforePaywall: search.result?.total_before_paywall,
+    isTrialExpiredOrQuota,
     isProfileComplete,
-
-    // Group 7: SearchFeedbackState
-    searchId: search.searchId || undefined,
-    setorId: filters.setorId,
+    searchElapsed,
+    partialDismissed,
+    lastSearchAvailable,
+    pdfLoading,
+    handleShowUpgradeModal,
+    handleLoadLastSearch,
+    handleRetryWithUfs,
+    startResultsTour,
     isResultsTourCompleted,
-  }), [
-    search.result, search.rawCount, search.filterSummary, search.pendingReviewUpdate,
-    search.zeroMatchProgress, search.loading, search.loadingStep, search.statesProcessed,
-    search.sseEvent, search.useRealProgress, search.sseAvailable, search.sseDisconnected,
-    search.isReconnecting, search.isDegraded, search.degradedDetail, search.skeletonTimeoutReached,
-    search.ufStatuses, search.ufTotalFound, search.ufAllComplete, search.sourceStatuses,
-    search.partialProgress, search.cancelSearch, search.buscar, search.handleDownload,
-    search.handleRegenerateExcel, search.viewPartialResults, search.buscarForceFresh,
-    search.handleRefreshResults, search.retryNow, search.cancelRetry,
-    search.error, search.quotaError, search.downloadLoading, search.downloadError,
-    search.excelFailCount, search.liveFetchInProgress, search.refreshAvailable,
-    search.retryCountdown, search.retryMessage, search.retryExhausted, search.searchId,
-    search.estimateSearchTime,
-    filters.ufsSelecionadas, filters.sectorName, filters.searchMode, filters.termosArray,
-    filters.ordenacao, filters.setOrdenacao, filters.dataInicial, filters.dataFinal,
-    filters.setorId, filters.status,
-    trackEvent, handleShowUpgradeModal, handleLoadLastSearch, handleRetryWithUfs, startResultsTour,
-    isResultsTourCompleted, searchElapsed, partialDismissed, lastSearchAvailable,
-    pdfLoading, planInfo, session, isTrialExpiredOrQuota, trialPhase, isProfileComplete,
-  ]);
+    setPdfModalOpen,
+    setPartialDismissed,
+    trackEvent,
+  });
 
   return {
     // Auth
     authLoading,
     session,
 
-    // Plan/Trial
-    planInfo,
-    trialPhase,
-    trialDaysRemaining,
-    isTrialExpired,
-    isGracePeriod,
-    graceDaysRemaining,
-    showTrialConversion,
-    setShowTrialConversion,
-    trialValue,
-    trialValueLoading,
-    fetchTrialValue,
-    showPaymentRecovery,
-    setShowPaymentRecovery,
+    // Plan/Trial — delegated to useSearchBillingState
+    planInfo: billing.planInfo,
+    trialPhase: billing.trialPhase,
+    trialDaysRemaining: billing.trialDaysRemaining,
+    isTrialExpired: billing.isTrialExpired,
+    isGracePeriod: billing.isGracePeriod,
+    graceDaysRemaining: billing.graceDaysRemaining,
+    showTrialConversion: billing.showTrialConversion,
+    setShowTrialConversion: billing.setShowTrialConversion,
+    trialValue: billing.trialValue,
+    trialValueLoading: billing.trialValueLoading,
+    fetchTrialValue: billing.fetchTrialValue,
+    showPaymentRecovery: billing.showPaymentRecovery,
+    setShowPaymentRecovery: billing.setShowPaymentRecovery,
 
     // Core search
     filters,

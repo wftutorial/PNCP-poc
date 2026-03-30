@@ -102,12 +102,13 @@ describe("AC13: Viability badge in result cards", () => {
       <LicitacoesPreview licitacoes={[bid]} previewCount={5} excelAvailable={true} />
     );
     const badge = screen.getByTestId("viability-badge");
-    const title = badge.getAttribute("title") || "";
-    expect(title).toContain("95/100");
-    expect(title).toContain("Modalidade");
-    expect(title).toContain("Prazo");
-    expect(title).toContain("Valor");
-    expect(title).toContain("UF");
+    // DEBT-FE-002: title attr removed for WCAG compliance; tooltip content is in data-tooltip-content
+    const tooltipContent = badge.getAttribute("data-tooltip-content") || "";
+    expect(tooltipContent).toContain("95/100");
+    expect(tooltipContent).toContain("Modalidade");
+    expect(tooltipContent).toContain("Prazo");
+    expect(tooltipContent).toContain("Valor");
+    expect(tooltipContent).toContain("UF");
   });
 
   it("does NOT render viability badge when data is absent", () => {

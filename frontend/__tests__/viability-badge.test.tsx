@@ -3,6 +3,11 @@
  *
  * AC8: Visual indicators with 3 levels
  * AC11: Tooltip shows factor breakdown
+ *
+ * DEBT-FE-002: Updated to use data-tooltip-content attribute instead of title.
+ * The title attribute was removed for WCAG 2.1 AA compliance — tooltip content
+ * is now accessible via keyboard/focus and via the data-tooltip-content attribute
+ * for test introspection.
  */
 
 import React from "react";
@@ -20,6 +25,11 @@ const mockFactors: ViabilityFactors = {
   geography: 100,
   geography_label: "Sua região",
 };
+
+/** Helper: get tooltip content from the badge (uses data-tooltip-content) */
+function getTooltipContent(badge: HTMLElement): string {
+  return badge.getAttribute("data-tooltip-content") || "";
+}
 
 describe("ViabilityBadge", () => {
   // AC8: Three levels with correct labels
@@ -68,20 +78,20 @@ describe("ViabilityBadge", () => {
   it("shows tooltip with factor breakdown", () => {
     render(<ViabilityBadge level="alta" score={95} factors={mockFactors} />);
     const badge = screen.getByTestId("viability-badge");
-    const title = badge.getAttribute("title") || "";
-    expect(title).toContain("Viabilidade: 95/100");
-    expect(title).toContain("Modalidade: Ótimo (100/100)");
-    expect(title).toContain("Prazo: 12 dias (80/100)");
-    expect(title).toContain("Valor: Ideal (100/100)");
-    expect(title).toContain("UF: Sua região (100/100)");
+    const tooltipContent = getTooltipContent(badge);
+    expect(tooltipContent).toContain("Viabilidade: 95/100");
+    expect(tooltipContent).toContain("Modalidade: Ótimo (100/100)");
+    expect(tooltipContent).toContain("Prazo: 12 dias (80/100)");
+    expect(tooltipContent).toContain("Valor: Ideal (100/100)");
+    expect(tooltipContent).toContain("UF: Sua região (100/100)");
   });
 
   it("shows basic tooltip without factors", () => {
     render(<ViabilityBadge level="media" score={60} factors={null} />);
     const badge = screen.getByTestId("viability-badge");
-    const title = badge.getAttribute("title") || "";
-    expect(title).toContain("Viabilidade: 60/100");
-    expect(title).not.toContain("Modalidade");
+    const tooltipContent = getTooltipContent(badge);
+    expect(tooltipContent).toContain("Viabilidade: 60/100");
+    expect(tooltipContent).not.toContain("Modalidade");
   });
 
   // Accessibility
@@ -118,13 +128,13 @@ describe("ViabilityBadge", () => {
   it("handles score of 0", () => {
     render(<ViabilityBadge level="baixa" score={0} factors={mockFactors} />);
     const badge = screen.getByTestId("viability-badge");
-    expect(badge.getAttribute("title")).toContain("Viabilidade: 0/100");
+    expect(getTooltipContent(badge)).toContain("Viabilidade: 0/100");
   });
 
   it("handles score of 100", () => {
     render(<ViabilityBadge level="alta" score={100} factors={mockFactors} />);
     const badge = screen.getByTestId("viability-badge");
-    expect(badge.getAttribute("title")).toContain("Viabilidade: 100/100");
+    expect(getTooltipContent(badge)).toContain("Viabilidade: 100/100");
   });
 
   // CRIT-FLT-003 AC3: Tooltip for missing value source
@@ -138,8 +148,7 @@ describe("ViabilityBadge", () => {
       />
     );
     const badge = screen.getByTestId("viability-badge");
-    const title = badge.getAttribute("title") || "";
-    expect(title).toContain(
+    expect(getTooltipContent(badge)).toContain(
       "Valor estimado não informado pelo órgão — viabilidade pode ser maior"
     );
   });
@@ -154,8 +163,7 @@ describe("ViabilityBadge", () => {
       />
     );
     const badge = screen.getByTestId("viability-badge");
-    const title = badge.getAttribute("title") || "";
-    expect(title).not.toContain("não informado pelo órgão");
+    expect(getTooltipContent(badge)).not.toContain("não informado pelo órgão");
   });
 
   it("does NOT show missing value warning when valueSource is null", () => {
@@ -168,7 +176,6 @@ describe("ViabilityBadge", () => {
       />
     );
     const badge = screen.getByTestId("viability-badge");
-    const title = badge.getAttribute("title") || "";
-    expect(title).not.toContain("não informado pelo órgão");
+    expect(getTooltipContent(badge)).not.toContain("não informado pelo órgão");
   });
 });

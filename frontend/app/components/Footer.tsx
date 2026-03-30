@@ -1,7 +1,8 @@
-'use client';
-
+// DEBT-FE-017: Footer is now an RSC — client islands (StatusFooterBadge, ManageCookiesButton)
+// are in FooterClientIslands.tsx to minimize the 'use client' footprint.
+import type { ReactNode } from 'react';
 import { footer } from '@/lib/copy/valueProps';
-import { useBackendStatusContext, type BackendStatus } from '@/app/components/BackendStatusIndicator';
+import { StatusFooterBadge, ManageCookiesButton } from '@/app/components/FooterClientIslands';
 
 /**
  * STORY-174 AC6: Footer - Refined Layout with Animations
@@ -137,36 +138,7 @@ export default function Footer() {
                 <FooterLink href="/termos">Termos de Uso</FooterLink>
               </li>
               <li>
-                <button
-                  onClick={() => window.dispatchEvent(new Event("manage-cookies"))}
-                  className="
-                    relative
-                    inline-block
-                    hover:text-brand-blue
-                    transition-colors
-                    focus-visible:outline-none
-                    focus-visible:ring-[3px]
-                    focus-visible:ring-[var(--ring)]
-                    focus-visible:ring-offset-2
-                    rounded
-                    px-1
-                    group
-                    text-left
-                  "
-                >
-                  Gerenciar Cookies
-                  <span className="
-                    absolute
-                    bottom-0
-                    left-0
-                    w-0
-                    h-[2px]
-                    bg-brand-blue
-                    transition-all
-                    duration-300
-                    group-hover:w-full
-                  " />
-                </button>
+                <ManageCookiesButton />
               </li>
             </ul>
           </div>
@@ -271,38 +243,11 @@ export default function Footer() {
   );
 }
 
-/**
- * STORY-316 AC16-AC17: Status badge in footer.
- * Reuses BackendStatusIndicator polling data (CRIT-008).
- */
-function StatusFooterBadge() {
-  const { status } = useBackendStatusContext();
-
-  const config: Record<BackendStatus, { dot: string; label: string }> = {
-    online: { dot: "bg-green-500", label: "Operacional" },
-    offline: { dot: "bg-red-500 animate-pulse", label: "Indisponível" },
-    recovering: { dot: "bg-yellow-500", label: "Recuperando" },
-  };
-
-  const c = config[status];
-
-  return (
-    <a
-      href="/status"
-      className="flex items-center gap-1.5 text-sm text-ink-secondary hover:text-brand-blue transition-colors"
-      aria-label={`Status: ${c.label}`}
-    >
-      <span className={`inline-block w-2 h-2 rounded-full ${c.dot}`} />
-      Status: {c.label}
-    </a>
-  );
-}
-
 
 /**
  * Footer Link with Underline Animation
  */
-function FooterLink({ href, children }: { href: string; children: React.ReactNode }) {
+function FooterLink({ href, children }: { href: string; children: ReactNode }) {
   return (
     <a
       href={href}

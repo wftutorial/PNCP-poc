@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useRef, useCallback, useEffect, useId } from "react";
 
 /** D-04 AC1: Viability factor breakdown */
 export interface ViabilityFactors {
@@ -26,7 +26,9 @@ function factorLine(name: string, score: number, label: string): string {
   return `${name}: ${label} (${score}/100)`;
 }
 
-/** D-04 AC8: Viability badge with tooltip showing factor breakdown */
+/** D-04 AC8: Viability badge with accessible tooltip showing factor breakdown
+ * DEBT-FE-002: Replaces non-accessible title attribute with keyboard+touch tooltip (WCAG 2.1 AA)
+ */
 export default function ViabilityBadge({
   level,
   score,
@@ -63,22 +65,20 @@ export default function ViabilityBadge({
   const c = config[level] ?? config["baixa"];
   if (!c) return null;
 
-  // Build tooltip with factor breakdown
-  let tooltip = `Viabilidade: ${score ?? "?"}/100`;
+  // Build tooltip lines
+  const tooltipLines: string[] = [`Viabilidade: ${score ?? "?"}/100`];
   if (factors) {
-    tooltip =
-      `Viabilidade: ${score ?? "?"}/100\n` +
-      factorLine("Modalidade", factors.modalidade, factors.modalidade_label) +
-      "\n" +
-      factorLine("Prazo", factors.timeline, factors.timeline_label) +
-      "\n" +
-      factorLine("Valor", factors.value_fit, factors.value_fit_label) +
-      "\n" +
-      factorLine("UF", factors.geography, factors.geography_label);
+    tooltipLines.push(
+      factorLine("Modalidade", factors.modalidade, factors.modalidade_label),
+      factorLine("Prazo", factors.timeline, factors.timeline_label),
+      factorLine("Valor", factors.value_fit, factors.value_fit_label),
+      factorLine("UF", factors.geography, factors.geography_label),
+    );
   }
-  // CRIT-FLT-003 AC3: Inform user when value was not reported
   if (valueSource === "missing") {
-    tooltip += "\n⚠ Valor estimado não informado pelo órgão — viabilidade pode ser maior";
+    tooltipLines.push(
+      "⚠ Valor estimado não informado pelo órgão — viabilidade pode ser maior",
+    );
   }
 
   // Icon: chart bar for viability (distinct from shield for confidence)
@@ -100,17 +100,115 @@ export default function ViabilityBadge({
   );
 
   return (
-    <span
-      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold ${c.bg}`}
-      title={tooltip}
-      aria-label={c.ariaLabel}
-      tabIndex={0}
-      role="img"
-      data-testid="viability-badge"
-      data-viability-level={level}
+    <ViabilityTooltip
+      tooltipLines={tooltipLines}
+      ariaLabel={c.ariaLabel}
+      bg={c.bg}
+      level={level}
     >
       {icon}
       {c.label}
+    </ViabilityTooltip>
+  );
+}
+
+/** DEBT-FE-002: Accessible tooltip wrapper
+ * - Keyboard accessible (focusable trigger with role=img + aria-label)
+ * - Mobile tap-to-toggle support
+ * - ARIA: role="tooltip" + aria-describedby linkage
+ * - Dismisses on Escape key and outside click
+ */
+function ViabilityTooltip({
+  children,
+  tooltipLines,
+  ariaLabel,
+  bg,
+  level,
+}: {
+  children: React.ReactNode;
+  tooltipLines: string[];
+  ariaLabel: string;
+  bg: string;
+  level: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const tooltipId = useId();
+  const triggerRef = useRef<HTMLSpanElement>(null);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === "Escape") {
+      setOpen(false);
+    } else if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      setOpen((prev) => !prev);
+    }
+  }, []);
+
+  // Dismiss on outside click
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (triggerRef.current && !triggerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  // tooltip text joined for data attribute (test introspection)
+  const tooltipText = tooltipLines.join("\n");
+
+  return (
+    <span className="relative inline-flex">
+      {/* Badge trigger — carries all semantic + accessibility attributes */}
+      <span
+        ref={triggerRef}
+        role="img"
+        aria-label={ariaLabel}
+        aria-describedby={open ? tooltipId : undefined}
+        tabIndex={0}
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        onKeyDown={handleKeyDown}
+        onClick={() => setOpen((prev) => !prev)}
+        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold cursor-default
+          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-current
+          ${bg}`}
+        data-testid="viability-badge"
+        data-viability-level={level}
+        data-tooltip-content={tooltipText}
+      >
+        {children}
+      </span>
+
+      {/* Tooltip panel — WCAG role="tooltip", linked via aria-describedby */}
+      {open && (
+        <span
+          id={tooltipId}
+          role="tooltip"
+          className={[
+            "absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2",
+            "w-max max-w-[240px]",
+            "bg-gray-900 dark:bg-gray-800 text-white text-[10px] leading-relaxed",
+            "rounded-md px-2.5 py-2 shadow-lg",
+            "pointer-events-none",
+          ].join(" ")}
+        >
+          {tooltipLines.map((line, i) => (
+            <p key={i} className={i === 0 ? "font-semibold mb-1" : "text-gray-300"}>
+              {line}
+            </p>
+          ))}
+          {/* Arrow */}
+          <span
+            aria-hidden="true"
+            className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900 dark:border-t-gray-800"
+          />
+        </span>
+      )}
     </span>
   );
 }

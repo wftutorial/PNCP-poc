@@ -59,7 +59,8 @@ def _ground_truth_summary(resumo: "ResumoLicitacoes") -> None:
     )
 
     # 2. Replace bid count in resumo_executivo (ISSUE-046: singular/plural)
-    _count_pat = r"\b(\d+)\s+licita[çc][oõã]es?\b"
+    # ISSUE-039 v3: Also match "N oportunidades" — LLM sometimes uses this word
+    _count_pat = r"\b(\d+)\s+(?:licita[çc][oõã]es?|oportunidades?)\b"
     _lic_word = "licitação" if resumo.total_oportunidades == 1 else "licitações"
     resumo.resumo_executivo = _re_llm.sub(
         _count_pat,

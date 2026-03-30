@@ -199,7 +199,7 @@ export default function PipelinePage() {
             </p>
           </div>
           <div className="text-sm text-[var(--text-secondary)]">
-            {items.length} {items.length === 1 ? "item" : "itens"} no pipeline
+            {loading ? "Carregando..." : `${items.length} ${items.length === 1 ? "item" : "itens"} no pipeline`}
           </div>
         </div>
 

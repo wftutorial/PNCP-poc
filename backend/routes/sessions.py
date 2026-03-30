@@ -38,6 +38,11 @@ async def get_sessions(
             if status == "failed":
                 # "failed" filter includes both failed and timed_out
                 query = query.in_("status", ["failed", "timed_out"])
+            elif status == "completed":
+                # ISSUE-040: Sessions with NULL status are legacy completed sessions
+                # (created before session lifecycle tracking was added).
+                # Include both explicit 'completed' and NULL status.
+                query = query.or_("status.eq.completed,status.is.null")
             else:
                 query = query.eq("status", status)
 

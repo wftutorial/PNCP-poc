@@ -23,7 +23,7 @@ load_dotenv(str(Path(__file__).resolve().parent.parent.parent / ".env"))
 
 from supabase import create_client
 from sectors import list_sectors, get_sector
-from filter.core import match_keywords
+from filter.keywords import match_keywords
 
 # Config
 SAMPLES_PER_SECTOR_RELEVANT = 50

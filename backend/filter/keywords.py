@@ -982,6 +982,7 @@ def has_red_flags(
     red_flag_sets: List[Set[str]],
     threshold: int = 2,
     setor: Optional[str] = None,
+    custom_terms: Optional[List[str]] = None,  # ISSUE-017: exempt user's explicit terms
 ) -> Tuple[bool, List[str]]:
     """
     Check if a contract description contains red flag terms (STORY-181 AC6).
@@ -993,16 +994,28 @@ def has_red_flags(
     and saude from RED_FLAGS_MEDICAL, since those terms are the primary
     keywords of those sectors.
     CRIT-024: Extends exemptions to facilities/transporte (medical) and software (admin).
+    ISSUE-017: Exempts user's explicit custom search terms from red flag matching.
 
     Args:
         objeto_norm: Normalized procurement object description
         red_flag_sets: List of red flag term sets to check
         threshold: Minimum matches in any single set to trigger flag
         setor: Sector ID — used to skip exempted red flag sets
+        custom_terms: User's explicit search terms — exempt from red flag matching
 
     Returns:
         Tuple of (has_flags, matched_flags)
     """
+    # ISSUE-017: Build set of normalized custom terms to exempt from red flags
+    _exempt_terms: Set[str] = set()
+    if custom_terms:
+        for term in custom_terms:
+            _exempt_terms.add(normalize_text(term))
+            # Also exempt individual words of multi-word terms
+            for word in normalize_text(term).split():
+                if len(word) >= 4:
+                    _exempt_terms.add(word)
+
     all_matched: List[str] = []
     for red_flags in red_flag_sets:
         # CRIT-020: Skip red flag sets when sector is exempt
@@ -1013,7 +1026,10 @@ def has_red_flags(
                 continue
             if red_flags is RED_FLAGS_ADMINISTRATIVE and setor in _ADMIN_EXEMPT_SECTORS:
                 continue
-        matches = [flag for flag in red_flags if flag in objeto_norm]
+        matches = [
+            flag for flag in red_flags
+            if flag in objeto_norm and flag not in _exempt_terms
+        ]
         if len(matches) >= threshold:
             all_matched.extend(matches)
     return len(all_matched) > 0, all_matched

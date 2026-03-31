@@ -1,23 +1,23 @@
-"""filter package -- DEBT-301 decomposition.
+"""filter package -- DEBT-201 decomposition.
 
-Re-exports everything from sub-modules and core orchestrator
-so that ``from filter import X`` continues to work.
+Re-exports everything from sub-modules so that ``from filter import X``
+continues to work (facade pattern).
 
 Architecture:
-  - filter/core.py: Main orchestrator (aplicar_todos_filtros) + legacy monolith
-  - filter_basic.py: Basic filter helpers (status, esfera, proximity, red flags)
-  - filter_keywords.py: Keyword matching engine (match_keywords, normalize_text, etc.)
-  - filter_density.py: Term density scoring
-  - filter_llm.py: LLM zero-match classification
-  - filter_recovery.py: Zero-results recovery (relaxation, LLM recovery)
-  - filter_stats.py: Filter statistics tracking
-  - filter_status.py: Status inference
-  - filter_uf.py: UF filtering
-  - filter_utils.py: Shared filter utilities
-  - filter_value.py: Value range filtering
+  - filter/pipeline.py: Main orchestrator (aplicar_todos_filtros)
+  - filter/keywords.py: Keyword matching engine (match_keywords, normalize_text, etc.)
+  - filter/density.py: Term density scoring + proximity/co-occurrence checks
+  - filter/status.py: Status inference + prazo aberto filter
+  - filter/uf.py: UF filtering
+  - filter/value.py: Value range filtering
+  - filter/basic.py: Basic filter helpers (status, esfera, proximity, red flags)
+  - filter/llm.py: LLM zero-match classification
+  - filter/recovery.py: Zero-results recovery (relaxation, LLM recovery)
+  - filter/stats.py: Filter statistics tracking
+  - filter/utils.py: Shared filter utilities
 """
 
-# Sub-modules (decomposed filter_*.py files)
+# Sub-modules (decomposed filter package)
 from filter.basic import *  # noqa: F401,F403
 from filter.keywords import *  # noqa: F401,F403
 from filter.density import *  # noqa: F401,F403
@@ -29,13 +29,12 @@ from filter.uf import *  # noqa: F401,F403
 from filter.utils import *  # noqa: F401,F403
 from filter.value import *  # noqa: F401,F403
 
-# Main orchestrator (still in core.py -- 1632-line function)
-from filter.core import aplicar_todos_filtros  # noqa: F401
+# Main orchestrator (DEBT-201: extracted from core.py to pipeline.py)
+from filter.pipeline import aplicar_todos_filtros  # noqa: F401
 
 # Private names used by tests/other modules
 from filter.keywords import _strip_org_context, _strip_org_context_with_detail, _get_tracker  # noqa: F401
-from filter.core import _filter_stats_tracker  # noqa: F401
-from filter.core import (  # noqa: F401
+from filter.keywords import (  # noqa: F401
     GLOBAL_EXCLUSION_OVERRIDES,
     GLOBAL_EXCLUSIONS,
     GLOBAL_EXCLUSIONS_NORMALIZED,
@@ -44,3 +43,6 @@ from filter.core import (  # noqa: F401
     _ADMIN_EXEMPT_SECTORS,
     RED_FLAGS_PER_SECTOR,
 )
+
+# _filter_stats_tracker: lazy singleton, lives in keywords.py (same as _get_tracker)
+_filter_stats_tracker = None  # noqa: F401 — kept for backward compat (tests import this name)

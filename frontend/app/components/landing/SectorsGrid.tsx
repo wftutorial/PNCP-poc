@@ -1,11 +1,5 @@
-'use client';
-
-import { motion } from 'framer-motion';
-import { useScrollAnimation, fadeInUp, staggerContainer } from '@/lib/animations';
-
-interface SectorsGridProps {
-  className?: string;
-}
+// RSC: No client-side hooks — static grid, CSS-only hover/animation.
+// DEBT-FE-017: Converted from 'use client' (useScrollAnimation + Framer Motion).
 
 interface SectorItem {
   name: string;
@@ -77,46 +71,29 @@ const sectors: SectorItem[] = [
 ];
 
 /**
- * STORY-174 AC4: Sectors Grid - 3D Tilt Cards
- *
- * Features:
- * - 3D tilt effect on hover (CSS transform perspective + rotateX/Y)
- * - Gradient overlay on hover (intensifies)
- * - Animated icons (scale + glow)
- * - Responsive grid (4→3→2 columns)
- * - Respect prefers-reduced-motion (disable tilt)
+ * STORY-174 AC4: Sectors Grid - CSS hover cards (RSC).
+ * DEBT-FE-017: Converted to RSC — removed useScrollAnimation + Framer Motion.
+ * 3D tilt replaced with CSS hover transforms (hover:-translate-y-2 hover:scale-105).
  */
-export default function SectorsGrid({ className = '' }: SectorsGridProps) {
-  const { ref, isVisible } = useScrollAnimation(0.1);
-
+export default function SectorsGrid({ className = '' }: { className?: string }) {
   return (
     <section
-      ref={ref}
       className={`max-w-landing mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24 ${className}`}
     >
       {/* Section Header */}
-      <motion.div
-        variants={fadeInUp}
-        initial="hidden"
-        animate={isVisible ? 'visible' : 'hidden'}
-      >
+      <div>
         <h2 className="text-3xl sm:text-4xl font-bold text-center text-ink tracking-tight mb-4">
           Setores atendidos
         </h2>
         <p className="text-lg text-center text-ink-secondary mb-8">
           Cobertura abrangente com expansão contínua
         </p>
-      </motion.div>
+      </div>
 
-      {/* 3D Tilt Grid */}
-      <motion.div
-        className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4"
-        variants={staggerContainer}
-        initial="hidden"
-        animate={isVisible ? 'visible' : 'hidden'}
-      >
+      {/* Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
         {sectors.map((sector, index) => (
-          <motion.div
+          <div
             key={index}
             className="
               group
@@ -133,19 +110,6 @@ export default function SectorsGrid({ className = '' }: SectorsGridProps) {
               hover:scale-105
               motion-reduce:hover:transform-none
             "
-            variants={fadeInUp}
-            whileHover={{
-              rotateX: 5,
-              rotateY: 5,
-              transition: {
-                duration: 0.4,
-                ease: [0.65, 0, 0.35, 1],
-              },
-            }}
-            style={{
-              perspective: '1000px',
-              transformStyle: 'preserve-3d',
-            }}
           >
             {/* Icon Container with Glow */}
             <div className="
@@ -171,24 +135,19 @@ export default function SectorsGrid({ className = '' }: SectorsGridProps) {
             <span className="text-sm font-semibold text-ink block">
               {sector.name}
             </span>
-          </motion.div>
+          </div>
         ))}
-      </motion.div>
+      </div>
 
       {/* Badge: Em expansão */}
-      <motion.div
-        className="mt-8 text-center"
-        variants={fadeInUp}
-        initial="hidden"
-        animate={isVisible ? 'visible' : 'hidden'}
-      >
+      <div className="mt-8 text-center">
         <span className="inline-flex items-center gap-2 bg-success-subtle text-success px-4 py-2 rounded-full text-sm font-medium">
           <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
           </svg>
           Novos setores regularmente
         </span>
-      </motion.div>
+      </div>
     </section>
   );
 }

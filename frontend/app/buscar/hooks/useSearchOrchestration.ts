@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useAnalytics } from "../../../hooks/useAnalytics";
 import { useOnboarding } from "../../../hooks/useOnboarding";
@@ -11,14 +11,15 @@ import { useSearchFilters } from "./useSearchFilters";
 import { useSearch } from "./useSearch";
 import { useSearchBillingState } from "./useSearchBillingState";
 import { useSearchComputedProps } from "./useSearchComputedProps";
+import { useSearchState } from "./useSearchState";
+import { useSearchSSE } from "./useSearchSSE";
 import { useNavigationGuard } from "../../../hooks/useNavigationGuard";
-import { useBackendStatusContext } from "../../components/BackendStatusIndicator";
 import { useBroadcastChannel } from "../../../hooks/useBroadcastChannel";
 
 import { toast } from "sonner";
-import { checkHasLastSearch, getLastSearch } from "../../../lib/lastSearchCache";
-import type { BuscaResult } from "../../types";
+import { getLastSearch, checkHasLastSearch } from "../../../lib/lastSearchCache";
 import { safeSetItem, safeGetItem } from "../../../lib/storage";
+import type { BuscaResult } from "../../types";
 
 import { SEARCH_TOUR_STEPS, RESULTS_TOUR_STEPS } from "../constants/tour-steps";
 
@@ -42,9 +43,9 @@ export function useSearchOrchestration() {
   // ── Trial / Plan / Billing State ────────────────────────────────────
   const billing = useSearchBillingState();
 
-  // ── Backend Status ──────────────────────────────────────────────────
-  const backendStatus = useBackendStatusContext();
-  const queuedSearchRef = useRef<(() => void) | null>(null);
+  // ── UI State ─────────────────────────────────────────────────────────
+  // DEBT-FE-001: Extracted to useSearchState sub-hook.
+  const uiState = useSearchState();
 
   // ── Auto-Search / Onboarding ────────────────────────────────────────
   const searchParamsRaw = useSearchParams();
@@ -52,48 +53,6 @@ export function useSearchOrchestration() {
   const autoSearchId = searchParamsRaw?.get('search_id') || null;
   const [showOnboardingBanner, setShowOnboardingBanner] = useState(isAutoSearch);
   const [autoSearchDismissed, setAutoSearchDismissed] = useState(false);
-
-  // ── UI State ────────────────────────────────────────────────────────
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-  const [upgradeSource, setUpgradeSource] = useState<string | undefined>();
-  const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
-
-  const hasSearchedBefore = useMemo(() => {
-    return safeGetItem('smartlic-has-searched') === 'true';
-  }, []);
-
-  const isProfileComplete = useMemo(() => {
-    try {
-      const cached = safeGetItem('profileContext');
-      if (!cached) return false;
-      const ctx = JSON.parse(cached);
-      return !!(ctx.porte_empresa && ctx.ufs_atuacao?.length > 0);
-    } catch { return false; }
-  }, []);
-
-  const [lastSearchAvailable, setLastSearchAvailable] = useState(() => checkHasLastSearch());
-
-  // UX-417 AC4: Filters visible by default (open on first access and always)
-  const [customizeOpen, setCustomizeOpen] = useState(() => {
-    const current = safeGetItem('smartlic:buscar:filters-expanded');
-    if (current !== null) return current === 'true';
-    // UX-417: Default to open (was false before)
-    return true;
-  });
-
-  useEffect(() => {
-    safeSetItem('smartlic:buscar:filters-expanded', String(customizeOpen));
-  }, [customizeOpen]);
-
-  const [showFirstUseTip, setShowFirstUseTip] = useState(() => {
-    return safeGetItem('smartlic-has-searched') !== 'true'
-      && safeGetItem('smartlic-first-tip-dismissed') !== 'true';
-  });
-
-  const dismissFirstUseTip = useCallback(() => {
-    setShowFirstUseTip(false);
-    safeSetItem('smartlic-first-tip-dismissed', 'true');
-  }, []);
 
   // ── Tours ───────────────────────────────────────────────────────────
   const reportTourEvent = useCallback(async (tourId: string, event: string, stepsSeen: number) => {
@@ -167,7 +126,7 @@ export function useSearchOrchestration() {
 
   useEffect(() => {
     const welcomeDone = safeGetItem('smartlic_onboarding_completed') === 'true' ||
-                         safeGetItem('smartlic_onboarding_dismissed') === 'true';
+                        safeGetItem('smartlic_onboarding_dismissed') === 'true';
     if (welcomeDone && !isSearchTourCompleted()) {
       const timer = setTimeout(() => {
         startSearchTour();
@@ -179,11 +138,24 @@ export function useSearchOrchestration() {
   }, [isSearchTourCompleted, startSearchTour]);
 
   // ── Search Core ─────────────────────────────────────────────────────
-  const progressAreaRef = useRef<HTMLDivElement>(null);
   const clearResultRef = useRef<() => void>(() => {});
   const filters = useSearchFilters(() => clearResultRef.current());
   const search = useSearch(filters);
   clearResultRef.current = () => search.setResult(null);
+
+  // ── SSE / Backend Status / Progress ─────────────────────────────────
+  // DEBT-FE-001: Extracted to useSearchSSE sub-hook.
+  const onSearchStart = useCallback(() => {
+    uiState.setCustomizeOpen(false);
+    uiState.setShowFirstUseTip(false);
+  }, [uiState.setCustomizeOpen, uiState.setShowFirstUseTip]);
+
+  const sse = useSearchSSE({
+    originalBuscar: search.buscar,
+    searchLoading: search.loading,
+    onSearchStart,
+    setUfsSelecionadas: filters.setUfsSelecionadas,
+  });
 
   // ── Cross-Tab Sync ──────────────────────────────────────────────────
   const { broadcastSearchComplete } = useBroadcastChannel({
@@ -221,67 +193,17 @@ export function useSearchOrchestration() {
 
   useEffect(() => {
     if (!search.loading) {
-      setLastSearchAvailable(checkHasLastSearch());
+      uiState.setLastSearchAvailable(checkHasLastSearch());
     }
-  }, [search.loading]);
-
-  // UX-432: Show "Restaurar última busca" button instead of auto-restoring
-  // Auto-restore caused ISSUE-037: mismatch between form state and cached results
-  // Now we just keep lastSearchAvailable=true (set in useState initializer) so the
-  // empty state can render a restore button via onLoadLastSearch.
-
-  const originalBuscar = search.buscar;
-  const buscarWithCollapse = useCallback(() => {
-    if (backendStatus.status === "offline") {
-      toast.info("Servidor indisponivel no momento. A analise sera iniciada quando o servidor estiver disponivel.");
-      queuedSearchRef.current = () => {
-        setCustomizeOpen(false);
-        safeSetItem('smartlic-has-searched', 'true');
-        setShowFirstUseTip(false);
-        originalBuscar();
-        setTimeout(() => {
-          progressAreaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }, 100);
-      };
-      return;
-    }
-    setCustomizeOpen(false);
-    safeSetItem('smartlic-has-searched', 'true');
-    setShowFirstUseTip(false);
-    originalBuscar();
-    setTimeout(() => {
-      progressAreaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 100);
-  }, [originalBuscar, backendStatus.status]);
-
-  // UX-436: Retry search with a reduced set of UFs (for timeout recovery)
-  const handleRetryWithUfs = useCallback((ufs: string[]) => {
-    filters.setUfsSelecionadas(new Set(ufs));
-    // Small delay to let state propagate before triggering search
-    setTimeout(() => {
-      originalBuscar();
-    }, 100);
-  }, [filters.setUfsSelecionadas, originalBuscar]);
-
-  useEffect(() => {
-    if ((backendStatus.status === "online" || backendStatus.status === "recovering") && queuedSearchRef.current) {
-      const queuedFn = queuedSearchRef.current;
-      queuedSearchRef.current = null;
-      toast.success("Servidor disponivel. Executando analise...");
-      queuedFn();
-    }
-  }, [backendStatus.status]);
+  }, [search.loading, uiState.setLastSearchAvailable]);
 
   useNavigationGuard({ isLoading: search.loading });
 
   // ── PDF ─────────────────────────────────────────────────────────────
-  const [pdfLoading, setPdfLoading] = useState(false);
-  const [pdfModalOpen, setPdfModalOpen] = useState(false);
-
   const handleGeneratePdf = useCallback(async (options: { clientName: string; maxItems: number }) => {
     if (!session?.access_token || !search.searchId) return;
-    setPdfLoading(true);
-    setPdfModalOpen(false);
+    uiState.setPdfLoading(true);
+    uiState.setPdfModalOpen(false);
     try {
       const response = await fetch("/api/reports/diagnostico", {
         method: "POST",
@@ -310,33 +232,18 @@ export function useSearchOrchestration() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       trackEvent("pdf_diagnostico_generated", { max_items: options.maxItems, has_client: !!options.clientName });
-    } catch (err) {
+    } catch {
       toast.error("Erro ao gerar relatorio PDF. Tente novamente.");
     } finally {
-      setPdfLoading(false);
+      uiState.setPdfLoading(false);
     }
-  }, [session, search.searchId, filters.sectorName, trackEvent]);
+  }, [session, search.searchId, filters.sectorName, trackEvent, uiState.setPdfLoading, uiState.setPdfModalOpen]);
 
   // ── Error Boundary Reset ────────────────────────────────────────────
   const handleErrorBoundaryReset = useCallback(() => {
     search.setResult(null);
     search.setError(null);
   }, [search]);
-
-  // ── Elapsed / Partial / Drawer ──────────────────────────────────────
-  const [searchElapsed, setSearchElapsed] = useState(0);
-  const [partialDismissed, setPartialDismissed] = useState(false);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-
-  useEffect(() => {
-    if (!search.loading) {
-      setSearchElapsed(0);
-      setPartialDismissed(false);
-      return;
-    }
-    const interval = setInterval(() => setSearchElapsed(prev => prev + 1), 1000);
-    return () => clearInterval(interval);
-  }, [search.loading]);
 
   useEffect(() => { search.restoreSearchStateOnMount(); }, []);
 
@@ -348,17 +255,12 @@ export function useSearchOrchestration() {
 
   // ── Keyboard Shortcuts ──────────────────────────────────────────────
   useKeyboardShortcuts({ shortcuts: [
-    { key: 'k', ctrlKey: true, action: () => { if (filters.canSearch && !search.loading) buscarWithCollapse(); }, description: 'Search' },
+    { key: 'k', ctrlKey: true, action: () => { if (filters.canSearch && !search.loading) sse.buscarWithCollapse(); }, description: 'Search' },
     { key: 'a', ctrlKey: true, action: filters.selecionarTodos, description: 'Select all' },
-    { key: 'Enter', ctrlKey: true, action: () => { if (filters.canSearch && !search.loading) buscarWithCollapse(); }, description: 'Search alt' },
-    { key: '/', action: () => setShowKeyboardHelp(true), description: 'Show shortcuts' },
+    { key: 'Enter', ctrlKey: true, action: () => { if (filters.canSearch && !search.loading) sse.buscarWithCollapse(); }, description: 'Search alt' },
+    { key: '/', action: () => uiState.setShowKeyboardHelp(true), description: 'Show shortcuts' },
     { key: 'Escape', action: filters.limparSelecao, description: 'Clear' },
   ] });
-
-  const handleShowUpgradeModal = useCallback((_plan?: string, source?: string) => {
-    setUpgradeSource(source);
-    setShowUpgradeModal(true);
-  }, []);
 
   // ── Computed: SearchResults props ───────────────────────────────────
   const isTrialExpiredOrQuota = billing.isTrialExpired || search.quotaError === "trial_expired";
@@ -369,18 +271,18 @@ export function useSearchOrchestration() {
     billing: { planInfo: billing.planInfo, trialPhase: billing.trialPhase },
     session,
     isTrialExpiredOrQuota,
-    isProfileComplete,
-    searchElapsed,
-    partialDismissed,
-    lastSearchAvailable,
-    pdfLoading,
-    handleShowUpgradeModal,
+    isProfileComplete: uiState.isProfileComplete,
+    searchElapsed: sse.searchElapsed,
+    partialDismissed: sse.partialDismissed,
+    lastSearchAvailable: uiState.lastSearchAvailable,
+    pdfLoading: uiState.pdfLoading,
+    handleShowUpgradeModal: uiState.handleShowUpgradeModal,
     handleLoadLastSearch,
-    handleRetryWithUfs,
+    handleRetryWithUfs: sse.handleRetryWithUfs,
     startResultsTour,
     isResultsTourCompleted,
-    setPdfModalOpen,
-    setPartialDismissed,
+    setPdfModalOpen: uiState.setPdfModalOpen,
+    setPartialDismissed: sse.setPartialDismissed,
     trackEvent,
   });
 
@@ -407,24 +309,24 @@ export function useSearchOrchestration() {
     // Core search
     filters,
     search,
-    buscarWithCollapse,
+    buscarWithCollapse: sse.buscarWithCollapse,
 
-    // UI state
-    showUpgradeModal,
-    setShowUpgradeModal,
-    upgradeSource,
-    handleShowUpgradeModal,
-    showKeyboardHelp,
-    setShowKeyboardHelp,
-    customizeOpen,
-    setCustomizeOpen,
-    showFirstUseTip,
-    dismissFirstUseTip,
-    drawerOpen,
-    setDrawerOpen,
-    lastSearchAvailable,
-    hasSearchedBefore,
-    isProfileComplete,
+    // UI state — delegated to useSearchState
+    showUpgradeModal: uiState.showUpgradeModal,
+    setShowUpgradeModal: uiState.setShowUpgradeModal,
+    upgradeSource: uiState.upgradeSource,
+    handleShowUpgradeModal: uiState.handleShowUpgradeModal,
+    showKeyboardHelp: uiState.showKeyboardHelp,
+    setShowKeyboardHelp: uiState.setShowKeyboardHelp,
+    customizeOpen: uiState.customizeOpen,
+    setCustomizeOpen: uiState.setCustomizeOpen,
+    showFirstUseTip: uiState.showFirstUseTip,
+    dismissFirstUseTip: uiState.dismissFirstUseTip,
+    drawerOpen: uiState.drawerOpen,
+    setDrawerOpen: uiState.setDrawerOpen,
+    lastSearchAvailable: uiState.lastSearchAvailable,
+    hasSearchedBefore: uiState.hasSearchedBefore,
+    isProfileComplete: uiState.isProfileComplete,
 
     // Onboarding
     showOnboardingBanner,
@@ -436,24 +338,24 @@ export function useSearchOrchestration() {
     restartSearchTour,
     restartResultsTour,
 
-    // Progress
-    progressAreaRef,
-    searchElapsed,
-    partialDismissed,
-    setPartialDismissed,
+    // Progress — delegated to useSearchSSE
+    progressAreaRef: sse.progressAreaRef,
+    searchElapsed: sse.searchElapsed,
+    partialDismissed: sse.partialDismissed,
+    setPartialDismissed: sse.setPartialDismissed,
+
+    // Backend
+    backendStatus: sse.backendStatus,
 
     // PDF
-    pdfLoading,
-    pdfModalOpen,
-    setPdfModalOpen,
+    pdfLoading: uiState.pdfLoading,
+    pdfModalOpen: uiState.pdfModalOpen,
+    setPdfModalOpen: uiState.setPdfModalOpen,
     handleGeneratePdf,
 
     // Error
     handleErrorBoundaryReset,
     handleLoadLastSearch,
-
-    // Backend
-    backendStatus,
 
     // Analytics
     trackEvent,

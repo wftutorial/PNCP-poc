@@ -329,7 +329,7 @@ class TestSupabaseLevelComposedRead:
                 return rj_result
             return None
 
-        with patch("search_cache.get_from_cache", side_effect=mock_get_from_cache):
+        with patch("cache.manager.get_from_cache", side_effect=mock_get_from_cache):
             result = await get_from_cache_composed(
                 "user-123",
                 {"setor_id": "engenharia", "ufs": ["SP", "RJ"], "status": None},
@@ -358,7 +358,7 @@ class TestSupabaseLevelComposedRead:
                 }
             return None  # RJ, MG, BA not cached
 
-        with patch("search_cache.get_from_cache", side_effect=mock_get_from_cache):
+        with patch("cache.manager.get_from_cache", side_effect=mock_get_from_cache):
             result = await get_from_cache_composed(
                 "user-123",
                 {"setor_id": "engenharia", "ufs": ["SP", "RJ", "MG", "BA"], "status": None},
@@ -379,7 +379,7 @@ class TestSupabaseLevelComposedRead:
             "is_stale": False,
         }
 
-        with patch("search_cache.get_from_cache", return_value=mock_result) as mock:
+        with patch("cache.manager.get_from_cache", return_value=mock_result) as mock:
             result = await get_from_cache_composed(
                 "user-123",
                 {"setor_id": "engenharia", "ufs": ["SP"], "status": None},
@@ -407,7 +407,7 @@ class TestSaveToCachePerUf:
             save_calls.append({"ufs": params.get("ufs"), "count": len(results)})
             return {"level": "supabase", "success": True}
 
-        with patch("search_cache.save_to_cache", side_effect=mock_save):
+        with patch("cache.manager.save_to_cache", side_effect=mock_save):
             result = await save_to_cache_per_uf(
                 "user-123",
                 {"setor_id": "engenharia", "ufs": ["SP", "RJ"], "status": None},
@@ -431,7 +431,7 @@ class TestSaveToCachePerUf:
         async def mock_save(user_id, params, results, sources, **kwargs):
             return {"level": "supabase", "success": True}
 
-        with patch("search_cache.save_to_cache", side_effect=mock_save):
+        with patch("cache.manager.save_to_cache", side_effect=mock_save):
             result = await save_to_cache_per_uf(
                 "user-123",
                 {"setor_id": "engenharia", "ufs": ["SP"], "status": None},

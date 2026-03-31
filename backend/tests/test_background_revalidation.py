@@ -28,11 +28,11 @@ class TestAC1_BackgroundTaskTriggered:
         mock_cb.is_degraded = False
 
         with (
-            patch("search_cache.compute_search_hash", return_value="abc123hash"),
-            patch("search_cache._mark_revalidating", new_callable=AsyncMock, return_value=True),
-            patch("search_cache._get_revalidation_lock") as mock_lock,
+            patch("cache.swr.compute_search_hash", return_value="abc123hash"),
+            patch("cache.swr._mark_revalidating", new_callable=AsyncMock, return_value=True),
+            patch("cache.swr._get_revalidation_lock") as mock_lock,
             patch("pncp_client.get_circuit_breaker", return_value=mock_cb),
-            patch("search_cache.asyncio") as mock_asyncio,
+            patch("cache.swr.asyncio") as mock_asyncio,
             patch("config.MAX_CONCURRENT_REVALIDATIONS", 3),
             patch("config.REVALIDATION_COOLDOWN_S", 600),
         ):
@@ -43,10 +43,10 @@ class TestAC1_BackgroundTaskTriggered:
 
             mock_asyncio.create_task = MagicMock()
 
-            import search_cache
-            search_cache._active_revalidations = 0
+            import cache.swr
+            cache.swr._active_revalidations = 0
             try:
-                result = await search_cache.trigger_background_revalidation(
+                result = await cache.swr.trigger_background_revalidation(
                     user_id="user-1",
                     params={"setor_id": 1, "ufs": ["SP"]},
                     request_data={
@@ -64,7 +64,7 @@ class TestAC1_BackgroundTaskTriggered:
                 coro = mock_asyncio.create_task.call_args[0][0]
                 coro.close()
             finally:
-                search_cache._active_revalidations = 0
+                cache.swr._active_revalidations = 0
 
     @pytest.mark.asyncio
     async def test_pipeline_helper_triggers_on_stale(self):
@@ -119,15 +119,15 @@ class TestAC2_CacheUpdated:
         """Successful fetch calls save_to_cache with results and metadata."""
         mock_results = [{"id": 1}, {"id": 2}, {"id": 3}]
 
-        import search_cache
-        search_cache._active_revalidations = 1
-        search_cache._revalidation_lock = None
+        import cache.swr
+        cache.swr._active_revalidations = 1
+        cache.swr._revalidation_lock = None
 
         with (
-            patch("search_cache.save_to_cache", new_callable=AsyncMock) as mock_save,
-            patch("search_cache._fetch_multi_source_for_revalidation", new_callable=AsyncMock, return_value=(mock_results, ["PNCP"])),
+            patch("cache.manager.save_to_cache", new_callable=AsyncMock) as mock_save,
+            patch("cache.swr._fetch_multi_source_for_revalidation", new_callable=AsyncMock, return_value=(mock_results, ["PNCP"])),
         ):
-            await search_cache._do_revalidation(
+            await cache.swr._do_revalidation(
                 user_id="user-1",
                 params={"setor_id": 1, "ufs": ["SP"]},
                 params_hash="abc123",
@@ -163,12 +163,12 @@ class TestAC3_Dedup:
         mock_cb.is_degraded = False
 
         with (
-            patch("search_cache.compute_search_hash", return_value="abc123"),
-            patch("search_cache._mark_revalidating", new_callable=AsyncMock, return_value=False),
+            patch("cache.swr.compute_search_hash", return_value="abc123"),
+            patch("cache.swr._mark_revalidating", new_callable=AsyncMock, return_value=False),
             patch("pncp_client.get_circuit_breaker", return_value=mock_cb),
             patch("config.REVALIDATION_COOLDOWN_S", 600),
         ):
-            from search_cache import trigger_background_revalidation
+            from cache.swr import trigger_background_revalidation
             result = await trigger_background_revalidation(
                 user_id="user-1",
                 params={"setor_id": 1, "ufs": ["SP"]},
@@ -187,7 +187,7 @@ class TestAC3_Dedup:
             patch("redis_pool.get_redis_pool", new_callable=AsyncMock, return_value=None),
             patch("redis_pool.get_fallback_cache", return_value=mock_cache),
         ):
-            from search_cache import _mark_revalidating
+            from cache.swr import _mark_revalidating
             result = await _mark_revalidating("hash123", 600)
             assert result is True
             mock_cache.setex.assert_called_once_with("revalidating:hash123", 600, "1")
@@ -202,7 +202,7 @@ class TestAC3_Dedup:
             patch("redis_pool.get_redis_pool", new_callable=AsyncMock, return_value=None),
             patch("redis_pool.get_fallback_cache", return_value=mock_cache),
         ):
-            from search_cache import _mark_revalidating
+            from cache.swr import _mark_revalidating
             result = await _mark_revalidating("hash123", 600)
             assert result is False
 
@@ -218,23 +218,23 @@ class TestAC4_BudgetLimit:
     @pytest.mark.asyncio
     async def test_budget_exceeded_skips_revalidation(self):
         """When _active_revalidations >= MAX, trigger returns False."""
-        import search_cache
-        original = search_cache._active_revalidations
+        import cache.swr
+        original = cache.swr._active_revalidations
         mock_cb = MagicMock()
         mock_cb.is_degraded = False
 
         try:
-            search_cache._active_revalidations = 3
+            cache.swr._active_revalidations = 3
 
             with (
-                patch("search_cache.compute_search_hash", return_value="abc123"),
-                patch("search_cache._mark_revalidating", new_callable=AsyncMock, return_value=True),
-                patch("search_cache._clear_revalidating", new_callable=AsyncMock),
+                patch("cache.swr.compute_search_hash", return_value="abc123"),
+                patch("cache.swr._mark_revalidating", new_callable=AsyncMock, return_value=True),
+                patch("cache.swr._clear_revalidating", new_callable=AsyncMock),
                 patch("pncp_client.get_circuit_breaker", return_value=mock_cb),
                 patch("config.MAX_CONCURRENT_REVALIDATIONS", 3),
                 patch("config.REVALIDATION_COOLDOWN_S", 600),
             ):
-                result = await search_cache.trigger_background_revalidation(
+                result = await cache.swr.trigger_background_revalidation(
                     user_id="user-1",
                     params={"setor_id": 1, "ufs": ["SP"]},
                     request_data={"ufs": ["SP"], "data_inicial": "2026-02-01", "data_final": "2026-02-10"},
@@ -242,17 +242,17 @@ class TestAC4_BudgetLimit:
 
                 assert result is False
         finally:
-            search_cache._active_revalidations = original
+            cache.swr._active_revalidations = original
 
     @pytest.mark.asyncio
     async def test_budget_slot_released_after_revalidation(self):
         """After _do_revalidation completes, _active_revalidations is decremented."""
-        import search_cache
-        search_cache._active_revalidations = 1
-        search_cache._revalidation_lock = None
+        import cache.swr
+        cache.swr._active_revalidations = 1
+        cache.swr._revalidation_lock = None
 
-        with patch("search_cache._fetch_multi_source_for_revalidation", new_callable=AsyncMock, return_value=([], [])):
-            await search_cache._do_revalidation(
+        with patch("cache.swr._fetch_multi_source_for_revalidation", new_callable=AsyncMock, return_value=([], [])):
+            await cache.swr._do_revalidation(
                 user_id="user-1",
                 params={"setor_id": 1, "ufs": ["SP"]},
                 params_hash="abc123",
@@ -260,7 +260,7 @@ class TestAC4_BudgetLimit:
                 search_id=None,
             )
 
-            assert search_cache._active_revalidations == 0
+            assert cache.swr._active_revalidations == 0
 
 
 # ---------------------------------------------------------------------------
@@ -274,20 +274,20 @@ class TestAC5_IndependentTimeout:
     @pytest.mark.asyncio
     async def test_revalidation_times_out_independently(self):
         """Fetch taking too long is canceled by REVALIDATION_TIMEOUT."""
-        import search_cache
-        search_cache._active_revalidations = 1
-        search_cache._revalidation_lock = None
+        import cache.swr
+        cache.swr._active_revalidations = 1
+        cache.swr._revalidation_lock = None
 
         async def slow_fetch(request_data):
             await asyncio.sleep(10)  # Will be canceled by timeout
             return ([], [])
 
         with (
-            patch("search_cache._fetch_multi_source_for_revalidation", side_effect=slow_fetch),
+            patch("cache.swr._fetch_multi_source_for_revalidation", side_effect=slow_fetch),
             patch("config.REVALIDATION_TIMEOUT", 0.1),  # 100ms timeout
-            patch("search_cache.record_cache_fetch_failure", new_callable=AsyncMock) as mock_fail,
+            patch("cache.manager.record_cache_fetch_failure", new_callable=AsyncMock) as mock_fail,
         ):
-            await search_cache._do_revalidation(
+            await cache.swr._do_revalidation(
                 user_id="user-1",
                 params={"setor_id": 1, "ufs": ["SP"]},
                 params_hash="timeout_hash",
@@ -297,7 +297,7 @@ class TestAC5_IndependentTimeout:
 
             # AC9: Timeout should record failure
             mock_fail.assert_called_once_with("user-1", "timeout_hash")
-            assert search_cache._active_revalidations == 0
+            assert cache.swr._active_revalidations == 0
 
 
 # ---------------------------------------------------------------------------
@@ -315,11 +315,11 @@ class TestAC6_CircuitBreakerCheck:
         mock_cb.is_degraded = True
 
         with (
-            patch("search_cache.compute_search_hash", return_value="abc123"),
+            patch("cache.swr.compute_search_hash", return_value="abc123"),
             patch("pncp_client.get_circuit_breaker", return_value=mock_cb),
             patch("config.REVALIDATION_COOLDOWN_S", 600),
         ):
-            from search_cache import trigger_background_revalidation
+            from cache.swr import trigger_background_revalidation
             result = await trigger_background_revalidation(
                 user_id="user-1",
                 params={"setor_id": 1, "ufs": ["SP"]},
@@ -335,11 +335,11 @@ class TestAC6_CircuitBreakerCheck:
         mock_cb.is_degraded = False
 
         with (
-            patch("search_cache.compute_search_hash", return_value="abc123"),
-            patch("search_cache._mark_revalidating", new_callable=AsyncMock, return_value=True),
-            patch("search_cache._get_revalidation_lock") as mock_lock,
+            patch("cache.swr.compute_search_hash", return_value="abc123"),
+            patch("cache.swr._mark_revalidating", new_callable=AsyncMock, return_value=True),
+            patch("cache.swr._get_revalidation_lock") as mock_lock,
             patch("pncp_client.get_circuit_breaker", return_value=mock_cb),
-            patch("search_cache.asyncio") as mock_asyncio,
+            patch("cache.swr.asyncio") as mock_asyncio,
             patch("config.MAX_CONCURRENT_REVALIDATIONS", 3),
             patch("config.REVALIDATION_COOLDOWN_S", 600),
         ):
@@ -350,10 +350,10 @@ class TestAC6_CircuitBreakerCheck:
 
             mock_asyncio.create_task = MagicMock()
 
-            import search_cache
-            search_cache._active_revalidations = 0
+            import cache.swr
+            cache.swr._active_revalidations = 0
             try:
-                result = await search_cache.trigger_background_revalidation(
+                result = await cache.swr.trigger_background_revalidation(
                     user_id="user-1",
                     params={"setor_id": 1, "ufs": ["SP"]},
                     request_data={"ufs": ["SP"], "data_inicial": "2026-02-01", "data_final": "2026-02-10"},
@@ -364,7 +364,7 @@ class TestAC6_CircuitBreakerCheck:
                 coro = mock_asyncio.create_task.call_args[0][0]
                 coro.close()
             finally:
-                search_cache._active_revalidations = 0
+                cache.swr._active_revalidations = 0
 
 
 # ---------------------------------------------------------------------------
@@ -382,16 +382,16 @@ class TestAC7_SSENotification:
         mock_tracker._is_complete = False
         mock_tracker.emit_revalidated = AsyncMock()
 
-        import search_cache
-        search_cache._active_revalidations = 1
-        search_cache._revalidation_lock = None
+        import cache.swr
+        cache.swr._active_revalidations = 1
+        cache.swr._revalidation_lock = None
 
         with (
-            patch("search_cache._fetch_multi_source_for_revalidation", new_callable=AsyncMock, return_value=([{"id": 1}], ["PNCP"])),
-            patch("search_cache.save_to_cache", new_callable=AsyncMock),
+            patch("cache.swr._fetch_multi_source_for_revalidation", new_callable=AsyncMock, return_value=([{"id": 1}], ["PNCP"])),
+            patch("cache.manager.save_to_cache", new_callable=AsyncMock),
             patch("progress.get_tracker", new_callable=AsyncMock, return_value=mock_tracker),
         ):
-            await search_cache._do_revalidation(
+            await cache.swr._do_revalidation(
                 user_id="user-1",
                 params={"setor_id": 1, "ufs": ["SP"]},
                 params_hash="abc123",
@@ -410,16 +410,16 @@ class TestAC7_SSENotification:
         mock_tracker._is_complete = True
         mock_tracker.emit_revalidated = AsyncMock()
 
-        import search_cache
-        search_cache._active_revalidations = 1
-        search_cache._revalidation_lock = None
+        import cache.swr
+        cache.swr._active_revalidations = 1
+        cache.swr._revalidation_lock = None
 
         with (
-            patch("search_cache._fetch_multi_source_for_revalidation", new_callable=AsyncMock, return_value=([{"id": 1}], ["PNCP"])),
-            patch("search_cache.save_to_cache", new_callable=AsyncMock),
+            patch("cache.swr._fetch_multi_source_for_revalidation", new_callable=AsyncMock, return_value=([{"id": 1}], ["PNCP"])),
+            patch("cache.manager.save_to_cache", new_callable=AsyncMock),
             patch("progress.get_tracker", new_callable=AsyncMock, return_value=mock_tracker),
         ):
-            await search_cache._do_revalidation(
+            await cache.swr._do_revalidation(
                 user_id="user-1",
                 params={"setor_id": 1, "ufs": ["SP"]},
                 params_hash="abc123",
@@ -432,16 +432,16 @@ class TestAC7_SSENotification:
     @pytest.mark.asyncio
     async def test_skips_sse_when_no_search_id(self):
         """If search_id is None, SSE notification is skipped entirely."""
-        import search_cache
-        search_cache._active_revalidations = 1
-        search_cache._revalidation_lock = None
+        import cache.swr
+        cache.swr._active_revalidations = 1
+        cache.swr._revalidation_lock = None
 
         with (
-            patch("search_cache._fetch_multi_source_for_revalidation", new_callable=AsyncMock, return_value=([{"id": 1}], ["PNCP"])),
-            patch("search_cache.save_to_cache", new_callable=AsyncMock),
+            patch("cache.swr._fetch_multi_source_for_revalidation", new_callable=AsyncMock, return_value=([{"id": 1}], ["PNCP"])),
+            patch("cache.manager.save_to_cache", new_callable=AsyncMock),
             patch("progress.get_tracker", new_callable=AsyncMock) as mock_get_tracker,
         ):
-            await search_cache._do_revalidation(
+            await cache.swr._do_revalidation(
                 user_id="user-1",
                 params={"setor_id": 1, "ufs": ["SP"]},
                 params_hash="abc123",
@@ -463,16 +463,16 @@ class TestAC8_StructuredLogging:
     @pytest.mark.asyncio
     async def test_revalidation_log_has_required_fields(self, caplog):
         """Log contains params_hash, trigger, duration_ms, result, new_results_count."""
-        import search_cache
-        search_cache._active_revalidations = 1
-        search_cache._revalidation_lock = None
+        import cache.swr
+        cache.swr._active_revalidations = 1
+        cache.swr._revalidation_lock = None
 
         with (
-            patch("search_cache._fetch_multi_source_for_revalidation", new_callable=AsyncMock, return_value=([{"id": 1}, {"id": 2}], ["PNCP"])),
-            patch("search_cache.save_to_cache", new_callable=AsyncMock),
-            caplog.at_level(logging.INFO, logger="search_cache"),
+            patch("cache.swr._fetch_multi_source_for_revalidation", new_callable=AsyncMock, return_value=([{"id": 1}, {"id": 2}], ["PNCP"])),
+            patch("cache.manager.save_to_cache", new_callable=AsyncMock),
+            caplog.at_level(logging.INFO, logger="cache.swr"),
         ):
-            await search_cache._do_revalidation(
+            await cache.swr._do_revalidation(
                 user_id="user-1",
                 params={"setor_id": 1, "ufs": ["SP"]},
                 params_hash="abc123hash45678",
@@ -498,21 +498,21 @@ class TestAC8_StructuredLogging:
     @pytest.mark.asyncio
     async def test_timeout_log_records_timeout_result(self, caplog):
         """Timeout revalidation logs result='timeout'."""
-        import search_cache
-        search_cache._active_revalidations = 1
-        search_cache._revalidation_lock = None
+        import cache.swr
+        cache.swr._active_revalidations = 1
+        cache.swr._revalidation_lock = None
 
         async def slow_fetch(request_data):
             await asyncio.sleep(10)
             return ([], [])
 
         with (
-            patch("search_cache._fetch_multi_source_for_revalidation", side_effect=slow_fetch),
+            patch("cache.swr._fetch_multi_source_for_revalidation", side_effect=slow_fetch),
             patch("config.REVALIDATION_TIMEOUT", 0.05),
-            patch("search_cache.record_cache_fetch_failure", new_callable=AsyncMock),
-            caplog.at_level(logging.INFO, logger="search_cache"),
+            patch("cache.manager.record_cache_fetch_failure", new_callable=AsyncMock),
+            caplog.at_level(logging.INFO, logger="cache.swr"),
         ):
-            await search_cache._do_revalidation(
+            await cache.swr._do_revalidation(
                 user_id="user-1",
                 params={"setor_id": 1, "ufs": ["SP"]},
                 params_hash="abc123hash45678",
@@ -540,16 +540,16 @@ class TestAC9_HealthMetadata:
     @pytest.mark.asyncio
     async def test_successful_revalidation_resets_health(self):
         """save_to_cache is called (which resets fail_streak=0 internally)."""
-        import search_cache
-        search_cache._active_revalidations = 1
-        search_cache._revalidation_lock = None
+        import cache.swr
+        cache.swr._active_revalidations = 1
+        cache.swr._revalidation_lock = None
 
         with (
-            patch("search_cache._fetch_multi_source_for_revalidation", new_callable=AsyncMock, return_value=([{"id": 1}], ["PNCP"])),
-            patch("search_cache.save_to_cache", new_callable=AsyncMock) as mock_save,
-            patch("search_cache.record_cache_fetch_failure", new_callable=AsyncMock) as mock_fail,
+            patch("cache.swr._fetch_multi_source_for_revalidation", new_callable=AsyncMock, return_value=([{"id": 1}], ["PNCP"])),
+            patch("cache.manager.save_to_cache", new_callable=AsyncMock) as mock_save,
+            patch("cache.manager.record_cache_fetch_failure", new_callable=AsyncMock) as mock_fail,
         ):
-            await search_cache._do_revalidation(
+            await cache.swr._do_revalidation(
                 user_id="user-1",
                 params={"setor_id": 1, "ufs": ["SP"]},
                 params_hash="abc123",
@@ -563,16 +563,16 @@ class TestAC9_HealthMetadata:
     @pytest.mark.asyncio
     async def test_failed_revalidation_records_failure(self):
         """On fetch error, record_cache_fetch_failure is called."""
-        import search_cache
-        search_cache._active_revalidations = 1
-        search_cache._revalidation_lock = None
+        import cache.swr
+        cache.swr._active_revalidations = 1
+        cache.swr._revalidation_lock = None
 
         with (
-            patch("search_cache._fetch_multi_source_for_revalidation", new_callable=AsyncMock, side_effect=ConnectionError("PNCP down")),
-            patch("search_cache.save_to_cache", new_callable=AsyncMock) as mock_save,
-            patch("search_cache.record_cache_fetch_failure", new_callable=AsyncMock) as mock_fail,
+            patch("cache.swr._fetch_multi_source_for_revalidation", new_callable=AsyncMock, side_effect=ConnectionError("PNCP down")),
+            patch("cache.manager.save_to_cache", new_callable=AsyncMock) as mock_save,
+            patch("cache.manager.record_cache_fetch_failure", new_callable=AsyncMock) as mock_fail,
         ):
-            await search_cache._do_revalidation(
+            await cache.swr._do_revalidation(
                 user_id="user-1",
                 params={"setor_id": 1, "ufs": ["SP"]},
                 params_hash="fail_hash",

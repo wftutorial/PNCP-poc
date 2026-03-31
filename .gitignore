@@ -275,6 +275,7 @@ outputs/minds/
 !**/fixtures/**/*.xlsx
 downloads/
 cache/
+!backend/cache/
 .cache/
 output/
 results/

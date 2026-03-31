@@ -526,7 +526,7 @@ class TestProactiveRefresh:
         mock_sb.execute.side_effect = read_calls
 
         with patch("supabase_client.get_supabase", return_value=mock_sb), \
-             patch("search_cache.trigger_background_revalidation", new_callable=AsyncMock, return_value=True) as mock_trigger:
+             patch("cache.swr.trigger_background_revalidation", new_callable=AsyncMock, return_value=True) as mock_trigger:
             result = await get_from_cache(
                 user_id="user-b02",
                 params={"setor_id": 1, "ufs": ["SP"]},
@@ -571,7 +571,7 @@ class TestProactiveRefresh:
         mock_sb.execute.side_effect = read_calls
 
         with patch("supabase_client.get_supabase", return_value=mock_sb), \
-             patch("search_cache.trigger_background_revalidation", new_callable=AsyncMock, return_value=True) as mock_trigger:
+             patch("cache.swr.trigger_background_revalidation", new_callable=AsyncMock, return_value=True) as mock_trigger:
             result = await get_from_cache(
                 user_id="user-b02",
                 params={"setor_id": 1, "ufs": ["SP"]},
@@ -616,7 +616,7 @@ class TestProactiveRefresh:
         mock_sb.execute.side_effect = read_calls
 
         with patch("supabase_client.get_supabase", return_value=mock_sb), \
-             patch("search_cache.trigger_background_revalidation", new_callable=AsyncMock, return_value=True) as mock_trigger:
+             patch("cache.swr.trigger_background_revalidation", new_callable=AsyncMock, return_value=True) as mock_trigger:
             result = await get_from_cache(
                 user_id="user-b02",
                 params={"setor_id": 1, "ufs": ["SP"]},

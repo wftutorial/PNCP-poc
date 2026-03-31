@@ -1,7 +1,7 @@
-"""CROSS-003: Feature Flags Runtime Admin API.
+"""CROSS-003 + DEBT-205: Feature Flags Admin + Public API.
 
-Admin-only endpoints to list, update, and reload feature flags at runtime
-WITHOUT requiring a container restart.
+Admin endpoints to list, update, and reload feature flags at runtime.
+Public endpoint for frontend consumption (DEBT-SYS-009 / DEBT-FE-008).
 
 Architecture:
 - Source of truth: _FEATURE_FLAG_REGISTRY in config/features.py
@@ -10,9 +10,10 @@ Architecture:
 - Priority: Redis override > env var > registry default
 
 Endpoints:
-- GET  /admin/feature-flags          -- List all flags with current values
-- PATCH /admin/feature-flags/{name}  -- Toggle a flag at runtime
-- POST /admin/feature-flags/reload   -- Reload all flags from env (clear overrides)
+- GET  /feature-flags                -- Public: list flags for frontend consumption
+- GET  /admin/feature-flags          -- Admin: list all flags with metadata
+- PATCH /admin/feature-flags/{name}  -- Admin: toggle a flag at runtime
+- POST /admin/feature-flags/reload   -- Admin: reload all flags from env
 """
 
 import logging
@@ -22,6 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path
 from pydantic import BaseModel, Field
 
 from admin import require_admin
+from auth import require_auth
 from config.features import (
     _FEATURE_FLAG_REGISTRY,
     _feature_flag_cache,
@@ -159,41 +161,138 @@ async def _resolve_flag_value(flag_name: str) -> tuple[bool, str]:
 # ---------------------------------------------------------------------------
 
 _FLAG_DESCRIPTIONS: dict[str, str] = {
+    # LLM & Classification
     "ENABLE_NEW_PRICING": "New pricing model (STORY-165)",
     "LLM_ARBITER_ENABLED": "LLM classification arbiter for relevance scoring",
-    "ZERO_RESULTS_RELAXATION_ENABLED": "Relax filters when zero results found",
     "LLM_ZERO_MATCH_ENABLED": "LLM zero-match classification (GPT-4.1-nano YES/NO)",
     "ASYNC_ZERO_MATCH_ENABLED": "Async background zero-match via ARQ jobs",
-    "CO_OCCURRENCE_RULES_ENABLED": "Keyword co-occurrence filtering rules",
-    "FILTER_DEBUG_MODE": "Verbose filter debug logging",
-    "ITEM_INSPECTION_ENABLED": "Item-level inspection for gray-zone contracts",
-    "USER_FEEDBACK_ENABLED": "User feedback collection on search results",
-    "PROXIMITY_CONTEXT_ENABLED": "Proximity context window for keyword matching",
-    "RATE_LIMITING_ENABLED": "Redis token-bucket rate limiting",
-    "SECTOR_RED_FLAGS_ENABLED": "Sector-specific red flag detection",
-    "TRIAL_EMAILS_ENABLED": "Automated trial lifecycle emails",
-    "TRIAL_PAYWALL_ENABLED": "Trial paywall after day 7 (limited results)",
-    "CACHE_REFRESH_ENABLED": "Background cache refresh for stale entries",
-    "SEARCH_ASYNC_ENABLED": "Async search via ARQ job queue",
+    "LLM_FALLBACK_PENDING_ENABLED": "LLM fallback to pending-review status on failure",
     "BID_ANALYSIS_ENABLED": "Deep bid analysis with LLM",
+    # Filter Pipeline
+    "ZERO_RESULTS_RELAXATION_ENABLED": "Relax filters when zero results found",
+    "CO_OCCURRENCE_RULES_ENABLED": "Keyword co-occurrence filtering rules",
+    "SECTOR_RED_FLAGS_ENABLED": "Sector-specific red flag detection",
+    "PROXIMITY_CONTEXT_ENABLED": "Proximity context window for keyword matching",
+    "ITEM_INSPECTION_ENABLED": "Item-level inspection for gray-zone contracts",
+    "FILTER_DEBUG_MODE": "Verbose filter debug logging (dev only)",
+    # Term Search Quality
     "TERM_SEARCH_LLM_AWARE": "LLM-aware term search quality parity",
     "TERM_SEARCH_SYNONYMS": "Synonym expansion for term search",
     "TERM_SEARCH_VIABILITY_GENERIC": "Generic viability for term search",
-    "TERM_SEARCH_FILTER_CONTEXT": "Filter context for term search",
-    "CACHE_WARMING_ENABLED": "Proactive cache warming on schedule",
-    "CACHE_LEGACY_KEY_FALLBACK": "Fallback to legacy cache key format",
-    "SHOW_CACHE_FALLBACK_BANNER": "Show cache fallback banner in frontend",
-    "HEALTH_CANARY_ENABLED": "PNCP health canary checks",
+    "TERM_SEARCH_FILTER_CONTEXT": "Filter context propagation for term search",
+    # Data Sources
+    "COMPRASGOV_ENABLED": "ComprasGov v3 data source (offline since 2026-03-03)",
     "PCP_V2_ENABLED": "Portal de Compras Publicas v2 data source",
-    "LLM_FALLBACK_PENDING_ENABLED": "LLM fallback to pending-review status",
+    "LICITAJA_ENABLED": "LicitaJa data source integration",
+    "DATALAKE_ENABLED": "ETL ingestion pipeline (pncp_raw_bids)",
+    "DATALAKE_QUERY_ENABLED": "Query local datalake instead of live APIs",
+    # Cache & Warming
+    "CACHE_WARMING_ENABLED": "Proactive cache warming on schedule",
+    "CACHE_REFRESH_ENABLED": "Background cache refresh for stale entries",
+    "CACHE_LEGACY_KEY_FALLBACK": "Fallback to legacy cache key format",
+    "CACHE_WARMING_POST_DEPLOY_ENABLED": "Cache warming after deploy (top-N queries)",
+    "SHOW_CACHE_FALLBACK_BANNER": "Show cache fallback banner in frontend",
+    "SERVE_EXPIRED_CACHE_ON_TOTAL_OUTAGE": "Serve expired cache during total outage",
+    # Search Pipeline
+    "SEARCH_ASYNC_ENABLED": "Async search via ARQ job queue",
     "PARTIAL_DATA_SSE_ENABLED": "Partial data delivery via SSE events",
-    "COMPRASGOV_ENABLED": "ComprasGov v3 data source",
+    "WARMUP_ENABLED": "Startup cache warm-up on boot",
+    # Cron & Operations
+    "HEALTH_CANARY_ENABLED": "PNCP health canary checks (5-min interval)",
+    "DIGEST_ENABLED": "Email digest cron job",
+    "ALERTS_ENABLED": "Alert notifications cron job",
+    "RECONCILIATION_ENABLED": "Stripe reconciliation cron job",
+    # Trial & Billing
+    "TRIAL_EMAILS_ENABLED": "Automated trial lifecycle emails",
+    "TRIAL_PAYWALL_ENABLED": "Trial paywall after day 7 (limited results)",
+    # Feature Gates (unreleased)
+    "ORGANIZATIONS_ENABLED": "Organizations feature (unreleased)",
+    "MESSAGES_ENABLED": "Messaging system",
+    "ALERTS_SYSTEM_ENABLED": "Alerts system feature (unreleased)",
+    "PARTNERS_ENABLED": "Partners feature (unreleased)",
+    # Infra
+    "METRICS_ENABLED": "Prometheus metrics collection",
+    "RATE_LIMITING_ENABLED": "Redis token-bucket rate limiting",
+    "USER_FEEDBACK_ENABLED": "User feedback collection on search results",
+    "USE_REDIS_CIRCUIT_BREAKER": "Redis-backed circuit breaker (vs in-memory)",
+    "COMPRASGOV_CB_ENABLED": "ComprasGov circuit breaker enabled",
+}
+
+
+# ---------------------------------------------------------------------------
+# DEBT-205: Flag lifecycle metadata (owner, category, lifecycle)
+# ---------------------------------------------------------------------------
+
+_FLAG_LIFECYCLE: dict[str, dict] = {
+    # LLM & Classification — permanent, core pipeline
+    "ENABLE_NEW_PRICING": {"owner": "billing", "category": "billing", "lifecycle": "permanent", "created": "2025-11"},
+    "LLM_ARBITER_ENABLED": {"owner": "search", "category": "llm", "lifecycle": "permanent", "created": "2025-10"},
+    "LLM_ZERO_MATCH_ENABLED": {"owner": "search", "category": "llm", "lifecycle": "permanent", "created": "2025-10"},
+    "ASYNC_ZERO_MATCH_ENABLED": {"owner": "search", "category": "llm", "lifecycle": "experimental", "created": "2025-12"},
+    "LLM_FALLBACK_PENDING_ENABLED": {"owner": "search", "category": "llm", "lifecycle": "permanent", "created": "2025-12"},
+    "BID_ANALYSIS_ENABLED": {"owner": "search", "category": "llm", "lifecycle": "permanent", "created": "2026-01"},
+    # Filter Pipeline — permanent
+    "ZERO_RESULTS_RELAXATION_ENABLED": {"owner": "search", "category": "filter", "lifecycle": "permanent", "created": "2025-11"},
+    "CO_OCCURRENCE_RULES_ENABLED": {"owner": "search", "category": "filter", "lifecycle": "permanent", "created": "2025-12"},
+    "SECTOR_RED_FLAGS_ENABLED": {"owner": "search", "category": "filter", "lifecycle": "permanent", "created": "2025-12"},
+    "PROXIMITY_CONTEXT_ENABLED": {"owner": "search", "category": "filter", "lifecycle": "permanent", "created": "2025-12"},
+    "ITEM_INSPECTION_ENABLED": {"owner": "search", "category": "filter", "lifecycle": "permanent", "created": "2025-12"},
+    "FILTER_DEBUG_MODE": {"owner": "search", "category": "debug", "lifecycle": "ops-toggle", "created": "2025-10"},
+    # Term Search Quality — experimental, remove when graduated
+    "TERM_SEARCH_LLM_AWARE": {"owner": "search", "category": "experimental", "lifecycle": "experimental", "created": "2026-01"},
+    "TERM_SEARCH_SYNONYMS": {"owner": "search", "category": "experimental", "lifecycle": "experimental", "created": "2026-01"},
+    "TERM_SEARCH_VIABILITY_GENERIC": {"owner": "search", "category": "experimental", "lifecycle": "experimental", "created": "2026-01"},
+    "TERM_SEARCH_FILTER_CONTEXT": {"owner": "search", "category": "experimental", "lifecycle": "experimental", "created": "2026-01"},
+    # Data Sources
+    "COMPRASGOV_ENABLED": {"owner": "data", "category": "source", "lifecycle": "ops-toggle", "created": "2025-10"},
+    "PCP_V2_ENABLED": {"owner": "data", "category": "source", "lifecycle": "permanent", "created": "2025-10"},
+    "LICITAJA_ENABLED": {"owner": "data", "category": "source", "lifecycle": "experimental", "created": "2026-02"},
+    "DATALAKE_ENABLED": {"owner": "data", "category": "source", "lifecycle": "permanent", "created": "2026-01"},
+    "DATALAKE_QUERY_ENABLED": {"owner": "data", "category": "source", "lifecycle": "permanent", "created": "2026-01"},
+    # Cache & Warming
+    "CACHE_WARMING_ENABLED": {"owner": "infra", "category": "cache", "lifecycle": "permanent", "created": "2025-12"},
+    "CACHE_REFRESH_ENABLED": {"owner": "infra", "category": "cache", "lifecycle": "permanent", "created": "2025-11"},
+    "CACHE_LEGACY_KEY_FALLBACK": {"owner": "infra", "category": "cache", "lifecycle": "deprecating", "created": "2026-02", "remove_after": "2026-06"},
+    "CACHE_WARMING_POST_DEPLOY_ENABLED": {"owner": "infra", "category": "cache", "lifecycle": "permanent", "created": "2026-02"},
+    "SHOW_CACHE_FALLBACK_BANNER": {"owner": "frontend", "category": "cache", "lifecycle": "ops-toggle", "created": "2026-02"},
+    "SERVE_EXPIRED_CACHE_ON_TOTAL_OUTAGE": {"owner": "infra", "category": "cache", "lifecycle": "permanent", "created": "2026-01"},
+    # Search Pipeline
+    "SEARCH_ASYNC_ENABLED": {"owner": "search", "category": "pipeline", "lifecycle": "experimental", "created": "2025-12"},
+    "PARTIAL_DATA_SSE_ENABLED": {"owner": "search", "category": "pipeline", "lifecycle": "permanent", "created": "2025-12"},
+    "WARMUP_ENABLED": {"owner": "infra", "category": "pipeline", "lifecycle": "permanent", "created": "2025-11"},
+    # Cron & Operations
+    "HEALTH_CANARY_ENABLED": {"owner": "infra", "category": "ops", "lifecycle": "permanent", "created": "2025-11"},
+    "DIGEST_ENABLED": {"owner": "email", "category": "ops", "lifecycle": "experimental", "created": "2025-12"},
+    "ALERTS_ENABLED": {"owner": "email", "category": "ops", "lifecycle": "permanent", "created": "2025-12"},
+    "RECONCILIATION_ENABLED": {"owner": "billing", "category": "ops", "lifecycle": "permanent", "created": "2025-12"},
+    # Trial & Billing
+    "TRIAL_EMAILS_ENABLED": {"owner": "billing", "category": "trial", "lifecycle": "permanent", "created": "2025-12"},
+    "TRIAL_PAYWALL_ENABLED": {"owner": "billing", "category": "trial", "lifecycle": "permanent", "created": "2025-12"},
+    # Feature Gates
+    "ORGANIZATIONS_ENABLED": {"owner": "product", "category": "gate", "lifecycle": "gate", "created": "2026-01"},
+    "MESSAGES_ENABLED": {"owner": "product", "category": "gate", "lifecycle": "gate", "created": "2025-12"},
+    "ALERTS_SYSTEM_ENABLED": {"owner": "product", "category": "gate", "lifecycle": "gate", "created": "2026-01"},
+    "PARTNERS_ENABLED": {"owner": "product", "category": "gate", "lifecycle": "gate", "created": "2026-01"},
+    # Infra
+    "METRICS_ENABLED": {"owner": "infra", "category": "infra", "lifecycle": "permanent", "created": "2025-11"},
+    "RATE_LIMITING_ENABLED": {"owner": "infra", "category": "infra", "lifecycle": "permanent", "created": "2025-11"},
+    "USER_FEEDBACK_ENABLED": {"owner": "product", "category": "infra", "lifecycle": "permanent", "created": "2025-12"},
+    "USE_REDIS_CIRCUIT_BREAKER": {"owner": "infra", "category": "infra", "lifecycle": "permanent", "created": "2025-12"},
+    "COMPRASGOV_CB_ENABLED": {"owner": "infra", "category": "infra", "lifecycle": "permanent", "created": "2026-02"},
 }
 
 
 # ---------------------------------------------------------------------------
 # Pydantic models
 # ---------------------------------------------------------------------------
+
+class FeatureFlagLifecycle(BaseModel):
+    owner: str = Field("", description="Team/domain that owns this flag")
+    category: str = Field("", description="Flag category (llm, filter, source, cache, etc.)")
+    lifecycle: str = Field("", description="permanent | experimental | ops-toggle | gate | deprecating")
+    created: str = Field("", description="Month created (YYYY-MM)")
+    remove_after: str | None = Field(None, description="Planned removal date (YYYY-MM) if deprecating")
+
 
 class FeatureFlagItem(BaseModel):
     name: str = Field(..., description="Flag name (e.g. LLM_ARBITER_ENABLED)")
@@ -202,12 +301,25 @@ class FeatureFlagItem(BaseModel):
     description: str = Field("", description="Human-readable description")
     env_var: str = Field("", description="Environment variable name")
     default: str = Field("", description="Registry default value")
+    lifecycle: FeatureFlagLifecycle | None = Field(None, description="Flag lifecycle metadata")
 
 
 class FeatureFlagListResponse(BaseModel):
     flags: list[FeatureFlagItem]
     total: int
     redis_available: bool
+
+
+class PublicFeatureFlagItem(BaseModel):
+    name: str = Field(..., description="Flag name")
+    value: bool = Field(..., description="Current effective value")
+    description: str = Field("", description="Human-readable description")
+    category: str = Field("", description="Flag category")
+
+
+class PublicFeatureFlagListResponse(BaseModel):
+    flags: list[PublicFeatureFlagItem]
+    total: int
 
 
 class FeatureFlagUpdateRequest(BaseModel):
@@ -252,6 +364,8 @@ async def list_feature_flags(
         value, source = await _resolve_flag_value(flag_name)
         env_var, default_str = _FEATURE_FLAG_REGISTRY[flag_name]
         description = _FLAG_DESCRIPTIONS.get(flag_name, "")
+        lc_data = _FLAG_LIFECYCLE.get(flag_name)
+        lifecycle = FeatureFlagLifecycle(**lc_data) if lc_data else None
 
         flags.append(FeatureFlagItem(
             name=flag_name,
@@ -260,6 +374,7 @@ async def list_feature_flags(
             description=description,
             env_var=env_var,
             default=default_str,
+            lifecycle=lifecycle,
         ))
 
     return FeatureFlagListResponse(
@@ -381,3 +496,36 @@ async def reload_flags_endpoint(
         overrides_cleared=total_cleared,
         message=f"All flags reloaded from environment. {total_cleared} override(s) cleared.",
     )
+
+
+# ---------------------------------------------------------------------------
+# DEBT-205: Public Feature Flags endpoint (for frontend consumption)
+# ---------------------------------------------------------------------------
+
+public_router = APIRouter(prefix="/feature-flags", tags=["feature-flags"])
+
+
+@public_router.get("", response_model=PublicFeatureFlagListResponse)
+async def list_public_feature_flags(
+    _user: dict = Depends(require_auth),
+):
+    """List all feature flags with current values (authenticated users).
+
+    DEBT-205 / DEBT-SYS-009: Public endpoint consumed by frontend via SWR.
+    Returns flag name, value, description, and category — no admin metadata.
+    """
+    flags: list[PublicFeatureFlagItem] = []
+    for flag_name in sorted(_FEATURE_FLAG_REGISTRY.keys()):
+        value, _source = await _resolve_flag_value(flag_name)
+        description = _FLAG_DESCRIPTIONS.get(flag_name, "")
+        lc_data = _FLAG_LIFECYCLE.get(flag_name, {})
+        category = lc_data.get("category", "other")
+
+        flags.append(PublicFeatureFlagItem(
+            name=flag_name,
+            value=value,
+            description=description,
+            category=category,
+        ))
+
+    return PublicFeatureFlagListResponse(flags=flags, total=len(flags))

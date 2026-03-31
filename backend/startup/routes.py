@@ -40,6 +40,7 @@ from routes.reports import router as reports_router
 from routes.blog_stats import router as blog_stats_router
 from routes.metrics_api import router as metrics_api_router
 from routes.feature_flags import router as feature_flags_router
+from routes.feature_flags import public_router as feature_flags_public_router
 
 _v1_routers = [
     admin_router, subscriptions_router, features_router, messages_router,
@@ -50,6 +51,7 @@ _v1_routers = [
     alerts_router, trial_emails_router, mfa_router, org_router, partners_router,
     sectors_public_router, reports_router, blog_stats_router, metrics_api_router,
     feature_flags_router,
+    feature_flags_public_router,
 ]
 
 

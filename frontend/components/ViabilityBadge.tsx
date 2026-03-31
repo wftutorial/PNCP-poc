@@ -43,22 +43,39 @@ export default function ViabilityBadge({
       label: string;
       ariaLabel: string;
       bg: string;
+      /** DEBT-FE-018: Level-specific icon for WCAG 1.4.1 (Use of Color) compliance */
+      icon: React.ReactNode;
     }
   > = {
     alta: {
       label: "Viabilidade alta",
       ariaLabel: "Viabilidade alta para sua empresa",
       bg: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300",
+      icon: (
+        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+        </svg>
+      ),
     },
     media: {
       label: "Viabilidade média",
       ariaLabel: "Viabilidade média para sua empresa",
       bg: "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300",
+      icon: (
+        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M12 3l9.66 16.59A1 1 0 0120.66 21H3.34a1 1 0 01-.86-1.41L12 3z" />
+        </svg>
+      ),
     },
     baixa: {
       label: "Viabilidade baixa",
       ariaLabel: "Viabilidade baixa para sua empresa",
       bg: "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400",
+      icon: (
+        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      ),
     },
   };
 
@@ -81,24 +98,6 @@ export default function ViabilityBadge({
     );
   }
 
-  // Icon: chart bar for viability (distinct from shield for confidence)
-  const icon = (
-    <svg
-      className="w-3 h-3"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      aria-hidden="true"
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-      />
-    </svg>
-  );
-
   return (
     <ViabilityTooltip
       tooltipLines={tooltipLines}
@@ -106,7 +105,7 @@ export default function ViabilityBadge({
       bg={c.bg}
       level={level}
     >
-      {icon}
+      {c.icon}
       {c.label}
     </ViabilityTooltip>
   );

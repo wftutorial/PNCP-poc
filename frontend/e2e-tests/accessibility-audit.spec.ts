@@ -189,4 +189,106 @@ test.describe('Accessibility Audits — @axe-core/playwright', () => {
     const result = await auditPage(page, 'Planos');
     console.log(`Planos: ${result.total} total violations (${result.serious.length} serious, ${result.moderate.length} moderate)`);
   });
+
+  // =======================================================================
+  // DEBT-205 / DEBT-FE-013: Expanded from 5 to 10 pages
+  // =======================================================================
+
+  // -----------------------------------------------------------------------
+  // 6. Landing page (public)
+  // -----------------------------------------------------------------------
+  test('AC1.6: Landing page has 0 critical a11y violations', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(500);
+
+    const result = await auditPage(page, 'Landing');
+    console.log(`Landing: ${result.total} total violations (${result.serious.length} serious, ${result.moderate.length} moderate)`);
+  });
+
+  // -----------------------------------------------------------------------
+  // 7. Signup page (public)
+  // -----------------------------------------------------------------------
+  test('AC1.7: Signup page has 0 critical a11y violations', async ({ page }) => {
+    await page.goto('/signup');
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForSelector('form', { timeout: 10000 }).catch(() => {});
+    await page.waitForTimeout(500);
+
+    const result = await auditPage(page, 'Signup');
+    console.log(`Signup: ${result.total} total violations (${result.serious.length} serious, ${result.moderate.length} moderate)`);
+  });
+
+  // -----------------------------------------------------------------------
+  // 8. Historico page (authenticated)
+  // -----------------------------------------------------------------------
+  test('AC1.8: Historico page has 0 critical a11y violations', async ({ page }) => {
+    await mockAuthAPI(page, 'user');
+    await mockMeAPI(page, {
+      plan_id: 'smartlic_pro',
+      plan_name: 'SmartLic Pro',
+      credits_remaining: 50,
+    });
+
+    // Mock sessions/history endpoint
+    await page.route('**/api/sessions**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ sessions: [], total: 0 }),
+      });
+    });
+
+    await page.goto('/historico');
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(1000);
+
+    const result = await auditPage(page, 'Historico');
+    console.log(`Historico: ${result.total} total violations (${result.serious.length} serious, ${result.moderate.length} moderate)`);
+  });
+
+  // -----------------------------------------------------------------------
+  // 9. Conta page (authenticated — account settings)
+  // -----------------------------------------------------------------------
+  test('AC1.9: Conta page has 0 critical a11y violations', async ({ page }) => {
+    await mockAuthAPI(page, 'user');
+    await mockMeAPI(page, {
+      plan_id: 'smartlic_pro',
+      plan_name: 'SmartLic Pro',
+      credits_remaining: 50,
+    });
+
+    // Mock subscription status
+    await page.route('**/api/subscription**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 'active',
+          plan_id: 'smartlic_pro',
+          plan_name: 'SmartLic Pro',
+          current_period_end: '2026-04-30',
+        }),
+      });
+    });
+
+    await page.goto('/conta');
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(1000);
+
+    const result = await auditPage(page, 'Conta');
+    console.log(`Conta: ${result.total} total violations (${result.serious.length} serious, ${result.moderate.length} moderate)`);
+  });
+
+  // -----------------------------------------------------------------------
+  // 10. Ajuda page (public help center)
+  // -----------------------------------------------------------------------
+  test('AC1.10: Ajuda page has 0 critical a11y violations', async ({ page }) => {
+    await page.goto('/ajuda');
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(500);
+
+    const result = await auditPage(page, 'Ajuda');
+    console.log(`Ajuda: ${result.total} total violations (${result.serious.length} serious, ${result.moderate.length} moderate)`);
+  });
 });

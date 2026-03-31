@@ -47,7 +47,7 @@ export function SourcesUnavailable({
   const retryDisabled = cooldown > 0 || retrying;
 
   return (
-    <div className="mt-8 flex flex-col items-center justify-center p-8 sm:p-12 bg-surface-0 dark:bg-surface-1 rounded-card border border-border animate-fade-in-up">
+    <div role="status" aria-live="polite" className="mt-8 flex flex-col items-center justify-center p-8 sm:p-12 bg-surface-0 dark:bg-surface-1 rounded-card border border-border animate-fade-in-up">
       {/* Friendly refresh icon (circular arrow) */}
       <svg
         className="w-16 h-16 text-ink-muted mb-6"

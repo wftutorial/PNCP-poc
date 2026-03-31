@@ -71,6 +71,7 @@ export function PaymentFailedBanner() {
     return (
       <div
         role="status"
+        aria-live="polite"
         data-testid="payment-recovered-banner"
         className={`fixed top-0 left-0 right-0 z-[9999] bg-green-50 border-b-2 border-green-400 px-4 py-3 shadow-lg transition-opacity duration-1000 ${fadeOut ? "opacity-0" : "opacity-100"}`}
       >

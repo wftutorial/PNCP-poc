@@ -23,6 +23,11 @@ LLM_ARBITER_TEMPERATURE: float = float(os.getenv("LLM_ARBITER_TEMPERATURE", "0")
 # Accepts OPENAI_TIMEOUT_S (preferred) or LLM_TIMEOUT_S (legacy alias).
 LLM_TIMEOUT_S: float = float(os.getenv("OPENAI_TIMEOUT_S", os.getenv("LLM_TIMEOUT_S", "5")))
 
+# DEBT-SYS-008: Per-future timeout for ThreadPoolExecutor LLM calls (filter/llm.py).
+# Used by zero_match_batch, zero_match_individual, and arbiter phases.
+# 20s = 4× p99 batch latency. Prevents thread starvation on LLM hangs.
+LLM_FUTURE_TIMEOUT_S: float = float(os.getenv("LLM_FUTURE_TIMEOUT_S", "20"))
+
 # Term density thresholds (STORY-248 reviewed 2026-02-14 — kept unchanged)
 TERM_DENSITY_HIGH_THRESHOLD: float = float(os.getenv("TERM_DENSITY_HIGH_THRESHOLD", "0.05"))
 TERM_DENSITY_MEDIUM_THRESHOLD: float = float(os.getenv("TERM_DENSITY_MEDIUM_THRESHOLD", "0.02"))

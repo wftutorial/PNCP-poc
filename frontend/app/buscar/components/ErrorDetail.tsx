@@ -82,7 +82,7 @@ export function ErrorDetail({ error, searchId, errorMessage, timestamp }: ErrorD
   };
 
   return (
-    <div className="mt-2" data-testid="error-detail" role="alert" aria-label="Detalhes técnicos do erro">
+    <div className="mt-2" data-testid="error-detail" role="alert" aria-live="assertive" aria-label="Detalhes técnicos do erro">
       {/* CRIT-002 AC4: Error classification badge */}
       {errorCode && ERROR_CODE_LABELS[errorCode] && (
         <div className="mb-2">

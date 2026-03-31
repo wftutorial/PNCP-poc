@@ -226,61 +226,6 @@ def reset_jwks_client() -> None:
     logger.info("JWKS client reset — will re-initialize on next request")
 
 
-def _decode_with_fallback(token: str, primary_key: Any, primary_algorithms: list[str]) -> dict:
-    """Attempt JWT decode with the alternate algorithm for backward compatibility.
-
-    During the HS256→ES256 transition (AC4), tokens may be signed with either
-    algorithm. If the primary decode (based on key detection) fails, this
-    function tries the other algorithm using the symmetric secret.
-
-    This handles the case where:
-      - Server is configured for ES256 (JWKS/PEM) but receives an old HS256 token
-      - Server is configured for HS256 but receives a new ES256 token (limited —
-        requires JWKS or PEM key to be available for ES256 verification)
-
-    Raises the original exception if the fallback also fails.
-    """
-    jwt_secret = os.getenv("SUPABASE_JWT_SECRET", "")
-
-    if "HS256" in primary_algorithms and jwt_secret and not _is_pem_key(jwt_secret):
-        # Primary was HS256 — try ES256 via JWKS if available
-        jwks = _get_jwks_client()
-        if jwks is not None:
-            try:
-                signing_key = jwks.get_signing_key_from_jwt(token)
-                payload = jwt.decode(
-                    token,
-                    signing_key.key,
-                    algorithms=["ES256"],
-                    audience="authenticated",
-                )
-                logger.info("JWT fallback: decoded with ES256 (JWKS) after HS256 failed")
-                return payload
-            except Exception:
-                pass
-        # No JWKS available or JWKS also failed — cannot try ES256 without a key
-        raise jwt.InvalidTokenError("Fallback ES256 decode not possible without JWKS")
-
-    elif "ES256" in primary_algorithms and jwt_secret and not _is_pem_key(jwt_secret):
-        # Primary was ES256 — try HS256 with the symmetric secret
-        try:
-            payload = jwt.decode(
-                token,
-                jwt_secret,
-                algorithms=["HS256"],
-                audience="authenticated",
-            )
-            logger.info("JWT fallback: decoded with HS256 after ES256 failed")
-            return payload
-        except Exception:
-            raise jwt.InvalidTokenError("Fallback HS256 decode also failed")
-
-    elif "ES256" in primary_algorithms and jwt_secret and _is_pem_key(jwt_secret):
-        # Primary was ES256 with PEM key — no HS256 fallback possible (no symmetric secret)
-        raise jwt.InvalidTokenError("ES256 PEM decode failed, no HS256 secret available")
-
-    # No meaningful fallback available
-    raise jwt.InvalidTokenError("No fallback algorithm available")
 
 
 async def get_current_user(
@@ -356,21 +301,13 @@ async def get_current_user(
                 algorithms=algorithms,
                 audience="authenticated",  # Supabase default audience
             )
-        except jwt.InvalidAlgorithmError:
-            # AC4: Backward compatibility — if primary algorithm fails,
-            # retry with the alternate algorithm during HS256→ES256 transition.
-            # e.g. token signed with HS256 but we tried ES256, or vice versa.
-            payload = _decode_with_fallback(token, key, algorithms)
         except jwt.ExpiredSignatureError:
             logger.warning("JWT token expired")
             raise HTTPException(status_code=401, detail="Token expirado")
         except jwt.InvalidTokenError as e:
-            # Primary decode failed — attempt fallback before giving up (AC4)
-            try:
-                payload = _decode_with_fallback(token, key, algorithms)
-            except Exception:
-                logger.warning(f"Invalid JWT token: {type(e).__name__}")
-                raise HTTPException(status_code=401, detail="Token invalido")
+            # DEBT-SYS-015: HS256→ES256 transition complete — single-algorithm path only.
+            logger.warning(f"Invalid JWT token: {type(e).__name__}")
+            raise HTTPException(status_code=401, detail="Token invalido")
 
         # Extract user data from JWT claims
         user_id = payload.get("sub")

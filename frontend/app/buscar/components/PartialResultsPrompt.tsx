@@ -58,7 +58,7 @@ export function PartialResultsPrompt({
   }
 
   return (
-    <div className="animate-fade-in-up rounded-card bg-surface-0 dark:bg-surface-0 border-2 border-amber-500 dark:border-amber-600 p-6 shadow-lg">
+    <div aria-live="polite" aria-atomic="false" className="animate-fade-in-up rounded-card bg-surface-0 dark:bg-surface-0 border-2 border-amber-500 dark:border-amber-600 p-6 shadow-lg">
       {/* Icon and Message */}
       <div className="flex items-start gap-4 mb-4">
         <div className="flex-shrink-0 w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">

@@ -17,7 +17,7 @@ class TestCacheSchemaCheck:
     @pytest.mark.asyncio
     async def test_check_cache_schema_with_rpc(self):
         """AC13: _check_cache_schema() works when RPC exists and returns columns."""
-        from main import _check_cache_schema
+        from startup.lifespan import _check_cache_schema
 
         mock_db = MagicMock()
         mock_result = MagicMock()
@@ -44,7 +44,7 @@ class TestCacheSchemaCheck:
     @pytest.mark.asyncio
     async def test_check_cache_schema_rpc_fallback(self):
         """AC14: _check_cache_schema() does fallback when RPC raises Exception."""
-        from main import _check_cache_schema
+        from startup.lifespan import _check_cache_schema
 
         mock_db = MagicMock()
         # RPC fails
@@ -63,7 +63,7 @@ class TestCacheSchemaCheck:
     @pytest.mark.asyncio
     async def test_check_cache_schema_both_fail(self):
         """AC14b: _check_cache_schema() handles both RPC and fallback failures gracefully."""
-        from main import _check_cache_schema
+        from startup.lifespan import _check_cache_schema
 
         mock_db = MagicMock()
         # Both RPC and direct query fail
@@ -233,7 +233,7 @@ class TestStartupSchemaValidation:
     @pytest.mark.asyncio
     async def test_startup_succeeds_with_valid_schema(self):
         """AC16c: Schema contract validation allows startup when all columns present."""
-        from main import lifespan
+        from startup.lifespan import lifespan
         from fastapi import FastAPI
         import asyncio
 

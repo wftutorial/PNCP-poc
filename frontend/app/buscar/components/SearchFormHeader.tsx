@@ -146,13 +146,19 @@ export default function SearchFormHeader({
                 </div>
               </div>
             ) : (
-              <CustomSelect
-                id="setor"
-                value={setorId}
-                options={setores.map(s => ({ value: s.id, label: s.name, description: s.description }))}
-                onChange={(value) => { setSetorId(value); clearResult(); }}
-                placeholder="Ex: TI, Engenharia, Facilities, Saúde..."
-              />
+              <>
+                <CustomSelect
+                  id="setor"
+                  value={setorId}
+                  options={setores.map(s => ({ value: s.id, label: s.name, description: s.description }))}
+                  onChange={(value) => { setSetorId(value); clearResult(); }}
+                  placeholder="Ex: TI, Engenharia, Facilities, Saúde..."
+                  ariaDescribedBy="setor-hint"
+                />
+                <p id="setor-hint" className="sr-only">
+                  Selecione o setor de atuação da sua empresa para encontrar licitações relevantes.
+                </p>
+              </>
             )}
           </div>
         )}

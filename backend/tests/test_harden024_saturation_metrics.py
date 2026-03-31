@@ -177,7 +177,7 @@ class TestPeriodicSaturationMetrics:
     @pytest.mark.asyncio
     async def test_periodic_task_reports_metrics(self):
         """AC6: _periodic_saturation_metrics sets all gauges each cycle."""
-        from main import _periodic_saturation_metrics, _SATURATION_INTERVAL
+        from startup.lifespan import _periodic_saturation_metrics, _SATURATION_INTERVAL
 
         # Verify interval is 30s
         assert _SATURATION_INTERVAL == 30
@@ -241,7 +241,7 @@ class TestPeriodicSaturationMetrics:
     @pytest.mark.asyncio
     async def test_periodic_task_handles_errors(self):
         """AC6: Task continues on errors (doesn't crash)."""
-        from main import _periodic_saturation_metrics
+        from startup.lifespan import _periodic_saturation_metrics
 
         with patch("startup.lifespan._SATURATION_INTERVAL", 0.01), \
              patch("redis_pool.get_pool_stats", side_effect=RuntimeError("test")):
@@ -258,7 +258,7 @@ class TestPeriodicSaturationMetrics:
     @pytest.mark.asyncio
     async def test_periodic_task_cancellation(self):
         """AC6: Task exits cleanly on cancellation."""
-        from main import _periodic_saturation_metrics
+        from startup.lifespan import _periodic_saturation_metrics
 
         with patch("startup.lifespan._SATURATION_INTERVAL", 0.01), \
              patch("redis_pool.get_pool_stats", return_value={"used": 0, "max": 0}), \

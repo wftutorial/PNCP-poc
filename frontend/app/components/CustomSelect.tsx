@@ -30,6 +30,7 @@ export interface CustomSelectProps {
   placeholder?: string;
   className?: string;
   disabled?: boolean;
+  ariaDescribedBy?: string;
 }
 
 export function CustomSelect({
@@ -41,6 +42,7 @@ export function CustomSelect({
   placeholder = "Selecione uma opção",
   className = "",
   disabled = false,
+  ariaDescribedBy,
 }: CustomSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
@@ -181,6 +183,7 @@ export function CustomSelect({
         aria-haspopup="listbox"
         aria-controls={`${id}-listbox`}
         aria-activedescendant={isOpen && highlightedIndex >= 0 ? `${id}-option-${highlightedIndex}` : undefined}
+        aria-describedby={ariaDescribedBy}
         disabled={disabled}
         onKeyDown={handleKeyDown}
         onClick={() => !disabled && setIsOpen(!isOpen)}

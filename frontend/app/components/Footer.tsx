@@ -16,7 +16,7 @@ import { StatusFooterBadge, ManageCookiesButton } from '@/app/components/FooterC
  */
 export default function Footer() {
   return (
-    <footer className="relative bg-surface-1 text-ink">
+    <footer id="site-footer" className="relative bg-surface-1 text-ink">
       {/* Gradient border-top separator */}
       <div
         className="absolute top-0 left-0 right-0 h-[2px]"

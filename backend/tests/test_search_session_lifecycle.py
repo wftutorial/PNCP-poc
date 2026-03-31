@@ -376,7 +376,7 @@ class TestSigtermMarksInflight:
             MagicMock(data=[{"id": "s1"}, {"id": "s2"}])
         )
 
-        from main import _mark_inflight_sessions_timed_out
+        from startup.lifespan import _mark_inflight_sessions_timed_out
 
         await _mark_inflight_sessions_timed_out()
 
@@ -399,7 +399,7 @@ class TestSigtermMarksInflight:
         """T9b: _mark_inflight_sessions_timed_out catches exceptions on shutdown."""
         mock_get_sb.side_effect = Exception("DB connection lost")
 
-        from main import _mark_inflight_sessions_timed_out
+        from startup.lifespan import _mark_inflight_sessions_timed_out
 
         # Must NOT raise — shutdown must not be blocked
         await _mark_inflight_sessions_timed_out()

@@ -25,7 +25,10 @@ export function AppHeader({ extraControls, statusSlot }: AppHeaderProps) {
   const defaultStatusSlot = <QuotaBadge />;
 
   return (
-    <header className="sticky top-0 z-50 bg-[var(--surface-0)]/95 backdrop-blur-md border-b border-[var(--border)] shadow-glass">
+    <header id="site-header" className="sticky top-0 z-50 bg-[var(--surface-0)]/95 backdrop-blur-md border-b border-[var(--border)] shadow-glass">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:rounded focus:bg-brand-navy focus:px-3 focus:py-1.5 focus:text-sm focus:text-white focus:shadow-md">
+        Ir para o conteúdo principal
+      </a>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link

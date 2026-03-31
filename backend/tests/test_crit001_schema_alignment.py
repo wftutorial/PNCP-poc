@@ -116,7 +116,7 @@ class TestSchemaHealthCheck:
     @pytest.mark.asyncio
     async def test_hc_t01_detects_missing_column(self, caplog):
         """HC-T01: Health check detects missing column and logs CRITICAL."""
-        from main import _check_cache_schema
+        from startup.lifespan import _check_cache_schema
 
         mock_result = MagicMock()
         mock_result.data = [
@@ -138,7 +138,7 @@ class TestSchemaHealthCheck:
     @pytest.mark.asyncio
     async def test_hc_t02_passes_with_correct_schema(self, caplog):
         """HC-T02: Health check passes with correct schema and logs INFO."""
-        from main import _check_cache_schema
+        from startup.lifespan import _check_cache_schema
         from models.cache import SearchResultsCacheRow
 
         mock_result = MagicMock()
@@ -158,7 +158,7 @@ class TestSchemaHealthCheck:
     @pytest.mark.asyncio
     async def test_hc_t03_survives_db_unavailable(self):
         """HC-T03: Health check survives unavailable DB (doesn't crash)."""
-        from main import _check_cache_schema
+        from startup.lifespan import _check_cache_schema
 
         with patch("supabase_client.get_supabase", side_effect=Exception("DB unavailable")):
             # Should not raise

@@ -131,7 +131,7 @@ export function Sidebar() {
       </div>
 
       {/* Primary Navigation — SAB-003 AC3: divide-y for dark mode separation */}
-      <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-1 divide-y divide-[var(--border)]" aria-label="Navegação principal">
+      <nav id="site-nav" className="flex-1 overflow-y-auto py-3 px-2 space-y-1 divide-y divide-[var(--border)]" aria-label="Navegação principal">
         {PRIMARY_NAV.map(renderNavItem)}
       </nav>
 

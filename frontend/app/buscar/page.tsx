@@ -42,7 +42,10 @@ function HomePageContent() {
   return (
     <div className="min-h-screen">
       {/* Page Header */}
-      <header className="sticky top-0 z-40 bg-[var(--surface-0)] backdrop-blur-sm supports-[backdrop-filter]:bg-[var(--surface-0)]/95 border-b border-[var(--border)] shadow-sm">
+      <header id="site-header" className="sticky top-0 z-40 bg-[var(--surface-0)] backdrop-blur-sm supports-[backdrop-filter]:bg-[var(--surface-0)]/95 border-b border-[var(--border)] shadow-sm">
+        <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:rounded focus:bg-brand-navy focus:px-3 focus:py-1.5 focus:text-sm focus:text-white focus:shadow-md">
+          Ir para o conteúdo principal
+        </a>
         <div className="max-w-5xl mx-auto px-4 sm:px-6 flex items-center justify-between h-14">
           <div className="flex items-center gap-3">
             <Link href="/buscar" className="lg:hidden text-xl font-bold text-brand-navy hover:text-brand-blue transition-colors">

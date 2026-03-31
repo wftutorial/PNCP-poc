@@ -16,6 +16,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from typing import Callable, Dict, List, Optional, Tuple
 
+from config.features import LLM_FUTURE_TIMEOUT_S
 from filter.keywords import _strip_org_context
 from filter.utils import get_valor_from_lic
 
@@ -516,7 +517,7 @@ def _run_zero_match_batch(
                 )
                 break
 
-            done, pending = wait(pending, timeout=20, return_when=FIRST_COMPLETED)
+            done, pending = wait(pending, timeout=LLM_FUTURE_TIMEOUT_S, return_when=FIRST_COMPLETED)
 
             if not done:
                 from metrics import LLM_BATCH_TIMEOUT
@@ -636,7 +637,7 @@ def _run_zero_match_individual(
                 )
                 break
 
-            done, pending = wait(pending, timeout=20, return_when=FIRST_COMPLETED)
+            done, pending = wait(pending, timeout=LLM_FUTURE_TIMEOUT_S, return_when=FIRST_COMPLETED)
 
             if not done:
                 from metrics import LLM_BATCH_TIMEOUT
@@ -774,7 +775,7 @@ def run_arbiter(
         }
         pending = set(futures.keys())
         while pending:
-            done, pending = wait(pending, timeout=20, return_when=FIRST_COMPLETED)
+            done, pending = wait(pending, timeout=LLM_FUTURE_TIMEOUT_S, return_when=FIRST_COMPLETED)
 
             if not done:
                 from metrics import LLM_BATCH_TIMEOUT

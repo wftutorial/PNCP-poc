@@ -80,7 +80,7 @@ class TestSchemaContract:
 
     def test_schema_contract_detects_missing_columns(self):
         """AC15: Schema contract validation detects missing columns."""
-        from schema_contract import validate_schema_contract
+        from schemas.contract import validate_schema_contract
 
         mock_db = MagicMock()
 
@@ -129,7 +129,7 @@ class TestSchemaContract:
 
     def test_schema_contract_all_columns_present(self):
         """AC16: Schema contract with all columns present passes."""
-        from schema_contract import validate_schema_contract
+        from schemas.contract import validate_schema_contract
 
         mock_db = MagicMock()
 
@@ -175,7 +175,7 @@ class TestSchemaContract:
 
     def test_schema_contract_rpc_unavailable_fallback(self):
         """AC16a: Schema contract handles RPC unavailable with graceful fallback."""
-        from schema_contract import validate_schema_contract
+        from schemas.contract import validate_schema_contract
 
         mock_db = MagicMock()
 
@@ -193,7 +193,7 @@ class TestSchemaContract:
 
     def test_schema_contract_table_not_exists(self):
         """AC16b: Schema contract detects when entire table is missing."""
-        from schema_contract import validate_schema_contract
+        from schemas.contract import validate_schema_contract
 
         mock_db = MagicMock()
 
@@ -219,7 +219,7 @@ class TestStartupSchemaValidation:
         """SLA-002: Schema contract failure logs CRITICAL but does NOT raise SystemExit."""
 
         # Mock the schema validation to return failure
-        with patch("schema_contract.validate_schema_contract") as mock_validate:
+        with patch("schemas.contract.validate_schema_contract") as mock_validate:
             mock_validate.return_value = (False, ["search_sessions.status"])
 
             with patch("supabase_client.get_supabase"):
@@ -240,7 +240,7 @@ class TestStartupSchemaValidation:
         app = FastAPI()
 
         # Mock the schema validation to return success
-        with patch("schema_contract.validate_schema_contract") as mock_validate:
+        with patch("schemas.contract.validate_schema_contract") as mock_validate:
             mock_validate.return_value = (True, [])
 
             with patch("supabase_client.get_supabase"):

@@ -250,7 +250,7 @@ async def lifespan(app_instance: FastAPI):
     logger.info("GTM-CRIT-005: Circuit breakers initialized from Redis (pncp, pcp, comprasgov)")
 
     # Schema contract validation
-    from schema_contract import validate_schema_contract
+    from schemas.contract import validate_schema_contract
     try:
         from supabase_client import get_supabase
         db = get_supabase()

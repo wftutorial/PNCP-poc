@@ -609,7 +609,7 @@ export function useSearchExecution(params: UseSearchExecutionParams): UseSearchE
         });
       } else if (data.licitacoes && data.licitacoes.length > 20) {
         // ISSUE-055: Auto-sort by relevance when majority of results are low confidence
-        const lowCount = data.licitacoes.filter((l: { confidence?: string }) => l.confidence === "low").length;
+        const lowCount = data.licitacoes.filter((l) => l.confidence === "low").length;
         if (lowCount > data.licitacoes.length * 0.5) {
           filters.setOrdenacao("relevancia");
         }

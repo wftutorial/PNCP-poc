@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import FocusTrap from "focus-trap-react";
 import { useAnalytics } from "../../hooks/useAnalytics";
 import { GlassCard } from "./ui/GlassCard";
 import { PlanToggle, BillingPeriod } from "../../components/subscriptions/PlanToggle";
@@ -65,6 +66,15 @@ export function TrialConversionScreen({ trialValue, onClose, loading }: TrialCon
   const hasData = trialValue && trialValue.total_opportunities > 0;
 
   return (
+    <FocusTrap
+      focusTrapOptions={{
+        escapeDeactivates: true,
+        onDeactivate: handleClose,
+        allowOutsideClick: true,
+        returnFocusOnDeactivate: true,
+        tabbableOptions: { displayCheck: "none" },
+      }}
+    >
     <div className="fixed inset-0 z-[60] bg-gradient-to-br from-[var(--surface-0)] to-[var(--surface-1)] flex items-center justify-center p-4 overflow-y-auto">
       {/* Close button */}
       <button
@@ -183,5 +193,6 @@ export function TrialConversionScreen({ trialValue, onClose, loading }: TrialCon
         </div>
       </GlassCard>
     </div>
+    </FocusTrap>
   );
 }

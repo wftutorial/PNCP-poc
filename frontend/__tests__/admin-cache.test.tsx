@@ -4,7 +4,16 @@
 
 import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { SWRConfig } from "swr";
 import "@testing-library/jest-dom";
+
+function renderWithSWR(ui: React.ReactElement) {
+  return render(
+    <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+      {ui}
+    </SWRConfig>
+  );
+}
 
 // Mock next/navigation
 jest.mock("next/navigation", () => ({
@@ -77,7 +86,7 @@ describe("AdminCachePage", () => {
       isAdmin: true,
     });
 
-    render(<AdminCachePage />);
+    renderWithSWR(<AdminCachePage />);
     expect(screen.getByText("Carregando...")).toBeInTheDocument();
   });
 
@@ -88,7 +97,7 @@ describe("AdminCachePage", () => {
       isAdmin: false,
     });
 
-    render(<AdminCachePage />);
+    renderWithSWR(<AdminCachePage />);
     expect(screen.getByText("Login necessário")).toBeInTheDocument();
   });
 
@@ -104,7 +113,7 @@ describe("AdminCachePage", () => {
       json: async () => MOCK_METRICS,
     });
 
-    render(<AdminCachePage />);
+    renderWithSWR(<AdminCachePage />);
 
     await waitFor(() => {
       expect(screen.getByText("Acesso Restrito")).toBeInTheDocument();
@@ -123,7 +132,7 @@ describe("AdminCachePage", () => {
       json: async () => MOCK_METRICS,
     });
 
-    render(<AdminCachePage />);
+    renderWithSWR(<AdminCachePage />);
 
     await waitFor(() => {
       expect(screen.getByText("73.0%")).toBeInTheDocument(); // hit rate
@@ -146,7 +155,7 @@ describe("AdminCachePage", () => {
       json: async () => MOCK_METRICS,
     });
 
-    render(<AdminCachePage />);
+    renderWithSWR(<AdminCachePage />);
 
     await waitFor(() => {
       expect(screen.getByText("Age Distribution")).toBeInTheDocument();
@@ -172,7 +181,7 @@ describe("AdminCachePage", () => {
       json: async () => MOCK_METRICS,
     });
 
-    render(<AdminCachePage />);
+    renderWithSWR(<AdminCachePage />);
 
     await waitFor(() => {
       expect(screen.getByText("Top Cache Keys (2)")).toBeInTheDocument();
@@ -194,7 +203,7 @@ describe("AdminCachePage", () => {
       json: async () => MOCK_METRICS,
     });
 
-    render(<AdminCachePage />);
+    renderWithSWR(<AdminCachePage />);
 
     await waitFor(() => {
       const hotBadges = screen.getAllByText("hot");
@@ -221,7 +230,7 @@ describe("AdminCachePage", () => {
       return { ok: true, json: async () => MOCK_METRICS };
     });
 
-    render(<AdminCachePage />);
+    renderWithSWR(<AdminCachePage />);
 
     await waitFor(() => {
       expect(screen.getAllByText("Invalidar").length).toBeGreaterThan(0);
@@ -257,7 +266,7 @@ describe("AdminCachePage", () => {
       json: async () => MOCK_METRICS,
     });
 
-    render(<AdminCachePage />);
+    renderWithSWR(<AdminCachePage />);
 
     await waitFor(() => {
       expect(screen.getByText("Invalidar Tudo")).toBeInTheDocument();
@@ -283,7 +292,7 @@ describe("AdminCachePage", () => {
       json: async () => MOCK_METRICS,
     });
 
-    render(<AdminCachePage />);
+    renderWithSWR(<AdminCachePage />);
 
     await waitFor(() => {
       expect(screen.getByText("Invalidar Tudo")).toBeInTheDocument();
@@ -314,7 +323,7 @@ describe("AdminCachePage", () => {
       return { ok: true, json: async () => MOCK_METRICS };
     });
 
-    render(<AdminCachePage />);
+    renderWithSWR(<AdminCachePage />);
 
     await waitFor(() => {
       expect(screen.getByText("Invalidar Tudo")).toBeInTheDocument();
@@ -367,7 +376,7 @@ describe("AdminCachePage", () => {
       return { ok: true, json: async () => MOCK_METRICS };
     });
 
-    render(<AdminCachePage />);
+    renderWithSWR(<AdminCachePage />);
 
     await waitFor(() => {
       expect(screen.getAllByText("Inspecionar").length).toBeGreaterThan(0);
@@ -393,7 +402,7 @@ describe("AdminCachePage", () => {
       status: 500,
     });
 
-    render(<AdminCachePage />);
+    renderWithSWR(<AdminCachePage />);
 
     await waitFor(() => {
       expect(screen.getByText(/Erro 500/)).toBeInTheDocument();
@@ -412,7 +421,7 @@ describe("AdminCachePage", () => {
       json: async () => MOCK_METRICS,
     });
 
-    render(<AdminCachePage />);
+    renderWithSWR(<AdminCachePage />);
 
     await waitFor(() => {
       const link = screen.getByText("Usuários");
@@ -439,7 +448,7 @@ describe("AdminCachePage", () => {
       json: async () => emptyMetrics,
     });
 
-    render(<AdminCachePage />);
+    renderWithSWR(<AdminCachePage />);
 
     await waitFor(() => {
       expect(screen.getByText("Nenhuma entrada no cache")).toBeInTheDocument();

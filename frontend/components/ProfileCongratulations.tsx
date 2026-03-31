@@ -43,12 +43,12 @@ function ConfettiDot({ x, y, color, delay, size }: ConfettiDotProps) {
 }
 
 const CONFETTI_COLORS = [
-  "var(--success, #10b981)",
-  "var(--warning, #f59e0b)",
-  "var(--brand-blue, #3b82f6)",
-  "var(--ring, #8b5cf6)",
-  "var(--error, #ef4444)",
-  "#06b6d4",
+  "var(--success)",
+  "var(--warning)",
+  "var(--brand-blue)",
+  "var(--ring)",
+  "var(--error)",
+  "var(--chart-10)",
 ];
 
 const CONFETTI_DOTS: ConfettiDotProps[] = Array.from({ length: 18 }, (_, i) => ({

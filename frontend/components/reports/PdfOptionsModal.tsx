@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import FocusTrap from "focus-trap-react";
 
 export interface PdfOptionsModalProps {
   isOpen: boolean;
@@ -40,8 +41,6 @@ export default function PdfOptionsModal({
   const [clientName, setClientName] = useState("");
   const [maxItems, setMaxItems] = useState<ItemOption>(20);
   const inputRef = useRef<HTMLInputElement>(null);
-  const firstFocusableRef = useRef<HTMLButtonElement>(null);
-  const lastFocusableRef = useRef<HTMLButtonElement>(null);
 
   // Focus the text input when modal opens
   useEffect(() => {
@@ -62,37 +61,6 @@ export default function PdfOptionsModal({
     document.addEventListener("keydown", handleKey);
     return () => document.removeEventListener("keydown", handleKey);
   }, [isOpen, isGenerating, onClose]);
-
-  // Trap focus inside the modal
-  const handleTabKey = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key !== "Tab") return;
-      const focusable = document.getElementById("pdf-modal-card")?.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      );
-      if (!focusable || focusable.length === 0) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (e.shiftKey) {
-        if (document.activeElement === first) {
-          e.preventDefault();
-          last.focus();
-        }
-      } else {
-        if (document.activeElement === last) {
-          e.preventDefault();
-          first.focus();
-        }
-      }
-    },
-    [],
-  );
-
-  useEffect(() => {
-    if (!isOpen) return;
-    document.addEventListener("keydown", handleTabKey);
-    return () => document.removeEventListener("keydown", handleTabKey);
-  }, [isOpen, handleTabKey]);
 
   const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget && !isGenerating) {
@@ -118,6 +86,15 @@ export default function PdfOptionsModal({
   return (
     <AnimatePresence>
       {isOpen && (
+        <FocusTrap
+          focusTrapOptions={{
+            escapeDeactivates: !isGenerating,
+            onDeactivate: onClose,
+            allowOutsideClick: true,
+            returnFocusOnDeactivate: true,
+            tabbableOptions: { displayCheck: "none" },
+          }}
+        >
         <motion.div
           key="pdf-modal-overlay"
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
@@ -177,7 +154,6 @@ export default function PdfOptionsModal({
                 </div>
               </div>
               <button
-                ref={firstFocusableRef}
                 onClick={onClose}
                 disabled={isGenerating}
                 className="p-1.5 rounded-button text-ink-muted hover:bg-surface-1 hover:text-ink transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -315,7 +291,6 @@ export default function PdfOptionsModal({
                 Cancelar
               </button>
               <button
-                ref={lastFocusableRef}
                 type="button"
                 onClick={handleGenerate}
                 disabled={isGenerating || totalResults === 0}
@@ -372,6 +347,7 @@ export default function PdfOptionsModal({
             </div>
           </motion.div>
         </motion.div>
+        </FocusTrap>
       )}
     </AnimatePresence>
   );

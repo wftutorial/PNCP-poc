@@ -118,7 +118,7 @@ export function KeyboardShortcutsHelp({
                   }`}
                 >
                   <span className="text-sm text-[var(--ink)]">{entry.label}</span>
-                  <kbd className="ml-4 px-2.5 py-1 bg-[var(--surface-2,#f3f4f6)] rounded text-sm font-[var(--font-data,monospace)] border border-[var(--border)] text-[var(--ink)] whitespace-nowrap">
+                  <kbd className="ml-4 px-2.5 py-1 bg-[var(--surface-2)] rounded text-sm font-[var(--font-data,monospace)] border border-[var(--border)] text-[var(--ink)] whitespace-nowrap">
                     {getShortcutDisplay({
                       key: entry.shortcut.key,
                       ctrlKey: entry.shortcut.ctrlKey,
@@ -139,7 +139,7 @@ export function KeyboardShortcutsHelp({
       <button
         type="button"
         onClick={() => setOpen(false)}
-        className="mt-6 w-full px-4 py-2.5 rounded-button bg-[var(--brand-blue)] text-white text-sm font-semibold hover:bg-[var(--brand-blue-dark,#1d4ed8)] transition-colors"
+        className="mt-6 w-full px-4 py-2.5 rounded-button bg-[var(--brand-blue)] text-white text-sm font-semibold hover:bg-[var(--brand-blue-hover)] transition-colors"
       >
         Entendi
       </button>

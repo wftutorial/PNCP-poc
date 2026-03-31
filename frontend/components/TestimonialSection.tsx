@@ -89,7 +89,7 @@ function StarRating({ rating }: { rating: number }) {
 
 function SectorBadge({ sector }: { sector: string }) {
   return (
-    <span className="inline-block px-2 py-0.5 text-xs font-medium bg-[var(--brand-blue-subtle,#e0edff)] text-[var(--brand-blue,#2563eb)] rounded-full">
+    <span className="inline-block px-2 py-0.5 text-xs font-medium bg-[var(--brand-blue-subtle)] text-[var(--brand-blue)] rounded-full">
       {sector}
     </span>
   );

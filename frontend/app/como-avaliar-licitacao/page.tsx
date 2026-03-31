@@ -9,6 +9,19 @@ export const metadata: Metadata = {
   alternates: {
     canonical: 'https://smartlic.tech/como-avaliar-licitacao',
   },
+  openGraph: {
+    title: 'Como Avaliar se uma Licitação Vale a Pena',
+    description: 'Conheça os 5 critérios que empresas B2G usam para decidir se vale investir tempo e recursos em uma licitação pública.',
+    url: 'https://smartlic.tech/como-avaliar-licitacao',
+    type: 'article',
+    images: [{ url: '/api/og?title=Como+Avaliar+se+uma+Licita%C3%A7%C3%A3o+Vale+a+Pena', width: 1200, height: 630, alt: 'Como Avaliar se uma Licitação Vale a Pena' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Como Avaliar se uma Licitação Vale a Pena',
+    description: 'Conheça os 5 critérios que empresas B2G usam para decidir se vale investir tempo e recursos em uma licitação pública.',
+    images: ['/api/og?title=Como+Avaliar+se+uma+Licita%C3%A7%C3%A3o+Vale+a+Pena'],
+  },
 };
 
 const articleSchema = {
@@ -57,6 +70,20 @@ const breadcrumbSchema = {
   ],
 };
 
+const howToSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'HowTo',
+  name: 'Como avaliar se uma licitação vale a pena',
+  description: 'Guia prático com 5 critérios para decidir se vale investir em uma licitação pública.',
+  step: [
+    { '@type': 'HowToStep', position: 1, name: 'Verificar compatibilidade setorial', text: 'Confirme se o objeto da licitação está diretamente relacionado ao seu CNAE principal e se você tem atestados compatíveis.' },
+    { '@type': 'HowToStep', position: 2, name: 'Avaliar faixa de valor', text: 'Foque em editais entre 50% e 300% do seu contrato médio para equilibrar risco e eficiência.' },
+    { '@type': 'HowToStep', position: 3, name: 'Verificar prazo para preparação', text: 'Confirme se há tempo para análise do edital, obtenção de certidões, elaboração da proposta e revisão interna.' },
+    { '@type': 'HowToStep', position: 4, name: 'Analisar viabilidade geográfica', text: 'Calcule o custo logístico real e verifique se consome mais de 15% da margem esperada.' },
+    { '@type': 'HowToStep', position: 5, name: 'Avaliar modalidade e competição', text: 'Identifique a modalidade e critério de julgamento para estimar o nível de competição.' },
+  ],
+};
+
 const RELATED_PAGES = [
   {
     href: '/como-evitar-prejuizo-licitacao',
@@ -85,6 +112,10 @@ export default function ComoAvaliarLicitacao() {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(howToSchema) }}
       />
 
       <h1>Como avaliar se uma licitação vale a pena?</h1>

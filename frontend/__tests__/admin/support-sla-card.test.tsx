@@ -4,7 +4,16 @@
 
 import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
+import { SWRConfig } from "swr";
 import "@testing-library/jest-dom";
+
+function renderWithSWR(ui: React.ReactElement) {
+  return render(
+    <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+      {ui}
+    </SWRConfig>
+  );
+}
 
 // Mock next/navigation
 jest.mock("next/navigation", () => ({
@@ -87,7 +96,7 @@ describe("STORY-353: Support SLA Card", () => {
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
     });
 
-    render(<AdminPage />);
+    renderWithSWR(<AdminPage />);
 
     await waitFor(() => {
       expect(screen.getByText("SLA de Suporte")).toBeInTheDocument();
@@ -137,7 +146,7 @@ describe("STORY-353: Support SLA Card", () => {
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
     });
 
-    render(<AdminPage />);
+    renderWithSWR(<AdminPage />);
 
     await waitFor(() => {
       expect(screen.getByText("SLA de Suporte")).toBeInTheDocument();
@@ -174,7 +183,7 @@ describe("STORY-353: Support SLA Card", () => {
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
     });
 
-    render(<AdminPage />);
+    renderWithSWR(<AdminPage />);
 
     await waitFor(() => {
       expect(screen.getByText("SLA de Suporte")).toBeInTheDocument();

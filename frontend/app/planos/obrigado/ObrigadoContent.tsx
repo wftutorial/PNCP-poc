@@ -108,11 +108,11 @@ export default function ObrigadoContent() {
         <div className="bg-[var(--surface-0)] border border-[var(--border)] rounded-card p-8 shadow-lg">
           {/* Status Icon */}
           <div className="w-16 h-16 mx-auto mb-6 rounded-full flex items-center justify-center"
-               style={{ backgroundColor: activationStatus === "timeout" ? "var(--warning-subtle, #FEF3C7)" : "rgba(var(--success-rgb, 34,197,94), 0.1)" }}>
+               style={{ backgroundColor: activationStatus === "timeout" ? "var(--warning-subtle)" : "var(--success-subtle)" }}>
             {activationStatus === "polling" ? (
               <Loader2 className="w-8 h-8 text-[var(--brand-blue)] animate-spin" />
             ) : activationStatus === "timeout" ? (
-              <AlertCircle className="w-8 h-8 text-[var(--warning, #F59E0B)]" />
+              <AlertCircle className="w-8 h-8 text-[var(--warning)]" />
             ) : (
               <CheckCircle className="w-8 h-8 text-[var(--success)]" />
             )}

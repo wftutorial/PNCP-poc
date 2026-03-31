@@ -9,6 +9,19 @@ export const metadata: Metadata = {
   alternates: {
     canonical: 'https://smartlic.tech/como-evitar-prejuizo-licitacao',
   },
+  openGraph: {
+    title: 'Como Evitar Prejuízo em Licitações Públicas',
+    description: 'As 5 causas mais comuns de perda financeira em licitações e como identificar cada uma antes de investir na proposta.',
+    url: 'https://smartlic.tech/como-evitar-prejuizo-licitacao',
+    type: 'article',
+    images: [{ url: '/api/og?title=Como+Evitar+Preju%C3%ADzo+em+Licita%C3%A7%C3%B5es+P%C3%BAblicas', width: 1200, height: 630, alt: 'Como Evitar Prejuízo em Licitações Públicas' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Como Evitar Prejuízo em Licitações Públicas',
+    description: 'As 5 causas mais comuns de perda financeira em licitações e como identificar cada uma antes de investir na proposta.',
+    images: ['/api/og?title=Como+Evitar+Preju%C3%ADzo+em+Licita%C3%A7%C3%B5es+P%C3%BAblicas'],
+  },
 };
 
 const articleSchema = {
@@ -57,6 +70,20 @@ const breadcrumbSchema = {
   ],
 };
 
+const howToSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'HowTo',
+  name: 'Como evitar prejuízo em licitações públicas',
+  description: 'As 5 causas mais comuns de perda financeira em licitações e como identificar cada uma.',
+  step: [
+    { '@type': 'HowToStep', position: 1, name: 'Identificar incompatibilidade setorial', text: 'Verifique se o objeto está no seu CNAE e se tem atestados. Subcontratar mais de 30% é sinal de risco.' },
+    { '@type': 'HowToStep', position: 2, name: 'Detectar valor fora da faixa', text: 'Compare com seu histórico. Contratos acima de 300% ou abaixo de 50% do ticket médio trazem riscos.' },
+    { '@type': 'HowToStep', position: 3, name: 'Avaliar prazo insuficiente', text: 'Propostas apressadas são a principal causa de erros documentais e desclassificação.' },
+    { '@type': 'HowToStep', position: 4, name: 'Calcular custo logístico real', text: 'Inclua frete, deslocamento e hospedagem na análise de margem antes de decidir.' },
+    { '@type': 'HowToStep', position: 5, name: 'Analisar concorrência predatória', text: 'Pregões de menor preço em setores saturados comprimem margens abaixo do viável.' },
+  ],
+};
+
 const RELATED_PAGES = [
   {
     href: '/como-avaliar-licitacao',
@@ -85,6 +112,10 @@ export default function ComoEvitarPrejuizo() {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(howToSchema) }}
       />
 
       <h1>Como evitar prejuízo em licitações públicas</h1>

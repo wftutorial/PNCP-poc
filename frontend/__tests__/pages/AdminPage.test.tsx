@@ -8,7 +8,16 @@
 process.env.NEXT_PUBLIC_BACKEND_URL = 'http://test-backend:8000';
 
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { SWRConfig } from 'swr';
 import AdminPage from '@/app/admin/page';
+
+function renderWithSWR(ui: React.ReactElement) {
+  return render(
+    <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+      {ui}
+    </SWRConfig>
+  );
+}
 
 // Mock useAuth hook
 const mockUseAuth = jest.fn();
@@ -34,6 +43,61 @@ const mockAlert = jest.fn();
 window.confirm = mockConfirm;
 window.alert = mockAlert;
 
+// Default SWR-compatible mock responses for admin endpoints
+const DEFAULT_RESPONSES: Record<string, unknown> = {
+  '/api/admin/users': { users: [], total: 0 },
+  '/api/status': { sources: {}, uptime_pct_30d: 99.5 },
+  '/api/admin/reconciliation/history': { runs: [] },
+  '/api/admin/support-sla': { avg_response_hours: 0, pending_count: 0, breached_count: 0 },
+};
+
+function setupDefaultFetch(overrides: Record<string, unknown> = {}) {
+  const responses = { ...DEFAULT_RESPONSES, ...overrides };
+  mockFetch.mockImplementation((url: string, opts?: RequestInit) => {
+    for (const [key, value] of Object.entries(responses)) {
+      if (url.includes(key)) {
+        if (value instanceof Error) {
+          return Promise.resolve({ ok: false, status: 500 });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(value),
+        });
+      }
+    }
+    return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+  });
+}
+
+function setupFetchWith403() {
+  mockFetch.mockImplementation((url: string) => {
+    if (url.includes('/api/admin/users')) {
+      return Promise.resolve({ ok: false, status: 403 });
+    }
+    for (const [key, value] of Object.entries(DEFAULT_RESPONSES)) {
+      if (url.includes(key)) {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(value) });
+      }
+    }
+    return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+  });
+}
+
+function setupFetchWithError() {
+  mockFetch.mockImplementation((url: string) => {
+    if (url.includes('/api/admin/users')) {
+      return Promise.resolve({ ok: false, status: 500 });
+    }
+    for (const [key, value] of Object.entries(DEFAULT_RESPONSES)) {
+      if (url.includes(key)) {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(value) });
+      }
+    }
+    return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+  });
+}
+
 describe('AdminPage Component', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -47,7 +111,7 @@ describe('AdminPage Component', () => {
         loading: true,
       });
 
-      render(<AdminPage />);
+      renderWithSWR(<AdminPage />);
 
       expect(screen.getByText('Carregando...')).toBeInTheDocument();
     });
@@ -58,7 +122,7 @@ describe('AdminPage Component', () => {
         loading: false,
       });
 
-      render(<AdminPage />);
+      renderWithSWR(<AdminPage />);
 
       expect(screen.getByRole('link', { name: /Login necessário/i })).toBeInTheDocument();
     });
@@ -78,12 +142,9 @@ describe('AdminPage Component', () => {
     });
 
     it('should fetch users on mount', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ users: [], total: 0 }),
-      });
+      setupDefaultFetch();
 
-      render(<AdminPage />);
+      renderWithSWR(<AdminPage />);
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
@@ -96,12 +157,9 @@ describe('AdminPage Component', () => {
     });
 
     it('should show page title', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ users: [], total: 0 }),
-      });
+      setupDefaultFetch();
 
-      render(<AdminPage />);
+      renderWithSWR(<AdminPage />);
 
       await waitFor(() => {
         expect(screen.getByRole('heading', { name: /Admin - Usuários/i })).toBeInTheDocument();
@@ -109,12 +167,9 @@ describe('AdminPage Component', () => {
     });
 
     it('should show user count', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ users: [], total: 5 }),
-      });
+      setupDefaultFetch({ '/api/admin/users': { users: [], total: 5 } });
 
-      render(<AdminPage />);
+      renderWithSWR(<AdminPage />);
 
       await waitFor(() => {
         expect(screen.getByText(/5 usuários/)).toBeInTheDocument();
@@ -122,12 +177,9 @@ describe('AdminPage Component', () => {
     });
 
     it('should use singular form for 1 user', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ users: [], total: 1 }),
-      });
+      setupDefaultFetch({ '/api/admin/users': { users: [], total: 1 } });
 
-      render(<AdminPage />);
+      renderWithSWR(<AdminPage />);
 
       await waitFor(() => {
         expect(screen.getByText(/1 usuário$/)).toBeInTheDocument();
@@ -135,12 +187,9 @@ describe('AdminPage Component', () => {
     });
 
     it('should show back and new user buttons', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ users: [], total: 0 }),
-      });
+      setupDefaultFetch();
 
-      render(<AdminPage />);
+      renderWithSWR(<AdminPage />);
 
       await waitFor(() => {
         expect(screen.getByRole('link', { name: /Voltar/i })).toBeInTheDocument();
@@ -157,7 +206,7 @@ describe('AdminPage Component', () => {
         isAdmin: false,
       });
 
-      render(<AdminPage />);
+      renderWithSWR(<AdminPage />);
 
       await waitFor(() => {
         expect(screen.getByText(/Acesso Restrito/i)).toBeInTheDocument();
@@ -172,7 +221,7 @@ describe('AdminPage Component', () => {
         isAdmin: false,
       });
 
-      render(<AdminPage />);
+      renderWithSWR(<AdminPage />);
 
       await waitFor(() => {
         const backLink = screen.getByRole('link', { name: /Voltar para início/i });
@@ -190,16 +239,12 @@ describe('AdminPage Component', () => {
         isAdmin: true,
       });
 
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 403,
-      });
+      setupFetchWith403();
 
-      render(<AdminPage />);
+      renderWithSWR(<AdminPage />);
 
       await waitFor(() => {
         expect(screen.getByText(/Acesso negado/i)).toBeInTheDocument();
-        expect(screen.getByText(/Você não é administrador/i)).toBeInTheDocument();
       });
     });
   });
@@ -243,12 +288,9 @@ describe('AdminPage Component', () => {
     });
 
     it('should display users in table', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ users: mockUsers, total: 2 }),
-      });
+      setupDefaultFetch({ '/api/admin/users': { users: mockUsers, total: 2 } });
 
-      render(<AdminPage />);
+      renderWithSWR(<AdminPage />);
 
       await waitFor(() => {
         expect(screen.getByText('user1@example.com')).toBeInTheDocument();
@@ -259,40 +301,30 @@ describe('AdminPage Component', () => {
     });
 
     it('should show dash for missing name/company', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ users: mockUsers, total: 2 }),
-      });
+      setupDefaultFetch({ '/api/admin/users': { users: mockUsers, total: 2 } });
 
-      render(<AdminPage />);
+      renderWithSWR(<AdminPage />);
 
       await waitFor(() => {
-        // User 2 has no name or company
         const dashes = screen.getAllByText('-');
         expect(dashes.length).toBeGreaterThan(0);
       });
     });
 
     it('should show credits for pack plans', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ users: mockUsers, total: 2 }),
-      });
+      setupDefaultFetch({ '/api/admin/users': { users: mockUsers, total: 2 } });
 
-      render(<AdminPage />);
+      renderWithSWR(<AdminPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('3')).toBeInTheDocument(); // Free plan has 3 credits
+        expect(screen.getByText('3')).toBeInTheDocument();
       });
     });
 
     it('should show table headers', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ users: [], total: 0 }),
-      });
+      setupDefaultFetch();
 
-      render(<AdminPage />);
+      renderWithSWR(<AdminPage />);
 
       await waitFor(() => {
         expect(screen.getByText('Email')).toBeInTheDocument();
@@ -313,7 +345,7 @@ describe('AdminPage Component', () => {
         }), 100))
       );
 
-      render(<AdminPage />);
+      renderWithSWR(<AdminPage />);
 
       const skeletons = document.querySelectorAll('.animate-pulse');
       expect(skeletons.length).toBeGreaterThan(0);
@@ -321,43 +353,23 @@ describe('AdminPage Component', () => {
   });
 
   describe('Search functionality', () => {
-    const mockSession = {
-      access_token: 'admin-token-123',
-    };
+    const mockSession = { access_token: 'admin-token-123' };
 
     beforeEach(() => {
-      mockUseAuth.mockReturnValue({
-        session: mockSession,
-        loading: false,
-        isAdmin: true,
-      });
+      mockUseAuth.mockReturnValue({ session: mockSession, loading: false, isAdmin: true });
     });
 
     it('should have search input', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ users: [], total: 0 }),
-      });
-
-      render(<AdminPage />);
-
+      setupDefaultFetch();
+      renderWithSWR(<AdminPage />);
       await waitFor(() => {
         expect(screen.getByPlaceholderText(/Buscar por email/i)).toBeInTheDocument();
       });
     });
 
     it('should trigger search on Enter key', async () => {
-      mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ users: [], total: 0 }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ users: [], total: 0 }),
-        });
-
-      render(<AdminPage />);
+      setupDefaultFetch();
+      renderWithSWR(<AdminPage />);
 
       await waitFor(() => {
         expect(screen.getByPlaceholderText(/Buscar por email/i)).toBeInTheDocument();
@@ -379,107 +391,65 @@ describe('AdminPage Component', () => {
   });
 
   describe('Create user form', () => {
-    const mockSession = {
-      access_token: 'admin-token-123',
-    };
+    const mockSession = { access_token: 'admin-token-123' };
 
     beforeEach(() => {
-      mockUseAuth.mockReturnValue({
-        session: mockSession,
-        loading: false,
-        isAdmin: true,
-      });
+      mockUseAuth.mockReturnValue({ session: mockSession, loading: false, isAdmin: true });
     });
 
     it('should toggle create user form', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ users: [], total: 0 }),
-      });
-
-      render(<AdminPage />);
+      setupDefaultFetch();
+      renderWithSWR(<AdminPage />);
 
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /Novo usuário/i })).toBeInTheDocument();
       });
 
-      // Click to show form
       const newButton = screen.getByRole('button', { name: /Novo usuário/i });
-      await act(async () => {
-        fireEvent.click(newButton);
-      });
+      await act(async () => { fireEvent.click(newButton); });
 
       expect(screen.getByText('Criar usuário')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Cancelar/i })).toBeInTheDocument();
     });
 
     it('should show form fields', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ users: [], total: 0 }),
-      });
-
-      render(<AdminPage />);
+      setupDefaultFetch();
+      renderWithSWR(<AdminPage />);
 
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /Novo usuário/i })).toBeInTheDocument();
       });
 
       const newButton = screen.getByRole('button', { name: /Novo usuário/i });
-      await act(async () => {
-        fireEvent.click(newButton);
-      });
+      await act(async () => { fireEvent.click(newButton); });
 
       expect(screen.getByText('Email *')).toBeInTheDocument();
       expect(screen.getByText('Senha *')).toBeInTheDocument();
-      // Nome, Empresa, and Plano appear both in table headers and form labels
-      // So we verify they appear at least twice (once in header, once in form)
       expect(screen.getAllByText('Nome').length).toBeGreaterThanOrEqual(2);
       expect(screen.getAllByText('Empresa').length).toBeGreaterThanOrEqual(2);
       expect(screen.getAllByText('Plano').length).toBeGreaterThanOrEqual(2);
     });
 
     it('should submit create user form', async () => {
-      mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ users: [], total: 0 }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ id: 'new-user-123' }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ users: [], total: 0 }),
-        });
-
-      render(<AdminPage />);
+      setupDefaultFetch();
+      renderWithSWR(<AdminPage />);
 
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /Novo usuário/i })).toBeInTheDocument();
       });
 
-      // Open form
       const newButton = screen.getByRole('button', { name: /Novo usuário/i });
-      await act(async () => {
-        fireEvent.click(newButton);
-      });
+      await act(async () => { fireEvent.click(newButton); });
 
-      // Fill form
-      const emailInput = screen.getAllByRole('textbox')[0]; // First input in form
+      const emailInput = screen.getAllByRole('textbox')[0];
       const passwordInputs = document.querySelectorAll('input[type="password"]');
-
       await act(async () => {
         fireEvent.change(emailInput, { target: { value: 'new@example.com' } });
         fireEvent.change(passwordInputs[0], { target: { value: 'password123' } });
       });
 
-      // Submit
       const createButton = screen.getByRole('button', { name: /^Criar$/i });
-      await act(async () => {
-        fireEvent.click(createButton);
-      });
+      await act(async () => { fireEvent.click(createButton); });
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
@@ -493,217 +463,124 @@ describe('AdminPage Component', () => {
     });
 
     it('should show loading state during creation', async () => {
-      mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ users: [], total: 0 }),
-        })
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ runs: [] }) })
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ sources: {} }) })
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ avg_response_hours: 0, pending_count: 0, breached_count: 0 }) })
-        .mockImplementationOnce(
-          () => new Promise((resolve) => setTimeout(() => resolve({
-            ok: true,
-            json: () => Promise.resolve({ id: 'new-user-123' }),
-          }), 100))
-        );
-
-      render(<AdminPage />);
+      setupDefaultFetch();
+      renderWithSWR(<AdminPage />);
 
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /Novo usuário/i })).toBeInTheDocument();
       });
 
       const newButton = screen.getByRole('button', { name: /Novo usuário/i });
-      await act(async () => {
-        fireEvent.click(newButton);
-      });
+      await act(async () => { fireEvent.click(newButton); });
 
       const emailInput = screen.getAllByRole('textbox')[0];
       const passwordInputs = document.querySelectorAll('input[type="password"]');
-
       await act(async () => {
         fireEvent.change(emailInput, { target: { value: 'new@example.com' } });
         fireEvent.change(passwordInputs[0], { target: { value: 'password123' } });
       });
 
-      const createButton = screen.getByRole('button', { name: /^Criar$/i });
-      await act(async () => {
-        fireEvent.click(createButton);
+      // Override fetch to slow down the POST
+      const origImpl = mockFetch.getMockImplementation();
+      mockFetch.mockImplementation((url: string, opts?: RequestInit) => {
+        if (opts?.method === 'POST' && url.includes('/admin/users')) {
+          return new Promise((resolve) => setTimeout(() => resolve({
+            ok: true, json: () => Promise.resolve({ id: 'new-user-123' }),
+          }), 200));
+        }
+        return origImpl!(url, opts);
       });
+
+      const createButton = screen.getByRole('button', { name: /^Criar$/i });
+      await act(async () => { fireEvent.click(createButton); });
 
       expect(screen.getByRole('button', { name: /Criando.../i })).toBeInTheDocument();
     });
   });
 
   describe('Delete user', () => {
-    const mockSession = {
-      access_token: 'admin-token-123',
-    };
-
+    const mockSession = { access_token: 'admin-token-123' };
     const mockUsers = [
-      {
-        id: '1',
-        email: 'user@example.com',
-        full_name: 'Test User',
-        company: null,
-        plan_type: 'free',
-        created_at: '2024-01-15T10:00:00Z',
-        user_subscriptions: [],
-      },
+      { id: '1', email: 'user@example.com', full_name: 'Test User', company: null, plan_type: 'free', created_at: '2024-01-15T10:00:00Z', user_subscriptions: [] },
     ];
 
     beforeEach(() => {
-      mockUseAuth.mockReturnValue({
-        session: mockSession,
-        loading: false,
-        isAdmin: true,
-      });
+      mockUseAuth.mockReturnValue({ session: mockSession, loading: false, isAdmin: true });
     });
 
     it('should show delete button for each user', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ users: mockUsers, total: 1 }),
-      });
-
-      render(<AdminPage />);
-
+      setupDefaultFetch({ '/api/admin/users': { users: mockUsers, total: 1 } });
+      renderWithSWR(<AdminPage />);
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /Excluir/i })).toBeInTheDocument();
       });
     });
 
     it('should show confirmation before deleting', async () => {
-      mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ users: mockUsers, total: 1 }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({}),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ users: [], total: 0 }),
-        });
-
-      render(<AdminPage />);
+      setupDefaultFetch({ '/api/admin/users': { users: mockUsers, total: 1 } });
+      renderWithSWR(<AdminPage />);
 
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /Excluir/i })).toBeInTheDocument();
       });
 
       const deleteButton = screen.getByRole('button', { name: /Excluir/i });
-      await act(async () => {
-        fireEvent.click(deleteButton);
-      });
+      await act(async () => { fireEvent.click(deleteButton); });
 
       expect(mockConfirm).toHaveBeenCalledWith(expect.stringContaining('user@example.com'));
     });
 
     it('should call delete API when confirmed', async () => {
       mockConfirm.mockReturnValue(true);
-
-      mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ users: mockUsers, total: 1 }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({}),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ users: [], total: 0 }),
-        });
-
-      render(<AdminPage />);
+      setupDefaultFetch({ '/api/admin/users': { users: mockUsers, total: 1 } });
+      renderWithSWR(<AdminPage />);
 
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /Excluir/i })).toBeInTheDocument();
       });
 
       const deleteButton = screen.getByRole('button', { name: /Excluir/i });
-      await act(async () => {
-        fireEvent.click(deleteButton);
-      });
+      await act(async () => { fireEvent.click(deleteButton); });
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
           expect.stringContaining('/admin/users/1'),
-          expect.objectContaining({
-            method: 'DELETE',
-          })
+          expect.objectContaining({ method: 'DELETE' })
         );
       });
     });
 
     it('should not delete when cancelled', async () => {
       mockConfirm.mockReturnValue(false);
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ users: mockUsers, total: 1 }),
-      });
-      mockFetch
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ runs: [] }) })
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ sources: {} }) })
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ avg_response_hours: 0, pending_count: 0, breached_count: 0 }) });
-
-      render(<AdminPage />);
+      setupDefaultFetch({ '/api/admin/users': { users: mockUsers, total: 1 } });
+      renderWithSWR(<AdminPage />);
 
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /Excluir/i })).toBeInTheDocument();
       });
 
+      const initialCallCount = mockFetch.mock.calls.length;
       const deleteButton = screen.getByRole('button', { name: /Excluir/i });
-      await act(async () => {
-        fireEvent.click(deleteButton);
-      });
+      await act(async () => { fireEvent.click(deleteButton); });
 
-      // Only the initial fetch should have been made (users + recon + status + sla)
-      expect(mockFetch).toHaveBeenCalledTimes(4);
+      // No additional fetch calls after cancel
+      expect(mockFetch.mock.calls.length).toBe(initialCallCount);
     });
   });
 
   describe('Plan assignment', () => {
-    const mockSession = {
-      access_token: 'admin-token-123',
-    };
-
+    const mockSession = { access_token: 'admin-token-123' };
     const mockUsers = [
-      {
-        id: '1',
-        email: 'user@example.com',
-        full_name: 'Test User',
-        company: null,
-        plan_type: 'free',
-        created_at: '2024-01-15T10:00:00Z',
-        user_subscriptions: [
-          { id: 's1', plan_id: 'free', credits_remaining: 3, expires_at: null, is_active: true },
-        ],
-      },
+      { id: '1', email: 'user@example.com', full_name: 'Test User', company: null, plan_type: 'free', created_at: '2024-01-15T10:00:00Z', user_subscriptions: [{ id: 's1', plan_id: 'free', credits_remaining: 3, expires_at: null, is_active: true }] },
     ];
 
     beforeEach(() => {
-      mockUseAuth.mockReturnValue({
-        session: mockSession,
-        loading: false,
-        isAdmin: true,
-      });
+      mockUseAuth.mockReturnValue({ session: mockSession, loading: false, isAdmin: true });
     });
 
     it('should show plan selector for each user', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ users: mockUsers, total: 1 }),
-      });
-
-      render(<AdminPage />);
-
+      setupDefaultFetch({ '/api/admin/users': { users: mockUsers, total: 1 } });
+      renderWithSWR(<AdminPage />);
       await waitFor(() => {
         const selects = screen.getAllByRole('combobox');
         expect(selects.length).toBeGreaterThan(0);
@@ -711,66 +588,36 @@ describe('AdminPage Component', () => {
     });
 
     it('should call assign plan API when plan changed', async () => {
-      mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ users: mockUsers, total: 1 }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({}),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ users: mockUsers, total: 1 }),
-        });
-
-      render(<AdminPage />);
+      setupDefaultFetch({ '/api/admin/users': { users: mockUsers, total: 1 } });
+      renderWithSWR(<AdminPage />);
 
       await waitFor(() => {
         expect(screen.getByText('user@example.com')).toBeInTheDocument();
       });
 
-      // Find the plan selector in the user row
       const selects = screen.getAllByRole('combobox');
       const planSelect = selects.find(s => s.classList.contains('text-xs'));
-
-      await act(async () => {
-        fireEvent.change(planSelect!, { target: { value: 'maquina' } });
-      });
+      await act(async () => { fireEvent.change(planSelect!, { target: { value: 'maquina' } }); });
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
           expect.stringContaining('/admin/users/1/assign-plan?plan_id=maquina'),
-          expect.objectContaining({
-            method: 'POST',
-          })
+          expect.objectContaining({ method: 'POST' })
         );
       });
     });
   });
 
   describe('Pagination', () => {
-    const mockSession = {
-      access_token: 'admin-token-123',
-    };
+    const mockSession = { access_token: 'admin-token-123' };
 
     beforeEach(() => {
-      mockUseAuth.mockReturnValue({
-        session: mockSession,
-        loading: false,
-        isAdmin: true,
-      });
+      mockUseAuth.mockReturnValue({ session: mockSession, loading: false, isAdmin: true });
     });
 
     it('should show pagination when multiple pages', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ users: [], total: 100 }),
-      });
-
-      render(<AdminPage />);
-
+      setupDefaultFetch({ '/api/admin/users': { users: [], total: 100 } });
+      renderWithSWR(<AdminPage />);
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /Anterior/i })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /Próximo/i })).toBeInTheDocument();
@@ -778,13 +625,8 @@ describe('AdminPage Component', () => {
     });
 
     it('should not show pagination for single page', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ users: [], total: 10 }),
-      });
-
-      render(<AdminPage />);
-
+      setupDefaultFetch({ '/api/admin/users': { users: [], total: 10 } });
+      renderWithSWR(<AdminPage />);
       await waitFor(() => {
         expect(screen.queryByRole('button', { name: /Anterior/i })).not.toBeInTheDocument();
         expect(screen.queryByRole('button', { name: /Próximo/i })).not.toBeInTheDocument();
@@ -793,9 +635,7 @@ describe('AdminPage Component', () => {
   });
 
   describe('Error handling', () => {
-    const mockSession = {
-      access_token: 'admin-token-123',
-    };
+    const mockSession = { access_token: 'admin-token-123' };
 
     beforeEach(() => {
       mockUseAuth.mockReturnValue({
@@ -806,22 +646,29 @@ describe('AdminPage Component', () => {
     });
 
     it('should show error message on fetch failure', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-      });
+      setupFetchWithError();
 
-      render(<AdminPage />);
+      renderWithSWR(<AdminPage />);
 
       await waitFor(() => {
-        expect(screen.getByText(/Erro ao carregar usuários/i)).toBeInTheDocument();
+        expect(screen.getByText(/Erro 500/i)).toBeInTheDocument();
       });
     });
 
     it('should show error on network failure', async () => {
-      mockFetch.mockRejectedValueOnce(new Error('Network error'));
+      mockFetch.mockImplementation((url: string) => {
+        if (url.includes('/api/admin/users')) {
+          return Promise.reject(new Error('Network error'));
+        }
+        for (const [key, value] of Object.entries(DEFAULT_RESPONSES)) {
+          if (url.includes(key)) {
+            return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(value) });
+          }
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      });
 
-      render(<AdminPage />);
+      renderWithSWR(<AdminPage />);
 
       await waitFor(() => {
         expect(screen.getByText('Network error')).toBeInTheDocument();

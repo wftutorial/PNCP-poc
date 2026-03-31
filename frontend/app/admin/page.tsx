@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { useAuth } from "../components/AuthProvider";
 import Link from "next/link";
 import { toast } from "sonner";
+import { useAdminSWR, usePublicSWR } from "../../hooks/useAdminSWR";
 
 import { AdminUptimeWidget } from "./components/AdminUptimeWidget";
 import { AdminSourceHealth } from "./components/AdminSourceHealth";
@@ -28,32 +29,28 @@ interface UserProfile {
   }>;
 }
 
-export default function AdminPage() {
-  const { session, loading: authLoading, isAdmin } = useAuth();
-  const [users, setUsers] = useState<UserProfile[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(0);
-  const limit = 50;
+interface UsersResponse {
+  users: UserProfile[];
+  total: number;
+}
 
-  const [showCreate, setShowCreate] = useState(false);
-
-  // STORY-352 AC5: Uptime widget state
-  const [uptimePct30d, setUptimePct30d] = useState<number | null>(null);
-  const [uptimeLoading, setUptimeLoading] = useState(true);
-
-  // STORY-350 AC6: Source health state
-  const [sourceHealth, setSourceHealth] = useState<Record<string, {
+interface StatusResponse {
+  sources: Record<string, {
     status: string;
     latency_ms?: number;
     last_check?: string;
-  }>>({});
-  const [sourceHealthLoading, setSourceHealthLoading] = useState(false);
+  }>;
+  uptime_pct_30d?: number;
+}
 
-  // STORY-314: Reconciliation widget state
-  const [reconHistory, setReconHistory] = useState<Array<{
+interface SlaResponse {
+  avg_response_hours: number;
+  pending_count: number;
+  breached_count: number;
+}
+
+interface ReconResponse {
+  runs: Array<{
     id: string;
     run_at: string;
     total_checked: number;
@@ -61,96 +58,36 @@ export default function AdminPage() {
     auto_fixed: number;
     manual_review: number;
     duration_ms: number;
-  }>>([]);
-  const [reconLoading, setReconLoading] = useState(false);
+  }>;
+}
+
+export default function AdminPage() {
+  const { session, loading: authLoading, isAdmin } = useAuth();
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
+  const limit = 50;
+  const [showCreate, setShowCreate] = useState(false);
   const [reconTriggering, setReconTriggering] = useState(false);
 
-  // STORY-353 AC7: Support SLA widget state
-  const [slaData, setSlaData] = useState<{
-    avg_response_hours: number;
-    pending_count: number;
-    breached_count: number;
-  } | null>(null);
-  const [slaLoading, setSlaLoading] = useState(false);
+  // SWR data fetching
+  const usersKey = isAdmin ? `/api/admin/users?limit=${limit}&offset=${page * limit}${search ? `&search=${search}` : ""}` : null;
+  const { data: usersData, error: usersError, isLoading: usersLoading, mutate: mutateUsers } = useAdminSWR<UsersResponse>(usersKey);
 
-  const fetchUsers = useCallback(async () => {
-    if (!session) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams({ limit: String(limit), offset: String(page * limit) });
-      if (search) params.set("search", search);
-      const res = await fetch(`/api/admin/users?${params}`, {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-      if (res.status === 403) {
-        setError("Acesso negado. Você não é administrador.");
-        return;
-      }
-      if (!res.ok) throw new Error("Erro ao carregar usuários");
-      const data = await res.json();
-      setUsers(data.users);
-      setTotal(data.total);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro desconhecido");
-    } finally {
-      setLoading(false);
-    }
-  }, [session, page, search]);
+  const { data: statusData, isLoading: statusLoading, mutate: mutateStatus } = usePublicSWR<StatusResponse>(isAdmin ? "/api/status" : null);
 
-  const fetchSourceHealth = useCallback(async () => {
-    setSourceHealthLoading(true);
-    setUptimeLoading(true);
-    try {
-      const res = await fetch("/api/status");
-      if (res.ok) {
-        const data = await res.json();
-        if (data.sources) setSourceHealth(data.sources);
-        if (data.uptime_pct_30d !== undefined) setUptimePct30d(data.uptime_pct_30d);
-      }
-    } catch {
-      // Non-critical
-    } finally {
-      setSourceHealthLoading(false);
-      setUptimeLoading(false);
-    }
-  }, []);
+  const { data: slaData, isLoading: slaLoading, mutate: mutateSla } = useAdminSWR<SlaResponse>(isAdmin ? "/api/admin/support-sla" : null);
 
-  const fetchSlaData = useCallback(async () => {
-    if (!session) return;
-    setSlaLoading(true);
-    try {
-      const res = await fetch("/api/admin/support-sla", {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setSlaData(data);
-      }
-    } catch {
-      // Non-critical
-    } finally {
-      setSlaLoading(false);
-    }
-  }, [session]);
+  const { data: reconData, isLoading: reconLoading, mutate: mutateRecon } = useAdminSWR<ReconResponse>(isAdmin ? "/api/admin/reconciliation/history?limit=5" : null);
 
-  const fetchReconHistory = useCallback(async () => {
-    if (!session) return;
-    setReconLoading(true);
-    try {
-      const res = await fetch("/api/admin/reconciliation/history?limit=5", {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setReconHistory(data.runs || []);
-      }
-    } catch {
-      // Non-critical
-    } finally {
-      setReconLoading(false);
-    }
-  }, [session]);
+  const users = usersData?.users ?? [];
+  const total = usersData?.total ?? 0;
+  const loading = usersLoading;
+  const error = usersError?.message ?? null;
+
+  const uptimePct30d = statusData?.uptime_pct_30d ?? null;
+  const sourceHealth = statusData?.sources ?? {};
+
+  const reconHistory = reconData?.runs ?? [];
 
   const handleTriggerReconciliation = async () => {
     if (!session) return;
@@ -162,7 +99,7 @@ export default function AdminPage() {
       });
       if (res.ok) {
         toast.success("Reconciliacao executada com sucesso");
-        fetchReconHistory();
+        mutateRecon();
       } else if (res.status === 409) {
         toast.error("Reconciliacao ja em execucao");
       } else {
@@ -174,15 +111,6 @@ export default function AdminPage() {
       setReconTriggering(false);
     }
   };
-
-  useEffect(() => {
-    if (!authLoading && session) {
-      fetchUsers();
-      fetchReconHistory();
-      fetchSourceHealth();
-      fetchSlaData();
-    }
-  }, [authLoading, session, fetchUsers, fetchReconHistory, fetchSourceHealth, fetchSlaData]);
 
   if (authLoading) return <div className="min-h-screen flex items-center justify-center bg-[var(--canvas)]"><p className="text-[var(--ink-secondary)]">Carregando...</p></div>;
   if (!session) return <div className="min-h-screen flex items-center justify-center bg-[var(--canvas)]"><Link href="/login" className="text-[var(--brand-blue)]">Login necessário</Link></div>;
@@ -246,12 +174,12 @@ export default function AdminPage() {
           </div>
         </div>
 
-        <AdminUptimeWidget uptimePct30d={uptimePct30d} loading={uptimeLoading} onRetry={fetchSourceHealth} />
+        <AdminUptimeWidget uptimePct30d={uptimePct30d} loading={statusLoading} onRetry={() => mutateStatus()} />
 
         <AdminSourceHealth
           sourceHealth={sourceHealth}
-          sourceHealthLoading={sourceHealthLoading}
-          onRefresh={fetchSourceHealth}
+          sourceHealthLoading={statusLoading}
+          onRefresh={() => mutateStatus()}
         />
 
         <AdminReconciliation
@@ -262,15 +190,15 @@ export default function AdminPage() {
         />
 
         <AdminSupportSLA
-          slaData={slaData}
+          slaData={slaData ?? null}
           slaLoading={slaLoading}
-          onRefresh={fetchSlaData}
+          onRefresh={() => mutateSla()}
         />
 
         {showCreate && (
           <AdminCreateUser
             session={session}
-            onCreated={fetchUsers}
+            onCreated={() => { mutateUsers().catch(() => {}); }}
             onCancel={() => setShowCreate(false)}
           />
         )}
@@ -286,7 +214,7 @@ export default function AdminPage() {
           session={session}
           onSearchChange={(v) => { setSearch(v); setPage(0); }}
           onPageChange={setPage}
-          onRefresh={fetchUsers}
+          onRefresh={() => mutateUsers()}
         />
       </div>
     </div>

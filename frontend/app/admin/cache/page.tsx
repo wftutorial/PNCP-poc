@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { useAuth } from "../../components/AuthProvider";
 import Link from "next/link";
 import { toast } from "sonner";
+import { useAdminSWR } from "../../../hooks/useAdminSWR";
 
 // STORY-332 AC4: Redis status from /health/cache
 interface CacheHealth {
@@ -68,56 +69,18 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function AdminCachePage() {
   const { session, loading: authLoading, isAdmin, isAdminLoading } = useAuth();
-  const [metrics, setMetrics] = useState<CacheMetrics | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [inspecting, setInspecting] = useState<string | null>(null);
   const [inspectedEntry, setInspectedEntry] = useState<CacheEntry | null>(null);
   const [showDeleteAll, setShowDeleteAll] = useState(false);
   const [invalidating, setInvalidating] = useState<string | null>(null);
-  const [cacheHealth, setCacheHealth] = useState<CacheHealth | null>(null);
 
-  const fetchCacheHealth = useCallback(async () => {
-    if (!session?.access_token) return;
-    try {
-      const res = await fetch("/api/health/cache", {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setCacheHealth(data);
-      }
-    } catch {
-      // Silently ignore — health is supplementary info
-    }
-  }, [session?.access_token]);
+  // SWR data fetching
+  const shouldFetch = isAdmin && !authLoading && !isAdminLoading;
+  const { data: metrics, error: metricsError, isLoading: metricsLoading, mutate: mutateMetrics } = useAdminSWR<CacheMetrics>(shouldFetch ? "/api/admin/cache/metrics" : null);
+  const { data: cacheHealth } = useAdminSWR<CacheHealth>(shouldFetch ? "/api/health/cache" : null);
 
-  const fetchMetrics = useCallback(async () => {
-    if (!session?.access_token) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/admin/cache/metrics", {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-      if (!res.ok) throw new Error(`Erro ${res.status}`);
-      const data = await res.json();
-      setMetrics(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao carregar métricas");
-    } finally {
-      setLoading(false);
-    }
-  }, [session?.access_token]);
-
-  useEffect(() => {
-    if (session?.access_token && isAdmin) {
-      fetchMetrics();
-      fetchCacheHealth();
-    } else if (!authLoading && !isAdminLoading) {
-      setLoading(false);
-    }
-  }, [session?.access_token, isAdmin, isAdminLoading, authLoading, fetchMetrics, fetchCacheHealth]);
+  const loading = metricsLoading;
+  const error = metricsError?.message ?? null;
 
   const handleInspect = async (hash: string) => {
     if (!session?.access_token) return;
@@ -147,7 +110,7 @@ export default function AdminCachePage() {
       if (!res.ok) throw new Error(`Erro ${res.status}`);
       const data = await res.json();
       toast.success(`Invalidado em: ${data.deleted_levels?.join(", ")}`);
-      fetchMetrics();
+      mutateMetrics();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro ao invalidar");
     } finally {
@@ -171,7 +134,7 @@ export default function AdminCachePage() {
       toast.success(
         `Cache limpo: ${data.deleted_counts?.supabase || 0} Supabase, ${data.deleted_counts?.redis || 0} Redis, ${data.deleted_counts?.local || 0} local`
       );
-      fetchMetrics();
+      mutateMetrics();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro ao limpar cache");
     }
@@ -240,7 +203,7 @@ export default function AdminCachePage() {
               Metrics
             </Link>
             <button
-              onClick={fetchMetrics}
+              onClick={() => mutateMetrics()}
               disabled={loading}
               className="px-4 py-2 bg-[var(--brand-navy)] text-white rounded-button text-sm hover:bg-[var(--brand-blue)] disabled:opacity-50"
             >

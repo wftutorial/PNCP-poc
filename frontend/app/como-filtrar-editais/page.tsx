@@ -9,6 +9,19 @@ export const metadata: Metadata = {
   alternates: {
     canonical: 'https://smartlic.tech/como-filtrar-editais',
   },
+  openGraph: {
+    title: 'Como Filtrar Editais de Licitação e Focar no que Importa',
+    description: 'Entenda por que a busca manual de editais não funciona e como um filtro por perfil transforma 1.500 publicações diárias em 12 oportunidades relevantes.',
+    url: 'https://smartlic.tech/como-filtrar-editais',
+    type: 'article',
+    images: [{ url: '/api/og?title=Como+Filtrar+Editais+de+Licita%C3%A7%C3%A3o', width: 1200, height: 630, alt: 'Como Filtrar Editais de Licitação' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Como Filtrar Editais de Licitação e Focar no que Importa',
+    description: 'Entenda por que a busca manual de editais não funciona e como um filtro por perfil transforma 1.500 publicações diárias em 12 oportunidades relevantes.',
+    images: ['/api/og?title=Como+Filtrar+Editais+de+Licita%C3%A7%C3%A3o'],
+  },
 };
 
 const articleSchema = {
@@ -57,6 +70,20 @@ const breadcrumbSchema = {
   ],
 };
 
+const howToSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'HowTo',
+  name: 'Como filtrar editais de licitação e focar no que importa',
+  description: 'Transforme milhares de publicações diárias em oportunidades relevantes com filtro inteligente por perfil.',
+  step: [
+    { '@type': 'HowToStep', position: 1, name: 'Definir perfil da empresa', text: 'Configure setor, CNAE, faixa de valor e estados de atuação como critérios base.' },
+    { '@type': 'HowToStep', position: 2, name: 'Aplicar filtro setorial por palavras-chave', text: 'Use palavras-chave do seu segmento para eliminar editais irrelevantes automaticamente.' },
+    { '@type': 'HowToStep', position: 3, name: 'Filtrar por faixa de valor', text: 'Defina valor mínimo e máximo compatíveis com seu porte e capacidade.' },
+    { '@type': 'HowToStep', position: 4, name: 'Segmentar por geografia', text: 'Selecione os estados onde sua empresa tem viabilidade logística.' },
+    { '@type': 'HowToStep', position: 5, name: 'Revisar resultados filtrados', text: 'Analise apenas os editais que passaram por todos os filtros, focando energia nos mais viáveis.' },
+  ],
+};
+
 const RELATED_PAGES = [
   {
     href: '/como-avaliar-licitacao',
@@ -85,6 +112,10 @@ export default function ComoFiltrarEditais() {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(howToSchema) }}
       />
 
       <h1>Como filtrar editais de licitação e focar no que importa</h1>

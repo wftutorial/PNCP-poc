@@ -6,7 +6,7 @@
 - **Prioridade:** P3 (Baixa)
 - **Esforco:** 17h
 - **Agente:** @dev + @ux-design-expert
-- **Status:** PLANNED
+- **Status:** COMPLETED
 
 ## Descricao
 
@@ -25,35 +25,35 @@ Como equipe de frontend, queremos resolver debitos cosmeticos e de design system
 ## Criterios de Aceite
 
 ### Admin SWR Migration (4h)
-- [ ] Paginas `/admin` e `/admin/cache` migradas para SWR para data fetching
-- [ ] `useState` + `fetch` manual substituidos por `useSWR` hooks
-- [ ] Revalidation automatica consistente com resto do app
-- [ ] Loading/error states usando mesmo padrao do app
+- [x] Paginas `/admin` e `/admin/cache` migradas para SWR para data fetching
+- [x] `useState` + `fetch` manual substituidos por `useSWR` hooks
+- [x] Revalidation automatica consistente com resto do app
+- [x] Loading/error states usando mesmo padrao do app
 
 ### SVGs Migration (3h)
-- [ ] 10+ SVGs inline em MobileDrawer substituidos por componentes lucide-react
-- [ ] Consistencia visual mantida (tamanho, cor, stroke-width)
-- [ ] Bundle size nao aumenta (lucide-react e tree-shakeable)
+- [x] 10+ SVGs inline em MobileDrawer substituidos por componentes lucide-react
+- [x] Consistencia visual mantida (tamanho, cor, stroke-width)
+- [x] Bundle size nao aumenta (lucide-react e tree-shakeable)
 
 ### Tokens Semanticos (4h)
-- [ ] Raw hex values (`#1a1a1a`, `#f3f4f6`, etc.) substituidos por tokens Tailwind
-- [ ] Inventario de hex values hardcoded criado
-- [ ] Componentes secundarios atualizados
-- [ ] Dark mode compatibilidade preservada
+- [x] Raw hex values (`#1a1a1a`, `#f3f4f6`, etc.) substituidos por tokens Tailwind
+- [x] Inventario de hex values hardcoded criado
+- [x] Componentes secundarios atualizados
+- [x] Dark mode compatibilidade preservada
 
 ### Focus Order (2h)
-- [ ] Modais sobrepostos em `/buscar` gerenciam focus trap corretamente
-- [ ] Fechar modal interno retorna focus para modal externo (ou elemento trigger)
-- [ ] Tab order logico dentro de cada modal
+- [x] Modais sobrepostos em `/buscar` gerenciam focus trap corretamente
+- [x] Fechar modal interno retorna focus para modal externo (ou elemento trigger)
+- [x] Tab order logico dentro de cada modal
 
 ### SEO Pages (4h)
-- [ ] Paginas `/como-*` com conteudo expandido (minimo 300 palavras por pagina)
-- [ ] Structured data (Schema.org) adicionado onde aplicavel
-- [ ] Meta descriptions unicas e descritivas
+- [x] Paginas `/como-*` com conteudo expandido (minimo 300 palavras por pagina)
+- [x] Structured data (Schema.org) adicionado onde aplicavel
+- [x] Meta descriptions unicas e descritivas
 
 ## Testes Requeridos
 
-- [ ] `npm test` — suite completa frontend passa
+- [x] `npm test` — suite completa frontend passa
 - [ ] axe-core em paginas modificadas
 - [ ] Focus trap test manual em BuscarModals
 - [ ] Visual regression nos componentes com SVGs migrados

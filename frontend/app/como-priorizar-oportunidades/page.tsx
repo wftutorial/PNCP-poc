@@ -9,6 +9,19 @@ export const metadata: Metadata = {
   alternates: {
     canonical: 'https://smartlic.tech/como-priorizar-oportunidades',
   },
+  openGraph: {
+    title: 'Como Identificar Licitações com Maior Chance de Vitória',
+    description: 'Framework prático para priorizar licitações: critérios de aderência, viabilidade e competição.',
+    url: 'https://smartlic.tech/como-priorizar-oportunidades',
+    type: 'article',
+    images: [{ url: '/api/og?title=Como+Priorizar+Oportunidades+em+Licita%C3%A7%C3%B5es', width: 1200, height: 630, alt: 'Como Priorizar Oportunidades em Licitações' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Como Identificar Licitações com Maior Chance de Vitória',
+    description: 'Framework prático para priorizar licitações: critérios de aderência, viabilidade e competição.',
+    images: ['/api/og?title=Como+Priorizar+Oportunidades+em+Licita%C3%A7%C3%B5es'],
+  },
 };
 
 const articleSchema = {
@@ -57,6 +70,20 @@ const breadcrumbSchema = {
   ],
 };
 
+const howToSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'HowTo',
+  name: 'Como identificar licitações com maior chance de vitória',
+  description: 'Framework prático para priorizar oportunidades de licitação usando critérios objetivos.',
+  step: [
+    { '@type': 'HowToStep', position: 1, name: 'Classificar por aderência setorial', text: 'Avalie quão alinhado o objeto está com seu core business e experiência comprovada.' },
+    { '@type': 'HowToStep', position: 2, name: 'Avaliar viabilidade operacional', text: 'Considere prazo, geografia, valor e capacidade de execução da sua equipe.' },
+    { '@type': 'HowToStep', position: 3, name: 'Estimar nível de competição', text: 'Analise modalidade, critério de julgamento e histórico de participantes.' },
+    { '@type': 'HowToStep', position: 4, name: 'Calcular score de priorização', text: 'Combine os 3 fatores em um score único para comparar editais objetivamente.' },
+    { '@type': 'HowToStep', position: 5, name: 'Focar nos top 3 editais', text: 'Concentre recursos nos editais com maior score em vez de dispersar esforço.' },
+  ],
+};
+
 const RELATED_PAGES = [
   {
     href: '/como-avaliar-licitacao',
@@ -85,6 +112,10 @@ export default function ComoPriorizarOportunidades() {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(howToSchema) }}
       />
 
       <h1>Como identificar licitações com maior chance de vitória</h1>

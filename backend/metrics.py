@@ -986,6 +986,20 @@ LLM_COST_BRL = _create_counter(
     labelnames=["model", "call_type"],  # call_type: arbiter, summary, zero_match
 )
 
+# DEBT-v3-S2 AC1: LLM cost in USD (labels: model, operation)
+LLM_COST_USD = _create_counter(
+    "smartlic_llm_api_cost_dollars",
+    "Cumulative LLM API cost in USD",
+    labelnames=["model", "operation"],  # operation: arbiter, summary, zero_match
+)
+
+# DEBT-v3-S2 AC2: LLM token usage by model/operation/direction
+LLM_TOKENS_DETAILED = _create_counter(
+    "smartlic_llm_tokens_by_operation_total",
+    "LLM token usage by model, operation, and direction",
+    labelnames=["model", "operation", "direction"],  # direction: input, output
+)
+
 LLM_SUMMARY_CACHE_HITS = _create_counter(
     "smartlic_llm_summary_cache_hits_total",
     "LLM summary Redis cache hits (cross-worker sharing)",

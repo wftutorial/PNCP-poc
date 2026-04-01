@@ -123,12 +123,37 @@ function HomePageContent() {
               />
             )}
 
-            {/* Page Title */}
-            <div className="mb-8 animate-fade-in-up">
-              <h1 className="text-2xl sm:text-3xl font-bold font-display text-ink">Análise de Licitações</h1>
-              <p className="text-ink-secondary mt-1 text-sm sm:text-base">
-                Encontre oportunidades de contratação pública de acordo com o momento do seu negócio.
-              </p>
+            {/* Page Title — AC24/AC25/AC26 */}
+            {/*
+              AC24: returning users (has_searched_before=true) see title only, no description.
+              AC25: first-time users see full title + description (onboarding experience).
+              AC26: on mobile, after search is submitted, the title block shrinks to save vertical space.
+            */}
+            <div className={[
+              "animate-fade-in-up",
+              // AC26: shrink top margin on mobile once search is active/complete
+              (orch.search.loading || orch.search.result) ? "mb-3 sm:mb-8" : "mb-8",
+            ].join(" ")}>
+              <h1 className={[
+                "font-bold font-display text-ink",
+                // AC26: smaller heading on mobile after search to reclaim vertical space
+                (orch.search.loading || orch.search.result)
+                  ? "text-lg sm:text-3xl"
+                  : "text-2xl sm:text-3xl",
+              ].join(" ")}>
+                Análise de Licitações
+              </h1>
+              {/* AC25: first-time users see full onboarding description */}
+              {/* AC24: returning users skip this description entirely */}
+              {!orch.hasSearchedBefore && (
+                <p className={[
+                  "text-ink-secondary mt-1 text-sm sm:text-base",
+                  // AC26: hide description on mobile once search is active/done
+                  (orch.search.loading || orch.search.result) ? "hidden sm:block" : "",
+                ].join(" ")}>
+                  Encontre oportunidades de contratação pública de acordo com o momento do seu negócio.
+                </p>
+              )}
             </div>
 
             <SearchForm

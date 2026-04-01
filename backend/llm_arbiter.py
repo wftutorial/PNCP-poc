@@ -193,6 +193,11 @@ class LLMClassification(BaseModel):
 
 _search_token_stats: dict[str, dict] = {}
 
+# DEBT-v3-S2 AC4: Rolling window cost tracker for hourly alert
+_hourly_cost_usd: list[tuple[float, float]] = []  # [(timestamp, cost_usd), ...]
+_COST_WINDOW_S = 3600  # 1 hour
+_cost_alert_fired = False
+
 
 def _log_token_usage(
     search_id: str,
@@ -219,10 +224,38 @@ def _log_token_usage(
     )
     cost_brl = cost_usd * _get_usd_to_brl()
     try:
-        from metrics import LLM_COST_BRL
+        from metrics import LLM_COST_BRL, LLM_COST_USD, LLM_TOKENS_DETAILED
         LLM_COST_BRL.labels(model=LLM_MODEL, call_type=call_type).inc(cost_brl)
+        # DEBT-v3-S2 AC1: USD cost counter
+        LLM_COST_USD.labels(model=LLM_MODEL, operation=call_type).inc(cost_usd)
+        # DEBT-v3-S2 AC2: Detailed token counters
+        LLM_TOKENS_DETAILED.labels(model=LLM_MODEL, operation=call_type, direction="input").inc(input_tokens)
+        LLM_TOKENS_DETAILED.labels(model=LLM_MODEL, operation=call_type, direction="output").inc(output_tokens)
     except Exception:
         pass  # Never let metrics break LLM flow
+
+    # DEBT-v3-S2 AC4: Rolling window cost alert
+    try:
+        global _cost_alert_fired
+        now = _time_module.time()
+        _hourly_cost_usd.append((now, cost_usd))
+        # Prune entries older than 1 hour
+        cutoff = now - _COST_WINDOW_S
+        while _hourly_cost_usd and _hourly_cost_usd[0][0] < cutoff:
+            _hourly_cost_usd.pop(0)
+        hourly_total = sum(c for _, c in _hourly_cost_usd)
+        from config.features import LLM_COST_ALERT_THRESHOLD
+        if hourly_total > LLM_COST_ALERT_THRESHOLD:
+            if not _cost_alert_fired:
+                _cost_alert_fired = True
+                logger.warning(
+                    f"DEBT-v3-S2 AC4: LLM cost alert — ${hourly_total:.4f}/hour "
+                    f"exceeds threshold ${LLM_COST_ALERT_THRESHOLD:.2f}/hour"
+                )
+        else:
+            _cost_alert_fired = False
+    except Exception:
+        pass
 
 
 def get_search_cost_stats(search_id: str) -> dict:

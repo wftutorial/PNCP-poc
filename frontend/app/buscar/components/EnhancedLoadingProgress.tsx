@@ -9,6 +9,10 @@
  * UX-411: Replaced 5-stage technical indicators and countdown with
  * educational B2G carousel that reduces perceived wait time.
  * DEBT-111: Removed time-based simulation path — only SSE/polling progress used.
+ * DEBT-v3-S2 AC9: After 45s, show "Buscando em mais fontes..." with animated spinner.
+ * DEBT-v3-S2 AC10: After 45s, show "Ver resultados parciais" button if intermediate results exist.
+ * DEBT-v3-S2 AC11: Phase labels replace numeric percentage.
+ * DEBT-v3-S2 AC12: No percentage number visible at any point.
  */
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
@@ -42,6 +46,10 @@ export interface EnhancedLoadingProgressProps {
   showTimeoutOverlay?: boolean;
   /** CRIT-052 AC2: Show reconnecting indicator during SSE reconnection */
   isReconnecting?: boolean;
+  /** DEBT-v3-S2 AC10: Number of intermediate results found so far */
+  ufTotalFound?: number;
+  /** DEBT-v3-S2 AC10: Callback to view partial results */
+  onViewPartial?: () => void;
 }
 
 // Internal stages for progress logic (not displayed to user)
@@ -130,9 +138,15 @@ export function EnhancedLoadingProgress({
   degradedMessage,
   showTimeoutOverlay = false,
   isReconnecting = false,
+  ufTotalFound = 0,
+  onViewPartial,
 }: EnhancedLoadingProgressProps) {
   const [currentStage, setCurrentStage] = useState(1);
   const [elapsedTime, setElapsedTime] = useState(0);
+
+  // DEBT-v3-S2 AC9: "Stuck" state after 45s without final result
+  const STUCK_THRESHOLD_SECONDS = 45;
+  const isStuck = elapsedTime >= STUCK_THRESHOLD_SECONDS;
 
   // UX-411: Carousel state
   const [currentTipIndex, setCurrentTipIndex] = useState(0);
@@ -280,11 +294,16 @@ export function EnhancedLoadingProgress({
         </div>
       )}
 
-      {/* AC4: Header with spinner and "Analisando oportunidades..." */}
-      <ProgressAnimation isDegraded={isDegraded} />
+      {/* AC4: Header with spinner and phase label (DEBT-v3-S2 AC11) */}
+      <ProgressAnimation
+        isDegraded={isDegraded}
+        sseStage={sseEvent?.stage}
+        progress={progressPercentage}
+        isStuck={isStuck}
+      />
 
-      {/* AC3: Progress bar — animated, no percentage */}
-      <ProgressBar progress={progressPercentage} isDegraded={isDegraded} />
+      {/* AC3: Progress bar — animated, no percentage (DEBT-v3-S2 AC12) */}
+      <ProgressBar progress={progressPercentage} isDegraded={isDegraded} isStuck={isStuck} />
 
       {/* AC5 + AC10 + AC11: Educational B2G carousel */}
       <div
@@ -353,6 +372,24 @@ export function EnhancedLoadingProgress({
       {isOvertime && !isDegraded && (
         <div className="mb-3 p-3 bg-warning-subtle border border-warning/20 rounded-lg text-sm text-warning-dark" data-testid="overtime-message">
           {getOvertimeMessage(overtimeSeconds, stateCount, estimatedTime, elapsedTime, currentSseProgress)}
+        </div>
+      )}
+
+      {/* DEBT-v3-S2 AC10: "Ver resultados parciais" button after 45s with intermediate results */}
+      {isStuck && ufTotalFound > 0 && onViewPartial && (
+        <div className="mb-3" data-testid="stuck-partial-results">
+          <button
+            type="button"
+            onClick={onViewPartial}
+            className="w-full py-2.5 px-4 rounded-lg border border-brand-blue text-brand-blue font-medium text-sm hover:bg-brand-blue/5 transition-colors flex items-center justify-center gap-2"
+            data-testid="view-partial-results-btn"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+            Ver resultados parciais ({ufTotalFound.toLocaleString('pt-BR')} encontradas)
+          </button>
         </div>
       )}
 

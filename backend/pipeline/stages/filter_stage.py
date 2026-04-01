@@ -37,9 +37,10 @@ async def stage_filter(pipeline, ctx: SearchContext) -> None:
     deps = pipeline.deps
     request = ctx.request
 
-    # SSE: Starting filtering
+    # SSE: Starting filtering — DEBT-v3-S2 AC5
     if ctx.tracker:
         await ctx.tracker.emit("filtering", 60, f"Aplicando filtros em {len(ctx.licitacoes_raw)} licitacoes...")
+        await ctx.tracker.emit_filtering_progress(0, len(ctx.licitacoes_raw), "filtering")
 
     esferas_values = [e.value for e in request.esferas] if request.esferas else None
     status_filter = request.status.value if request.status else "todos"
@@ -62,24 +63,21 @@ async def stage_filter(pipeline, ctx: SearchContext) -> None:
             elapsed = sync_time_module.monotonic() - _filter_start
 
             if phase == "filter":
-                # AC2: interpolate 60->65 for keyword matching
-                pct = 60 + int((processed / max(total, 1)) * 5)
-                msg = f"Filtrando: {processed}/{total}"
+                # DEBT-v3-S2 AC5: Use new filtering_progress event
+                coro = ctx.tracker.emit_filtering_progress(processed, total, "filtering")
+                _loop.call_soon_threadsafe(_loop.create_task, coro)
             elif phase == "llm_classify":
-                # AC3: interpolate 65->70 for LLM zero-match
-                pct = 65 + int((processed / max(total, 1)) * 5)
-                msg = f"Classificação IA: {processed}/{total} sem keywords"
+                # DEBT-v3-S2 AC6: Use new llm_classifying event
+                coro = ctx.tracker.emit_llm_classifying(items=total, processed=processed, total=total)
+                _loop.call_soon_threadsafe(_loop.create_task, coro)
             else:
                 return
 
-            detail: dict = {}
-            # AC4: flag long-running filter after 30s
+            # AC4: flag long-running filter after 30s (legacy emit for compatibility)
             if elapsed > 30 and not _long_running_emitted[0]:
                 _long_running_emitted[0] = True
-                detail["is_long_running"] = True
-
-            coro = ctx.tracker.emit("filtering", pct, msg, **detail)
-            _loop.call_soon_threadsafe(_loop.create_task, coro)
+                coro2 = ctx.tracker.emit("filtering", 65, f"Filtragem demorada...", is_long_running=True)
+                _loop.call_soon_threadsafe(_loop.create_task, coro2)
     else:
         _on_filter_progress = None
 

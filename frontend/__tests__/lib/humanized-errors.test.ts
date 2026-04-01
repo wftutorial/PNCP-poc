@@ -5,24 +5,24 @@
 import { getHumanizedError } from "../../lib/error-messages";
 
 describe("getHumanizedError (STAB-006 AC2)", () => {
-  test("timeout error (524) returns yellow tone with scope reduction", () => {
+  test("timeout error (524) returns blue tone with scope reduction", () => {
     const result = getHumanizedError(524, "Gateway Timeout");
-    expect(result.tone).toBe("yellow");
+    expect(result.tone).toBe("blue");
     expect(result.suggestReduceScope).toBe(true);
     expect(result.actionLabel).toBe("Tentar novamente");
     expect(result.secondaryActionLabel).toBe("Reduzir escopo");
-    expect(result.message).toContain("excedeu o tempo limite");
+    expect(result.message).toContain("demorando");
   });
 
-  test("504 timeout returns yellow tone", () => {
+  test("504 timeout returns blue tone", () => {
     const result = getHumanizedError(504, "Gateway Timeout");
-    expect(result.tone).toBe("yellow");
+    expect(result.tone).toBe("blue");
     expect(result.suggestReduceScope).toBe(true);
   });
 
   test("message containing 'timeout' triggers timeout path", () => {
     const result = getHumanizedError(null, "Request timeout exceeded");
-    expect(result.tone).toBe("yellow");
+    expect(result.tone).toBe("blue");
     expect(result.suggestReduceScope).toBe(true);
   });
 

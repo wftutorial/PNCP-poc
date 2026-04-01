@@ -149,7 +149,7 @@ export function SearchStateManager({
 
   return (
     <>
-      {/* Offline / Auto-retry active (with countdown) */}
+      {/* Offline / Auto-retry active — DEBT-v3-S2 AC13-AC14: silent retry, no countdown visible */}
       <FadePanel
         show={showOfflineCountdown}
         className="mt-4 sm:mt-8 mx-0 p-3 sm:p-5 bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-xl max-w-full overflow-hidden"
@@ -158,16 +158,10 @@ export function SearchStateManager({
         data-testid="retry-countdown"
       >
         <p
-          className="text-sm sm:text-base font-medium text-blue-700 dark:text-blue-300 mb-1 break-words"
+          className="text-sm sm:text-base font-medium text-blue-700 dark:text-blue-300 mb-3 break-words"
           data-testid="retry-message"
         >
-          {retryMessage || "Temporariamente indisponível. Tentando novamente..."}
-        </p>
-        <p
-          className="text-xs sm:text-sm text-blue-600/70 dark:text-blue-400/70 mb-3"
-          data-testid="retry-countdown-text"
-        >
-          Tentando em {retryCountdown}s...
+          {retryMessage || "A busca esta demorando. Estamos tentando novamente automaticamente."}
         </p>
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
           <Button
@@ -192,7 +186,7 @@ export function SearchStateManager({
         </div>
       </FadePanel>
 
-      {/* Offline / Retry exhausted */}
+      {/* Offline / Retry exhausted — DEBT-v3-S2 AC15: humanized final message */}
       <FadePanel
         show={showOfflineExhausted}
         className="mt-4 sm:mt-8 mx-0 p-3 sm:p-5 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-xl max-w-full overflow-hidden"
@@ -201,7 +195,7 @@ export function SearchStateManager({
         data-testid="retry-exhausted"
       >
         <p className="text-sm sm:text-base font-medium text-amber-700 dark:text-amber-300 mb-3 break-words">
-          Análise indisponível no momento.
+          Nao conseguimos completar a busca agora. Tente novamente em alguns minutos.
         </p>
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
           <Button

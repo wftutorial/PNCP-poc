@@ -9,9 +9,13 @@
  *
  * Priority order: error (4) > warning (3) > info (2) > success (1)
  * aria-live="assertive" for errors, aria-live="polite" for others.
+ *
+ * AC17: Maximum 2 banners visible simultaneously (priority order).
+ * AC18: Non-error (informational) banners auto-dismiss after 5 seconds.
+ * AC19: Mounting 5 simultaneous banners results in only 2 visible in DOM.
  */
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
 // ============================================================================
 // Types
@@ -46,6 +50,11 @@ export interface BannerStackProps {
   className?: string;
   /** data-testid for the container */
   "data-testid"?: string;
+  /**
+   * Auto-dismiss delay in milliseconds for non-error banners.
+   * Default: 5000 (5 seconds). Set to 0 to disable auto-dismiss.
+   */
+  autoDismissMs?: number;
 }
 
 // ============================================================================
@@ -101,13 +110,52 @@ export function BannerStack({
   maxVisible = 2,
   className = "",
   "data-testid": testId = "banner-stack",
+  autoDismissMs = 5000,
 }: BannerStackProps) {
   const [expanded, setExpanded] = useState(false);
+  // Set of banner IDs that have been auto-dismissed
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+
+  // Reset dismissed state when the banners prop changes identity
+  // (new search or new banner set)
+  useEffect(() => {
+    setDismissed(new Set());
+  }, [banners]);
+
+  // AC18: Auto-dismiss non-error banners after autoDismissMs
+  useEffect(() => {
+    if (autoDismissMs <= 0) return;
+
+    const timers: ReturnType<typeof setTimeout>[] = [];
+
+    for (const banner of banners) {
+      // Error banners are persistent — never auto-dismiss
+      if (banner.type === "error") continue;
+
+      const timer = setTimeout(() => {
+        setDismissed((prev) => {
+          const next = new Set(prev);
+          next.add(banner.id);
+          return next;
+        });
+      }, autoDismissMs);
+
+      timers.push(timer);
+    }
+
+    return () => {
+      for (const timer of timers) clearTimeout(timer);
+    };
+  }, [banners, autoDismissMs]);
+
+  // Filter out dismissed banners before sorting/slicing
+  const activeBanners = banners.filter((b) => !dismissed.has(b.id));
 
   // Nothing to render
-  if (banners.length === 0) return null;
+  if (activeBanners.length === 0) return null;
 
-  const sorted = sortBanners(banners);
+  // AC17 / AC19: slice to maxVisible after priority sort
+  const sorted = sortBanners(activeBanners);
   const visible = sorted.slice(0, maxVisible);
   const hidden = sorted.slice(maxVisible);
   const hasMore = hidden.length > 0;
@@ -117,7 +165,7 @@ export function BannerStack({
       data-testid={testId}
       className={["flex flex-col gap-2", className].filter(Boolean).join(" ")}
     >
-      {/* Always-visible top banners */}
+      {/* Always-visible top banners (AC17: max maxVisible items) */}
       {visible.map((item) => (
         <BannerWrapper key={item.id} item={item} />
       ))}

@@ -431,11 +431,11 @@ describe("T7-T10: SearchResults retry countdown UI", () => {
     timestamp: new Date().toISOString(),
   };
 
-  it("T7: countdown visual displays remaining seconds correctly", () => {
+  it("T7: silent auto-retry shows humanized message without countdown seconds (DEBT-v3-S2 AC13-AC14)", () => {
     const mockRetryNow = jest.fn();
     const mockCancelRetry = jest.fn();
 
-    const { rerender } = render(
+    render(
       <SearchResults
         {...baseProps}
         error={transientError}
@@ -445,21 +445,11 @@ describe("T7-T10: SearchResults retry countdown UI", () => {
       />
     );
 
-    // Should show the countdown text
-    expect(screen.getByText(/Tentando em 15s/)).toBeInTheDocument();
-
-    // Rerender with decremented countdown
-    rerender(
-      <SearchResults
-        {...baseProps}
-        error={transientError}
-        retryCountdown={10}
-        onRetryNow={mockRetryNow}
-        onCancelRetry={mockCancelRetry}
-      />
-    );
-
-    expect(screen.getByText(/Tentando em 10s/)).toBeInTheDocument();
+    // Should show humanized retry message without countdown seconds
+    expect(screen.getByTestId("retry-countdown")).toBeInTheDocument();
+    expect(screen.getByTestId("retry-message")).toBeInTheDocument();
+    // Must NOT show countdown seconds like "15s" or "10s"
+    expect(screen.queryByText(/\d+s\.\.\./)).not.toBeInTheDocument();
   });
 
   it('T8: "Tentar agora" button triggers immediate retry', () => {

@@ -79,17 +79,17 @@ export function SearchErrorBanner({
             {humanizedError.message}
           </p>
 
-          {/* Auto-retry countdown */}
+          {/* DEBT-v3-S2 AC13: Silent auto-retry — no countdown or attempt counter visible */}
           {retryCountdown != null && retryMessage && (
             <p className={`text-xs mt-1 ${textClass} opacity-80`}>
-              {retryMessage} ({retryCountdown}s)
+              {retryMessage}
             </p>
           )}
 
-          {/* Retry exhausted */}
+          {/* DEBT-v3-S2 AC15: Retries exhausted — humanized message */}
           {retryExhausted && (
             <p className={`text-xs mt-1 ${textClass} opacity-80`}>
-              Todas as tentativas automaticas foram esgotadas.
+              Nao conseguimos completar a busca agora. Tente novamente em alguns minutos.
             </p>
           )}
 

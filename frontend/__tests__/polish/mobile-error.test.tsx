@@ -270,7 +270,7 @@ describe("GTM-POLISH-002 T1: retry-countdown card layout (375px mobile)", () => 
     expect(screen.getByText("Cancelar")).toBeInTheDocument();
   });
 
-  it("displays countdown seconds in text", () => {
+  it("shows humanized retry message without countdown seconds (DEBT-v3-S2 AC13-AC14)", () => {
     const props = makeMinimalProps({
       error: mockError,
       retryCountdown: 7,
@@ -280,7 +280,9 @@ describe("GTM-POLISH-002 T1: retry-countdown card layout (375px mobile)", () => 
 
     render(<SearchResults {...props} />);
 
-    expect(screen.getByTestId("retry-countdown-text")).toHaveTextContent("7s");
+    // Silent retry: shows retry panel but no countdown seconds
+    expect(screen.getByTestId("retry-countdown")).toBeInTheDocument();
+    expect(screen.queryByText(/7s/)).not.toBeInTheDocument();
   });
 
   it("does NOT render retry-countdown card when retryCountdown is 0", () => {

@@ -314,19 +314,20 @@ describe("SearchStateManager — AC9: visual test for each of 9 states", () => {
     expect(container.innerHTML).toBe("");
   });
 
-  it("renders retry-countdown for 'offline' phase with countdown", () => {
+  it("renders silent retry message for 'offline' phase with countdown (DEBT-v3-S2 AC13-AC14)", () => {
     render(
       <SearchStateManager
         {...baseManagerProps}
         phase="offline"
         error={makeError()}
         retryCountdown={15}
-        retryMessage="Serviço temporariamente indisponível"
+        retryMessage="A busca esta demorando. Estamos tentando novamente automaticamente."
       />
     );
     expect(screen.getByTestId("retry-countdown")).toBeInTheDocument();
-    expect(screen.getByTestId("retry-message")).toHaveTextContent("Serviço temporariamente indisponível");
-    expect(screen.getByTestId("retry-countdown-text")).toHaveTextContent("15s");
+    expect(screen.getByTestId("retry-message")).toHaveTextContent("A busca esta demorando. Estamos tentando novamente automaticamente.");
+    // DEBT-v3-S2 AC14: No countdown seconds visible
+    expect(screen.queryByText(/\d+s/)).not.toBeInTheDocument();
     expect(screen.getByTestId("retry-now-button")).toBeInTheDocument();
     expect(screen.getByText("Cancelar")).toBeInTheDocument();
   });
@@ -343,7 +344,7 @@ describe("SearchStateManager — AC9: visual test for each of 9 states", () => {
     );
     expect(screen.getByTestId("retry-exhausted")).toBeInTheDocument();
     expect(screen.getByTestId("retry-manual-button")).toBeInTheDocument();
-    expect(screen.getByText("Análise indisponível no momento.")).toBeInTheDocument();
+    expect(screen.getByText("Nao conseguimos completar a busca agora. Tente novamente em alguns minutos.")).toBeInTheDocument();
   });
 
   it("renders error card for 'failed' phase", () => {

@@ -339,6 +339,21 @@ Data atual: {datetime.now().strftime("%d/%m/%Y")}
     if not resumo:
         raise ValueError("OpenAI API returned empty response")
 
+    # DEBT-v3-S2 AC1-AC2: Track LLM cost and tokens for summary generation
+    try:
+        if response.usage:
+            _input_tokens = response.usage.prompt_tokens or 0
+            _output_tokens = response.usage.completion_tokens or 0
+            from metrics import LLM_COST_USD, LLM_TOKENS_DETAILED
+            _model_name = "gpt-4o-mini"
+            # gpt-4o-mini pricing: $0.15/1M input, $0.60/1M output
+            _cost_usd = _input_tokens * 0.15 / 1_000_000 + _output_tokens * 0.60 / 1_000_000
+            LLM_COST_USD.labels(model=_model_name, operation="summary").inc(_cost_usd)
+            LLM_TOKENS_DETAILED.labels(model=_model_name, operation="summary", direction="input").inc(_input_tokens)
+            LLM_TOKENS_DETAILED.labels(model=_model_name, operation="summary", direction="output").inc(_output_tokens)
+    except Exception:
+        pass  # Never let metrics break summary generation
+
     # ISSUE-039: Ground summary stats on actual data, not LLM counts.
     # The LLM may independently re-analyze relevance and report a different
     # count/value than what the pipeline actually returns to the frontend.

@@ -7,7 +7,7 @@ import type { RefreshAvailableInfo } from "../../../hooks/useSearchSSE";
 import { useAnalytics } from "../../../hooks/useAnalytics";
 import { useAuth } from "../../components/AuthProvider";
 import { useQuota } from "../../../hooks/useQuota";
-import { getUserFriendlyError, getMessageFromErrorCode } from "../../../lib/error-messages";
+import { getUserFriendlyError, getMessageFromErrorCode, CLIENT_TIMEOUT_STATUS } from "../../../lib/error-messages";
 import { saveSearchState } from "../../../lib/searchStatePersistence";
 import { saveLastSearch } from "../../../lib/lastSearchCache";
 import { recoverPartialSearch, clearPartialSearch } from "../../../lib/searchPartialCache";
@@ -191,7 +191,7 @@ export function useSearchExecution(params: UseSearchExecutionParams): UseSearchE
         asyncSearchIdRef.current = null;
         setLoading(false);
         setError({
-          message: "A análise excedeu o tempo limite. Algumas fontes podem estar lentas. Sugestão: tente novamente — resultados parciais podem estar disponíveis.",
+          message: "A busca esta demorando. Tente novamente em alguns minutos.",
           rawMessage: "Async safety timeout after 120s",
           errorCode: "ASYNC_TIMEOUT",
           searchId: searchId || "",
@@ -652,13 +652,13 @@ export function useSearchExecution(params: UseSearchExecutionParams): UseSearchE
           } catch { /* ignore */ }
           // CRIT-070 AC2: Abort without partial must show error, never return silently
           const abortError: SearchError = {
-            message: "A análise excedeu o tempo limite. Algumas fontes podem estar lentas. Tente novamente — resultados parciais podem estar disponíveis.",
+            message: "A busca esta demorando. Estamos tentando novamente automaticamente.",
             rawMessage: "Client timeout triggered after 65s",
             errorCode: "CLIENT_TIMEOUT",
             searchId: newSearchId,
             correlationId: null,
             requestId: null,
-            httpStatus: 524,
+            httpStatus: CLIENT_TIMEOUT_STATUS,
             timestamp: new Date().toISOString(),
           };
           setError(abortError);
@@ -688,7 +688,7 @@ export function useSearchExecution(params: UseSearchExecutionParams): UseSearchE
         setError(null);
         toast.info("Não foi possível atualizar os dados. Mostrando resultados anteriores.");
       } else {
-        const isTimeoutError = searchError.httpStatus === 524 || searchError.httpStatus === 504 ||
+        const isTimeoutError = searchError.httpStatus === CLIENT_TIMEOUT_STATUS || searchError.httpStatus === 504 ||
           searchError.rawMessage?.toLowerCase().includes('timeout') ||
           searchError.rawMessage?.toLowerCase().includes('demorou');
         if (isTimeoutError) {

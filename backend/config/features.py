@@ -78,6 +78,9 @@ TRIAL_PAYWALL_MAX_PIPELINE: int = int(os.getenv("TRIAL_PAYWALL_MAX_PIPELINE", "5
 # DEBT-325: USD to BRL exchange rate for LLM cost estimation
 USD_TO_BRL_RATE: float = float(os.getenv("USD_TO_BRL_RATE", "5.0"))
 
+# DEBT-v3-S2 AC4: LLM cost alert threshold in USD per hour (default $1/h)
+LLM_COST_ALERT_THRESHOLD: float = float(os.getenv("LLM_COST_ALERT_THRESHOLD", "1.0"))
+
 # D-04: Viability Assessment
 VIABILITY_WEIGHT_MODALITY: float = float(os.getenv("VIABILITY_WEIGHT_MODALITY", "0.30"))
 VIABILITY_WEIGHT_TIMELINE: float = float(os.getenv("VIABILITY_WEIGHT_TIMELINE", "0.25"))

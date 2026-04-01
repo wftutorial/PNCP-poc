@@ -33,8 +33,9 @@ exports[`EnhancedLoadingProgress Component Snapshot should match visual snapshot
     </svg>
     <p
       class="text-base sm:text-lg font-semibold text-ink"
+      data-testid="progress-phase-label"
     >
-      Analisando oportunidades...
+      Analisando editais...
     </p>
   </div>
   <div

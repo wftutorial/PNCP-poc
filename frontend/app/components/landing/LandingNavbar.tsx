@@ -1,46 +1,30 @@
-'use client';
-
+// DEBT-v3-S2 AC20: LandingNavbar is now an RSC -- client islands (NavbarScrollStyler,
+// NavScrollButton, NavbarAuthCTA, NavbarMobileControls) are in NavbarClientIsland.tsx
+// to minimize the 'use client' footprint.
 import Link from 'next/link';
-import { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '../AuthProvider';
-import MobileMenu from '../../../components/layout/MobileMenu';
+import {
+  NavbarScrollStyler,
+  NavScrollButton,
+  NavbarAuthCTA,
+  NavbarMobileControls,
+} from './NavbarClientIsland';
 
 interface LandingNavbarProps {
   className?: string;
 }
 
 export default function LandingNavbar({ className = '' }: LandingNavbarProps) {
-  const [isScrolled, setIsScrolled] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const { user, loading } = useAuth();
-
-  useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 10);
-    };
-
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  const scrollToSection = useCallback((id: string) => {
-    const element = document.getElementById(id);
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  }, []);
-
   return (
     <header
-      className={`sticky top-0 z-50 transition-all duration-300 ${
-        isScrolled
-          ? 'bg-[var(--surface-0)] md:bg-surface-0/70 md:backdrop-blur-xl shadow-[0_1px_3px_rgba(0,0,0,0.04)] border-b border-[var(--border)]/50'
-          : 'bg-transparent'
-      } ${className}`}
+      data-navbar-header
+      className={`sticky top-0 z-50 transition-all duration-300 bg-transparent data-[scrolled]:bg-[var(--surface-0)] data-[scrolled]:md:bg-surface-0/70 data-[scrolled]:md:backdrop-blur-xl data-[scrolled]:shadow-[0_1px_3px_rgba(0,0,0,0.04)] data-[scrolled]:border-b data-[scrolled]:border-[var(--border)]/50 ${className}`}
     >
+      {/* Client island: toggles data-scrolled attribute on header based on scroll position */}
+      <NavbarScrollStyler />
+
       <nav className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-14">
-          {/* Logo */}
+          {/* Logo -- fully static, server-rendered */}
           <div className="flex-shrink-0">
             <Link
               href="/"
@@ -50,7 +34,7 @@ export default function LandingNavbar({ className = '' }: LandingNavbarProps) {
             </Link>
           </div>
 
-          {/* Navigation Links — hidden on mobile */}
+          {/* Navigation Links -- hidden on mobile */}
           <div className="hidden md:flex items-center space-x-6">
             <Link
               href="/planos"
@@ -58,12 +42,8 @@ export default function LandingNavbar({ className = '' }: LandingNavbarProps) {
             >
               Planos
             </Link>
-            <button
-              onClick={() => scrollToSection('como-funciona')}
-              className="text-sm text-ink-secondary/80 hover:text-ink transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] rounded px-2 py-1"
-            >
-              Como Funciona
-            </button>
+            {/* Client island: scroll-to-section button */}
+            <NavScrollButton sectionId="como-funciona" label="Como Funciona" />
             <Link
               href="/blog"
               className="text-sm text-ink-secondary/80 hover:text-ink transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] rounded px-2 py-1"
@@ -86,62 +66,16 @@ export default function LandingNavbar({ className = '' }: LandingNavbarProps) {
 
           {/* CTA Buttons (desktop) + Hamburger (mobile) */}
           <div className="flex items-center space-x-4">
-            {/* Desktop CTA — hidden on mobile */}
+            {/* Desktop CTA -- hidden on mobile. Client island: auth-aware */}
             <div className="hidden md:flex items-center space-x-3">
-              {loading ? (
-                <div className="w-[160px]" />
-              ) : user ? (
-                <Link
-                  href="/buscar"
-                  className="bg-brand-navy hover:bg-brand-blue-hover text-white text-sm font-medium px-4 py-1.5 rounded-button transition-all hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2"
-                >
-                  Ir para Busca
-                </Link>
-              ) : (
-                <>
-                  <Link
-                    href="/login"
-                    className="text-sm text-ink-secondary/80 hover:text-ink font-medium px-3 py-1.5 rounded-button transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2"
-                  >
-                    Entrar
-                  </Link>
-                  <Link
-                    href="/signup?source=header-cta"
-                    className="bg-brand-navy hover:bg-brand-blue-hover text-white text-sm font-medium px-4 py-1.5 rounded-button transition-all hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2"
-                  >
-                    Comece Gratis
-                  </Link>
-                </>
-              )}
+              <NavbarAuthCTA />
             </div>
 
-            {/* Hamburger button — AC1: visible only on mobile */}
-            <button
-              onClick={() => setIsMobileMenuOpen(true)}
-              className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg
-                         text-[var(--ink)] hover:bg-[var(--surface-1)] transition-colors
-                         focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)]"
-              aria-label="Abrir menu"
-              aria-expanded={isMobileMenuOpen}
-              data-testid="hamburger-button"
-            >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="3" y1="6" x2="21" y2="6" />
-                <line x1="3" y1="12" x2="21" y2="12" />
-                <line x1="3" y1="18" x2="21" y2="18" />
-              </svg>
-            </button>
+            {/* Mobile controls: hamburger + mobile menu. Client island */}
+            <NavbarMobileControls />
           </div>
         </div>
       </nav>
-
-      {/* Mobile Menu — AC2-AC6 */}
-      <MobileMenu
-        isOpen={isMobileMenuOpen}
-        onClose={() => setIsMobileMenuOpen(false)}
-        user={user}
-        scrollToSection={scrollToSection}
-      />
     </header>
   );
 }

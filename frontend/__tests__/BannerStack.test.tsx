@@ -1,9 +1,12 @@
 /**
  * DEBT-204 Track 3: BannerStack unit tests
+ * AC17: Max 2 banners visible simultaneously
+ * AC18: Non-error banners auto-dismiss after 5 seconds
+ * AC19: 5 simultaneous banners → only 2 visible in DOM
  */
 
 import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { BannerStack, BannerItem } from "../app/buscar/components/BannerStack";
 
 // ---------------------------------------------------------------------------
@@ -276,5 +279,189 @@ describe("BannerStack — edge cases", () => {
     const banners = [makeItem("b1", "info", "Info")];
     render(<BannerStack banners={banners} data-testid="my-banner-stack" />);
     expect(screen.getByTestId("my-banner-stack")).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AC19: 5 simultaneous banners — only 2 visible in DOM
+// ---------------------------------------------------------------------------
+
+describe("BannerStack — AC19: 5 banners → max 2 visible", () => {
+  it("renders exactly 2 banner-item elements in the visible slot when 5 are provided", () => {
+    const banners = [
+      makeItem("b1", "error", "Error 1"),
+      makeItem("b2", "warning", "Warning 1"),
+      makeItem("b3", "info", "Info 1"),
+      makeItem("b4", "info", "Info 2"),
+      makeItem("b5", "success", "Success 1"),
+    ];
+    render(<BannerStack banners={banners} />);
+
+    // The top-level container's direct banner wrappers (the 2 visible ones)
+    // are NOT inside the overflow div. Count banner-item-* that are NOT
+    // children of banner-stack-overflow.
+    const overflow = screen.getByTestId("banner-stack-overflow");
+    const allItems = screen.getAllByTestId(/^banner-item-/);
+    const visibleItems = allItems.filter((el) => !overflow.contains(el));
+
+    expect(visibleItems).toHaveLength(2);
+  });
+
+  it("the 2 visible banners are the highest-severity ones (error + warning)", () => {
+    const banners = [
+      makeItem("b1", "error", "Error msg"),
+      makeItem("b2", "warning", "Warning msg"),
+      makeItem("b3", "info", "Info msg"),
+      makeItem("b4", "info", "Info 2"),
+      makeItem("b5", "success", "Success msg"),
+    ];
+    render(<BannerStack banners={banners} />);
+
+    const overflow = screen.getByTestId("banner-stack-overflow");
+    const allItems = screen.getAllByTestId(/^banner-item-/);
+    const visibleItems = allItems.filter((el) => !overflow.contains(el));
+
+    const visibleIds = visibleItems.map((el) =>
+      el.getAttribute("data-testid")?.replace("banner-item-", "")
+    );
+    expect(visibleIds).toContain("b1");
+    expect(visibleIds).toContain("b2");
+  });
+
+  it("overflow region contains the remaining 3 hidden banners", () => {
+    const banners = [
+      makeItem("b1", "error", "Error"),
+      makeItem("b2", "warning", "Warning"),
+      makeItem("b3", "info", "Info 1"),
+      makeItem("b4", "info", "Info 2"),
+      makeItem("b5", "success", "Success"),
+    ];
+    render(<BannerStack banners={banners} />);
+
+    const overflow = screen.getByTestId("banner-stack-overflow");
+    expect(overflow).toContainElement(screen.getByTestId("banner-item-b3"));
+    expect(overflow).toContainElement(screen.getByTestId("banner-item-b4"));
+    expect(overflow).toContainElement(screen.getByTestId("banner-item-b5"));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AC18: Auto-dismiss non-error banners after 5 seconds
+// ---------------------------------------------------------------------------
+
+describe("BannerStack — AC18: auto-dismiss non-error banners", () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    act(() => {
+      jest.runOnlyPendingTimers();
+    });
+    jest.useRealTimers();
+  });
+
+  it("removes a non-error banner after autoDismissMs elapses", () => {
+    const banners = [makeItem("i1", "info", "Info message")];
+    render(<BannerStack banners={banners} autoDismissMs={5000} />);
+
+    expect(screen.getByText("Info message")).toBeInTheDocument();
+
+    act(() => {
+      jest.advanceTimersByTime(5000);
+    });
+
+    expect(screen.queryByText("Info message")).not.toBeInTheDocument();
+  });
+
+  it("does NOT auto-dismiss error banners after 5 seconds", () => {
+    const banners = [makeItem("e1", "error", "Error message")];
+    render(<BannerStack banners={banners} autoDismissMs={5000} />);
+
+    expect(screen.getByText("Error message")).toBeInTheDocument();
+
+    act(() => {
+      jest.advanceTimersByTime(10000);
+    });
+
+    expect(screen.getByText("Error message")).toBeInTheDocument();
+  });
+
+  it("auto-dismisses warning banners after the timeout", () => {
+    const banners = [makeItem("w1", "warning", "Warning message")];
+    render(<BannerStack banners={banners} autoDismissMs={5000} />);
+
+    expect(screen.getByText("Warning message")).toBeInTheDocument();
+
+    act(() => {
+      jest.advanceTimersByTime(5000);
+    });
+
+    expect(screen.queryByText("Warning message")).not.toBeInTheDocument();
+  });
+
+  it("auto-dismisses success banners after the timeout", () => {
+    const banners = [makeItem("s1", "success", "Success message")];
+    render(<BannerStack banners={banners} autoDismissMs={5000} />);
+
+    expect(screen.getByText("Success message")).toBeInTheDocument();
+
+    act(() => {
+      jest.advanceTimersByTime(5000);
+    });
+
+    expect(screen.queryByText("Success message")).not.toBeInTheDocument();
+  });
+
+  it("does NOT dismiss before the timeout elapses", () => {
+    const banners = [makeItem("i1", "info", "Info message")];
+    render(<BannerStack banners={banners} autoDismissMs={5000} />);
+
+    act(() => {
+      jest.advanceTimersByTime(4999);
+    });
+
+    expect(screen.getByText("Info message")).toBeInTheDocument();
+  });
+
+  it("keeps error banner while dismissing colocated non-error banners", () => {
+    const banners = [
+      makeItem("e1", "error", "Persistent error"),
+      makeItem("i1", "info", "Transient info"),
+    ];
+    render(<BannerStack banners={banners} autoDismissMs={5000} />);
+
+    act(() => {
+      jest.advanceTimersByTime(5000);
+    });
+
+    expect(screen.getByText("Persistent error")).toBeInTheDocument();
+    expect(screen.queryByText("Transient info")).not.toBeInTheDocument();
+  });
+
+  it("disables auto-dismiss when autoDismissMs=0", () => {
+    const banners = [makeItem("i1", "info", "Info message")];
+    render(<BannerStack banners={banners} autoDismissMs={0} />);
+
+    act(() => {
+      jest.advanceTimersByTime(60000);
+    });
+
+    expect(screen.getByText("Info message")).toBeInTheDocument();
+  });
+
+  it("respects custom autoDismissMs value", () => {
+    const banners = [makeItem("i1", "info", "Info message")];
+    render(<BannerStack banners={banners} autoDismissMs={2000} />);
+
+    act(() => {
+      jest.advanceTimersByTime(1999);
+    });
+    expect(screen.getByText("Info message")).toBeInTheDocument();
+
+    act(() => {
+      jest.advanceTimersByTime(1);
+    });
+    expect(screen.queryByText("Info message")).not.toBeInTheDocument();
   });
 });

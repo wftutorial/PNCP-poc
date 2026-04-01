@@ -61,7 +61,7 @@ describe('getUserFriendlyError', () => {
     });
 
     it('should map 504 errors', () => {
-      expect(getUserFriendlyError('504')).toBe('A análise excedeu o tempo limite. Algumas fontes podem estar lentas. Tente novamente — resultados parciais podem estar disponíveis.');
+      expect(getUserFriendlyError('504')).toBe('A busca esta demorando. Tente novamente em alguns minutos.');
     });
 
     it('should map 500 errors', () => {
@@ -180,15 +180,15 @@ describe('getUserFriendlyError', () => {
 
   describe('Timeout errors', () => {
     it('should map "excedeu o tempo limite"', () => {
-      expect(getUserFriendlyError('excedeu o tempo limite')).toBe('A análise excedeu o tempo limite. Algumas fontes podem estar lentas. Tente novamente — resultados parciais podem estar disponíveis.');
+      expect(getUserFriendlyError('excedeu o tempo limite')).toBe('A busca esta demorando. Tente novamente em alguns minutos.');
     });
 
     it('should map "PNCP está temporariamente"', () => {
-      expect(getUserFriendlyError('PNCP está temporariamente')).toBe('O portal PNCP está temporariamente fora do ar. Tente novamente em instantes.');
+      expect(getUserFriendlyError('PNCP está temporariamente')).toBe('Uma das fontes esta temporariamente indisponivel. Tente novamente em instantes.');
     });
 
     it('should map "tempo limite de"', () => {
-      expect(getUserFriendlyError('tempo limite de')).toBe('A análise excedeu o tempo limite. Algumas fontes podem estar lentas. Tente novamente — resultados parciais podem estar disponíveis.');
+      expect(getUserFriendlyError('tempo limite de')).toBe('A busca esta demorando. Tente novamente em alguns minutos.');
     });
   });
 

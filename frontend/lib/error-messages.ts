@@ -19,7 +19,7 @@ const ERROR_MAP: Record<string, string> = {
   "400": "Requisição inválida. Verifique os dados e tente novamente.",
   "503": "Serviço temporariamente indisponível. Tente em alguns minutos.",
   "502": "O servidor está temporariamente indisponível. Tente novamente em instantes.",
-  "504": "A análise excedeu o tempo limite. Algumas fontes podem estar lentas. Tente novamente — resultados parciais podem estar disponíveis.",
+  "504": "A busca esta demorando. Tente novamente em alguns minutos.",
   "500": "Erro interno do servidor. Tente novamente.",
   "429": "Muitas requisições. Aguarde um momento e tente novamente.",
   "401": "Sessão expirada. Faça login novamente.",
@@ -56,9 +56,9 @@ const ERROR_MAP: Record<string, string> = {
   "Quota excedida": "Suas análises do mês acabaram. Faça upgrade para continuar.",
 
   // Timeout / PNCP specific (from backend detail messages)
-  "excedeu o tempo limite": "A análise excedeu o tempo limite. Algumas fontes podem estar lentas. Tente novamente — resultados parciais podem estar disponíveis.",
-  "PNCP está temporariamente": "O portal PNCP está temporariamente fora do ar. Tente novamente em instantes.",
-  "tempo limite de": "A análise excedeu o tempo limite. Algumas fontes podem estar lentas. Tente novamente — resultados parciais podem estar disponíveis.",
+  "excedeu o tempo limite": "A busca esta demorando. Tente novamente em alguns minutos.",
+  "PNCP está temporariamente": "Uma das fontes esta temporariamente indisponivel. Tente novamente em instantes.",
+  "tempo limite de": "A busca esta demorando. Tente novamente em alguns minutos.",
 
   // UX FIX: Plan limit errors (date range)
   "período da análise não pode exceder": "keep_original", // Let the full message through
@@ -210,7 +210,10 @@ export const DEFAULT_ERROR_MESSAGE = "Ocorreu um erro inesperado. Tente novament
  * CRIT-008 AC4: HTTP status codes that indicate transient (recoverable) errors.
  * These trigger auto-retry with countdown in the frontend.
  */
-export const TRANSIENT_HTTP_CODES = new Set([502, 503, 504]);
+/** Internal status code for client-side timeout (not a real HTTP code — never expose to users). */
+export const CLIENT_TIMEOUT_STATUS = 524;
+
+export const TRANSIENT_HTTP_CODES = new Set([502, 503, 504, CLIENT_TIMEOUT_STATUS]);
 
 /**
  * GTM-UX-003 AC4-AC7: Contextual retry messages by error type.
@@ -219,17 +222,17 @@ export const TRANSIENT_HTTP_CODES = new Set([502, 503, 504]);
 export function getRetryMessage(httpStatus: number | null, rawMessage?: string): string {
   const msg = (rawMessage || '').toLowerCase();
 
-  // AC4: Timeout / PNCP timeout
-  if (httpStatus === 504 || msg.includes('timeout') || msg.includes('demorou') || msg.includes('tempo limite')) {
-    return 'A consulta está demorando mais que o esperado. Tentando novamente...';
+  // Timeout errors (no HTTP codes or technical details exposed)
+  if (httpStatus === 504 || httpStatus === CLIENT_TIMEOUT_STATUS || msg.includes('timeout') || msg.includes('demorou') || msg.includes('tempo limite')) {
+    return 'A busca esta demorando. Estamos tentando novamente automaticamente.';
   }
 
-  // AC5: 502/503 — service unavailable
+  // Service unavailable
   if (httpStatus === 502 || httpStatus === 503) {
-    return 'Serviço temporariamente indisponível. Tentando novamente...';
+    return 'Estamos tentando novamente automaticamente.';
   }
 
-  // AC6: Network errors
+  // Network errors
   if (
     msg.includes('fetch failed') ||
     msg.includes('failed to fetch') ||
@@ -241,11 +244,11 @@ export function getRetryMessage(httpStatus: number | null, rawMessage?: string):
     msg.includes('conexão') ||
     msg.includes('conexao')
   ) {
-    return 'Sem conexão com o servidor. Verificando...';
+    return 'Verificando conexao. Tentando novamente automaticamente.';
   }
 
-  // AC7: Generic transient — never say "reiniciando"
-  return 'Serviço temporariamente indisponível. Tentando novamente...';
+  // Generic transient
+  return 'Estamos tentando novamente automaticamente.';
 }
 
 /**
@@ -322,8 +325,8 @@ export const ERROR_CODE_MESSAGES: Record<string, string> = {
   BACKEND_UNAVAILABLE: "Estamos voltando em instantes. Tente novamente em alguns segundos.",
   SOURCE_UNAVAILABLE: "As fontes de dados estão temporariamente em manutenção. Tente novamente em breve.",
   ALL_SOURCES_FAILED: "Nenhuma fonte respondeu a tempo. Tente novamente em 2-3 minutos.",
-  TIMEOUT: "A análise excedeu o tempo limite. Algumas fontes podem estar lentas. Sugestão: tente novamente — resultados parciais podem estar disponíveis.",
-  CLIENT_TIMEOUT: "A análise excedeu o tempo limite. Algumas fontes podem estar lentas. Sugestão: tente novamente — resultados parciais podem estar disponíveis.",
+  TIMEOUT: "A busca esta demorando. Estamos tentando novamente automaticamente.",
+  CLIENT_TIMEOUT: "A busca esta demorando. Estamos tentando novamente automaticamente.",
   RATE_LIMIT: "Muitas análises em sequência. Aguarde 1 minuto e tente novamente.",
   QUOTA_EXCEEDED: "Suas análises deste mês foram utilizadas. Faça upgrade para continuar.",
   VALIDATION_ERROR: "Verifique os filtros selecionados e tente novamente.",
@@ -359,13 +362,13 @@ export function getHumanizedError(
 ): HumanizedError {
   const msg = (rawMessage || "").toLowerCase();
 
-  // Timeout / 524
-  if (httpStatus === 524 || httpStatus === 504 || msg.includes("timeout") || msg.includes("demorou")) {
+  // Timeout errors (504, client-side timeout, etc.)
+  if (httpStatus === 504 || httpStatus === CLIENT_TIMEOUT_STATUS || msg.includes("timeout") || msg.includes("demorou")) {
     return {
-      message: "A análise excedeu o tempo limite. Algumas fontes podem estar lentas. Tente novamente — resultados parciais podem estar disponíveis.",
+      message: "A busca esta demorando. Estamos tentando novamente automaticamente.",
       actionLabel: "Tentar novamente",
       secondaryActionLabel: "Reduzir escopo",
-      tone: "yellow",
+      tone: "blue",
       suggestReduceScope: true,
     };
   }

@@ -159,7 +159,7 @@ describe('EnhancedLoadingProgress Component', () => {
   });
 
   describe('UX-411: Spinner and text', () => {
-    it('should show spinner and "Analisando oportunidades..." text', () => {
+    it('should show spinner and descriptive phase label (AC11)', () => {
       render(
         <EnhancedLoadingProgress
           currentStep={1}
@@ -168,7 +168,10 @@ describe('EnhancedLoadingProgress Component', () => {
         />
       );
 
-      expect(screen.getByText('Analisando oportunidades...')).toBeInTheDocument();
+      // DEBT-v3-S2 AC11: Phase labels replace static text
+      const phaseLabels = ['Conectando fontes...', 'Analisando editais...', 'Classificando relevância...', 'Finalizando...'];
+      const hasPhaseLabel = phaseLabels.some(label => screen.queryByText(label));
+      expect(hasPhaseLabel).toBe(true);
       // SVG spinner should be present (with animate-spin class)
       const svg = document.querySelector('svg.animate-spin');
       expect(svg).toBeInTheDocument();

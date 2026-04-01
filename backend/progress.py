@@ -523,6 +523,58 @@ class ProgressTracker:
         )
         await self._emit_event(event)
 
+    async def emit_filtering_progress(
+        self,
+        processed: int,
+        total: int,
+        phase: str = "filtering",
+    ) -> None:
+        """DEBT-v3-S2 AC5: Emit filtering_progress event during filter phase.
+
+        Ensures progress never stays silent >15s during filtering.
+        """
+        pct = 60 + int((processed / max(total, 1)) * 10)  # 60-70%
+        event = ProgressEvent(
+            stage="filtering_progress",
+            progress=min(70, pct),
+            message=f"Analisando editais: {processed}/{total}",
+            detail={
+                "phase": phase,
+                "processed": processed,
+                "total": total,
+            },
+        )
+        await self._emit_event(event)
+
+    async def emit_llm_classifying(
+        self,
+        items: int,
+        processed: int = 0,
+        total: int = 0,
+    ) -> None:
+        """DEBT-v3-S2 AC6: Emit llm_classifying event when LLM zero-match starts.
+
+        Sent when LLM classification begins and periodically during classification.
+        """
+        if total > 0:
+            pct = 70 + int((processed / max(total, 1)) * 5)  # 70-75%
+            message = f"Classificando relevância: {processed}/{total}"
+        else:
+            pct = 70
+            message = f"Classificando relevância de {items} editais com IA..."
+        event = ProgressEvent(
+            stage="llm_classifying",
+            progress=min(75, pct),
+            message=message,
+            detail={
+                "phase": "classifying",
+                "items": items,
+                "processed": processed,
+                "total": total,
+            },
+        )
+        await self._emit_event(event)
+
     async def emit_filter_summary(
         self,
         total_raw: int,

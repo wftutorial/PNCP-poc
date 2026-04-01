@@ -88,16 +88,17 @@ export function useSearchRetry(): UseSearchRetryReturn {
     autoRetryInProgressRef.current = false;
   }, []);
 
-  // CRIT-008 AC4-AC5 + GTM-UX-003 AC1-AC7: Auto-retry with contextual messages
-  // CRIT-082: Reduced to max 2 attempts with delays [10s, 20s] to prevent retry amplification
+  // DEBT-v3-S2 AC13-AC14: Silent auto-retry with backoff [10s, 20s].
+  // No countdown, no attempt counter visible to user. Retries happen silently.
+  // After 2 retries exhausted, show AC15 message.
   const startAutoRetry = useCallback((searchError: SearchError, setError: (e: SearchError | null) => void) => {
     if (isTransientError(searchError.httpStatus, searchError.rawMessage) && retryAttemptRef.current < 2) {
       const RETRY_DELAYS = [10, 20];
       const delaySeconds = RETRY_DELAYS[retryAttemptRef.current] ?? 20;
       let remaining = delaySeconds;
-      setRetryCountdown(remaining);
-      // GTM-UX-003 AC4-AC7: Contextual message (never "reiniciando")
+      // AC13: Show humanized message during silent retry (no countdown exposed)
       setRetryMessage(getRetryMessage(searchError.httpStatus, searchError.rawMessage));
+      setRetryCountdown(remaining);
       setRetryExhausted(false);
 
       if (retryTimerRef.current) clearInterval(retryTimerRef.current);
@@ -117,9 +118,10 @@ export function useSearchRetry(): UseSearchRetryReturn {
         }
       }, 1000);
     } else if (isTransientError(searchError.httpStatus, searchError.rawMessage) && retryAttemptRef.current >= 2) {
-      // GTM-UX-003 AC9: All 2 attempts exhausted (CRIT-082: reduced from 3)
+      // AC15: All 2 attempts exhausted — show final humanized message
       setRetryExhausted(true);
       setRetryMessage(null);
+      setRetryCountdown(null);
     }
   }, []);
 

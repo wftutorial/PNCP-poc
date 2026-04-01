@@ -155,31 +155,31 @@ describe("GTM-UX-003: Unified Retry UX", () => {
   describe("T1: Contextual retry messages", () => {
     test("getRetryMessage returns timeout message for HTTP 504", () => {
       const msg = getRetryMessage(504, "Gateway Timeout");
-      expect(msg).toContain("demorando mais que o esperado");
+      expect(msg).toContain("demorando");
       expect(msg).not.toContain("reiniciando");
     });
 
-    test("getRetryMessage returns service unavailable for HTTP 502", () => {
+    test("getRetryMessage returns humanized message for HTTP 502", () => {
       const msg = getRetryMessage(502, "Bad Gateway");
-      expect(msg).toContain("temporariamente indisponível");
+      expect(msg).toContain("tentando novamente");
       expect(msg).not.toContain("reiniciando");
     });
 
-    test("getRetryMessage returns service unavailable for HTTP 503", () => {
+    test("getRetryMessage returns humanized message for HTTP 503", () => {
       const msg = getRetryMessage(503, "Service Unavailable");
-      expect(msg).toContain("temporariamente indisponível");
+      expect(msg).toContain("tentando novamente");
       expect(msg).not.toContain("reiniciando");
     });
 
     test("getRetryMessage returns network message for fetch failed", () => {
       const msg = getRetryMessage(null, "Failed to fetch");
-      expect(msg).toContain("Sem conexão");
+      expect(msg).toContain("conexao");
       expect(msg).not.toContain("reiniciando");
     });
 
     test("getRetryMessage returns timeout message for PNCP timeout", () => {
       const msg = getRetryMessage(null, "PNCP timeout exceeded");
-      expect(msg).toContain("demorando mais que o esperado");
+      expect(msg).toContain("demorando");
     });
 
     test("getRetryMessage NEVER returns 'reiniciando' for any transient error", () => {
@@ -414,7 +414,7 @@ describe("GTM-UX-003: Unified Retry UX", () => {
         await result.current.buscar();
       });
 
-      expect(result.current.retryMessage).toContain("demorando mais que o esperado");
+      expect(result.current.retryMessage).toContain("demorando");
     });
   });
 });

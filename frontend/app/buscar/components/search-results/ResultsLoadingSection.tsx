@@ -62,6 +62,8 @@ export function ResultsLoadingSection({
           onStageChange={onStageChange} ufAllComplete={ufAllComplete}
           isDegraded={isDegraded}
           degradedMessage={sseEvent?.stage === 'degraded' ? sseEvent.message : undefined}
+          ufTotalFound={ufTotalFound}
+          onViewPartial={onViewPartial}
         />
       </div>
       <LoadingResultsSkeleton count={1} />

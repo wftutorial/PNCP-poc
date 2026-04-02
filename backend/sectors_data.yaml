@@ -3536,15 +3536,9 @@ sectors:
       - "registro de preços para aquisição de materiais de limpeza"
       - "registro de preços de materiais de limpeza"
       - "registro de preços de produtos de limpeza"
-      # Aquisições futuras/parceladas (SRP para material)
-      - "aquisicoes parceladas de material de limpeza"
-      - "aquisicoes parceladas de materiais de limpeza"
-      - "aquisicoes futuras de material de limpeza"
-      - "aquisicoes futuras de materiais de limpeza"
-      - "aquisições parceladas de material de limpeza"
-      - "aquisições parceladas de materiais de limpeza"
-      - "aquisições futuras de material de limpeza"
-      - "aquisições futuras de materiais de limpeza"
+      # Aquisições de materiais (SRP) — substrings curtas, capturam variações com palavras inseridas (ISSUE-063 session-032)
+      - "aquisicoes de materiais de limpeza"
+      - "aquisicoes de produtos de limpeza"
       # ISSUE-062 session-030: fraldas, teleatendentes, saneantes hospitalares, outsourcing TI
       - "fralda"
       - "fraldas"
@@ -3573,6 +3567,15 @@ sectors:
       - "mao de obra de ti"
       - "terceirização de serviços de tecnologia"
       - "terceirizacao de servicos de tecnologia"
+      # ISSUE-063 session-032: exclusões curtas para FPs de compra de produto vs serviço predial
+      - "materiais de higiene"
+      - "artigos de higiene"
+      - "artigos descartáveis"
+      - "artigos descartaveis"
+      - "utensílios domésticos"
+      - "utensilios domesticos"
+      - "utensílios de copa e cozinha"
+      - "utensilios de copa e cozinha"
     context_required_keywords:
       # CRIT-021 AC9: Facilities context gates
       # "limpeza" can be data cleansing or general cleaning product (not service).
@@ -4874,6 +4877,31 @@ sectors:
       - "caminhao tracado"
       - "caçamba basculante"
       - "cacamba basculante"
+      # ISSUE-064 session-032: abreviação KM + FPs de seguros/borracharia/lavagem
+      # Abreviação "ZERO KM" — fix anterior usou "zero quilometro" mas títulos reais usam "ZERO KM"
+      - "zero km"
+      - "0 km"
+      # Seguros automotivos
+      - "seguro automotivo"
+      - "seguros automotivos"
+      - "seguros dos veículos"
+      - "seguros dos veiculos"
+      - "seguro de veículos"
+      - "seguro de veiculos"
+      # Recauchutagem (compra avulsa, não frota)
+      - "recauchutagem"
+      - "recauchutagem de pneus"
+      # Lavagem de veículos
+      - "lavagem de veículo"
+      - "lavagem de veiculo"
+      - "lavagem de veículos"
+      - "lavagem de veiculos"
+      # Ambulância sem condutor (locação de equipamento, não serviço de transporte)
+      - "ambulância sem condutor"
+      - "ambulancia sem condutor"
+      # Caçambas estacionárias (coleta de resíduos, não transporte)
+      - "caçambas estacionárias"
+      - "cacambas estacionarias"
     context_required_keywords:
       # CRIT-021 AC9: Transporte context gates
       # "diesel" can appear in generator/equipment fuel context.

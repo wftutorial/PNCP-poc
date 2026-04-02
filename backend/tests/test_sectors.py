@@ -866,7 +866,8 @@ class TestTransporteSector:
         assert ok is True
 
     def test_matches_aquisicao_veiculos(self):
-        ok, _ = self._match("Aquisição de veículos zero km tipo caminhonete para a Secretaria de Obras")
+        # "zero km" é excluído (session-032 fix). Usar veículo sem abreviação zero km.
+        ok, _ = self._match("Aquisição de veículos tipo caminhonete para a Secretaria de Obras")
         assert ok is True
 
     def test_matches_ambulancia(self):

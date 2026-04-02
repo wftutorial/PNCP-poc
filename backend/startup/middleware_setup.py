@@ -140,8 +140,12 @@ def setup_metrics_endpoint(app: FastAPI) -> None:
         """Protect /metrics with Bearer token."""
         if request.url.path == "/metrics" or request.url.path.startswith("/metrics/"):
             if METRICS_TOKEN:
-                token = request.headers.get("Authorization", "")
+                token = request.headers.get("Authorization", "").strip()
                 if token != f"Bearer {METRICS_TOKEN}":
+                    logger.warning(
+                        "Metrics auth failed: received token length=%d, expected length=%d",
+                        len(token), len(f"Bearer {METRICS_TOKEN}"),
+                    )
                     return StarletteJSONResponse(status_code=401, content={"detail": "Unauthorized"})
         return await call_next(request)
 

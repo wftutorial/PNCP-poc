@@ -849,8 +849,14 @@ class TestTransporteSector:
         ok, _ = self._match("Locação de veículos com motorista para a Secretaria de Educação")
         assert ok is True
 
-    def test_matches_combustivel(self):
+    def test_excludes_aquisicao_combustivel(self):
+        """ISSUE-064 session-033: aquisição avulsa de combustível é FP para transporte de pessoas."""
         ok, _ = self._match("Registro de preços para aquisição de combustível (gasolina e diesel)")
+        assert ok is False
+
+    def test_matches_frota_com_combustivel(self):
+        """Locação de frota COM combustível é TP (combustível como insumo, não objeto)."""
+        ok, _ = self._match("Contratação de locação de frota com fornecimento de combustível")
         assert ok is True
 
     def test_matches_manutencao_frota(self):

@@ -1008,7 +1008,14 @@ def match_keywords(
             exc_norm = normalize_text(exc)
             # Use strict word boundary for exclusions (exact match required)
             pattern = rf"\b{re.escape(exc_norm)}\b"
-            if re.search(pattern, objeto_norm):
+            matched_exc = bool(re.search(pattern, objeto_norm))
+            # ISSUE-063/064 session-033: plural expansion for exclusions (symmetric with keywords)
+            if not matched_exc and not exc_norm.endswith('s'):
+                if re.search(rf"\b{re.escape(exc_norm)}s\b", objeto_norm):
+                    matched_exc = True
+                elif re.search(rf"\b{re.escape(exc_norm)}es\b", objeto_norm):
+                    matched_exc = True
+            if matched_exc:
                 # STORY-248 AC9: Record exclusion hit
                 try:
                     _get_tracker().record_rejection(

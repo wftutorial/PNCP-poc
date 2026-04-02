@@ -84,7 +84,7 @@ VIABILITY_WEIGHT_GEOGRAPHY: float = float(os.getenv("VIABILITY_WEIGHT_GEOGRAPHY"
 
 # E-03: Prometheus Metrics
 METRICS_ENABLED: bool = str_to_bool(os.getenv("METRICS_ENABLED", "true"))
-METRICS_TOKEN: str = os.getenv("METRICS_TOKEN", "")
+METRICS_TOKEN: str = os.getenv("METRICS_TOKEN", "").strip()
 
 # D-05: User Feedback Loop
 USER_FEEDBACK_ENABLED: bool = str_to_bool(os.getenv("USER_FEEDBACK_ENABLED", "true"))

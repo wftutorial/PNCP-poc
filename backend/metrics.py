@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 # Feature flag: disable metrics entirely via env var
 METRICS_ENABLED = os.getenv("METRICS_ENABLED", "true").lower() in ("true", "1", "yes", "on")
-METRICS_TOKEN = os.getenv("METRICS_TOKEN", "")
+METRICS_TOKEN = os.getenv("METRICS_TOKEN", "").strip()
 
 try:
     from prometheus_client import Counter, Histogram, Gauge, make_asgi_app

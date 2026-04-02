@@ -128,7 +128,7 @@ export async function GET(request: NextRequest) {
     const headers: Record<string, string> = {};
 
     // If METRICS_TOKEN is set, use it for backend auth
-    const metricsToken = process.env.METRICS_TOKEN;
+    const metricsToken = process.env.METRICS_TOKEN?.trim();
     if (metricsToken) {
       headers["Authorization"] = `Bearer ${metricsToken}`;
     }

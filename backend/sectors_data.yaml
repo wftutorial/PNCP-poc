@@ -3576,6 +3576,26 @@ sectors:
       - "utensilios domesticos"
       - "utensílios de copa e cozinha"
       - "utensilios de copa e cozinha"
+      # ISSUE-063 session-033: singular de limpeza/higiene (plurais existem mas singulares não)
+      - "material de limpeza"
+      - "produto de limpeza"
+      - "material de higiene"
+      # ISSUE-063 session-033: produtos médicos que matcham via "descartável" keyword
+      - "sonda"
+      - "cateter"
+      - "seringa"
+      - "material médico-hospitalar"
+      - "material medico-hospitalar"
+      - "material cirúrgico"
+      - "material cirurgico"
+      # ISSUE-063 session-033: uniformes (objeto é vestuário, não serviço Facilities)
+      - "aquisição de uniformes"
+      - "aquisicao de uniformes"
+      # ISSUE-063 session-033: insumos de papel/higiene avulsos
+      - "sacos de lixo"
+      - "papel higiênico"
+      - "papel higienico"
+      - "toalha de papel"
     context_required_keywords:
       # CRIT-021 AC9: Facilities context gates
       # "limpeza" can be data cleansing or general cleaning product (not service).
@@ -4902,6 +4922,24 @@ sectors:
       # Caçambas estacionárias (coleta de resíduos, não transporte)
       - "caçambas estacionárias"
       - "cacambas estacionarias"
+      # ISSUE-064 session-033: "0KM" sem espaço (não coberto por "0 km")
+      - "0km"
+      # ISSUE-064 session-033: combustíveis direcionados (aquisição/abastecimento como objeto principal)
+      - "aquisição de combustível"
+      - "aquisicao de combustivel"
+      - "abastecimento de combustíveis"
+      - "abastecimento de combustivel"
+      # ISSUE-064 session-033: plural de seguros (singular já existe acima)
+      - "seguros de veículos"
+      - "seguros de veiculos"
+      # ISSUE-064 session-033: peças/acessórios automotivos avulsos
+      - "peças e acessórios automotivos"
+      - "pecas e acessorios automotivos"
+      # ISSUE-064 session-033: saneamento com caminhão especializado
+      - "limpa-fossa"
+      - "limpa fossa"
+      - "desentupidora"
+      - "desentupimento"
     context_required_keywords:
       # CRIT-021 AC9: Transporte context gates
       # "diesel" can appear in generator/equipment fuel context.

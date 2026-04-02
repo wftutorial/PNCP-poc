@@ -3341,9 +3341,17 @@ sectors:
       - "recepcionista"
       - "copeira"
       - "copeiro"
-      # Outsourced services (only compound forms specific to facilities)
-      - "terceirização de mão de obra"
-      - "terceirizacao de mao de obra"
+      # Outsourced services (compound forms specific to facilities — ISSUE-062: removed generic "terceirização de mão de obra" that matched TI/teleatendentes)
+      - "terceirização de mão de obra de limpeza"
+      - "terceirizacao de mao de obra de limpeza"
+      - "terceirização de mão de obra de portaria"
+      - "terceirizacao de mao de obra de portaria"
+      - "terceirização de mão de obra de conservação"
+      - "terceirizacao de mao de obra de conservacao"
+      - "terceirização de mão de obra de zeladoria"
+      - "terceirizacao de mao de obra de zeladoria"
+      - "terceirização de mão de obra de copeiragem"
+      - "terceirizacao de mao de obra de copeiragem"
       - "serviços de apoio administrativo"
       - "servicos de apoio administrativo"
       # Gardening (internal / condominium)
@@ -3509,6 +3517,34 @@ sectors:
       - "kit produto de limpeza"
       - "fornecimento de material de limpeza"
       - "fornecimento de produto de limpeza"
+      # ISSUE-062 session-030: fraldas, teleatendentes, saneantes hospitalares, outsourcing TI
+      - "fralda"
+      - "fraldas"
+      - "fralda geriátrica"
+      - "fralda geriatrica"
+      - "fraldas geriátricas"
+      - "fraldas geriatricas"
+      - "fralda descartável"
+      - "fraldas descartáveis"
+      - "absorvente geriátrico"
+      - "absorventes geriátricos"
+      - "teleatendente"
+      - "teleatendentes"
+      - "teleatendimento"
+      - "telemarketing"
+      - "call center"
+      - "contact center"
+      - "mão de obra de teleatendente"
+      - "mao de obra de teleatendente"
+      - "saneante hospitalar"
+      - "saneantes hospitalares"
+      - "produto saneante hospitalar"
+      - "kit de higiene hospitalar"
+      - "material hospitalar"
+      - "mão de obra de ti"
+      - "mao de obra de ti"
+      - "terceirização de serviços de tecnologia"
+      - "terceirizacao de servicos de tecnologia"
     context_required_keywords:
       # CRIT-021 AC9: Facilities context gates
       # "limpeza" can be data cleansing or general cleaning product (not service).
@@ -3593,6 +3629,37 @@ sectors:
         - "desinfeccao"
         - "higienização"
         - "higienizacao"
+      # ISSUE-062 session-030: context gates for generic material keywords
+      detergente:
+        - "predial"
+        - "limpeza"
+        - "conservação"
+        - "conservacao"
+        - "produto"
+        - "serviço"
+        - "servico"
+      detergentes:
+        - "predial"
+        - "limpeza"
+        - "conservação"
+        - "conservacao"
+        - "produto"
+        - "serviço"
+        - "servico"
+      saneante:
+        - "predial"
+        - "limpeza"
+        - "conservação"
+        - "conservacao"
+        - "serviço"
+        - "servico"
+      saneantes:
+        - "predial"
+        - "limpeza"
+        - "conservação"
+        - "conservacao"
+        - "serviço"
+        - "servico"
     # CRIT-FLT-007: Co-occurrence rules for facilities
     co_occurrence_rules:
       # Rule 1: "limpeza" in non-building context (environmental, data)

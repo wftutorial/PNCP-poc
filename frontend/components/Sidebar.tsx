@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   ClipboardList,
   Clock,
+  MessageSquare,
   User,
   HelpCircle,
   LogOut,
@@ -31,8 +32,8 @@ const PRIMARY_NAV: NavItem[] = [
   { href: "/buscar", label: "Buscar", icon: <Search className="w-5 h-5" aria-hidden="true" /> },
   { href: "/dashboard", label: "Dashboard", icon: <LayoutDashboard className="w-5 h-5" aria-hidden="true" /> },
   { href: "/pipeline", label: "Pipeline", icon: <ClipboardList className="w-5 h-5" aria-hidden="true" /> },
-  // SHIP-002 AC9: Alertas and Mensagens hidden — feature-gated (backend returns 404)
   { href: "/historico", label: "Histórico", icon: <Clock className="w-5 h-5" aria-hidden="true" /> },
+  { href: "/mensagens", label: "Mensagens", icon: <MessageSquare className="w-5 h-5" aria-hidden="true" /> },
 ];
 
 const SECONDARY_NAV: NavItem[] = [

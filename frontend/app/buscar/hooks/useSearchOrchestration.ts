@@ -53,6 +53,7 @@ export function useSearchOrchestration() {
   const autoSearchId = searchParamsRaw?.get('search_id') || null;
   const [showOnboardingBanner, setShowOnboardingBanner] = useState(isAutoSearch);
   const [autoSearchDismissed, setAutoSearchDismissed] = useState(false);
+  const [shouldSearchAfterRestore, setShouldSearchAfterRestore] = useState(false);
 
   // ── Tours ───────────────────────────────────────────────────────────
   const reportTourEvent = useCallback(async (tourId: string, event: string, stepsSeen: number) => {
@@ -211,9 +212,17 @@ export function useSearchOrchestration() {
         if (fs.setor) { filters.setSearchMode("setor"); filters.setSetorId(fs.setor); }
         else if (fs.includeKeywords?.length) { filters.setSearchMode("termos"); filters.setTermosArray(fs.includeKeywords); }
       }
-      toast.success("Resultados da ultima analise restaurados.");
+      // ISSUE-061: trigger search automatically after state flush (1 click = sync + search)
+      setShouldSearchAfterRestore(true);
     }
   }, [search.setResult, filters]);
+
+  useEffect(() => {
+    if (shouldSearchAfterRestore) {
+      setShouldSearchAfterRestore(false);
+      search.buscar();
+    }
+  }, [shouldSearchAfterRestore, search.buscar]);
 
   useEffect(() => {
     if (!search.loading) {

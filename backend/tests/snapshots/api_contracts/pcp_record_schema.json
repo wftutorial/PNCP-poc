@@ -78,13 +78,13 @@
     ]
   },
   "sample_record": {
-    "codigoLicitacao": 469194,
+    "codigoLicitacao": 468641,
     "numeroLicitacao": null,
-    "identificacao": "03",
-    "numero": "03/2026",
-    "resumo": "CONTRATAÇÃO DE EMPRESA PARA AQUISIÇÃO DE COMBUSTÍVEIS, TIPO GASOLINA COMUM E/OU ADITIVADA, ETANOL, LUBRIFICANTES, FILTROS DE AR, FILTROS DE AR CONDICIONADO, FILTROS DE ÓLEO LUBRIFICANTE PARA MOTOR, FILTROS DE COMBUSTÍVEL PARA OS VEÍCULOS OFICIAIS DA...",
-    "razaoSocial": "Câmara Municipal de Boa Ventura de São Roque",
-    "nomeUnidade": "Câmara Municipal de Boa Ventura de São Roque",
+    "identificacao": "2026.03.127",
+    "numero": "014/2026",
+    "resumo": "CONTRATAÇÃO DE EMPRESA ESPECIALIZADA PARA SERVIÇO DE ARMAZENAMENTO DE DADOS DO PRONTUÁRIO ELETRÔNICO DO CIDADÃO MINISTÉRIO DA SAÚDE (PEC-MS E-SUS APS) EM SERVIDOR EM NUVEM E SUPORTE TÉCNICO DO PRONTUÁRIO ELETRÔNICO NAS UBS’S DO MUNICÍPIO DE POMBAL-PB",
+    "razaoSocial": "Prefeitura Municipal de Pombal",
+    "nomeUnidade": "Prefeitura Municipal de Pombal",
     "status": {
       "codigo": 1,
       "descricao": "Recebendo Propostas"
@@ -105,23 +105,23 @@
     "codigoSituacaoEdital": 5,
     "codigoTratamentoDiferenciado": 1,
     "codigoSituacaoCadastroLicitacao": 2,
-    "dataHoraInicioLances": "2026-04-02T02:59:00Z",
-    "dataHoraInicioPropostas": "2026-03-31T20:00:00Z",
-    "dataHoraFinalPropostas": "2026-04-02T02:59:00Z",
+    "dataHoraInicioLances": "2026-04-02T21:00:00Z",
+    "dataHoraInicioPropostas": "2026-03-31T11:00:00Z",
+    "dataHoraFinalPropostas": "2026-04-02T21:00:00Z",
     "dataHoraFinalLances": null,
-    "dataHoraPublicacao": "2026-03-31T19:49:00Z",
+    "dataHoraPublicacao": "2026-03-30T14:57:00Z",
     "isPublicado": false,
     "unidadeCompradora": {
-      "codigoUnidadeCompradora": 9634,
-      "nomeUnidadeCompradora": "Câmara Municipal de Boa Ventura de São Roque",
-      "codigoComprador": 5483,
+      "codigoUnidadeCompradora": 2614,
+      "nomeUnidadeCompradora": "Prefeitura Municipal de Pombal",
+      "codigoComprador": 1578,
       "nomeComprador": null,
-      "cidade": "Boa Ventura de São Roque",
+      "cidade": "Pombal",
       "codigoMunicipioIbge": null,
-      "uf": "PR"
+      "uf": "PB"
     },
     "comprador": null,
-    "urlReferencia": "/pr/camara-municipal-de-boa-ventura-de-sao-roque-5483/dp-03-2026-2026-469194",
+    "urlReferencia": "/pb/prefeitura-municipal-de-pombal-1578/dp-014-2026-2026-468641",
     "statusProcessoPublico": {
       "codigo": 1,
       "descricao": "Recebendo Propostas"
@@ -129,5 +129,5 @@
     "isExclusivoME": false,
     "isBeneficoLocal": false
   },
-  "captured_at": "2026-04-01T19:16:19.298770+00:00"
+  "captured_at": "2026-04-02T13:23:05.693984+00:00"
 }

@@ -136,6 +136,13 @@ export async function GET(request: NextRequest) {
     const response = await fetch(`${backendUrl}/metrics`, { headers });
 
     if (!response.ok) {
+      // ISSUE-056: distinguish config error (METRICS_TOKEN mismatch) from user auth error
+      if (response.status === 401) {
+        return NextResponse.json(
+          { error: "Backend metrics indisponivel: METRICS_TOKEN nao configurado no frontend. Configure a variavel de ambiente.", raw: null, metrics: null },
+          { status: 503 }
+        );
+      }
       return NextResponse.json(
         { error: `Backend returned ${response.status}`, raw: null, metrics: null },
         { status: response.status }

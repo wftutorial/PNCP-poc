@@ -17,7 +17,7 @@ import { useNavigationGuard } from "../../../hooks/useNavigationGuard";
 import { useBroadcastChannel } from "../../../hooks/useBroadcastChannel";
 
 import { toast } from "sonner";
-import { getLastSearch, checkHasLastSearch } from "../../../lib/lastSearchCache";
+import { getLastSearch, saveLastSearch, checkHasLastSearch } from "../../../lib/lastSearchCache";
 import { safeSetItem, safeGetItem } from "../../../lib/storage";
 import type { BuscaResult } from "../../types";
 
@@ -182,14 +182,38 @@ export function useSearchOrchestration() {
     }
   }, [search.quotaError, billing.fetchTrialValue, billing.setShowTrialConversion]);
 
+  // ── ISSUE-060: Save last search with form state so restore is consistent ──
+  const prevResultRef = useRef<BuscaResult | null>(null);
+  useEffect(() => {
+    if (search.result && search.result !== prevResultRef.current) {
+      prevResultRef.current = search.result;
+      saveLastSearch(search.result, {
+        ufs: Array.from(filters.ufsSelecionadas),
+        startDate: filters.dataInicial ?? "",
+        endDate: filters.dataFinal ?? "",
+        setor: filters.searchMode === "setor" ? filters.setorId : undefined,
+        includeKeywords: filters.searchMode === "termos" ? filters.termosArray : undefined,
+      });
+    }
+  }, [search.result, filters.ufsSelecionadas, filters.dataInicial, filters.dataFinal, filters.searchMode, filters.setorId, filters.termosArray]);
+
   // ── Search Actions ──────────────────────────────────────────────────
   const handleLoadLastSearch = useCallback(() => {
     const cached = getLastSearch();
     if (cached?.result) {
       search.setResult(cached.result as BuscaResult);
+      // ISSUE-060: restore form state that matches this result
+      if (cached.formState) {
+        const fs = cached.formState;
+        if (fs.ufs?.length) filters.setUfsSelecionadas(new Set(fs.ufs));
+        if (fs.startDate) filters.setDataInicial(fs.startDate);
+        if (fs.endDate) filters.setDataFinal(fs.endDate);
+        if (fs.setor) { filters.setSearchMode("setor"); filters.setSetorId(fs.setor); }
+        else if (fs.includeKeywords?.length) { filters.setSearchMode("termos"); filters.setTermosArray(fs.includeKeywords); }
+      }
       toast.success("Resultados da ultima analise restaurados.");
     }
-  }, [search.setResult]);
+  }, [search.setResult, filters]);
 
   useEffect(() => {
     if (!search.loading) {

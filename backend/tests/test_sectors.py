@@ -190,9 +190,11 @@ class TestEngenhariaSector:
         s = SECTORS["engenharia"]
         return match_keywords(texto, s.keywords, s.exclusions)
 
-    def test_matches_materiais_construcao(self):
+    def test_excludes_pura_aquisicao_materiais_construcao(self):
+        # session-029: "AQUISIÇÃO DE MATERIAIS DE CONSTRUÇÃO" sem contexto de obra/serviço
+        # é falso-positivo para ICP-01 Roberto (35% precisão). Deve ser excluído.
         ok, _ = self._match("AQUISIÇÃO DE MATERIAIS DE CONSTRUÇÃO DIVERSOS")
-        assert ok is True
+        assert ok is False
 
     def test_matches_concreto(self):
         ok, _ = self._match("REGISTRO DE PREÇOS para eventual aquisição de concreto")

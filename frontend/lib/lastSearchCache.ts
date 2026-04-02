@@ -7,6 +7,7 @@
  */
 
 import { safeSetItem, safeGetItem, safeRemoveItem } from "./storage";
+import type { SearchFormState } from "./searchStatePersistence";
 
 const LAST_SEARCH_KEY = "smartlic_last_search";
 const LAST_SEARCH_TTL = 24 * 60 * 60 * 1000; // 24 hours
@@ -14,11 +15,12 @@ const LAST_SEARCH_TTL = 24 * 60 * 60 * 1000; // 24 hours
 export interface LastSearchData {
   result: unknown; // BuscaResult
   timestamp: number;
+  formState?: SearchFormState; // ISSUE-060: params used in this search
 }
 
 /** Save the most recent successful search result to localStorage */
-export function saveLastSearch(result: unknown): void {
-  const data: LastSearchData = { result, timestamp: Date.now() };
+export function saveLastSearch(result: unknown, formState?: SearchFormState): void {
+  const data: LastSearchData = { result, timestamp: Date.now(), formState };
   safeSetItem(LAST_SEARCH_KEY, JSON.stringify(data));
 }
 

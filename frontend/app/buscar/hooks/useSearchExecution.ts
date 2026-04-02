@@ -9,7 +9,6 @@ import { useAuth } from "../../components/AuthProvider";
 import { useQuota } from "../../../hooks/useQuota";
 import { getUserFriendlyError, getMessageFromErrorCode, CLIENT_TIMEOUT_STATUS } from "../../../lib/error-messages";
 import { saveSearchState } from "../../../lib/searchStatePersistence";
-import { saveLastSearch } from "../../../lib/lastSearchCache";
 import { recoverPartialSearch, clearPartialSearch } from "../../../lib/searchPartialCache";
 import { toast } from "sonner";
 import { dateDiffInDays } from "../../../lib/utils/dateDiffInDays";
@@ -577,9 +576,8 @@ export function useSearchExecution(params: UseSearchExecutionParams): UseSearchE
       // P4-FIX: Clean up sessionStorage partial count on successful completion
       try { sessionStorage.removeItem(`partial_search_${newSearchId}`); } catch {}
 
-      if (data.licitacoes?.length > 0) {
-        saveLastSearch(data);
-      }
+      // ISSUE-060: saveLastSearch moved to useSearchOrchestration where formState is available
+      // so that "Restaurar última busca" also restores the correct filters (setor, UFs, etc.).
 
       if (data.llm_status === 'processing') {
         if (llmTimeoutRef.current) clearTimeout(llmTimeoutRef.current);

@@ -2450,6 +2450,15 @@ sectors:
       - "aquisicao de materiais de construcao para atender"
       - "fornecimento de materiais de construção"
       - "fornecimento de materiais de construcao"
+      # ISSUE-060 session-029: aquisição de materiais sem obra/serviço associado
+      - "compra de materiais de construção"
+      - "compra de materiais de construcao"
+      - "aquisição de materiais de construção"
+      - "aquisicao de materiais de construcao"
+      - "material de construção para manutenção"
+      - "material de construcao para manutencao"
+      - "registro de preços para fornecimento de materiais de construção"
+      - "registro de precos para fornecimento de materiais de construcao"
     context_required_keywords:
       # CRIT-021: "reforma" is generic (car reform, agrarian reform, etc.)
       # Context ensures it matches only construction/building renovation
@@ -3490,6 +3499,16 @@ sectors:
       # "recepção" in non-reception context
       - "recepção de obra"
       - "recepcao de obra"
+      # ISSUE-060 session-029: compra de materiais de limpeza sem serviço associado
+      - "aquisição de material de limpeza"
+      - "aquisicao de material de limpeza"
+      - "compra de material de limpeza"
+      - "material de limpeza para estoque"
+      - "produto de limpeza para estoque"
+      - "kit material de limpeza"
+      - "kit produto de limpeza"
+      - "fornecimento de material de limpeza"
+      - "fornecimento de produto de limpeza"
     context_required_keywords:
       # CRIT-021 AC9: Facilities context gates
       # "limpeza" can be data cleansing or general cleaning product (not service).
@@ -4372,6 +4391,16 @@ sectors:
       - "monitoramento de alunos"
       - "monitoramento de saúde"
       - "monitoramento de saude"
+      # ISSUE-060 session-029: monitoramento eletrônico de ambiente/qualidade ≠ segurança patrimonial
+      - "câmera de monitoramento ambiental"
+      - "camera de monitoramento ambiental"
+      - "sistema de monitoramento de qualidade do ar"
+      - "monitoramento de qualidade do ar"
+      - "monitoramento de temperatura"
+      - "sistema de monitoramento de temperatura"
+      - "monitoramento de umidade"
+      - "monitoramento de poluição"
+      - "monitoramento de poluicao"
     context_required_keywords:
       # CRIT-021 AC9: Vigilancia context gates
       # "alarme" can be fire alarm (bombeiros) or medical alarm.
@@ -4720,6 +4749,15 @@ sectors:
       - "lubrificante cirúrgico"
       - "lubrificante cirurgico"
       - "lubrificante industrial"
+      # ISSUE-060 session-029: combustível/insumos para geradores e equipamentos fixos
+      - "combustível para grupo gerador"
+      - "combustivel para grupo gerador"
+      - "combustível para gerador"
+      - "combustivel para gerador"
+      - "abastecimento de grupo gerador"
+      - "peças para equipamentos"
+      - "manutenção de equipamentos estacionários"
+      - "manutencao de equipamentos estacionarios"
     context_required_keywords:
       # CRIT-021 AC9: Transporte context gates
       # "diesel" can appear in generator/equipment fuel context.

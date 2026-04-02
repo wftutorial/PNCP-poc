@@ -299,11 +299,16 @@ async def stage_generate(pipeline, ctx: SearchContext) -> None:
             sanitize_valor(lic.get("valorTotalEstimado", 0))
             for lic in ctx.licitacoes_filtradas
         ]
+        # ISSUE-059: raw_total uses all sanitized values (hard cap R$10B removes true garbage).
+        # IQR outlier removal via compute_robust_total was incorrectly excluding large
+        # legitimate contracts (R$36.8M + R$20M classified as "outliers" vs R$388K avg).
+        # In B2G, large contracts are the MOST valuable — never exclude them from the total.
+        raw_total = sum(raw_values)
         actual_valor, _median, _outlier_count, _used_sanitized = compute_robust_total(raw_values)
         if _outlier_count > 0:
-            logger.warning(
-                f"ISSUE-022: {_outlier_count} outlier value(s) excluded from total. "
-                f"sanitized={_used_sanitized}, total=R$ {actual_valor:,.2f}"
+            logger.info(
+                f"ISSUE-059: {_outlier_count} outlier value(s) detected (IQR). "
+                f"Showing raw total R$ {raw_total:,.2f} (not sanitized R$ {actual_valor:,.2f})"
             )
         if ctx.resumo.total_oportunidades != actual_total:
             logger.warning(
@@ -311,7 +316,7 @@ async def stage_generate(pipeline, ctx: SearchContext) -> None:
                 f"overriding with actual count={actual_total}"
             )
         ctx.resumo.total_oportunidades = actual_total
-        ctx.resumo.valor_total = actual_valor
+        ctx.resumo.valor_total = raw_total  # ISSUE-059: full total, not IQR-sanitized
         ctx.resumo.outlier_count = _outlier_count
         ctx.resumo.valor_sanitizado = _used_sanitized
 

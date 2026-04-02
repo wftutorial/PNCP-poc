@@ -201,33 +201,33 @@ class TestVestuarioProtection:
 # ---------------------------------------------------------------------------
 
 class TestMedicalExemptions:
-    """Saude sector is exempt from medical red flags."""
+    """Medicamentos sector is exempt from medical red flags."""
 
     def test_saude_exempt_from_medical_flags(self):
-        """Medical red flags are skipped for saude sector."""
+        """Medical red flags are skipped for medicamentos sector."""
         flagged, terms = has_red_flags(
-            _medical_heavy_text(), ALL_RED_FLAG_SETS, setor="saude"
+            _medical_heavy_text(), ALL_RED_FLAG_SETS, setor="medicamentos"
         )
         medical_terms = [t for t in terms if t in RED_FLAGS_MEDICAL]
         assert len(medical_terms) == 0
 
     def test_saude_still_catches_infra_flags(self):
-        """Saude sector is still checked for infrastructure red flags."""
+        """Medicamentos sector is still checked for infrastructure red flags."""
         flagged, terms = has_red_flags(
-            _infra_heavy_text(), ALL_RED_FLAG_SETS, setor="saude"
+            _infra_heavy_text(), ALL_RED_FLAG_SETS, setor="medicamentos"
         )
         assert flagged is True
         infra_terms = [t for t in terms if t in RED_FLAGS_INFRASTRUCTURE]
         assert len(infra_terms) >= 2
 
     def test_saude_typical_bid_passes(self):
-        """Typical saude bid with medical terms passes filter."""
+        """Typical medicamentos bid with medical terms passes filter."""
         text = normalize_text(
             "Aquisicao de medicamento para paciente hospitalar "
             "incluindo material cirurgico"
         )
         flagged, terms = has_red_flags(
-            text, ALL_RED_FLAG_SETS, setor="saude"
+            text, ALL_RED_FLAG_SETS, setor="medicamentos"
         )
         # Should not be flagged due to medical exemption
         # (admin and infra flags wouldn't match this text)
@@ -243,7 +243,7 @@ class TestNonExemptSectors:
 
     @pytest.mark.parametrize("setor", [
         "informatica", "software", "papelaria", "mobiliario",
-        "alimentos", "facilities", "vigilancia", "transporte_servicos", "frota_veicular",
+        "alimentos", "servicos_prediais", "vigilancia", "transporte_servicos", "frota_veicular",
     ])
     def test_non_exempt_sector_catches_infra_flags(self, setor: str):
         """Non-infra-exempt sectors are checked against infrastructure red flags."""
@@ -311,7 +311,13 @@ class TestExemptionSets:
 
     def test_medical_exempt_sectors(self):
         # CRIT-024: facilities and transporte added; session-035: split into transporte_servicos + frota_veicular
-        assert _MEDICAL_EXEMPT_SECTORS == {"saude", "facilities", "transporte_servicos", "frota_veicular"}
+        # session-034/035: saude split into medicamentos/equipamentos_medicos/insumos_hospitalares;
+        # facilities split into servicos_prediais + produtos_limpeza
+        assert _MEDICAL_EXEMPT_SECTORS == {
+            "medicamentos", "equipamentos_medicos", "insumos_hospitalares",
+            "servicos_prediais", "produtos_limpeza",
+            "transporte_servicos", "frota_veicular",
+        }
 
     def test_admin_exempt_sectors(self):
         # CRIT-024: software exempt from administrative red flags
@@ -373,7 +379,7 @@ class TestSoftwareAdminExemption:
 # ---------------------------------------------------------------------------
 
 class TestFacilitiesMedicalExemption:
-    """CRIT-024 AC3: Facilities sector exempt from medical red flags."""
+    """CRIT-024 AC3: Servicos_prediais sector exempt from medical red flags."""
 
     def test_facilities_hospitalar_bid_not_flagged(self):
         """Hospital cleaning bid with medical terms passes."""
@@ -382,22 +388,22 @@ class TestFacilitiesMedicalExemption:
             "e higienizacao de clinica medica"
         )
         flagged, terms = has_red_flags(
-            text, ALL_RED_FLAG_SETS, setor="facilities"
+            text, ALL_RED_FLAG_SETS, setor="servicos_prediais"
         )
         medical_terms = [t for t in terms if t in RED_FLAGS_MEDICAL]
         assert len(medical_terms) == 0
 
     def test_facilities_still_catches_infra_flags(self):
-        """Facilities is NOT exempt from infra flags."""
+        """Servicos_prediais is NOT exempt from infra flags."""
         flagged, terms = has_red_flags(
-            _infra_heavy_text(), ALL_RED_FLAG_SETS, setor="facilities"
+            _infra_heavy_text(), ALL_RED_FLAG_SETS, setor="servicos_prediais"
         )
         assert flagged is True
 
     def test_facilities_still_catches_admin_flags(self):
-        """Facilities is NOT exempt from admin flags."""
+        """Servicos_prediais is NOT exempt from admin flags."""
         flagged, terms = has_red_flags(
-            _admin_heavy_text(), ALL_RED_FLAG_SETS, setor="facilities"
+            _admin_heavy_text(), ALL_RED_FLAG_SETS, setor="servicos_prediais"
         )
         assert flagged is True
 
@@ -451,8 +457,8 @@ class TestAllSectorsRecall:
         "papelaria": "Aquisicao de material de escritorio papel a4 canetas e grampeadores",
         "engenharia": "Servico de engenharia construcao civil pavimentacao e reforma predial",
         "software": "Contratacao de software sistema de gestao e consultoria de ti",
-        "facilities": "Servico de limpeza predial conservacao e manutencao de ar condicionado",
-        "saude": "Aquisicao de medicamento hospitalar material cirurgico e equipamento medico",
+        "servicos_prediais": "Servico de limpeza predial conservacao e manutencao de ar condicionado",
+        "medicamentos": "Aquisicao de medicamento hospitalar material cirurgico e equipamento medico",
         "vigilancia": "Servico de vigilancia patrimonial monitoramento e alarme eletronico",
         "transporte_servicos": "Locacao de onibus e contratacao de servicos de transporte escolar",
         "frota_veicular": "Aquisicao de veiculo ambulancia e combustivel para frota municipal",

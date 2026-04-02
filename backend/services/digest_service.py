@@ -260,8 +260,11 @@ async def build_digest_for_user(
         "informatica": "TI e Hardware",
         "software": "Software e Sistemas",
         "engenharia": "Engenharia",
-        "saude": "Saude",
-        "facilities": "Facilities",
+        "medicamentos": "Medicamentos",
+        "equipamentos_medicos": "Equipamentos Medicos",
+        "insumos_hospitalares": "Insumos Hospitalares",
+        "servicos_prediais": "Servicos Prediais",
+        "produtos_limpeza": "Produtos de Limpeza",
         "mobiliario": "Mobiliario",
     }
     setor_nome = _SECTOR_NAMES.get(setor_id, setor_id or "seu setor")

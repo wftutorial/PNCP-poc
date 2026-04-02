@@ -341,76 +341,184 @@ GROUND_TRUTH = {
             "Aquisição de teclado mouse e periféricos de informática",
         ],
     },
-    "facilities": {
+    "servicos_prediais": {
         "relevant": [
-            "Contratação de serviço de limpeza e conservação predial",
-            "Serviço de limpeza hospitalar para o hospital municipal",
-            "Contratação de serviço de limpeza para escolas municipais",
-            "Serviço de copeiragem e apoio para secretaria municipal",
-            "Contratação de serviço de recepção e portaria para prédios públicos",
-            "Serviço de jardinagem e paisagismo para áreas verdes do prédio",
-            "Contratação de empresa de dedetização e desinsetização predial",
-            "Serviço de coleta de resíduos sólidos hospitalares",
-            "Contratação de serviço de lavanderia hospitalar",
-            "Serviço de higienização e desinfecção de ambientes prediais",
-            "Fornecimento de material de limpeza e produto de limpeza",
-            "Serviço de controle de acesso e recepção para atendimento no fórum",
-            "Fornecimento de detergente desinfetante e água sanitária",
-            "Contratação de serviço de controle de pragas em prédio público",
-            "Contratação de serviço de zeladoria para prédio público",
+            "Contratação de empresa para limpeza e conservação predial",
+            "Terceirização de portaria e zeladoria para prédio público",
+            "Contratação de serviços de copeiragem para secretaria municipal",
+            "Serviço de dedetização e controle de pragas para escola",
+            "Contratação de jardineiro para manutenção de áreas verdes",
+            "Prestação de serviços de limpeza para unidade administrativa",
+            "Contratação de auxiliar de serviços gerais para prefeitura",
+            "Serviço de lavanderia hospitalar para roupa cirúrgica",
+            "Terceirização de serviços de zeladoria para câmara municipal",
+            "Contratação de empresa de limpeza para hospital municipal",
+            "Serviço de desratização e controle de vetores para prédio público",
+            "Terceirização de recepcionistas e porteiros para secretaria",
+            "Contratação de roçagem e corte de grama em áreas públicas",
+            "Serviço de higienização e sanitização de ambientes",
+            "Contratação de empresa de asseio e conservação predial",
         ],
         "irrelevant": [
-            "Manutenção de veículos e frota da secretaria de saúde",
-            "Manutenção de equipamentos de TI e informática",
-            "Pavimentação asfáltica de ruas do município",
-            "Construção civil de escola no bairro novo",
-            "Limpeza de terreno baldio para construção de praça",
-            "Limpeza de dados do sistema de gestão municipal",
-            "Limpeza de fossa séptica em zona rural",
-            "Reforma e ampliação do prédio da secretaria",
-            "Aquisição de uniformes para servidores da prefeitura",
-            "Aquisição de material de escritório e papelaria",
-            "Contratação de serviço de vigilância patrimonial",
-            "Iluminação pública com LED para vias do município",
-            "Serviço de transporte escolar para alunos da zona rural",
+            "Aquisição de material de limpeza para repartições públicas",
+            "Compra de detergente, desinfetante e saco de lixo",
+            "Registro de preços para fornecimento de papel higiênico",
+            "Aquisição de saneantes para unidades de saúde",
+            "Compra de vassoura, rodo e pano de chão",
+            "Construção e reforma de prédio público",
+            "Aquisição de mobiliário para secretaria",
+            "Contratação de vigilância patrimonial armada",
+            "Aquisição de computadores e impressoras",
+            "Obra de pavimentação de via pública",
             "Aquisição de medicamentos para farmácia básica",
-            "Limpeza de rio e dragagem de canal de escoamento",
+            "Compra de material de escritório e papelaria",
+            "Contratação de serviço de engenharia predial e reformas",
+            "Aquisição de uniformes e calçados para servidores",
+            "Compra de alimentos para merenda escolar",
         ],
     },
-    "saude": {
+    "produtos_limpeza": {
         "relevant": [
-            "Aquisição de medicamentos para farmácia básica do SUS",
-            "Compra de equipamento médico hospitalar para UTI",
-            "Aquisição de material cirúrgico para centro cirúrgico",
-            "Registro de preços para insumos hospitalares descartáveis",
-            "Fornecimento de reagentes para laboratório de análises clínicas",
-            "Aquisição de aparelho de ultrassonografia para UBS",
-            "Compra de desfibrilador para unidade de pronto atendimento",
-            "Aquisição de luvas hospitalares de procedimento e cirúrgicas",
-            "Fornecimento de seringas e agulhas para vacinação hospitalar",
-            "Aquisição de próteses ortopédicas para hospital municipal",
-            "Registro de preços para oxigênio medicinal e gases medicinais",
-            "Compra de cama hospitalar elétrica para enfermaria",
-            "Aquisição de material para curativo e sutura do pronto socorro",
-            "Fornecimento de sonda nasogástrica e sonda uretral para pacientes",
-            "Aquisição de equipamento de raio-X digital para diagnóstico hospitalar",
+            "Aquisição de material de limpeza para uso nas repartições públicas",
+            "Registro de preços para fornecimento de detergente e desinfetante",
+            "Compra de papel higiênico, papel toalha e saco de lixo",
+            "Aquisição de produtos saneantes para unidades de saúde",
+            "Fornecimento de produtos de higienização e limpeza domiciliar",
+            "Aquisição de álcool gel, sabonete líquido e desinfetante",
+            "Compra de vassoura, rodo, pano de chão e esponja",
+            "Aquisição de alvejante, água sanitária e limpa vidros",
+            "Registro de preços de material de limpeza e higiene",
+            "Fornecimento de detergente neutro e desengordurante",
+            "Aquisição de inseticida e repelente para repartições",
+            "Compra de cera de assoalho e removedor de piso",
+            "Aquisição de balde, mop e utensílios de limpeza",
+            "Fornecimento de sabão em pó e amaciante de roupas",
+            "Aquisição de hipoclorito de sódio e cloro para uso geral",
         ],
         "irrelevant": [
-            "Material de limpeza hospitalar para empresa de facilities",
-            "Aquisição de uniformes hospitalares para equipe de enfermagem",
-            "Nutrição animal e ração para canil municipal",
-            "Plano de saúde empresarial para servidores da prefeitura",
-            "Sondagem de solo para fundação de edifício público",
-            "Monitor de computador para departamento de TI",
-            "Agulha de costura para oficina de artesanato comunitário",
-            "Lâmina de serra para marcenaria da escola técnica",
-            "Clínica veterinária para atendimento de animais de rua",
-            "Instrumental musical para banda da escola municipal",
-            "Aquisição de mobiliário hospitalar para enfermaria cadeira mesa",
-            "Ar comprimido para limpeza de equipamentos do laboratório",
-            "Construção de unidade básica de saúde no bairro norte",
-            "Serviço de vigilância patrimonial para hospital municipal",
-            "Aquisição de software de gestão para hospital público",
+            "Contratação de empresa para limpeza e conservação predial",
+            "Serviço de portaria e zeladoria terceirizado",
+            "Terceirização de serviços de limpeza predial",
+            "Aquisição de medicamentos para farmácia básica",
+            "Compra de material médico-hospitalar descartável",
+            "Aquisição de tinta e material de pintura predial",
+            "Compra de cal, cimento e material de construção",
+            "Contratação de serviço de dedetização",
+            "Aquisição de saneante hospitalar para UTI",
+            "Compra de defensivo agrícola e agrotóxico",
+            "Contratação de empresa de jardinagem e paisagismo",
+            "Aquisição de material de escritório e papelaria",
+            "Serviço de controle de vetores e pragas urbanas",
+            "Aquisição de uniformes e EPIs para servidores",
+            "Compra de alimentos e produtos alimentícios",
+        ],
+    },
+    "medicamentos": {
+        "relevant": [
+            "Registro de preços para fornecimento de medicamentos para farmácia básica",
+            "Aquisição de medicamentos para assistência farmacêutica municipal",
+            "Compra de dipirona, amoxicilina e paracetamol para UBS",
+            "Fornecimento de insulina e metformina para programa de diabetes",
+            "Aquisição de soros e soluções injetáveis para pronto-socorro",
+            "Compra de antibióticos e anti-inflamatórios para hospital",
+            "Aquisição de vacinas para programa de imunização municipal",
+            "Fornecimento de medicamentos de alto custo para tratamentos especiais",
+            "Compra de analgésicos e antiespasmódicos para UPA",
+            "Aquisição de cápsulas e comprimidos para farmácia popular",
+            "Fornecimento de colírios e pomadas oftálmicas para clínica",
+            "Compra de soluções parenterais para CTI",
+            "Aquisição de medicamentos antineoplásicos para oncologia",
+            "Fornecimento de antivirais para tratamento de hepatite",
+            "Compra de fármacos para componente especializado da assistência farmacêutica",
+        ],
+        "irrelevant": [
+            "Aquisição de tomógrafo computadorizado para hospital regional",
+            "Compra de seringas, agulhas e cateteres descartáveis",
+            "Contratação de serviço de limpeza hospitalar",
+            "Aquisição de ventilador pulmonar para UTI",
+            "Compra de reagentes laboratoriais para diagnóstico",
+            "Aquisição de cadeiras de rodas e andadores",
+            "Compra de autoclave para centro cirúrgico",
+            "Aquisição de equipamentos de diagnóstico por imagem",
+            "Compra de material odontológico para consultório",
+            "Aquisição de próteses e órteses ortopédicas",
+            "Contratação de serviços médicos especializados",
+            "Compra de alimentos para merenda escolar",
+            "Aquisição de material de limpeza para hospital",
+            "Compra de uniformes para servidores de saúde",
+            "Aquisição de computadores para sistema hospitalar",
+        ],
+    },
+    "equipamentos_medicos": {
+        "relevant": [
+            "Aquisição de tomógrafo computadorizado para hospital regional",
+            "Compra de monitor multiparâmetro e desfibrilador para UTI",
+            "Aquisição de ventilador pulmonar para pronto-socorro",
+            "Compra de cadeiras de rodas e andadores para centro de reabilitação",
+            "Aquisição de autoclave para esterilização de materiais cirúrgicos",
+            "Compra de aparelho de ultrassom para maternidade municipal",
+            "Aquisição de eletrocardiógrafo e oxímetro para UPA",
+            "Compra de equipamentos de fisioterapia para centro de reabilitação",
+            "Aquisição de OPME: stents e próteses ortopédicas",
+            "Compra de incubadora neonatal para maternidade",
+            "Aquisição de microscópio e centrífuga para laboratório",
+            "Compra de cadeira odontológica e equipo para consultório",
+            "Aquisição de mesas cirúrgicas e focos operatórios",
+            "Compra de aparelho de raio-x digital para unidade de saúde",
+            "Aquisição de próteses de quadril e joelho para ortopedia",
+        ],
+        "irrelevant": [
+            "Aquisição de medicamentos para farmácia básica municipal",
+            "Compra de seringas, agulhas e cateteres descartáveis",
+            "Registro de preços para material de laboratório e reagentes",
+            "Aquisição de material odontológico: resina e amálgama",
+            "Compra de dieta enteral e suplementos nutricionais",
+            "Contratação de serviço de limpeza hospitalar",
+            "Aquisição de grupo gerador diesel para hospital",
+            "Compra de computadores e sistemas de gestão hospitalar",
+            "Aquisição de móveis e cadeiras para sala de espera",
+            "Compra de uniformes para equipe de saúde",
+            "Aquisição de material de escritório para secretaria de saúde",
+            "Compra de veículo para transporte de pacientes",
+            "Fornecimento de oxigênio medicinal em cilindros",
+            "Aquisição de vacinas e imunobiológicos para campanha",
+            "Compra de material de curativo e atadura para UBS",
+        ],
+    },
+    "insumos_hospitalares": {
+        "relevant": [
+            "Aquisição de material médico-hospitalar: seringas, agulhas e cateteres",
+            "Registro de preços para luvas cirúrgicas e de procedimento",
+            "Fornecimento de material de laboratório: reagentes e kit diagnóstico",
+            "Aquisição de material odontológico para consultórios",
+            "Fornecimento de dieta enteral e nutrição parenteral",
+            "Compra de gaze, atadura, esparadrapo e curativos",
+            "Aquisição de oxigênio medicinal e gases medicinais",
+            "Compra de bisturi, fio de sutura e campo cirúrgico",
+            "Aquisição de sondas nasoenteral e vesicais",
+            "Compra de tubos coletores e pipetas para laboratório",
+            "Aquisição de resina dental, amálgama e materiais odontológicos",
+            "Compra de testes rápidos e kits diagnóstico",
+            "Aquisição de bolsas de colostomia e materiais ostomizados",
+            "Fornecimento de máscara cirúrgica e N95 para equipe de saúde",
+            "Compra de equipos de soro e seringas para hospital",
+        ],
+        "irrelevant": [
+            "Aquisição de medicamentos para farmácia básica municipal",
+            "Compra de tomógrafo e ventilador pulmonar para UTI",
+            "Contratação de empresa de limpeza hospitalar",
+            "Aquisição de vacinas para campanha de imunização",
+            "Compra de antibióticos e anti-inflamatórios",
+            "Aquisição de cadeira odontológica e equipo",
+            "Compra de cadeiras de rodas e andadores",
+            "Aquisição de próteses ortopédicas e stents",
+            "Fornecimento de saneante hospitalar e desinfetante",
+            "Contratação de serviços médicos especializados",
+            "Aquisição de computadores para sistema de gestão",
+            "Compra de material de construção para reforma",
+            "Aquisição de uniformes para servidores de saúde",
+            "Compra de alimentos e gêneros alimentícios",
+            "Aquisição de material de escritório e papelaria",
         ],
     },
     "vigilancia": {
@@ -669,7 +777,7 @@ GROUND_TRUTH = {
 
 
 # =============================================================================
-# All 15 Sectors
+# All 19 Sectors
 # =============================================================================
 
 ALL_SECTORS = list(GROUND_TRUTH.keys())
@@ -953,81 +1061,88 @@ class TestSoftware:
         )[0]
 
 
-class TestFacilities:
-    """AC-FAC-2 through AC-FAC-5"""
+class TestServicosPrediais:
+    """AC-FAC-2 through AC-FAC-5 (migrado de facilities → servicos_prediais)"""
 
     def test_servico_limpeza_approved(self):
         """AC-FAC-2: serviço de limpeza → APPROVED"""
         assert check_match(
-            "facilities",
-            "Contratação de serviço de limpeza e conservação predial",
+            "servicos_prediais",
+            "Contratação de empresa para limpeza e conservação predial",
         )[0]
 
     def test_manutencao_veiculos_rejected(self):
         """AC-FAC-3: manutenção de veículos → REJECTED (é transporte)"""
         assert not check_match(
-            "facilities",
+            "servicos_prediais",
             "Manutenção de veículos e frota da secretaria de saúde",
         )[0]
 
     def test_conservacao_predial_analysis(self):
         """AC-FAC-4: conservação predial → APPROVED or goes to manutencao_predial?"""
         obj = "Serviço de conservação predial incluindo limpeza e zeladoria"
-        matched_fac, _ = check_match("facilities", obj)
+        matched_pred, _ = check_match("servicos_prediais", obj)
         matched_man, _ = check_match("manutencao_predial", obj)
         # At least one should match — document which one wins
-        assert matched_fac or matched_man, (
-            "conservação predial should match either facilities or manutencao_predial"
+        assert matched_pred or matched_man, (
+            "conservação predial should match either servicos_prediais or manutencao_predial"
         )
 
-    def test_document_collision_facilities_manutencao(self):
-        """AC-FAC-5: Document collision facilities vs manutencao_predial"""
+    def test_document_collision_servicos_prediais_manutencao(self):
+        """AC-FAC-5: Document collision servicos_prediais vs manutencao_predial"""
         # Test items that could belong to either
         test_items = [
             "Serviço de manutenção de ar condicionado do prédio",
-            "Contratação de serviço de limpeza e conservação predial",
+            "Contratação de empresa para limpeza e conservação predial",
             "Serviço de manutenção predial preventiva e corretiva",
         ]
         for obj in test_items:
-            fac_match, fac_kws = check_match("facilities", obj)
+            pred_match, pred_kws = check_match("servicos_prediais", obj)
             man_match, man_kws = check_match("manutencao_predial", obj)
             # Both might match — that's expected cross-sector behavior
             # At least one should match
-            assert fac_match or man_match, f"Neither sector matched: {obj}"
+            assert pred_match or man_match, f"Neither sector matched: {obj}"
 
 
-class TestSaude:
-    """AC-SAU-2 through AC-SAU-5"""
+class TestMedicamentos:
+    """AC-SAU-2 through AC-SAU-5 (migrado de saude → medicamentos/equipamentos_medicos/insumos_hospitalares)"""
 
     def test_medicamento_approved(self):
-        """AC-SAU-2: medicamento → APPROVED"""
+        """AC-SAU-2: medicamento → APPROVED em medicamentos"""
         assert check_match(
-            "saude", "Aquisição de medicamentos para farmácia básica do SUS"
+            "medicamentos", "Registro de preços para fornecimento de medicamentos para farmácia básica"
         )[0]
 
     def test_equipamento_medico_approved(self):
-        """AC-SAU-3: equipamento médico → APPROVED"""
+        """AC-SAU-3: equipamento médico → APPROVED em equipamentos_medicos"""
         assert check_match(
-            "saude", "Compra de equipamento médico hospitalar para UTI"
+            "equipamentos_medicos", "Aquisição de tomógrafo computadorizado para hospital regional"
         )[0]
 
     def test_material_limpeza_hospitalar_rejected(self):
-        """AC-SAU-4: material de limpeza hospitalar → REJECTED (é facilities)"""
+        """AC-SAU-4: material de limpeza hospitalar → REJECTED em medicamentos (é servicos_prediais/produtos_limpeza)"""
         matched, kws = check_match(
-            "saude",
-            "Material de limpeza hospitalar para empresa de facilities",
+            "medicamentos",
+            "Contratação de empresa para limpeza e conservação predial",
         )
-        # Should NOT match saude — limpeza is facilities domain
+        # Should NOT match medicamentos — limpeza is servicos_prediais/produtos_limpeza domain
         assert not matched, f"Unexpected match for limpeza hospitalar: {kws}"
 
     def test_no_collision_with_vestuario(self):
-        """AC-SAU-5: Validate that doesn't collide with vestuario (uniformes hospitalares)"""
+        """AC-SAU-5: Validate medicamentos doesn't collide with vestuario (uniformes hospitalares)"""
         obj = "Aquisição de uniformes hospitalares para equipe de enfermagem"
-        matched_saude, _ = check_match("saude", obj)
+        matched_med, _ = check_match("medicamentos", obj)
         matched_vest, _ = check_match("vestuario", obj)
-        # Should match vestuario NOT saude
-        assert not matched_saude, "uniformes hospitalares should not match saude"
+        # Should match vestuario NOT medicamentos
+        assert not matched_med, "uniformes hospitalares should not match medicamentos"
         assert matched_vest, "uniformes hospitalares should match vestuario"
+
+    def test_insumo_hospitalar_approved(self):
+        """AC-SAU-6: insumo hospitalar descartável → APPROVED em insumos_hospitalares"""
+        assert check_match(
+            "insumos_hospitalares",
+            "Aquisição de material médico-hospitalar: seringas, agulhas e cateteres",
+        )[0]
 
 
 class TestVigilancia:
@@ -1088,10 +1203,10 @@ class TestTransporte:
         )[0]
 
     def test_ambulancia_analysis(self):
-        """AC-TRA-5: ambulância → ambiguous (frota_veicular OR saude?)"""
+        """AC-TRA-5: ambulância → ambiguous (frota_veicular OR equipamentos_medicos?)"""
         obj = "Aquisição de ambulância tipo B para SAMU municipal"
         matched_tra, _ = check_match("frota_veicular", obj)
-        matched_sau, _ = check_match("saude", obj)
+        matched_eq, _ = check_match("equipamentos_medicos", obj)
         # Ambulância should match at least frota_veicular (it's a vehicle)
         assert matched_tra, "ambulância should match frota_veicular"
 
@@ -1121,8 +1236,8 @@ class TestManutencaoPredial:
             "Serviço de manutenção de instalações hidráulicas prediais",
         )[0]
 
-    def test_document_collision_with_facilities_and_hidraulicos(self):
-        """AC-MAN-5: Document collision with facilities and materiais_hidraulicos"""
+    def test_document_collision_with_servicos_prediais_and_hidraulicos(self):
+        """AC-MAN-5: Document collision with servicos_prediais and materiais_hidraulicos"""
         # Reparos hidráulicos prediais — could be manutencao_predial or materiais_hidraulicos
         obj = "Serviço de manutenção de instalações hidráulicas do prédio"
         man_match, _ = check_match("manutencao_predial", obj)
@@ -1304,15 +1419,16 @@ class TestCrossSectorCollisions:
 
 
 class TestConsolidatedMetrics:
-    """AC-FINAL-1: Consolidated table for all 15 sectors."""
+    """AC-FINAL-1: Consolidated table for all 19 sectors."""
 
     def test_all_sectors_covered(self):
-        """Verify all 16 sectors have ground truth data."""
+        """Verify all 19 sectors have ground truth data."""
         expected = {
             "vestuario", "alimentos", "informatica", "mobiliario", "papelaria",
-            "engenharia", "software", "facilities", "saude", "vigilancia",
-            "transporte_servicos", "frota_veicular", "manutencao_predial", "engenharia_rodoviaria",
-            "materiais_eletricos", "materiais_hidraulicos",
+            "engenharia", "software", "servicos_prediais", "produtos_limpeza",
+            "medicamentos", "equipamentos_medicos", "insumos_hospitalares",
+            "vigilancia", "transporte_servicos", "frota_veicular", "manutencao_predial",
+            "engenharia_rodoviaria", "materiais_eletricos", "materiais_hidraulicos",
         }
         assert set(GROUND_TRUTH.keys()) == expected
 

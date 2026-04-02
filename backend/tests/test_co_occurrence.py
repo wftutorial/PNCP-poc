@@ -294,7 +294,7 @@ class TestCoOccurrenceEdgeCases:
         should_reject, reason = check_co_occurrence(
             "Aquisição de material de construção para reforma",
             rules,
-            "saude",
+            "medicamentos",
         )
         assert should_reject is True
         assert "construcao" in reason
@@ -379,11 +379,11 @@ class TestCoOccurrenceSectorsLoading:
         informatica = SECTORS["informatica"]
         assert len(informatica.co_occurrence_rules) >= 2
 
-    def test_saude_has_2_rules(self):
-        """AC6: Saude sector has at least 2 co-occurrence rules."""
+    def test_medicamentos_has_2_rules(self):
+        """AC6: Medicamentos sector has at least 2 co-occurrence rules."""
         from sectors import SECTORS
-        saude = SECTORS["saude"]
-        assert len(saude.co_occurrence_rules) >= 2
+        medicamentos = SECTORS["medicamentos"]
+        assert len(medicamentos.co_occurrence_rules) >= 2
 
     def test_sector_without_rules_has_empty_list(self):
         """AC6: Sectors without rules have empty list (not None)."""

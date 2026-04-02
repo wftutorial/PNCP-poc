@@ -81,7 +81,7 @@ class TestFirstAnalysis:
                 },
             )
             assert response.status_code == 200
-            assert response.json()["setor_id"] == "facilities"
+            assert response.json()["setor_id"] == "servicos_prediais"
 
     @pytest.mark.asyncio
     async def test_ac2_derives_search_params(self, mock_pipeline):

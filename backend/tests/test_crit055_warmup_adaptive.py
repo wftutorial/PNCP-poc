@@ -42,7 +42,7 @@ async def test_warmup_covers_all_27_ufs():
     """AC1: warmup_specific_combinations dispatches for all 27 UFs."""
     from config import ALL_BRAZILIAN_UFS
 
-    sectors = ["software", "informatica", "engenharia", "saude", "facilities"]
+    sectors = ["software", "informatica", "engenharia", "medicamentos", "servicos_prediais"]
     ufs = ALL_BRAZILIAN_UFS.copy()
 
     assert len(ufs) == 27, "Brazil has 27 UFs"

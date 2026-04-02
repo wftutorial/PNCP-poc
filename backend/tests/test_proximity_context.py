@@ -96,7 +96,7 @@ class TestCheckProximityContextCore:
         texto = "aquisicao de luva de procedimento cirurgico hospitalar"
         matched_terms = ["luva"]
         other_sigs = {
-            "saude": {"cirurgico", "hospitalar", "medicamento", "farmaceutico"}
+            "medicamentos": {"cirurgico", "hospitalar", "medicamento", "farmaceutico"}
         }
 
         should_reject, reason = check_proximity_context(
@@ -104,7 +104,7 @@ class TestCheckProximityContextCore:
         )
 
         assert should_reject is True
-        assert "saude" in reason
+        assert "medicamentos" in reason
 
     def test_sistema_hidraulico_keeps(self):
         """'sistema hidraulico de bombeamento' — no cross-sector sig nearby."""
@@ -347,7 +347,7 @@ class TestProximityContextCrossSector:
         matched_terms = ["confeccao"]
         other_sigs = {
             "alimentos": {"merenda"},
-            "saude": {"medicamento", "hospitalar"},
+            "medicamentos": {"medicamento", "hospitalar"},
         }
 
         should_reject, reason = check_proximity_context(
@@ -356,7 +356,7 @@ class TestProximityContextCrossSector:
 
         assert should_reject is True
         # Should match one of the sectors
-        assert "alimentos" in reason or "saude" in reason
+        assert "alimentos" in reason or "medicamentos" in reason
 
     def test_own_sector_signature_not_rejected(self):
         """Signature terms of OWN sector in window → NOT rejected."""
@@ -415,8 +415,9 @@ class TestProximityContextCrossSector:
 
         expected_sectors = {
             "vestuario", "alimentos", "informatica", "mobiliario",
-            "papelaria", "engenharia", "software", "facilities",
-            "saude", "vigilancia", "transporte_servicos", "frota_veicular", "manutencao_predial",
+            "papelaria", "engenharia", "software", "servicos_prediais",
+            "produtos_limpeza", "medicamentos", "equipamentos_medicos", "insumos_hospitalares",
+            "vigilancia", "transporte_servicos", "frota_veicular", "manutencao_predial",
             "engenharia_rodoviaria", "materiais_eletricos", "materiais_hidraulicos",
         }
 

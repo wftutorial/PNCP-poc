@@ -49,7 +49,7 @@ def base_session_args():
     """Standard arguments for register_search_session."""
     return {
         "user_id": "user-abc-123",
-        "sectors": ["facilities"],
+        "sectors": ["servicos_prediais"],
         "ufs": ["SP", "RJ"],
         "data_inicial": "2026-02-10",
         "data_final": "2026-02-20",
@@ -87,7 +87,7 @@ class TestRegisterSearchSession:
         inserted_data = insert_call[0][0]
         assert inserted_data["status"] == "created"
         assert inserted_data["user_id"] == "user-abc-123"
-        assert inserted_data["sectors"] == ["facilities"]
+        assert inserted_data["sectors"] == ["servicos_prediais"]
         assert sorted(inserted_data["ufs"]) == sorted(["SP", "RJ"])
         assert inserted_data["data_inicial"] == "2026-02-10"
         assert inserted_data["data_final"] == "2026-02-20"
@@ -108,7 +108,7 @@ class TestRegisterSearchSession:
 
         result = await register_search_session(
             user_id="user-abc-123",
-            sectors=["facilities"],
+            sectors=["servicos_prediais"],
             ufs=["SP"],
             data_inicial="2026-02-10",
             data_final="2026-02-20",
@@ -134,7 +134,7 @@ class TestRegisterSearchSession:
 
         result = await register_search_session(
             user_id="no-profile-user",
-            sectors=["facilities"],
+            sectors=["servicos_prediais"],
             ufs=["SP"],
             data_inicial="2026-02-10",
             data_final="2026-02-20",
@@ -272,7 +272,7 @@ class TestSessionRegistrationFailure:
 
         result = await register_search_session(
             user_id="user-abc-123",
-            sectors=["facilities"],
+            sectors=["servicos_prediais"],
             ufs=["SP"],
             data_inicial="2026-02-10",
             data_final="2026-02-20",
@@ -297,7 +297,7 @@ class TestSessionRegistrationFailure:
 
         result = await register_search_session(
             user_id="user-abc-123",
-            sectors=["facilities"],
+            sectors=["servicos_prediais"],
             ufs=["SP"],
             data_inicial="2026-02-10",
             data_final="2026-02-20",
@@ -535,7 +535,7 @@ class TestPrometheusCounter:
 
             await register_search_session(
                 user_id="user-abc-123",
-                sectors=["facilities"],
+                sectors=["servicos_prediais"],
                 ufs=["SP"],
                 data_inicial="2026-02-10",
                 data_final="2026-02-20",
@@ -595,7 +595,7 @@ class TestStructuredLog:
         with caplog.at_level(logging.INFO, logger="quota"):
             await register_search_session(
                 user_id="user-abc-123",
-                sectors=["facilities"],
+                sectors=["servicos_prediais"],
                 ufs=["SP"],
                 data_inicial="2026-02-10",
                 data_final="2026-02-20",
@@ -960,7 +960,7 @@ class TestPipelineStatusTransitions:
             # Step 1: Register session (pipeline entry)
             session_id = await register_search_session(
                 user_id="user-i1",
-                sectors=["facilities"],
+                sectors=["servicos_prediais"],
                 ufs=["SP"],
                 data_inicial="2026-02-10",
                 data_final="2026-02-20",
@@ -1033,7 +1033,7 @@ class TestPipelineStatusTransitions:
             # Step 1: Register
             session_id = await register_search_session(
                 user_id="user-i2",
-                sectors=["facilities"],
+                sectors=["servicos_prediais"],
                 ufs=["SP"],
                 data_inicial="2026-02-10",
                 data_final="2026-02-20",
@@ -1080,7 +1080,7 @@ class TestPipelineStatusTransitions:
             # Step 1: Register
             session_id = await register_search_session(
                 user_id="user-i3",
-                sectors=["facilities"],
+                sectors=["servicos_prediais"],
                 ufs=["SP"],
                 data_inicial="2026-02-10",
                 data_final="2026-02-20",
@@ -1121,7 +1121,7 @@ class TestPipelineStatusTransitions:
 
             session_id = await register_search_session(
                 user_id="user-i1b",
-                sectors=["facilities"],
+                sectors=["servicos_prediais"],
                 ufs=["SP"],
                 data_inicial="2026-02-10",
                 data_final="2026-02-20",

@@ -173,7 +173,7 @@ class TestGetTrialUsageStats:
         sessions_chain.eq.return_value = sessions_chain
         sessions_chain.execute.return_value = MagicMock(data=[
             {"total_filtered": None, "valor_total": None, "sectors": None},
-            {"total_filtered": 5, "valor_total": 100_000, "sectors": ["saude"]},
+            {"total_filtered": 5, "valor_total": 100_000, "sectors": ["medicamentos"]},
         ])
 
         pipeline_chain = MagicMock()
@@ -194,4 +194,4 @@ class TestGetTrialUsageStats:
 
         assert stats.opportunities_found == 5  # 0 + 5
         assert stats.total_value_estimated == 100_000.0
-        assert stats.sectors_searched == ["saude"]
+        assert stats.sectors_searched == ["medicamentos"]

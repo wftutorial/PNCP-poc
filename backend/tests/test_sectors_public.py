@@ -54,10 +54,10 @@ def client():
 def sample_stats():
     """Sample sector stats dict."""
     return {
-        "sector_id": "saude",
+        "sector_id": "medicamentos",
         "sector_name": "Saúde",
         "sector_description": "Medicamentos, equipamentos hospitalares, insumos médicos",
-        "slug": "saude",
+        "slug": "medicamentos",
         "total_open": 42,
         "total_value": 5000000.0,
         "avg_value": 119047.62,
@@ -82,7 +82,7 @@ def sample_stats():
 
 class TestSlugMapping:
     def test_simple_slug(self):
-        assert sector_id_from_slug("saude") == "saude"
+        assert sector_id_from_slug("medicamentos") == "medicamentos"
 
     def test_hyphenated_slug(self):
         assert sector_id_from_slug("manutencao-predial") == "manutencao_predial"
@@ -91,14 +91,14 @@ class TestSlugMapping:
         assert sector_id_from_slug("inexistente") is None
 
     def test_sector_slug_simple(self):
-        assert sector_slug("saude") == "saude"
+        assert sector_slug("medicamentos") == "medicamentos"
 
     def test_sector_slug_underscore(self):
         assert sector_slug("materiais_eletricos") == "materiais-eletricos"
 
     def test_all_sector_slugs_count(self):
         slugs = get_all_sector_slugs()
-        assert len(slugs) == 15
+        assert len(slugs) == 19
 
     def test_all_slugs_have_correct_structure(self):
         slugs = get_all_sector_slugs()
@@ -116,23 +116,23 @@ class TestSlugMapping:
 
 class TestStatsCache:
     def test_cache_miss_returns_none(self):
-        assert _get_cached_stats("saude") is None
+        assert _get_cached_stats("medicamentos") is None
 
     def test_cache_hit_returns_data(self, sample_stats):
-        _set_cached_stats("saude", sample_stats)
-        result = _get_cached_stats("saude")
+        _set_cached_stats("medicamentos", sample_stats)
+        result = _get_cached_stats("medicamentos")
         assert result is not None
         assert result["total_open"] == 42
 
     def test_cache_expired_returns_none(self, sample_stats):
-        _stats_cache["saude"] = (sample_stats, time.time() - _CACHE_TTL_SECONDS - 1)
-        assert _get_cached_stats("saude") is None
+        _stats_cache["medicamentos"] = (sample_stats, time.time() - _CACHE_TTL_SECONDS - 1)
+        assert _get_cached_stats("medicamentos") is None
 
     def test_invalidate_all(self, sample_stats):
-        _set_cached_stats("saude", sample_stats)
+        _set_cached_stats("medicamentos", sample_stats)
         _set_cached_stats("alimentos", sample_stats)
         invalidate_all_stats()
-        assert _get_cached_stats("saude") is None
+        assert _get_cached_stats("medicamentos") is None
         assert _get_cached_stats("alimentos") is None
 
 
@@ -165,13 +165,13 @@ class TestSectorStatsEndpoint:
         assert resp.status_code == 404
 
     def test_returns_stats_from_cache(self, client, sample_stats):
-        _set_cached_stats("saude", sample_stats)
-        resp = client.get("/v1/sectors/saude/stats")
+        _set_cached_stats("medicamentos", sample_stats)
+        resp = client.get("/v1/sectors/medicamentos/stats")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["sector_id"] == "saude"
+        assert data["sector_id"] == "medicamentos"
         assert data["total_open"] == 42
-        assert data["slug"] == "saude"
+        assert data["slug"] == "medicamentos"
 
     def test_hyphenated_slug_works(self, client, sample_stats):
         stats = {**sample_stats, "sector_id": "manutencao_predial", "slug": "manutencao-predial"}
@@ -183,14 +183,14 @@ class TestSectorStatsEndpoint:
     @patch("routes.sectors_public._generate_sector_stats")
     def test_generates_on_cache_miss(self, mock_gen, client, sample_stats):
         mock_gen.return_value = sample_stats
-        resp = client.get("/v1/sectors/saude/stats")
+        resp = client.get("/v1/sectors/medicamentos/stats")
         assert resp.status_code == 200
         mock_gen.assert_called_once()
 
     def test_sample_items_no_internal_ids(self, client, sample_stats):
         """AC4: sample_items should not expose internal IDs."""
-        _set_cached_stats("saude", sample_stats)
-        resp = client.get("/v1/sectors/saude/stats")
+        _set_cached_stats("medicamentos", sample_stats)
+        resp = client.get("/v1/sectors/medicamentos/stats")
         data = resp.json()
         for item in data["sample_items"]:
             assert "id" not in item
@@ -199,8 +199,8 @@ class TestSectorStatsEndpoint:
 
     def test_stats_response_structure(self, client, sample_stats):
         """AC1: Verify all required fields are present."""
-        _set_cached_stats("saude", sample_stats)
-        resp = client.get("/v1/sectors/saude/stats")
+        _set_cached_stats("medicamentos", sample_stats)
+        resp = client.get("/v1/sectors/medicamentos/stats")
         data = resp.json()
         required_fields = [
             "sector_id", "sector_name", "sector_description", "slug",
@@ -250,12 +250,12 @@ class TestStatsGeneration:
 
         mock_cls = self._make_async_mock(items=[])
         with patch("pncp_client.AsyncPNCPClient", mock_cls):
-            sector = SECTORS["saude"]
-            result = await _generate_sector_stats("saude", sector)
+            sector = SECTORS["medicamentos"]
+            result = await _generate_sector_stats("medicamentos", sector)
 
-        assert result["sector_id"] == "saude"
-        assert result["sector_name"] == "Saúde"
-        assert result["slug"] == "saude"
+        assert result["sector_id"] == "medicamentos"
+        assert result["sector_name"] == "Medicamentos e Produtos Farmacêuticos"
+        assert result["slug"] == "medicamentos"
         assert result["total_open"] == 0
         assert isinstance(result["top_ufs"], list)
         assert isinstance(result["sample_items"], list)
@@ -268,8 +268,8 @@ class TestStatsGeneration:
 
         mock_cls = self._make_async_mock(side_effect=Exception("PNCP down"))
         with patch("pncp_client.AsyncPNCPClient", mock_cls):
-            sector = SECTORS["saude"]
-            result = await _generate_sector_stats("saude", sector)
+            sector = SECTORS["medicamentos"]
+            result = await _generate_sector_stats("medicamentos", sector)
 
         assert result["total_open"] == 0
         assert result["total_value"] == 0.0
@@ -285,8 +285,8 @@ class TestStatsGeneration:
             {"objetoCompra": "Compra de material de escritório", "uf": "RJ", "valorTotalEstimado": 50000},
         ])
         with patch("pncp_client.AsyncPNCPClient", mock_cls):
-            sector = SECTORS["saude"]
-            result = await _generate_sector_stats("saude", sector)
+            sector = SECTORS["medicamentos"]
+            result = await _generate_sector_stats("medicamentos", sector)
 
         # "medicamentos" matches saude keywords, "material de escritório" does not
         assert result["total_open"] >= 1
@@ -302,8 +302,8 @@ class TestStatsGeneration:
             {"objetoCompra": long_title, "uf": "SP", "valorTotalEstimado": 100000},
         ])
         with patch("pncp_client.AsyncPNCPClient", mock_cls):
-            sector = SECTORS["saude"]
-            result = await _generate_sector_stats("saude", sector)
+            sector = SECTORS["medicamentos"]
+            result = await _generate_sector_stats("medicamentos", sector)
 
         if result["sample_items"]:
             assert len(result["sample_items"][0]["titulo"]) <= 120

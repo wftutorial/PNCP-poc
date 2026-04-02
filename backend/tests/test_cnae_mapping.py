@@ -11,9 +11,9 @@ class TestMapCnaeToSetor:
         # Vestuário
         ("4781", "vestuario"),
         ("1412", "vestuario"),
-        # Facilities
-        ("8121", "facilities"),
-        ("8011", "facilities"),
+        # Facilities / Prediais
+        ("8121", "servicos_prediais"),
+        ("8011", "vigilancia"),
         # Equipamentos
         ("2710", "equipamentos"),
         ("3250", "equipamentos"),
@@ -30,7 +30,7 @@ class TestMapCnaeToSetor:
 
     @pytest.mark.parametrize("cnae,expected", [
         ("4781-4/00", "vestuario"),
-        ("8121-4/00", "facilities"),
+        ("8121-4/00", "servicos_prediais"),
         ("6201-5/01", "informatica"),
     ])
     def test_formatted_cnae(self, cnae: str, expected: str):
@@ -39,7 +39,7 @@ class TestMapCnaeToSetor:
 
     @pytest.mark.parametrize("cnae,expected", [
         ("47814", "vestuario"),
-        ("81214", "facilities"),
+        ("81214", "servicos_prediais"),
     ])
     def test_five_digit_cnae(self, cnae: str, expected: str):
         """Handles 5-digit CNAE prefix format."""
@@ -59,7 +59,7 @@ class TestMapCnaeToSetor:
     def test_whitespace_handling(self):
         """Handles leading/trailing whitespace."""
         assert map_cnae_to_setor("  4781  ") == "vestuario"
-        assert map_cnae_to_setor(" 8121-4/00 ") == "facilities"
+        assert map_cnae_to_setor(" 8121-4/00 ") == "servicos_prediais"
 
     def test_text_with_cnae(self):
         """Handles CNAE embedded in description text."""
@@ -73,7 +73,7 @@ class TestGetSetorName:
     def test_known_sectors(self):
         """Returns correct names for known sectors."""
         assert get_setor_name("vestuario") == "Vestuário e Uniformes"
-        assert get_setor_name("facilities") == "Facilities e Serviços"
+        assert get_setor_name("servicos_prediais") == "Serviços Prediais e Facilities"
         assert get_setor_name("equipamentos") == "Equipamentos"
         assert get_setor_name("alimentos") == "Alimentos e Merenda"
         assert get_setor_name("informatica") == "Hardware e Equipamentos de TI"

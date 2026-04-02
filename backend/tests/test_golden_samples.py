@@ -403,24 +403,24 @@ class TestGoldenSamplesSoftware:
 
 
 class TestGoldenSamplesFacilities:
-    """Facilities e Manutenção — Golden Samples."""
+    """Serviços Prediais e Facilities — Golden Samples."""
 
     @pytest.fixture
     def kw(self):
-        return _sector_kwargs("facilities")
+        return _sector_kwargs("servicos_prediais")
 
     @pytest.mark.parametrize("description", [
         "Contratação de serviço de limpeza e conservação predial para as unidades da prefeitura",
-        "Aquisição de material de limpeza incluindo detergente, desinfetante e água sanitária",
-        "Fornecimento de papel higiênico, papel toalha e saco de lixo para as repartições públicas",
         "Contratação de empresa para serviços prediais de portaria, recepção e zeladoria",
         "Contratação de serviços de jardinagem e paisagismo para as áreas verdes do prédio",
-        # Edge case: long description
+        # Cleaning products with predial context — servicos_prediais should match
+        "Aquisição de detergente e desinfetante para limpeza predial das escolas",
+        # Edge case: long description with copeira
         "Pregão eletrônico para contratação de empresa especializada em serviços de facilities management incluindo limpeza predial, conservação de imóveis, copa e cozinha, recepção, copeira e zelador para atender as necessidades da Secretaria Municipal de Administração do município de Recife",
-        # Cleaning products
-        "Aquisição de saneantes, alvejante, sabão, vassouras, rodos e esponjas para o almoxarifado",
-        # Third-party support
-        "Contratação de terceirização de mão de obra para serviços de apoio administrativo",
+        # Copeiragem service
+        "Contratação de serviços de copeiragem e serviços de copa para a sede da prefeitura",
+        # Dedetização
+        "Contratação de empresa de dedetização e controle de pragas para os prédios municipais",
     ])
     def test_positive_samples(self, kw, description):
         matched, keywords = match_keywords(description, **kw)
@@ -452,31 +452,27 @@ class TestGoldenSamplesFacilities:
 # ===========================================================================
 
 
-class TestGoldenSamplesSaude:
-    """Saúde e Medicamentos — Golden Samples."""
+class TestGoldenSamplesMedicamentos:
+    """Medicamentos e Farmácia — Golden Samples."""
 
     @pytest.fixture
     def kw(self):
-        return _sector_kwargs("saude")
+        return _sector_kwargs("medicamentos")
 
     @pytest.mark.parametrize("description", [
         "Aquisição de medicamentos da farmácia básica para as unidades de saúde do município",
-        "Fornecimento de material médico-hospitalar incluindo seringas, agulhas e gazes",
-        "Registro de preço para aquisição de equipamento médico hospitalar para o novo hospital",
-        "Aquisição de reagentes e kit diagnóstico para o laboratório municipal de análises clínicas",
-        "Fornecimento de próteses e órteses para pacientes do centro de reabilitação",
         # Specific drugs
         "Aquisição de dipirona, paracetamol, amoxicilina e omeprazol para a rede de atenção básica",
-        # Edge case: long description
-        "Pregão eletrônico para registro de preços visando à aquisição de materiais médico-hospitalares incluindo luva de procedimento, compressa, atadura, esparadrapo, fio de sutura, bisturi e curativo para atender as necessidades das unidades básicas de saúde e do hospital municipal do município de Manaus no estado do Amazonas",
-        # Medical equipment
-        "Aquisição de desfibrilador, monitor multiparâmetro e ventilador pulmonar para a UTI",
-        # Dental
-        "Fornecimento de material odontológico incluindo resina dental e anestésicos para o CEO",
+        # Antibiotics and vaccines
+        "Registro de preço para fornecimento de antibióticos e imunobiológicos para a rede de saúde",
+        # Pharmacy services
+        "Contratação de farmácia para dispensação de medicamentos de alto custo para a SES",
+        # Dental anesthetics (with context)
+        "Fornecimento de anestésico odontológico para os centros de especialidades odontológicas",
     ])
     def test_positive_samples(self, kw, description):
         matched, keywords = match_keywords(description, **kw)
-        assert matched, f"Should match saude but didn't: {description!r}"
+        assert matched, f"Should match medicamentos but didn't: {description!r}"
 
     @pytest.mark.parametrize("description", [
         # Exclusion: saúde do trabalhador
@@ -814,8 +810,10 @@ class TestGoldenSamplesCrossSectorEdgeCases:
         """Verify all 15 expected sectors are loaded from YAML."""
         expected = {
             "vestuario", "alimentos", "informatica", "mobiliario",
-            "papelaria", "engenharia", "software", "facilities",
-            "saude", "vigilancia", "transporte_servicos", "frota_veicular", "manutencao_predial",
+            "papelaria", "engenharia", "software",
+            "servicos_prediais", "produtos_limpeza",
+            "medicamentos", "equipamentos_medicos", "insumos_hospitalares",
+            "vigilancia", "transporte_servicos", "frota_veicular", "manutencao_predial",
             "engenharia_rodoviaria", "materiais_eletricos", "materiais_hidraulicos",
         }
         assert set(SECTORS.keys()) == expected
@@ -826,10 +824,10 @@ class TestGoldenSamplesCrossSectorEdgeCases:
             "Reforma da sede da secretaria de educação incluindo pintura predial e alvenaria",
             "engenharia",
         ),
-        # Ambiguous: "limpeza" must be facilities, not infra
+        # Ambiguous: "limpeza" must be servicos_prediais, not infra
         (
             "Aquisição de detergente e desinfetante para limpeza predial das escolas",
-            "facilities",
+            "servicos_prediais",
         ),
         # Ambiguous: "manutenção" for building must be manutencao_predial not transporte
         (
@@ -858,7 +856,7 @@ class TestGoldenSamplesCrossSectorEdgeCases:
 
     def test_hyphenated_terms(self):
         """Hyphenated terms should match after normalization (hyphen -> space)."""
-        kw = _sector_kwargs("saude")
+        kw = _sector_kwargs("insumos_hospitalares")
         matched, _ = match_keywords(
             "Aquisição de material médico-hospitalar para o hospital municipal",
             **kw,

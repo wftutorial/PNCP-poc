@@ -14,7 +14,7 @@ class TestSectorConfig:
     def test_all_sectors_exist(self):
         sectors = list_sectors()
         ids = {s["id"] for s in sectors}
-        assert ids == {"vestuario", "alimentos", "informatica", "mobiliario", "papelaria", "engenharia", "software", "facilities", "saude", "vigilancia", "transporte_servicos", "frota_veicular", "manutencao_predial", "engenharia_rodoviaria", "materiais_eletricos", "materiais_hidraulicos"}
+        assert ids == {"vestuario", "alimentos", "informatica", "mobiliario", "papelaria", "engenharia", "software", "servicos_prediais", "produtos_limpeza", "vigilancia", "transporte_servicos", "frota_veicular", "manutencao_predial", "engenharia_rodoviaria", "materiais_eletricos", "materiais_hidraulicos", "medicamentos", "equipamentos_medicos", "insumos_hospitalares"}
 
     def test_get_sector_returns_config(self):
         s = get_sector("vestuario")
@@ -32,9 +32,10 @@ class TestSectorIdsUnchanged:
 
     EXPECTED_IDS = {
         "vestuario", "alimentos", "informatica", "mobiliario", "papelaria",
-        "engenharia", "software", "facilities", "saude", "vigilancia",
-        "transporte_servicos", "frota_veicular", "manutencao_predial",
+        "engenharia", "software", "servicos_prediais", "produtos_limpeza",
+        "vigilancia", "transporte_servicos", "frota_veicular", "manutencao_predial",
         "engenharia_rodoviaria", "materiais_eletricos", "materiais_hidraulicos",
+        "medicamentos", "equipamentos_medicos", "insumos_hospitalares",
     }
 
     def test_sector_ids_unchanged(self):
@@ -44,12 +45,17 @@ class TestSectorIdsUnchanged:
         assert ids == self.EXPECTED_IDS
 
     def test_renamed_sectors_have_new_names(self):
-        """Verify the 5 renamed sectors have their new display names."""
+        """Verify renamed/split sectors have their correct display names."""
         assert get_sector("engenharia").name == "Engenharia, Projetos e Obras"
-        assert get_sector("facilities").name == "Facilities e Manutenção"
         assert get_sector("manutencao_predial").name == "Manutenção e Conservação Predial"
         assert get_sector("vigilancia").name == "Vigilância e Segurança Patrimonial"
         assert get_sector("informatica").name == "Hardware e Equipamentos de TI"
+        # Split sectors (formerly facilities + saude)
+        assert get_sector("servicos_prediais") is not None
+        assert get_sector("produtos_limpeza") is not None
+        assert get_sector("medicamentos") is not None
+        assert get_sector("equipamentos_medicos") is not None
+        assert get_sector("insumos_hospitalares") is not None
 
     def test_search_by_sector_id_still_works(self):
         """AC12: Searching by sector ID returns valid config (keywords preserved)."""
@@ -100,10 +106,10 @@ class TestInformaticaSector:
 
 
 class TestLimpezaInFacilities:
-    """Tests for cleaning products/services (now merged into facilities)."""
+    """Tests for cleaning products (produtos_limpeza sector)."""
 
     def _match(self, texto):
-        s = SECTORS["facilities"]
+        s = SECTORS["produtos_limpeza"]
         return match_keywords(texto, s.keywords, s.exclusions)
 
     def test_matches_material_limpeza(self):
@@ -490,7 +496,7 @@ class TestFacilitiesSector:
     """Tests for Facilities (Serviços de Zeladoria) sector."""
 
     def _match(self, texto):
-        s = SECTORS["facilities"]
+        s = SECTORS["servicos_prediais"]
         return match_keywords(texto, s.keywords, s.exclusions)
 
     # TRUE POSITIVES - Should match facilities (zeladoria) contracts
@@ -680,11 +686,16 @@ class TestManutencaoPredialSector:
 
 
 class TestSaudeSector:
-    """Tests for Saúde (health) sector."""
+    """Tests for health sectors (medicamentos / equipamentos_medicos / insumos_hospitalares)."""
 
     def _match(self, objeto: str):
-        s = get_sector("saude")
-        return match_keywords(objeto, s.keywords, s.exclusions)
+        """Match against any of the 3 health sub-sectors (union check)."""
+        for sector_id in ["medicamentos", "equipamentos_medicos", "insumos_hospitalares"]:
+            s = get_sector(sector_id)
+            ok, kw = match_keywords(objeto, s.keywords, s.exclusions)
+            if ok:
+                return True, kw
+        return False, []
 
     # TRUE POSITIVES
     def test_matches_medicamentos(self):
@@ -1075,7 +1086,7 @@ class TestFacilitiesPortariaExclusions:
     """Tests for facilities sector portaria/recepção exclusions."""
 
     def _match(self, texto):
-        s = SECTORS["facilities"]
+        s = SECTORS["servicos_prediais"]
         return match_keywords(texto, s.keywords, s.exclusions)
 
     def test_excludes_portaria_ministerial(self):

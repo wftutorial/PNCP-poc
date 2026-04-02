@@ -26,14 +26,15 @@ from synonyms import SECTOR_SYNONYMS, find_synonym_matches
 
 ALL_SECTOR_IDS = {
     "vestuario", "alimentos", "informatica", "mobiliario", "papelaria",
-    "engenharia", "software", "facilities", "saude", "vigilancia",
+    "engenharia", "software", "servicos_prediais", "produtos_limpeza",
+    "medicamentos", "equipamentos_medicos", "insumos_hospitalares", "vigilancia",
     "transporte_servicos", "frota_veicular", "manutencao_predial", "engenharia_rodoviaria",
     "materiais_eletricos", "materiais_hidraulicos",
 }
 
 # Sectors that received new co-occurrence rules + domain signals in CRIT-FLT-007
 EXPANDED_SECTORS = {
-    "alimentos", "engenharia", "engenharia_rodoviaria", "facilities",
+    "alimentos", "engenharia", "engenharia_rodoviaria", "servicos_prediais",
     "manutencao_predial", "materiais_eletricos", "materiais_hidraulicos",
     "mobiliario", "papelaria", "software", "transporte_servicos", "frota_veicular", "vigilancia",
 }
@@ -69,14 +70,14 @@ class TestAllSectorsExist:
     """Verify all 15 sectors are loaded and accessible."""
 
     def test_15_sectors_loaded(self):
-        assert len(SECTORS) == 16
+        assert len(SECTORS) == len(ALL_SECTOR_IDS)
 
     def test_all_sector_ids_present(self):
         assert set(SECTORS.keys()) == ALL_SECTOR_IDS
 
     def test_list_sectors_returns_15(self):
         sectors = list_sectors()
-        assert len(sectors) == 16
+        assert len(sectors) == len(ALL_SECTOR_IDS)
         ids = {s["id"] for s in sectors}
         assert ids == ALL_SECTOR_IDS
 
@@ -338,18 +339,20 @@ AUDIT_TEST_CASES = [
     ("engenharia", "Contratacao para execucao de obra de ampliacao do hospital", True),
     ("engenharia", "Contratacao de servicos de mao de obra terceirizada de limpeza", False),
     ("engenharia", "Aquisicao de computadores para o setor administrativo", False),
-    # --- facilities (TP) ---
-    ("facilities", "Contratacao de empresa para limpeza asseio e conservacao dos predios", True),
-    ("facilities", "Prestacao de servicos de portaria recepcao e controle de acesso", True),
-    ("facilities", "Contratacao de servicos de zeladoria para os predios da prefeitura", True),
-    ("facilities", "Aquisicao de escavadeira hidraulica para desassoreamento da lagoa", False),
-    ("facilities", "Aquisicao de lubrificantes e produtos de limpeza pesada para veiculos", False),
-    # --- saude (TP) ---
-    ("saude", "Aquisicao de medicamentos para a rede municipal de saude", True),
-    ("saude", "Registro de preco para material medico hospitalar", True),
-    ("saude", "Aquisicao de seringas e agulhas descartaveis", True),
-    ("saude", "Contratacao de plano de saude para servidores municipais", False),
-    ("saude", "Aquisicao de agulhas de costura e linhas para oficina de costura", False),
+    # --- servicos_prediais (TP) ---
+    ("servicos_prediais", "Contratacao de empresa para limpeza asseio e conservacao dos predios", True),
+    ("servicos_prediais", "Prestacao de servicos de portaria recepcao e controle de acesso", True),
+    ("servicos_prediais", "Contratacao de servicos de zeladoria para os predios da prefeitura", True),
+    ("servicos_prediais", "Aquisicao de escavadeira hidraulica para desassoreamento da lagoa", False),
+    # --- produtos_limpeza (TP) ---
+    ("produtos_limpeza", "Aquisicao de lubrificantes e produtos de limpeza pesada para veiculos", False),
+    # --- medicamentos (TP) ---
+    ("medicamentos", "Aquisicao de medicamentos para a rede municipal de saude", True),
+    ("medicamentos", "Registro de preco para medicamentos da farmacia basica", True),
+    ("medicamentos", "Contratacao de plano de saude para servidores municipais", False),
+    ("medicamentos", "Aquisicao de agulhas de costura e linhas para oficina de costura", False),
+    # --- insumos_hospitalares (TP) ---
+    ("insumos_hospitalares", "Aquisicao de seringas e agulhas descartaveis", True),
     # --- vigilancia (TP) ---
     ("vigilancia", "Contratacao de empresa de vigilancia patrimonial armada e desarmada", True),
     ("vigilancia", "Implantacao de sistema de CFTV com cameras de monitoramento", True),
@@ -472,12 +475,12 @@ class TestCrossSectorCollision:
         ("Aquisicao de disjuntores termomagneticos e eletrodutos", "materiais_eletricos"),
         ("Aquisicao de tubo PVC e registro hidraulico para rede de agua", "materiais_hidraulicos"),
         ("Contratacao de empresa de vigilancia patrimonial armada", "vigilancia"),
-        ("Aquisicao de medicamentos e seringas para o hospital", "saude"),
+        ("Aquisicao de medicamentos da farmacia basica para a rede municipal", "medicamentos"),
         ("Locacao de veiculos com motorista para secretaria", "transporte_servicos"),
         ("Aquisicao de papel sulfite A4 e canetas para secretaria", "papelaria"),
         ("Servico de manutencao preventiva e corretiva de ar condicionado", "manutencao_predial"),
         ("Aquisicao de mesas de reuniao e armario vestiario", "mobiliario"),
-        ("Contratacao de servicos de zeladoria e portaria predial", "facilities"),
+        ("Contratacao de servicos de zeladoria e portaria predial", "servicos_prediais"),
         ("Contratacao para execucao de obra publica de pavimentacao urbana", "engenharia"),
     ]
 
@@ -534,7 +537,7 @@ class TestYamlStructuralIntegrity:
         return _load_sectors_yaml()
 
     def test_yaml_has_15_sectors(self, sectors_yaml):
-        assert len(sectors_yaml) == 16
+        assert len(sectors_yaml) == len(ALL_SECTOR_IDS)
 
     def test_all_sectors_have_name(self, sectors_yaml):
         for sid, cfg in sectors_yaml.items():
@@ -661,7 +664,7 @@ class TestKnownFalsePositives:
         assert ok is False
 
     def test_facilities_excludes_limpeza_veiculos(self):
-        ok, _ = _match("facilities", "Aquisicao de lubrificantes e produtos de limpeza pesada para veiculos")
+        ok, _ = _match("servicos_prediais", "Aquisicao de lubrificantes e produtos de limpeza pesada para veiculos")
         assert ok is False
 
     def test_vigilancia_excludes_vigilancia_sanitaria(self):

@@ -25,7 +25,7 @@ SAMPLE_STATS = {
     "opportunities_found": 47,
     "total_value_estimated": 2_350_000,
     "pipeline_items_count": 8,
-    "sectors_searched": ["software", "saude", "construcao"],
+    "sectors_searched": ["software", "medicamentos", "construcao"],
 }
 
 ZERO_STATS = {

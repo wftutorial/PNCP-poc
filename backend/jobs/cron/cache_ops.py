@@ -17,9 +17,9 @@ MANDATORY_WARMUP_COMBOS = [
     {"setor_id": "engenharia", "ufs": ["SC", "PR", "RS"]},
     {"setor_id": "engenharia", "ufs": ["MG", "RJ", "ES"]},
     {"setor_id": "vestuario", "ufs": ["SP"]},
-    {"setor_id": "saude", "ufs": ["SP"]},
+    {"setor_id": "medicamentos", "ufs": ["SP"]},
     {"setor_id": "informatica", "ufs": ["SP"]},
-    {"setor_id": "facilities", "ufs": ["SP"]},
+    {"setor_id": "servicos_prediais", "ufs": ["SP"]},
     {"setor_id": "software", "ufs": ["SP"]},
 ]
 

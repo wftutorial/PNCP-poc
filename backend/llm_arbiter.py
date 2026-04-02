@@ -291,10 +291,30 @@ def get_search_cost_stats(search_id: str) -> dict:
 
 # STORY-328 AC13: Dynamic negative examples per sector (org name traps)
 _SECTOR_NEGATIVE_EXAMPLES: dict[str, list[str]] = {
-    "saude": [
-        "Locação de veículos para Secretaria de Saúde",
-        "Material de escritório para Hospital Municipal",
-        "Construção de muro na Unidade de Saúde",
+    "servicos_prediais": [
+        "aquisicao de material de limpeza",
+        "compra de produto de limpeza",
+        "detergente para uso domestico",
+    ],
+    "produtos_limpeza": [
+        "servico de limpeza e conservacao predial",
+        "terceirizacao de portaria e zeladoria",
+        "empresa de limpeza contratada",
+    ],
+    "medicamentos": [
+        "equipamento hospitalar tomografo",
+        "seringa e agulha descartavel",
+        "monitor multiparametro uti",
+    ],
+    "equipamentos_medicos": [
+        "medicamento dipirona paracetamol",
+        "vacina imunobiologico",
+        "material descartavel seringa gaze",
+    ],
+    "insumos_hospitalares": [
+        "medicamento farmacia basica",
+        "equipamento de grande porte tomografo",
+        "saneante hospitalar produto de limpeza",
     ],
     "informatica": [
         "Uniformes para Secretaria de Tecnologia",
@@ -313,10 +333,6 @@ _SECTOR_NEGATIVE_EXAMPLES: dict[str, list[str]] = {
     "alimentos": [
         "Material de escritório para Secretaria de Alimentação",
         "Reforma na cozinha da Secretaria de Agricultura",
-    ],
-    "facilities": [
-        "Material de escritório para empresa de limpeza",
-        "Uniformes para equipe de conservação",
     ],
     "engenharia_rodoviaria": [
         "Material de escritório para Departamento de Estradas",

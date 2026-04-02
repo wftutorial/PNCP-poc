@@ -106,7 +106,7 @@ async def preview_trial_emails(request: Request):
         "opportunities_found": 47,
         "total_value_estimated": 2_350_000,
         "pipeline_items_count": 8,
-        "sectors_searched": ["software", "saude", "construcao"],
+        "sectors_searched": ["software", "medicamentos", "construcao"],
         "days_remaining": 15,
     }
 
@@ -161,7 +161,7 @@ async def test_send_trial_email(request: Request):
         "opportunities_found": 47,
         "total_value_estimated": 2_350_000,
         "pipeline_items_count": 8,
-        "sectors_searched": ["software", "saude", "construcao"],
+        "sectors_searched": ["software", "medicamentos", "construcao"],
         "days_remaining": 15,
     }
 

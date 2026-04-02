@@ -48,7 +48,7 @@ class TestSectorRedFlagsReject:
 
     def test_facilities_reject_manutencao_de_veiculos(self):
         obj = normalize_text("Serviço de manutenção de veículos da frota municipal")
-        flagged, terms = has_sector_red_flags(obj, "facilities")
+        flagged, terms = has_sector_red_flags(obj, "servicos_prediais")
         assert flagged is True
 
     def test_vigilancia_reject_vigilancia_sanitaria(self):
@@ -94,9 +94,9 @@ class TestSectorRedFlagsReject:
         assert terms == []
 
     def test_saude_reject_empty_list(self):
-        """Saúde has no sector-specific red flags (empty list)."""
+        """Saúde (medicamentos) has no sector-specific red flags (empty list)."""
         obj = normalize_text("Aquisição de equipamento hospitalar para UTI")
-        flagged, terms = has_sector_red_flags(obj, "saude")
+        flagged, terms = has_sector_red_flags(obj, "medicamentos")
         assert flagged is False
         assert terms == []
 
@@ -133,7 +133,7 @@ class TestSectorRedFlagsPass:
 
     def test_facilities_pass_limpeza(self):
         obj = normalize_text("Serviço de manutenção e limpeza predial com fornecimento de material")
-        flagged, terms = has_sector_red_flags(obj, "facilities")
+        flagged, terms = has_sector_red_flags(obj, "servicos_prediais")
         assert flagged is False
 
     def test_vigilancia_pass_seguranca_patrimonial(self):
@@ -178,7 +178,7 @@ class TestSectorRedFlagsPass:
 
     def test_saude_pass_medicamentos(self):
         obj = normalize_text("Aquisição de medicamentos e insumos hospitalares")
-        flagged, terms = has_sector_red_flags(obj, "saude")
+        flagged, terms = has_sector_red_flags(obj, "medicamentos")
         assert flagged is False
 
     def test_engenharia_rodoviaria_pass_pavimentacao(self):
@@ -222,10 +222,11 @@ class TestSectorRedFlagsEdgeCases:
         assert len(terms) == 1
 
     def test_all_15_sectors_have_entries(self):
-        """All 15 sectors must be present in RED_FLAGS_PER_SECTOR."""
+        """All sectors must be present in RED_FLAGS_PER_SECTOR."""
         expected = {
             "vestuario", "alimentos", "informatica", "mobiliario", "papelaria",
-            "engenharia", "software", "facilities", "saude", "vigilancia",
+            "engenharia", "software", "servicos_prediais", "produtos_limpeza",
+            "medicamentos", "equipamentos_medicos", "insumos_hospitalares", "vigilancia",
             "transporte_servicos", "frota_veicular", "manutencao_predial", "engenharia_rodoviaria",
             "materiais_eletricos", "materiais_hidraulicos",
         }

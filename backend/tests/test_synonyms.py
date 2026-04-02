@@ -32,11 +32,11 @@ class TestFindSynonymMatches:
         assert len(matches) >= 1
         assert any(m[0] == "uniforme" and "fardamento" in m[1] for m in matches)
 
-    def test_exact_synonym_match_facilities(self):
+    def test_exact_synonym_match_servicos_prediais(self):
         """Test exact match: 'asseio' → 'limpeza'."""
         objeto = "Serviços de asseio e conservação predial"
         setor_keywords = {"limpeza", "conservação"}
-        setor_id = "facilities"
+        setor_id = "servicos_prediais"
 
         matches = find_synonym_matches(objeto, setor_keywords, setor_id)
 
@@ -60,7 +60,7 @@ class TestFindSynonymMatches:
         """Test synonym matching with Portuguese accents."""
         objeto = "Manutenção e conservação de imóveis públicos"
         setor_keywords = {"manutenção predial", "conservação"}
-        setor_id = "facilities"
+        setor_id = "servicos_prediais"
 
         matches = find_synonym_matches(objeto, setor_keywords, setor_id)
 
@@ -344,11 +344,11 @@ class TestSectorSynonymDictionaries:
         assert "uniforme" in SECTOR_SYNONYMS["vestuario"]
         assert "fardamento" in SECTOR_SYNONYMS["vestuario"]["uniforme"]
 
-    def test_facilities_asseio_synonym(self):
-        """Test facilities sector has 'asseio' as synonym for 'limpeza'."""
-        assert "facilities" in SECTOR_SYNONYMS
-        assert "limpeza" in SECTOR_SYNONYMS["facilities"]
-        assert "asseio" in SECTOR_SYNONYMS["facilities"]["limpeza"]
+    def test_servicos_prediais_limpeza_synonym(self):
+        """Test servicos_prediais sector has 'limpeza predial' as synonym for 'limpeza'."""
+        assert "servicos_prediais" in SECTOR_SYNONYMS
+        assert "limpeza" in SECTOR_SYNONYMS["servicos_prediais"]
+        assert "limpeza predial" in SECTOR_SYNONYMS["servicos_prediais"]["limpeza"]
 
     def test_informatica_servidor_synonyms(self):
         """Test informatica sector has server-related synonyms."""

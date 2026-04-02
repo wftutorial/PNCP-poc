@@ -13,8 +13,8 @@ CNAE_TO_SETOR: dict[str, str] = {
     "4781": "vestuario",     # Comércio varejista de artigos de vestuário e acessórios
     "1412": "vestuario",     # Confecção de peças de vestuário, exceto roupas íntimas
     # Facilities / Limpeza
-    "8121": "facilities",    # Limpeza em prédios e em domicílios
-    "8011": "facilities",    # Atividades de vigilância e segurança privada
+    "8121": "servicos_prediais",  # Limpeza em prédios e em domicílios
+    "8011": "vigilancia",         # Atividades de vigilância e segurança privada
     # Equipamentos
     "2710": "equipamentos",  # Fabricação de geradores, transformadores, motores elétricos
     "3250": "equipamentos",  # Fabricação de instrumentos e materiais para uso médico
@@ -29,7 +29,8 @@ CNAE_TO_SETOR: dict[str, str] = {
 # Reverse mapping: sector descriptions for user feedback
 SETOR_NAMES: dict[str, str] = {
     "vestuario": "Vestuário e Uniformes",
-    "facilities": "Facilities e Serviços",
+    "servicos_prediais": "Serviços Prediais e Facilities",
+    "vigilancia": "Vigilância e Segurança",
     "equipamentos": "Equipamentos",
     "alimentos": "Alimentos e Merenda",
     "informatica": "Hardware e Equipamentos de TI",
@@ -51,7 +52,7 @@ def map_cnae_to_setor(cnae: str) -> str:
         cnae: CNAE code or prefix string
 
     Returns:
-        Sector ID string (e.g., "vestuario", "facilities")
+        Sector ID string (e.g., "vestuario", "servicos_prediais")
     """
     # Extract 4-digit prefix: handle "4781-4/00", "4781400", "4781" formats
     cleaned = cnae.strip().replace(" ", "")

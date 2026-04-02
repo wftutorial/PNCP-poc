@@ -386,7 +386,10 @@ class TestFindTermSynonymCrossSector:
 
         expected_sectors = {
             "vestuario", "alimentos", "informatica", "mobiliario", "papelaria",
-            "engenharia", "software", "facilities", "saude", "vigilancia",
+            "engenharia", "software",
+            "servicos_prediais", "produtos_limpeza",
+            "medicamentos", "equipamentos_medicos", "insumos_hospitalares",
+            "vigilancia",
             "transporte_servicos", "frota_veicular", "manutencao_predial", "engenharia_rodoviaria",
             "materiais_eletricos", "materiais_hidraulicos",
         }

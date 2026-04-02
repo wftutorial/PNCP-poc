@@ -152,7 +152,7 @@ class TestSaudeIntegration:
 
     def test_saude_finds_matches(self, pncp_records):
         """Saúde sector should find some matches in a large enough sample."""
-        result = run_sector_against_api("saude", pncp_records)
+        result = run_sector_against_api("medicamentos", pncp_records)
         print(f"\n{'='*60}")
         print("SAÚDE SECTOR RESULTS")
         print(f"{'='*60}")
@@ -175,7 +175,7 @@ class TestSaudeIntegration:
 
     def test_saude_exclusions_work(self, pncp_records):
         """Verify exclusions prevent false positives."""
-        sector = get_sector("saude")
+        sector = get_sector("medicamentos")
         false_positives = []
         for rec in pncp_records:
             objeto = rec.get("objetoCompra", "")
@@ -210,7 +210,7 @@ class TestSaudeIntegration:
 
     def test_saude_keyword_coverage(self, pncp_records):
         """Check which keyword categories actually produce matches."""
-        sector = get_sector("saude")
+        sector = get_sector("medicamentos")
         keyword_hits = Counter()
         for rec in pncp_records:
             objeto = rec.get("objetoCompra", "")
@@ -363,10 +363,10 @@ class TestCrossSectorOverlap:
 
     def test_no_excessive_overlap(self, pncp_records):
         """Each matched record should predominantly belong to one sector."""
-        new_sectors = ["saude", "vigilancia", "transporte"]
+        new_sectors = ["medicamentos", "vigilancia", "transporte_servicos"]
         all_sectors = [
             "vestuario", "alimentos", "informatica", "mobiliario",
-            "papelaria", "engenharia", "software", "facilities",
+            "papelaria", "engenharia", "software", "servicos_prediais",
             "manutencao_predial",
         ] + new_sectors
 
@@ -437,8 +437,8 @@ class TestSummaryReport:
     def test_print_summary(self, pncp_records):
         all_sectors = [
             "vestuario", "alimentos", "informatica", "mobiliario",
-            "papelaria", "engenharia", "software", "facilities",
-            "saude", "vigilancia", "transporte", "manutencao_predial",
+            "papelaria", "engenharia", "software", "servicos_prediais",
+            "medicamentos", "vigilancia", "transporte_servicos", "manutencao_predial",
         ]
 
         print(f"\n{'='*70}")

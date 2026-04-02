@@ -60,7 +60,7 @@ async def test_l1_miss_l2_miss_returns_none():
 
         result = await get_from_cache(
             user_id="user-test",
-            params={"setor_id": "saude", "ufs": ["RJ"]},
+            params={"setor_id": "medicamentos", "ufs": ["RJ"]},
         )
 
     assert result is None

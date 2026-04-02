@@ -654,8 +654,8 @@ class TestDynamicConservativePrompt:
 
     @pytest.mark.parametrize(
         "setor_id",
-        ["vestuario", "informatica", "saude", "engenharia", "facilities"],
-        ids=["vestuario", "informatica", "saude", "engenharia", "facilities"],
+        ["vestuario", "informatica", "medicamentos", "engenharia", "servicos_prediais"],
+        ids=["vestuario", "informatica", "medicamentos", "engenharia", "servicos_prediais"],
     )
     def test_conservative_prompt_uses_sector_data(self, setor_id):
         """AC11: Parametrized test verifying conservative prompt uses sector-specific data."""

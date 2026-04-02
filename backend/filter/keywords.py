@@ -770,7 +770,7 @@ GLOBAL_EXCLUSION_OVERRIDES: Dict[str, Set[str]] = {
         "equipamentos de informatica", "equipamento de informatica",
         "insumos de informatica",
     },
-    "facilities": {
+    "servicos_prediais": {
         "servico de limpeza", "servicos de limpeza",
         "servico de conservacao",
     },
@@ -831,11 +831,13 @@ RED_FLAGS_INFRASTRUCTURE: Set[str] = {
 _INFRA_EXEMPT_SECTORS: Set[str] = {
     "engenharia", "engenharia_rodoviaria", "manutencao_predial", "materiais_hidraulicos",
 }
-# Medical red flags are the PRIMARY keywords for saude;
-# CRIT-024: facilities has "material de limpeza hospitalar" (contains "hospitalar");
+# Medical red flags are the PRIMARY keywords for medicamentos/equipamentos_medicos/insumos_hospitalares;
+# CRIT-024: servicos_prediais/produtos_limpeza have "material de limpeza hospitalar" (contains "hospitalar");
 # CRIT-024: transporte has "ambulância" (descriptions naturally contain "paciente", "hospitalar")
 _MEDICAL_EXEMPT_SECTORS: Set[str] = {
-    "saude", "facilities", "transporte_servicos", "frota_veicular",
+    "medicamentos", "equipamentos_medicos", "insumos_hospitalares",
+    "servicos_prediais", "produtos_limpeza",
+    "transporte_servicos", "frota_veicular",
 }
 # CRIT-024: Administrative red flags overlap with software sector keywords
 # (software has "consultoria de software", "consultoria de ti", "assessoria de ti")
@@ -872,7 +874,7 @@ RED_FLAGS_PER_SECTOR: Dict[str, List[str]] = {
         "engenharia de software", "engenharia genetica",
         "engenharia financeira", "engenharia reversa",
     ],
-    "facilities": [
+    "servicos_prediais": [
         "manutencao de veiculos", "manutencao de software",
         "manutencao de equipamentos medicos", "manutencao rodoviaria",
     ],
@@ -910,8 +912,14 @@ RED_FLAGS_PER_SECTOR: Dict[str, List[str]] = {
     ],
     # Sectors with sufficiently specific keywords — generic red flags are enough
     "vestuario": [],
-    "saude": [],
+    "medicamentos": [],
+    "equipamentos_medicos": [],
+    "insumos_hospitalares": [],
     "engenharia_rodoviaria": [],
+    "produtos_limpeza": [
+        "servico de limpeza", "empresa de limpeza", "terceirizacao de limpeza",
+        "limpeza automotiva", "limpeza de veiculos",
+    ],
 }
 
 

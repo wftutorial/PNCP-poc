@@ -101,15 +101,15 @@ BID_ANALYSIS_ENABLED: bool = str_to_bool(os.getenv("BID_ANALYSIS_ENABLED", "true
 # STORY-260: Certifications Catalog
 ATESTADOS_DISPONIVEIS: list[dict] = [
     {"id": "crea", "label": "CREA (Engenharia)", "sectors": ["engenharia", "manutencao_predial", "engenharia_rodoviaria"]},
-    {"id": "crf", "label": "CRF (Farmácia)", "sectors": ["saude"]},
+    {"id": "crf", "label": "CRF (Farmácia)", "sectors": ["medicamentos"]},
     {"id": "inmetro", "label": "INMETRO", "sectors": ["vestuario", "materiais_eletricos"]},
     {"id": "iso_9001", "label": "ISO 9001 (Qualidade)", "sectors": ["*"]},
     {"id": "iso_14001", "label": "ISO 14001 (Ambiental)", "sectors": ["*"]},
-    {"id": "pgr_pcmso", "label": "PGR/PCMSO (Segurança do Trabalho)", "sectors": ["facilities", "vigilancia"]},
-    {"id": "alvara_sanitario", "label": "Alvará Sanitário", "sectors": ["alimentos", "saude"]},
-    {"id": "registro_anvisa", "label": "Registro ANVISA", "sectors": ["saude"]},
+    {"id": "pgr_pcmso", "label": "PGR/PCMSO (Segurança do Trabalho)", "sectors": ["servicos_prediais", "vigilancia"]},
+    {"id": "alvara_sanitario", "label": "Alvará Sanitário", "sectors": ["alimentos", "medicamentos", "insumos_hospitalares"]},
+    {"id": "registro_anvisa", "label": "Registro ANVISA", "sectors": ["medicamentos", "equipamentos_medicos", "insumos_hospitalares"]},
     {"id": "habilitacao_antt", "label": "Habilitação ANTT", "sectors": ["transporte_servicos", "frota_veicular"]},
-    {"id": "registro_cfq", "label": "Registro CRQ (Química)", "sectors": ["saude", "materiais_hidraulicos"]},
+    {"id": "registro_cfq", "label": "Registro CRQ (Química)", "sectors": ["medicamentos", "materiais_hidraulicos"]},
     {"id": "licenca_ambiental", "label": "Licença Ambiental", "sectors": ["engenharia", "engenharia_rodoviaria"]},
     {"id": "crt", "label": "CRT (Técnico)", "sectors": ["informatica", "software"]},
 ]

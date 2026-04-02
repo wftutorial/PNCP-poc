@@ -666,7 +666,7 @@ def test_pdf_results_as_dict_parsed_correctly(mock_get_results, client):
             "recomendacoes": [],
         },
         "licitacoes": _make_licitacoes(3),
-        "setor": "facilities",
+        "setor": "servicos_prediais",
         "ufs": ["RJ"],
         "total_raw": 50,
         "total_filtrado": 3,

@@ -87,7 +87,7 @@ class TestSearchDurationMetric:
 
     def test_search_duration_observe(self):
         m.SEARCH_DURATION.labels(
-            sector="facilities", uf_count="5", cache_status="miss"
+            sector="servicos_prediais", uf_count="5", cache_status="miss"
         ).observe(12.5)
 
     def test_search_duration_multiple_labels(self):
@@ -273,10 +273,10 @@ class TestMetricsIntegration:
         m.ACTIVE_SEARCHES.dec()
 
     def test_searches_counter_labels(self):
-        m.SEARCHES.labels(sector="facilities", result_status="success", search_mode="sector").inc()
-        m.SEARCHES.labels(sector="facilities", result_status="empty", search_mode="sector").inc()
-        m.SEARCHES.labels(sector="facilities", result_status="partial", search_mode="terms").inc()
-        m.SEARCHES.labels(sector="facilities", result_status="error", search_mode="sector").inc()
+        m.SEARCHES.labels(sector="servicos_prediais", result_status="success", search_mode="sector").inc()
+        m.SEARCHES.labels(sector="servicos_prediais", result_status="empty", search_mode="sector").inc()
+        m.SEARCHES.labels(sector="servicos_prediais", result_status="partial", search_mode="terms").inc()
+        m.SEARCHES.labels(sector="servicos_prediais", result_status="error", search_mode="sector").inc()
 
     def test_fetch_duration_per_source(self):
         """FETCH_DURATION tracks per-source latency."""

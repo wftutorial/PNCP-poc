@@ -225,9 +225,9 @@ class TestTopDimensions:
 
     def test_top_dimensions_with_data(self):
         sessions = [
-            {"ufs": ["SP", "RJ"], "sectors": ["facilities"], "valor_total": 100000},
-            {"ufs": ["SP"], "sectors": ["facilities", "saude"], "valor_total": 200000},
-            {"ufs": ["MG"], "sectors": ["saude"], "valor_total": 50000},
+            {"ufs": ["SP", "RJ"], "sectors": ["servicos_prediais"], "valor_total": 100000},
+            {"ufs": ["SP"], "sectors": ["servicos_prediais", "medicamentos"], "valor_total": 200000},
+            {"ufs": ["MG"], "sectors": ["medicamentos"], "valor_total": 50000},
         ]
         sb = _mock_sb(execute_data=sessions)
         client = _create_client(mock_db=sb)
@@ -241,10 +241,10 @@ class TestTopDimensions:
         assert body["top_ufs"][0]["name"] == "SP"
         assert body["top_ufs"][0]["count"] == 2
 
-        # facilities: 2, saude: 2 — both count=2
+        # servicos_prediais: 2, medicamentos: 2 — both count=2
         sector_names = {s["name"] for s in body["top_sectors"]}
-        assert "facilities" in sector_names
-        assert "saude" in sector_names
+        assert "servicos_prediais" in sector_names
+        assert "medicamentos" in sector_names
 
     def test_top_dimensions_empty(self):
         sb = _mock_sb(execute_data=[])

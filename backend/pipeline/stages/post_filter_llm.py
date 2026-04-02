@@ -21,7 +21,9 @@ logger = logging.getLogger(__name__)
 # Sectors with ambiguous keywords that need LLM re-classification
 _SECTORS_REQUIRING_RECHECK = {
     "vestuario",
-    "saude",
+    "medicamentos",
+    "equipamentos_medicos",
+    "insumos_hospitalares",
 }
 
 _MODEL = os.getenv("LLM_ARBITER_MODEL", "gpt-4.1-nano")

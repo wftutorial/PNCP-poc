@@ -70,8 +70,11 @@ const SETORES_FALLBACK: Setor[] = [
   { id: "papelaria", name: "Papelaria e Material de Escritório", description: "Papel, canetas, material de escritório, suprimentos administrativos" },
   { id: "engenharia", name: "Engenharia, Projetos e Obras", description: "Obras, reformas, construção civil, pavimentação, infraestrutura, escritórios de projeto, consultorias de engenharia, fiscalização, topografia" },
   { id: "software", name: "Software e Sistemas", description: "Licenças de software, SaaS, desenvolvimento de sistemas, consultoria de TI" },
-  { id: "facilities", name: "Facilities e Manutenção", description: "Limpeza predial, produtos de limpeza, conservação, copa/cozinha, portaria, recepção, zeladoria, jardinagem, manutenção predial" },
-  { id: "saude", name: "Saúde", description: "Medicamentos, equipamentos hospitalares, insumos médicos, materiais de laboratório, órteses e próteses" },
+  { id: "servicos_prediais", name: "Serviços Prediais e Facilities", description: "Contratação de serviços prediais terceirizados: limpeza e conservação, portaria, zeladoria, copeiragem, jardinagem, dedetização e controle de pragas" },
+  { id: "produtos_limpeza", name: "Produtos de Limpeza e Higienização", description: "Aquisição de materiais e produtos de limpeza, higienização e saneantes para uso em repartições públicas" },
+  { id: "medicamentos", name: "Medicamentos e Produtos Farmacêuticos", description: "Aquisição de medicamentos, fármacos, imunobiológicos e produtos farmacêuticos para assistência farmacêutica e unidades de saúde" },
+  { id: "equipamentos_medicos", name: "Equipamentos Médico-Hospitalares", description: "Aquisição de equipamentos médicos, hospitalares e odontológicos, instrumentais, OPME, próteses, órteses e mobiliário hospitalar" },
+  { id: "insumos_hospitalares", name: "Insumos e Materiais Hospitalares", description: "Aquisição de insumos hospitalares descartáveis, materiais de laboratório, materiais odontológicos de consumo, nutrição enteral e gases medicinais" },
   { id: "vigilancia", name: "Vigilância e Segurança Patrimonial", description: "Vigilância patrimonial, segurança eletrônica, CFTV, alarmes, controle de acesso, portaria armada/desarmada" },
   { id: "transporte_servicos", name: "Transporte de Pessoas e Cargas", description: "Contratação de serviços de transporte: transporte escolar, fretamento, locação de veículos, translados, transporte de pacientes e cargas" },
   { id: "frota_veicular", name: "Frota e Veículos", description: "Aquisição de veículos, manutenção de frota, combustíveis, pneus, peças automotivas e serviços de oficina" },
@@ -330,7 +333,7 @@ export function useSearchFilters(clearResult: () => void): SearchFiltersState {
 
   // Sector caching configuration (FE-NEW-08)
   // STORY-249 AC11: Bump version when sector IDs/names change to invalidate old cache
-  const SECTOR_CACHE_KEY = "smartlic-sectors-cache-v2";
+  const SECTOR_CACHE_KEY = "smartlic-sectors-cache-v3";
   const SECTOR_CACHE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
 
   interface SectorCache {

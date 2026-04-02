@@ -135,21 +135,41 @@ SECTOR_SYNONYMS: Dict[str, Dict[str, Set[str]]] = {
         },
     },
 
-    "facilities": {
+    "servicos_prediais": {
         "limpeza": {
-            "asseio", "higienização", "higienizacao",
-            "zeladoria", "conservação", "conservacao",
+            "asseio",
+            "limpeza predial",
+            "limpeza e conservacao",
+            "conservacao predial",
+            "servico de limpeza",
+            "servicos de limpeza",
         },
-        "conservação": {
-            "conservacao",
-            "manutenção predial", "manutencao predial",
-            "preservação", "preservacao",
-            "manutenção e conservação", "manutencao e conservacao",
+        "portaria": {
+            "porteiro",
+            "porteiros",
+            "portaria predial",
         },
-        "zeladoria": {
-            "zelador",
-            "serviços de zeladoria", "servicos de zeladoria",
-            "zeladoria predial",
+        "higienizacao": {
+            "higienização",
+            "higienizacao predial",
+            "sanitizacao",
+        },
+    },
+    "produtos_limpeza": {
+        "saneante": {
+            "saneantes",
+            "produto saneante",
+            "produtos saneantes",
+        },
+        "detergente": {
+            "detergentes",
+            "detergente liquido",
+            "detergente em po",
+        },
+        "desinfetante": {
+            "desinfetantes",
+            "desinfecção",
+            "desinfeccao",
         },
     },
 
@@ -218,15 +238,72 @@ SECTOR_SYNONYMS: Dict[str, Dict[str, Set[str]]] = {
         },
     },
 
-    "saude": {
+    "medicamentos": {
         "medicamento": {
-            "medicamentos", "remédio", "remedio", "remédios", "remedios",
-            "fármaco", "farmaco", "fármacos", "farmacos",
-            "produto farmacêutico", "produto farmaceutico",
+            "medicamentos",
+            "farmaco",
+            "farmacos",
+            "remedio",
+            "remedios",
         },
-        "equipamento médico": {
-            "equipamento medico", "equipamento hospitalar",
-            "equipamento médico-hospitalar", "equipamento medico-hospitalar",
+        "farmácia": {
+            "farmacia",
+            "farmacias",
+            "farmaceutico",
+            "farmaceuticos",
+        },
+        "vacina": {
+            "vacinas",
+            "imunobiologico",
+            "imunobiologicos",
+            "imunizante",
+            "imunizantes",
+        },
+    },
+    "equipamentos_medicos": {
+        "equipamento": {
+            "equipamentos",
+            "aparelho medico",
+            "aparelhos medicos",
+            "equipamento hospitalar",
+            "equipamentos hospitalares",
+        },
+        "prótese": {
+            "protese",
+            "proteses",
+            "ortese",
+            "orteses",
+            "opme",
+        },
+        "tomógrafo": {
+            "tomografo",
+            "tomografia",
+            "tomografos",
+        },
+    },
+    "insumos_hospitalares": {
+        "insumo": {
+            "insumos",
+            "insumo hospitalar",
+            "insumos hospitalares",
+            "material hospitalar",
+            "materiais hospitalares",
+        },
+        "seringa": {
+            "seringas",
+            "agulha",
+            "agulhas",
+        },
+        "cateter": {
+            "cateteres",
+            "sonda",
+            "sondas",
+        },
+        "reagente": {
+            "reagentes",
+            "kit diagnostico",
+            "kit de diagnostico",
+            "teste rapido",
         },
     },
 

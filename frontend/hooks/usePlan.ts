@@ -30,6 +30,7 @@ export interface PlanInfo {
   subscription_status: string;
   dunning_phase: string;
   days_since_failure: number | null;
+  subscription_end_date: string | null;
 }
 
 interface UsePlanReturn {
@@ -72,6 +73,7 @@ export function usePlan(): UsePlanReturn {
         subscription_status: (data.subscription_status as string) || "",
         dunning_phase: (data.dunning_phase as string) || "",
         days_since_failure: (data.days_since_failure as number) ?? null,
+        subscription_end_date: (data.subscription_end_date as string) || null,
       }
     : null;
 

@@ -4482,6 +4482,16 @@ sectors:
       - "monitoramento de umidade"
       - "monitoramento de poluição"
       - "monitoramento de poluicao"
+      # Equipment procurement — pórtico detector (sessão 037: FP "aquisição de pórticos detectores de metais")
+      - "pórtico detector"
+      - "portico detector"
+      - "pórticos detectores"
+      - "porticos detectores"
+      - "pórtico de detector"
+      - "portico de detector"
+      - "aquisição de detector"
+      - "aquisicao de detector"
+      - "fornecimento de detector"
     context_required_keywords:
       # CRIT-021 AC9: Vigilancia context gates
       # "alarme" can be fire alarm (bombeiros) or medical alarm.

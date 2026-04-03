@@ -279,6 +279,10 @@ class UserProfileResponse(BaseModel):
         default=None,
         description="STORY-309: Days since first payment failure (null if no failure)"
     )
+    subscription_end_date: Optional[str] = Field(
+        default=None,
+        description="ISO 8601 — data real de renovação Stripe (current_period_end), null para trial/admin"
+    )
 
 
 class DeleteAccountResponse(BaseModel):

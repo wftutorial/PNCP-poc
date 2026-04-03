@@ -141,6 +141,22 @@ async def get_profile(user: dict = Depends(require_auth), db=Depends(get_db)):
         logger.warning(f"Failed to fetch user email: {e}")
         email = user.get("email", "unknown@example.com")
 
+    # ISSUE-070: Fetch real Stripe renewal date from profiles
+    subscription_end_date_val = None
+    try:
+        profile_row = await asyncio.to_thread(
+            lambda: db.table("profiles")
+                .select("subscription_end_date")
+                .eq("id", user["id"])
+                .single()
+                .execute()
+        )
+        if isinstance(profile_row.data, dict) and profile_row.data.get("subscription_end_date"):
+            val = profile_row.data["subscription_end_date"]
+            subscription_end_date_val = val if isinstance(val, str) else val.isoformat()
+    except Exception as e:
+        logger.warning(f"Failed to fetch subscription_end_date: {e}")
+
     # STORY-309: Determine subscription_status with dunning awareness
     dunning_phase = getattr(quota_info, "dunning_phase", "healthy")
     days_since_failure = getattr(quota_info, "days_since_failure", None)
@@ -169,6 +185,7 @@ async def get_profile(user: dict = Depends(require_auth), db=Depends(get_db)):
         is_admin=is_admin_flag,
         dunning_phase=dunning_phase,
         days_since_failure=days_since_failure,
+        subscription_end_date=subscription_end_date_val,
     )
 
 

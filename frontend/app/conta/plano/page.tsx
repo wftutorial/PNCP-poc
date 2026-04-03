@@ -79,7 +79,12 @@ export default function PlanoPage() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm"><span className="text-[var(--ink-secondary)]">Acesso</span><span className="font-medium text-[var(--ink)]">{getPlanDisplayName(planInfo.plan_id, planInfo.plan_name)}</span></div>
                 <div className="flex items-center justify-between text-sm"><span className="text-[var(--ink-secondary)]">Análises este mês</span><span className="font-medium text-[var(--ink)]">{planInfo.quota_used} de {planInfo.capabilities.max_requests_per_month === -1 ? "ilimitado" : planInfo.capabilities.max_requests_per_month}</span></div>
-                {planInfo.quota_reset_date && <div className="flex items-center justify-between text-sm"><span className="text-[var(--ink-secondary)]">Próxima renovação</span><span className="font-medium text-[var(--ink)]">{new Date(planInfo.quota_reset_date).toLocaleDateString("pt-BR", { day: "2-digit", month: "long" })}</span></div>}
+                {planInfo.subscription_end_date
+                  ? <div className="flex items-center justify-between text-sm"><span className="text-[var(--ink-secondary)]">Próxima renovação</span><span className="font-medium text-[var(--ink)]">{new Date(planInfo.subscription_end_date).toLocaleDateString("pt-BR", { day: "2-digit", month: "long" })}</span></div>
+                  : planInfo.quota_reset_date
+                    ? <div className="flex items-center justify-between text-sm"><span className="text-[var(--ink-secondary)]">Próximo reset de cota</span><span className="font-medium text-[var(--ink)]">{new Date(planInfo.quota_reset_date).toLocaleDateString("pt-BR", { day: "2-digit", month: "long" })}</span></div>
+                    : null
+                }
               </div>
             )}
 

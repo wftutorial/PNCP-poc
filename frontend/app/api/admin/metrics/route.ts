@@ -133,7 +133,8 @@ export async function GET(request: NextRequest) {
       headers["Authorization"] = `Bearer ${metricsToken}`;
     }
 
-    const response = await fetch(`${backendUrl}/metrics`, { headers });
+    // Use trailing slash to avoid 307 redirect from Prometheus ASGI mount
+    const response = await fetch(`${backendUrl}/metrics/`, { headers, redirect: "follow" });
 
     if (!response.ok) {
       // ISSUE-056: distinguish "token missing" from "token wrong" for easier diagnosis

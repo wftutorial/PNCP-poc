@@ -129,7 +129,7 @@ function LoginContent() {
         } catch { /* MFA check failed */ }
 
         const redirectTo = searchParams.get("redirect") || "/buscar";
-        toast.info("Você já está autenticado!");
+        toast.info("Você já está autenticado!", { id: "already-auth" });
         setTimeout(() => { router.push(redirectTo); }, 1500);
       })();
     }

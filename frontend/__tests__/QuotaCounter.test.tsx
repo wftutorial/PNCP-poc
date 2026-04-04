@@ -91,7 +91,7 @@ describe('QuotaCounter', () => {
         />
       );
 
-      expect(screen.getByText(/Renovação:/i)).toBeInTheDocument();
+      expect(screen.getByText(/Reset em:/i)).toBeInTheDocument();
       // Date formatting includes the reset date (may vary by timezone)
       expect(screen.getByText(/\/2026/i)).toBeInTheDocument();
     });
@@ -380,7 +380,7 @@ describe('QuotaCounter', () => {
 
       expect(screen.getByText(/2 análises completas restantes/i)).toBeInTheDocument();
       expect(screen.getByText(/Período de avaliação/i)).toBeInTheDocument();
-      expect(screen.queryByText(/Renovação:/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Reset em:/i)).not.toBeInTheDocument();
     });
 
     it('shows "análises completas" for free tier (quotaLimit <= 5)', () => {
@@ -395,7 +395,7 @@ describe('QuotaCounter', () => {
 
       expect(screen.getByText(/3 análises completas restantes/i)).toBeInTheDocument();
       expect(screen.getByText(/Período de avaliação/i)).toBeInTheDocument();
-      expect(screen.queryByText(/Renovação:/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Reset em:/i)).not.toBeInTheDocument();
     });
   });
 
@@ -411,7 +411,7 @@ describe('QuotaCounter', () => {
       );
 
       expect(screen.getByText(/40 análises restantes neste mês/i)).toBeInTheDocument();
-      expect(screen.getByText(/Renovação:/i)).toBeInTheDocument();
+      expect(screen.getByText(/Reset em:/i)).toBeInTheDocument();
     });
 
     it('correctly displays Máquina quota', () => {
@@ -425,7 +425,7 @@ describe('QuotaCounter', () => {
       );
 
       expect(screen.getByText(/200 análises restantes neste mês/i)).toBeInTheDocument();
-      expect(screen.getByText(/Renovação:/i)).toBeInTheDocument();
+      expect(screen.getByText(/Reset em:/i)).toBeInTheDocument();
     });
 
     it('correctly displays Sala de Guerra quota', () => {
@@ -439,7 +439,7 @@ describe('QuotaCounter', () => {
       );
 
       expect(screen.getByText(/500 análises restantes neste mês/i)).toBeInTheDocument();
-      expect(screen.getByText(/Renovação:/i)).toBeInTheDocument();
+      expect(screen.getByText(/Reset em:/i)).toBeInTheDocument();
     });
   });
 });

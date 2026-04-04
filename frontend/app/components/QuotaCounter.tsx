@@ -93,7 +93,7 @@ export function QuotaCounter({
           }
         </span>
         <span className="text-xs text-ink-muted">
-          {isFreeTier ? "Período de avaliação" : `Renovação: ${formattedResetDate}`}
+          {isFreeTier ? "Período de avaliação" : `Reset em: ${formattedResetDate}`}
         </span>
       </div>
 

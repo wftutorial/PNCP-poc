@@ -243,7 +243,7 @@ test.describe('Quota Counter Display', () => {
     await page.goto('/');
 
     // Look for reset date
-    const resetDateDisplay = page.locator('text=/Renovação:/i');
+    const resetDateDisplay = page.locator('text=/Reset em:/i');
 
     if (await resetDateDisplay.isVisible()) {
       await expect(resetDateDisplay).toBeVisible();

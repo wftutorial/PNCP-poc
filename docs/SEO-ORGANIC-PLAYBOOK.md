@@ -714,27 +714,27 @@ CTA:
 
 #### Checklist de curadoria (fase 1 — antes de implementar)
 
-- [ ] **Selecionar 5 cases** dos `docs/reports/`:
+- [x] **Selecionar 5 cases** dos `docs/reports/`:
   - 1 Engenharia, 1 Construção, 1 Facilities, 1 Saúde ou TI, 1 anonimizado de destaque
-- [ ] **Extrair por case:** porte, setor, UF, N editais analisados, valor oportunidades, score médio, insight chave
+- [x] **Extrair por case:** porte, setor, UF, N editais analisados, valor oportunidades, score médio, insight chave
 - [ ] **Obter aprovação** dos betas (email simples):
   - Opção A: nome real + logo (máxima credibilidade)
   - Opção B: perfil anonimizado "Construtora de médio porte em SC" (zero risco)
 
 #### Checklist de implementação — Frontend
 
-- [ ] **Criar `frontend/app/casos/page.tsx`** — listagem de cases
-- [ ] **Criar `frontend/app/casos/[slug]/page.tsx`** — case individual
-- [ ] **Metadata SEO por case:**
+- [x] **Criar `frontend/app/casos/page.tsx`** — listagem de cases
+- [x] **Criar `frontend/app/casos/[slug]/page.tsx`** — case individual
+- [x] **Metadata SEO por case:**
   ```ts
   title: `Como ${empresa} identificou R$ ${valor} em contratos de licitação em ${tempo} | SmartLic`
   description: `Case real: ${empresa} analisou ${totalEditais} editais com o SmartLic e encontrou 
                 R$ ${valor} em contratos compatíveis. Score médio de viabilidade: ${score}/100.`
   ```
-- [ ] **Schema markup:** `Article` + `Review`
-- [ ] **Adicionar `/casos`** ao sitemap.ts (priority 0.8)
-- [ ] **Link "Casos de sucesso"** no menu de navegação principal e footer
-- [ ] **CTA em cada case:** "Rode uma análise para o seu setor" → `/signup?ref=case-{slug}`
+- [x] **Schema markup:** `Article` + `Review`
+- [x] **Adicionar `/casos`** ao sitemap.ts (priority 0.8)
+- [x] **Link "Casos de sucesso"** no menu de navegação principal e footer
+- [x] **CTA em cada case:** "Rode uma análise para o seu setor" → `/signup?ref=case-{slug}`
 - [ ] **Link cruzado** nos artigos de blog do setor correspondente
 - [ ] **Commit:** `feat(seo): add /casos public case studies section`
 
@@ -785,7 +785,7 @@ Geografia (20%): [score/10] — SP. UF de operação primária da empresa.
 
 #### Checklist de implementação — Backend
 
-- [ ] **Criar tabela** `shared_analyses` no Supabase:
+- [x] **Criar tabela** `shared_analyses` no Supabase:
   ```sql
   CREATE TABLE shared_analyses (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -805,25 +805,25 @@ Geografia (20%): [score/10] — SP. UF de operação primária da empresa.
   );
   -- RLS: select aberto (público), insert requer auth
   ```
-- [ ] **Endpoint** `POST /v1/share/analise` (requer auth) → retorna `{ url }`
-- [ ] **Endpoint** `GET /v1/share/analise/{hash}` (público) → incrementa view_count, 404 se expirado
+- [x] **Endpoint** `POST /v1/share/analise` (requer auth) → retorna `{ url }`
+- [x] **Endpoint** `GET /v1/share/analise/{hash}` (público) → incrementa view_count, 404 se expirado
 
 #### Checklist de implementação — Frontend
 
-- [ ] **Botão "Compartilhar análise"** em cada card de resultado no `/buscar`
+- [x] **Botão "Compartilhar análise"** em cada card de resultado no `/buscar`
   - Click → POST → copia URL para clipboard com toast "Link copiado!"
   - Mobile: Web Share API nativo se disponível
-- [ ] **Criar `frontend/app/analise/[hash]/page.tsx`** (ISR 1h)
+- [x] **Criar `frontend/app/analise/[hash]/page.tsx`** (ISR 1h)
   - Score de viabilidade com breakdown dos 4 fatores
   - OG image dinâmico com score e título
   - Watermark + CTA contextual (copy acima)
-- [ ] **Metadata dinâmica:**
+- [x] **Metadata dinâmica:**
   ```ts
   title: `Análise: ${bidTitle} — Score ${score}/100 | SmartLic`
   description: `Viabilidade ${score}/100 para "${bidTitle}" (${organ}). 
                 4 fatores: modalidade, prazo, valor e geografia.`
   ```
-- [ ] **Schema markup:** `Review` com `ratingValue = score`
+- [x] **Schema markup:** `Review` com `ratingValue = score`
 - [ ] **Analytics:** `analysis_shared`, `analysis_viewed` no Mixpanel
 - [ ] **Commit:** `feat(viral): add shareable bid analysis pages at /analise/[hash]`
 
@@ -892,8 +892,8 @@ Antes de escrever qualquer artigo, verifique:
 
 #### Infraestrutura de blog (melhorias independentes)
 
-- [ ] **RSS feed** — verificar se `/blog/rss.xml` está no sitemap
-- [ ] **Canonical tags** — confirmar que todas as 40 páginas têm `alternates.canonical`
+- [x] **RSS feed** — verificar se `/blog/rss.xml` está no sitemap
+- [x] **Canonical tags** — confirmar que todas as 40 páginas têm `alternates.canonical`
 - [ ] **Internal linking audit** — cada artigo linka para pelo menos 2 outros + `/calculadora`
 - [ ] **Core Web Vitals** — LCP < 2.5s, CLS < 0.1 nas páginas programáticas (PageSpeed Insights)
 

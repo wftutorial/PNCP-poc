@@ -2,6 +2,7 @@ import { MetadataRoute } from 'next';
 import { getAllSlugs } from '@/lib/blog';
 import { SECTORS } from '@/lib/sectors';
 import { generateSectorParams, generateLicitacoesParams } from '@/lib/programmatic';
+import { getAllCaseSlugs } from '@/lib/cases';
 
 /**
  * GTM-COPY-006 AC10: Dynamic sitemap with all public pages
@@ -184,5 +185,25 @@ export default function sitemap(): MetadataRoute.Sitemap {
     ...licitacoesUfRoutes,
     // SEO-PLAYBOOK P0: Panorama sector pages
     ...panoramaSectorRoutes,
+    // SEO-PLAYBOOK P7: RSS feed
+    {
+      url: `${baseUrl}/blog/rss.xml`,
+      lastModified: new Date(),
+      changeFrequency: 'daily' as const,
+      priority: 0.3,
+    },
+    // SEO-PLAYBOOK P5: Cases de sucesso
+    {
+      url: `${baseUrl}/casos`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly' as const,
+      priority: 0.8,
+    },
+    ...getAllCaseSlugs().map((slug) => ({
+      url: `${baseUrl}/casos/${slug}`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly' as const,
+      priority: 0.8,
+    })),
   ];
 }

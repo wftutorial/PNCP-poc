@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState, useCallback, type ReactNode } from "react";
 import Link from "next/link";
 import type { LicitacaoItem, BidAnalysisItem } from "../types";
 import ViabilityBadge from "../../components/ViabilityBadge";
@@ -10,6 +10,7 @@ import ActionLabel from "../../components/ActionLabel";
 import DeepAnalysisModal from "../../components/DeepAnalysisModal";
 import { AddToPipelineButton } from "./AddToPipelineButton";
 import { formatCurrencyBR } from "../../lib/format-currency";
+import { ShareAnalysisButton } from "../../components/ShareAnalysisButton";
 
 interface LicitacoesPreviewProps {
   /** List of bid items to display */
@@ -504,6 +505,10 @@ function BidCard({
                         d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                 </svg>
               </a>
+            )}
+            {/* SEO-PLAYBOOK P6: Share analysis button */}
+            {item.viability_score != null && (
+              <ShareAnalysisButton item={item} accessToken={accessToken} />
             )}
           </div>
         </div>

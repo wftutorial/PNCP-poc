@@ -60,6 +60,9 @@ export default function Footer() {
               <li>
                 <FooterLink href="/como-priorizar-oportunidades">Priorizar oportunidades</FooterLink>
               </li>
+              <li>
+                <FooterLink href="/casos">Casos de sucesso</FooterLink>
+              </li>
             </ul>
           </div>
 

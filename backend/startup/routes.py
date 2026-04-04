@@ -43,6 +43,7 @@ from routes.feature_flags import router as feature_flags_router
 from routes.feature_flags import public_router as feature_flags_public_router
 from routes.calculadora import router as calculadora_router
 from routes.empresa_publica import router as empresa_publica_router
+from routes.share import router as share_router
 
 _v1_routers = [
     admin_router, subscriptions_router, features_router, messages_router,
@@ -56,6 +57,7 @@ _v1_routers = [
     feature_flags_public_router,
     calculadora_router,
     empresa_publica_router,
+    share_router,
 ]
 
 

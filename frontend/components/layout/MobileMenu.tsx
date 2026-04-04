@@ -19,6 +19,7 @@ const NAV_LINKS: NavLink[] = [
   { href: '/planos', label: 'Planos' },
   { sectionId: 'como-funciona', label: 'Como Funciona' },
   { href: '/blog', label: 'Blog' },
+  { href: '/casos', label: 'Casos' },
   { href: '/sobre', label: 'Sobre' },
   { href: '#suporte', label: 'Suporte' },
 ];

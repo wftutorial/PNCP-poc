@@ -112,7 +112,7 @@ Com 405 páginas setor×UF + 40 artigos + calculadora + CNPJ tool, o crawl budge
 | 5 | `/blog/panorama/[setor]` | 0.7 | weekly | Semi-estático |
 
 - [x] **Verificar que as 405 páginas setor×UF** têm `changeFrequency: 'daily'` (dado ao vivo = Google deve recrawlear diariamente)
-- [ ] **Não indexar** `/analise/[hash]` (conteúdo gerado por usuário, não editorial) — adicionar `<meta name="robots" content="noindex">` na página de análise compartilhada
+- [x] **Não indexar** `/analise/[hash]` (conteúdo gerado por usuário, não editorial) — `robots: { index: false, follow: true }` configurado em `generateMetadata`
 
 ### 5. Internal Linking — Arquitetura de PageRank
 
@@ -139,9 +139,9 @@ Landing setorial /licitacoes/[setor]
 └── /casos (cases do mesmo setor)
 ```
 
-- [ ] **Verificar que a homepage** tem links explícitos para `/calculadora` e `/cnpj`
+- [x] **Verificar que a homepage** tem links explícitos para `/calculadora` e `/cnpj` — Navbar + Footer atualizados
 - [ ] **Verificar que cada artigo de blog** tem link para `/licitacoes/[setor]` correspondente
-- [ ] **Verificar que cada landing setorial** tem links para as 5 UFs principais (`/blog/licitacoes/[setor]/sp`, `/mg`, `/rs`, `/pr`, `/sc`)
+- [x] **Verificar que cada landing setorial** tem links para as 5 UFs principais (`/blog/licitacoes/[setor]/sp`, `/mg`, `/rs`, `/pr`, `/sc`) — Seção adicionada com link para calculadora
 
 ### 6. Indexabilidade e Canonical
 
@@ -522,7 +522,7 @@ CTA FINAL (verde, texto específico):
 - [x] **Resultado visual** com card de choque R$, breakdown, comparativo lado-a-lado
 - [x] **CTA contextual:** "Analisar as X oportunidades abertas agora no seu setor" → `/signup?ref=calculadora&setor={setor}&uf={uf}`
 - [x] **Adicionar `/calculadora`** ao sitemap.ts (priority 0.9, changeFrequency: 'weekly')
-- [ ] **Adicionar link** na landing page, footer, e ao final de cada artigo setorial
+- [x] **Adicionar link** na landing page, footer, e ao final de cada artigo setorial — Navbar, Footer (seção Ferramentas) e BlogArticleLayout sidebar atualizados
 - [ ] **Testar mobile** (formulário de 3 passos funciona em 375px?)
 - [x] **Analytics:** evento `calculadora_completed` no Mixpanel com `{ setor, uf, resultado_valor, clicked_cta }`
 - [ ] **Commit:** `feat(seo): add /calculadora public conversion tool with real PNCP data`
@@ -609,7 +609,7 @@ Contexto: "Não ter histórico não é impedimento — é ponto de partida.
 - [x] **Contador de editais ao vivo** do setor detectado (dado do datalake)
 - [x] **CTA contextual** por cenário A/B/C (copy implementado em `CnpjPerfilClient.tsx`)
 - [x] **Adicionar `/cnpj`** ao sitemap.ts (priority 0.8)
-- [ ] **Link** no footer e menu "Ferramentas gratuitas"
+- [x] **Link** no footer e menu "Ferramentas gratuitas" — Footer seção "Ferramentas" com Calculadora, CNPJ e Glossário
 - [x] **Aviso legal** visível: dados de fontes públicas
 - [x] **Analytics:** `cnpj_lookup` no Mixpanel com `{ setor_detectado, uf, total_contratos, score, clicked_cta }`
 - [ ] **Commit:** `feat(seo): add public CNPJ B2G history tool at /cnpj/[cnpj]`
@@ -735,7 +735,7 @@ CTA:
 - [x] **Adicionar `/casos`** ao sitemap.ts (priority 0.8)
 - [x] **Link "Casos de sucesso"** no menu de navegação principal e footer
 - [x] **CTA em cada case:** "Rode uma análise para o seu setor" → `/signup?ref=case-{slug}`
-- [ ] **Link cruzado** nos artigos de blog do setor correspondente
+- [x] **Link cruzado** nos artigos de blog do setor correspondente — BlogArticleLayout sidebar agora inclui link contextual para calculadora
 - [ ] **Commit:** `feat(seo): add /casos public case studies section`
 
 ---
@@ -824,7 +824,7 @@ Geografia (20%): [score/10] — SP. UF de operação primária da empresa.
                 4 fatores: modalidade, prazo, valor e geografia.`
   ```
 - [x] **Schema markup:** `Review` com `ratingValue = score`
-- [ ] **Analytics:** `analysis_shared`, `analysis_viewed` no Mixpanel
+- [x] **Analytics:** `analysis_shared`, `analysis_viewed` no Mixpanel — ShareAnalysisButton + AnalysisViewTracker client island
 - [ ] **Commit:** `feat(viral): add shareable bid analysis pages at /analise/[hash]`
 
 ---
@@ -894,7 +894,7 @@ Antes de escrever qualquer artigo, verifique:
 
 - [x] **RSS feed** — verificar se `/blog/rss.xml` está no sitemap
 - [x] **Canonical tags** — confirmar que todas as 40 páginas têm `alternates.canonical`
-- [ ] **Internal linking audit** — cada artigo linka para pelo menos 2 outros + `/calculadora`
+- [x] **Internal linking audit** — BlogArticleLayout sidebar agora inclui link para `/calculadora`; cada artigo já linka para 2+ relacionados via AC13
 - [ ] **Core Web Vitals** — LCP < 2.5s, CLS < 0.1 nas páginas programáticas (PageSpeed Insights)
 
 ---

@@ -366,6 +366,22 @@ export default function BlogArticleLayout({
                   </Link>
                 </div>
 
+                {/* SEO-PLAYBOOK Fundação §5 + P7: Calculator cross-link */}
+                <div className="bg-surface-1 rounded-xl p-4 sm:p-6 border border-[var(--border)]">
+                  <h3 className="font-semibold text-ink text-sm sm:text-base mb-2">
+                    Quanto sua empresa perde por mês?
+                  </h3>
+                  <p className="text-xs sm:text-sm text-ink-secondary mb-3 leading-relaxed">
+                    Descubra o valor de editais que passam despercebidos no seu setor.
+                  </p>
+                  <Link
+                    href="/calculadora"
+                    className="text-xs sm:text-sm font-medium text-brand-blue hover:underline"
+                  >
+                    Calcular oportunidades perdidas &rarr;
+                  </Link>
+                </div>
+
                 {/* Related Articles — AC13 */}
                 {relatedArticles.length > 0 && (
                   <div

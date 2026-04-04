@@ -44,6 +44,25 @@ export default function Footer() {
             </ul>
           </div>
 
+          {/* Ferramentas — SEO-PLAYBOOK Fundação §5 */}
+          <div>
+            <h3 className="font-bold text-lg mb-4 text-ink">Ferramentas</h3>
+            <ul className="space-y-2 text-sm text-ink-secondary">
+              <li>
+                <FooterLink href="/calculadora">Calculadora de Oportunidades</FooterLink>
+              </li>
+              <li>
+                <FooterLink href="/cnpj">Consulta CNPJ B2G</FooterLink>
+              </li>
+              <li>
+                <FooterLink href="/glossario">Glossário de Licitações</FooterLink>
+              </li>
+              <li>
+                <FooterLink href="/casos">Casos de sucesso</FooterLink>
+              </li>
+            </ul>
+          </div>
+
           {/* Conteudo */}
           <div>
             <h3 className="font-bold text-lg mb-4 text-ink">Conteúdo</h3>
@@ -59,9 +78,6 @@ export default function Footer() {
               </li>
               <li>
                 <FooterLink href="/como-priorizar-oportunidades">Priorizar oportunidades</FooterLink>
-              </li>
-              <li>
-                <FooterLink href="/casos">Casos de sucesso</FooterLink>
               </li>
             </ul>
           </div>

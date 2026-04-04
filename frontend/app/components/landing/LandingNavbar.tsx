@@ -50,6 +50,13 @@ export default function LandingNavbar({ className = '' }: LandingNavbarProps) {
             >
               Blog
             </Link>
+            {/* SEO-PLAYBOOK Fundação §5: link to calculator for PageRank flow */}
+            <Link
+              href="/calculadora"
+              className="text-sm text-ink-secondary/80 hover:text-ink transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] rounded px-2 py-1"
+            >
+              Calculadora
+            </Link>
             <Link
               href="/casos"
               className="text-sm text-ink-secondary/80 hover:text-ink transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] rounded px-2 py-1"

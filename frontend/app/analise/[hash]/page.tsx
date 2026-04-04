@@ -1,6 +1,7 @@
 import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
+import { AnalysisViewTracker } from './AnalysisViewTracker';
 
 const baseUrl = process.env.NEXT_PUBLIC_CANONICAL_URL || 'https://smartlic.tech';
 const backendUrl = process.env.BACKEND_URL || 'http://localhost:8000';
@@ -132,6 +133,9 @@ export default async function AnalisePage({
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(reviewSchema) }}
       />
+
+      {/* SEO-PLAYBOOK P6: track analysis_viewed */}
+      <AnalysisViewTracker hash={hash} viabilityScore={data.viability_score} bidUf={data.bid_uf} />
 
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-12 sm:py-16">
         {/* Score Hero */}

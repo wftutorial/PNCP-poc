@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { useAnalytics } from "../hooks/useAnalytics";
 import type { LicitacaoItem } from "../app/types";
 
 interface ShareAnalysisButtonProps {
@@ -15,6 +16,7 @@ interface ShareAnalysisButtonProps {
  */
 export function ShareAnalysisButton({ item, accessToken }: ShareAnalysisButtonProps) {
   const [status, setStatus] = useState<"idle" | "loading" | "copied" | "error">("idle");
+  const { trackEvent } = useAnalytics();
 
   const handleShare = useCallback(async () => {
     if (!accessToken) return;
@@ -49,6 +51,13 @@ export function ShareAnalysisButton({ item, accessToken }: ShareAnalysisButtonPr
       const data = await res.json();
       const url = data.url;
 
+      // SEO-PLAYBOOK P6: track share event
+      const shareProps = {
+        bid_id: item.pncp_id || "",
+        viability_score: item.viability_score,
+        uf: item.uf || "",
+      };
+
       // Try Web Share API on mobile
       if (typeof navigator !== "undefined" && navigator.share) {
         try {
@@ -57,6 +66,7 @@ export function ShareAnalysisButton({ item, accessToken }: ShareAnalysisButtonPr
             text: `Score de viabilidade: ${item.viability_score}/100`,
             url,
           });
+          trackEvent("analysis_shared", { ...shareProps, method: "web_share" });
           setStatus("copied");
           setTimeout(() => setStatus("idle"), 2000);
           return;
@@ -67,6 +77,7 @@ export function ShareAnalysisButton({ item, accessToken }: ShareAnalysisButtonPr
 
       // Fallback: copy to clipboard
       await navigator.clipboard.writeText(url);
+      trackEvent("analysis_shared", { ...shareProps, method: "clipboard" });
       setStatus("copied");
       setTimeout(() => setStatus("idle"), 2000);
     } catch {

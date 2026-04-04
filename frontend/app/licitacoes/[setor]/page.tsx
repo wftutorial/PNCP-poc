@@ -232,6 +232,34 @@ export default async function SectorPage({
         </section>
       )}
 
+      {/* SEO-PLAYBOOK Fundação §5: Top UFs + Calculator link */}
+      <section className="max-w-5xl mx-auto py-12 px-4">
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">
+          Licitações de {sector.name} por estado
+        </h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 mb-6">
+          {["sp", "mg", "rs", "pr", "sc"].map((uf) => (
+            <Link
+              key={uf}
+              href={`/blog/licitacoes/${setor}/${uf}`}
+              className="p-3 rounded-lg border border-gray-200 dark:border-gray-700
+                         hover:border-brand-blue hover:shadow transition-all
+                         bg-white dark:bg-gray-900 text-center"
+            >
+              <span className="font-medium text-sm text-gray-900 dark:text-white uppercase">
+                {uf}
+              </span>
+            </Link>
+          ))}
+        </div>
+        <Link
+          href={`/calculadora?setor=${setor}`}
+          className="inline-flex items-center gap-2 text-sm font-medium text-brand-blue hover:underline"
+        >
+          Calcular oportunidades perdidas em {sector.name} &rarr;
+        </Link>
+      </section>
+
       {/* AC16: Related Sectors */}
       <section className="max-w-5xl mx-auto py-12 px-4">
         <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">

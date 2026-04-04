@@ -52,6 +52,12 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application code
 COPY . .
 
+# MED-SEC-003: Non-root user for container security
+RUN addgroup --system --gid 1001 appuser && \
+    adduser --system --uid 1001 --ingroup appuser appuser && \
+    mkdir -p /tmp/smartlic_cache && \
+    chown appuser:appuser /tmp/smartlic_cache
+
 # Expose port (Railway injects PORT env var)
 EXPOSE 8000
 
@@ -65,6 +71,9 @@ EXPOSE 8000
 # Using shell form for guaranteed variable expansion
 COPY start.sh /app/start.sh
 RUN chmod +x /app/start.sh
+
+# MED-SEC-003: Run as non-root user
+USER appuser
 
 # CRIT-SIGSEGV-FIX: Force uvicorn standalone to eliminate SIGSEGV from Gunicorn fork.
 # cryptography C extensions are fork-unsafe and crash workers on POST body parsing.

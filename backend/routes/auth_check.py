@@ -4,52 +4,20 @@ Endpoints:
 - GET /auth/check-email — Validate email (disposable check, no enumeration leak)
 - GET /auth/check-phone — Validate phone uniqueness (boolean only)
 
-Both endpoints are rate-limited: 10 req/min/IP.
+MED-SEC-001: Rate-limited via FlexibleRateLimiter (Redis + in-memory fallback).
 """
 
 import logging
-import time
-from collections import defaultdict
 
-from fastapi import APIRouter, HTTPException, Request, Query
+from fastapi import APIRouter, Depends, HTTPException, Request, Query
 
+from rate_limiter import require_rate_limit, SIGNUP_RATE_LIMIT_PER_10MIN
 from utils.disposable_emails import is_disposable_email, is_corporate_email
 from utils.phone_normalizer import normalize_phone
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth-check"])
-
-# ---------------------------------------------------------------------------
-# Rate limiting (in-memory, per-IP)
-# ---------------------------------------------------------------------------
-_CHECK_RATE_LIMIT = 10  # requests per minute
-_CHECK_WINDOW_S = 60
-
-_rate_limits: dict[str, list[float]] = defaultdict(list)
-
-
-def _check_rate_limit(ip: str) -> None:
-    """Enforce rate limit: 10 req/min/IP."""
-    now = time.time()
-    cutoff = now - _CHECK_WINDOW_S
-    attempts = _rate_limits[ip]
-    _rate_limits[ip] = [t for t in attempts if t > cutoff]
-
-    if len(_rate_limits[ip]) >= _CHECK_RATE_LIMIT:
-        raise HTTPException(
-            status_code=429,
-            detail="Muitas verificações. Aguarde 1 minuto.",
-        )
-    _rate_limits[ip].append(now)
-
-
-def _get_ip(request: Request) -> str:
-    """Extract client IP from request headers."""
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.headers.get("x-real-ip", request.client.host if request.client else "unknown")
 
 
 # ---------------------------------------------------------------------------
@@ -60,6 +28,7 @@ def _get_ip(request: Request) -> str:
 async def check_email(
     request: Request,
     email: str = Query(..., min_length=5, max_length=320),
+    _rl=Depends(require_rate_limit(SIGNUP_RATE_LIMIT_PER_10MIN, 600)),
 ):
     """AC15: Pre-signup email validation.
 
@@ -67,10 +36,8 @@ async def check_email(
 
     Security:
     - Does NOT reveal if email already exists (always available=true for disposable).
-    - Rate limited: 10 req/min/IP.
+    - MED-SEC-001: Rate limited 3 req/10min per IP (Redis + fallback).
     """
-    ip = _get_ip(request)
-    _check_rate_limit(ip)
 
     email_lower = email.strip().lower()
     disposable = is_disposable_email(email_lower)
@@ -79,7 +46,8 @@ async def check_email(
     if disposable:
         # AC15: Don't reveal that email was blocked — return available=true
         # to prevent enumeration (blocked vs already-exists is indistinguishable)
-        logger.info(f"AUDIT: Disposable email check — domain blocked (ip={ip})")
+        client_ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "unknown")
+        logger.info(f"AUDIT: Disposable email check — domain blocked (ip={client_ip})")
         return {
             "available": True,
             "disposable": True,
@@ -120,15 +88,14 @@ async def check_phone(
     request: Request,
     phone: str = Query(..., min_length=8, max_length=20),
     company: str | None = Query(default=None, max_length=200),
+    _rl=Depends(require_rate_limit(SIGNUP_RATE_LIMIT_PER_10MIN, 600)),
 ):
     """AC11-AC12: Pre-signup phone uniqueness check.
 
     Returns { available: bool } only — no data leakage.
     AC13: Optional company param triggers fingerprint abuse detection (non-blocking).
-    Rate limited: 10 req/min/IP.
+    MED-SEC-001: Rate limited 3 req/10min per IP (Redis + fallback).
     """
-    ip = _get_ip(request)
-    _check_rate_limit(ip)
 
     normalized = normalize_phone(phone)
     if not normalized:

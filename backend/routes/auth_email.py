@@ -12,8 +12,10 @@ import logging
 import time
 from typing import Dict
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, EmailStr
+
+from rate_limiter import require_rate_limit, SIGNUP_RATE_LIMIT_PER_10MIN
 
 logger = logging.getLogger(__name__)
 
@@ -39,9 +41,13 @@ class AuthStatusResponse(BaseModel):
 
 
 @router.post("/validate-signup-email")
-async def validate_signup_email(request: ResendRequest):
+async def validate_signup_email(
+    request: ResendRequest,
+    _rl=Depends(require_rate_limit(SIGNUP_RATE_LIMIT_PER_10MIN, 600)),
+):
     """STORY-258 AC3: Backend disposable email validation (defense-in-depth).
 
+    MED-SEC-001: Rate limited to 3 req/10min per IP to prevent trial multi-account abuse.
     Returns 422 if email domain is disposable.
     """
     from utils.disposable_emails import is_disposable_email
@@ -69,9 +75,13 @@ async def validate_signup_email(request: ResendRequest):
 
 
 @router.post("/resend-confirmation", response_model=ResendResponse)
-async def resend_confirmation(request: ResendRequest):
+async def resend_confirmation(
+    request: ResendRequest,
+    _rl=Depends(require_rate_limit(SIGNUP_RATE_LIMIT_PER_10MIN, 600)),
+):
     """Resend signup confirmation email with 60s rate limiting.
 
+    MED-SEC-001: Rate limited to 3 req/10min per IP to prevent trial multi-account abuse.
     AC4: Calls Supabase auth.resend({ type: 'signup', email }).
     AC1-AC6: Frontend uses this with countdown timer.
     """

@@ -15,12 +15,10 @@ from main import app
 
 
 @pytest.fixture(autouse=True)
-def clear_rate_limits():
-    """Clear per-IP rate limit state between tests."""
-    import routes.auth_check as auth_check_module
-    auth_check_module._rate_limits.clear()
-    yield
-    auth_check_module._rate_limits.clear()
+def _disable_rate_limits():
+    """MED-SEC-001: Rate limiting now uses FlexibleRateLimiter — disable for unit tests."""
+    with patch("config.get_feature_flag", return_value=False):
+        yield
 
 
 @pytest.fixture
@@ -103,17 +101,17 @@ class TestCheckEmailEndpoint:
         assert response.status_code == 422
 
     def test_rate_limit_enforced(self, client):
-        """After 10 requests from same IP, 11th is rejected with 429."""
-        import routes.auth_check as auth_check_module
+        """MED-SEC-001: Rate limit via FlexibleRateLimiter returns 429."""
+        from unittest.mock import AsyncMock
 
-        # Directly inject 10 timestamps within the last minute to simulate limit reached
-        import time
-        now = time.time()
-        auth_check_module._rate_limits["testclient"] = [now] * 10
+        async def mock_check(key, max_req, window):
+            return (False, 600)
 
-        response = client.get("/v1/auth/check-email?email=user@gmail.com")
-        assert response.status_code == 429
-        assert "Muitas" in response.json()["detail"]
+        with patch("config.get_feature_flag", return_value=True), \
+             patch("rate_limiter._flexible_limiter") as mock_limiter:
+            mock_limiter.check_rate_limit = AsyncMock(side_effect=mock_check)
+            response = client.get("/v1/auth/check-email?email=user@gmail.com")
+            assert response.status_code == 429
 
     def test_response_shape_has_required_keys(self, client):
         """Response always contains available, disposable, corporate."""
@@ -203,15 +201,17 @@ class TestCheckPhoneEndpoint:
         assert response.status_code == 422
 
     def test_rate_limit_phone_enforced(self, client):
-        """Rate limit applies to check-phone as well (10 req/min/IP)."""
-        import routes.auth_check as auth_check_module
-        import time
+        """MED-SEC-001: Rate limit via FlexibleRateLimiter returns 429 for phone too."""
+        from unittest.mock import AsyncMock
 
-        now = time.time()
-        auth_check_module._rate_limits["testclient"] = [now] * 10
+        async def mock_check(key, max_req, window):
+            return (False, 600)
 
-        response = client.get("/v1/auth/check-phone?phone=11999991234")
-        assert response.status_code == 429
+        with patch("config.get_feature_flag", return_value=True), \
+             patch("rate_limiter._flexible_limiter") as mock_limiter:
+            mock_limiter.check_rate_limit = AsyncMock(side_effect=mock_check)
+            response = client.get("/v1/auth/check-phone?phone=11999991234")
+            assert response.status_code == 429
 
     def test_response_shape_has_available_key(self, client):
         """Response contains only available key (no data leakage)."""

@@ -738,8 +738,8 @@ def check_and_increment_org_quota_atomic(
 # Profile-Based Plan Fallback (prevents "fail to free" anti-pattern)
 # ============================================================================
 
-# STORY-309 AC6: Extended grace period (was 3, now 7 for post-retry dunning)
-SUBSCRIPTION_GRACE_DAYS = 7
+# MED-SEC-002: Reduced grace period (was 7, now 3) — 7 days was abusable
+SUBSCRIPTION_GRACE_DAYS = 3
 
 
 def get_plan_from_profile(user_id: str, sb=None) -> Optional[str]:

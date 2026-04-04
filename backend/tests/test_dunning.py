@@ -525,12 +525,12 @@ async def test_dunning_recovery_metric_incremented():
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def test_grace_days_extended_to_7():
-    """AC6: SUBSCRIPTION_GRACE_DAYS should be 7 (extended from original 3)."""
+def test_grace_days_reduced_to_3():
+    """MED-SEC-002: SUBSCRIPTION_GRACE_DAYS should be 3 (reduced from 7 to prevent abuse)."""
     from quota import SUBSCRIPTION_GRACE_DAYS
 
-    assert SUBSCRIPTION_GRACE_DAYS == 7, \
-        f"SUBSCRIPTION_GRACE_DAYS should be 7, got {SUBSCRIPTION_GRACE_DAYS}"
+    assert SUBSCRIPTION_GRACE_DAYS == 3, \
+        f"SUBSCRIPTION_GRACE_DAYS should be 3, got {SUBSCRIPTION_GRACE_DAYS}"
 
 
 def test_check_quota_blocked_phase_returns_zero_remaining():

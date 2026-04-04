@@ -40,6 +40,28 @@ export async function GET(request: NextRequest) {
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get("location");
       if (location) {
+        // CRIT-SEC: Validate redirect target to prevent open redirect attacks
+        try {
+          const redirectUrl = new URL(location);
+          const allowedHosts = [
+            "smartlic.tech",
+            "www.smartlic.tech",
+            "localhost",
+          ];
+          if (
+            !allowedHosts.includes(redirectUrl.hostname) &&
+            !redirectUrl.hostname.endsWith(".railway.app")
+          ) {
+            console.error(
+              `OAuth callback: blocked redirect to untrusted host: ${redirectUrl.hostname}`
+            );
+            return NextResponse.redirect(
+              new URL("/login?error=invalid_redirect", request.url)
+            );
+          }
+        } catch {
+          // If location is a relative URL, it's safe (same origin)
+        }
         return NextResponse.redirect(location);
       }
     }

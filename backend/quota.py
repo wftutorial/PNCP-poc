@@ -839,7 +839,7 @@ def check_quota(user_id: str) -> QuotaInfo:
                 f"STORY-291 CB OPEN + CACHE MISS for user {mask_user_id(user_id)}: "
                 f"Allowing search (fail-open). Will reconcile later."
             )
-            plan_id = "smartlic_pro"  # Generous fail-open default
+            plan_id = "free_trial"  # CRIT-SEC: Conservative fail-open (was smartlic_pro)
             subscription_found = True
 
     # --- Layer 1: Active subscription ---

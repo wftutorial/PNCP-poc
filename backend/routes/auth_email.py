@@ -127,9 +127,9 @@ async def auth_status(email: str = Query(..., description="Email to check")):
             if user_email and user_email.lower() == email_lower:
                 confirmed_at = getattr(user, "email_confirmed_at", None)
                 if confirmed_at:
+                    # CRIT-SEC: Do NOT expose user_id — prevents enumeration
                     return AuthStatusResponse(
                         confirmed=True,
-                        user_id=user.id
                     )
                 return AuthStatusResponse(confirmed=False)
 

@@ -10,7 +10,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 
-from auth import require_auth
+from admin import require_admin
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ router = APIRouter(prefix="/v1/admin", tags=["admin"])
 
 
 @router.get("/search-trace/{search_id}")
-async def get_search_trace(search_id: str, user=Depends(require_auth)) -> dict[str, Any]:
+async def get_search_trace(search_id: str, user=Depends(require_admin)) -> dict[str, Any]:
     """Reconstruct complete search journey from search_id.
 
     Aggregates:

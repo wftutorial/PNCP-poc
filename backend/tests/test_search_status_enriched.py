@@ -44,6 +44,16 @@ def mock_auth():
     app.dependency_overrides.pop(require_auth, None)
 
 
+@pytest.fixture(autouse=True)
+def mock_ownership_check():
+    """Bypass ownership check in all tests — tested separately."""
+    with patch(
+        "routes.search_status._verify_search_ownership",
+        new_callable=AsyncMock,
+    ):
+        yield
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

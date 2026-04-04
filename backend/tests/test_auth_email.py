@@ -155,7 +155,8 @@ class TestAuthStatus:
         assert response.status_code == 200
         data = response.json()
         assert data["confirmed"] is True
-        assert data["user_id"] == "user-123"
+        # CRIT-SEC: user_id no longer returned to prevent enumeration
+        assert data.get("user_id") is None
 
     @patch("supabase_client.get_supabase")
     def test_status_not_confirmed(self, mock_get_supabase, client):

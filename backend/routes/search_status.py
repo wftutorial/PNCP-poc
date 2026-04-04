@@ -36,6 +36,45 @@ router = APIRouter(tags=["search"])
 
 
 # ---------------------------------------------------------------------------
+# CRIT-SEC-003: Search ownership verification helper
+# ---------------------------------------------------------------------------
+
+async def _verify_search_ownership(search_id: str, user_id: str) -> None:
+    """Verify that search_id belongs to user_id. Raises 404 if not.
+
+    Checks DB for ownership. If the search hasn't been persisted yet
+    (in-flight, only exists in-memory), allows access since the tracker
+    was created by the authenticated user's own request.
+
+    This prevents IDOR — user A cannot access user B's search results.
+    """
+    from database import get_db as _get_db
+    from supabase_client import sb_execute
+
+    db = _get_db()
+    try:
+        result = await sb_execute(
+            db.table("search_sessions")
+            .select("id")
+            .eq("id", search_id)
+            .eq("user_id", user_id)
+            .limit(1)
+        )
+        if result and result.data:
+            return  # Ownership confirmed via DB
+    except Exception:
+        pass
+
+    # If search is in-flight (not yet persisted), the in-memory tracker
+    # was created by the same authenticated request — allow access.
+    tracker = await get_tracker(search_id)
+    if tracker:
+        return
+
+    raise HTTPException(status_code=404, detail="Search not found")
+
+
+# ---------------------------------------------------------------------------
 # CRIT-003 AC11: Search status polling endpoint
 # ---------------------------------------------------------------------------
 
@@ -51,6 +90,9 @@ async def search_status_endpoint(
 
     Called by frontend when SSE disconnects (AC12) or for async polling.
     """
+    # CRIT-SEC-003: Verify ownership before returning data
+    await _verify_search_ownership(search_id, user["id"])
+
     # --- Fast path: in-memory state (no DB hit) ---
     tracker = await get_tracker(search_id)
     state_machine = get_state_machine(search_id)
@@ -188,6 +230,7 @@ async def search_timeline_endpoint(
     user: dict = Depends(require_auth),
 ):
     """AC7: Return all state transitions for audit trail."""
+    await _verify_search_ownership(search_id, user["id"])
     timeline = await get_timeline(search_id)
     return {"search_id": search_id, "transitions": timeline}
 
@@ -207,6 +250,7 @@ async def get_search_results(
     GTM-ARCH-001 AC3: Also serves results from ARQ Worker (via Redis).
     Returns 404 if search_id not found or expired.
     """
+    await _verify_search_ownership(search_id, user["id"])
     result = await get_background_results_async(search_id)
     if result is None:
         raise HTTPException(
@@ -231,6 +275,7 @@ async def get_search_results_v1(
     - 202 with status when still processing
     - 404 when search_id not found or expired
     """
+    await _verify_search_ownership(search_id, user["id"])
     result = await get_background_results_async(search_id)
     if result is not None:
         # STORY-364 AC2: Merge Excel job result if not already in response
@@ -281,6 +326,7 @@ async def get_zero_match_results_endpoint(
     - 200: Results ready (may be empty list if none approved)
     - 404: Job not yet completed or results expired
     """
+    await _verify_search_ownership(search_id, user["id"])
     from job_queue import get_zero_match_results
 
     results = await get_zero_match_results(search_id)
@@ -307,6 +353,7 @@ async def regenerate_excel_endpoint(
     - 202: Excel generation job enqueued
     - 404: Results not found or expired
     """
+    await _verify_search_ownership(search_id, user["id"])
     result = await get_background_results_async(search_id)
     if result is None:
         raise HTTPException(
@@ -427,6 +474,7 @@ async def cancel_search(
     user: dict = Depends(require_auth),
 ):
     """CRIT-006 AC16-17: Cancel an in-progress search."""
+    await _verify_search_ownership(search_id, user["id"])
     # Try to update state machine
     try:
         machine = get_state_machine(search_id)

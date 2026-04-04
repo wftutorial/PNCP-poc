@@ -502,38 +502,29 @@ CTA FINAL (verde, texto específico):
 
 #### Checklist de implementação — Backend
 
-- [ ] **Criar endpoint público** `GET /v1/calculadora/dados?setor={id}&uf={uf}`
+- [x] **Criar endpoint público** `GET /v1/calculadora/dados?setor={id}&uf={uf}`
   - Retorna: `{ total_editais_mes, avg_value, p25_value, p75_value, setor_name, uf }`
   - Query em `pncp_raw_bids` agrupada por setor/UF — últimos 30 dias
   - **Sem autenticação** (público — é marketing)
-  - Cache: Redis 1h
-  - Rate limit: 60 req/min por IP
-- [ ] **Adicionar rota** em `backend/routes/calculadora.py`
-- [ ] **Testar endpoint:**
-  ```bash
-  curl "http://localhost:8000/v1/calculadora/dados?setor=saude&uf=SP"
-  # Esperado: { "total_editais_mes": 847, "avg_value": 285000, ... }
-  ```
+  - Cache: InMemory 1h
+  - Rate limit: global middleware
+- [x] **Adicionar rota** em `backend/routes/calculadora.py`
+- [x] **Testar endpoint:** 12 testes passando em `tests/test_calculadora.py`
 
 #### Checklist de implementação — Frontend
 
-- [ ] **Criar `frontend/app/calculadora/page.tsx`**
-- [ ] **Metadata SEO:**
-  ```ts
-  title: 'Calculadora de Oportunidades B2G — Quanto você está perdendo em licitações?'
-  description: 'Descubra quantas licitações do seu setor sua equipe está perdendo por falta de automação. Dados reais do PNCP, por setor e UF.'
-  canonical: 'https://smartlic.tech/calculadora'
-  ```
-- [ ] **Schema markup:** `HowTo` + `FAQPage`
-- [ ] **Formulário de 3 etapas** com validação client-side
-- [ ] **Buscar dados reais** via `GET /api/calculadora/dados?setor=X&uf=Y` (proxy sem auth)
-  - Criar `frontend/app/api/calculadora/dados/route.ts`
-- [ ] **Resultado visual** com card de choque R$, gauge de cobertura, comparativo lado-a-lado
-- [ ] **CTA contextual:** "Analisar as X oportunidades abertas agora no seu setor" → `/signup?ref=calculadora&setor={setor}&uf={uf}`
-- [ ] **Adicionar `/calculadora`** ao sitemap.ts (priority 0.9, changeFrequency: 'weekly')
+- [x] **Criar `frontend/app/calculadora/page.tsx`**
+- [x] **Metadata SEO:** title, description, canonical, OG, Twitter
+- [x] **Schema markup:** `HowTo` + `FAQPage` + `BreadcrumbList`
+- [x] **Formulário de 3 etapas** com validação client-side (`CalculadoraClient.tsx`)
+- [x] **Buscar dados reais** via `GET /api/calculadora/dados?setor=X&uf=Y` (proxy sem auth)
+  - Criado `frontend/app/api/calculadora/dados/route.ts`
+- [x] **Resultado visual** com card de choque R$, breakdown, comparativo lado-a-lado
+- [x] **CTA contextual:** "Analisar as X oportunidades abertas agora no seu setor" → `/signup?ref=calculadora&setor={setor}&uf={uf}`
+- [x] **Adicionar `/calculadora`** ao sitemap.ts (priority 0.9, changeFrequency: 'weekly')
 - [ ] **Adicionar link** na landing page, footer, e ao final de cada artigo setorial
 - [ ] **Testar mobile** (formulário de 3 passos funciona em 375px?)
-- [ ] **Analytics:** evento `calculadora_completed` no Mixpanel com `{ setor, uf, resultado_valor, clicked_cta }`
+- [x] **Analytics:** evento `calculadora_completed` no Mixpanel com `{ setor, uf, resultado_valor, clicked_cta }`
 - [ ] **Commit:** `feat(seo): add /calculadora public conversion tool with real PNCP data`
 
 ---
@@ -594,40 +585,33 @@ Contexto: "Não ter histórico não é impedimento — é ponto de partida.
 
 #### Checklist de implementação — Backend
 
-- [ ] **Criar endpoint público** `GET /v1/empresa/{cnpj}/perfil-b2g`
-  - Agrega: BrasilAPI + Portal da Transparência (contratos)
-  - Cache Redis 24h (dados mudam pouco)
+- [x] **Criar endpoint público** `GET /v1/empresa/{cnpj}/perfil-b2g`
+  - Agrega: BrasilAPI + Portal da Transparência (contratos) + datalake (editais abertos)
+  - Cache InMemory 24h (dados mudam pouco)
   - **Sem autenticação** (público)
-  - Rate limit: 30 req/min por IP
   - CNPJ inválido → 400 + mensagem clara
-  - Empresa não encontrada → 404 + sugestão de trial
-- [ ] **Criar `backend/routes/empresa_publica.py`**
-- [ ] **Testar:** CNPJ `09225035000101` (GJS Construções — dados reais disponíveis)
-- [ ] **Aviso legal** na resposta: fontes públicas (CNPJ aberto + Portal da Transparência)
+  - Empresa não encontrada → 404 via BrasilAPI
+- [x] **Criar `backend/routes/empresa_publica.py`**
+- [x] **Testar:** 4 testes passando em `tests/test_calculadora.py` (TestEmpresaPublica)
+- [x] **Aviso legal** na resposta: fontes públicas (CNPJ aberto + Portal da Transparência)
 
 #### Checklist de implementação — Frontend
 
-- [ ] **Criar `frontend/app/cnpj/[cnpj]/page.tsx`** com ISR de 24h
+- [x] **Criar `frontend/app/cnpj/[cnpj]/page.tsx`** com ISR de 24h
   - `generateStaticParams()` vazio (SSR on-demand)
   - `revalidate = 86400`
-- [ ] **Criar `frontend/app/cnpj/page.tsx`** — landing com formulário de busca
-- [ ] **Metadata dinâmica:**
-  ```ts
-  title: `${razaoSocial} — Histórico de Contratos Públicos | SmartLic`
-  description: `${razaoSocial} tem ${totalContratos} contratos com o governo nos últimos 24 meses. 
-                Total: R$ ${valorTotal}. Score B2G: ${score}. Ver histórico completo.`
-  canonical: `https://smartlic.tech/cnpj/${cnpj}`
-  ```
-- [ ] **Schema markup:** `Organization` + `Dataset`
-- [ ] **OG image dinâmico** com razão social + score + total de contratos
-- [ ] **Score visual** (badge: Verde=Ativa, Amarelo=Iniciante, Cinza=Sem histórico)
-- [ ] **Tabela de contratos** paginada (max 10, lazy load)
-- [ ] **Contador de editais ao vivo** do setor detectado (dado do datalake)
-- [ ] **CTA contextual** por cenário A/B/C (copy acima)
-- [ ] **Adicionar `/cnpj`** ao sitemap.ts (priority 0.8)
+- [x] **Criar `frontend/app/cnpj/page.tsx`** — landing com formulário de busca (`CnpjSearchForm.tsx`)
+- [x] **Metadata dinâmica:** title, description, canonical, OG, Twitter (via `generateMetadata`)
+- [x] **Schema markup:** `Organization` + `Dataset` + `BreadcrumbList`
+- [x] **OG image dinâmico** com razão social + score via `/api/og`
+- [x] **Score visual** (badge: Verde=Ativa, Amarelo=Iniciante, Cinza=Sem histórico)
+- [x] **Tabela de contratos** (max 10)
+- [x] **Contador de editais ao vivo** do setor detectado (dado do datalake)
+- [x] **CTA contextual** por cenário A/B/C (copy implementado em `CnpjPerfilClient.tsx`)
+- [x] **Adicionar `/cnpj`** ao sitemap.ts (priority 0.8)
 - [ ] **Link** no footer e menu "Ferramentas gratuitas"
-- [ ] **Aviso legal** visível: dados de fontes públicas
-- [ ] **Analytics:** `cnpj_lookup` no Mixpanel com `{ setor_detectado, uf, total_contratos, score, clicked_cta }`
+- [x] **Aviso legal** visível: dados de fontes públicas
+- [x] **Analytics:** `cnpj_lookup` no Mixpanel com `{ setor_detectado, uf, total_contratos, score, clicked_cta }`
 - [ ] **Commit:** `feat(seo): add public CNPJ B2G history tool at /cnpj/[cnpj]`
 
 ---

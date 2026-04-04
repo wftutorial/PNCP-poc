@@ -157,6 +157,20 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: 'monthly',
       priority: 0.7,
     },
+    // SEO-PLAYBOOK P2: Calculadora B2G
+    {
+      url: `${baseUrl}/calculadora`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly',
+      priority: 0.9,
+    },
+    // SEO-PLAYBOOK P3: CNPJ B2G lookup
+    {
+      url: `${baseUrl}/cnpj`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly',
+      priority: 0.8,
+    },
     // SEO-PLAYBOOK P0: About page
     {
       url: `${baseUrl}/sobre`,

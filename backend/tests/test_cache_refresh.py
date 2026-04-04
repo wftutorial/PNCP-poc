@@ -352,7 +352,7 @@ async def test_cache_refresh_job_metrics():
         },
         {
             "user_id": "u3", "params_hash": "hash3",
-            "search_params": {"setor_id": "software", "ufs": ["MG"]},
+            "search_params": {"setor_id": "software_desenvolvimento", "ufs": ["MG"]},
             "total_results": 8, "priority": "warm", "access_count": 1,
         },
     ]

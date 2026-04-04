@@ -2822,43 +2822,18 @@ sectors:
       - "fundacao"
       - "edificacao"
 
-  software:
-    name: "Software e Sistemas"
-    description: "Licenças de software, SaaS, desenvolvimento de sistemas, consultoria de TI"
+  # =========================================================================
+  # ISSUE-072 / session-040: Split "software" em 2 setores distintos
+  # Analogia: split transporte -> transporte_servicos + frota_veicular
+  # =========================================================================
+
+  software_desenvolvimento:
+    name: "Desenvolvimento de Software e Consultoria de TI"
+    description: "Contratação de desenvolvimento de software customizado, SaaS, implantação de sistemas, consultoria e fábrica de software"
     max_contract_value: 20000000  # R$ 20M
-    viability_value_range: [50000, 5000000]  # D-04: ideal R$50k-R$5M
+    viability_value_range: [50000, 5000000]
     keywords:
-      # Software licenses (high precision)
-      - "licença de software"
-      - "licenca de software"
-      - "licenciamento de software"
-      - "licenciamento"
-      - "licenca"
-      - "microsoft office"
-      - "office 365"
-      - "microsoft 365"
-      - "windows server"
-      - "sql server"
-      - "adobe"
-      - "autocad"
-      - "corel"
-      - "sap"
-      - "oracle"
-      - "salesforce"
-      - "software de gestão"
-      - "software de gestao"
-      # SaaS & Cloud platforms
-      - "saas"
-      - "software as a service"
-      - "software como serviço"
-      - "software como servico"
-      - "plataforma cloud"
-      - "plataforma em nuvem"
-      - "assinatura de software"
-      - "assinatura de sistema"
-      - "serviço de nuvem"
-      - "servico de nuvem"
-      # Custom development
+      # Desenvolvimento sob demanda
       - "desenvolvimento de software"
       - "desenvolvimento de sistema"
       - "desenvolvimento de aplicativo"
@@ -2866,16 +2841,22 @@ sectors:
       - "sistema web"
       - "aplicação web"
       - "aplicacao web"
-      - "sistema de gestão"
-      - "sistema de gestao"
       - "software customizado"
       - "software personalizado"
-      - "aplicativo mobile"
-      - "aplicativo móvel"
-      - "aplicativo movel"
-      # Software services
-      - "consultoria de software"
+      - "fábrica de software"
+      - "fabrica de software"
+      # SaaS / cloud desenvolvido
+      - "saas"
+      - "software as a service"
+      - "software como serviço"
+      - "software como servico"
+      - "plataforma cloud"
+      - "plataforma em nuvem"
+      - "serviço de nuvem"
+      - "servico de nuvem"
+      # Serviços de TI (não licença)
       - "consultoria de ti"
+      - "consultoria de software"
       - "implantação de sistema"
       - "implantacao de sistema"
       - "integração de sistema"
@@ -2884,11 +2865,17 @@ sectors:
       - "manutencao de software"
       - "suporte técnico de software"
       - "suporte tecnico de software"
-      # Specific business systems
-      - "erp"
-      - "crm"
-      - "bi"
-      - "business intelligence"
+      # Sistemas específicos (contexto desenvolvimento)
+      - "sistema de gestão"
+      - "sistema de gestao"
+      - "sistema informatizado"
+      - "sistema informatizada"
+      - "aplicação informatizada"
+      - "aplicacao informatizada"
+      - "aplicativo mobile"
+      - "aplicativo móvel"
+      - "aplicativo movel"
+      # Sistemas de negócio (implantação/desenvolvimento)
       - "sistema de folha de pagamento"
       - "sistema de protocolo"
       - "sistema de almoxarifado"
@@ -2903,19 +2890,14 @@ sectors:
       - "sistema de licitacao"
       - "portal de transparência"
       - "portal de transparencia"
-      # Restored standalone terms (guarded by exclusions + context gates)
-      - "software"
-      - "softwares"
-      - "aplicativo"
-      - "aplicativos"
-      # CRIT-FLT-004: standalone "sistema" with context gate to prevent
-      # cross-sector false positives (e.g. "sistema de registro de preços")
-      - "sistema"
-      # CRITICAL ADDITIONS (Issue #software-0-results - 2026-02-06)
-      - "sistema informatizado"
-      - "sistema informatizada"
-      - "aplicação informatizada"
-      - "aplicacao informatizada"
+      # Serviços gerais TI
+      - "serviços de tecnologia"
+      - "servicos de tecnologia"
+      - "consultoria de tecnologia"
+      - "contratação de ti"
+      - "contratacao de ti"
+      - "tecnologia da informação"
+      - "tecnologia da informacao"
       - "solução tecnológica"
       - "solucao tecnologica"
       - "solução de tecnologia"
@@ -2926,17 +2908,21 @@ sectors:
       - "plataforma digital"
       - "portal digital"
       - "portal web"
-      - "tecnologia da informação"
-      - "tecnologia da informacao"
-      - "serviços de tecnologia"
-      - "servicos de tecnologia"
-      - "contratação de ti"
-      - "contratacao de ti"
-      - "fornecimento de software"
-      - "aquisição de software"
-      - "aquisicao de software"
+      # Standalone terms (guarded by exclusions + context gates)
+      - "software"
+      - "softwares"
+      - "aplicativo"
+      - "aplicativos"
+      - "sistema"
+      # ERP/CRM/BI (contexto implantação/desenvolvimento)
+      - "erp"
+      - "crm"
+      - "bi"
+      - "business intelligence"
+      - "software de gestão"
+      - "software de gestao"
     exclusions:
-      # Hardware (keep in "informatica" sector)
+      # Hardware (pertence a informatica)
       - "hardware"
       - "equipamento de informatica"
       - "equipamento de informática"
@@ -2958,7 +2944,36 @@ sectors:
       - "mouse"
       - "monitor"
       - "monitores"
-      # Training/courses (not software procurement)
+      # Licenças de marcas comerciais (pertence a software_licencas)
+      - "microsoft 365"
+      - "office 365"
+      - "microsoft office"
+      - "microsoft teams"
+      - "exchange online"
+      - "windows server"
+      - "sql server"
+      - "autodesk"
+      - "autocad"
+      - "adobe"
+      - "corel"
+      - "vmware"
+      - "hipervisor"
+      - "hypervisor"
+      - "subscrição de licenças"
+      - "subscricao de licencas"
+      - "antivírus"
+      - "antivirus"
+      - "salesforce"
+      - "licença de software"
+      - "licenca de software"
+      - "licenciamento de software"
+      - "aquisição de licenças"
+      - "aquisicao de licencas"
+      - "renovação de licença"
+      - "renovacao de licenca"
+      - "fornecimento de licenças"
+      - "fornecimento de licencas"
+      # Cursos/treinamentos
       - "curso de software"
       - "treinamento de software"
       - "capacitação em software"
@@ -2968,10 +2983,6 @@ sectors:
       - "capacitacao em ti"
       - "curso de corte costura"
       - "instrutor de corte costura"
-      # Physical goods
-      - "caixa de software"
-      - "embalagem de software"
-      # Non-software training/education (REVISED - Issue #software-0-results)
       - "curso de engenharia de software"
       - "graduação em engenharia de software"
       - "graduacao em engenharia de software"
@@ -2979,7 +2990,11 @@ sectors:
       - "curso de desenvolvimento"
       - "bootcamp"
       - "treinamento de desenvolvimento"
-      # "Sistema" in non-software context (CRITICAL - high false positive rate)
+      # Firewall/segurança de rede (pertence a vigilância)
+      - "firewall"
+      - "appliance"
+      - "utm"
+      # "Sistema" em contexto não-software (CRITICAL - alta taxa de FP)
       - "sistema de climatização"
       - "sistema de climatizacao"
       - "sistema de ar condicionado"
@@ -3023,7 +3038,7 @@ sectors:
       - "sistema de energia solar"
       - "sistema de microgeração"
       - "sistema de microgeracao"
-      # Physical infrastructure and equipment
+      # Physical infrastructure
       - "balança"
       - "balanca"
       - "bomba"
@@ -3042,7 +3057,6 @@ sectors:
       - "equipamento rodoviário"
       - "equipamento rodoviario"
       - "plataforma fixa"
-      # HVAC and climate control
       - "climatização"
       - "climatizacao"
       - "ar condicionado"
@@ -3050,23 +3064,19 @@ sectors:
       - "ventilacao"
       - "refrigeração"
       - "refrigeracao"
-      # Audio/video equipment
       - "sonorização"
       - "sonorizacao"
       - "iluminação cênica"
       - "iluminacao cenica"
       - "instrumentos musicais"
-      # Medical/health supplies
       - "oxigênio medicinal"
       - "oxigenio medicinal"
       - "primeiros socorros"
-      # Food and consumables
       - "água mineral"
       - "agua mineral"
       - "lanche"
       - "lanches"
       - "kit de lanche"
-      # Physical construction/maintenance
       - "plotagem"
       - "plotagens"
       - "painel"
@@ -3074,11 +3084,9 @@ sectors:
       - "paineis"
       - "sondagem"
       - "gradeamento mecanizado"
-      # Personal services
       - "maquiagem"
       - "cabelo"
       - "beleza"
-      # Generic materials
       - "ferramentas manuais"
       - "materiais para manutenção"
       - "materiais para manutencao"
@@ -3087,55 +3095,14 @@ sectors:
       - "acessórios"
       - "acessorios"
       - "insumos"
-      # Lighting/electrical
       - "iluminação pública"
       - "iluminacao publica"
       - "extintores"
       - "luminárias"
       - "luminarias"
+      - "caixa de software"
+      - "embalagem de software"
     context_required_keywords:
-      # CRIT-021 AC9: Software context gates
-      # "licenciamento" can be vehicle licensing or environmental licensing.
-      # "sap" can be tree sap. "bi" can be prefix (bicicleta, bilateral).
-      # "aplicativo" can refer to non-software applications.
-      # Context ensures software/IT procurement context.
-      licenciamento:
-        - "software"
-        - "sistema"
-        - "microsoft"
-        - "adobe"
-        - "oracle"
-        - "ti"
-        - "tecnologia"
-        - "digital"
-      licenca:
-        - "software"
-        - "sistema"
-        - "microsoft"
-        - "adobe"
-        - "oracle"
-        - "ti"
-        - "tecnologia"
-        - "uso"
-        - "digital"
-        - "antivírus"
-        - "antivirus"
-        - "informática"
-        - "informatica"
-      "licença":
-        - "software"
-        - "sistema"
-        - "microsoft"
-        - "adobe"
-        - "oracle"
-        - "ti"
-        - "tecnologia"
-        - "uso"
-        - "digital"
-        - "antivírus"
-        - "antivirus"
-        - "informática"
-        - "informatica"
       sap:
         - "sistema"
         - "erp"
@@ -3174,9 +3141,6 @@ sectors:
         - "app"
         - "celular"
         - "software"
-      # CRIT-FLT-004 AC5: "sistema" is extremely generic (5% of PNCP items
-      # contain "sistema de registro de preços"). Context gate ensures only
-      # IT/software contexts match.
       sistema:
         - "informação"
         - "informacao"
@@ -3195,8 +3159,6 @@ sectors:
         - "gerenciamento"
         - "gestão eletrônica"
         - "gestao eletronica"
-      # Frente4 AC3: "plataforma" is ambiguous (physical platform, loading dock).
-      # Context ensures only digital/software platform context matches.
       plataforma:
         - "digital"
         - "software"
@@ -3207,9 +3169,7 @@ sectors:
         - "web"
         - "aplicativo"
         - "tecnologia"
-    # CRIT-FLT-007: Co-occurrence rules for software
     co_occurrence_rules:
-      # Rule 1: "plataforma" in non-software context (physical platform)
       - trigger: "plataforma"
         negative_contexts:
           - "elevacao"
@@ -3222,7 +3182,6 @@ sectors:
           - "software"
           - "web"
           - "nuvem"
-      # Rule 2: "consultoria" in non-IT context
       - trigger: "consultoria"
         negative_contexts:
           - "juridica"
@@ -3235,10 +3194,177 @@ sectors:
           - "tecnologia"
           - "software"
           - "sistema"
-    # CRIT-FLT-007: Domain signals for software
     domain_signals:
       ncm_prefixes:
-        - "8523"  # Discos e suportes para gravação (mídias de software)
+        - "8523"
+      unit_patterns:
+        - "usuario"
+        - "usuário"
+        - "mensal"
+        - "anual"
+      size_patterns: []
+    signature_terms:
+      - "sistema de gestao"
+      - "erp"
+      - "saas"
+      - "plataforma digital"
+      - "desenvolvimento de sistema"
+      - "consultoria de ti"
+      - "fabrica de software"
+
+  software_licencas:
+    name: "Licenciamento de Software Comercial"
+    description: "Aquisição e renovação de licenças de software de terceiros: Microsoft, Oracle, SAP, Adobe, Autodesk, antivírus, sistemas operacionais"
+    max_contract_value: 10000000  # R$ 10M
+    viability_value_range: [10000, 3000000]
+    keywords:
+      # Licenciamento genérico
+      - "licença de software"
+      - "licenca de software"
+      - "licenciamento de software"
+      - "licenciamento de sistema"
+      - "assinatura de software"
+      - "assinatura de sistema"
+      - "fornecimento de licenças"
+      - "fornecimento de licencas"
+      - "aquisição de licenças"
+      - "aquisicao de licencas"
+      - "subscrição de licenças"
+      - "subscricao de licencas"
+      - "renovação de licença"
+      - "renovacao de licenca"
+      - "aquisição de software"
+      - "aquisicao de software"
+      - "fornecimento de software"
+      # Marcas Microsoft
+      - "microsoft 365"
+      - "office 365"
+      - "microsoft office"
+      - "microsoft teams"
+      - "exchange online"
+      - "windows server"
+      - "sql server"
+      # Segurança / virtualização
+      - "antivírus"
+      - "antivirus"
+      - "vmware"
+      - "hipervisor"
+      - "hypervisor"
+      - "virtualização"
+      - "virtualizacao"
+      # Design / engenharia
+      - "autodesk"
+      - "autocad"
+      - "adobe"
+      - "corel"
+      # ERP empresarial (aquisição de licença, não desenvolvimento)
+      - "erp"
+      - "crm"
+      - "oracle"
+      - "sap"
+      - "salesforce"
+      # Genéricos com contexto de compra
+      - "pacote de softwares"
+      - "pacote de software"
+      - "software de gestão"
+      - "software de gestao"
+      # Standalone terms (guarded by context gates)
+      - "licenciamento"
+      - "licenca"
+    exclusions:
+      # Desenvolvimento (pertence a software_desenvolvimento)
+      - "desenvolvimento de software"
+      - "desenvolvimento de sistema"
+      - "desenvolvimento de aplicativo"
+      - "desenvolvimento web"
+      - "software customizado"
+      - "software personalizado"
+      - "implantação de sistema"
+      - "implantacao de sistema"
+      - "consultoria de software"
+      - "consultoria de ti"
+      - "fábrica de software"
+      - "fabrica de software"
+      - "integração de sistema"
+      - "integracao de sistema"
+      - "manutenção de software"
+      - "manutencao de software"
+      - "suporte técnico de software"
+      - "suporte tecnico de software"
+      # Hardware (pertence a informatica)
+      - "hardware"
+      - "computador"
+      - "computadores"
+      - "notebook"
+      - "notebooks"
+      - "servidor físico"
+      - "servidor fisico"
+      - "impressora"
+      - "impressoras"
+      - "scanner"
+      - "scanners"
+      - "roteador"
+      - "roteadores"
+      - "switch"
+      - "switches"
+      - "teclado"
+      - "mouse"
+      - "monitor"
+      - "monitores"
+      # Firewall hardware (pertence a vigilância)
+      - "firewall"
+      - "appliance"
+      # Cursos/treinamentos
+      - "curso de software"
+      - "treinamento de software"
+      - "capacitação em software"
+      - "capacitacao em software"
+      - "bootcamp"
+    context_required_keywords:
+      licenciamento:
+        - "software"
+        - "sistema"
+        - "microsoft"
+        - "adobe"
+        - "oracle"
+        - "ti"
+        - "tecnologia"
+        - "digital"
+      licenca:
+        - "software"
+        - "sistema"
+        - "microsoft"
+        - "adobe"
+        - "oracle"
+        - "ti"
+        - "tecnologia"
+        - "uso"
+        - "digital"
+        - "antivírus"
+        - "antivirus"
+        - "informática"
+        - "informatica"
+      erp:
+        - "licença"
+        - "licenca"
+        - "aquisição"
+        - "aquisicao"
+        - "fornecimento"
+      oracle:
+        - "licença"
+        - "licenca"
+        - "banco de dados"
+        - "database"
+        - "software"
+      sap:
+        - "licença"
+        - "licenca"
+        - "licenciamento"
+        - "erp"
+    co_occurrence_rules: []
+    domain_signals:
+      ncm_prefixes:
+        - "8523"
       unit_patterns:
         - "licenca"
         - "licença"
@@ -3249,12 +3375,12 @@ sectors:
       size_patterns: []
     signature_terms:
       - "licenca de software"
-      - "sistema de gestao"
-      - "erp"
-      - "saas"
-      - "cloud computing"
-      - "plataforma digital"
-      - "desenvolvimento de sistema"
+      - "microsoft 365"
+      - "office 365"
+      - "licenciamento"
+      - "antivirus"
+      - "adobe"
+      - "autodesk"
 
   servicos_prediais:
     name: "Serviços Prediais e Facilities"

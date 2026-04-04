@@ -8,6 +8,7 @@ interface SearchEmptyStateProps {
   stateCount?: number;
   filterStats?: FilterStats | null;
   sectorName?: string;
+  emptyUfs?: string[];
 }
 
 export function SearchEmptyState({
@@ -16,6 +17,7 @@ export function SearchEmptyState({
   stateCount = 0,
   filterStats,
   sectorName = "uniformes",
+  emptyUfs,
 }: SearchEmptyStateProps) {
   const handleAdjust = () => {
     if (onAdjustSearch) {
@@ -105,6 +107,20 @@ export function SearchEmptyState({
         <p className="text-ink-secondary mb-4" data-testid="empty-state-message">
           Analisamos os editais disponíveis e nenhum correspondeu ao seu perfil no momento. Volte amanhã para novas oportunidades.
         </p>
+      )}
+
+      {/* ISSUE-073: UFs with 0 results callout */}
+      {emptyUfs && emptyUfs.length > 0 && (
+        <div className="mb-4 px-4 py-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/40 rounded-card text-sm text-amber-800 dark:text-amber-200 flex items-start gap-2" data-testid="empty-ufs-callout">
+          <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01" />
+          </svg>
+          <span>
+            {emptyUfs.length === 1 ? "O estado" : "Os estados"}{" "}
+            <strong>{emptyUfs.join(", ")}</strong>{" "}
+            {emptyUfs.length === 1 ? "não teve" : "não tiveram"} licitações publicadas neste período. Tente ampliar o período de busca.
+          </span>
+        </div>
       )}
 
       {/* Suggestions */}

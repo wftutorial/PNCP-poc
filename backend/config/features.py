@@ -111,7 +111,7 @@ ATESTADOS_DISPONIVEIS: list[dict] = [
     {"id": "habilitacao_antt", "label": "Habilitação ANTT", "sectors": ["transporte_servicos", "frota_veicular"]},
     {"id": "registro_cfq", "label": "Registro CRQ (Química)", "sectors": ["medicamentos", "materiais_hidraulicos"]},
     {"id": "licenca_ambiental", "label": "Licença Ambiental", "sectors": ["engenharia", "engenharia_rodoviaria"]},
-    {"id": "crt", "label": "CRT (Técnico)", "sectors": ["informatica", "software"]},
+    {"id": "crt", "label": "CRT (Técnico)", "sectors": ["informatica", "software_desenvolvimento", "software_licencas"]},
 ]
 
 # STORY-267: Term Search Quality Parity
@@ -218,6 +218,143 @@ def reload_feature_flags() -> dict[str, bool]:
     for name in _FEATURE_FLAG_REGISTRY:
         current_values[name] = get_feature_flag(name)
     return current_values
+
+
+def validate_feature_flags() -> None:
+    """Validate all feature flag values for correct types and reasonable ranges.
+
+    Reads directly from environment (not module-level cached values) so that
+    this function is useful even when called after os.environ has been patched
+    in tests.
+
+    On validation failure: logs a CRITICAL error with the specific flag and
+    issue, then raises a ValueError so the application does NOT start with
+    invalid configuration.
+
+    Call AFTER setup_logging() and log_feature_flags().
+    """
+    errors: list[str] = []
+
+    def _check_float(env_var: str, default: str, min_val: float | None = None, max_val: float | None = None) -> None:
+        raw = os.getenv(env_var, default)
+        try:
+            value = float(raw)
+        except (ValueError, TypeError):
+            errors.append(f"{env_var}={raw!r} — expected a float, got non-numeric value")
+            return
+        if min_val is not None and value < min_val:
+            errors.append(f"{env_var}={raw!r} — value {value} is below minimum {min_val}")
+        if max_val is not None and value > max_val:
+            errors.append(f"{env_var}={raw!r} — value {value} exceeds maximum {max_val}")
+
+    def _check_int(env_var: str, default: str, min_val: int | None = None, max_val: int | None = None) -> None:
+        raw = os.getenv(env_var, default)
+        try:
+            value = int(raw)
+        except (ValueError, TypeError):
+            errors.append(f"{env_var}={raw!r} — expected an integer, got non-numeric value")
+            return
+        if min_val is not None and value < min_val:
+            errors.append(f"{env_var}={raw!r} — value {value} is below minimum {min_val}")
+        if max_val is not None and value > max_val:
+            errors.append(f"{env_var}={raw!r} — value {value} exceeds maximum {max_val}")
+
+    # --- LLM Arbiter ---
+    _check_float("LLM_ARBITER_TEMPERATURE", "0", min_val=0.0, max_val=2.0)
+    _check_int("LLM_ARBITER_MAX_TOKENS", "1", min_val=1, max_val=32768)
+    _check_float("OPENAI_TIMEOUT_S", os.getenv("LLM_TIMEOUT_S", "5"), min_val=0.1, max_val=300.0)
+    _check_float("LLM_FUTURE_TIMEOUT_S", "20", min_val=1.0, max_val=300.0)
+
+    # --- Term density thresholds ---
+    _check_float("TERM_DENSITY_HIGH_THRESHOLD", "0.05", min_val=0.0, max_val=1.0)
+    _check_float("TERM_DENSITY_MEDIUM_THRESHOLD", "0.02", min_val=0.0, max_val=1.0)
+    _check_float("TERM_DENSITY_LOW_THRESHOLD", "0.01", min_val=0.0, max_val=1.0)
+
+    # --- Filter QA ---
+    _check_float("QA_AUDIT_SAMPLE_RATE", "0.10", min_val=0.0, max_val=1.0)
+
+    # --- Zero-match config ---
+    _check_int("LLM_ZERO_MATCH_BATCH_SIZE", "20", min_val=1, max_val=500)
+    _check_float("LLM_ZERO_MATCH_BATCH_TIMEOUT", "5.0", min_val=0.1, max_val=300.0)
+    _check_float("FILTER_ZERO_MATCH_BUDGET_S", "30", min_val=1.0, max_val=300.0)
+    _check_int("MAX_ZERO_MATCH_ITEMS", "200", min_val=1, max_val=10000)
+    _check_float("ZERO_MATCH_VALUE_RATIO", "1.0", min_val=0.0, max_val=100.0)
+    _check_int("ZERO_MATCH_JOB_TIMEOUT_S", "120", min_val=1, max_val=3600)
+
+    # --- Pending review ---
+    _check_int("PENDING_REVIEW_TTL_SECONDS", "86400", min_val=1)
+    _check_int("PENDING_REVIEW_MAX_RETRIES", "3", min_val=0, max_val=100)
+    _check_int("PENDING_REVIEW_RETRY_DELAY", "300", min_val=1)
+
+    # --- Item inspection ---
+    _check_int("MAX_ITEM_INSPECTIONS", "20", min_val=1, max_val=1000)
+    _check_float("ITEM_INSPECTION_TIMEOUT", "5", min_val=0.1, max_val=300.0)
+    _check_float("ITEM_INSPECTION_PHASE_TIMEOUT", "15", min_val=1.0, max_val=300.0)
+    _check_int("ITEM_INSPECTION_CONCURRENCY", "5", min_val=1, max_val=100)
+
+    # --- Trial config ---
+    _check_int("TRIAL_DURATION_DAYS", "14", min_val=1, max_val=365)
+    _check_int("TRIAL_PAYWALL_DAY", "7", min_val=1, max_val=365)
+    _check_int("TRIAL_PAYWALL_MAX_RESULTS", "10", min_val=1, max_val=10000)
+    _check_int("TRIAL_PAYWALL_MAX_PIPELINE", "5", min_val=1, max_val=10000)
+
+    # --- Currency / cost ---
+    _check_float("USD_TO_BRL_RATE", "5.0", min_val=0.01, max_val=1000.0)
+    _check_float("LLM_COST_ALERT_THRESHOLD", "1.0", min_val=0.0, max_val=10000.0)
+
+    # --- Viability weights (must each be 0–1 and sum to ~1.0) ---
+    _check_float("VIABILITY_WEIGHT_MODALITY", "0.30", min_val=0.0, max_val=1.0)
+    _check_float("VIABILITY_WEIGHT_TIMELINE", "0.25", min_val=0.0, max_val=1.0)
+    _check_float("VIABILITY_WEIGHT_VALUE_FIT", "0.25", min_val=0.0, max_val=1.0)
+    _check_float("VIABILITY_WEIGHT_GEOGRAPHY", "0.20", min_val=0.0, max_val=1.0)
+
+    # Validate viability weights sum (only if all parsed successfully)
+    viability_vars = [
+        "VIABILITY_WEIGHT_MODALITY",
+        "VIABILITY_WEIGHT_TIMELINE",
+        "VIABILITY_WEIGHT_VALUE_FIT",
+        "VIABILITY_WEIGHT_GEOGRAPHY",
+    ]
+    viability_defaults = ["0.30", "0.25", "0.25", "0.20"]
+    if not any(v.split("=")[0] in e for e in errors for v in viability_vars):
+        weight_sum = sum(
+            float(os.getenv(var, default))
+            for var, default in zip(viability_vars, viability_defaults)
+        )
+        if abs(weight_sum - 1.0) > 0.01:
+            errors.append(
+                f"Viability weights sum to {weight_sum:.4f} — must sum to 1.0 "
+                f"(VIABILITY_WEIGHT_MODALITY + VIABILITY_WEIGHT_TIMELINE + "
+                f"VIABILITY_WEIGHT_VALUE_FIT + VIABILITY_WEIGHT_GEOGRAPHY)"
+            )
+
+    # --- Feedback rate limit ---
+    _check_int("USER_FEEDBACK_RATE_LIMIT", "50", min_val=1, max_val=100000)
+
+    # --- Proximity window ---
+    _check_int("PROXIMITY_WINDOW_SIZE", "8", min_val=1, max_val=1000)
+
+    # --- Deep analysis rate limit ---
+    _check_int("DEEP_ANALYSIS_RATE_LIMIT", "20", min_val=1, max_val=100000)
+
+    # --- Term search value range ---
+    _check_float("TERM_SEARCH_VALUE_RANGE_MIN", "10000", min_val=0.0)
+    _check_float("TERM_SEARCH_VALUE_RANGE_MAX", "50000000", min_val=0.0)
+
+    if errors:
+        for error in errors:
+            logger.critical("Invalid feature flag configuration: %s", error)
+        raise ValueError(
+            f"Feature flag validation failed with {len(errors)} error(s):\n"
+            + "\n".join(f"  - {e}" for e in errors)
+        )
+
+    logger.info("Feature flag validation passed — all %d checked flags are valid", _VALIDATED_FLAG_COUNT)
+
+
+# Number of flags validated by validate_feature_flags() — used in log message above.
+# Update this constant whenever a new _check_* call is added.
+_VALIDATED_FLAG_COUNT = 34
 
 
 def log_feature_flags() -> None:

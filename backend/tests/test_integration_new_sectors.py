@@ -366,7 +366,7 @@ class TestCrossSectorOverlap:
         new_sectors = ["medicamentos", "vigilancia", "transporte_servicos"]
         all_sectors = [
             "vestuario", "alimentos", "informatica", "mobiliario",
-            "papelaria", "engenharia", "software", "servicos_prediais",
+            "papelaria", "engenharia", "software_desenvolvimento", "software_licencas", "servicos_prediais",
             "manutencao_predial",
         ] + new_sectors
 
@@ -437,7 +437,7 @@ class TestSummaryReport:
     def test_print_summary(self, pncp_records):
         all_sectors = [
             "vestuario", "alimentos", "informatica", "mobiliario",
-            "papelaria", "engenharia", "software", "servicos_prediais",
+            "papelaria", "engenharia", "software_desenvolvimento", "software_licencas", "servicos_prediais",
             "medicamentos", "vigilancia", "transporte_servicos", "manutencao_predial",
         ]
 

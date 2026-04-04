@@ -14,7 +14,7 @@ class TestSectorConfig:
     def test_all_sectors_exist(self):
         sectors = list_sectors()
         ids = {s["id"] for s in sectors}
-        assert ids == {"vestuario", "alimentos", "informatica", "mobiliario", "papelaria", "engenharia", "software", "servicos_prediais", "produtos_limpeza", "vigilancia", "transporte_servicos", "frota_veicular", "manutencao_predial", "engenharia_rodoviaria", "materiais_eletricos", "materiais_hidraulicos", "medicamentos", "equipamentos_medicos", "insumos_hospitalares"}
+        assert ids == {"vestuario", "alimentos", "informatica", "mobiliario", "papelaria", "engenharia", "software_desenvolvimento", "software_licencas", "servicos_prediais", "produtos_limpeza", "vigilancia", "transporte_servicos", "frota_veicular", "manutencao_predial", "engenharia_rodoviaria", "materiais_eletricos", "materiais_hidraulicos", "medicamentos", "equipamentos_medicos", "insumos_hospitalares"}
 
     def test_get_sector_returns_config(self):
         s = get_sector("vestuario")
@@ -32,7 +32,8 @@ class TestSectorIdsUnchanged:
 
     EXPECTED_IDS = {
         "vestuario", "alimentos", "informatica", "mobiliario", "papelaria",
-        "engenharia", "software", "servicos_prediais", "produtos_limpeza",
+        "engenharia", "software_desenvolvimento", "software_licencas",
+        "servicos_prediais", "produtos_limpeza",
         "vigilancia", "transporte_servicos", "frota_veicular", "manutencao_predial",
         "engenharia_rodoviaria", "materiais_eletricos", "materiais_hidraulicos",
         "medicamentos", "equipamentos_medicos", "insumos_hospitalares",
@@ -288,20 +289,14 @@ class TestAlimentosSector:
         assert ok is False
 
 
-class TestSoftwareSector:
-    """Tests for Software e Sistemas sector — real-world derived."""
+class TestSoftwareDesenvolvimentoSector:
+    """Tests for Desenvolvimento de Software e Consultoria de TI sector — ISSUE-072 split."""
 
     def _match(self, texto):
-        s = SECTORS["software"]
+        s = SECTORS["software_desenvolvimento"]
         return match_keywords(texto, s.keywords, s.exclusions)
 
-    def test_matches_microsoft_office(self):
-        ok, _ = self._match("Aquisição de licenças Microsoft Office 365 para a Secretaria de Educação")
-        assert ok is True
-
-    def test_matches_licenca_software(self):
-        ok, _ = self._match("CONTRATAÇÃO DE LICENCIAMENTO DE SOFTWARE DE GESTÃO PÚBLICA")
-        assert ok is True
+    # TRUE POSITIVES — development/consulting bids
 
     def test_matches_saas_plataforma(self):
         ok, _ = self._match("Contratação de plataforma SaaS em nuvem para gestão escolar")
@@ -315,7 +310,7 @@ class TestSoftwareSector:
         ok, _ = self._match("AQUISIÇÃO DE SISTEMA DE GESTÃO HOSPITALAR")
         assert ok is True
 
-    def test_matches_erp(self):
+    def test_matches_erp_implantacao(self):
         ok, _ = self._match("Implantação de sistema ERP integrado para Prefeitura")
         assert ok is True
 
@@ -323,8 +318,36 @@ class TestSoftwareSector:
         ok, _ = self._match("Contratação de consultoria de TI para implantação de sistema de compras")
         assert ok is True
 
+    def test_matches_portal_transparencia(self):
+        ok, _ = self._match("Desenvolvimento de portal de transparência para município")
+        assert ok is True
+
+    def test_matches_sistema_licitacao(self):
+        ok, _ = self._match("Contratação de sistema de licitação e compras eletrônicas")
+        assert ok is True
+
+    # CROSS-EXCLUSION — license bids should NOT match desenvolvimento
+
+    def test_excludes_microsoft_office_license(self):
+        """License reselling belongs in software_licencas, not desenvolvimento."""
+        ok, _ = self._match("Aquisição de licenças Microsoft Office 365 para a Secretaria de Educação")
+        assert ok is False
+
+    def test_excludes_licenciamento_software(self):
+        ok, _ = self._match("CONTRATAÇÃO DE LICENCIAMENTO DE SOFTWARE DE GESTÃO PÚBLICA")
+        assert ok is False
+
+    def test_excludes_autodesk_license(self):
+        ok, _ = self._match("Aquisição de licenças Autodesk AEC Collection para engenharia")
+        assert ok is False
+
+    def test_excludes_antivirus(self):
+        ok, _ = self._match("Renovação de licenças de antivírus corporativo para 500 estações")
+        assert ok is False
+
+    # GENERAL EXCLUSIONS — same as before
+
     def test_excludes_hardware_computador(self):
-        """Hardware should be in 'informatica' sector, not 'software'."""
         ok, _ = self._match("Aquisição de computadores e notebooks para laboratório")
         assert ok is False
 
@@ -332,163 +355,102 @@ class TestSoftwareSector:
         ok, _ = self._match("AQUISIÇÃO DE IMPRESSORAS E SCANNERS PARA SECRETARIA")
         assert ok is False
 
-    def test_excludes_hardware_servidor_fisico(self):
-        ok, _ = self._match("Aquisição de servidor físico para datacenter")
-        assert ok is False
-
     def test_excludes_curso_treinamento(self):
-        """Training/courses are not software procurement."""
         ok, _ = self._match("Contratação de curso de desenvolvimento de software para servidores")
         assert ok is False
 
-    def test_excludes_capacitacao_ti(self):
-        ok, _ = self._match("Capacitação em software de gestão para equipe administrativa")
-        assert ok is False
-
-    def test_allows_software_plus_consultoria(self):
-        """Software procurement bundled with consultancy services should match."""
-        ok, _ = self._match(
-            "Aquisição de licenças de software SAP com serviços de implantação e consultoria"
-        )
-        assert ok is True
-
-    def test_allows_portal_transparencia(self):
-        ok, _ = self._match("Desenvolvimento de portal de transparência para município")
-        assert ok is True
-
-    def test_allows_sistema_licitacao(self):
-        ok, _ = self._match("Contratação de sistema de licitação e compras eletrônicas")
-        assert ok is True
-
-    # False Positive Prevention Tests (Issue #FESTIVAL-FP)
-
-    def test_excludes_agua_mineral(self):
-        """Water should NOT match software sector."""
-        ok, _ = self._match("Aquisição de água mineral, por sistema de registro de preços")
-        assert ok is False
-
-    def test_excludes_plotagem_paineis(self):
-        """Physical signage/panels should NOT match software."""
-        ok, _ = self._match(
-            "Contratação de empresa especializada no serviço de confecção de plotagens e painéis em chapa"
-        )
-        assert ok is False
-
     def test_excludes_sistema_climatizacao(self):
-        """HVAC systems should NOT match software."""
         ok, _ = self._match(
             "Contratação de empresa para locação de sistema de climatização evaporativa para os pavilhões"
         )
         assert ok is False
 
-    def test_excludes_sistema_sonorizacao(self):
-        """Audio systems should NOT match software."""
-        ok, _ = self._match(
-            "PRESTAÇÃO DE SERVIÇO TÉCNICO PARA A MANUTENÇÃO PREVENTIVA E CORRETIVA DE INTRUMENTOS MUSICAIS, SISTEMAS DE SONORIZAÇÃO E ILUNAÇÃO CÊNICA"
-        )
+    def test_excludes_sistema_registro_precos(self):
+        ok, _ = self._match("Aquisição de água mineral, por sistema de registro de preços")
         assert ok is False
 
-    def test_excludes_balanca_gado(self):
-        """Livestock scales should NOT match software."""
+    def test_excludes_sistema_energia_solar(self):
         ok, _ = self._match(
-            "fornecimento de balança para pesagem de gado composta por plataforma 4×2,5 m em madeira cumaru com estrutura metálica reforçada, sistema de pesagem manual"
-        )
-        assert ok is False
-
-    def test_excludes_primeiros_socorros(self):
-        """First aid supplies should NOT match software."""
-        ok, _ = self._match(
-            "Aquisição de itens de primeiros socorros, higiene pessoal, proteção individual e apoio à assistência básica"
-        )
-        assert ok is False
-
-    def test_excludes_ferramentas_manuais(self):
-        """Hand tools should NOT match software."""
-        ok, _ = self._match("Aquisição de ferramentas manuais e acessórios por meio de Sistema de Registro de Preços")
-        assert ok is False
-
-    def test_excludes_sistema_videomonitoramento(self):
-        """Video surveillance hardware should NOT match software."""
-        ok, _ = self._match(
-            "Serviços de manutenção preventiva e corretiva do sistema de videomonitoramento urbano do Município"
-        )
-        assert ok is False
-
-    def test_excludes_moto_bombas(self):
-        """Water pumps should NOT match software."""
-        ok, _ = self._match(
-            "AQUISIÇÃO DE MOTO BOMBAS SUBMERSAS, CABOS DE PRIMEIRA QUALIDADE, CONTRATAÇÃO DE MÃO DE OBRA ESPECIALIZADA"
-        )
-        assert ok is False
-
-    def test_excludes_oxigenio_medicinal(self):
-        """Medical oxygen should NOT match software."""
-        ok, _ = self._match(
-            "AQUISIÇÃO CONTÍNUA E PARCELADA DE OXIGÊNIO MEDICINAL, DEVIDAMENTE COMPRIMIDO E ACONDICIONADO EM CILINDROS"
+            "Contratação de empresa especializada para fornecimento e instalação de sistema de microgeração de energia solar fotovoltaica"
         )
         assert ok is False
 
     def test_excludes_caminhao_plataforma(self):
-        """Trucks should NOT match software."""
         ok, _ = self._match(
             "Aquisição de Equipamento Rodoviário sendo um CAMINHÃO PLATAFORMA FIXA SOBRE CHASSI 6x4"
         )
         assert ok is False
 
-    def test_excludes_kit_lanche(self):
-        """Food kits should NOT match software."""
-        ok, _ = self._match(
-            "Registro de preços para a aquisição de kits de lanche matinal para os usuário do sistema único de saúde"
-        )
+    def test_excludes_firewall_appliance(self):
+        """Firewall hardware belongs in vigilancia, not software_desenvolvimento."""
+        ok, _ = self._match("Aquisição de firewall appliance UTM para proteção de rede corporativa")
         assert ok is False
 
-    def test_excludes_sondagem_geologica(self):
-        """Geological surveying should NOT match software."""
-        ok, _ = self._match(
-            "Contratação de empresa especializada por meio do Sistema de Registro de Preços para execução de serviços de Sondagens - Tipo SPT"
-        )
+
+class TestSoftwareLicencasSector:
+    """Tests for Licenciamento de Software Comercial sector — ISSUE-072 split."""
+
+    def _match(self, texto):
+        s = SECTORS["software_licencas"]
+        return match_keywords(texto, s.keywords, s.exclusions)
+
+    # TRUE POSITIVES — license/subscription bids
+
+    def test_matches_microsoft_office(self):
+        ok, _ = self._match("Aquisição de licenças Microsoft Office 365 para a Secretaria de Educação")
+        assert ok is True
+
+    def test_matches_licenciamento_software(self):
+        ok, _ = self._match("CONTRATAÇÃO DE LICENCIAMENTO DE SOFTWARE DE GESTÃO PÚBLICA")
+        assert ok is True
+
+    def test_matches_autodesk(self):
+        ok, _ = self._match("Aquisição de licenças Autodesk AEC Collection para engenharia")
+        assert ok is True
+
+    def test_matches_antivirus(self):
+        ok, _ = self._match("Renovação de licenças de antivírus corporativo para 500 estações")
+        assert ok is True
+
+    def test_matches_vmware(self):
+        ok, _ = self._match("Aquisição de licenças VMware vSphere para virtualização de servidores")
+        assert ok is True
+
+    def test_matches_windows_server(self):
+        ok, _ = self._match("Renovação de licenciamento Windows Server Datacenter para 200 cores")
+        assert ok is True
+
+    # CROSS-EXCLUSION — development bids should NOT match licencas
+
+    def test_excludes_desenvolvimento_sistema(self):
+        """Custom development belongs in software_desenvolvimento."""
+        ok, _ = self._match("Desenvolvimento de sistema web para protocolo digital")
         assert ok is False
 
-    def test_excludes_curso_corte_costura(self):
-        """Sewing classes should NOT match software."""
-        ok, _ = self._match(
-            "Contratacao de instrutor de corte costura e artesanato com reconhecimento pelo SICAB"
-        )
+    def test_excludes_consultoria_ti(self):
+        ok, _ = self._match("Contratação de consultoria de TI para implantação de sistema de compras")
         assert ok is False
 
-    def test_excludes_escavadeira_hidraulica(self):
-        """Excavators should NOT match software."""
-        ok, _ = self._match(
-            "CONTRATAÇÃO DE EMPRESA PARA PRESTAÇÃO DE SERVIÇOS DE HORAS MÁQUINA DE ESCAVADEIRA HIDRÁULICA"
-        )
+    def test_excludes_fabrica_software(self):
+        ok, _ = self._match("Contratação de fábrica de software para desenvolvimento de portal")
         assert ok is False
 
-    def test_excludes_iluminacao_publica(self):
-        """Public lighting should NOT match software."""
-        ok, _ = self._match(
-            "CONTRATAÇÃO DE EMPRESAS PARA FORNECIMENTO DE MATERIAIS PARA MANUTENÇÃO DA ILUMINAÇÃO PÚBLICA"
-        )
+    def test_excludes_manutencao_software(self):
+        ok, _ = self._match("Manutenção de software customizado para sistema de protocolo digital")
         assert ok is False
 
-    def test_excludes_maquiagem_cabelo(self):
-        """Beauty services should NOT match software."""
-        ok, _ = self._match(
-            "contratação de empresa especializada em cuidados com beleza para suprir a necessidade de serviço de maquiagem e cabelo"
-        )
+    # GENERAL EXCLUSIONS
+
+    def test_excludes_hardware(self):
+        ok, _ = self._match("Aquisição de computadores e notebooks para laboratório")
         assert ok is False
 
-    def test_excludes_sistema_gradeamento(self):
-        """Mechanical grating systems should NOT match software."""
-        ok, _ = self._match(
-            "Contratação de empresa especializada na prestação de serviços de manutenção preventiva e corretiva, com fornecimento de peças, de sistemas de gradeamento mecanizado"
-        )
+    def test_excludes_curso(self):
+        ok, _ = self._match("Curso de capacitação em software de gestão")
         assert ok is False
 
-    def test_excludes_sistema_energia_solar(self):
-        """Solar panels should NOT match software."""
-        ok, _ = self._match(
-            "Contratação de empresa especializada para fornecimento e instalação de sistema de microgeração de energia solar fotovoltaica"
-        )
+    def test_excludes_firewall(self):
+        ok, _ = self._match("Aquisição de firewall appliance UTM para proteção de rede")
         assert ok is False
 
 

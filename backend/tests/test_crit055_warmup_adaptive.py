@@ -42,7 +42,7 @@ async def test_warmup_covers_all_27_ufs():
     """AC1: warmup_specific_combinations dispatches for all 27 UFs."""
     from config import ALL_BRAZILIAN_UFS
 
-    sectors = ["software", "informatica", "engenharia", "medicamentos", "servicos_prediais"]
+    sectors = ["software_desenvolvimento", "informatica", "engenharia", "medicamentos", "servicos_prediais"]
     ufs = ALL_BRAZILIAN_UFS.copy()
 
     assert len(ufs) == 27, "Brazil has 27 UFs"
@@ -128,7 +128,7 @@ async def test_ufs_default_priority_when_no_history():
 @pytest.mark.asyncio
 async def test_warmup_pauses_on_pncp_degraded():
     """AC4: When PNCP canary reports degraded, warmup pauses."""
-    sectors = ["software"]
+    sectors = ["software_desenvolvimento"]
     ufs = ["SP", "RJ"]
 
     mock_trigger = AsyncMock(return_value=True)
@@ -186,7 +186,7 @@ async def test_periodic_warmup_loop():
         patch("config.WARMUP_PERIODIC_INTERVAL_HOURS", 1),
     ):
         # Should complete without error (CancelledError is caught)
-        await _warmup_startup_and_periodic(["SP"], ["software"], 0)
+        await _warmup_startup_and_periodic(["SP"], ["software_desenvolvimento"], 0)
 
     mock_warmup.assert_called_once()  # Startup warmup
     mock_top.assert_called_once()  # Periodic warmup
@@ -199,7 +199,7 @@ async def test_periodic_warmup_loop():
 @pytest.mark.asyncio
 async def test_warmup_updates_coverage_metric():
     """AC5: WARMUP_COVERAGE_RATIO gauge is set after warmup."""
-    sectors = ["software"]
+    sectors = ["software_desenvolvimento"]
     ufs = ["SP", "RJ", "MG"]
 
     mock_trigger = AsyncMock(return_value=True)
@@ -314,7 +314,7 @@ async def test_prioritized_ufs_fallback_on_error():
 @pytest.mark.asyncio
 async def test_warmup_respects_rate_limit():
     """AC4: Warmup sleeps between requests at configured rate."""
-    sectors = ["software"]
+    sectors = ["software_desenvolvimento"]
     ufs = ["SP", "RJ"]
 
     mock_trigger = AsyncMock(return_value=True)
@@ -361,7 +361,7 @@ async def test_start_warmup_disabled():
 @pytest.mark.asyncio
 async def test_warmup_summary_log_format():
     """AC5: Warmup result dict contains all expected keys."""
-    sectors = ["software"]
+    sectors = ["software_desenvolvimento"]
     ufs = ["SP"]
 
     mock_trigger = AsyncMock(return_value=True)

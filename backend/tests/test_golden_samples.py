@@ -352,21 +352,17 @@ class TestGoldenSamplesEngenharia:
 # ===========================================================================
 
 
-class TestGoldenSamplesSoftware:
-    """Software e Sistemas — Golden Samples."""
+class TestGoldenSamplesSoftwareDesenvolvimento:
+    """Desenvolvimento de Software e Consultoria de TI — Golden Samples (ISSUE-072 split)."""
 
     @pytest.fixture
     def kw(self):
-        return _sector_kwargs("software")
+        return _sector_kwargs("software_desenvolvimento")
 
     @pytest.mark.parametrize("description", [
-        "Aquisição de licença de software Microsoft 365 para as estações de trabalho da prefeitura",
         "Contratação de empresa para desenvolvimento de software de gestão pública municipal",
-        "Licenciamento de software AutoCAD para o departamento de engenharia",
         "Contratação de serviço SaaS para sistema de gestão escolar da rede municipal",
         "Implantação de sistema ERP integrado para gestão administrativa e financeira",
-        # Edge case: long description
-        "Pregão eletrônico para contratação de solução tecnológica em plataforma cloud para sistema de gestão pública incluindo módulos de compras, licitação, almoxarifado, folha de pagamento, protocolo e portal de transparência com licenciamento por assinatura mensal",
         # Business intelligence
         "Aquisição de ferramenta de business intelligence e consultoria de TI para análise de dados",
         # Digital platform
@@ -374,27 +370,37 @@ class TestGoldenSamplesSoftware:
     ])
     def test_positive_samples(self, kw, description):
         matched, keywords = match_keywords(description, **kw)
-        assert matched, f"Should match software but didn't: {description!r}"
+        assert matched, f"Should match software_desenvolvimento but didn't: {description!r}"
+
+
+class TestGoldenSamplesSoftwareLicencas:
+    """Licenciamento de Software Comercial — Golden Samples (ISSUE-072 split)."""
+
+    @pytest.fixture
+    def kw(self):
+        return _sector_kwargs("software_licencas")
 
     @pytest.mark.parametrize("description", [
-        # Exclusion: hardware (keep in informatica)
+        "Aquisição de licença de software Microsoft 365 para as estações de trabalho da prefeitura",
+        "Licenciamento de software AutoCAD para o departamento de engenharia",
+    ])
+    def test_positive_samples(self, kw, description):
+        matched, keywords = match_keywords(description, **kw)
+        assert matched, f"Should match software_licencas but didn't: {description!r}"
+
+    @pytest.mark.parametrize("description", [
+        # Hardware (pertence a informatica)
         "Aquisição de computadores e notebooks para a secretaria de educação",
-        # Exclusion: sistema de ar condicionado (physical)
-        "Instalação de sistema de ar condicionado para a nova sede da secretaria",
-        # Exclusion: sistema de alarme (security)
-        "Aquisição de sistema de alarme e vigilância eletrônica para as escolas",
-        # Exclusion: sistema de drenagem
-        "Implantação de sistema de drenagem pluvial na área urbana do município",
-        # Exclusion: curso de software
-        "Contratação de curso de software para capacitação dos servidores",
-        # Exclusion: sistema fotovoltaico
-        "Instalação de sistema fotovoltaico na cobertura do prédio da prefeitura",
+        # Desenvolvimento (pertence a software_desenvolvimento)
+        "Contratação de empresa para desenvolvimento de sistema web para protocolo digital",
+        # Consultoria de TI (pertence a software_desenvolvimento)
+        "Contratação de consultoria de TI para implantação de sistema de compras",
         # No matching keywords
         "Aquisição de uniformes escolares para alunos da rede municipal",
     ])
     def test_negative_samples(self, kw, description):
         matched, keywords = match_keywords(description, **kw)
-        assert not matched, f"Should NOT match software but did: {description!r}, matched: {keywords}"
+        assert not matched, f"Should NOT match software_licencas but did: {description!r}, matched: {keywords}"
 
 
 # ===========================================================================
@@ -810,7 +816,7 @@ class TestGoldenSamplesCrossSectorEdgeCases:
         """Verify all 15 expected sectors are loaded from YAML."""
         expected = {
             "vestuario", "alimentos", "informatica", "mobiliario",
-            "papelaria", "engenharia", "software",
+            "papelaria", "engenharia", "software_desenvolvimento", "software_licencas",
             "servicos_prediais", "produtos_limpeza",
             "medicamentos", "equipamentos_medicos", "insumos_hospitalares",
             "vigilancia", "transporte_servicos", "frota_veicular", "manutencao_predial",

@@ -695,6 +695,8 @@ class CoverageMetadata(BaseModel):
     ufs_requested: List[str] = Field(..., description="UFs solicitadas pelo usuario")
     ufs_processed: List[str] = Field(..., description="UFs que retornaram dados com sucesso")
     ufs_failed: List[str] = Field(default_factory=list, description="UFs que falharam (timeout/erro)")
+    ufs_empty: List[str] = Field(default_factory=list, description="ISSUE-073: UFs processadas com 0 resultados pos-filtragem")
+    uf_result_counts: Dict[str, int] = Field(default_factory=dict, description="ISSUE-073: contagem de resultados por UF")
     coverage_pct: float = Field(..., ge=0, le=100, description="Porcentagem de cobertura (1 decimal)")
     data_timestamp: str = Field(..., description="ISO timestamp de quando dados foram obtidos")
     freshness: Literal["live", "cached_fresh", "cached_stale"] = Field(..., description="Indicador de freshness")

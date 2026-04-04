@@ -842,7 +842,7 @@ _MEDICAL_EXEMPT_SECTORS: Set[str] = {
 # CRIT-024: Administrative red flags overlap with software sector keywords
 # (software has "consultoria de software", "consultoria de ti", "assessoria de ti")
 _ADMIN_EXEMPT_SECTORS: Set[str] = {
-    "software",
+    "software_desenvolvimento", "software_licencas",
 }
 
 # =============================================================================
@@ -865,7 +865,12 @@ RED_FLAGS_PER_SECTOR: Dict[str, List[str]] = {
         "equipamento odontologico", "equipamento laboratorial",
         "equipamento de protecao", "equipamento esportivo",
     ],
-    "software": [
+    "software_desenvolvimento": [
+        "sistema de registro de precos", "sistema de ar condicionado",
+        "sistema de combate a incendio", "sistema de irrigacao",
+        "sistema viario", "sistema de drenagem", "sistema de esgoto",
+    ],
+    "software_licencas": [
         "sistema de registro de precos", "sistema de ar condicionado",
         "sistema de combate a incendio", "sistema de irrigacao",
         "sistema viario", "sistema de drenagem", "sistema de esgoto",

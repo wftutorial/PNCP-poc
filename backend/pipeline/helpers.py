@@ -205,10 +205,23 @@ def _build_coverage_metadata(ctx) -> CoverageMetadata:
     else:
         data_timestamp = datetime.now(_tz.utc).isoformat()
 
+    # ISSUE-073: Calculate per-UF result counts from filtered results
+    uf_result_counts: dict[str, int] = {}
+    _filtered = getattr(ctx, "licitacoes_filtradas", None)
+    _raw = getattr(ctx, "licitacoes_raw", None)
+    items = _filtered if isinstance(_filtered, list) else (_raw if isinstance(_raw, list) else [])
+    for lic in items:
+        uf = (lic.get("uf") or "").upper()
+        if uf:
+            uf_result_counts[uf] = uf_result_counts.get(uf, 0) + 1
+    ufs_empty = [uf for uf in processed if uf_result_counts.get(uf, 0) == 0]
+
     return CoverageMetadata(
         ufs_requested=requested,
         ufs_processed=processed,
         ufs_failed=failed,
+        ufs_empty=ufs_empty,
+        uf_result_counts=uf_result_counts,
         coverage_pct=coverage,
         data_timestamp=data_timestamp,
         freshness=freshness,

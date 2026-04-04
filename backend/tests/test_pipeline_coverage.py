@@ -228,3 +228,83 @@ class TestBuildCoverageMetadata:
         assert meta.ufs_processed == []
         assert meta.ufs_failed == []
         assert meta.coverage_pct == 0.0
+
+    def test_empty_ufs_detected(self):
+        """ISSUE-073: UFs processed but with 0 results appear in ufs_empty."""
+        from pipeline.helpers import _build_coverage_metadata
+        ctx = MagicMock()
+        ctx.request.ufs = ["SP", "DF", "GO"]
+        ctx.succeeded_ufs = ["SP", "DF", "GO"]
+        ctx.failed_ufs = []
+        ctx.response_state = "live"
+        ctx.cached = False
+        ctx.cache_status = None
+        ctx.cached_at = None
+        # SP has results, DF and GO have 0
+        ctx.licitacoes_filtradas = [
+            {"uf": "SP", "titulo": "Licitacao 1"},
+            {"uf": "SP", "titulo": "Licitacao 2"},
+        ]
+
+        meta = _build_coverage_metadata(ctx)
+        assert meta.ufs_empty == ["DF", "GO"]
+        assert meta.uf_result_counts == {"SP": 2}
+        assert meta.ufs_processed == ["SP", "DF", "GO"]
+
+    def test_all_ufs_empty(self):
+        """ISSUE-073: All UFs succeeded but no results after filtering."""
+        from pipeline.helpers import _build_coverage_metadata
+        ctx = MagicMock()
+        ctx.request.ufs = ["DF", "GO"]
+        ctx.succeeded_ufs = ["DF", "GO"]
+        ctx.failed_ufs = []
+        ctx.response_state = "live"
+        ctx.cached = False
+        ctx.cache_status = None
+        ctx.cached_at = None
+        ctx.licitacoes_filtradas = []
+
+        meta = _build_coverage_metadata(ctx)
+        assert set(meta.ufs_empty) == {"DF", "GO"}
+        assert meta.uf_result_counts == {}
+
+    def test_no_empty_ufs_when_all_have_results(self):
+        """ISSUE-073: ufs_empty is empty when all UFs have results."""
+        from pipeline.helpers import _build_coverage_metadata
+        ctx = MagicMock()
+        ctx.request.ufs = ["SP", "RJ"]
+        ctx.succeeded_ufs = ["SP", "RJ"]
+        ctx.failed_ufs = []
+        ctx.response_state = "live"
+        ctx.cached = False
+        ctx.cache_status = None
+        ctx.cached_at = None
+        ctx.licitacoes_filtradas = [
+            {"uf": "SP", "titulo": "Licitacao 1"},
+            {"uf": "RJ", "titulo": "Licitacao 2"},
+        ]
+
+        meta = _build_coverage_metadata(ctx)
+        assert meta.ufs_empty == []
+        assert meta.uf_result_counts == {"SP": 1, "RJ": 1}
+
+    def test_empty_ufs_fallback_to_raw(self):
+        """ISSUE-073: Falls back to licitacoes_raw when licitacoes_filtradas is absent."""
+        from pipeline.helpers import _build_coverage_metadata
+        ctx = MagicMock()
+        ctx.request.ufs = ["SP", "MG"]
+        ctx.succeeded_ufs = ["SP", "MG"]
+        ctx.failed_ufs = []
+        ctx.response_state = "live"
+        ctx.cached = False
+        ctx.cache_status = None
+        ctx.cached_at = None
+        # No licitacoes_filtradas list — should fallback to licitacoes_raw
+        ctx.licitacoes_filtradas = None
+        ctx.licitacoes_raw = [
+            {"uf": "SP", "titulo": "Raw 1"},
+        ]
+
+        meta = _build_coverage_metadata(ctx)
+        assert meta.ufs_empty == ["MG"]
+        assert meta.uf_result_counts == {"SP": 1}

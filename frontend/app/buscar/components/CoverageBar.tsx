@@ -32,7 +32,9 @@ export function CoverageBar({ coverageMetadata, cacheBannerVisible }: CoverageBa
   const panelRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
-  const { ufs_requested, ufs_processed, ufs_failed, coverage_pct } = coverageMetadata;
+  const { ufs_requested, ufs_processed, ufs_failed, ufs_empty = [], coverage_pct } = coverageMetadata;
+  // UFs that succeeded AND have results (not empty)
+  const ufs_with_results = ufs_processed.filter(uf => !ufs_empty.includes(uf));
   const colors = getBarColor(coverage_pct);
 
   // Close on outside click
@@ -88,7 +90,7 @@ export function CoverageBar({ coverageMetadata, cacheBannerVisible }: CoverageBa
           <p className={`text-sm font-medium ${colors.text}`}>
             Cobertura: {ufs_processed.length} de {ufs_requested.length} UFs ({coverage_pct.toFixed(1)}%)
           </p>
-          {ufs_failed.length > 0 && (
+          {(ufs_failed.length > 0 || ufs_empty.length > 0) && (
             <span className="text-xs text-ink-secondary flex items-center gap-1">
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -108,17 +110,17 @@ export function CoverageBar({ coverageMetadata, cacheBannerVisible }: CoverageBa
           role="region"
           aria-label="Detalhes de cobertura por estado"
         >
-          {/* Processed UFs */}
-          {ufs_processed.length > 0 && (
+          {/* Processed UFs with results */}
+          {ufs_with_results.length > 0 && (
             <div className="mb-3">
               <p className="text-xs font-semibold text-green-700 dark:text-green-400 mb-1.5 flex items-center gap-1">
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
-                Processadas ({ufs_processed.length})
+                Com resultados ({ufs_with_results.length})
               </p>
               <div className="flex flex-wrap gap-1.5">
-                {ufs_processed.map((uf) => (
+                {ufs_with_results.map((uf) => (
                   <span
                     key={uf}
                     className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
@@ -127,6 +129,31 @@ export function CoverageBar({ coverageMetadata, cacheBannerVisible }: CoverageBa
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                     {uf}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ISSUE-073: Empty UFs (processed but 0 results) */}
+          {ufs_empty.length > 0 && (
+            <div className="mb-3">
+              <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 mb-1.5 flex items-center gap-1">
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01" />
+                </svg>
+                Sem resultados ({ufs_empty.length})
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {ufs_empty.map((uf) => (
+                  <span
+                    key={uf}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+                  >
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01" />
+                    </svg>
+                    {uf} (0 resultados)
                   </span>
                 ))}
               </div>

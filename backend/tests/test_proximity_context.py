@@ -415,7 +415,7 @@ class TestProximityContextCrossSector:
 
         expected_sectors = {
             "vestuario", "alimentos", "informatica", "mobiliario",
-            "papelaria", "engenharia", "software", "servicos_prediais",
+            "papelaria", "engenharia", "software_desenvolvimento", "software_licencas", "servicos_prediais",
             "produtos_limpeza", "medicamentos", "equipamentos_medicos", "insumos_hospitalares",
             "vigilancia", "transporte_servicos", "frota_veicular", "manutencao_predial",
             "engenharia_rodoviaria", "materiais_eletricos", "materiais_hidraulicos",
@@ -450,7 +450,7 @@ class TestProximityContextCrossSector:
         texto = "aquisicao de computador para sistema de gestao erp"
         matched_terms = ["computador"]
         other_sigs = {
-            "software": {"licenca de software", "sistema de gestao", "erp"}
+            "software_desenvolvimento": {"licenca de software", "sistema de gestao", "erp"}
         }
 
         should_reject, reason = check_proximity_context(
@@ -459,7 +459,7 @@ class TestProximityContextCrossSector:
 
         # "erp" is within window of "computador"
         assert should_reject is True
-        assert "software" in reason
+        assert "software_desenvolvimento" in reason
 
     def test_multiple_matched_terms_checked(self):
         """All matched terms should be checked, not just the first."""

@@ -363,7 +363,11 @@ _SECTOR_NEGATIVE_EXAMPLES: dict[str, list[str]] = {
         "Combustível para gráfica municipal",
         "Uniformes para equipe de impressão",
     ],
-    "software": [
+    "software_desenvolvimento": [
+        "Material de escritório para empresa de software",
+        "Uniformes para equipe de TI",
+    ],
+    "software_licencas": [
         "Material de escritório para empresa de software",
         "Uniformes para equipe de TI",
     ],

@@ -305,23 +305,23 @@ GROUND_TRUTH = {
             "Contratação de serviço de manutenção de veículos da frota",
         ],
     },
-    "software": {
+    "software_desenvolvimento": {
         "relevant": [
-            "Licenciamento de software de gestão pública integrada",
             "Contratação de sistema de gestão administrativa municipal",
-            "Aquisição de licença de software antivírus para rede corporativa",
             "Implantação de sistema de controle de patrimônio digital",
             "Desenvolvimento de software para portal de transparência",
-            "Licença de software de gestão de recursos humanos",
-            "Contratação de software de gestão financeira e contábil",
+            "Contratação de consultoria de TI para implantação de sistema de compras",
             "Implantação de sistema de protocolo eletrônico digital",
-            "Locação de software de backup e recuperação de dados",
             "Desenvolvimento de aplicativo móvel para atendimento ao cidadão",
-            "Software de gestão escolar para rede municipal de ensino",
-            "Licença de software de edição de imagens e documentos",
-            "Contratação de plataforma de ensino a distância EAD",
-            "Sistema de gestão de frotas via software",
-            "Implantação de software de gestão de processos jurídicos",
+            "Contratação de plataforma digital para portal web da prefeitura",
+            "Contratação de fábrica de software para sistema de gestão",
+            "Desenvolvimento de sistema web para protocolo digital",
+            "Implantação de sistema ERP integrado para gestão administrativa",
+            "Contratação de serviço SaaS para sistema de gestão escolar",
+            "Manutenção de software de gestão financeira e contábil",
+            "Suporte técnico de software de gestão de processos",
+            "Integração de sistema de protocolo com portal de transparência",
+            "Contratação de solução tecnológica em plataforma cloud para gestão pública",
         ],
         "irrelevant": [
             "Sistema de registro de preços para material de escritório",
@@ -339,6 +339,42 @@ GROUND_TRUTH = {
             "Sistema de esgoto para bairro da zona leste",
             "Sistema de drenagem pluvial para área urbana",
             "Aquisição de teclado mouse e periféricos de informática",
+        ],
+    },
+    "software_licencas": {
+        "relevant": [
+            "Licenciamento de software de gestão pública integrada",
+            "Aquisição de licença de software antivírus para rede corporativa",
+            "Licença de software de gestão de recursos humanos",
+            "Licença de software de edição de imagens e documentos",
+            "Aquisição de licenças Microsoft Office 365 para prefeitura",
+            "Renovação de licenciamento Windows Server Datacenter",
+            "Fornecimento de licenças Autodesk AEC Collection",
+            "Assinatura de software Adobe Creative Cloud para design",
+            "Aquisição de licença VMware vSphere para virtualização",
+            "Licenciamento de software Oracle Database Enterprise",
+            "Renovação de licenças de antivírus Kaspersky para 300 estações",
+            "Assinatura de sistema CRM Salesforce para gestão de contratos",
+            "Fornecimento de licenças Corel Draw para setor de comunicação",
+            "Locação de software de backup e recuperação de dados",
+            "Pacote de softwares para escritório e produtividade",
+        ],
+        "irrelevant": [
+            "Desenvolvimento de software para portal de transparência",
+            "Contratação de consultoria de TI para implantação de sistema",
+            "Contratação de fábrica de software para sistema de gestão",
+            "Aquisição de computadores e hardware para o setor de TI",
+            "Aquisição de impressoras multifuncionais para secretaria",
+            "Curso de software para capacitação de servidores",
+            "Aquisição de teclado mouse e periféricos de informática",
+            "Sistema de registro de preços para material de escritório",
+            "Sistema de ar condicionado para sala de servidores",
+            "Sistema de iluminação pública com LED para avenida",
+            "Sistema de videomonitoramento por câmeras de segurança",
+            "Sistema de incêndio e hidrantes para o prédio público",
+            "Sistema de abastecimento de água para zona rural",
+            "Sistema de sonorização para auditório da câmara",
+            "Sistema de alarme patrimonial para prédios públicos",
         ],
     },
     "servicos_prediais": {
@@ -1035,28 +1071,28 @@ class TestSoftware:
     def test_sistema_registro_precos_rejected(self):
         """AC-SOF-2: sistema de registro de preços → REJECTED (after CRIT-FLT-004)"""
         assert not check_match(
-            "software",
+            "software_desenvolvimento",
             "Sistema de registro de preços para material de escritório",
         )[0]
 
     def test_software_gestao_approved(self):
         """AC-SOF-3: software de gestão → APPROVED"""
         assert check_match(
-            "software",
+            "software_desenvolvimento",
             "Contratação de software de gestão administrativa municipal",
         )[0]
 
     def test_licenca_software_approved(self):
-        """AC-SOF-4: licença de software → APPROVED"""
+        """AC-SOF-4: licença de software → APPROVED (now in software_licencas)"""
         assert check_match(
-            "software",
+            "software_licencas",
             "Aquisição de licença de software antivírus para rede corporativa",
         )[0]
 
     def test_sistema_ar_condicionado_rejected(self):
         """AC-SOF-5: sistema de ar condicionado → REJECTED"""
         assert not check_match(
-            "software",
+            "software_desenvolvimento",
             "Sistema de ar condicionado para sala de servidores",
         )[0]
 
@@ -1425,7 +1461,7 @@ class TestConsolidatedMetrics:
         """Verify all 19 sectors have ground truth data."""
         expected = {
             "vestuario", "alimentos", "informatica", "mobiliario", "papelaria",
-            "engenharia", "software", "servicos_prediais", "produtos_limpeza",
+            "engenharia", "software_desenvolvimento", "software_licencas", "servicos_prediais", "produtos_limpeza",
             "medicamentos", "equipamentos_medicos", "insumos_hospitalares",
             "vigilancia", "transporte_servicos", "frota_veicular", "manutencao_predial",
             "engenharia_rodoviaria", "materiais_eletricos", "materiais_hidraulicos",

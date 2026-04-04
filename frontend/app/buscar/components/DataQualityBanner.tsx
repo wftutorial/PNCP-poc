@@ -46,6 +46,9 @@ export interface DataQualityBannerProps {
   // CRIT-053: Degraded sources
   sourcesDegraded?: string[];
 
+  // ISSUE-073: UFs with 0 results after filtering
+  emptyUfs?: string[];
+
   // Actions
   onRefresh: () => void;
   onRetry: () => void;
@@ -108,6 +111,7 @@ function hasAnythingToReport(props: DataQualityBannerProps): boolean {
     return true;
   }
   if (props.coveragePct !== undefined && props.coveragePct < 100) return true;
+  if (props.emptyUfs && props.emptyUfs.length > 0) return true;
   return false;
 }
 
@@ -260,6 +264,14 @@ export function DataQualityBanner(props: DataQualityBannerProps) {
   // Truncation
   if (isTruncated) {
     segments.push("Resultados truncados");
+  }
+
+  // ISSUE-073: UFs with 0 results
+  if (props.emptyUfs && props.emptyUfs.length > 0) {
+    const ufList = props.emptyUfs.join(", ");
+    segments.push(
+      `${props.emptyUfs.length === 1 ? "Estado" : "Estados"} sem resultados: ${ufList}`
+    );
   }
 
   // STORY-306 AC6: Cache fallback from a different date range

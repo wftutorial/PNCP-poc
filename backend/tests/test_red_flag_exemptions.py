@@ -242,7 +242,7 @@ class TestNonExemptSectors:
     """Non-exempt sectors get full red flag treatment."""
 
     @pytest.mark.parametrize("setor", [
-        "informatica", "software", "papelaria", "mobiliario",
+        "informatica", "software_desenvolvimento", "software_licencas", "papelaria", "mobiliario",
         "alimentos", "servicos_prediais", "vigilancia", "transporte_servicos", "frota_veicular",
     ])
     def test_non_exempt_sector_catches_infra_flags(self, setor: str):
@@ -253,7 +253,7 @@ class TestNonExemptSectors:
         assert flagged is True
 
     @pytest.mark.parametrize("setor", [
-        "informatica", "software", "vestuario", "engenharia",
+        "informatica", "software_desenvolvimento", "software_licencas", "vestuario", "engenharia",
         "papelaria", "mobiliario", "alimentos", "vigilancia",
     ])
     def test_non_exempt_sector_catches_medical_flags(self, setor: str):
@@ -321,7 +321,7 @@ class TestExemptionSets:
 
     def test_admin_exempt_sectors(self):
         # CRIT-024: software exempt from administrative red flags
-        assert _ADMIN_EXEMPT_SECTORS == {"software"}
+        assert _ADMIN_EXEMPT_SECTORS == {"software_desenvolvimento", "software_licencas"}
 
 
 # ---------------------------------------------------------------------------
@@ -338,7 +338,7 @@ class TestSoftwareAdminExemption:
             "de ti para treinamento de equipe"
         )
         flagged, terms = has_red_flags(
-            text, ALL_RED_FLAG_SETS, setor="software"
+            text, ALL_RED_FLAG_SETS, setor="software_desenvolvimento"
         )
         # Admin red flags skipped for software
         admin_terms = [t for t in terms if t in RED_FLAGS_ADMINISTRATIVE]
@@ -347,7 +347,7 @@ class TestSoftwareAdminExemption:
     def test_software_still_catches_medical_flags(self):
         """Software sector is NOT exempt from medical flags."""
         flagged, terms = has_red_flags(
-            _medical_heavy_text(), ALL_RED_FLAG_SETS, setor="software"
+            _medical_heavy_text(), ALL_RED_FLAG_SETS, setor="software_desenvolvimento"
         )
         assert flagged is True
         medical_terms = [t for t in terms if t in RED_FLAGS_MEDICAL]
@@ -356,7 +356,7 @@ class TestSoftwareAdminExemption:
     def test_software_still_catches_infra_flags(self):
         """Software sector is NOT exempt from infrastructure flags."""
         flagged, terms = has_red_flags(
-            _infra_heavy_text(), ALL_RED_FLAG_SETS, setor="software"
+            _infra_heavy_text(), ALL_RED_FLAG_SETS, setor="software_desenvolvimento"
         )
         assert flagged is True
 
@@ -456,7 +456,7 @@ class TestAllSectorsRecall:
         "mobiliario": "Aquisicao de mobiliario cadeiras e mesas para escritorio municipal",
         "papelaria": "Aquisicao de material de escritorio papel a4 canetas e grampeadores",
         "engenharia": "Servico de engenharia construcao civil pavimentacao e reforma predial",
-        "software": "Contratacao de software sistema de gestao e consultoria de ti",
+        "software_desenvolvimento": "Contratacao de software sistema de gestao e consultoria de ti",
         "servicos_prediais": "Servico de limpeza predial conservacao e manutencao de ar condicionado",
         "medicamentos": "Aquisicao de medicamento hospitalar material cirurgico e equipamento medico",
         "vigilancia": "Servico de vigilancia patrimonial monitoramento e alarme eletronico",

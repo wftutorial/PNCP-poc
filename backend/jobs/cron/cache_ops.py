@@ -20,7 +20,8 @@ MANDATORY_WARMUP_COMBOS = [
     {"setor_id": "medicamentos", "ufs": ["SP"]},
     {"setor_id": "informatica", "ufs": ["SP"]},
     {"setor_id": "servicos_prediais", "ufs": ["SP"]},
-    {"setor_id": "software", "ufs": ["SP"]},
+    {"setor_id": "software_desenvolvimento", "ufs": ["SP"]},
+    {"setor_id": "software_licencas", "ufs": ["SP"]},
 ]
 
 _DATE_WINDOW = lambda: {  # noqa: E731

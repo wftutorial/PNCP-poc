@@ -228,7 +228,7 @@ class TestBuildDigestForUser:
         }
 
         profile_result = MagicMock()
-        profile_result.data = {"context_data": {"setor_id": "software"}}
+        profile_result.data = {"context_data": {"setor_id": "software_desenvolvimento"}}
 
         cache_result = MagicMock()
         cache_result.data = []

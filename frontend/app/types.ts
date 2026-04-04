@@ -225,6 +225,8 @@ export interface CoverageMetadata {
   ufs_requested: string[];
   ufs_processed: string[];
   ufs_failed: string[];
+  ufs_empty?: string[];
+  uf_result_counts?: Record<string, number>;
   coverage_pct: number;
   data_timestamp: string;
   freshness: "live" | "cached_fresh" | "cached_stale";

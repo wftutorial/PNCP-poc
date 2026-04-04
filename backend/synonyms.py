@@ -226,7 +226,7 @@ SECTOR_SYNONYMS: Dict[str, Dict[str, Set[str]]] = {
         },
     },
 
-    "software": {
+    "software_desenvolvimento": {
         "sistema": {
             "sistema informatizado", "sistema informatizada",
             "solução", "solucao",
@@ -235,6 +235,16 @@ SECTOR_SYNONYMS: Dict[str, Dict[str, Set[str]]] = {
         "aplicativo": {
             "aplicativos", "app", "aplicação", "aplicacao",
             "aplicativo mobile", "aplicativo móvel", "aplicativo movel",
+        },
+    },
+    "software_licencas": {
+        "licença": {
+            "licenca", "licenciamento", "assinatura",
+            "subscrição", "subscricao",
+        },
+        "software": {
+            "softwares", "programa", "programas",
+            "aplicação", "aplicacao",
         },
     },
 

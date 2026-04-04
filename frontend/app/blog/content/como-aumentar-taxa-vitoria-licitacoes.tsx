@@ -519,6 +519,25 @@ export default function ComoAumentarTaxaVitoriaLicitacoes() {
         </p>
       </div>
 
+      {/* Cross-links — SEO Q2/2026 */}
+      <div className="not-prose my-8 sm:my-10 bg-surface-1 border border-[var(--border)] rounded-lg p-4 sm:p-6">
+        <p className="text-sm font-semibold text-ink mb-3">Continue aprendendo</p>
+        <ul className="space-y-2 text-sm text-ink-secondary">
+          <li>
+            <Link href="/blog/como-participar-primeira-licitacao-2026" className="text-brand-blue hover:underline">
+              Como participar da primeira licitação em 2026
+            </Link>{' '}
+            — guia passo a passo para quem está começando
+          </li>
+          <li>
+            <Link href="/blog/analise-viabilidade-editais-guia" className="text-brand-blue hover:underline">
+              Análise de viabilidade de editais
+            </Link>{' '}
+            — os 4 fatores para decidir quais editais disputar
+          </li>
+        </ul>
+      </div>
+
       {/* FAQ Section — STORY-262 AC5 */}
       <h2>Perguntas Frequentes</h2>
 

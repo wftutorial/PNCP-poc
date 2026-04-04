@@ -102,6 +102,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
     // STORY-324 AC12: Individual sector landing pages
     ...sectorRoutes,
     {
+      url: `${baseUrl}/glossario`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly',
+      priority: 0.8,
+    },
+    {
       url: `${baseUrl}/como-avaliar-licitacao`,
       lastModified: new Date(),
       changeFrequency: 'monthly',

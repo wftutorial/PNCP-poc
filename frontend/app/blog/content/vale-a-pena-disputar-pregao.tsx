@@ -482,6 +482,19 @@ export default function ValeAPenaDisputarPregao() {
         </p>
       </div>
 
+      {/* Cross-links — SEO Q2/2026 */}
+      <div className="not-prose my-8 sm:my-10 bg-surface-1 border border-[var(--border)] rounded-lg p-4 sm:p-6">
+        <p className="text-sm font-semibold text-ink mb-3">Aprofunde-se</p>
+        <ul className="space-y-2 text-sm text-ink-secondary">
+          <li>
+            <Link href="/blog/analise-viabilidade-editais-guia" className="text-brand-blue hover:underline">
+              Análise de viabilidade de editais — guia completo
+            </Link>{' '}
+            — framework detalhado com os 4 fatores e scoring go/no-go
+          </li>
+        </ul>
+      </div>
+
       {/* FAQ Section — STORY-262 AC5 */}
       <h2>Perguntas Frequentes</h2>
 

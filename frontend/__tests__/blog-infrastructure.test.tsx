@@ -212,7 +212,7 @@ describe('lib/blog.ts utilities', () => {
     });
 
     it('all articles have valid category', () => {
-      const validCategories = ['Empresas B2G', 'Consultorias de Licitação'];
+      const validCategories = ['Empresas B2G', 'Consultorias de Licitação', 'Guias'];
       BLOG_ARTICLES.forEach((a) => {
         expect(validCategories).toContain(a.category);
       });

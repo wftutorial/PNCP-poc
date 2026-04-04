@@ -12,6 +12,7 @@ const CATEGORIES: Array<{ label: string; value: BlogCategory | 'all' }> = [
   { label: 'Todos', value: 'all' },
   { label: 'Empresas B2G', value: 'Empresas B2G' },
   { label: 'Consultorias', value: 'Consultorias de Licitação' },
+  { label: 'Guias', value: 'Guias' },
 ];
 
 function formatDate(dateStr: string): string {

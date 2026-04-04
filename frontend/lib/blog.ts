@@ -5,7 +5,7 @@
  * used by listing page, dynamic route, RSS feed, and sitemap.
  */
 
-export type BlogCategory = 'Empresas B2G' | 'Consultorias de Licitação';
+export type BlogCategory = 'Empresas B2G' | 'Consultorias de Licitação' | 'Guias';
 
 export interface BlogArticleMeta {
   slug: string;
@@ -760,6 +760,264 @@ export const BLOG_ARTICLES: BlogArticleMeta[] = [
       'aumentar-retencao-clientes-inteligencia-editais',
       'usar-dados-provar-eficiencia-licitacoes',
       'aumentar-taxa-sucesso-clientes-20-porcento',
+    ],
+  },
+
+  // ──────────────────────────────────────────────
+  // SEO Q2/2026: Guias Setoriais — 5 articles
+  // ──────────────────────────────────────────────
+
+  // GUIA-S1
+  {
+    slug: 'licitacoes-engenharia-2026',
+    title: 'Licitações de Engenharia e Construção 2026 — Guia Completo',
+    description:
+      'Guia definitivo sobre licitações de engenharia e construção civil em 2026: modalidades, faixas de valor, UFs com maior volume, habilitação técnica e como analisar viabilidade.',
+    category: 'Guias',
+    tags: ['engenharia', 'construção civil', 'licitações 2026', 'guia setorial'],
+    publishDate: '2026-04-04',
+    readingTime: calculateReadingTime(3400),
+    wordCount: 3400,
+    keywords: [
+      'licitações engenharia',
+      'licitações construção civil 2026',
+      'edital de obra pública',
+      'como participar licitação engenharia',
+    ],
+    relatedSlugs: [
+      'licitacoes-ti-software-2026',
+      'licitacoes-saude-2026',
+      'como-participar-primeira-licitacao-2026',
+      'analise-viabilidade-editais-guia',
+    ],
+  },
+
+  // GUIA-S2
+  {
+    slug: 'licitacoes-ti-software-2026',
+    title: 'Licitações de TI e Software 2026 — Guia Completo',
+    description:
+      'Tudo sobre licitações de tecnologia da informação e software em 2026: pregão eletrônico, atas de registro de preço, exigências técnicas e estratégias de participação.',
+    category: 'Guias',
+    tags: ['tecnologia', 'software', 'TI', 'licitações 2026', 'guia setorial'],
+    publishDate: '2026-04-04',
+    readingTime: calculateReadingTime(3400),
+    wordCount: 3400,
+    keywords: [
+      'licitações tecnologia',
+      'licitações TI 2026',
+      'pregão eletrônico software',
+      'edital de tecnologia da informação',
+    ],
+    relatedSlugs: [
+      'licitacoes-engenharia-2026',
+      'licitacoes-saude-2026',
+      'inteligencia-artificial-licitacoes-como-funciona',
+      'analise-viabilidade-editais-guia',
+    ],
+  },
+
+  // GUIA-S3
+  {
+    slug: 'licitacoes-saude-2026',
+    title: 'Licitações de Saúde 2026 — Guia Completo',
+    description:
+      'Guia completo sobre licitações de saúde em 2026: medicamentos, equipamentos médicos, insumos hospitalares, registros na Anvisa e estratégias de participação.',
+    category: 'Guias',
+    tags: ['saúde', 'medicamentos', 'equipamentos médicos', 'licitações 2026', 'guia setorial'],
+    publishDate: '2026-04-04',
+    readingTime: calculateReadingTime(3400),
+    wordCount: 3400,
+    keywords: [
+      'licitações saúde',
+      'licitações medicamentos 2026',
+      'edital de equipamento médico',
+      'como vender para hospitais públicos',
+    ],
+    relatedSlugs: [
+      'licitacoes-engenharia-2026',
+      'licitacoes-limpeza-facilities-2026',
+      'como-participar-primeira-licitacao-2026',
+      'lei-14133-guia-fornecedores',
+    ],
+  },
+
+  // GUIA-S4
+  {
+    slug: 'licitacoes-limpeza-facilities-2026',
+    title: 'Licitações de Limpeza e Facilities 2026 — Guia Completo',
+    description:
+      'Guia definitivo sobre licitações de limpeza, conservação e facilities management em 2026: planilha de custos, convenção coletiva, BDI e requisitos de habilitação.',
+    category: 'Guias',
+    tags: ['limpeza', 'facilities', 'serviços prediais', 'licitações 2026', 'guia setorial'],
+    publishDate: '2026-04-04',
+    readingTime: calculateReadingTime(3200),
+    wordCount: 3200,
+    keywords: [
+      'licitações limpeza',
+      'licitações facilities 2026',
+      'edital de limpeza pública',
+      'como ganhar licitação de limpeza',
+    ],
+    relatedSlugs: [
+      'licitacoes-alimentacao-2026',
+      'licitacoes-engenharia-2026',
+      'analise-viabilidade-editais-guia',
+      'lei-14133-guia-fornecedores',
+    ],
+  },
+
+  // GUIA-S5
+  {
+    slug: 'licitacoes-alimentacao-2026',
+    title: 'Licitações de Alimentação 2026 — Guia Completo',
+    description:
+      'Guia completo sobre licitações de alimentação em 2026: merenda escolar, refeições hospitalares, PNAE, atas de registro de preço e logística de distribuição.',
+    category: 'Guias',
+    tags: ['alimentação', 'merenda escolar', 'PNAE', 'licitações 2026', 'guia setorial'],
+    publishDate: '2026-04-04',
+    readingTime: calculateReadingTime(3200),
+    wordCount: 3200,
+    keywords: [
+      'licitações alimentação',
+      'licitações merenda escolar 2026',
+      'edital de alimentação escolar',
+      'PNAE fornecedores',
+    ],
+    relatedSlugs: [
+      'licitacoes-limpeza-facilities-2026',
+      'licitacoes-saude-2026',
+      'como-participar-primeira-licitacao-2026',
+      'pncp-guia-completo-empresas',
+    ],
+  },
+
+  // ─────────────────────────────��────────────────
+  // SEO Q2/2026: Guias Transversais — 5 articles
+  // ──────────────────────────────────────────────
+
+  // GUIA-T1
+  {
+    slug: 'como-participar-primeira-licitacao-2026',
+    title: 'Como Participar da Primeira Licitação em 2026 — Guia Completo',
+    description:
+      'Passo a passo completo para participar da sua primeira licitação pública em 2026: cadastro, documentação, portais, pregão eletrônico e erros a evitar.',
+    category: 'Guias',
+    tags: ['primeira licitação', 'guia iniciante', 'passo a passo', 'cadastro'],
+    publishDate: '2026-04-04',
+    readingTime: calculateReadingTime(3600),
+    wordCount: 3600,
+    keywords: [
+      'como participar de licitações',
+      'primeira licitação passo a passo',
+      'como começar em licitações públicas',
+      'guia iniciante licitações 2026',
+    ],
+    relatedSlugs: [
+      'lei-14133-guia-fornecedores',
+      'pncp-guia-completo-empresas',
+      'licitacoes-engenharia-2026',
+      'licitacoes-ti-software-2026',
+    ],
+  },
+
+  // GUIA-T2
+  {
+    slug: 'lei-14133-guia-fornecedores',
+    title: 'Lei 14.133/2021: O que Mudou para Fornecedores — Guia Prático',
+    description:
+      'Guia prático da Nova Lei de Licitações (14.133/2021) para fornecedores: novas modalidades, prazos, sanções, diálogo competitivo e o que muda na prática.',
+    category: 'Guias',
+    tags: ['Lei 14.133', 'nova lei de licitações', 'fornecedores', 'guia prático'],
+    publishDate: '2026-04-04',
+    readingTime: calculateReadingTime(3600),
+    wordCount: 3600,
+    keywords: [
+      'lei 14133 fornecedores',
+      'nova lei de licitações 2026',
+      'o que mudou na lei de licitações',
+      'lei 14133 guia prático',
+    ],
+    relatedSlugs: [
+      'como-participar-primeira-licitacao-2026',
+      'pncp-guia-completo-empresas',
+      'licitacoes-engenharia-2026',
+      'clausulas-escondidas-editais-licitacao',
+    ],
+  },
+
+  // GUIA-T3
+  {
+    slug: 'pncp-guia-completo-empresas',
+    title: 'PNCP: Guia Completo para Empresas — Como Buscar e Monitorar Editais',
+    description:
+      'Tudo sobre o Portal Nacional de Contratações Públicas (PNCP): como buscar editais, filtrar por setor/UF, acompanhar publicações e usar a plataforma na prática.',
+    category: 'Guias',
+    tags: ['PNCP', 'portal de contratações', 'busca de editais', 'monitoramento'],
+    publishDate: '2026-04-04',
+    readingTime: calculateReadingTime(3400),
+    wordCount: 3400,
+    keywords: [
+      'pncp como usar',
+      'portal nacional de contratações públicas',
+      'como buscar editais no pncp',
+      'pncp guia empresas',
+    ],
+    relatedSlugs: [
+      'lei-14133-guia-fornecedores',
+      'como-participar-primeira-licitacao-2026',
+      'inteligencia-artificial-licitacoes-como-funciona',
+      'licitacoes-ti-software-2026',
+    ],
+  },
+
+  // GUIA-T4
+  {
+    slug: 'inteligencia-artificial-licitacoes-como-funciona',
+    title: 'Inteligência Artificial em Licitações: Como Funciona na Prática',
+    description:
+      'Como a inteligência artificial está transformando a análise de editais: classificação automática, análise de viabilidade, e o futuro da participação em licitações.',
+    category: 'Guias',
+    tags: ['inteligência artificial', 'IA', 'automação', 'análise de editais'],
+    publishDate: '2026-04-04',
+    readingTime: calculateReadingTime(3200),
+    wordCount: 3200,
+    keywords: [
+      'inteligência artificial licitações',
+      'IA em licitações públicas',
+      'automação de editais',
+      'como IA analisa licitações',
+    ],
+    relatedSlugs: [
+      'analise-viabilidade-editais-guia',
+      'pncp-guia-completo-empresas',
+      'inteligencia-artificial-consultoria-licitacao-2026',
+      'reduzir-tempo-analisando-editais-irrelevantes',
+    ],
+  },
+
+  // GUIA-T5
+  {
+    slug: 'analise-viabilidade-editais-guia',
+    title: 'Análise de Viabilidade de Editais: O que Considerar antes de Participar',
+    description:
+      'Os 4 fatores objetivos para avaliar a viabilidade de um edital antes de investir recursos: modalidade, prazo, valor estimado e localização geográfica.',
+    category: 'Guias',
+    tags: ['viabilidade', 'análise de editais', 'go/no-go', 'decisão de participação'],
+    publishDate: '2026-04-04',
+    readingTime: calculateReadingTime(3200),
+    wordCount: 3200,
+    keywords: [
+      'análise viabilidade editais',
+      'como avaliar edital de licitação',
+      'viabilidade de licitação',
+      'critérios para participar de licitação',
+    ],
+    relatedSlugs: [
+      'vale-a-pena-disputar-pregao',
+      'como-participar-primeira-licitacao-2026',
+      'licitacoes-engenharia-2026',
+      'licitacoes-ti-software-2026',
     ],
   },
 ];

@@ -575,6 +575,19 @@ export default function InteligenciaArtificialConsultoriaLicitacao2026() {
         </p>
       </div>
 
+      {/* Cross-links — SEO Q2/2026 */}
+      <div className="not-prose my-8 sm:my-10 bg-surface-1 border border-[var(--border)] rounded-lg p-4 sm:p-6">
+        <p className="text-sm font-semibold text-ink mb-3">Aprofunde-se</p>
+        <ul className="space-y-2 text-sm text-ink-secondary">
+          <li>
+            <Link href="/blog/inteligencia-artificial-licitacoes-como-funciona" className="text-brand-blue hover:underline">
+              IA em licitações: como funciona na prática
+            </Link>{' '}
+            — classificação automática, viabilidade e resumos com IA
+          </li>
+        </ul>
+      </div>
+
       {/* FAQ Section */}
       <h2>Perguntas Frequentes</h2>
 

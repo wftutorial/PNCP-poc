@@ -494,6 +494,19 @@ export default function ClausulasEscondidasEditaisLicitacao() {
         </p>
       </div>
 
+      {/* Cross-links — SEO Q2/2026 */}
+      <div className="not-prose my-8 sm:my-10 bg-surface-1 border border-[var(--border)] rounded-lg p-4 sm:p-6">
+        <p className="text-sm font-semibold text-ink mb-3">Leitura recomendada</p>
+        <ul className="space-y-2 text-sm text-ink-secondary">
+          <li>
+            <Link href="/blog/lei-14133-guia-fornecedores" className="text-brand-blue hover:underline">
+              Lei 14.133: o que mudou para fornecedores
+            </Link>{' '}
+            — como a nova lei afeta cláusulas e sanções
+          </li>
+        </ul>
+      </div>
+
       <h2>Perguntas Frequentes</h2>
 
       <h3>

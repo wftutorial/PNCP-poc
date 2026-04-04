@@ -875,14 +875,14 @@ Antes de escrever qualquer artigo, verifique:
 
 #### Temas prioritários (intenção de compra próxima)
 
-- [ ] "Checklist completo de habilitação para licitação em 2026 (Lei 14.133)"
-- [ ] "Pregão eletrônico: guia passo a passo para primeira participação"
-- [ ] "Como calcular o preço de proposta para não perder dinheiro em licitação"
-- [ ] "MEI e Microempresa: vantagens e limites para participar de licitações"
-- [ ] "SICAF: como se cadastrar e manter ativo em 2026"
-- [ ] "Principais erros que desclassificam propostas — e como evitá-los"
-- [ ] "Impugnação de edital: quando e como contestar"
-- [ ] "Ata de Registro de Preços: estratégia de licitação sem comprar"
+- [x] "Checklist completo de habilitação para licitação em 2026 (Lei 14.133)" — `checklist-habilitacao-licitacao-2026.tsx`
+- [x] "Pregão eletrônico: guia passo a passo para primeira participação" — `pregao-eletronico-guia-passo-a-passo.tsx`
+- [x] "Como calcular o preço de proposta para não perder dinheiro em licitação" — `como-calcular-preco-proposta-licitacao.tsx`
+- [x] "MEI e Microempresa: vantagens e limites para participar de licitações" — `mei-microempresa-vantagens-licitacoes.tsx`
+- [x] "SICAF: como se cadastrar e manter ativo em 2026" — `sicaf-como-cadastrar-manter-ativo-2026.tsx`
+- [x] "Principais erros que desclassificam propostas — e como evitá-los" — `erros-desclassificam-propostas-licitacao.tsx`
+- [x] "Impugnação de edital: quando e como contestar" — `impugnacao-edital-quando-como-contestar.tsx`
+- [x] "Ata de Registro de Preços: estratégia de licitação sem comprar" — `ata-registro-precos-estrategia-licitacao.tsx`
 
 #### Distribuição de cada artigo
 

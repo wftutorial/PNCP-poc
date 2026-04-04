@@ -118,6 +118,7 @@ export const BLOG_ARTICLES: BlogArticleMeta[] = [
     ],
     relatedSlugs: [
       'como-aumentar-taxa-vitoria-licitacoes',
+      'como-calcular-preco-proposta-licitacao',
       'disputar-todas-licitacoes-matematica-real',
       'escolher-editais-maior-probabilidade-vitoria',
     ],
@@ -432,6 +433,7 @@ export const BLOG_ARTICLES: BlogArticleMeta[] = [
       'vale a pena ata de preços',
     ],
     relatedSlugs: [
+      'ata-registro-precos-estrategia-licitacao',
       'clausulas-escondidas-editais-licitacao',
       'escolher-editais-maior-probabilidade-vitoria',
       'disputar-todas-licitacoes-matematica-real',
@@ -1077,9 +1079,9 @@ export const BLOG_ARTICLES: BlogArticleMeta[] = [
     ],
     relatedSlugs: [
       'lei-14133-guia-fornecedores',
+      'checklist-habilitacao-licitacao-2026',
       'pncp-guia-completo-empresas',
-      'licitacoes-engenharia-2026',
-      'licitacoes-ti-software-2026',
+      'sicaf-como-cadastrar-manter-ativo-2026',
     ],
     sources: [
       'PNCP — Portal Nacional de Contratações Públicas (pncp.gov.br)',
@@ -1108,8 +1110,8 @@ export const BLOG_ARTICLES: BlogArticleMeta[] = [
     ],
     relatedSlugs: [
       'como-participar-primeira-licitacao-2026',
+      'checklist-habilitacao-licitacao-2026',
       'pncp-guia-completo-empresas',
-      'licitacoes-engenharia-2026',
       'clausulas-escondidas-editais-licitacao',
     ],
     sources: [
@@ -1199,12 +1201,256 @@ export const BLOG_ARTICLES: BlogArticleMeta[] = [
       'vale-a-pena-disputar-pregao',
       'como-participar-primeira-licitacao-2026',
       'licitacoes-engenharia-2026',
-      'licitacoes-ti-software-2026',
+      'erros-desclassificam-propostas-licitacao',
     ],
     sources: [
       'PNCP — Portal Nacional de Contratações Públicas (pncp.gov.br)',
       'Lei 14.133/2021 — Nova Lei de Licitações e Contratos Administrativos',
       'Dados agregados da plataforma SmartLic (2025-2026)',
+    ],
+  },
+
+  // ──────────────────────────────────────────────
+  // SEO-PLAYBOOK P7: Buyer-Intent Articles — 8 articles
+  // ──────────────────────────────────────────────
+
+  // P7-01
+  {
+    slug: 'checklist-habilitacao-licitacao-2026',
+    title: 'Checklist Completo de Habilitação para Licitação em 2026 (Lei 14.133)',
+    description:
+      'Lista completa dos documentos de habilitação exigidos na Lei 14.133/2021: jurídica, fiscal, técnica, econômico-financeira e trabalhista — com prazos e armadilhas.',
+    category: 'Guias',
+    tags: ['habilitação', 'documentos', 'Lei 14.133', 'checklist', 'compliance'],
+    publishDate: '2026-04-07',
+    readingTime: calculateReadingTime(3000),
+    wordCount: 3000,
+    keywords: [
+      'checklist habilitação licitação',
+      'documentos habilitação licitação 2026',
+      'habilitação Lei 14.133',
+      'documentos para participar de licitação',
+    ],
+    relatedSlugs: [
+      'como-participar-primeira-licitacao-2026',
+      'sicaf-como-cadastrar-manter-ativo-2026',
+      'lei-14133-guia-fornecedores',
+      'erros-desclassificam-propostas-licitacao',
+    ],
+    sources: [
+      'Lei 14.133/2021, arts. 62 a 70 — Habilitação',
+      'SICAF — Sistema de Cadastramento Unificado de Fornecedores',
+      'TCU — Acórdãos sobre habilitação em licitações',
+    ],
+  },
+
+  // P7-02
+  {
+    slug: 'pregao-eletronico-guia-passo-a-passo',
+    title: 'Pregão Eletrônico: Guia Passo a Passo para Primeira Participação',
+    description:
+      'Do cadastro à disputa de lances: guia prático com os 10 passos para participar do primeiro pregão eletrônico em 2026 — tempos, portais e erros fatais.',
+    category: 'Guias',
+    tags: ['pregão eletrônico', 'passo a passo', 'ComprasNet', 'disputa de lances'],
+    publishDate: '2026-04-09',
+    readingTime: calculateReadingTime(3200),
+    wordCount: 3200,
+    keywords: [
+      'pregão eletrônico como participar',
+      'guia pregão eletrônico 2026',
+      'passo a passo pregão eletrônico',
+      'como dar lance em pregão',
+    ],
+    relatedSlugs: [
+      'como-participar-primeira-licitacao-2026',
+      'checklist-habilitacao-licitacao-2026',
+      'erros-desclassificam-propostas-licitacao',
+      'como-calcular-preco-proposta-licitacao',
+    ],
+    sources: [
+      'Lei 14.133/2021, arts. 28 e 29 — Pregão',
+      'Decreto 10.024/2019 — Pregão Eletrônico',
+      'ComprasNet / ComprasGov — Portal de Compras do Governo Federal',
+    ],
+  },
+
+  // P7-03
+  {
+    slug: 'como-calcular-preco-proposta-licitacao',
+    title: 'Como Calcular o Preço de Proposta para Não Perder Dinheiro em Licitação',
+    description:
+      'Metodologia prática para calcular preço de proposta em licitações: BDI, planilha de custos, margem mínima e os 5 erros de precificação que eliminam propostas.',
+    category: 'Guias',
+    tags: ['precificação', 'proposta', 'BDI', 'custos', 'margem'],
+    publishDate: '2026-04-11',
+    readingTime: calculateReadingTime(2800),
+    wordCount: 2800,
+    keywords: [
+      'como calcular preço licitação',
+      'precificação proposta pregão',
+      'BDI licitação',
+      'planilha de custos licitação',
+    ],
+    relatedSlugs: [
+      'pregao-eletronico-guia-passo-a-passo',
+      'ata-registro-precos-estrategia-licitacao',
+      'vale-a-pena-disputar-pregao',
+      'ata-registro-precos-como-escolher',
+    ],
+    sources: [
+      'Lei 14.133/2021, arts. 23 a 27 — Preço Estimado',
+      'TCU — Acórdão 2.637/2015 sobre BDI',
+      'PNCP — Portal Nacional de Contratações Públicas (pncp.gov.br)',
+    ],
+  },
+
+  // P7-04
+  {
+    slug: 'mei-microempresa-vantagens-licitacoes',
+    title: 'MEI e Microempresa: Vantagens e Limites para Participar de Licitações',
+    description:
+      'Guia completo das vantagens legais de ME, EPP e MEI em licitações: empate ficto, exclusividade até R$80k, regularização tardia e limites práticos.',
+    category: 'Guias',
+    tags: ['MEI', 'microempresa', 'EPP', 'vantagens', 'LC 123'],
+    publishDate: '2026-04-13',
+    readingTime: calculateReadingTime(2800),
+    wordCount: 2800,
+    keywords: [
+      'MEI licitação',
+      'microempresa licitação vantagens',
+      'EPP pode participar de licitação',
+      'licitação exclusiva microempresa',
+    ],
+    relatedSlugs: [
+      'como-participar-primeira-licitacao-2026',
+      'checklist-habilitacao-licitacao-2026',
+      'sicaf-como-cadastrar-manter-ativo-2026',
+      'pregao-eletronico-guia-passo-a-passo',
+    ],
+    sources: [
+      'Lei Complementar 123/2006, arts. 42 a 49 — Tratamento Diferenciado',
+      'Lei 14.133/2021, art. 4º — ME/EPP',
+      'Decreto 8.538/2015 — Tratamento Favorecido ME/EPP',
+    ],
+  },
+
+  // P7-05
+  {
+    slug: 'sicaf-como-cadastrar-manter-ativo-2026',
+    title: 'SICAF: Como se Cadastrar e Manter Ativo em 2026',
+    description:
+      'Passo a passo do cadastro no SICAF em 2026: níveis, documentos, prazos de validade, renovação e como resolver pendências que bloqueiam sua habilitação.',
+    category: 'Guias',
+    tags: ['SICAF', 'cadastro', 'renovação', 'habilitação', 'gov.br'],
+    publishDate: '2026-04-15',
+    readingTime: calculateReadingTime(2500),
+    wordCount: 2500,
+    keywords: [
+      'SICAF cadastro',
+      'como se cadastrar SICAF 2026',
+      'SICAF renovação',
+      'SICAF documentos necessários',
+    ],
+    relatedSlugs: [
+      'checklist-habilitacao-licitacao-2026',
+      'como-participar-primeira-licitacao-2026',
+      'lei-14133-guia-fornecedores',
+      'pncp-guia-completo-empresas',
+    ],
+    sources: [
+      'SICAF — Sistema de Cadastramento Unificado de Fornecedores (sicaf.gov.br)',
+      'Instrução Normativa SEGES/ME nº 3/2018',
+      'Lei 14.133/2021, art. 87 — Registro Cadastral',
+    ],
+  },
+
+  // P7-06
+  {
+    slug: 'erros-desclassificam-propostas-licitacao',
+    title: 'Principais Erros que Desclassificam Propostas — e Como Evitá-los',
+    description:
+      'Os 12 erros mais frequentes que causam desclassificação em licitações: documentação, preço, prazo, assinatura digital e os que parecem bobos mas eliminam.',
+    category: 'Guias',
+    tags: ['desclassificação', 'erros em licitação', 'proposta', 'compliance'],
+    publishDate: '2026-04-17',
+    readingTime: calculateReadingTime(2800),
+    wordCount: 2800,
+    keywords: [
+      'erros em licitação',
+      'desclassificação proposta pregão',
+      'motivos de inabilitação licitação',
+      'erros comuns em pregão eletrônico',
+    ],
+    relatedSlugs: [
+      'checklist-habilitacao-licitacao-2026',
+      'pregao-eletronico-guia-passo-a-passo',
+      'clausulas-escondidas-editais-licitacao',
+      'impugnacao-edital-quando-como-contestar',
+    ],
+    sources: [
+      'Lei 14.133/2021, arts. 59 e 60 — Julgamento de Propostas',
+      'TCU — Jurisprudência sobre desclassificação em licitações',
+      'PNCP — Portal Nacional de Contratações Públicas (pncp.gov.br)',
+    ],
+  },
+
+  // P7-07
+  {
+    slug: 'impugnacao-edital-quando-como-contestar',
+    title: 'Impugnação de Edital: Quando e Como Contestar',
+    description:
+      'Guia prático de impugnação de editais: prazos legais, fundamentos válidos, modelo de petição, quando vale a pena contestar e quando é melhor não participar.',
+    category: 'Guias',
+    tags: ['impugnação', 'edital', 'recurso', 'contestação', 'prazos'],
+    publishDate: '2026-04-19',
+    readingTime: calculateReadingTime(2500),
+    wordCount: 2500,
+    keywords: [
+      'impugnação edital licitação',
+      'como impugnar edital',
+      'prazo impugnação licitação',
+      'modelo impugnação edital',
+    ],
+    relatedSlugs: [
+      'lei-14133-guia-fornecedores',
+      'clausulas-escondidas-editais-licitacao',
+      'erros-desclassificam-propostas-licitacao',
+      'analise-viabilidade-editais-guia',
+    ],
+    sources: [
+      'Lei 14.133/2021, art. 164 — Impugnação',
+      'Lei 14.133/2021, arts. 165 a 168 — Recursos',
+      'TCU — Súmula 369 — Direcionamento em Editais',
+    ],
+  },
+
+  // P7-08
+  {
+    slug: 'ata-registro-precos-estrategia-licitacao',
+    title: 'Ata de Registro de Preços: Estratégia de Licitação sem Comprar',
+    description:
+      'Como usar o Sistema de Registro de Preços (SRP) como estratégia: vantagens para fornecedor, carona, vigência, riscos e quando é melhor que licitação convencional.',
+    category: 'Guias',
+    tags: ['ata de registro de preços', 'SRP', 'carona', 'estratégia', 'fornecedor'],
+    publishDate: '2026-04-21',
+    readingTime: calculateReadingTime(2800),
+    wordCount: 2800,
+    keywords: [
+      'ata de registro de preços',
+      'SRP licitação estratégia',
+      'carona ata de registro',
+      'registro de preços fornecedor',
+    ],
+    relatedSlugs: [
+      'ata-registro-precos-como-escolher',
+      'como-calcular-preco-proposta-licitacao',
+      'pregao-eletronico-guia-passo-a-passo',
+      'lei-14133-guia-fornecedores',
+    ],
+    sources: [
+      'Lei 14.133/2021, arts. 82 a 86 — Sistema de Registro de Preços',
+      'Decreto 11.462/2023 — Regulamenta o SRP',
+      'PNCP — Portal Nacional de Contratações Públicas (pncp.gov.br)',
     ],
   },
 ];

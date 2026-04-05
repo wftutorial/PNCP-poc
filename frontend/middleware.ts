@@ -119,6 +119,36 @@ const PUBLIC_ROUTES = [
   "/auth/callback",
 ];
 
+// SEO: Public content routes that can be cached by Cloudflare CDN.
+// Improves TTFB + CWV, which accelerates Googlebot crawl rate and indexation.
+// Nonce-based CSP is safe here: Cloudflare caches the full response (HTML + headers)
+// together, so the nonce in the HTML body and CSP header are always consistent.
+const CACHEABLE_CONTENT_PREFIXES = [
+  "/blog",
+  "/licitacoes",
+  "/glossario",
+  "/calculadora",
+  "/sobre",
+  "/cnpj",
+  "/features",
+  "/pricing",
+  "/ajuda",
+  "/termos",
+  "/privacidade",
+  "/como-",
+  "/sitemap",
+];
+
+function isPublicContentRoute(pathname: string): boolean {
+  if (pathname === "/") return true;
+  return CACHEABLE_CONTENT_PREFIXES.some(prefix => pathname.startsWith(prefix));
+}
+
+// SEO-CWV: s-maxage=3600 (Cloudflare caches 1h), stale-while-revalidate=86400
+// (serve stale for 24h while revalidating in background). max-age=0 forces
+// browsers to always revalidate but allows CDN to cache.
+const PUBLIC_CACHE_CONTROL = "public, max-age=0, s-maxage=3600, stale-while-revalidate=86400";
+
 export async function middleware(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
   const host = request.headers.get("host") || "";
@@ -167,7 +197,14 @@ export async function middleware(request: NextRequest) {
   );
 
   if (!isProtectedRoute) {
-    return addSecurityHeaders(NextResponse.next());
+    const response = addSecurityHeaders(NextResponse.next());
+    // SEO: Enable Cloudflare CDN caching for public content pages.
+    // Next.js sets Cache-Control: private by default when middleware runs.
+    // Overriding this allows Cloudflare to cache and serve with low TTFB.
+    if (isPublicContentRoute(pathname)) {
+      response.headers.set("Cache-Control", PUBLIC_CACHE_CONTROL);
+    }
+    return response;
   }
 
   // Get Supabase config

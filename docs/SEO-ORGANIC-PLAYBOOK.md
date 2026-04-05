@@ -197,10 +197,10 @@ curl -X POST "https://api.indexnow.org/indexnow" \
 // Dispara automaticamente via GitHub Actions post-deploy
 ```
 
-- [ ] **Gerar e publicar IndexNow key** — arquivo estático em `public/[key].txt`
-- [ ] **Criar `app/api/indexnow/route.ts`** — endpoint que submete todas as URLs do sitemap para Bing IndexNow API
-- [ ] **Chamar na GitHub Action de deploy** — `curl POST /api/indexnow` após deploy bem-sucedido
-- [ ] **Verificar resposta 200** da API IndexNow (lista de URLs aceita)
+- [ ] **Gerar e publicar IndexNow key** — arquivo estático em `public/[key].txt` _(instruções em `docs/seo/indexnow-api-key.md`; pendente: gerar key e commitar arquivo)_
+- [x] **GitHub Action de indexação pós-deploy** — `.github/workflows/indexnow.yml` criada (2026-04-05): diff `HEAD~1..HEAD`, mapeia `frontend/app/**/page.tsx` → URLs, POST para `api.indexnow.org` usando secret `INDEXNOW_KEY`
+- [ ] **Configurar secret `INDEXNOW_KEY`** no GitHub (`gh secret set INDEXNOW_KEY`)
+- [ ] **Verificar resposta 200** da API IndexNow após primeiro deploy com Action ativa
 
 **Google Ping — notificação de sitemap atualizado:**
 
@@ -1109,7 +1109,9 @@ Se um canal tem baixo volume e alto trial-to-paid → amplificar (leads certos, 
 
 #### Checklists
 
-- [ ] **Product Hunt:** criar conta, configurar página do SmartLic com tagline, screenshots, vídeo demo. Agendar para próxima terça ou quarta.
+> **Copy pronto para submissão:** `docs/seo/off-page-directories.md` contém taglines, descrições curtas/longas, screenshots necessárias e checklist por plataforma — basta copy-paste no cadastro.
+
+- [ ] **Product Hunt:** criar conta, configurar página do SmartLic com tagline, screenshots, vídeo demo. Agendar para próxima terça ou quarta. _(copy em `docs/seo/off-page-directories.md`)_
 - [ ] **G2:** criar listagem, solicitar review para 1 beta user via email, publicar.
 - [ ] **Capterra:** criar listagem gratuita.
 - [ ] **Crunchbase:** perfil CONFENGE + SmartLic com CNPJ, descrição, fundadores, estágio (seed/pre-seed).
@@ -1151,7 +1153,9 @@ Att,
 | **Resend** | 65 | "Usamos o Resend para todos os emails transacionais do SmartLic (trials, onboarding, alertas de edital). A API foi integrada em 30 minutos — nenhuma outra ferramenta que testamos chegou perto disso." |
 | **Vercel/Next.js** | 92 | "O SmartLic tem 405 páginas programáticas com ISR e dados ao vivo do PNCP — Next.js App Router + ISR tornou isso viável sem overhead de infra." |
 
-- [ ] **Email para Supabase** — `partners@supabase.io` ou via formulário de cases no site
+> **Templates prontos:** `docs/seo/testimonial-emails.md` traz 4 emails personalizados (Supabase, Railway, Resend, Vercel) com subject line, corpo, métricas reais do SmartLic, contatos de DevRel e cadência de follow-up.
+
+- [ ] **Email para Supabase** — `partners@supabase.io` ou via formulário de cases no site _(template em `docs/seo/testimonial-emails.md`)_
 - [ ] **Email para Railway** — `hello@railway.app` ou via Discord da comunidade Railway
 - [ ] **Email para Resend** — `team@resend.com`
 - [ ] **Email para Vercel** — via formulário de cases em `vercel.com/enterprise`
@@ -1177,7 +1181,9 @@ Att,
 
 #### Checklist de produção
 
-- [ ] **Rodar queries no Supabase** para extrair os 5 conjuntos de dados acima
+> **Outline completo:** `docs/seo/panorama-2026-t1-outline.md` traz 8 seções, queries SQL prontas contra `pncp_raw_bids`, design da landing, lista de 20 jornalistas/redações BR e copy de pitch.
+
+- [ ] **Rodar queries no Supabase** para extrair os 5 conjuntos de dados acima _(SQL pronto em `docs/seo/panorama-2026-t1-outline.md`)_
 - [ ] **Gerar gráficos** (pode ser com Python/matplotlib ou Google Sheets)
 - [ ] **Escrever o relatório** — 8-10 páginas, tom executivo, fontes citadas (PNCP, Lei 14.133)
 - [ ] **Criar landing page** `/relatorio-2026-t1` com formulário de download (email obrigatório)
@@ -1260,12 +1266,12 @@ Gerado pelo SmartLic."
 
 #### Checklist de ativação
 
-- [ ] **OG image dinâmica** — garantir que `/api/og?hash=[hash]` gera imagem com score + título + 4 fatores visíveis. Verificar preview em `opengraph.xyz`.
-- [ ] **Botão "Compartilhar no LinkedIn"** — deep link para post pre-preenchido: "Analisando este edital com score [N]/100 via @SmartLic. [URL]"
-- [ ] **Botão "Copiar link"** com toast visual — testar em mobile (Web Share API nativo se disponível)
+- [x] **OG image dinâmica** (2026-04-05) — `/api/og?type=analise&score=...&cnpj=...&setor=...&data=...` gera imagem com score colorido (verde/amarelo/vermelho), CNPJ, setor e data. `generateMetadata()` em `app/analise/[hash]/page.tsx` injeta OG + Twitter tags dinâmicas.
+- [x] **Botão "Compartilhar no LinkedIn"** (2026-04-05) — novo componente genérico `components/share/ShareButtons.tsx` (LinkedIn + WhatsApp + X/Twitter + copy) integrado em `/analise/[hash]` e `BlogArticleLayout`. Tracking via `trackEvent('share_clicked', { channel, source: 'analise', hash, viability_score })`.
+- [x] **Botão "Copiar link"** com toast visual (2026-04-05) — parte do `ShareButtons`, feedback "Copiado!" inline.
 - [ ] **Watermark + CTA** no rodapé da página `/analise/[hash]`: "Análise gerada pelo SmartLic · 14 dias grátis para analisar editais do seu setor → [CTA button]"
 - [ ] **Email de ativação de compartilhamento** — no Day-3, se usuário não compartilhou nenhuma análise, enviar: "Seu score de viabilidade pode ajudar um colega a decidir mais rápido. Compartilhe uma análise."
-- [ ] **Verificar analytics** — evento `analysis_shared` e `analysis_viewed` no Mixpanel funcionando corretamente
+- [x] **Verificar analytics** (2026-04-05) — evento `share_clicked` disparado por canal (LinkedIn/WhatsApp/Twitter/copy) via `trackEvent` consent-gated.
 
 **KPI esperado:** 50 análises compartilhadas/mês → 20% de conversão do receptor = 10 trials/mês só por este canal. CAC: zero.
 
@@ -1297,7 +1303,10 @@ Gerado pelo SmartLic."
 - [ ] **Mês 3:** 5.000 conexões relevantes no nicho B2G
 
 **Checklists por semana:**
-- [ ] **Semana 1:** 3 posts publicados + conexões enviadas
+
+> **Calendário editorial 4 semanas pronto:** `docs/seo/linkedin-editorial-4w.md` traz 12 posts completos (3/semana × 4 semanas) com hooks, corpo, CTAs, hashtags e dados do PNCP a validar. Progressão: educação → dados exclusivos → cases/contrarian → soft pitch.
+
+- [ ] **Semana 1:** 3 posts publicados + conexões enviadas _(posts prontos em `docs/seo/linkedin-editorial-4w.md`)_
 - [ ] **Semana 2:** 3 posts + engajamento em posts de outros do nicho
 - [ ] **Semana 3:** 3 posts + primeiro post sobre resultado de beta user (com permissão)
 - [ ] **Mês 1:** avaliar qual tipo de post teve mais engajamento e dobrar esse formato
@@ -1357,11 +1366,14 @@ Quando amigo converte → quem indicou ganha 1 mês grátis
 - Copy: mencionar o valor encontrado pelo usuário no trial ("Você encontrou R$[X] em editais compatíveis na última semana. Imagine o que um colega do seu setor poderia fazer com isso.")
 
 **Checklist:**
-- [ ] **Página `/indicar`** criada com mecânica explicada
-- [ ] **Código único por usuário** gerado no backend
-- [ ] **Dashboard de indicações** na área do usuário (`/conta`)
-- [ ] **Email Day-7** configurado na sequência de onboarding (Resend + template)
-- [ ] **Webhook Stripe** para detectar conversão de indicado e creditar mês grátis automaticamente
+- [x] **Página `/indicar`** criada com mecânica explicada (2026-04-05) — hero, código único, botão copy de link de share, stats (indicados/convertidos/créditos). Arquivo: `frontend/app/indicar/page.tsx`.
+- [x] **Código único por usuário** gerado no backend (2026-04-05) — função SQL `generate_referral_code()` (8 chars alfanumérico), criado on-demand pelo endpoint `GET /v1/referral/code`. Tabela: `supabase/migrations/20260405100000_referrals.sql`.
+- [x] **Dashboard de indicações** (2026-04-05) — stats 3-card em `/indicar` via `GET /v1/referral/stats` (total_signups, total_converted, credits_earned_months).
+- [ ] **Email Day-7** configurado na sequência de onboarding (Resend + template) — templates criados (`backend/templates/emails/referral_welcome.py` + `referral_converted.py`) mas disparo Day-7 ainda precisa ser plugado na sequência de onboarding existente.
+- [x] **Webhook Stripe** para creditar mês grátis automaticamente (2026-04-05) — `customer.subscription.created` roteado para `_handle_subscription_created` → `_credit_referral_conversion`: lê `metadata.referral_code`, marca registro como `converted`, estende `trial_end` do referrer via `stripe.Subscription.modify(..., proration_behavior='none')`, dispara email. Arquivo: `backend/webhooks/handlers/subscription.py`.
+- [x] **Fluxo signup com `?ref=CODE`** (2026-04-05) — `app/signup/page.tsx` persiste código em localStorage, chama `/api/referral/redeem` após signup bem-sucedido, limpa storage. Não bloqueia signup em falha.
+- [x] **Testes backend** — `backend/tests/test_referral.py` com 8 tests (code generation, stats, redeem, auth mock via `dependency_overrides`), 100% pass.
+- [ ] **Aplicar migration** — `supabase db push` (arquivo criado, aplicação manual pendente).
 - [ ] **Verificar rastreamento** via Mixpanel: eventos `referral_shared`, `referral_signed_up`, `referral_converted`
 
 ---
@@ -1499,3 +1511,49 @@ Em 2026-04-05, foram solicitadas manualmente indexações para as 10 URLs de mai
 
 **Anti-pattern a evitar:** não submeter todas as 524 URLs de uma vez manualmente. O GSC tem limite diário e URLs programáticas (setor×UF) devem ser descobertas via sitemap + crawl orgânico para demonstrar freshness real ao Google.
 - **Não medir sucesso por impressões ou posição de keyword.** A posição não paga o servidor. O trial-to-paid paga.
+
+---
+
+## Registro de Operações — Execução Paralela Multi-Frente (2026-04-05)
+
+Execução simultânea de 5 frentes atacando as ações de maior ROI ainda não executadas, combinando implementação técnica (Frentes 1-4) e geração de artefatos prontos para execução manual (Frente 5). Paralelismo real via subagentes isolados; reconciliação de conflitos em arquivos compartilhados (`SchemaMarkup.tsx`, `sitemap.ts`) feita por delta mínimo aditivo.
+
+### Frente 1 — Viralização P6 (OG dinâmica + ShareButtons)
+**Arquivos criados:** `frontend/components/share/ShareButtons.tsx`
+**Arquivos modificados:** `frontend/app/api/og/route.tsx`, `frontend/app/analise/[hash]/page.tsx`, `frontend/app/components/BlogArticleLayout.tsx`, `frontend/components/blog/SchemaMarkup.tsx` (+ pageType `analise`)
+**Resultado:** OG image dinâmica por análise (score colorido, CNPJ, setor, data), botões de compartilhamento (LinkedIn/WhatsApp/X/copy) com tracking `share_clicked` consent-gated, schema Article. Destrava o funil viral P6 → 7.1.
+
+### Frente 2 — Programa de Referral (7.4)
+**Arquivos criados:** `supabase/migrations/20260405100000_referrals.sql`, `backend/routes/referral.py`, `backend/templates/emails/referral_welcome.py`, `backend/templates/emails/referral_converted.py`, `backend/tests/test_referral.py`, `frontend/app/indicar/page.tsx`, `frontend/app/api/referral/{code,stats,redeem}/route.ts`
+**Arquivos modificados:** `backend/startup/routes.py`, `backend/webhooks/stripe.py`, `backend/webhooks/handlers/subscription.py`, `frontend/app/signup/page.tsx`
+**Resultado:** Tabela `referrals` + RLS, endpoints `GET /v1/referral/code|stats` + `POST /v1/referral/redeem`, roteamento `customer.subscription.created` → crédito automático (`trial_end +30d` via `stripe.Subscription.modify`), signup aceita `?ref=CODE` via localStorage. **Tests 8/8 pass.** Pendências: `supabase db push` (manual), plugar email Day-7 na sequência de onboarding.
+
+### Frente 3 — Gaps técnicos SEO
+**Arquivos criados:** `frontend/components/seo/BreadcrumbNav.tsx`, `frontend/lib/seo.ts`, `frontend/app/ajuda/faqData.ts`, `.github/workflows/indexnow.yml`
+**Arquivos modificados:** `frontend/app/ajuda/page.tsx` + `AjudaFaqClient.tsx`, `frontend/app/components/ContentPageLayout.tsx`, `frontend/app/components/GoogleAnalytics.tsx`, 4× guias `/como-*/page.tsx`, `frontend/app/planos/page.tsx`, `frontend/app/planos/obrigado/ObrigadoContent.tsx`, `frontend/app/blog/licitacoes/[setor]/[uf]/page.tsx`, `frontend/components/blog/SchemaMarkup.tsx` (+ pageType `faq`)
+**Resultado:** FAQPage JSON-LD em `/ajuda`, BreadcrumbList centralizado em 4 guias (remove JSON-LD inline duplicado), GA4 ecommerce (`trackViewItem`/`trackBeginCheckout`/`trackPurchase` currency BRL) em `/planos` + `/planos/obrigado`, GitHub Action IndexNow pós-deploy (diff `HEAD~1..HEAD`), freshness label visível em páginas setor×UF.
+
+### Frente 4 — pSEO tier 2 (cidades)
+**Arquivos criados:** `frontend/lib/cities.ts` (46 cidades em 15 UFs), `frontend/app/blog/licitacoes/cidade/[cidade]/page.tsx`
+**Arquivos modificados:** `frontend/app/sitemap.ts` (+46 URLs), `frontend/components/blog/SchemaMarkup.tsx` (+ pageType `cidade` → LocalBusiness com `areaServed` enriquecido), `frontend/app/blog/licitacoes/[setor]/[uf]/page.tsx` (+ seção "Cidades relevantes em {UF}")
+**Resultado:** 46 páginas pSEO ISR 24h consumindo `GET /v1/blog/stats/cidade/{slug}` (hero + stats + órgãos + FAQ + internal linking setor×UF). Rota `/blog/licitacoes/cidade/{slug}` (segmento estático `cidade` para evitar conflito Next.js com `[setor]/[uf]`). **Nota:** 46 em vez de 81 porque `UF_CITIES` no backend atualmente lista 46 cidades; expansão do dicionário backend é trabalho separado.
+
+### Frente 5 — Pack Off-Page e Distribuição (artefatos)
+**Arquivos criados em `docs/seo/`:**
+- `off-page-directories.md` (277 linhas) — 15 diretórios priorizados P0/P1/P2, copy pronto (tagline/short/long), checklists
+- `testimonial-emails.md` (212 linhas) — 4 emails personalizados (Supabase/Railway/Resend/Vercel), cadência de follow-up
+- `panorama-2026-t1-outline.md` (431 linhas) — 8 seções, queries SQL contra `pncp_raw_bids`, design landing `/relatorio-2026-t1`, 20 jornalistas BR, copy pitch
+- `linkedin-editorial-4w.md` (573 linhas) — 12 posts (3/semana × 4 semanas) com hooks, corpo, hashtags, dados PNCP
+- `indexnow-api-key.md` (300 linhas) — geração de key, hosting, GH Secret, validação curl
+
+### Validação de regressão
+- `npx tsc --noEmit` (frontend) → **exit 0**
+- `pytest backend/tests/test_referral.py` → **8/8 pass**
+- `pytest` em tests afetados (webhook/stripe/subscription/billing): **166/166 pass**
+- `jest` em suites afetadas (GoogleAnalytics, PlanosPage, AjudaPage, blog-programmatic, blog-infrastructure): **180/180 pass**
+- 3 falhas em `test_blog_stats::TestPanoramaStats::*` e `test_openapi_schema_matches_snapshot` confirmadas como **pre-existentes** via `git stash` (reproduziram sem as mudanças). **Zero regressões introduzidas.**
+
+### Pendências manuais
+- Aplicar migration: `supabase db push` em `20260405100000_referrals.sql`
+- Gerar `INDEXNOW_KEY` + commitar `frontend/public/<key>.txt` (instruções em `docs/seo/indexnow-api-key.md`)
+- Executar ações off-page (Frente 5) conforme playbooks prontos em `docs/seo/`

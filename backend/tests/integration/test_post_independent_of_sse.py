@@ -64,7 +64,7 @@ class TestPostIndependentOfSSE:
             _mock_rate_limiter(),
         ):
             payload = make_busca_request(ufs=_DEFAULT_UFS)
-            resp = integration_app.post("/buscar", json=payload)
+            resp = integration_app.post("/v1/buscar", json=payload)
 
         assert resp.status_code == 200, (
             f"Expected HTTP 200, got {resp.status_code}: {resp.text}"
@@ -95,7 +95,7 @@ class TestPostIndependentOfSSE:
             _mock_rate_limiter(),
         ):
             payload = make_busca_request(ufs=_DEFAULT_UFS)
-            resp = integration_app.post("/buscar", json=payload)
+            resp = integration_app.post("/v1/buscar", json=payload)
 
         body = resp.json()
         assert body["total_filtrado"] >= 0, "total_filtrado must be non-negative"
@@ -119,7 +119,7 @@ class TestPostIndependentOfSSE:
             _mock_rate_limiter(),
         ):
             payload = make_busca_request(ufs=_DEFAULT_UFS)
-            resp = integration_app.post("/buscar", json=payload)
+            resp = integration_app.post("/v1/buscar", json=payload)
 
         body = resp.json()
         resumo = body["resumo"]
@@ -150,7 +150,7 @@ class TestPostIndependentOfSSE:
         ):
             payload = make_busca_request(ufs=_DEFAULT_UFS)
             start = time.monotonic()
-            resp = integration_app.post("/buscar", json=payload)
+            resp = integration_app.post("/v1/buscar", json=payload)
             elapsed = time.monotonic() - start
 
         assert resp.status_code == 200

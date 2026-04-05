@@ -48,7 +48,7 @@ class TestAbsoluteWorstCase:
             _mock_rate_limiter(),
         ):
             payload = make_busca_request(ufs=_DEFAULT_UFS)
-            resp = integration_app.post("/buscar", json=payload)
+            resp = integration_app.post("/v1/buscar", json=payload)
 
         assert resp.status_code == 200, (
             f"Expected HTTP 200 for empty_failure, got {resp.status_code}: {resp.text}"
@@ -76,7 +76,7 @@ class TestAbsoluteWorstCase:
             _mock_rate_limiter(),
         ):
             payload = make_busca_request(ufs=_DEFAULT_UFS)
-            resp = integration_app.post("/buscar", json=payload)
+            resp = integration_app.post("/v1/buscar", json=payload)
 
         body = resp.json()
         assert body["degradation_guidance"] is not None, (
@@ -112,7 +112,7 @@ class TestAbsoluteWorstCase:
             _mock_rate_limiter(),
         ):
             payload = make_busca_request(ufs=_DEFAULT_UFS)
-            resp = integration_app.post("/buscar", json=payload)
+            resp = integration_app.post("/v1/buscar", json=payload)
 
         assert resp.status_code == 200, (
             f"empty_failure must return HTTP 200, got {resp.status_code}"
@@ -143,7 +143,7 @@ class TestAbsoluteWorstCase:
                 _mock_rate_limiter(),
             ):
                 payload = make_busca_request(ufs=_DEFAULT_UFS)
-                resp = integration_app.post("/buscar", json=payload)
+                resp = integration_app.post("/v1/buscar", json=payload)
                 assert resp.status_code == 200
                 bodies.append(resp.json())
 

@@ -55,7 +55,7 @@ class TestFrontend504Timeout:
             _mock_rate_limiter(),
         ):
             payload = make_busca_request(ufs=_DEFAULT_UFS)
-            resp = integration_app.post("/buscar", json=payload)
+            resp = integration_app.post("/v1/buscar", json=payload)
 
         assert resp.status_code == 504, (
             f"Expected HTTP 504 for timeout, got {resp.status_code}: {resp.text}"
@@ -82,7 +82,7 @@ class TestFrontend504Timeout:
             _mock_rate_limiter(),
         ):
             payload = make_busca_request(ufs=_DEFAULT_UFS)
-            resp = integration_app.post("/buscar", json=payload)
+            resp = integration_app.post("/v1/buscar", json=payload)
 
         body = resp.json()
         assert "detail" in body, (
@@ -110,7 +110,7 @@ class TestFrontend504Timeout:
             _mock_rate_limiter(),
         ):
             payload = make_busca_request(ufs=_DEFAULT_UFS)
-            resp = integration_app.post("/buscar", json=payload)
+            resp = integration_app.post("/v1/buscar", json=payload)
 
         body = resp.json()
         raw_detail = body["detail"]
@@ -151,7 +151,7 @@ class TestFrontend504Timeout:
             _mock_rate_limiter(),
         ):
             payload = make_busca_request(ufs=_DEFAULT_UFS)
-            resp = integration_app.post("/buscar", json=payload)
+            resp = integration_app.post("/v1/buscar", json=payload)
 
         # Must be parseable JSON regardless of status code
         body = resp.json()

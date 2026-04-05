@@ -114,7 +114,7 @@ def test_pncp_total_failure_with_cache_returns_cached_data(
         return_value=cache_data,
     ):
         payload = make_busca_request(ufs=_DEFAULT_UFS)
-        response = integration_app.post("/buscar", json=payload)
+        response = integration_app.post("/v1/buscar", json=payload)
 
     assert response.status_code == 200, (
         f"Expected 200 (cached fallback) but got {response.status_code}: "
@@ -168,7 +168,7 @@ def test_pncp_total_failure_no_cache_returns_empty_failure(
         return_value=None,
     ):
         payload = make_busca_request(ufs=_DEFAULT_UFS)
-        response = integration_app.post("/buscar", json=payload)
+        response = integration_app.post("/v1/buscar", json=payload)
 
     assert response.status_code == 200, (
         f"Expected 200 (empty_failure) but got {response.status_code}: "
@@ -209,7 +209,7 @@ def test_filter_stage_crash_returns_500(
         side_effect=RuntimeError("Unexpected filter crash: invalid regex in keyword set"),
     ):
         payload = make_busca_request(ufs=_DEFAULT_UFS)
-        response = integration_app.post("/buscar", json=payload)
+        response = integration_app.post("/v1/buscar", json=payload)
 
     assert response.status_code == 500, (
         f"Expected 500 (filter crash) but got {response.status_code}: "
@@ -256,7 +256,7 @@ def test_llm_timeout_returns_fallback_resumo(
         side_effect=TimeoutError("OpenAI request timed out after 30s"),
     ):
         payload = make_busca_request(ufs=_DEFAULT_UFS)
-        response = integration_app.post("/buscar", json=payload)
+        response = integration_app.post("/v1/buscar", json=payload)
 
     assert response.status_code == 200, (
         f"Expected 200 (LLM fallback) but got {response.status_code}: "

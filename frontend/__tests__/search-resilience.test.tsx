@@ -85,7 +85,7 @@ jest.mock("../lib/utils/dateDiffInDays", () => ({
 
 // ---- Constants ----
 
-const SECTOR_CACHE_KEY = "smartlic-sectors-cache-v2";
+const SECTOR_CACHE_KEY = "smartlic-sectors-cache-v3";
 const SECTOR_CACHE_TTL = 5 * 60 * 1000; // 5 min
 
 const MOCK_SECTORS = [
@@ -206,8 +206,8 @@ describe("T1-T4: useSearchFilters sector cache resilience", () => {
       expect(screen.getByTestId("using-fallback").textContent).toBe("true");
     });
     expect(screen.getByTestId("using-stale").textContent).toBe("false");
-    // Hardcoded fallback has 15 sectors
-    expect(Number(screen.getByTestId("sectors-count").textContent)).toBe(15);
+    // Hardcoded fallback has 20 sectors (SETORES_FALLBACK in useSearchFilters.ts)
+    expect(Number(screen.getByTestId("sectors-count").textContent)).toBe(20);
 
     jest.useRealTimers();
   });

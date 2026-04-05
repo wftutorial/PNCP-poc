@@ -75,7 +75,7 @@ class TestQueueWorkerFailInline:
             return_value=mock_job,
         ):
             payload = make_busca_request(ufs=_DEFAULT_UFS)
-            resp = integration_app.post("/buscar", json=payload)
+            resp = integration_app.post("/v1/buscar", json=payload)
 
         assert resp.status_code == 200, (
             f"Expected HTTP 200, got {resp.status_code}: {resp.text}"
@@ -114,7 +114,7 @@ class TestQueueWorkerFailInline:
             return_value=mock_job,
         ):
             payload = make_busca_request(ufs=_DEFAULT_UFS)
-            resp = integration_app.post("/buscar", json=payload)
+            resp = integration_app.post("/v1/buscar", json=payload)
 
         body = resp.json()
         resumo = body.get("resumo")
@@ -157,7 +157,7 @@ class TestQueueWorkerFailInline:
             return_value=mock_job,
         ):
             payload = make_busca_request(ufs=_DEFAULT_UFS)
-            resp = integration_app.post("/buscar", json=payload)
+            resp = integration_app.post("/v1/buscar", json=payload)
 
         body = resp.json()
         assert body["total_raw"] > 0, (
@@ -197,7 +197,7 @@ class TestQueueWorkerFailInline:
             mock_enqueue,
         ):
             payload = make_busca_request(ufs=_DEFAULT_UFS)
-            resp = integration_app.post("/buscar", json=payload)
+            resp = integration_app.post("/v1/buscar", json=payload)
 
         assert resp.status_code == 200
 

@@ -89,7 +89,7 @@ def test_supabase_outage_search_returns_pncp_results(
         side_effect=Exception("Supabase session update failed"),
     ):
         payload = make_busca_request(ufs=["SP", "RJ", "MG"])
-        response = integration_app.post("/buscar", json=payload)
+        response = integration_app.post("/v1/buscar", json=payload)
 
     assert response.status_code == 200, (
         f"Expected 200 (degraded but functional) but got {response.status_code}: "
@@ -155,7 +155,7 @@ def test_supabase_outage_session_id_is_none(
         session_update_mock,
     ):
         payload = make_busca_request(ufs=["SP", "RJ", "MG"])
-        response = integration_app.post("/buscar", json=payload)
+        response = integration_app.post("/v1/buscar", json=payload)
 
     # Search should still succeed
     assert response.status_code == 200, (
@@ -213,7 +213,7 @@ def test_supabase_outage_cache_write_failure_does_not_block(
         side_effect=Exception("Supabase unavailable"),
     ):
         payload = make_busca_request(ufs=["SP", "RJ", "MG"])
-        response = integration_app.post("/buscar", json=payload)
+        response = integration_app.post("/v1/buscar", json=payload)
 
     assert response.status_code == 200, (
         f"Expected 200 but got {response.status_code}: {response.text[:500]}"

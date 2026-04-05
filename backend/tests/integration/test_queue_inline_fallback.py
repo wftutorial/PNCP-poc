@@ -66,7 +66,7 @@ def test_queue_unavailable_executes_inline_with_full_results(
         return_value=pncp_success,
     ):
         payload = make_busca_request(ufs=["SP", "RJ", "MG"])
-        response = integration_app.post("/buscar", json=payload)
+        response = integration_app.post("/v1/buscar", json=payload)
 
     assert response.status_code == 200, (
         f"Expected 200 but got {response.status_code}: {response.text[:500]}"
@@ -142,7 +142,7 @@ def test_queue_unavailable_does_not_enqueue_jobs(
         enqueue_mock,
     ):
         payload = make_busca_request(ufs=["SP", "RJ", "MG"])
-        response = integration_app.post("/buscar", json=payload)
+        response = integration_app.post("/v1/buscar", json=payload)
 
     assert response.status_code == 200
     enqueue_mock.assert_not_called(), (
@@ -170,7 +170,7 @@ def test_inline_response_contains_complete_data(
         return_value=pncp_success,
     ):
         payload = make_busca_request(ufs=["SP", "RJ", "MG"])
-        response = integration_app.post("/buscar", json=payload)
+        response = integration_app.post("/v1/buscar", json=payload)
 
     assert response.status_code == 200
     body = response.json()

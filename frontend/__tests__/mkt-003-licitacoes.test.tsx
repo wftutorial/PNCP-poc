@@ -79,26 +79,22 @@ describe('MKT-003 — programmatic.ts helpers', () => {
   describe('generateLicitacoesParams()', () => {
     const params = generateLicitacoesParams();
 
-    it('returns exactly 25 items (5 sectors × 5 UFs)', () => {
-      expect(params).toHaveLength(25);
+    it('returns exactly 405 items (15 sectors × 27 UFs)', () => {
+      expect(params).toHaveLength(405);
     });
 
-    it('only includes Phase 1 sectors (informatica, saude, engenharia, facilities, software)', () => {
-      const PHASE1_SLUGS = new Set(
-        SECTORS.filter((s) =>
-          ['informatica', 'saude', 'engenharia', 'facilities', 'software'].includes(s.id),
-        ).map((s) => s.slug),
-      );
-
+    it('includes all 15 sectors', () => {
+      const ALL_SLUGS = new Set(SECTORS.map((s) => s.slug));
       for (const { setor } of params) {
-        expect(PHASE1_SLUGS.has(setor)).toBe(true);
+        expect(ALL_SLUGS.has(setor)).toBe(true);
       }
     });
 
-    it('only includes Phase 1 UFs (SP, RJ, MG, PR, RS) as lowercase', () => {
-      const EXPECTED_UFS = new Set(['sp', 'rj', 'mg', 'pr', 'rs']);
+    it('includes all 27 UFs as lowercase', () => {
+      const ALL_UFS_LOWER = new Set(['ac', 'al', 'am', 'ap', 'ba', 'ce', 'df', 'es', 'go', 'ma',
+        'mg', 'ms', 'mt', 'pa', 'pb', 'pe', 'pi', 'pr', 'rj', 'rn', 'ro', 'rr', 'rs', 'sc', 'se', 'sp', 'to']);
       for (const { uf } of params) {
-        expect(EXPECTED_UFS.has(uf)).toBe(true);
+        expect(ALL_UFS_LOWER.has(uf)).toBe(true);
       }
     });
 
@@ -108,23 +104,23 @@ describe('MKT-003 — programmatic.ts helpers', () => {
       }
     });
 
-    it('each Phase 1 sector appears exactly 5 times (once per UF)', () => {
+    it('each sector appears exactly 27 times (once per UF)', () => {
       const counts: Record<string, number> = {};
       for (const { setor } of params) {
         counts[setor] = (counts[setor] || 0) + 1;
       }
       for (const count of Object.values(counts)) {
-        expect(count).toBe(5);
+        expect(count).toBe(27);
       }
     });
 
-    it('each Phase 1 UF appears exactly 5 times (once per sector)', () => {
+    it('each UF appears exactly 15 times (once per sector)', () => {
       const counts: Record<string, number> = {};
       for (const { uf } of params) {
         counts[uf] = (counts[uf] || 0) + 1;
       }
       for (const count of Object.values(counts)) {
-        expect(count).toBe(5);
+        expect(count).toBe(15);
       }
     });
 
@@ -153,25 +149,23 @@ describe('MKT-003 — programmatic.ts helpers', () => {
       expect(params).toContainEqual({ setor: softwareSlug, uf: 'rs' });
     });
 
-    it('does NOT include non-Phase 1 sectors (e.g. vestuario)', () => {
+    it('includes vestuario sector (all 15 sectors covered)', () => {
       const vestuarioSlug = SECTORS.find((s) => s.id === 'vestuario')!.slug;
-      const hasVestuario = params.some((p) => p.setor === vestuarioSlug);
-      expect(hasVestuario).toBe(false);
+      expect(params.some((p) => p.setor === vestuarioSlug)).toBe(true);
     });
 
-    it('does NOT include non-Phase 1 UFs (e.g. AC)', () => {
-      const hasAC = params.some((p) => p.uf === 'ac');
-      expect(hasAC).toBe(false);
+    it('includes AC (all 27 UFs covered)', () => {
+      expect(params.some((p) => p.uf === 'ac')).toBe(true);
     });
 
-    it('does NOT include BA (non-Phase1 UF)', () => {
-      expect(params.some((p) => p.uf === 'ba')).toBe(false);
+    it('includes BA (all 27 UFs covered)', () => {
+      expect(params.some((p) => p.uf === 'ba')).toBe(true);
     });
 
-    it('does NOT include alimentos sector (non-Phase1)', () => {
+    it('includes alimentos sector (all 15 sectors covered)', () => {
       const alimentosSlug = SECTORS.find((s) => s.id === 'alimentos')?.slug;
       if (alimentosSlug) {
-        expect(params.some((p) => p.setor === alimentosSlug)).toBe(false);
+        expect(params.some((p) => p.setor === alimentosSlug)).toBe(true);
       }
     });
   });
@@ -518,9 +512,9 @@ describe('MKT-003 — LicitacoesIndexPage metadata contract', () => {
     expect(phase1).toHaveLength(5);
   });
 
-  it('generateLicitacoesParams() matches Phase 1 sectors × UFs (page uses this for static params)', () => {
+  it('generateLicitacoesParams() covers all 15 sectors × 27 UFs (page uses this for static params)', () => {
     const params = generateLicitacoesParams();
-    expect(params).toHaveLength(25);
+    expect(params).toHaveLength(405);
   });
 
   it('canonical URL convention: /blog/licitacoes (matches source code)', () => {
@@ -572,9 +566,9 @@ describe('MKT-003 — LicitacoesIndexPage metadata contract', () => {
 
 describe('MKT-003 — LicitacoesSectorUfPage logic (via helpers)', () => {
   // The page's generateStaticParams() delegates to generateLicitacoesParams()
-  it('generateStaticParams() logic: returns 25 items (via generateLicitacoesParams)', () => {
+  it('generateStaticParams() logic: returns 405 items (15 sectors × 27 UFs via generateLicitacoesParams)', () => {
     const params = generateLicitacoesParams();
-    expect(params).toHaveLength(25);
+    expect(params).toHaveLength(405);
   });
 
   // The page's revalidate = 86400 is a static constant

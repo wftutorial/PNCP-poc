@@ -36,6 +36,40 @@ TRIAL_EMAIL_SEQUENCE = [
     {"number": 6, "day": 16, "type": "expired"},
 ]
 
+# SEO-PLAYBOOK §7.4 / §Day-3 Activation — opt-in extensions to the core
+# sequence above. These are appended only when their feature flags are on,
+# so toggling them off returns the sequence to its baseline production
+# behavior without code changes. Numbers 7/8 are reserved for these.
+#
+# - referral_invitation (day 8): viral loop activation, sent 1 day after
+#   the paywall alert so it doesn't crowd that email in the inbox.
+# - activation_nudge (day 2): conditional on stats.searches_count == 0,
+#   filtered at dispatch time inside process_trial_emails.
+TRIAL_EMAIL_SEQUENCE_OPTIONAL = [
+    {"number": 7, "day": 2, "type": "activation_nudge"},
+    {"number": 8, "day": 8, "type": "referral_invitation"},
+]
+
+
+def _active_sequence() -> list[dict]:
+    """Return the trial email sequence with opt-in entries appended.
+
+    Feature flags are read lazily so tests that monkeypatch config values at
+    import time still take effect.
+    """
+    from config import DAY3_ACTIVATION_EMAIL_ENABLED, REFERRAL_EMAIL_ENABLED
+
+    sequence = list(TRIAL_EMAIL_SEQUENCE)
+    if DAY3_ACTIVATION_EMAIL_ENABLED:
+        sequence.append(
+            {"number": 7, "day": 2, "type": "activation_nudge"}
+        )
+    if REFERRAL_EMAIL_ENABLED:
+        sequence.append(
+            {"number": 8, "day": 8, "type": "referral_invitation"}
+        )
+    return sequence
+
 # AC13: Stripe coupon for reengagement email (20% off first month)
 TRIAL_COMEBACK_COUPON = os.getenv("TRIAL_COMEBACK_COUPON", "TRIAL_COMEBACK_20")
 
@@ -178,7 +212,7 @@ async def process_trial_emails(batch_size: int = 50) -> dict:
         converted_skipped = 0
         unsubscribed_skipped = 0
 
-        for email_def in TRIAL_EMAIL_SEQUENCE:
+        for email_def in _active_sequence():
             if sent >= batch_size:
                 logger.info(f"Batch limit reached ({batch_size}), stopping")
                 break
@@ -249,6 +283,22 @@ async def process_trial_emails(batch_size: int = 50) -> dict:
                         stats = get_trial_user_stats(user_id)
                     except Exception:
                         stats = {}
+
+                    # SEO-PLAYBOOK §Day-3 Activation: the activation nudge is
+                    # only valuable for users who have NOT yet searched. If
+                    # they already searched, the "aha moment" is ahead of
+                    # them — we want the engagement email instead, not this
+                    # one. Skip silently (counts as skipped to keep the
+                    # batch metric honest).
+                    if email_type == "activation_nudge":
+                        if stats.get("searches_count", 0) > 0:
+                            skipped += 1
+                            continue
+
+                    # Pass user_id into stats so _render_email can look up
+                    # the referral code for referral_invitation type.
+                    if isinstance(stats, dict):
+                        stats["user_id"] = user_id
 
                     # Build unsubscribe URL (AC2)
                     unsub_url = get_unsubscribe_url(user_id)
@@ -350,6 +400,7 @@ def _render_email(
     Returns:
         tuple of (subject, html)
     """
+    from templates.emails.base import FRONTEND_URL
     from templates.emails.trial import (
         render_trial_welcome_email,
         render_trial_engagement_email,
@@ -403,6 +454,41 @@ def _render_email(
             user_name, stats,
             unsubscribe_url=unsubscribe_url,
             coupon_checkout_url=coupon_url,
+        )
+
+    elif email_type == "activation_nudge":
+        # SEO-PLAYBOOK §Day-3 Activation — short, action-oriented nudge for
+        # users that have not searched yet. Fires on Day 2 of trial.
+        from templates.emails.day3_activation import render_day3_activation_email
+        subject = "Sua primeira análise está a 30 segundos"
+        html = render_day3_activation_email(user_name, unsubscribe_url=unsubscribe_url)
+
+    elif email_type == "referral_invitation":
+        # SEO-PLAYBOOK §7.4 — Day-8 viral loop email. Reuses the existing
+        # referral_welcome template with the user's actual referral code.
+        # We must look up (or lazily generate) their code here since the
+        # standard trial stats dict does not include it.
+        from templates.emails.referral_welcome import render_referral_welcome_email
+        from supabase_client import get_supabase
+        try:
+            sb_inner = get_supabase()
+            existing = (
+                sb_inner.table("referrals")
+                .select("code")
+                .eq("referrer_user_id", stats.get("user_id", ""))
+                .limit(1)
+                .execute()
+            )
+            code = (existing.data[0]["code"] if existing.data else "").upper()
+        except Exception:
+            code = ""
+
+        share_url = f"{FRONTEND_URL}/signup?ref={code}" if code else f"{FRONTEND_URL}/indicar"
+        subject = "Você ganha 1 mês grátis por cada amigo que converter"
+        html = render_referral_welcome_email(
+            user_name=user_name,
+            code=code or "—",
+            share_url=share_url,
         )
 
     else:

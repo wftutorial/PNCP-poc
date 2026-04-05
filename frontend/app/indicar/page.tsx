@@ -7,6 +7,7 @@ import { Copy, Gift, Users, CheckCircle2, TrendingUp } from "lucide-react";
 import { useAuth } from "../components/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { AuthLoadingScreen } from "../../components/AuthLoadingScreen";
+import { useAnalytics } from "@/hooks/useAnalytics";
 
 interface ReferralCodeResponse {
   code: string;
@@ -23,6 +24,7 @@ interface ReferralStatsResponse {
 export default function IndicarPage() {
   const { session, loading: authLoading } = useAuth();
   const router = useRouter();
+  const { trackEvent } = useAnalytics();
 
   const [codeData, setCodeData] = useState<ReferralCodeResponse | null>(null);
   const [stats, setStats] = useState<ReferralStatsResponse | null>(null);
@@ -71,6 +73,13 @@ export default function IndicarPage() {
     try {
       await navigator.clipboard.writeText(codeData.share_url);
       toast.success("Link copiado! Cole onde quiser compartilhar.");
+      // Instrumenta o loop viral do playbook §7.4 — cada share é um sinal
+      // de intenção de indicação antes do signup do referee.
+      trackEvent("referral_shared", {
+        channel: "copy_link",
+        code: codeData.code,
+        source: "indicar_page",
+      });
     } catch {
       toast.error("Não foi possível copiar. Copie manualmente.");
     }
@@ -81,6 +90,11 @@ export default function IndicarPage() {
     try {
       await navigator.clipboard.writeText(codeData.code);
       toast.success("Código copiado!");
+      trackEvent("referral_shared", {
+        channel: "copy_code",
+        code: codeData.code,
+        source: "indicar_page",
+      });
     } catch {
       toast.error("Não foi possível copiar.");
     }

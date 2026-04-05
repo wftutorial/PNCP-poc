@@ -140,6 +140,20 @@ def _credit_referral_conversion(sb, referral_code: str, subscription_data) -> No
         }
     ).eq("id", row["id"]).execute()
 
+    # Playbook §7.4 viral loop instrumentation — structured log that can be
+    # piped to Mixpanel via log-sink. The conversion is the furthest-funnel
+    # event of the referral program and the one that maps directly to MRR.
+    logger.info(
+        "analytics.referral_converted",
+        extra={
+            "event": "referral_converted",
+            "code": referral_code,
+            "referrer_user_id": row.get("referrer_user_id"),
+            "referred_user_id": row.get("referred_user_id"),
+            "stripe_subscription_id": subscription_data.get("id") if hasattr(subscription_data, "get") else None,
+        },
+    )
+
     referrer_user_id = row["referrer_user_id"]
 
     # 2. Find referrer's active Stripe subscription

@@ -11,6 +11,7 @@ import {
   SectorStats,
 } from "@/lib/sectors";
 import { getSectorFaqs } from "@/data/sector-faqs";
+import { getFreshnessLabel } from "@/lib/seo";
 
 /**
  * STORY-324 AC5: SSG with ISR 6h for sector landing pages.
@@ -111,6 +112,14 @@ export default async function SectorPage({
               value={stats.top_ufs.slice(0, 3).map((u) => u.name).join(", ") || "—"}
             />
           </div>
+          {/* SEO E-E-A-T: freshness signal — visible timestamp from ISR revalidate.
+              Google explicitly values real-time verifiable data for YMYL-adjacent
+              queries. See docs/SEO-ORGANIC-PLAYBOOK.md §Fundação Técnica item 2. */}
+          {stats.last_updated && (
+            <p className="text-xs text-ink-secondary dark:text-gray-400 mt-3 text-center">
+              Dados atualizados {getFreshnessLabel(stats.last_updated)} · fonte PNCP
+            </p>
+          )}
         </section>
       )}
 

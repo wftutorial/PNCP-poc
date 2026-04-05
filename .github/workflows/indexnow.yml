@@ -109,3 +109,19 @@ jobs:
             echo "::error::IndexNow submission failed with HTTP $HTTP_CODE"
             exit 1
           fi
+
+      - name: Ping Google & Bing with sitemap
+        if: ${{ always() }}
+        run: |
+          # Google and Bing accept a sitemap ping via GET. This tells their
+          # crawlers that the sitemap was updated so they can re-fetch it and
+          # pick up any new pages published by this deploy. Both pings are
+          # best-effort (|| true) — a failed ping must NOT fail the workflow,
+          # because these endpoints are rate-limited and occasionally flap.
+          echo "Pinging Google..."
+          curl -sS -o /dev/null -w "Google ping: HTTP %{http_code}\n" \
+            "https://www.google.com/ping?sitemap=https://smartlic.tech/sitemap.xml" || true
+
+          echo "Pinging Bing..."
+          curl -sS -o /dev/null -w "Bing ping: HTTP %{http_code}\n" \
+            "https://www.bing.com/ping?sitemap=https://smartlic.tech/sitemap.xml" || true

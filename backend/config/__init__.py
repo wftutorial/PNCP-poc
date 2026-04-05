@@ -99,6 +99,8 @@ from config.features import (
     TRIAL_PAYWALL_DAY,  # noqa: F401
     TRIAL_PAYWALL_MAX_RESULTS,  # noqa: F401
     TRIAL_PAYWALL_MAX_PIPELINE,  # noqa: F401
+    REFERRAL_EMAIL_ENABLED,  # noqa: F401
+    DAY3_ACTIVATION_EMAIL_ENABLED,  # noqa: F401
     VIABILITY_WEIGHT_MODALITY,  # noqa: F401
     VIABILITY_WEIGHT_TIMELINE,  # noqa: F401
     VIABILITY_WEIGHT_VALUE_FIT,  # noqa: F401
@@ -124,6 +126,7 @@ from config.features import (
     get_feature_flag,  # noqa: F401
     reload_feature_flags,  # noqa: F401
     log_feature_flags,  # noqa: F401
+    validate_feature_flags,  # noqa: F401
 )
 
 # cors.py — CORS origins

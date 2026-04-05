@@ -184,6 +184,13 @@ export default function SignupPage() {
         });
         if (!res.ok) {
           console.warn("[signup] referral redeem non-ok", res.status);
+        } else {
+          // Playbook §7.4 viral loop instrumentation — confirms the
+          // referee actually completed signup attributed to a code.
+          trackEvent("referral_signed_up", {
+            code,
+            referred_user_id: authSession.user.id,
+          });
         }
       } catch (e) {
         console.warn("[signup] referral redeem failed", e);

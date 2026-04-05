@@ -1,5 +1,5 @@
 # SmartLic — Playbook de Crescimento Orgânico: CAC Mínimo via Conversão Máxima
-## Versão 2.1 · Atualizado: 2026-04-05
+## Versão 2.2 · Atualizado: 2026-04-05
 
 > **Premissa:** SEO impecável é o piso, não o teto. Quando alguém encontra o SmartLic —
 > por busca orgânica, indicação ou conteúdo — cada touchpoint subsequente deve funcionar
@@ -74,7 +74,7 @@ Conteúdo sobre licitações públicas e contratos governamentais é classificad
 
 **Sinal específico de abril/2026:** o Google passou a valorizar explicitamente conteúdo com **dados verificáveis em tempo real** para queries com intenção informacional/comercial. Isso é o nosso maior diferencial — as páginas com dados do datalake ao vivo têm sinal de freshness permanente.
 
-- [ ] **Verificar que todas as páginas com dado ao vivo** incluem timestamp de última atualização visível ao usuário (ex: "Atualizado 4 horas atrás" via ISR metadata)
+- [x] **Verificar que todas as páginas com dado ao vivo** incluem timestamp de última atualização visível ao usuário (2026-04-05, segunda rodada) — `/blog/licitacoes/[setor]/[uf]` e `/blog/programmatic/[setor]` já exibiam via `getFreshnessLabel()`. Faltava `/licitacoes/[setor]` — adicionado em `app/licitacoes/[setor]/page.tsx` após bloco de StatsCards, usando helper existente de `lib/seo.ts`. Label: "Dados atualizados X horas atrás · fonte PNCP".
 - [x] **Adicionar `dateModified`** no JSON-LD de cada página com ISR igual ao `revalidate` timestamp — `BlogArticleLayout.tsx` usa `article.lastModified || article.publishDate`, cases usa `c.lastModified || c.publishDate`
 
 ### 3. AI Overviews — Elegibilidade e Otimização
@@ -212,15 +212,15 @@ curl "https://www.google.com/ping?sitemap=https://smartlic.tech/sitemap.xml"
 # Resposta esperada: HTTP 200 "Sitemap notification received"
 ```
 
-- [ ] **Adicionar ao script de deploy** (GitHub Actions) o Google Ping após sitemap atualizado
-- [ ] **Adicionar ao Bing também:** `curl "https://www.bing.com/ping?sitemap=https://smartlic.tech/sitemap.xml"`
+- [x] **Adicionar ao script de deploy** (GitHub Actions) o Google Ping após sitemap atualizado (2026-04-05, segunda rodada) — step `Ping Google & Bing with sitemap` adicionado ao fim de `.github/workflows/indexnow.yml`, executa `if: always()` para rodar mesmo se o POST IndexNow anterior falhar. Usa `|| true` para não falhar o workflow em caso de endpoint flapping.
+- [x] **Adicionar ao Bing também** (2026-04-05) — incluído no mesmo step acima. Ambos os pings são best-effort (`|| true`) para não bloquear o deploy se os endpoints estiverem rate-limited.
 
 **Próximo lote de indexação manual (GSC URL Inspection):**
 
 Após confirmação das 10 URLs submetidas em 2026-04-05, submeter próximo lote:
 
-- [ ] `https://smartlic.tech/sobre`
-- [ ] `https://smartlic.tech/pricing`
+- [x] `https://smartlic.tech/sobre` (2026-04-05, segunda rodada — submetida via Playwright antes de bater cota diária GSC)
+- [ ] `https://smartlic.tech/pricing` (cota GSC esgotada 2026-04-05; retomar 2026-04-06)
 - [ ] `https://smartlic.tech/ajuda`
 - [ ] `https://smartlic.tech/termos`
 - [ ] `https://smartlic.tech/privacidade`
@@ -600,9 +600,9 @@ CTA FINAL (verde, texto específico):
 - [x] **CTA contextual:** "Analisar as X oportunidades abertas agora no seu setor" → `/signup?ref=calculadora&setor={setor}&uf={uf}`
 - [x] **Adicionar `/calculadora`** ao sitemap.ts (priority 0.9, changeFrequency: 'weekly')
 - [x] **Adicionar link** na landing page, footer, e ao final de cada artigo setorial — Navbar, Footer (seção Ferramentas) e BlogArticleLayout sidebar atualizados
-- [ ] **Testar mobile** (formulário de 3 passos funciona em 375px?)
+- [x] **Testar mobile** (2026-04-05, segunda rodada) — Playwright viewport 375×812 em `https://smartlic.tech/calculadora`: H1 quebra em 3 linhas sem overflow, step indicator 1-2-3 centralizado, ambos dropdowns (setor/UF) renderizam corretamente, botão Continuar inline dentro do viewport. Screenshot: `calc-375-step1.png`. 20 setores e 27 UFs populados. Nenhum corte de layout.
 - [x] **Analytics:** evento `calculadora_completed` no Mixpanel com `{ setor, uf, resultado_valor, clicked_cta }`
-- [ ] **Commit:** `feat(seo): add /calculadora public conversion tool with real PNCP data`
+- [x] **Commit:** `feat(seo): add /calculadora public conversion tool with real PNCP data` (commit já existe no histórico)
 
 ---
 
@@ -689,7 +689,7 @@ Contexto: "Não ter histórico não é impedimento — é ponto de partida.
 - [x] **Link** no footer e menu "Ferramentas gratuitas" — Footer seção "Ferramentas" com Calculadora, CNPJ e Glossário
 - [x] **Aviso legal** visível: dados de fontes públicas
 - [x] **Analytics:** `cnpj_lookup` no Mixpanel com `{ setor_detectado, uf, total_contratos, score, clicked_cta }`
-- [ ] **Commit:** `feat(seo): add public CNPJ B2G history tool at /cnpj/[cnpj]`
+- [x] **Commit:** `feat(seo): add public CNPJ B2G history tool at /cnpj/[cnpj]` (commit já existe no histórico)
 
 ---
 
@@ -813,7 +813,7 @@ CTA:
 - [x] **Link "Casos de sucesso"** no menu de navegação principal e footer
 - [x] **CTA em cada case:** "Rode uma análise para o seu setor" → `/signup?ref=case-{slug}`
 - [x] **Link cruzado** nos artigos de blog do setor correspondente — BlogArticleLayout sidebar agora inclui link contextual para calculadora
-- [ ] **Commit:** `feat(seo): add /casos public case studies section`
+- [x] **Commit:** `feat(seo): add /casos public case studies section` (commit já existe no histórico)
 
 ---
 
@@ -902,7 +902,7 @@ Geografia (20%): [score/10] — SP. UF de operação primária da empresa.
   ```
 - [x] **Schema markup:** `Review` com `ratingValue = score`
 - [x] **Analytics:** `analysis_shared`, `analysis_viewed` no Mixpanel — ShareAnalysisButton + AnalysisViewTracker client island
-- [ ] **Commit:** `feat(viral): add shareable bid analysis pages at /analise/[hash]`
+- [x] **Commit:** `feat(viral): add shareable bid analysis pages at /analise/[hash]` (commit já existe no histórico)
 
 ---
 
@@ -1271,8 +1271,8 @@ Gerado pelo SmartLic."
 - [x] **OG image dinâmica** (2026-04-05) — `/api/og?type=analise&score=...&cnpj=...&setor=...&data=...` gera imagem com score colorido (verde/amarelo/vermelho), CNPJ, setor e data. `generateMetadata()` em `app/analise/[hash]/page.tsx` injeta OG + Twitter tags dinâmicas.
 - [x] **Botão "Compartilhar no LinkedIn"** (2026-04-05) — novo componente genérico `components/share/ShareButtons.tsx` (LinkedIn + WhatsApp + X/Twitter + copy) integrado em `/analise/[hash]` e `BlogArticleLayout`. Tracking via `trackEvent('share_clicked', { channel, source: 'analise', hash, viability_score })`.
 - [x] **Botão "Copiar link"** com toast visual (2026-04-05) — parte do `ShareButtons`, feedback "Copiado!" inline.
-- [ ] **Watermark + CTA** no rodapé da página `/analise/[hash]`: "Análise gerada pelo SmartLic · 14 dias grátis para analisar editais do seu setor → [CTA button]"
-- [ ] **Email de ativação de compartilhamento** — no Day-3, se usuário não compartilhou nenhuma análise, enviar: "Seu score de viabilidade pode ajudar um colega a decidir mais rápido. Compartilhe uma análise."
+- [x] **Watermark + CTA** no rodapé da página `/analise/[hash]` (2026-04-05, segunda rodada — verificado existente) — `app/analise/[hash]/page.tsx:274-288` já renderiza card com "Análise gerada pelo SmartLic" + "14 dias grátis para analisar editais do seu setor".
+- [ ] **Email de ativação de compartilhamento** — no Day-3, se usuário não compartilhou nenhuma análise, enviar: "Seu score de viabilidade pode ajudar um colega a decidir mais rápido. Compartilhe uma análise." (diferente do email activation_nudge do §Day-3 Activation — este é trigger-based em evento `analysis_shared` ausente)
 - [x] **Verificar analytics** (2026-04-05) — evento `share_clicked` disparado por canal (LinkedIn/WhatsApp/Twitter/copy) via `trackEvent` consent-gated.
 
 **KPI esperado:** 50 análises compartilhadas/mês → 20% de conversão do receptor = 10 trials/mês só por este canal. CAC: zero.
@@ -1371,7 +1371,7 @@ Quando amigo converte → quem indicou ganha 1 mês grátis
 - [x] **Página `/indicar`** criada com mecânica explicada (2026-04-05) — hero, código único, botão copy de link de share, stats (indicados/convertidos/créditos). Arquivo: `frontend/app/indicar/page.tsx`.
 - [x] **Código único por usuário** gerado no backend (2026-04-05) — função SQL `generate_referral_code()` (8 chars alfanumérico), criado on-demand pelo endpoint `GET /v1/referral/code`. Tabela: `supabase/migrations/20260405100000_referrals.sql`.
 - [x] **Dashboard de indicações** (2026-04-05) — stats 3-card em `/indicar` via `GET /v1/referral/stats` (total_signups, total_converted, credits_earned_months).
-- [ ] **Email Day-7** configurado na sequência de onboarding (Resend + template) — templates criados (`backend/templates/emails/referral_welcome.py` + `referral_converted.py`) mas disparo Day-7 ainda precisa ser plugado na sequência de onboarding existente.
+- [x] **Email Day-7** plugado na sequência de onboarding (2026-04-05, segunda rodada) — novo email type `referral_invitation` (day 8) adicionado a `TRIAL_EMAIL_SEQUENCE_OPTIONAL` em `backend/services/trial_email_sequence.py`. Helper `_active_sequence()` só appenda se `REFERRAL_EMAIL_ENABLED=true` (default false por segurança). Dispatch renderiza `referral_welcome.py` com código real lookup em `referrals` table; fallback `/indicar` se código ausente. Colocado em day 8 (após paywall_alert day 7) para não duplicar inbox. Testes: `test_trial_email_extensions.py` (11/11 pass). Para ativar em prod: setar env `REFERRAL_EMAIL_ENABLED=true`.
 - [x] **Webhook Stripe** para creditar mês grátis automaticamente (2026-04-05) — `customer.subscription.created` roteado para `_handle_subscription_created` → `_credit_referral_conversion`: lê `metadata.referral_code`, marca registro como `converted`, estende `trial_end` do referrer via `stripe.Subscription.modify(..., proration_behavior='none')`, dispara email. Arquivo: `backend/webhooks/handlers/subscription.py`.
 - [x] **Fluxo signup com `?ref=CODE`** (2026-04-05) — `app/signup/page.tsx` persiste código em localStorage, chama `/api/referral/redeem` após signup bem-sucedido, limpa storage. Não bloqueia signup em falha.
 - [x] **Testes backend** — `backend/tests/test_referral.py` com 8 tests (code generation, stats, redeem, auth mock via `dependency_overrides`), 100% pass.
@@ -1558,5 +1558,59 @@ Execução simultânea de 5 frentes atacando as ações de maior ROI ainda não 
 ### Pendências manuais
 - ~~Aplicar migration: `supabase db push` em `20260405100000_referrals.sql`~~ → **CONCLUÍDO (2026-04-05)** via `deploy.yml > Apply Pending Migrations`; tabela + RLS + função validadas.
 - ~~Gerar `INDEXNOW_KEY` + commitar `frontend/public/<key>.txt`~~ → **CONCLUÍDO (2026-04-05)**: key `e9fd5881ff34cea8b67399d910212300`, GH Secret configurado, pipeline validado end-to-end (curl HTTP 200, IndexNow submission HTTP 202).
-- Plugar email Day-7 de referral na sequência de onboarding existente (templates prontos em `backend/templates/emails/referral_{welcome,converted}.py`).
+- ~~Plugar email Day-7 de referral na sequência de onboarding existente~~ → **CONCLUÍDO (2026-04-05, segunda rodada)** via `trial_email_sequence._active_sequence()` + novo email type `referral_invitation` day 8 + feature flag `REFERRAL_EMAIL_ENABLED` default false. Para ativar em prod: setar env var.
 - Executar ações off-page (Frente 5) conforme playbooks prontos em `docs/seo/` (Product Hunt, G2, testimonials, LinkedIn, relatório Panorama T1).
+
+---
+
+## Registro de Operações — Segunda Rodada Multi-Frente (2026-04-05)
+
+Execução paralela de 10 frentes on-page de alto ROI após a primeira rodada. Escopo explicitamente restrito a ações **não off-page** e **não distribuição manual** (Parte 6 e 7.2/7.3 ficaram fora).
+
+### Frentes executadas
+
+| # | Frente | Status | Arquivos |
+|---|--------|--------|----------|
+| A | Google/Bing Ping no workflow IndexNow | ✅ | `.github/workflows/indexnow.yml` |
+| B | Freshness label visível em `/licitacoes/[setor]` | ✅ | `frontend/app/licitacoes/[setor]/page.tsx` |
+| C | 4 eventos Mixpanel (`first_analysis_viewed`, `referral_shared`, `referral_signed_up`, `referral_converted`) | ✅ | `AnalysisViewTracker.tsx`, `indicar/page.tsx`, `signup/page.tsx`, `webhooks/handlers/subscription.py` |
+| D | Email Day-8 `referral_invitation` plugado no scheduler | ✅ | `services/trial_email_sequence.py`, `config/features.py` |
+| E | Email `activation_nudge` (Day-2, condicional `searches_count == 0`) | ✅ | `templates/emails/day3_activation.py` (novo), `services/trial_email_sequence.py`, `config/features.py` |
+| F | GSC URL Inspection próximo lote (Playwright) | 🟡 **1/10** | `/sobre` submetida; cota diária GSC esgotada após 1ª URL. Retomar 2026-04-06. |
+| G | Rich Results Test — 3 setores via browser | ✅ | Validação: WebPage+FAQPage+HowTo presentes em engenharia/informatica/saude. **Dataset schema AUSENTE — gap a investigar (playbook L710-729 marca [x] mas não está renderizando em prod).** |
+| H | Core Web Vitals via PageSpeed API | ⚪ **Blocked** | API sem key retorna HTTP 429. Verificar via GSC Core Web Vitals report após field data acumular. |
+| I | Calculadora mobile 375px via Playwright | ✅ | Screenshot `calc-375-step1.png`: layout sem overflow, steps 1-2-3 centralizados, dropdowns e CTA dentro do viewport. |
+| J | Atualização de checkboxes + registro operacional | ✅ | `docs/SEO-ORGANIC-PLAYBOOK.md` |
+
+### Arquivos tocados
+
+**Frontend (5 edits):**
+- `app/licitacoes/[setor]/page.tsx` — import `getFreshnessLabel` + label "Dados atualizados X · fonte PNCP"
+- `app/analise/[hash]/AnalysisViewTracker.tsx` — `first_analysis_viewed` com flag localStorage single-fire
+- `app/indicar/page.tsx` — `referral_shared` nos handlers copy-link e copy-code
+- `app/signup/page.tsx` — `referral_signed_up` após `/api/referral/redeem` 2xx
+
+**Backend (6 edits/creates):**
+- `webhooks/handlers/subscription.py` — `logger.info("analytics.referral_converted", extra=...)` estruturado no `_credit_referral_conversion`
+- `config/features.py` — novas flags `REFERRAL_EMAIL_ENABLED`, `DAY3_ACTIVATION_EMAIL_ENABLED` (default false)
+- `config/__init__.py` — re-export das flags
+- `services/trial_email_sequence.py` — `TRIAL_EMAIL_SEQUENCE_OPTIONAL` + `_active_sequence()` helper + dispatch conditional de `activation_nudge` (skip se `searches_count > 0`) + render de `referral_invitation` com lookup de código
+- `templates/emails/day3_activation.py` — **NOVO** template curto, action-oriented, CTA único para `/buscar`
+- `tests/test_trial_email_extensions.py` — **NOVO** (11 testes, 100% pass): sequence shape, template render, dispatch filter
+
+**Infra (1 edit):**
+- `.github/workflows/indexnow.yml` — step `Ping Google & Bing with sitemap` após POST IndexNow
+
+### Validação de regressão
+
+- ✅ `cd frontend && npx tsc --noEmit` → **exit 0**
+- ✅ `pytest tests/test_trial_email_extensions.py` → **11/11 pass**
+- ✅ `pytest tests/test_trial_email_extensions.py tests/test_trial_email_sequence.py tests/test_trial_emails.py tests/test_referral.py tests/test_stripe_webhook.py tests/test_stripe_webhook_matrix.py` → **192/192 pass** (zero regressão nas áreas críticas tocadas)
+- ✅ Base `TRIAL_EMAIL_SEQUENCE` preservada em 6 itens (STORY-321 compat) — extensões são opt-in via flag
+
+### Pendências pós-rodada
+
+- **Frente F remanescente (9 URLs GSC)** — retomar 2026-04-06 quando a cota diária resetar. URLs: `/pricing`, `/ajuda`, `/termos`, `/privacidade`, `/licitacoes/engenharia`, `/licitacoes/tecnologia-informacao`, `/blog/licitacoes/engenharia/sp`, `/cnpj`, `/casos`.
+- **Gap Dataset schema em `/licitacoes/[setor]`** (descoberto na Frente G) — playbook L710-729 marca como implementado mas produção não está renderizando `@type: Dataset`. Investigar se `stats.total_open === 0` no build ou se o código nunca foi mergeado. Fora de escopo desta rodada.
+- **Ativar feature flags em prod após validar em staging:** `REFERRAL_EMAIL_ENABLED=true`, `DAY3_ACTIVATION_EMAIL_ENABLED=true`. Ambos default false para não disturbar deliverability atual.
+- **Core Web Vitals** — aguardar field data acumular no GSC (Experiência → Core Web Vitals). PageSpeed API sem key é rate-limited demais para spot-checks manuais.

@@ -70,6 +70,16 @@ TRIAL_PAYWALL_DAY: int = int(os.getenv("TRIAL_PAYWALL_DAY", "7"))
 TRIAL_PAYWALL_MAX_RESULTS: int = int(os.getenv("TRIAL_PAYWALL_MAX_RESULTS", "10"))
 TRIAL_PAYWALL_MAX_PIPELINE: int = int(os.getenv("TRIAL_PAYWALL_MAX_PIPELINE", "5"))
 
+# SEO-PLAYBOOK §7.4 — Day-8 referral invitation email (opt-in, additive to
+# the existing trial sequence). Default False to avoid disturbing production
+# deliverability until validated end-to-end in staging.
+REFERRAL_EMAIL_ENABLED: bool = str_to_bool(os.getenv("REFERRAL_EMAIL_ENABLED", "false"))
+
+# SEO-PLAYBOOK §Day-3 Activation — conditional nudge for trial users that
+# have not yet completed their first search (the "aha moment" predictor).
+# Default False — flip on once the `first_analysis_viewed` signal is wired.
+DAY3_ACTIVATION_EMAIL_ENABLED: bool = str_to_bool(os.getenv("DAY3_ACTIVATION_EMAIL_ENABLED", "false"))
+
 # DEBT-325: USD to BRL exchange rate for LLM cost estimation
 USD_TO_BRL_RATE: float = float(os.getenv("USD_TO_BRL_RATE", "5.0"))
 

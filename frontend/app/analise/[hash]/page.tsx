@@ -2,6 +2,8 @@ import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { AnalysisViewTracker } from './AnalysisViewTracker';
+import ShareButtons from '@/components/share/ShareButtons';
+import SchemaMarkup from '@/components/blog/SchemaMarkup';
 
 const baseUrl = process.env.NEXT_PUBLIC_CANONICAL_URL || 'https://smartlic.tech';
 const backendUrl = process.env.BACKEND_URL || 'http://localhost:8000';
@@ -44,6 +46,18 @@ async function fetchAnalysis(hash: string): Promise<SharedAnalysis | null> {
   }
 }
 
+function formatAnalysisDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
+  } catch {
+    return '';
+  }
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -54,29 +68,54 @@ export async function generateMetadata({
   if (!data) return { title: 'Análise não encontrada | SmartLic' };
 
   const levelLabel = data.viability_level === 'alta' ? 'ALTA' : data.viability_level === 'media' ? 'MÉDIA' : 'BAIXA';
-  const title = `Análise: ${data.bid_title.slice(0, 60)} — Score ${data.viability_score}/100 | SmartLic`;
-  const description = `Viabilidade ${data.viability_score}/100 (${levelLabel}) para "${data.bid_title.slice(0, 80)}"${data.bid_orgao ? ` (${data.bid_orgao})` : ''}. 4 fatores: modalidade, prazo, valor e geografia.`;
+  const setor = data.bid_modalidade || data.bid_uf || 'licitações';
+  const cnpjLike = data.bid_orgao || '';
+  const dataFmt = formatAnalysisDate(data.created_at);
+
+  const title = `Análise de Viabilidade - ${setor} | SmartLic`;
+  const description = cnpjLike
+    ? `Score ${data.viability_score}/100 para ${cnpjLike} no setor ${setor}. Veja análise completa.`
+    : `Score ${data.viability_score}/100 (${levelLabel}) no setor ${setor}. Veja análise completa.`;
+
+  const ogParams = new URLSearchParams({
+    type: 'analise',
+    score: String(data.viability_score),
+    level: data.viability_level,
+    title: data.bid_title.slice(0, 60),
+  });
+  if (cnpjLike) ogParams.set('cnpj', cnpjLike);
+  if (setor) ogParams.set('setor', setor);
+  if (dataFmt) ogParams.set('data', dataFmt);
+
+  const ogImageUrl = `${baseUrl}/api/og?${ogParams.toString()}`;
+  const canonical = `${baseUrl}/analise/${hash}`;
 
   return {
     title,
     description,
     robots: { index: false, follow: true },
-    alternates: { canonical: `${baseUrl}/analise/${hash}` },
+    alternates: { canonical },
     openGraph: {
       title: `Score ${data.viability_score}/100 — ${levelLabel} VIABILIDADE`,
       description,
-      url: `${baseUrl}/analise/${hash}`,
+      url: canonical,
       type: 'article',
       locale: 'pt_BR',
       images: [
         {
-          url: `${baseUrl}/api/og?type=analise&score=${data.viability_score}&level=${data.viability_level}&title=${encodeURIComponent(data.bid_title.slice(0, 60))}`,
+          url: ogImageUrl,
           width: 1200,
           height: 630,
+          alt: title,
         },
       ],
     },
-    twitter: { card: 'summary_large_image' },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: [ogImageUrl],
+    },
   };
 }
 
@@ -127,11 +166,27 @@ export default async function AnalisePage({
     reviewBody: `Análise de viabilidade com score ${data.viability_score}/100 (${levelLabel}).`,
   };
 
+  const shareUrl = `${baseUrl}/analise/${hash}`;
+  const setor = data.bid_modalidade || data.bid_uf || 'licitações';
+  const shareTitle = `Análise de Viabilidade — Score ${data.viability_score}/100 (${levelLabel})`;
+  const shareDescription = `Análise de viabilidade SmartLic para "${data.bid_title.slice(0, 80)}"${data.bid_orgao ? ` — ${data.bid_orgao}` : ''}.`;
+
   return (
     <>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(reviewSchema) }}
+      />
+
+      {/* SEO-PLAYBOOK P6: Article schema for shareable analysis */}
+      <SchemaMarkup
+        pageType="analise"
+        title={shareTitle}
+        description={shareDescription}
+        url={shareUrl}
+        datePublished={data.created_at}
+        dateModified={data.created_at}
+        sectorName={setor}
       />
 
       {/* SEO-PLAYBOOK P6: track analysis_viewed */}
@@ -230,6 +285,17 @@ export default async function AnalisePage({
           >
             Analisar editais para o meu setor →
           </Link>
+        </div>
+
+        {/* SEO-PLAYBOOK P6: Share buttons */}
+        <div className="mt-8">
+          <ShareButtons
+            url={shareUrl}
+            title={shareTitle}
+            description={shareDescription}
+            hashtags={['SmartLic', 'Licitacoes', 'B2G']}
+            trackingContext={{ source: 'analise', hash, viability_score: data.viability_score }}
+          />
         </div>
 
         {/* Footer note */}

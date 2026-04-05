@@ -18,12 +18,33 @@ export async function GET(request: NextRequest) {
 
 function renderAnaliseOG(searchParams: URLSearchParams) {
   const score = parseInt(searchParams.get("score") || "0", 10);
-  const level = searchParams.get("level") || "media";
+  const explicitLevel = searchParams.get("level");
+  // Derive level from score if not explicitly provided (supports score-only callers)
+  const level =
+    explicitLevel ||
+    (score > 70 ? "alta" : score >= 40 ? "media" : "baixa");
   const title = searchParams.get("title") || "Análise de Viabilidade";
+  const cnpj = searchParams.get("cnpj") || "";
+  const setor = searchParams.get("setor") || "";
+  const data = searchParams.get("data") || "";
+
+  // Truncate CNPJ for display (e.g., "12.345.678/0001-XX" style)
+  const cnpjDisplay = cnpj
+    ? cnpj.length > 18
+      ? cnpj.slice(0, 18) + "…"
+      : cnpj
+    : "";
+
+  // Color thresholds: verde >70, amarelo 40-70, vermelho <40
+  const scoreColor = score > 70 ? "#22C55E" : score >= 40 ? "#EAB308" : "#EF4444";
+  const scoreBg =
+    score > 70
+      ? "rgba(34,197,94,0.15)"
+      : score >= 40
+        ? "rgba(234,179,8,0.15)"
+        : "rgba(239,68,68,0.15)";
 
   const levelLabel = level === "alta" ? "ALTA" : level === "media" ? "MÉDIA" : "BAIXA";
-  const scoreColor = level === "alta" ? "#22C55E" : level === "media" ? "#EAB308" : "#9CA3AF";
-  const scoreBg = level === "alta" ? "rgba(34,197,94,0.15)" : level === "media" ? "rgba(234,179,8,0.15)" : "rgba(156,163,175,0.15)";
 
   return new ImageResponse(
     (
@@ -79,12 +100,32 @@ function renderAnaliseOG(searchParams: URLSearchParams) {
             color: "#FFFFFF",
             textAlign: "center",
             maxWidth: "900px",
-            margin: "0 0 32px 0",
+            margin: "0 0 16px 0",
             lineHeight: 1.3,
           }}
         >
           {title.length > 80 ? title.slice(0, 77) + "..." : title}
         </p>
+
+        {/* Meta row: CNPJ · Setor · Data */}
+        {(cnpjDisplay || setor || data) && (
+          <div
+            style={{
+              display: "flex",
+              gap: "16px",
+              alignItems: "center",
+              marginBottom: "24px",
+              color: "#C8D4E8",
+              fontSize: "18px",
+            }}
+          >
+            {cnpjDisplay && <span>CNPJ {cnpjDisplay}</span>}
+            {cnpjDisplay && setor && <span style={{ opacity: 0.5 }}>·</span>}
+            {setor && <span>{setor.length > 30 ? setor.slice(0, 27) + "…" : setor}</span>}
+            {(cnpjDisplay || setor) && data && <span style={{ opacity: 0.5 }}>·</span>}
+            {data && <span>{data}</span>}
+          </div>
+        )}
 
         {/* Factor badges */}
         <div

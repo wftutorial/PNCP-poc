@@ -4,8 +4,9 @@ import Script from 'next/script';
 import { useEffect } from 'react';
 import { safeGetItem } from '../../lib/storage';
 
-// DEBT-108: nonce prop passed from layout.tsx (read from x-nonce header set by middleware).
-export function GoogleAnalytics({ nonce }: { nonce?: string }) {
+// SEO-FIX: nonce prop removed — layout.tsx no longer calls headers(), enabling
+// static rendering and Cache-Control: public for CDN caching.
+export function GoogleAnalytics() {
   const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA4_MEASUREMENT_ID;
 
   useEffect(() => {
@@ -34,28 +35,12 @@ export function GoogleAnalytics({ nonce }: { nonce?: string }) {
 
   return (
     <>
-      {/* DEBT-108: nonce allows this external script under nonce-based CSP */}
+      {/* External GA script — allowed by https://www.googletagmanager.com in CSP script-src */}
       <Script
         src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
         strategy="afterInteractive"
-        nonce={nonce}
       />
-      {/* DEBT-108: nonce allows this inline script block under nonce-based CSP */}
-      <Script id="google-analytics" strategy="afterInteractive" nonce={nonce}>
-        {`
-          window.dataLayer = window.dataLayer || [];
-          function gtag(){dataLayer.push(arguments);}
-          gtag('js', new Date());
-
-          // Wait for consent before initializing
-          if (localStorage.getItem('cookie-consent') === 'accepted') {
-            gtag('config', '${GA_MEASUREMENT_ID}', {
-              page_path: window.location.pathname,
-              anonymize_ip: true
-            });
-          }
-        `}
-      </Script>
+      {/* Inline initialization handled by useEffect above — no inline script needed */}
     </>
   );
 }

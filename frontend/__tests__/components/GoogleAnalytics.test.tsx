@@ -97,13 +97,18 @@ describe('GoogleAnalytics Component', () => {
       expect(gtagSpy).not.toHaveBeenCalled();
     });
 
-    it('should check consent before initializing in inline script', () => {
+    it('should check consent before initializing via useEffect', async () => {
       localStorage.setItem('cookie-consent', 'accepted');
 
-      const { getByTestId } = render(<GoogleAnalytics />);
-      const inlineScript = getByTestId('google-analytics');
+      render(<GoogleAnalytics />);
 
-      expect(inlineScript.innerHTML).toContain("localStorage.getItem('cookie-consent') === 'accepted'");
+      // useEffect pushes config command to dataLayer when consent is accepted
+      await waitFor(() => {
+        const configCall = (window.dataLayer as unknown[]).find(
+          (entry) => Array.isArray(entry) && entry[0] === 'config'
+        );
+        expect(configCall).toBeDefined();
+      });
     });
   });
 
@@ -119,21 +124,34 @@ describe('GoogleAnalytics Component', () => {
       });
     });
 
-    it('should configure GA with anonymize_ip for LGPD compliance', () => {
-      const { getByTestId } = render(<GoogleAnalytics />);
-      const inlineScript = getByTestId('google-analytics');
+    it('should configure GA with anonymize_ip for LGPD compliance via useEffect', async () => {
+      localStorage.setItem('cookie-consent', 'accepted');
 
-      // Check that the inline script includes anonymize_ip config
-      expect(inlineScript.innerHTML).toContain('anonymize_ip: true');
-      expect(inlineScript.innerHTML).toContain("gtag('config', 'G-TEST123456'");
+      render(<GoogleAnalytics />);
+
+      // useEffect pushes ['config', 'G-TEST123456', { anonymize_ip: true, ... }] to dataLayer
+      await waitFor(() => {
+        const configCall = (window.dataLayer as unknown[]).find(
+          (entry): entry is unknown[] => Array.isArray(entry) && entry[0] === 'config'
+        );
+        expect(configCall).toBeDefined();
+        expect(configCall![2]).toMatchObject({ anonymize_ip: true });
+        expect(configCall![1]).toBe('G-TEST123456');
+      });
     });
 
-    it('should include page_path in config', () => {
-      const { getByTestId } = render(<GoogleAnalytics />);
-      const inlineScript = getByTestId('google-analytics');
+    it('should include page_path in config via useEffect', async () => {
+      localStorage.setItem('cookie-consent', 'accepted');
 
-      // Check that the inline script includes page_path
-      expect(inlineScript.innerHTML).toContain('page_path:');
+      render(<GoogleAnalytics />);
+
+      await waitFor(() => {
+        const configCall = (window.dataLayer as unknown[]).find(
+          (entry): entry is unknown[] => Array.isArray(entry) && entry[0] === 'config'
+        );
+        expect(configCall).toBeDefined();
+        expect(configCall![2]).toHaveProperty('page_path');
+      });
     });
   });
 
@@ -261,11 +279,18 @@ describe('GoogleAnalytics Component', () => {
   });
 
   describe('LGPD compliance', () => {
-    it('should include anonymize_ip in inline script config', () => {
-      const { getByTestId } = render(<GoogleAnalytics />);
-      const inlineScript = getByTestId('google-analytics');
+    it('should include anonymize_ip in GA config via useEffect', async () => {
+      localStorage.setItem('cookie-consent', 'accepted');
 
-      expect(inlineScript.innerHTML).toContain('anonymize_ip: true');
+      render(<GoogleAnalytics />);
+
+      await waitFor(() => {
+        const configCall = (window.dataLayer as unknown[]).find(
+          (entry): entry is unknown[] => Array.isArray(entry) && entry[0] === 'config'
+        );
+        expect(configCall).toBeDefined();
+        expect(configCall![2]).toMatchObject({ anonymize_ip: true });
+      });
     });
 
     it('should check localStorage consent before tracking', () => {

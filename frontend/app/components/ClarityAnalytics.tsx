@@ -1,25 +1,28 @@
 'use client';
 
-import Script from 'next/script';
+import { useEffect } from 'react';
 
-// DEBT-108: nonce prop passed from layout.tsx (read from x-nonce header set by middleware).
-export function ClarityAnalytics({ nonce }: { nonce?: string }) {
+// SEO-FIX: nonce prop removed. Replaced <Script> inline with useEffect — the script
+// src loads from https://www.clarity.ms (allowed by CSP domain allowlist), no
+// inline script needed in HTML so no hash/nonce required.
+export function ClarityAnalytics() {
   const CLARITY_PROJECT_ID = process.env.NEXT_PUBLIC_CLARITY_PROJECT_ID;
 
-  if (!CLARITY_PROJECT_ID) {
-    return null;
-  }
+  useEffect(() => {
+    if (!CLARITY_PROJECT_ID) return;
 
-  return (
-    // DEBT-108: nonce allows this inline script block under nonce-based CSP
-    <Script id="microsoft-clarity" strategy="afterInteractive" nonce={nonce}>
-      {`
-        (function(c,l,a,r,i,t,y){
-          c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-          t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
-          y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-        })(window, document, "clarity", "script", "${CLARITY_PROJECT_ID}");
-      `}
-    </Script>
-  );
+    // Initialize clarity queue before script loads
+    const win = window as Window & { clarity?: ((...args: unknown[]) => void) & { q?: unknown[] } };
+    win.clarity = win.clarity || function (...args: unknown[]) {
+      (win.clarity!.q = win.clarity!.q || []).push(args);
+    };
+
+    // Dynamically load Clarity — src allowed by https://www.clarity.ms in CSP script-src
+    const script = document.createElement('script');
+    script.async = true;
+    script.src = `https://www.clarity.ms/tag/${CLARITY_PROJECT_ID}`;
+    document.head.appendChild(script);
+  }, [CLARITY_PROJECT_ID]);
+
+  return null;
 }

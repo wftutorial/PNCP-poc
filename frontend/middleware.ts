@@ -33,16 +33,38 @@ import { createServerClient } from "@supabase/ssr";
  * and remove the nonce generation + x-nonce header lines.
  */
 function addSecurityHeaders(response: NextResponse): NextResponse {
-  // DEBT-108: Generate a cryptographically random nonce per request
-  const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
+  // SEO-FIX: Replaced per-request nonce (DEBT-108) with static SHA-256 hash.
+  // Per-request nonce required `await headers()` in layout.tsx, forcing dynamic
+  // rendering on the entire page tree → Next.js set Cache-Control: private on ALL
+  // pages → Cloudflare CDN could not cache → cf-cache-status: DYNAMIC on every
+  // request → worse crawl budget, higher TTFB, slower Googlebot indexation.
+  //
+  // The only truly inline script in HTML is the theme-init script in layout.tsx
+  // (dangerouslySetInnerHTML). Its content is 100% static — SHA-256 hash never
+  // changes across requests. GA and Clarity use strategy="afterInteractive" which
+  // bundles/executes as JS (not raw inline <script> in HTML), so no hash needed.
+  //
+  // 'strict-dynamic' removed: it ignores domain allowlists for static <script src>
+  // tags, requiring nonce/hash on every script. Without per-request nonce, domain
+  // allowlists are the correct enforcement mechanism.
+  //
+  // To restore nonce-based CSP (reverts this fix):
+  // 1. Re-add: const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
+  // 2. Replace script-src with: `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' ...`
+  // 3. Re-add: response.headers.set("x-nonce", nonce);
+  // 4. Restore `async` + `await headers()` in layout.tsx
+  //
+  // Hash computation: node -e "const {createHash}=require('crypto');
+  //   const s='\n              (function() { ... })();\n            ';
+  //   console.log('sha256-'+createHash('sha256').update(s).digest('base64'));"
+  // THEME_INIT_HASH: sha256-cKn8Ad2sQ17kSb7D+OWHpjqjv4Jgu4eo/To/sKp8AsQ=
 
-  // AC1+AC4: Content Security Policy — enforcing mode with nonce-based script-src
+  // AC1+AC4: Content Security Policy — enforcing mode with hash-based script-src
   const csp = [
     "default-src 'self'",
-    // DEBT-108: nonce + strict-dynamic replaces unsafe-inline/unsafe-eval.
-    // 'strict-dynamic' propagates trust to scripts loaded by nonced scripts.
-    // Fallback hosts kept for browsers that do not support strict-dynamic/nonces.
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://js.stripe.com https://static.cloudflareinsights.com https://cdnjs.cloudflare.com https://cdn.sentry.io https://www.clarity.ms https://www.googletagmanager.com`,
+    // SHA-256 hash of the static theme-init inline script in layout.tsx.
+    // Domain allowlist covers all external scripts (GA, Clarity, Stripe, etc.).
+    "script-src 'self' 'sha256-cKn8Ad2sQ17kSb7D+OWHpjqjv4Jgu4eo/To/sKp8AsQ=' https://js.stripe.com https://static.cloudflareinsights.com https://cdnjs.cloudflare.com https://cdn.sentry.io https://www.clarity.ms https://www.googletagmanager.com",
     // DEBT-116: style-src unsafe-inline is an accepted risk.
     // Tailwind CSS and Next.js inject inline styles at runtime (className -> style).
     // Nonce-based styles would require a custom PostCSS plugin + Next.js config changes
@@ -61,9 +83,6 @@ function addSecurityHeaders(response: NextResponse): NextResponse {
 
   // AC1: Enforcing CSP (promoted from Report-Only in STORY-300)
   response.headers.set("Content-Security-Policy", csp);
-
-  // DEBT-108: Expose nonce to layout.tsx via response header
-  response.headers.set("x-nonce", nonce);
 
   // AC2: Reporting API v1 — report-to group definition
   response.headers.set(

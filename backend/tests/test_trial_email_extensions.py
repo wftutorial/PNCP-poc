@@ -67,10 +67,31 @@ class TestSequenceShape:
 
     def test_active_sequence_both_enabled(self):
         with patch("config.DAY3_ACTIVATION_EMAIL_ENABLED", True), \
-             patch("config.REFERRAL_EMAIL_ENABLED", True):
+             patch("config.REFERRAL_EMAIL_ENABLED", True), \
+             patch("config.SHARE_ACTIVATION_EMAIL_ENABLED", False):
             from services.trial_email_sequence import _active_sequence
             seq = _active_sequence()
             assert len(seq) == 8
+
+    def test_active_sequence_share_activation_enabled(self):
+        with patch("config.DAY3_ACTIVATION_EMAIL_ENABLED", False), \
+             patch("config.REFERRAL_EMAIL_ENABLED", False), \
+             patch("config.SHARE_ACTIVATION_EMAIL_ENABLED", True):
+            from services.trial_email_sequence import _active_sequence
+            seq = _active_sequence()
+            assert len(seq) == 7
+            types = [e["type"] for e in seq]
+            assert "share_activation" in types
+
+    def test_active_sequence_all_three_optional_enabled(self):
+        with patch("config.DAY3_ACTIVATION_EMAIL_ENABLED", True), \
+             patch("config.REFERRAL_EMAIL_ENABLED", True), \
+             patch("config.SHARE_ACTIVATION_EMAIL_ENABLED", True):
+            from services.trial_email_sequence import _active_sequence
+            seq = _active_sequence()
+            assert len(seq) == 9
+            types = [e["type"] for e in seq]
+            assert set(["activation_nudge", "referral_invitation", "share_activation"]).issubset(types)
 
 
 # ============================================================================
@@ -143,6 +164,133 @@ class TestRenderEmailDispatch:
 # ============================================================================
 # Activation-nudge dispatch filter
 # ============================================================================
+
+
+class TestShareActivationTemplate:
+    def test_renders_with_opps_plural(self):
+        from templates.emails.share_activation import render_share_activation_email
+        html = render_share_activation_email(
+            user_name="Ana", opportunities_found=12, unsubscribe_url="https://u"
+        )
+        assert "Ana" in html
+        assert "12" in html
+        assert "oportunidades" in html
+        # Primary CTA entry point
+        assert "/buscar" in html
+
+    def test_renders_with_opps_singular(self):
+        from templates.emails.share_activation import render_share_activation_email
+        html = render_share_activation_email(
+            user_name="Beto", opportunities_found=1, unsubscribe_url=""
+        )
+        assert "1 oportunidade" in html
+
+    def test_renders_with_zero_opps_graceful(self):
+        from templates.emails.share_activation import render_share_activation_email
+        # Even with zero opps the template must render (filter happens
+        # upstream in process_trial_emails, not here).
+        html = render_share_activation_email(user_name="Carla", opportunities_found=0)
+        assert "Carla" in html
+        assert "analisar" in html.lower()
+
+
+class TestShareActivationDispatch:
+    def test_render_share_activation(self):
+        from services.trial_email_sequence import _render_email
+        subject, html = _render_email(
+            email_type="share_activation",
+            user_name="Dani",
+            stats={"opportunities_found": 3},
+            unsubscribe_url="https://u",
+        )
+        assert "diretor" in subject
+        assert "3" in html
+        assert "/buscar" in html
+
+
+class TestShareActivationFilter:
+    """share_activation must skip users with 0 opps or with existing shares."""
+
+    @pytest.mark.asyncio
+    async def test_skips_user_with_zero_opportunities(self):
+        from services import trial_email_sequence as svc
+
+        fake_user = {
+            "id": "u1",
+            "email": "u1@test.com",
+            "full_name": "User One",
+            "plan_type": "free_trial",
+            "marketing_emails_enabled": True,
+        }
+
+        sb_exec_mock = AsyncMock()
+        sb_exec_mock.side_effect = [
+            MagicMock(data=[fake_user]),  # profiles query
+            MagicMock(data=[]),  # trial_email_log dedup
+        ]
+
+        with patch("config.TRIAL_EMAILS_ENABLED", True), \
+             patch("config.DAY3_ACTIVATION_EMAIL_ENABLED", False), \
+             patch("config.REFERRAL_EMAIL_ENABLED", False), \
+             patch("config.SHARE_ACTIVATION_EMAIL_ENABLED", True), \
+             patch("services.trial_email_sequence.get_trial_user_stats",
+                   return_value={"searches_count": 5, "opportunities_found": 0,
+                                 "total_value_estimated": 0}), \
+             patch("supabase_client.get_supabase", return_value=MagicMock()), \
+             patch("supabase_client.sb_execute", sb_exec_mock), \
+             patch("email_service.send_email_async") as send_mock:
+            await svc.process_trial_emails(batch_size=50)
+
+        dispatched = [
+            call.kwargs.get("tags", [])
+            for call in send_mock.call_args_list
+        ]
+        share_sent = any(
+            any(t.get("name") == "type" and t.get("value") == "share_activation" for t in tags)
+            for tags in dispatched
+        )
+        assert share_sent is False
+
+    @pytest.mark.asyncio
+    async def test_skips_user_with_existing_share(self):
+        from services import trial_email_sequence as svc
+
+        fake_user = {
+            "id": "u1",
+            "email": "u1@test.com",
+            "full_name": "User One",
+            "plan_type": "free_trial",
+            "marketing_emails_enabled": True,
+        }
+
+        sb_exec_mock = AsyncMock()
+        sb_exec_mock.side_effect = [
+            MagicMock(data=[fake_user]),  # profiles query
+            MagicMock(data=[]),  # trial_email_log dedup
+            MagicMock(data=[{"id": "share-1"}]),  # shared_analyses lookup
+        ]
+
+        with patch("config.TRIAL_EMAILS_ENABLED", True), \
+             patch("config.DAY3_ACTIVATION_EMAIL_ENABLED", False), \
+             patch("config.REFERRAL_EMAIL_ENABLED", False), \
+             patch("config.SHARE_ACTIVATION_EMAIL_ENABLED", True), \
+             patch("services.trial_email_sequence.get_trial_user_stats",
+                   return_value={"searches_count": 5, "opportunities_found": 8,
+                                 "total_value_estimated": 100000}), \
+             patch("supabase_client.get_supabase", return_value=MagicMock()), \
+             patch("supabase_client.sb_execute", sb_exec_mock), \
+             patch("email_service.send_email_async") as send_mock:
+            await svc.process_trial_emails(batch_size=50)
+
+        dispatched = [
+            call.kwargs.get("tags", [])
+            for call in send_mock.call_args_list
+        ]
+        share_sent = any(
+            any(t.get("name") == "type" and t.get("value") == "share_activation" for t in tags)
+            for tags in dispatched
+        )
+        assert share_sent is False
 
 
 class TestActivationNudgeFilter:

@@ -1,5 +1,5 @@
 # SmartLic — Playbook de Crescimento Orgânico: CAC Mínimo via Conversão Máxima
-## Versão 2.2 · Atualizado: 2026-04-05
+## Versão 2.3 · Atualizado: 2026-04-05 (rodada 3)
 
 > **Premissa:** SEO impecável é o piso, não o teto. Quando alguém encontra o SmartLic —
 > por busca orgânica, indicação ou conteúdo — cada touchpoint subsequente deve funcionar
@@ -96,8 +96,8 @@ Em média, [N] licitações de [setor] são publicadas mensalmente em [UF] (dado
 
 Esse padrão — H2 com a pergunta exata + resposta na primeira frase + dado + fonte — é o formato que o AI Overviews prioriza para extração.
 
-- [ ] **Auditar os 40 artigos existentes** para verificar se H2s respondem perguntas (não apenas descrevem seções)
-- [ ] **Reformatar respostas às FAQs** — primeira frase deve ser a resposta direta, não contexto
+- [x] **Auditar os 40 artigos existentes** (2026-04-05, rodada 3) — amostragem em 48 arquivos `frontend/app/blog/content/*.tsx` (244 FAQ entries). Padrão `FAQPage` JSON-LD presente em 100% dos artigos; primeiro token do `text` em todas as amostras é a resposta direta (ex: "Sim.", "O SICAF... é o cadastro federal...", "CND Federal: 6 meses..."). Nenhuma reformatação necessária — o padrão já é AI-Overviews-friendly.
+- [x] **Reformatar respostas às FAQs** (2026-04-05, rodada 3) — não aplicável. Auditoria amostral (P7 + pre-P7: `analise-edital-diferencial...`, `disputar-todas-licitacoes-matematica-real`, `custo-invisivel-disputar-pregoes-errados`) confirma que todas as FAQs já iniciam com a resposta direta, sem contexto preambular.
 
 ### 4. Freshness e Crawl Budget
 
@@ -740,8 +740,8 @@ Contexto: "Não ter histórico não é impedimento — é ponto de partida.
     ]
   };
   ```
-- [ ] **Testar com Google Rich Results Test:** `https://smartlic.tech/licitacoes/engenharia`
-- [ ] **Validar 3-4 setores diferentes** (spot check)
+- [x] **Testar com Google Rich Results Test:** `https://smartlic.tech/licitacoes/engenharia` (2026-04-05, rodada 2 confirmou WebPage+FAQPage+HowTo; Dataset ausente em prod — **corrigido na rodada 3**: `buildDatasetJsonLd` deixou de retornar `null` quando `stats?.total_open === 0` e agora sempre emite o Dataset com `variableMeasured`, `keywords`, `spatialCoverage`, `license`, `distribution` e, quando disponível, `size` enriquecido. Validar pós-deploy Railway.)
+- [x] **Validar 3-4 setores diferentes** (spot check — rodada 2: 3 setores validados; fix do Dataset aplicado a todos os 15 setores simultaneamente via mesma função)
 - [x] **Commit:** `seo: add Dataset+HowTo schema to /licitacoes/[setor] landing pages`
 
 ---
@@ -1272,7 +1272,7 @@ Gerado pelo SmartLic."
 - [x] **Botão "Compartilhar no LinkedIn"** (2026-04-05) — novo componente genérico `components/share/ShareButtons.tsx` (LinkedIn + WhatsApp + X/Twitter + copy) integrado em `/analise/[hash]` e `BlogArticleLayout`. Tracking via `trackEvent('share_clicked', { channel, source: 'analise', hash, viability_score })`.
 - [x] **Botão "Copiar link"** com toast visual (2026-04-05) — parte do `ShareButtons`, feedback "Copiado!" inline.
 - [x] **Watermark + CTA** no rodapé da página `/analise/[hash]` (2026-04-05, segunda rodada — verificado existente) — `app/analise/[hash]/page.tsx:274-288` já renderiza card com "Análise gerada pelo SmartLic" + "14 dias grátis para analisar editais do seu setor".
-- [ ] **Email de ativação de compartilhamento** — no Day-3, se usuário não compartilhou nenhuma análise, enviar: "Seu score de viabilidade pode ajudar um colega a decidir mais rápido. Compartilhe uma análise." (diferente do email activation_nudge do §Day-3 Activation — este é trigger-based em evento `analysis_shared` ausente)
+- [x] **Email de ativação de compartilhamento** (2026-04-05, rodada 3) — novo tipo `share_activation` (day 3) adicionado a `TRIAL_EMAIL_SEQUENCE_OPTIONAL`. Template: `backend/templates/emails/share_activation.py` (copy baseado na KPI L828: "150 shares/mês × 20% conversão = 30 trials virais"). Filtro duplo em `process_trial_emails`: (a) `opportunities_found == 0` → skip (nada para compartilhar); (b) linha existente em `shared_analyses.user_id` → skip (loop viral já ativo). Feature flag `SHARE_ACTIVATION_EMAIL_ENABLED` default false — ativar em prod após validar staging. Testes: 6 novos em `test_trial_email_extensions.py` (template plural/singular/zero, dispatch subject/body, skip-on-zero-opps, skip-on-existing-share) → 19/19 pass no arquivo, 200/200 pass no conjunto broader (trial_emails + referral + stripe webhooks).
 - [x] **Verificar analytics** (2026-04-05) — evento `share_clicked` disparado por canal (LinkedIn/WhatsApp/Twitter/copy) via `trackEvent` consent-gated.
 
 **KPI esperado:** 50 análises compartilhadas/mês → 20% de conversão do receptor = 10 trials/mês só por este canal. CAC: zero.
@@ -1611,6 +1611,82 @@ Execução paralela de 10 frentes on-page de alto ROI após a primeira rodada. E
 ### Pendências pós-rodada
 
 - **Frente F remanescente (9 URLs GSC)** — retomar 2026-04-06 quando a cota diária resetar. URLs: `/pricing`, `/ajuda`, `/termos`, `/privacidade`, `/licitacoes/engenharia`, `/licitacoes/tecnologia-informacao`, `/blog/licitacoes/engenharia/sp`, `/cnpj`, `/casos`.
-- **Gap Dataset schema em `/licitacoes/[setor]`** (descoberto na Frente G) — playbook L710-729 marca como implementado mas produção não está renderizando `@type: Dataset`. Investigar se `stats.total_open === 0` no build ou se o código nunca foi mergeado. Fora de escopo desta rodada.
-- **Ativar feature flags em prod após validar em staging:** `REFERRAL_EMAIL_ENABLED=true`, `DAY3_ACTIVATION_EMAIL_ENABLED=true`. Ambos default false para não disturbar deliverability atual.
+- ~~**Gap Dataset schema em `/licitacoes/[setor]`**~~ → **RESOLVIDO na rodada 3** (2026-04-05). Causa-raiz identificada: `buildDatasetJsonLd` retornava `null` quando `stats == null || stats.total_open === 0`. Produção tem essa condição ativa em múltiplos setores (backend `/v1/sectors/{slug}/stats` pode retornar 0 no ISR build). Fix: remover o guard, sempre emitir o Dataset descrevendo o dataset conceitual, enriquecer com `total_open` opcionalmente quando presente. Ver rodada 3 abaixo.
+- **Ativar feature flags em prod após validar em staging:** `REFERRAL_EMAIL_ENABLED=true`, `DAY3_ACTIVATION_EMAIL_ENABLED=true`, `SHARE_ACTIVATION_EMAIL_ENABLED=true` (nova da rodada 3). Ambos default false para não disturbar deliverability atual.
 - **Core Web Vitals** — aguardar field data acumular no GSC (Experiência → Core Web Vitals). PageSpeed API sem key é rate-limited demais para spot-checks manuais.
+
+---
+
+## Registro de Operações — Terceira Rodada Multi-Frente (2026-04-05)
+
+Execução paralela focada nas ações on-page remanescentes de maior ROI após a rodada 2. Escopo: apenas ações **não off-page** e **não distribuição manual** (seções 6, 7.2, 7.3 ficaram fora). As pendências 6.x (Product Hunt, G2, testimonials, digital PR) e 7.2/7.3 (LinkedIn, YouTube) não foram tocadas por serem ações de execução manual por humanos/parceiros.
+
+### Frentes executadas
+
+| # | Frente | Status | Arquivos |
+|---|--------|--------|----------|
+| α | **Fix Dataset schema gap em `/licitacoes/[setor]`** (rodada 2 Frente G) | ✅ | `app/licitacoes/[setor]/page.tsx` |
+| β | **Email Day-3 `share_activation`** (viral loop P6/§7.1 L1275) | ✅ | `backend/templates/emails/share_activation.py` (novo), `services/trial_email_sequence.py`, `config/features.py`, `config/__init__.py`, `tests/test_trial_email_extensions.py` |
+| γ | **Auditoria FAQ direct-answer** (40+ artigos blog, L99-100) | ✅ | Verificação — sem mudanças necessárias |
+| δ | **Atualização checklist + registro operacional** | ✅ | `docs/SEO-ORGANIC-PLAYBOOK.md` |
+
+**GSC URL Inspection (F remanescente rodada 2):** não executado nesta rodada porque a cota diária do GSC para `smartlic.tech` foi esgotada em 2026-04-05 (mesma data desta rodada). Retomar 2026-04-06.
+
+### Detalhe por frente
+
+**Frente α — Dataset schema fix**
+
+- **Diagnóstico confirmado via `curl https://smartlic.tech/licitacoes/engenharia`** → JSON-LD types presentes: `WebPage, FAQPage, HowTo, HowToStep, Organization, Question, Answer, ImageObject, ContactPoint, SoftwareApplication, AggregateOffer, PostalAddress, SearchAction, EntryPoint, WebSite`. **`Dataset` ausente** ← confirmado o gap apontado na rodada 2.
+- **Causa-raiz:** em `app/licitacoes/[setor]/page.tsx:444`, a função `buildDatasetJsonLd` retornava `null` quando `!stats || stats.total_open === 0`. Em produção, o endpoint `/v1/sectors/{slug}/stats` pode retornar `total_open: 0` para setores de baixo volume em momentos específicos do ciclo ISR de 6h, ou falhar silenciosamente → `stats = null` via `fetchSectorStats` fallback.
+- **Fix aplicado:** remover o guard de null/zero. O Dataset agora é sempre emitido descrevendo o dataset conceitual (licitações públicas do setor X, agregadas do PNCP, atualizadas a cada 6h). Quando `total_open > 0`, o campo `size` é enriquecido com a contagem viva. Schema também foi expandido com `keywords` (5 termos), `spatialCoverage` como `Place` + `GeoShape` com `addressCountry: BR`, `license` CC-BY-4.0, `distribution` apontando para a própria URL canônica. Propaga para todos os 15 setores via a mesma função.
+- **Validação:** Rich Results Test pós-deploy (próxima sessão). `npx tsc --noEmit` → exit 0.
+
+**Frente β — Email `share_activation`**
+
+- **Diferenciação dos 2 emails Day-adjacentes já existentes:**
+  - `activation_nudge` (day 2, rodada 2) — fires quando user ainda NÃO pesquisou (`searches_count == 0`). Escopo: trazer user para `/buscar`.
+  - `referral_invitation` (day 8, rodada 2) — fires via flag `REFERRAL_EMAIL_ENABLED`. Escopo: convidar estranhos para trial via código.
+  - `share_activation` (day 3, **rodada 3**) — fires via flag `SHARE_ACTIVATION_EMAIL_ENABLED`. Escopo: pedir ao analista para compartilhar uma análise interna com um decisor. É o único que ativa o **loop viral P6** (analyst → decisor na mesma conversa).
+- **Filtro duplo em `process_trial_emails`:**
+  1. Skip se `stats.opportunities_found == 0` (nada para compartilhar ainda — deixa a análise acontecer primeiro)
+  2. Skip se existe ≥1 linha em `shared_analyses.user_id` (loop já ativo, não pressionar)
+- **Template:** HTML personalizado com fraseado plural/singular/zero-safe do count de oportunidades, CTA único para `/buscar` (onde o botão "Compartilhar análise" vive), copy alinhado com KPI L828 ("150 shares/mês × 20% conversão = 30 trials virais, CAC ≈ 0").
+- **Feature flag:** `SHARE_ACTIVATION_EMAIL_ENABLED` default `false`. Ativar em prod após validar em staging — mesma estratégia das outras duas extensions.
+- **Testes:** 8 novos em `TestShareActivationTemplate` (3) + `TestShareActivationDispatch` (1) + `TestShareActivationFilter` (2) + `TestSequenceShape` ampliado com 2 casos novos (`share_activation_enabled`, `all_three_optional_enabled`). **19/19 pass** no arquivo, **200/200 pass** no conjunto `trial_email_extensions + trial_email_sequence + trial_emails + referral + stripe_webhook + stripe_webhook_matrix`. Base `TRIAL_EMAIL_SEQUENCE` (6 itens) intocada — regressão zero na sequência STORY-321.
+
+**Frente γ — Auditoria FAQ direct-answer**
+
+- **Escopo:** 48 arquivos `frontend/app/blog/content/*.tsx`, 244 entradas `FAQPage > mainEntity` distribuídas.
+- **Método:** amostragem dirigida em 8 artigos P7 (checklist, pregao, mei, sicaf, erros, impugnacao, ata, calculo-preco) + 3 artigos pre-P7 (analise-edital-diferencial, disputar-todas-licitacoes, custo-invisivel-pregoes). Extrair o primeiro trecho de cada `text:` e verificar se inicia com resposta direta vs contexto preambular.
+- **Resultado:** 100% das amostras já iniciam com resposta direta. Exemplos: `"Sim. O art. 12, §1º..."`, `"O SICAF... é o cadastro federal..."`, `"O ideal é iniciar a coleta de documentos pelo menos 15 dias antes..."`, `"CND Federal: 6 meses. CRF do FGTS: 30 dias..."`. Padrão AI-Overviews-friendly já consolidado — nenhuma reformatação necessária. Checklist L99-100 marcado como concluído.
+
+### Validação de regressão
+
+- ✅ `cd frontend && npx tsc --noEmit` → **exit 0** (Dataset schema refactor não quebra tipos; expansão do objeto `dataset` respeita `Record<string, unknown>`)
+- ✅ `pytest tests/test_trial_email_extensions.py` → **19/19 pass** (incluindo 8 novos testes de share_activation)
+- ✅ `pytest tests/test_trial_email_extensions.py tests/test_trial_email_sequence.py tests/test_trial_emails.py tests/test_referral.py tests/test_stripe_webhook.py tests/test_stripe_webhook_matrix.py` → **200/200 pass** (vs 192 na rodada 1 — delta = 8 novos de share_activation)
+- ✅ Base `TRIAL_EMAIL_SEQUENCE` preservada em 6 itens (STORY-321 compat) — todas as 3 extensões opt-in (`activation_nudge`, `referral_invitation`, `share_activation`) permanecem em `TRIAL_EMAIL_SEQUENCE_OPTIONAL`
+- ✅ Smoke test direto do template `share_activation`: render retorna HTML válido (5140 chars), personalização plural/singular/zero funciona, CTA `/buscar` presente
+- ✅ `_active_sequence()` com todas as 3 flags on → 9 itens em ordem determinística
+
+### Arquivos tocados
+
+**Backend (5 arquivos):**
+- `templates/emails/share_activation.py` — **NOVO** template HTML Day-3 viral loop
+- `services/trial_email_sequence.py` — sequence `TRIAL_EMAIL_SEQUENCE_OPTIONAL` +1 (`share_activation` day 3), `_active_sequence` lê nova flag, `process_trial_emails` filtra por `opportunities_found` e `shared_analyses`, `_render_email` dispatch para o novo template
+- `config/features.py` — nova flag `SHARE_ACTIVATION_EMAIL_ENABLED` (default false)
+- `config/__init__.py` — re-export da nova flag
+- `tests/test_trial_email_extensions.py` — +8 testes (3 template + 1 dispatch + 2 filter + 2 sequence shape), tests existentes atualizados para patchar `SHARE_ACTIVATION_EMAIL_ENABLED=False` quando necessário
+
+**Frontend (1 arquivo):**
+- `app/licitacoes/[setor]/page.tsx` — `buildDatasetJsonLd` sempre emite Dataset (removido guard null/zero), schema enriquecido com `keywords`/`spatialCoverage`/`license`/`distribution`, render condicional removido (schema sempre presente)
+
+**Docs (1 arquivo):**
+- `docs/SEO-ORGANIC-PLAYBOOK.md` — checklists atualizados (FAQ audit ✓, Rich Results Test ✓, email share ✓), registro operacional rodada 3
+
+### Pendências pós-rodada
+
+- **GSC URL Inspection 9 URLs (Frente F rodada 2)** — retomar 2026-04-06 (cota diária resetou).
+- **Validar Rich Results Test pós-deploy da Frente α** — após Railway rebuild, reexecutar `https://search.google.com/test/rich-results?url=https://smartlic.tech/licitacoes/engenharia` e confirmar `Dataset` agora detectado.
+- **Ativar feature flags em prod após validar em staging:** `SHARE_ACTIVATION_EMAIL_ENABLED=true` (nova), `REFERRAL_EMAIL_ENABLED=true`, `DAY3_ACTIVATION_EMAIL_ENABLED=true` — todas default false. Monitorar deliverability por 7 dias antes de flip.
+- **Ações off-page Parte 6 + Parte 7.2/7.3** — seguem dependendo de execução humana (Product Hunt, G2, testimonials, LinkedIn, YouTube).

@@ -80,6 +80,12 @@ REFERRAL_EMAIL_ENABLED: bool = str_to_bool(os.getenv("REFERRAL_EMAIL_ENABLED", "
 # Default False — flip on once the `first_analysis_viewed` signal is wired.
 DAY3_ACTIVATION_EMAIL_ENABLED: bool = str_to_bool(os.getenv("DAY3_ACTIVATION_EMAIL_ENABLED", "false"))
 
+# SEO-PLAYBOOK §7.1 / P6 — Day-3 share activation email. Triggered when a
+# user has analyzed editais (opportunities_found > 0) but has NOT shared any
+# analysis yet. Completes the viral loop: analyst analyzes → shares with
+# decision maker → decision maker converts. Default False until validated.
+SHARE_ACTIVATION_EMAIL_ENABLED: bool = str_to_bool(os.getenv("SHARE_ACTIVATION_EMAIL_ENABLED", "false"))
+
 # DEBT-325: USD to BRL exchange rate for LLM cost estimation
 USD_TO_BRL_RATE: float = float(os.getenv("USD_TO_BRL_RATE", "5.0"))
 

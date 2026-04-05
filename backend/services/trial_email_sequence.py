@@ -48,6 +48,7 @@ TRIAL_EMAIL_SEQUENCE = [
 TRIAL_EMAIL_SEQUENCE_OPTIONAL = [
     {"number": 7, "day": 2, "type": "activation_nudge"},
     {"number": 8, "day": 8, "type": "referral_invitation"},
+    {"number": 9, "day": 3, "type": "share_activation"},
 ]
 
 
@@ -57,7 +58,11 @@ def _active_sequence() -> list[dict]:
     Feature flags are read lazily so tests that monkeypatch config values at
     import time still take effect.
     """
-    from config import DAY3_ACTIVATION_EMAIL_ENABLED, REFERRAL_EMAIL_ENABLED
+    from config import (
+        DAY3_ACTIVATION_EMAIL_ENABLED,
+        REFERRAL_EMAIL_ENABLED,
+        SHARE_ACTIVATION_EMAIL_ENABLED,
+    )
 
     sequence = list(TRIAL_EMAIL_SEQUENCE)
     if DAY3_ACTIVATION_EMAIL_ENABLED:
@@ -67,6 +72,10 @@ def _active_sequence() -> list[dict]:
     if REFERRAL_EMAIL_ENABLED:
         sequence.append(
             {"number": 8, "day": 8, "type": "referral_invitation"}
+        )
+    if SHARE_ACTIVATION_EMAIL_ENABLED:
+        sequence.append(
+            {"number": 9, "day": 3, "type": "share_activation"}
         )
     return sequence
 
@@ -295,6 +304,32 @@ async def process_trial_emails(batch_size: int = 50) -> dict:
                             skipped += 1
                             continue
 
+                    # SEO-PLAYBOOK §7.1 / P6: share activation fires only
+                    # when (a) the user has something worth sharing, and
+                    # (b) they have not shared anything yet. Both checks
+                    # are strict — we never pressure empty trials and we
+                    # never re-pressure users who already activated the
+                    # viral loop.
+                    if email_type == "share_activation":
+                        if stats.get("opportunities_found", 0) == 0:
+                            skipped += 1
+                            continue
+                        try:
+                            shares = await sb_execute(
+                                sb.table("shared_analyses")
+                                .select("id")
+                                .eq("user_id", user_id)
+                                .limit(1)
+                            )
+                            if shares.data and len(shares.data) > 0:
+                                skipped += 1
+                                continue
+                        except Exception:
+                            # On transient DB error, proceed — the
+                            # trial_email_log UNIQUE constraint keeps us
+                            # idempotent if we re-enter this path later.
+                            pass
+
                     # Pass user_id into stats so _render_email can look up
                     # the referral code for referral_invitation type.
                     if isinstance(stats, dict):
@@ -462,6 +497,18 @@ def _render_email(
         from templates.emails.day3_activation import render_day3_activation_email
         subject = "Sua primeira análise está a 30 segundos"
         html = render_day3_activation_email(user_name, unsubscribe_url=unsubscribe_url)
+
+    elif email_type == "share_activation":
+        # SEO-PLAYBOOK §7.1 / P6 — Day-3 share activation. Fires when user
+        # has analyzed editais but has not shared any analysis yet. Completes
+        # the viral loop (analyst → decision maker in the same conversation).
+        from templates.emails.share_activation import render_share_activation_email
+        subject = "Seu score pode acelerar a decisão do seu diretor"
+        html = render_share_activation_email(
+            user_name,
+            opportunities_found=opps,
+            unsubscribe_url=unsubscribe_url,
+        )
 
     elif email_type == "referral_invitation":
         # SEO-PLAYBOOK §7.4 — Day-8 viral loop email. Reuses the existing

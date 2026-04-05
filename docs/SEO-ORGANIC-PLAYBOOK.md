@@ -1,5 +1,5 @@
 # SmartLic — Playbook de Crescimento Orgânico: CAC Mínimo via Conversão Máxima
-## Versão 2.0 · Atualizado: 2026-04-04
+## Versão 2.1 · Atualizado: 2026-04-05
 
 > **Premissa:** SEO impecável é o piso, não o teto. Quando alguém encontra o SmartLic —
 > por busca orgânica, indicação ou conteúdo — cada touchpoint subsequente deve funcionar
@@ -23,6 +23,8 @@
 | [3](#parte-3--iniciativas-técnicas-p0--p7) | Técnico | Checklists de implementação com copy especificado |
 | [4](#parte-4--métricas-de-cac-mínimo) | Métricas | Dashboard orientado a R$ CAC, não cliques |
 | [5](#parte-5--anti-patterns) | Anti-patterns | O que nunca fazer |
+| [6](#parte-6--off-page-backlinks-e-autoridade-de-domínio) | Off-Page | Backlinks, digital PR, diretórios — **o que faltava** |
+| [7](#parte-7--distribuição-produto-como-canal) | Distribuição | LinkedIn, P6 viral, YouTube, referral |
 
 ---
 
@@ -162,6 +164,74 @@ Erros silenciosos de canonical ou `noindex` matam meses de trabalho sem aviso.
 curl https://smartlic.tech/robots.txt
 curl https://smartlic.tech/sitemap.xml | grep -c "<url>" # deve retornar 450+
 ```
+
+### 7. Indexação Acelerada — IndexNow + Google Ping
+
+> **Aviso:** Sitemap + robots.txt corretos são condição necessária, mas não suficiente. Sem sinais externos de autoridade e sem notificação ativa dos mecanismos de busca, um site novo pode aguardar 4-8 semanas na fila de crawl do Google. As ações abaixo reduzem esse tempo para 24-72h para as páginas prioritárias.
+
+**IndexNow — notificação para Bing/Yandex:**
+
+O protocolo IndexNow permite notificar Bing e Yandex imediatamente sobre conteúdo novo ou atualizado. Esses motores indexam em horas. Embora o Google não use IndexNow diretamente, o sinal de rastreamento em múltiplos motores acelera indiretamente o crawl do Googlebot.
+
+```bash
+# Exemplo de chamada IndexNow (POST com lista de URLs):
+curl -X POST "https://api.indexnow.org/indexnow" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "host": "smartlic.tech",
+    "key": "SEU_KEY_AQUI",
+    "urlList": [
+      "https://smartlic.tech/",
+      "https://smartlic.tech/calculadora",
+      "https://smartlic.tech/licitacoes/engenharia"
+    ]
+  }'
+
+# Gerar key (arquivo estático): criar /public/[key].txt com o conteúdo da key
+# Verificar: https://smartlic.tech/[key].txt deve retornar a key
+```
+
+**Implementação Next.js (recomendada via route handler):**
+```ts
+// app/api/indexnow/route.ts — chamar após deploy ou atualização de conteúdo
+// Dispara automaticamente via GitHub Actions post-deploy
+```
+
+- [ ] **Gerar e publicar IndexNow key** — arquivo estático em `public/[key].txt`
+- [ ] **Criar `app/api/indexnow/route.ts`** — endpoint que submete todas as URLs do sitemap para Bing IndexNow API
+- [ ] **Chamar na GitHub Action de deploy** — `curl POST /api/indexnow` após deploy bem-sucedido
+- [ ] **Verificar resposta 200** da API IndexNow (lista de URLs aceita)
+
+**Google Ping — notificação de sitemap atualizado:**
+
+```bash
+# Pingar o Google após cada deploy ou adição de conteúdo:
+curl "https://www.google.com/ping?sitemap=https://smartlic.tech/sitemap.xml"
+# Resposta esperada: HTTP 200 "Sitemap notification received"
+```
+
+- [ ] **Adicionar ao script de deploy** (GitHub Actions) o Google Ping após sitemap atualizado
+- [ ] **Adicionar ao Bing também:** `curl "https://www.bing.com/ping?sitemap=https://smartlic.tech/sitemap.xml"`
+
+**Próximo lote de indexação manual (GSC URL Inspection):**
+
+Após confirmação das 10 URLs submetidas em 2026-04-05, submeter próximo lote:
+
+- [ ] `https://smartlic.tech/sobre`
+- [ ] `https://smartlic.tech/pricing`
+- [ ] `https://smartlic.tech/ajuda`
+- [ ] `https://smartlic.tech/termos`
+- [ ] `https://smartlic.tech/privacidade`
+- [ ] `https://smartlic.tech/licitacoes/engenharia` (landing setorial — maior volume)
+- [ ] `https://smartlic.tech/licitacoes/tecnologia-informacao`
+- [ ] `https://smartlic.tech/blog/licitacoes/engenharia/sp` (setor×UF de maior volume)
+- [ ] `https://smartlic.tech/cnpj` (ferramenta pública)
+- [ ] `https://smartlic.tech/casos` (prova social)
+
+**Sinais sociais para aceleração de descoberta:**
+
+- [ ] **Compartilhar 3-5 páginas programáticas no LinkedIn** do founder com contexto real (dados do PNCP, não spam) — Google monitora sinais sociais como proxy de descoberta de conteúdo novo
+- [ ] **Compartilhar `/calculadora`** no LinkedIn com resultado de exemplo: "empresas de engenharia em SP estão deixando R$X passar por mês — calculadora gratuita"
 
 ---
 
@@ -939,26 +1009,65 @@ Para o SmartLic (fase atual: pré-escala, custo de infra ~zero marginal por cana
 
 > Verificar mensalmente: Google Search Console + Mixpanel + Stripe
 
+> **⚠️ Correção de expectativa (Conselho CMO, 2026-04-05):** A meta de 30 trials orgânicos
+> em 30 dias é agressiva demais dado o baseline atual (zero backlinks, 2/524 páginas indexadas,
+> DA ≈ 0). O benchmark realista para mês 1 é **3-8 trials orgânicos**. A meta de 30 trials/mês
+> é alcançável no **mês 3** com o playbook off-page (Parte 6) e distribuição (Parte 7) executados
+> com disciplina. Metas desajustadas desmotivam — calibrar para o que o canal consegue entregar.
+
 **Métricas de CAC (prioridade 1):**
 
 | Métrica | Baseline | Meta 30 dias | Meta 90 dias |
 |---------|----------|-------------|-------------|
-| CAC orgânico geral (R$) | — | < R$150 | < R$80 |
-| Trials via orgânico/mês | — | 30 | 120 |
-| Trial-to-paid por canal (%) | — | > 30% | > 35% |
-| Pagantes via orgânico/mês | — | 10 | 42 |
-| MRR orgânico incremental | R$0 | R$3.970 | R$16.674 |
+| CAC orgânico geral (R$) | — | < R$200 | < R$100 |
+| Trials via orgânico/mês | — | 3-8 *(realista)* | 30 *(mês 3 com off-page ativo)* |
+| Trial-to-paid por canal (%) | — | > 25% | > 35% |
+| Pagantes via orgânico/mês | — | 1-3 | 10-12 |
+| MRR orgânico incremental | R$0 | R$400-1.200 | R$4.000-5.000 |
+
+**Métricas de autoridade de domínio (prioridade 0 — desbloqueiam tudo):**
+
+| Métrica | Baseline | Semana 1 | Mês 1 | Mês 3 |
+|---------|----------|---------|-------|-------|
+| Backlinks externos (GSC) | 0 | 5-8 (perfis + testimonials) | 10-20 | 40-60 |
+| Domain Rating — Ahrefs (gratuito) | 0 | 3-5 | 10-15 | 20-25 |
+| Páginas indexadas (GSC) | 2 | 20-30 (força-bruta GSC) | 50-100 | 350-450 |
+
+> Verificar com **Ahrefs Webmaster Tools** (gratuito, cadastrar `smartlic.tech`): Domain Rating,
+> backlinks novos, páginas indexadas. Não gastar com plano pago enquanto DR < 15.
 
 **Métricas de funil (prioridade 2):**
 
 | Métrica | Baseline | Meta 30 dias | Meta 90 dias |
 |---------|----------|-------------|-------------|
-| Páginas indexadas (GSC) | ~50 est. | 130+ (pós P0+P1) | 450+ |
-| Impressões orgânicas/mês | — | 5.000 | 50.000 |
-| Cliques orgânicos/mês | — | 200 | 2.000 |
-| Cálculos na calculadora/mês | 0 | 100 | 500 |
-| Consultas CNPJ/mês | 0 | 200 | 2.000 |
-| Análises compartilhadas/mês | 0 | 30 | 150 |
+| Impressões orgânicas/mês | 0 | 500-2.000 | 20.000-50.000 |
+| Cliques orgânicos/mês | 0 | 50-200 | 1.000-2.000 |
+| Cálculos na calculadora/mês | 0 | 50-100 | 300-500 |
+| Consultas CNPJ/mês | 0 | 100-200 | 1.000-2.000 |
+| Análises compartilhadas/mês | 0 | 20-30 | 100-150 |
+| Trials via LinkedIn/mês | 0 | 5-10 | 20-30 |
+| Indicações (referral)/mês | 0 | 0-2 | 10-20 |
+
+**Day-3 Activation — o maior preditor de conversão trial→pago:**
+
+> Dados de mercado (2026): usuários que chegam ao "aha moment" nos primeiros 3 dias do trial
+> convertem 4× mais que usuários que chegam depois do Day-7. Definir e instrumentar esse evento
+> é mais impactante que qualquer outra otimização de funil.
+
+**"Aha moment" do SmartLic:** usuário fez ≥1 busca **E** viu análise de viabilidade de ≥1 edital.
+Evento Mixpanel: `first_analysis_viewed` (já rastreado? verificar).
+
+| Métrica | Meta | Ação se abaixo do target |
+|---------|------|--------------------------|
+| Day-3 activation rate | ≥ 60% | Revisar onboarding + email comportamental Day-3 (disparar quando NÃO voltou — não no dia 3 fixo) |
+| Day-7 feature depth | ≥ 3 funcionalidades usadas | Email de dica de feature específica no Day-5 |
+| DAU/MAU no trial | ≥ 25% | Alertas de novos editais (push/email) para trazer de volta |
+
+**Checklist de instrumentação:**
+- [ ] **Verificar evento `first_analysis_viewed`** existe no Mixpanel (ou criar)
+- [ ] **Criar funil no Mixpanel:** `signup → first_search → first_analysis_viewed → trial_converted`
+- [ ] **Monitorar Day-3 activation rate** semanalmente
+- [ ] **Configurar email comportamental Day-3:** disparar para usuários que SE inscreveram há 2 dias e NÃO geraram evento `first_analysis_viewed`
 
 **O número que mais importa:**
 ```
@@ -968,6 +1077,292 @@ trial-to-paid por source (Stripe + Mixpanel UTM)
 
 Se um canal tem alto volume de trial e baixo trial-to-paid → problema de qualificação (leads errados).
 Se um canal tem baixo volume e alto trial-to-paid → amplificar (leads certos, escassez de topo).
+
+---
+
+## Parte 6 — Off-Page: Backlinks e Autoridade de Domínio
+
+> **Diagnóstico CMO Advisory Board (2026-04-05):** O playbook técnico on-page está no top 5%
+> para SaaS early-stage no Brasil — mas opera com uma perna só. A ausência de estratégia
+> off-page neutraliza 80% do investimento técnico já feito. Com zero backlinks e DA próximo
+> de zero, o Google não tem sinal externo para confiar nas 405 páginas programáticas.
+> **Sem DA mínimo de 15-20, essas páginas ficam no limbo por 6-9 meses.**
+>
+> Esta seção cobre o que estava completamente ausente no playbook original.
+
+### 6.1 — Perfis de Alta Autoridade (1-2h total, zero custo)
+
+> Quick wins imediatos: cada perfil é 1 backlink legítimo de DA 60-98. Total de esforço: ~2h.
+> Fazer na **Semana 1**, antes de qualquer outra iniciativa de link building.
+
+| Plataforma | DA | Tipo de link | Tempo | Instrução |
+|-----------|-----|-------------|-------|-----------|
+| **Product Hunt** | 90 | Dofollow | 2h | Criar página do SmartLic. Agendar lançamento para terça ou quarta (maior engajamento). Categorias: Productivity, SaaS, GovTech |
+| **G2** | 80 | Dofollow | 1h | Listagem gratuita. Requer 1 review — pedir a beta user. Categoria: Contract Management / Procurement |
+| **Capterra** | 85 | Dofollow | 1h | Listagem gratuita. Categoria: Procurement Software |
+| **Crunchbase** | 90 | Dofollow | 30min | Perfil da CONFENGE Avaliações e Inteligência Artificial LTDA + produto SmartLic |
+| **LinkedIn Company Page** | 98 | Nofollow (alta autoridade) | 20min | Criar Company Page para SmartLic / CONFENGE se não existe |
+| **ABStartups** | 55 | Dofollow | 30min | Diretório de startups brasileiras |
+| **Distrito** | 60 | Dofollow | 30min | Diretório do ecossistema de startups |
+| **BrazilLAB** | 45 | Dofollow | 30min | Diretório específico de GovTech Brasil |
+| **StartupBase** | 50 | Dofollow | 20min | Diretório BR |
+
+#### Checklists
+
+- [ ] **Product Hunt:** criar conta, configurar página do SmartLic com tagline, screenshots, vídeo demo. Agendar para próxima terça ou quarta.
+- [ ] **G2:** criar listagem, solicitar review para 1 beta user via email, publicar.
+- [ ] **Capterra:** criar listagem gratuita.
+- [ ] **Crunchbase:** perfil CONFENGE + SmartLic com CNPJ, descrição, fundadores, estágio (seed/pre-seed).
+- [ ] **LinkedIn Company Page:** criar se não existe. Completar 100% do perfil (logo, banner, about, website).
+- [ ] **ABStartups:** cadastrar em `membros.abstartups.com.br`.
+- [ ] **Distrito:** cadastrar em `distrito.me/startups`.
+- [ ] **BrazilLAB GovTech:** submeter em `brazillab.org.br`.
+- [ ] **Verificar backlinks após 7 dias** usando Ahrefs Webmaster Tools (gratuito — cadastrar `smartlic.tech`).
+
+---
+
+### 6.2 — Testimonial Link Building
+
+> Taxa de sucesso: 40-60% para ferramentas DevTool que mantêm página de cases/testimonials.
+> Cada depoimento aceito = backlink de DA 60-92+ com contexto técnico altamente relevante.
+> Esforço: ~30min por email. Retorno potencial: 4 backlinks de alta autoridade.
+
+**Template de email (adaptar por ferramenta):**
+
+```
+Assunto: Depoimento sobre [ferramenta] — SmartLic (startup GovTech BR)
+
+Olá equipe [ferramenta],
+
+Construímos o SmartLic (smartlic.tech) com [ferramenta] para [resultado específico].
+[1-2 linhas sobre o caso de uso técnico concreto]
+
+Seria um prazer escrever um depoimento mais detalhado para vocês, 
+se tiverem interesse em cases da comunidade de usuários.
+
+Att,
+[Fundador] — SmartLic
+```
+
+| Ferramenta | DA | Copy do depoimento |
+|-----------|----|--------------------|
+| **Supabase** | 85 | "Construímos o SmartLic com Supabase + RLS para processar 40K+ editais públicos do PNCP com segurança multi-tenant. O Auth + Row Level Security reduziu nosso tempo de desenvolvimento de autorização de semanas para dias." |
+| **Railway** | 75 | "O SmartLic roda backend FastAPI + worker ARQ no Railway — o deploy monorepo com watch patterns por subdiretório foi exatamente o que precisávamos para separar web e worker. Zero config de infra." |
+| **Resend** | 65 | "Usamos o Resend para todos os emails transacionais do SmartLic (trials, onboarding, alertas de edital). A API foi integrada em 30 minutos — nenhuma outra ferramenta que testamos chegou perto disso." |
+| **Vercel/Next.js** | 92 | "O SmartLic tem 405 páginas programáticas com ISR e dados ao vivo do PNCP — Next.js App Router + ISR tornou isso viável sem overhead de infra." |
+
+- [ ] **Email para Supabase** — `partners@supabase.io` ou via formulário de cases no site
+- [ ] **Email para Railway** — `hello@railway.app` ou via Discord da comunidade Railway
+- [ ] **Email para Resend** — `team@resend.com`
+- [ ] **Email para Vercel** — via formulário de cases em `vercel.com/enterprise`
+- [ ] **Acompanhar respostas em 2 semanas** — se não houver retorno, tentar via Twitter/X ou LinkedIn dos fundadores
+
+---
+
+### 6.3 — Digital PR: Relatório "Panorama Licitações Brasil 2026 T1"
+
+> O SmartLic tem um ativo único: dados reais de 40K+ editais do PNCP processados.
+> Isso é pauta de imprensa. Nenhum concorrente tem. Um relatório de dados original
+> bem distribuído gera 10-15 backlinks em portais de DA 40-80+ — tudo gratuito.
+
+**Conteúdo do relatório (dados já existem no `pncp_raw_bids`):**
+
+- Top 10 setores por volume de editais publicados (jan-mar 2026)
+- UFs com maior crescimento de compras públicas vs mesmo período 2025
+- Distribuição de modalidades: impacto da Lei 14.133 (pregão × concorrência × inexigibilidade)
+- Valor médio por edital por setor (P25, P50, P75)
+- Sazonalidade: quais meses concentram mais editais
+
+**Formato:** PDF de 8-10 páginas com gráficos + landing page gated em `/relatorio-2026-t1` (email para download).
+
+#### Checklist de produção
+
+- [ ] **Rodar queries no Supabase** para extrair os 5 conjuntos de dados acima
+- [ ] **Gerar gráficos** (pode ser com Python/matplotlib ou Google Sheets)
+- [ ] **Escrever o relatório** — 8-10 páginas, tom executivo, fontes citadas (PNCP, Lei 14.133)
+- [ ] **Criar landing page** `/relatorio-2026-t1` com formulário de download (email obrigatório)
+- [ ] **PDF gerado** e hospedado no Supabase Storage
+
+#### Checklist de distribuição
+
+- [ ] **Sebrae Startups** — submeter em `sebraestartups.com.br` (DA 60+, contexto B2B Brasil)
+- [ ] **Featured.com** (novo HARO) — cadastrar em `featured.com` como especialista em licitações públicas e compras governamentais. Responder queries de jornalistas buscando dados sobre mercado B2G.
+- [ ] **LinkedIn post** do founder com 3-5 dados do relatório no corpo do post (não pedir clique — mostrar valor no próprio post). Link para landing no final.
+- [ ] **Email para redações:** Estadão PME, Exame, Valor Econômico, Agência Brasil, Governo Digital. Assunto: "Dados exclusivos: licitações públicas no Brasil em 2026 — relatório SmartLic"
+- [ ] **GovTech Brasil** — portais especializados: govtech.com.br, Poder360 (tecnologia pública), Jota (licitações)
+- [ ] **Monitorar menções** via Google Alerts: "SmartLic", "panorama licitações 2026"
+
+---
+
+### 6.4 — Diretórios, Fóruns e Comunidade
+
+> Links de fóruns são nofollow, mas geram tráfego qualificado direto e sinais de menção
+> de marca — importantes para E-E-A-T. O objetivo aqui não é DA, é presença onde o ICP está.
+
+**Google Meu Negócio:**
+- [ ] **Criar perfil** para CONFENGE Avaliações e Inteligência Artificial LTDA com endereço, CNPJ, categoria "Software"
+- [ ] **Adicionar SmartLic** como produto/serviço no perfil
+- Impacto: aparece em buscas de marca + credibilidade E-E-A-T
+
+**Fóruns de licitação (contribuição útil, não spam):**
+- [ ] **LicitaNet** (forum.licitanet.com.br) — responder dúvidas com links contextuais para artigos do blog
+- [ ] **Grupos Facebook "Licitações Públicas"** e "Pregão Eletrônico BR" — contribuir com dados do PNCP, linkar para calculadora quando relevante
+- [ ] **Reddit r/empreendedorismo** — post sobre análise de licitações com dados exclusivos
+
+**Comunidades B2G:**
+- [ ] **Slack da Abstartups** — canal de govtech/b2g
+- [ ] **WhatsApp de gestores de licitação** — entrar em grupos como participante ativo (compartilhar artigos relevantes, nunca spam)
+
+**Google Business menções:**
+- [ ] **Falar em webinars de licitação** (gratuitos, qualquer formato) — gera autoridade E-E-A-T + menções de marca
+
+---
+
+## Parte 7 — Distribuição: Produto como Canal
+
+> O maior erro de SaaS pré-tração: esperar o SEO orgânico amadurecer (3-6 meses) sem ter
+> outros canais ativos. Nos primeiros 60 dias, LinkedIn do founder + produto como distribuição
+> devem ser os canais **primários** de aquisição. SEO é o canal de **longo prazo** que
+> amortiza o custo. Os dois precisam operar em paralelo, não em sequência.
+
+### 7.1 — Ativação Real do P6: Análise Compartilhável
+
+> O P6 foi implementado (rotas `/analise/[hash]`, botão de compartilhamento, OG metadata),
+> mas o mecanismo viral não está **ativado** — não há incentivo claro de compartilhamento,
+> nem OG image dinâmica que torna o preview social irresistível.
+
+**O funil viral do P6:**
+```
+Usuário analisa edital → vê score 78/100 → compartilha link no WhatsApp com o diretor
+→ diretor clica → vê análise completa com breakdown dos 4 fatores
+→ tenta ver outros editais → precisa criar conta → trial começado
+```
+
+**OG image especificado (gerar via `/api/og?hash=[hash]`):**
+```
+[Logo SmartLic — canto superior direito, 40px]
+
+Score de Viabilidade
+[78]/100   [barra de progresso visual]
+
+"Pregão Eletrônico nº 001/2026 — Secretaria de TI..."  [truncado 55 chars]
+Ministério da Saúde · SP · R$ 285.000
+
+Modalidade ✅  Prazo ✅  Valor ✅  Geo ⚠️
+```
+
+**OG text (meta description da página compartilhada):**
+```
+"Análise de viabilidade: [título do edital] — Score [N]/100. 
+4 fatores avaliados: modalidade, prazo, valor e geografia. 
+Gerado pelo SmartLic."
+```
+
+#### Checklist de ativação
+
+- [ ] **OG image dinâmica** — garantir que `/api/og?hash=[hash]` gera imagem com score + título + 4 fatores visíveis. Verificar preview em `opengraph.xyz`.
+- [ ] **Botão "Compartilhar no LinkedIn"** — deep link para post pre-preenchido: "Analisando este edital com score [N]/100 via @SmartLic. [URL]"
+- [ ] **Botão "Copiar link"** com toast visual — testar em mobile (Web Share API nativo se disponível)
+- [ ] **Watermark + CTA** no rodapé da página `/analise/[hash]`: "Análise gerada pelo SmartLic · 14 dias grátis para analisar editais do seu setor → [CTA button]"
+- [ ] **Email de ativação de compartilhamento** — no Day-3, se usuário não compartilhou nenhuma análise, enviar: "Seu score de viabilidade pode ajudar um colega a decidir mais rápido. Compartilhe uma análise."
+- [ ] **Verificar analytics** — evento `analysis_shared` e `analysis_viewed` no Mixpanel funcionando corretamente
+
+**KPI esperado:** 50 análises compartilhadas/mês → 20% de conversão do receptor = 10 trials/mês só por este canal. CAC: zero.
+
+---
+
+### 7.2 — LinkedIn do Founder como Canal Primário (60 primeiros dias)
+
+> LinkedIn é o canal de menor fricção para atingir gestores B2G no Brasil. Um post com dado
+> do PNCP atinge exatamente o ICP (compradores de SaaS B2G, consultores de licitação,
+> donos de empresas que participam de pregões). Custo: 30-45min por post.
+
+**Cadência: 3 posts/semana**
+
+| Tipo de post | Frequência | Formato | Link |
+|-------------|-----------|---------|------|
+| Dado do PNCP (números reais) | 1×/semana | "Sabia que X editais de [setor] abriram só em [UF] em [mês]?" + dado + contexto | → `/blog/licitacoes/[setor]/[uf]` |
+| Caso de uso prático | 1×/semana | "Como [perfil de empresa] encontrou [resultado] em [tempo]" | → `/casos/[slug]` |
+| Reflexão sobre mercado B2G | 1×/semana | Opinião sobre Lei 14.133, tendências, erros comuns | → artigo do blog |
+
+**Regras de formato LinkedIn (para alcance máximo):**
+- Primeira linha: hook com número ou pergunta (exibida sem expandir)
+- Sem link no corpo do post — link apenas no primeiro comentário (algoritmo do LinkedIn penaliza links no corpo)
+- 3-5 linhas com espaçamento duplo (leitura mobile)
+- Encerrar com pergunta para engajamento ("Você já analisou quantos editais foram perdidos no seu setor esse mês?")
+
+**Meta de conexões:**
+- [ ] **Semana 1:** conectar com 50 gestores B2G (consultores de licitação, diretores comerciais de empresas que participam de pregões)
+- [ ] **Mês 1:** 500 novas conexões relevantes
+- [ ] **Mês 3:** 5.000 conexões relevantes no nicho B2G
+
+**Checklists por semana:**
+- [ ] **Semana 1:** 3 posts publicados + conexões enviadas
+- [ ] **Semana 2:** 3 posts + engajamento em posts de outros do nicho
+- [ ] **Semana 3:** 3 posts + primeiro post sobre resultado de beta user (com permissão)
+- [ ] **Mês 1:** avaliar qual tipo de post teve mais engajamento e dobrar esse formato
+
+---
+
+### 7.3 — YouTube Shorts / Reels
+
+> YouTube é o segundo maior mecanismo de busca do mundo. Vídeos sobre "como usar PNCP",
+> "encontrar licitações de [setor]", "pregão eletrônico tutorial" têm audiência real e
+> competição quase nula. O YouTube indexa vídeos no Google em horas — cada vídeo é mais
+> uma URL no grafo de links com âncora para o SmartLic.
+
+**Formato padrão (30-60 segundos):**
+```
+Título: "Como encontrar editais de [setor] em [UF] em 30 segundos"
+Abertura: "Vou te mostrar como achar todos os pregões de [setor] em [UF] agora"
+Demonstração: screen recording do SmartLic fazendo a busca (sem narração complexa)
+Resultado: mostrar os editais filtrados com score de viabilidade
+CTA final: "Link na bio para 14 dias grátis"
+```
+
+**Produção:**
+- Screen recording: OBS Studio (gratuito) ou Loom
+- Edição: DaVinci Resolve (gratuito) ou CapCut
+- Tempo total por vídeo: 15-20 minutos
+
+**Checklist:**
+- [ ] **Canal YouTube** criado para SmartLic (ou conta pessoal do founder)
+- [ ] **2 vídeos/semana** publicados como Shorts (< 60s) ou vídeos normais (2-5min para tutoriais)
+- [ ] **Título SEO-first:** incluir "[setor] licitação [UF] 2026" para ranquear nas buscas do YouTube
+- [ ] **Descrição com link** para a página programática correspondente (`/blog/licitacoes/[setor]/[uf]`)
+- [ ] **Monitorar** quais vídeos geram cliques para o site via UTM `?utm_source=youtube`
+
+---
+
+### 7.4 — Programa de Referral Estruturado
+
+> Dados de mercado (2026): usuários indicados têm CAC 0, LTV 16% maior, e churn 37% menor
+> que usuários adquiridos por outros canais. Em B2B de nicho, a indicação entre pares
+> (consultor indica para outros consultores) é o canal de maior qualidade.
+
+**Mecânica:**
+```
+Usuário indica → amigo recebe link com 7 dias extras de trial
+Quando amigo converte → quem indicou ganha 1 mês grátis
+```
+
+**Implementação:**
+- Cada usuário tem código único `/indicar?ref=[user_id_hash]`
+- Dashboard de indicações: "Você indicou [N] amigos. [M] converteram. [X] meses grátis acumulados."
+- Landing page `/indicar` explicando a mecânica
+
+**Ativação do email de referral:**
+- Enviar no **Day-7 do trial** (momento de maior engajamento pré-conversão, não no último dia)
+- Subject: "Você ganha 1 mês grátis por cada amigo que converter"
+- Copy: mencionar o valor encontrado pelo usuário no trial ("Você encontrou R$[X] em editais compatíveis na última semana. Imagine o que um colega do seu setor poderia fazer com isso.")
+
+**Checklist:**
+- [ ] **Página `/indicar`** criada com mecânica explicada
+- [ ] **Código único por usuário** gerado no backend
+- [ ] **Dashboard de indicações** na área do usuário (`/conta`)
+- [ ] **Email Day-7** configurado na sequência de onboarding (Resend + template)
+- [ ] **Webhook Stripe** para detectar conversão de indicado e creditar mês grátis automaticamente
+- [ ] **Verificar rastreamento** via Mixpanel: eventos `referral_shared`, `referral_signed_up`, `referral_converted`
 
 ---
 
@@ -996,4 +1391,111 @@ Os três ou não publica.
 - **Não publicar cases sem número de resultado** — "ficou satisfeito" não é case, é depoimento. Sem R$ ou N editais ou horas economizadas → não publicar.
 - **Não construir P2/P3 antes de ter P0 e P1 feitos** — fundação antes de conversão.
 - **Não otimizar para volume de tráfego.** Um artigo com 200 visitas e 15% de conversão para trial vale mais que 10 artigos com 2.000 visitas cada e 0,3% de conversão.
+
+### Anti-patterns de off-page e distribuição (adicionados 2026-04-05)
+
+> Estes anti-patterns foram identificados pelo Conselho CMO Advisory Board ao diagnosticar
+> que o playbook original cobria excelentemente on-page mas ignorava completamente off-page.
+
+- **Não criar mais páginas sem antes conseguir backlinks.** Com zero backlinks e DA ≈ 0, cada nova página vai para o mesmo limbo das 405 existentes. O gargalo é autoridade, não volume de conteúdo. Fazer as 9 ações da seção 6.1 (perfis gratuitos) antes de publicar qualquer novo artigo.
+
+- **Não tratar SEO como único canal de aquisição nos primeiros 60 dias.** SEO B2B SaaS amadurece em 3-6 meses. Nos primeiros 60 dias, LinkedIn do founder + P6 compartilhável + comunidades B2G devem ser os canais primários. SEO complementa, não lidera ainda.
+
+- **Não comprar backlinks PBN (Private Blog Network).** O Google December 2025 Core Update penalizou link schemes com severidade histórica. Um backlink legítimo do Product Hunt (DA 90) vale mais que 100 links de PBN. Risco: penalidade manual que apaga anos de trabalho de SEO.
+
+- **Não focar em keywords KD > 40 com DA < 15.** "Software de licitações" (KD 55+) não ranqueia com domínio novo. Focar em long-tail das páginas programáticas (KD < 10): "editais de engenharia civil Santa Catarina 2026", "pregão TI prefeitura Rio Grande do Sul". É onde o tráfego qualificado de nicho vive.
+
+- **Não fazer A/B test de duração de trial com < 50 signups/mês.** Sem significância estatística, qualquer resultado é ruído. Com 50 signups/mês no mesmo canal, o teste A/B levaria 3-4 meses para ter confiança de 95%. Alternativa: trocar para 7 dias diretamente (dados de mercado de 40.4% vs 30.6% de conversão são suficientemente robustos) e monitorar conversão total.
+
+- **Não confundir DA/DR alto de diretório com link de qualidade editorial.** Links de perfis (Product Hunt, G2, Capterra) têm DA alto mas são nofollow ou de baixo peso editorial. Valem pela tração inicial de autoridade e pelo tráfego qualificado direto. O objetivo de médio prazo são links editoriais (portais de notícias, blogs técnicos de licitação) — que vêm via digital PR (seção 6.3).
+
+- **Não esperar ter "conteúdo perfeito" para começar o LinkedIn.** Posts imperfeitos publicados hoje valem mais que posts perfeitos publicados em 30 dias. O algoritmo do LinkedIn favorece consistência e engajamento, não polimento.
+
+---
+
+## Registro de Operações — Indexação GSC (2026-04-04/05)
+
+### Contexto: por que foi necessário fazer isso manualmente
+
+Em 2026-04-04, ao verificar o status de indexação do smartlic.tech no Google Search Console, foi identificado que **apenas 2 de 524 páginas estavam indexadas**. O GSC reportava "21 páginas encontradas no sitemap" — normal para uma propriedade com 1 dia de existência — mas a fila de indexação orgânica do Googlebot para sites novos sem backlinks pode levar semanas.
+
+**Duas causas raiz identificadas:**
+
+#### Causa 1 — Site novo, sem histórico de autoridade
+O domínio `smartlic.tech` foi adicionado ao GSC em 2026-04-04. Sites sem backlinks externos e sem histórico de crawl ficam na fila de baixa prioridade do Googlebot. Sem uma solicitação explícita via URL Inspection, o Google pode levar 2-6 semanas para indexar as primeiras páginas.
+
+A solicitação manual via GSC URL Inspection coloca a URL na **fila prioritária de crawl** (geralmente processada em 24-72h), acelerando o início do processo de indexação.
+
+#### Causa 2 — Cache-Control: private em todas as páginas (impedimento a CDN + crawl eficiente)
+
+O `frontend/app/layout.tsx` (linha 132) contém:
+```typescript
+const nonce = (await headers()).get("x-nonce") ?? ""
+```
+
+Esta chamada a `headers()` — uma API dinâmica do Next.js App Router — força **toda a árvore de renderização** a entrar em modo dinâmico. O Next.js automaticamente define `Cache-Control: private, no-store` em respostas com renderização dinâmica, **sobrescrevendo qualquer header definido no middleware**.
+
+Consequência: mesmo com a correção do middleware (`middleware.ts`, commit `ae013199`) que define `Cache-Control: public, s-maxage=3600` para rotas públicas, o Next.js sobrescreve isso na camada de renderização. O Cloudflare CDN recebe `Cache-Control: private` e registra `cf-cache-status: DYNAMIC` — sem caching, sem TTFB otimizado, sem crawl budget eficiente.
+
+**Trade-off arquitetural documentado:**
+- CSP nonce-based (`DEBT-108`) = segurança máxima (elimina `unsafe-inline`/`unsafe-eval`)
+- Mas: `headers()` no root layout = dynamic rendering obrigatório = `Cache-Control: private` em toda a árvore
+- Solução definitiva futura: separar o nonce em um Server Component isolado que não envolva o layout inteiro, ou migrar para CSP hash-based para scripts estáticos
+
+**Impacto no SEO:** sem CDN caching, cada request do Googlebot bate no Railway diretamente. Crawl budget é consumido mais rapidamente, TTFB é maior (Railway cold start ~800ms vs CDN edge ~50ms), o que pode reduzir a frequência de recrawl.
+
+---
+
+### O que foi feito: solicitação de indexação via GSC URL Inspection
+
+Em 2026-04-05, foram solicitadas manualmente indexações para as 10 URLs de maior valor comercial e de autoridade via a ferramenta de Inspeção de URL do Google Search Console. O processo foi automatizado via Playwright (browser automation).
+
+**Padrão de automação estabelecido:**
+1. Navegar para `https://search.google.com/search-console?resource_id=https://smartlic.tech/`
+2. Tirar snapshot depth-6 para capturar `combobox [ref=e24]`
+3. `browser_type` no combobox com a URL completa + `submit=true`
+4. JS evaluate: clicar em `SPAN` com texto `'Solicitar indexação'` (children.length === 0)
+5. Aguardar texto `'URL foi adicionado'` na página
+6. JS evaluate: clicar no botão `'Dispensar'`
+7. Navegar de volta para a visão geral e repetir
+
+**URLs submetidas em 2026-04-05:**
+
+| # | URL | Tipo | Resultado |
+|---|-----|------|-----------|
+| 1 | `https://smartlic.tech/blog` | Hub de conteúdo | ✅ Indexação solicitada |
+| 2 | `https://smartlic.tech/blog/como-aumentar-taxa-vitoria-licitacoes` | Artigo blog P7 | ✅ Indexação solicitada |
+| 3 | `https://smartlic.tech/blog/licitacoes-engenharia-2026` | Artigo blog P7 | ✅ Indexação solicitada |
+| 4 | `https://smartlic.tech/blog/licitacoes-ti-software-2026` | Artigo blog P7 | ✅ Indexação solicitada |
+| 5 | `https://smartlic.tech/blog/pncp-guia-completo-empresas` | Artigo blog P7 | ✅ Indexação solicitada |
+| 6 | `https://smartlic.tech/blog/como-participar-primeira-licitacao-2026` | Artigo blog P7 | ✅ Indexação solicitada |
+| 7 | `https://smartlic.tech/glossario` | Ferramenta de autoridade | ✅ Indexação solicitada |
+| 8 | `https://smartlic.tech/calculadora` | Ferramenta de conversão P2 | ✅ Indexação solicitada |
+| 9 | `https://smartlic.tech/licitacoes` | Landing hub setorial | ✅ Indexação solicitada |
+| 10 | `https://smartlic.tech/features` | Página de produto | ✅ Indexação solicitada |
+
+**Nota:** O GSC tem limite de ~10-12 solicitações manuais por dia por propriedade. Para as 524 páginas restantes, a indexação ocorrerá via crawl orgânico a partir das páginas indexadas (link graph) + resubmissão do sitemap.
+
+---
+
+### Próximos passos técnicos pós-indexação
+
+**Imediato (24-72h):**
+- [ ] Verificar no GSC → Cobertura → Válidas se as 10 URLs aparecem como indexadas
+- [ ] Se alguma URL aparecer como "Descoberta — aguardando indexação por mais de 7 dias", reinvestigar (pode ser problema de renderização ou conteúdo fino)
+
+**Curto prazo (1-2 semanas):**
+- [ ] Após as 10 URLs indexadas, submeter próximo lote: `/sobre`, `/pricing`, `/ajuda`, `/termos`, `/privacidade`
+- [ ] Investigar se `/licitacoes/[setor]` (landing setoriais) estão sendo descobertas via sitemap
+- [ ] Monitorar GSC → Desempenho para primeiras impressões orgânicas
+
+**Médio prazo (1 mês):**
+- [ ] Resolver `Cache-Control: private` — refatorar nonce para não usar `headers()` no root layout. Opções:
+  - Mover nonce para `<head>` via `generateMetadata` (não bloqueia streaming)
+  - Usar CSP hash-based para scripts estáticos (elimina necessidade de nonce por request)
+  - Criar wrapper Server Component que isola o `headers()` call sem propagar dynamic rendering para o layout inteiro
+- [ ] Após fix de cache: verificar Cloudflare Analytics para confirmar `cf-cache-status: HIT` em páginas públicas
+- [ ] Construir backlinks iniciais: submeter para Product Hunt, directories B2B SaaS brasileiros, mencionar em fóruns de licitação
+
+**Anti-pattern a evitar:** não submeter todas as 524 URLs de uma vez manualmente. O GSC tem limite diário e URLs programáticas (setor×UF) devem ser descobertas via sitemap + crawl orgânico para demonstrar freshness real ao Google.
 - **Não medir sucesso por impressões ou posição de keyword.** A posição não paga o servidor. O trial-to-paid paga.

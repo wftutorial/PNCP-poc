@@ -22,6 +22,14 @@ jest.mock('../hooks/useAnalytics', () => ({
   useAnalytics: () => ({ trackEvent: mockTrackEvent }),
 }));
 
+jest.mock('../app/components/AuthProvider', () => ({
+  useAuth: () => ({ session: { access_token: 'test-token' }, loading: false }),
+}));
+
+jest.mock('../hooks/usePlans', () => ({
+  usePlans: () => ({ plans: null, error: null, isLoading: false }),
+}));
+
 jest.mock('framer-motion', () => ({
   motion: {
     div: ({ children, className, whileHover, transition, ...rest }: any) => (
@@ -87,18 +95,23 @@ describe('TrialConversionScreen', () => {
     const closeButton = screen.getByLabelText('Fechar');
     fireEvent.click(closeButton);
 
-    // The close handler in the component calls router.push('/planos')
-    expect(mockPush).toHaveBeenCalledWith('/planos');
+    // The close handler redirects to /planos with billing period preserved
+    expect(mockPush).toHaveBeenCalledWith('/planos?billing=monthly');
   });
 
-  it('redirects to /planos with billing period on CTA click', () => {
+  it('attempts direct checkout on CTA click', async () => {
+    // P0 zero-churn: CTA now calls POST /api/billing directly
+    const mockFetch = jest.fn().mockRejectedValue(new Error('test'));
+    global.fetch = mockFetch;
+
     render(<TrialConversionScreen trialValue={mockTrialValue} onClose={jest.fn()} />);
 
-    // Find the primary CTA button (contains "Continuar com SmartLic Pro")
     const ctaButton = screen.getByRole('button', { name: /Continuar com SmartLic Pro/i });
     fireEvent.click(ctaButton);
 
-    // Default billing period is monthly
+    // Should attempt fetch then fallback to router.push
+    await new Promise(r => setTimeout(r, 200));
+    expect(mockFetch).toHaveBeenCalled();
     expect(mockPush).toHaveBeenCalledWith('/planos?billing=monthly');
   });
 
@@ -166,10 +179,10 @@ describe('TrialExpiringBanner', () => {
     expect(screen.getByText(/acesso completo.*termina em 6 dias/i)).toBeInTheDocument();
   });
 
-  it('shows updated subtext with daily price (COPY-369 AC2)', () => {
+  it('shows updated subtext with pricing info (COPY-369 AC2)', () => {
     render(<TrialExpiringBanner daysRemaining={3} />);
 
-    expect(screen.getByText(/R\$ 9,90\/dia/)).toBeInTheDocument();
+    expect(screen.getByText(/R\$ 297\/mês/)).toBeInTheDocument();
   });
 
   it('does not render when daysRemaining > 6 (STORY-319: threshold from day 8)', () => {

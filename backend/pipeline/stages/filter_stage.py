@@ -283,6 +283,43 @@ async def stage_filter(pipeline, ctx: SearchContext) -> None:
                 f"(NOT top-by-value garbage)"
             )
 
+    # S2-FIX: Sector-level substring relaxation before returning empty.
+    # When a sector search yields 0 results but raw pool is non-empty, try looser
+    # substring matching (same pattern as custom_terms Level 2 relaxation above).
+    # This recovers results where word-boundary regex misses partial mentions
+    # while still enforcing exclusions to maintain precision.
+    if (
+        not ctx.custom_terms
+        and ctx.request.setor_id
+        and len(ctx.licitacoes_filtradas) == 0
+        and len(ctx.licitacoes_raw) > 0
+        and ctx.relaxation_level == 0
+        and ctx.active_keywords
+    ):
+        from filter import normalize_text as _normalize_text_sector
+        _sector_norms = [_normalize_text_sector(k) for k in ctx.active_keywords]
+        _excl_norms = [_normalize_text_sector(e) for e in (ctx.active_exclusions or [])]
+        _sector_substring = []
+        for _bid in ctx.licitacoes_raw:
+            _obj_norm = _normalize_text_sector(_bid.get("objetoCompra", ""))
+            # Check at least one keyword matches as substring
+            if any(_kw in _obj_norm for _kw in _sector_norms):
+                # Enforce exclusions via substring too (maintain precision)
+                if any(_ex in _obj_norm for _ex in _excl_norms):
+                    continue
+                _bid["_relevance_source"] = "sector_substring_relaxation"
+                _bid["_term_density"] = 0.5
+                _bid["_matched_terms"] = ctx.active_keywords
+                _sector_substring.append(_bid)
+
+        if _sector_substring:
+            ctx.licitacoes_filtradas = _sector_substring
+            ctx.relaxation_level = 2
+            logger.info(
+                f"[S2-FIX] Sector substring relaxation recovered {len(_sector_substring)} results "
+                f"for sector={ctx.request.setor_id} from {len(ctx.licitacoes_raw)} raw bids"
+            )
+
     # ISSUE-044: Sector-based searches with zero results return empty with guidance.
     # Previously (ISSUE-025 fix), zero results triggered a "relaxation" that dropped
     # ALL keyword/sector/value-ceiling filters and returned top-20-by-value — mixing

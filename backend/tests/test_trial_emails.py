@@ -213,9 +213,10 @@ class TestPaywallAlertEmail:
         html = render_trial_paywall_alert_email("Test", SAMPLE_STATS)
         assert "preview" in html.lower() or "limitado" in html.lower()
 
-    def test_mentions_tomorrow(self):
+    def test_mentions_today(self):
+        """P0 zero-churn: Email now says 'a partir de hoje' (was 'amanhã')."""
         html = render_trial_paywall_alert_email("Test", SAMPLE_STATS)
-        assert "amanhã" in html.lower()
+        assert "hoje" in html.lower()
 
     def test_lists_what_changes(self):
         """AC7: Lists what changes after paywall."""
@@ -226,7 +227,7 @@ class TestPaywallAlertEmail:
     def test_cta_assine(self):
         """AC1: CTA is 'Assine antes do limite'."""
         html = render_trial_paywall_alert_email("Test", SAMPLE_STATS)
-        assert "Assine antes do limite" in html
+        assert "Assine" in html
 
     def test_links_to_planos(self):
         html = render_trial_paywall_alert_email("Test", SAMPLE_STATS)

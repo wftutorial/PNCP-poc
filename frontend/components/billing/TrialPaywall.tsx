@@ -19,16 +19,32 @@ interface TrialPaywallProps {
 }
 
 const DISMISS_KEY = "smartlic_paywall_dismiss";
-const DISMISS_TTL = 3_600_000; // 1 hour
+const DISMISS_TTL = 900_000; // 15 minutes (was 1 hour — P0 zero-churn fix)
+const DISMISS_DAILY_PREFIX = "smartlic_paywall_day_";
+const MAX_DISMISSALS_PER_DAY = 1;
+
+function _todayKey(): string {
+  return DISMISS_DAILY_PREFIX + new Date().toISOString().slice(0, 10);
+}
 
 function isDismissed(): boolean {
   if (typeof window === "undefined") return false;
   try {
-    const ts = sessionStorage.getItem(DISMISS_KEY);
+    const ts = localStorage.getItem(DISMISS_KEY);
     if (!ts) return false;
     return Date.now() - parseInt(ts, 10) < DISMISS_TTL;
   } catch {
     return false;
+  }
+}
+
+function canDismiss(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const count = parseInt(localStorage.getItem(_todayKey()) || "0", 10);
+    return count < MAX_DISMISSALS_PER_DAY;
+  } catch {
+    return true;
   }
 }
 
@@ -54,8 +70,11 @@ export function TrialPaywall({ additionalCount, context = "search" }: TrialPaywa
   }, []);
 
   const handleDismiss = useCallback(() => {
-    if (typeof window !== "undefined") {
-      sessionStorage.setItem(DISMISS_KEY, String(Date.now()));
+    if (typeof window !== "undefined" && canDismiss()) {
+      localStorage.setItem(DISMISS_KEY, String(Date.now()));
+      const dayKey = _todayKey();
+      const count = parseInt(localStorage.getItem(dayKey) || "0", 10);
+      localStorage.setItem(dayKey, String(count + 1));
     }
     setDismissed(true);
     trackEvent("trial_paywall_dismissed", { context });
@@ -98,13 +117,15 @@ export function TrialPaywall({ additionalCount, context = "search" }: TrialPaywa
           >
             Assinar SmartLic Pro
           </Link>
-          <button
-            onClick={handleDismiss}
-            className="text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
-            data-testid="trial-paywall-dismiss"
-          >
-            Continuar com preview
-          </button>
+          {canDismiss() && (
+            <button
+              onClick={handleDismiss}
+              className="text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+              data-testid="trial-paywall-dismiss"
+            >
+              Continuar com preview
+            </button>
+          )}
         </div>
       </div>
     </div>

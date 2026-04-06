@@ -4,7 +4,7 @@ STORY-321 AC1-AC6, AC12-AC14: Trial email sequence — 6 emails over 14 days.
 Compressed sequence (replaces STORY-310 8-email sequence):
 - Day 0:  Welcome (onboarding CTA)
 - Day 3:  Engagement (stats de uso)
-- Day 7:  Paywall alert (preview limitado amanha)
+- Day 7:  Paywall alert (preview limitado a partir de hoje)
 - Day 10: Valor acumulado (social proof R$X)
 - Day 13: Ultimo dia (escassez)
 - Day 16: Expirado (reengajamento 20% off)
@@ -30,7 +30,7 @@ _UNSUBSCRIBE_SECRET = os.getenv("WEBHOOK_SECRET", os.getenv("SECRET_KEY", "smart
 TRIAL_EMAIL_SEQUENCE = [
     {"number": 1, "day": 0,  "type": "welcome"},
     {"number": 2, "day": 3,  "type": "engagement"},
-    {"number": 3, "day": 7,  "type": "paywall_alert"},
+    {"number": 3, "day": 7,  "type": "paywall_alert"},  # Day 7: paywall ativa HOJE (current_day > 7 = Day 8)
     {"number": 4, "day": 10, "type": "value"},
     {"number": 5, "day": 13, "type": "last_day"},
     {"number": 6, "day": 16, "type": "expired"},
@@ -462,7 +462,7 @@ def _render_email(
         html = render_trial_engagement_email(user_name, stats, unsubscribe_url=unsubscribe_url)
 
     elif email_type == "paywall_alert":
-        subject = "Metade do trial — a partir de amanha, preview limitado"
+        subject = "Metade do trial — preview limitado a partir de hoje"
         html = render_trial_paywall_alert_email(user_name, stats, unsubscribe_url=unsubscribe_url)
 
     elif email_type == "value":

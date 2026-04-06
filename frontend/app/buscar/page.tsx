@@ -22,6 +22,7 @@ import { QuotaBadge } from "../components/QuotaBadge";
 import { PlanBadge } from "../components/PlanBadge";
 import { TrialCountdown } from "../components/TrialCountdown";
 import { TrialExpiringBanner } from "../components/TrialExpiringBanner";
+import { TrialValueTracker } from "../../components/billing/TrialValueTracker";
 import { Button } from "../../components/ui/button";
 import { APP_NAME } from "../../lib/config";
 
@@ -112,6 +113,9 @@ function HomePageContent() {
           className="pull-to-refresh-wrapper"
         >
           <div>
+            {/* P0 zero-churn: Trial value tracker — shows ROI during trial */}
+            <TrialValueTracker />
+
             {/* Trial expiring banner */}
             {orch.trialDaysRemaining !== null && orch.trialDaysRemaining <= 1 && !orch.isTrialExpired && (
               <TrialExpiringBanner

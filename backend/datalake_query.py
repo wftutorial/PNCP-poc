@@ -13,9 +13,54 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# S3-FIX: In-memory TTL cache for datalake queries (avoids repeated Supabase
+# round-trips and mitigates timeout impact on retries).
+# ---------------------------------------------------------------------------
+
+_CACHE_TTL = 3600  # 1 hour
+_CACHE_MAX_ENTRIES = 50
+
+# dict[str, tuple[float, list[dict]]]  — key -> (expiry_timestamp, results)
+_query_cache: dict[str, tuple[float, list[dict]]] = {}
+
+
+def _cache_key(
+    ufs: list[str],
+    data_inicial: str,
+    data_final: str,
+    tsquery: str | None,
+    modo_busca: str,
+) -> str:
+    """Deterministic cache key from query parameters."""
+    ufs_sorted = ",".join(sorted(ufs))
+    return f"{ufs_sorted}|{data_inicial}|{data_final}|{tsquery or ''}|{modo_busca}"
+
+
+def _cache_get(key: str) -> list[dict] | None:
+    """Return cached results if key exists and is not expired."""
+    entry = _query_cache.get(key)
+    if entry is None:
+        return None
+    expiry, results = entry
+    if time.monotonic() > expiry:
+        del _query_cache[key]
+        return None
+    return results
+
+
+def _cache_put(key: str, results: list[dict]) -> None:
+    """Store results in cache, evicting oldest entry if at capacity."""
+    if len(_query_cache) >= _CACHE_MAX_ENTRIES:
+        # Evict the entry with the earliest expiry
+        oldest_key = min(_query_cache, key=lambda k: _query_cache[k][0])
+        del _query_cache[oldest_key]
+    _query_cache[key] = (time.monotonic() + _CACHE_TTL, results)
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -58,14 +103,24 @@ async def query_datalake(
         List of flat bid dicts compatible with _normalize_item() output.
         Returns [] on any error (fail-open).
     """
+    tsquery = _build_tsquery(keywords, custom_terms)
+
+    # S3-FIX: Check in-memory cache before hitting Supabase
+    _ck = _cache_key(ufs, data_inicial, data_final, tsquery, modo_busca)
+    _cached = _cache_get(_ck)
+    if _cached is not None:
+        logger.info(
+            f"[DatalakeQuery] Cache HIT for {len(ufs)} UFs, "
+            f"returning {len(_cached)} cached records"
+        )
+        return _cached
+
     try:
         from supabase_client import get_supabase
         sb = get_supabase()
     except Exception as e:
         logger.warning(f"[DatalakeQuery] Supabase unavailable: {e}")
         return []
-
-    tsquery = _build_tsquery(keywords, custom_terms)
 
     rpc_params: dict[str, Any] = {
         "p_ufs": ufs,
@@ -117,6 +172,10 @@ async def query_datalake(
     normalized = [_row_to_normalized(row) for row in rows]
 
     logger.info(f"[DatalakeQuery] Returned {len(normalized)} records from local DB ({len(ufs)} UFs)")
+
+    # S3-FIX: Cache results before returning
+    _cache_put(_ck, normalized)
+
     return normalized
 
 

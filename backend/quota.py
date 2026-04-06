@@ -24,6 +24,7 @@ STORY-291: Circuit breaker integration for Supabase calls.
 
 import asyncio
 import logging
+import os
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -948,17 +949,49 @@ def check_quota(user_id: str) -> QuotaInfo:
     # Check expiry — ONLY for free_trial (trial expiry) vs paid (billing grace)
     if expires_at_dt and datetime.now(timezone.utc) > expires_at_dt:
         if plan_id == "free_trial":
-            # Free trial expired: block immediately
-            return QuotaInfo(
-                allowed=False,
-                plan_id=plan_id,
-                plan_name=plan_name,
-                capabilities=caps,
-                quota_used=0,
-                quota_remaining=0,
-                quota_reset_date=get_quota_reset_date(),
-                trial_expires_at=expires_at_dt,
-                error_message="Seu trial expirou. Veja o valor que você analisou e continue tendo vantagem.",
+            # P0 zero-churn: 48h grace period for trial users (was: block immediately)
+            _TRIAL_GRACE_HOURS = int(os.getenv("TRIAL_GRACE_HOURS", "48"))
+            _TRIAL_GRACE_MAX_SEARCHES = int(os.getenv("TRIAL_GRACE_MAX_SEARCHES", "3"))
+            trial_grace_end = expires_at_dt + timedelta(hours=_TRIAL_GRACE_HOURS)
+            now_utc = datetime.now(timezone.utc)
+
+            if now_utc > trial_grace_end:
+                # Grace period also expired: block completely
+                return QuotaInfo(
+                    allowed=False,
+                    plan_id=plan_id,
+                    plan_name=plan_name,
+                    capabilities=caps,
+                    quota_used=0,
+                    quota_remaining=0,
+                    quota_reset_date=get_quota_reset_date(),
+                    trial_expires_at=expires_at_dt,
+                    error_message="Seu trial expirou. Veja o valor que você analisou e continue tendo vantagem.",
+                )
+
+            # Within grace period: allow up to N searches
+            grace_used = get_monthly_quota_used(user_id)
+            if grace_used >= _TRIAL_GRACE_MAX_SEARCHES:
+                return QuotaInfo(
+                    allowed=False,
+                    plan_id=plan_id,
+                    plan_name=plan_name,
+                    capabilities=caps,
+                    quota_used=grace_used,
+                    quota_remaining=0,
+                    quota_reset_date=get_quota_reset_date(),
+                    trial_expires_at=expires_at_dt,
+                    error_message=(
+                        f"Você usou suas {_TRIAL_GRACE_MAX_SEARCHES} buscas do período de "
+                        f"cortesia. Assine o SmartLic Pro para continuar."
+                    ),
+                )
+
+            logger.info(
+                f"User {mask_user_id(user_id)} in trial grace period "
+                f"(expired={expires_at_dt.isoformat()}, "
+                f"grace_until={trial_grace_end.isoformat()}, "
+                f"grace_searches={grace_used}/{_TRIAL_GRACE_MAX_SEARCHES})"
             )
         else:
             # Paid plan expired: allow grace period before blocking

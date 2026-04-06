@@ -57,7 +57,7 @@ export function TrialExpiringBanner({ daysRemaining, onConvert }: TrialExpiringB
               {expiryMessage}
             </p>
             <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
-              Continue com acesso a todas as funcionalidades a partir de R$ 9,90/dia.
+              Continue com acesso a todas as funcionalidades. Planos a partir de R$ 297/mês.
             </p>
           </div>
         </div>

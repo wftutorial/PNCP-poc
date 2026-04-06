@@ -255,13 +255,13 @@ def render_trial_paywall_alert_email(user_name: str, stats: dict, unsubscribe_ur
         value_line = ""
 
     body = f"""
-    {_preheader("A partir de amanhã, resultados ficam limitados. Assine antes.")}
+    {_preheader("A partir de hoje, resultados ficam limitados. Assine para acesso completo.")}
     <h1 style="color: #333; font-size: 22px; margin: 0 0 16px;">
-      Metade do trial — a partir de amanhã, preview limitado
+      Metade do trial — preview limitado a partir de hoje
     </h1>
     <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
       Olá, {user_name}! Você está na metade do seu trial de 14 dias.
-      {value_line}A partir de amanhã, os resultados de busca serão
+      {value_line}A partir de hoje, os resultados de busca serão
       exibidos em modo preview (limitado a 10 resultados).
     </p>
     {_stats_block(stats, show_pipeline=True) if has_usage else ''}
@@ -270,7 +270,7 @@ def render_trial_paywall_alert_email(user_name: str, stats: dict, unsubscribe_ur
       <tr>
         <td style="background-color: #fff3e0; border-radius: 8px; padding: 16px; border-left: 4px solid #ff9800;">
           <p style="color: #e65100; font-size: 14px; margin: 0; font-weight: 600;">
-            O que muda a partir de amanhã:
+            O que muda a partir de hoje:
           </p>
           <ul style="color: #555; font-size: 14px; margin: 8px 0 0; padding-left: 20px;">
             <li>Resultados limitados a 10 por busca (preview)</li>
@@ -282,7 +282,7 @@ def render_trial_paywall_alert_email(user_name: str, stats: dict, unsubscribe_ur
     </table>
 
     <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
-      Assine o SmartLic Pro <strong>antes do limite</strong> e mantenha acesso
+      Assine o SmartLic Pro <strong>agora</strong> e recupere acesso
       completo a todos os resultados, pipeline ilimitado e relatórios Excel.
     </p>
 
@@ -299,7 +299,7 @@ def render_trial_paywall_alert_email(user_name: str, stats: dict, unsubscribe_ur
     """
 
     return email_base(
-        title="Metade do trial — preview limitado amanhã",
+        title="Metade do trial — preview limitado a partir de hoje",
         body_html=body,
         is_transactional=False,
         unsubscribe_url=unsubscribe_url,

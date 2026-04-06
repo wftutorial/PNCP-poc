@@ -162,6 +162,11 @@ function mockSessionStorage(overrides: Partial<Storage> = {}) {
     key: jest.fn(),
     ...overrides,
   };
+  // P0 zero-churn: TrialPaywall now uses localStorage instead of sessionStorage
+  Object.defineProperty(window, "localStorage", {
+    value: mock,
+    writable: true,
+  });
   Object.defineProperty(window, "sessionStorage", {
     value: mock,
     writable: true,
@@ -290,14 +295,14 @@ describe("TrialPaywall", () => {
       ).toBeInTheDocument();
     });
 
-    it("dismiss button stores timestamp in sessionStorage", () => {
-      const sessionMock = mockSessionStorage();
+    it("dismiss button stores timestamp in localStorage", () => {
+      const storageMock = mockSessionStorage();
       render(<TrialPaywall additionalCount={10} />);
 
       const dismissBtn = screen.getByTestId("trial-paywall-dismiss");
       fireEvent.click(dismissBtn);
 
-      expect(sessionMock.setItem).toHaveBeenCalledWith(
+      expect(storageMock.setItem).toHaveBeenCalledWith(
         "smartlic_paywall_dismiss",
         expect.any(String)
       );
@@ -360,7 +365,7 @@ describe("TrialPaywall", () => {
       expect(overlay).toHaveAttribute("aria-label", "Paywall de trial");
     });
 
-    it("does not show paywall when sessionStorage has unexpired dismiss timestamp", () => {
+    it("does not show paywall when localStorage has unexpired dismiss timestamp", () => {
       // Simulate an already-dismissed state within the TTL
       const recentTimestamp = String(Date.now() - 1000); // 1 second ago
       mockSessionStorage({
@@ -378,9 +383,9 @@ describe("TrialPaywall", () => {
       ).not.toBeInTheDocument();
     });
 
-    it("shows paywall when sessionStorage has expired dismiss timestamp", () => {
-      // Simulate a dismiss timestamp older than 1 hour (3_600_000 ms)
-      const expiredTimestamp = String(Date.now() - 3_700_000);
+    it("shows paywall when localStorage has expired dismiss timestamp", () => {
+      // Simulate a dismiss timestamp older than 15 min (900_000 ms)
+      const expiredTimestamp = String(Date.now() - 1_000_000);
       mockSessionStorage({
         getItem: jest.fn((key: string) => {
           if (key === "smartlic_paywall_dismiss") return expiredTimestamp;

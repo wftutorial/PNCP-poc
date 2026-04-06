@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import FocusTrap from "focus-trap-react";
 import { useAnalytics } from "../../hooks/useAnalytics";
+import { useAuth } from "../components/AuthProvider";
+import { usePlans } from "../../hooks/usePlans";
 import { GlassCard } from "./ui/GlassCard";
 import { PlanToggle, BillingPeriod } from "../../components/subscriptions/PlanToggle";
 
@@ -33,7 +35,23 @@ const BILLING_PRICES: Record<BillingPeriod, { monthly: number; label: string; su
 export function TrialConversionScreen({ trialValue, onClose, loading }: TrialConversionScreenProps) {
   const router = useRouter();
   const { trackEvent } = useAnalytics();
+  const { session } = useAuth();
+  const { plans } = usePlans();
   const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>("monthly");
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+
+  // P0 zero-churn: Dynamic prices from backend, fallback to hardcoded
+  const dynamicPrices = useMemo(() => {
+    if (!plans) return BILLING_PRICES;
+    const proPlan = Array.isArray(plans) ? plans.find((p: { id: string }) => p.id === "smartlic_pro") : null;
+    if (!proPlan?.billing_periods) return BILLING_PRICES;
+    const bp = proPlan.billing_periods as Record<string, { price_cents?: number }>;
+    const result = { ...BILLING_PRICES };
+    if (bp.monthly?.price_cents) result.monthly = { ...result.monthly, monthly: bp.monthly.price_cents / 100 };
+    if (bp.semiannual?.price_cents) result.semiannual = { ...result.semiannual, monthly: bp.semiannual.price_cents / 100 };
+    if (bp.annual?.price_cents) result.annual = { ...result.annual, monthly: bp.annual.price_cents / 100 };
+    return result;
+  }, [plans]);
 
   useEffect(() => {
     trackEvent("trial_conversion_screen_viewed", {
@@ -42,14 +60,40 @@ export function TrialConversionScreen({ trialValue, onClose, loading }: TrialCon
     });
   }, []);
 
-  const handleSelectPlan = (period: BillingPeriod) => {
+  // P0 zero-churn: Direct checkout — skip /planos redirect (1-click conversion)
+  const handleSelectPlan = async (period: BillingPeriod) => {
     trackEvent("trial_conversion_cta_clicked", { billing_period: period });
+
+    if (!session?.access_token) {
+      router.push(`/planos?billing=${period}`);
+      return;
+    }
+
+    setCheckoutLoading(true);
+    try {
+      const res = await fetch(
+        `/api/billing?endpoint=checkout&plan_id=smartlic_pro&billing_period=${period}`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        }
+      );
+      if (!res.ok) throw new Error("checkout_failed");
+      const data = await res.json();
+      if (data.checkout_url) {
+        window.location.href = data.checkout_url;
+        return;
+      }
+    } catch {
+      // Graceful fallback: redirect to /planos if direct checkout fails
+    }
+    setCheckoutLoading(false);
     router.push(`/planos?billing=${period}`);
   };
 
   const handleClose = () => {
     trackEvent("trial_conversion_dismissed");
-    router.push("/planos");
+    router.push(`/planos?billing=${billingPeriod}`);
   };
 
   // Handle Escape key → redirect to /planos (AC8)
@@ -142,7 +186,7 @@ export function TrialConversionScreen({ trialValue, onClose, loading }: TrialCon
         {/* Billing Period Cards */}
         <div className="grid md:grid-cols-3 gap-4 mb-8">
           {(["monthly", "semiannual", "annual"] as BillingPeriod[]).map((period) => {
-            const price = BILLING_PRICES[period];
+            const price = dynamicPrices[period];
             const isSelected = billingPeriod === period;
             const discount = period === "semiannual" ? "10%" : period === "annual" ? "20%" : null;
 
@@ -177,9 +221,12 @@ export function TrialConversionScreen({ trialValue, onClose, loading }: TrialCon
         {/* Primary CTA */}
         <button
           onClick={() => handleSelectPlan(billingPeriod)}
-          className="w-full px-6 py-4 rounded-xl font-semibold text-lg bg-brand-navy text-white hover:bg-brand-blue-hover hover:-translate-y-0.5 hover:shadow-xl transition-all"
+          disabled={checkoutLoading}
+          className="w-full px-6 py-4 rounded-xl font-semibold text-lg bg-brand-navy text-white hover:bg-brand-blue-hover hover:-translate-y-0.5 hover:shadow-xl transition-all disabled:opacity-60 disabled:cursor-wait"
         >
-          Continuar com SmartLic Pro — {formatCurrency(BILLING_PRICES[billingPeriod].monthly)}/mês
+          {checkoutLoading
+            ? "Redirecionando para pagamento..."
+            : `Continuar com SmartLic Pro — ${formatCurrency(dynamicPrices[billingPeriod].monthly)}/mês`}
         </button>
 
         {/* Confidence Footer */}

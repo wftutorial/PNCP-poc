@@ -1,14 +1,16 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useAuth } from "../components/AuthProvider";
 import { useAnalytics } from "../../hooks/useAnalytics";
+import { useShepherdTour, type TourStep } from "../../hooks/useShepherdTour";
 import { useBackendStatusContext } from "../components/BackendStatusIndicator";
 import { useFetchWithBackoff } from "../../hooks/useFetchWithBackoff";
 import { useProfileCompleteness } from "../../hooks/useProfileCompleteness";
 import { PageHeader } from "../../components/PageHeader";
 import { AuthLoadingScreen } from "../../components/AuthLoadingScreen";
 import { TrialUpsellCTA } from "../../components/billing/TrialUpsellCTA";
+import { TrialValueTracker } from "../../components/billing/TrialValueTracker";
 import { usePlan } from "../../hooks/usePlan";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { formatCurrencyBR } from "../../lib/format-currency";
@@ -37,6 +39,31 @@ import { PageErrorBoundary } from "../../components/PageErrorBoundary";
 
 const LOADING_TIMEOUT_MS = 10_000;
 
+// P0 zero-churn: Dashboard tour steps (auto-triggered on first visit)
+const DASHBOARD_TOUR_STEPS: TourStep[] = [
+  {
+    id: "dashboard-stats",
+    title: "Seu resumo de atividade",
+    text: '<span class="tour-step-counter">Passo 1 de 3</span><p>Aqui você vê o total de buscas, oportunidades encontradas e valor acumulado.</p>',
+    attachTo: { element: '[data-testid="dashboard-stat-cards"]', on: "bottom" },
+    showOn: () => !!document.querySelector('[data-testid="dashboard-stat-cards"]'),
+  },
+  {
+    id: "dashboard-chart",
+    title: "Tendência de buscas",
+    text: '<span class="tour-step-counter">Passo 2 de 3</span><p>Acompanhe sua atividade ao longo do tempo. Mais buscas = mais oportunidades.</p>',
+    attachTo: { element: '[data-testid="timeseries-chart"]', on: "top" },
+    showOn: () => !!document.querySelector('[data-testid="timeseries-chart"]'),
+  },
+  {
+    id: "dashboard-dimensions",
+    title: "Suas dimensões",
+    text: '<span class="tour-step-counter">Passo 3 de 3</span><p>Veja quais setores, estados e faixas de valor você mais pesquisa.</p>',
+    attachTo: { element: '[data-testid="dimensions-widget"]', on: "top" },
+    showOn: () => !!document.querySelector('[data-testid="dimensions-widget"]'),
+  },
+];
+
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("pt-BR", {
     day: "2-digit", month: "long", year: "numeric",
@@ -51,6 +78,17 @@ export default function DashboardPage() {
   const isMobile = useIsMobile();
 
   const [period, setPeriod] = useState<Period>("week");
+
+  // P0 zero-churn: Dashboard tour (auto-trigger on first visit)
+  const {
+    isCompleted: isDashboardTourCompleted,
+    startTour: startDashboardTour,
+  } = useShepherdTour({
+    tourId: "dashboard",
+    steps: DASHBOARD_TOUR_STEPS,
+    onComplete: (stepsSeen) => trackEvent("onboarding_tour_completed", { tour: "dashboard", steps_seen: stepsSeen }),
+    onSkip: (stepsSeen) => trackEvent("onboarding_tour_skipped", { tour: "dashboard", skipped_at_step: stepsSeen }),
+  });
 
   // STORY-260: Profile completeness (FE-007: SWR)
   // Local override allows ProfileCompletionPrompt to show immediate feedback;
@@ -182,6 +220,16 @@ export default function DashboardPage() {
     return <DashboardRetryingState retryCount={retryCount} />;
   }
 
+  // P0 zero-churn: Auto-start dashboard tour on first visit
+  const dashboardTourStarted = useRef(false);
+  useEffect(() => {
+    if (!loading && data && !dashboardTourStarted.current && !isDashboardTourCompleted()) {
+      dashboardTourStarted.current = true;
+      const timer = setTimeout(() => startDashboardTour(), 800);
+      return () => clearTimeout(timer);
+    }
+  }, [loading, data, isDashboardTourCompleted, startDashboardTour]);
+
   // ── Loading skeleton ────────────────────────────────────────────────────────
 
   if (loading && !data) return <DashboardLoadingSkeleton />;
@@ -226,6 +274,11 @@ export default function DashboardPage() {
       />
 
       <div className="max-w-6xl mx-auto py-8 px-4">
+        {/* P0 zero-churn: Trial value tracker */}
+        <div className="mb-6">
+          <TrialValueTracker />
+        </div>
+
         {summary && (
           <p className="text-sm text-[var(--ink-muted)] mb-6">
             Membro desde {formatDate(summary.member_since)}
@@ -244,11 +297,13 @@ export default function DashboardPage() {
           newOpportunities={newOpportunities}
         />
 
-        <DashboardStatCards
-          summary={summary}
-          summaryError={summaryError}
-          onRetry={manualRetry}
-        />
+        <div data-testid="dashboard-stat-cards">
+          <DashboardStatCards
+            summary={summary}
+            summaryError={summaryError}
+            onRetry={manualRetry}
+          />
+        </div>
 
         {/* STORY-312 AC4: Dashboard CTA for trial users with >= 3 searches */}
         {summary && summary.total_searches >= 3 && (
@@ -264,15 +319,18 @@ export default function DashboardPage() {
           </div>
         )}
 
-        <DashboardTimeSeriesChart
-          timeSeries={timeSeries}
-          timeSeriesError={timeSeriesError}
-          period={period}
-          setPeriod={setPeriod}
-          isMobile={isMobile}
-          onRetry={manualRetry}
-        />
+        <div data-testid="timeseries-chart">
+          <DashboardTimeSeriesChart
+            timeSeries={timeSeries}
+            timeSeriesError={timeSeriesError}
+            period={period}
+            setPeriod={setPeriod}
+            isMobile={isMobile}
+            onRetry={manualRetry}
+          />
+        </div>
 
+        <div data-testid="dimensions-widget">
         <DashboardDimensionsWidget
           dimensions={dimensions}
           dimensionsError={dimensionsError}
@@ -281,6 +339,7 @@ export default function DashboardPage() {
           isMobile={isMobile}
           onRetry={manualRetry}
         />
+        </div>
 
         <DashboardQuickLinks />
       </div>

@@ -9,6 +9,7 @@ import HowItWorks from './components/landing/HowItWorks';
 import StatsSection from './components/landing/StatsSection';
 import TestimonialSection from '../components/TestimonialSection';
 import FinalCTA from './components/landing/FinalCTA';
+import { TrendingEditais } from './components/landing/TrendingEditais';
 import Footer from './components/Footer';
 
 export default function LandingPage() {
@@ -23,6 +24,7 @@ export default function LandingPage() {
         <HowItWorks />
         <StatsSection />
         <TestimonialSection />
+        <TrendingEditais />
 
         <section id="suporte">
           <FinalCTA />

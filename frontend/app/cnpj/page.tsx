@@ -1,6 +1,7 @@
 import { Metadata } from 'next';
 import ContentPageLayout from '../components/ContentPageLayout';
 import CnpjSearchForm from './CnpjSearchForm';
+import { LeadCapture } from '@/components/LeadCapture';
 
 export const metadata: Metadata = {
   title: 'Consulta CNPJ B2G — Histórico de Contratos Públicos | SmartLic',
@@ -167,6 +168,14 @@ export default function CnpjLandingPage() {
       </p>
 
       <CnpjSearchForm />
+
+      <div className="mt-10">
+        <LeadCapture
+          source="cnpj"
+          heading="Monitore este CNPJ automaticamente"
+          description="Receba alertas quando novos editais relevantes para esta empresa forem publicados."
+        />
+      </div>
 
       <section className="mt-12">
         <h2>O que você verá</h2>

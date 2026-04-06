@@ -170,7 +170,7 @@ export default async function SectorPage({
         </section>
       )}
 
-      {/* AC6: CTA */}
+      {/* AC6: CTA (inline — catches users who don't scroll) */}
       <section className="bg-brand-blue/5 dark:bg-brand-blue/10 py-12 px-4">
         <div className="max-w-3xl mx-auto text-center">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
@@ -180,7 +180,7 @@ export default async function SectorPage({
             Análise de viabilidade com IA, filtros por região e valor, alertas por email.
           </p>
           <Link
-            href="/signup"
+            href={`/signup?source=setor-landing&utm_source=seo&utm_medium=setor-landing&utm_content=${sector.slug}`}
             className="inline-block px-8 py-3 bg-brand-blue text-white font-semibold
                        rounded-lg hover:bg-blue-700 transition-colors text-lg"
           >
@@ -241,6 +241,28 @@ export default async function SectorPage({
           </div>
         </section>
       )}
+
+      {/* SEO-CAC-ZERO A4: Conversion CTA — after FAQ, high intent moment */}
+      <section className="max-w-5xl mx-auto py-8 px-4">
+        <div className="rounded-2xl bg-gradient-to-br from-brand-navy to-brand-blue p-8 sm:p-12 text-center text-white">
+          <h3 className="text-2xl sm:text-3xl font-bold mb-4">
+            {stats?.total_open && stats.total_open > 0
+              ? `${stats.total_open} licitações de ${sector.name} abertas agora`
+              : `Licitações de ${sector.name} abertas agora`}
+          </h3>
+          <p className="text-white/80 text-lg mb-8 max-w-2xl mx-auto">
+            Filtre por estado, valor e modalidade. Receba análise de viabilidade automática.
+            Exporte para Excel. Teste grátis por 14 dias.
+          </p>
+          <Link
+            href={`/signup?source=setor-landing&utm_source=seo&utm_medium=setor-landing&utm_content=${sector.slug}`}
+            className="inline-block px-8 py-4 bg-white text-brand-navy font-bold rounded-xl hover:bg-gray-100 transition-colors text-lg shadow-lg"
+          >
+            Analisar Oportunidades de {sector.name}
+          </Link>
+          <p className="mt-4 text-white/60 text-sm">Sem cartão de crédito. Cancele quando quiser.</p>
+        </div>
+      </section>
 
       {/* SEO-PLAYBOOK Fundação §5: Todos os 27 UFs agrupados por região + Calculator link */}
       <section className="max-w-5xl mx-auto py-12 px-4">

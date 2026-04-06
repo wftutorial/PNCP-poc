@@ -1,6 +1,7 @@
 import { Metadata } from 'next';
 import CalculadoraClient from './CalculadoraClient';
 import ContentPageLayout from '../components/ContentPageLayout';
+import { LeadCapture } from '@/components/LeadCapture';
 
 export const metadata: Metadata = {
   title: 'Calculadora de Oportunidades B2G — Quanto você está perdendo em licitações?',
@@ -141,6 +142,14 @@ export default function CalculadoraPage() {
       </p>
 
       <CalculadoraClient />
+
+      <div className="mt-10">
+        <LeadCapture
+          source="calculadora"
+          heading="Receba oportunidades do seu setor toda semana"
+          description="Análise automática de editais novos, filtrada pelo seu perfil. Direto no email."
+        />
+      </div>
 
       <section className="mt-12">
         <h2>Perguntas Frequentes</h2>

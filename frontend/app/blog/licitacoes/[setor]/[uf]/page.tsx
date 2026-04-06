@@ -23,8 +23,18 @@ import { getFreshnessLabel } from '@/lib/seo';
  * MKT-003 AC1: Sector × UF programmatic page.
  *
  * Route: /blog/licitacoes/{setor}/{uf}
+ * Optional ?modalidade=6 query param for SEO-CAC-ZERO A1 modalidade variants.
  * ISR 24h. Phase 1: 5 sectors × 5 UFs = 25 pages.
  */
+
+const MODALIDADE_MAP: Record<number, { name: string; slug: string }> = {
+  4: { name: 'Concorrência Eletrônica', slug: 'concorrencia-eletronica' },
+  5: { name: 'Concorrência Presencial', slug: 'concorrencia-presencial' },
+  6: { name: 'Pregão Eletrônico', slug: 'pregao-eletronico' },
+  7: { name: 'Pregão Presencial', slug: 'pregao-presencial' },
+  8: { name: 'Dispensa de Licitação', slug: 'dispensa' },
+  12: { name: 'Credenciamento', slug: 'credenciamento' },
+};
 
 export const revalidate = 86400; // 24h ISR
 
@@ -58,10 +68,16 @@ function getTrendIndicator(trend: { period: string; count: number }[]): {
 
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: Promise<{ setor: string; uf: string }>;
+  searchParams?: Promise<{ modalidade?: string }>;
 }): Promise<Metadata> {
   const { setor, uf } = await params;
+  const resolvedSearch = searchParams ? await searchParams : {};
+  const modalidadeCode = resolvedSearch?.modalidade ? parseInt(resolvedSearch.modalidade, 10) : null;
+  const modalidadeInfo = modalidadeCode ? (MODALIDADE_MAP[modalidadeCode] ?? null) : null;
+
   const ufUpper = uf.toUpperCase();
   const sector = getSectorFromSlug(setor);
   if (!sector || !ALL_UFS.includes(ufUpper)) return { title: 'Página não encontrada' };
@@ -69,32 +85,40 @@ export async function generateMetadata({
   const stats = await fetchSectorUfBlogStats(setor, ufUpper);
   const total = stats?.total_editais ?? 0;
   const ufName = UF_NAMES[ufUpper] || ufUpper;
+  // Canonical always points to the base page (without modalidade param) to avoid duplicate content
   const canonicalUrl = `https://smartlic.tech/blog/licitacoes/${setor}/${uf}`;
+  const modalidadeSuffix = modalidadeInfo ? ` — ${modalidadeInfo.name}` : '';
 
   return {
-    title: `${total > 0 ? `${total} ` : ''}Licitações de ${sector.name} em ${ufName} — ${getMonthYear()} | SmartLic`,
-    description: `Encontre ${total > 0 ? total : ''} licitações de ${sector.name.toLowerCase()} em ${ufName}. Dados ao vivo de PNCP, PCP e ComprasGov. Filtre por valor, modalidade e prazo. Teste grátis.`,
+    title: `${total > 0 ? `${total} ` : ''}Licitações de ${sector.name} em ${ufName}${modalidadeSuffix} — ${getMonthYear()} | SmartLic`,
+    description: `Encontre ${total > 0 ? total : ''} licitações de ${sector.name.toLowerCase()}${modalidadeInfo ? ` via ${modalidadeInfo.name}` : ''} em ${ufName}. Dados ao vivo de PNCP, PCP e ComprasGov. Filtre por valor, modalidade e prazo. Teste grátis.`,
     alternates: { canonical: canonicalUrl },
     openGraph: {
-      title: `${total > 0 ? `${total} ` : ''}Licitações de ${sector.name} em ${ufName} — ${getMonthYear()} | SmartLic`,
-      description: `${total > 0 ? `${total} editais` : 'Editais'} de ${sector.name.toLowerCase()} em ${ufName}. Dados ao vivo consolidados de 3 fontes oficiais.`,
+      title: `${total > 0 ? `${total} ` : ''}Licitações de ${sector.name} em ${ufName}${modalidadeSuffix} — ${getMonthYear()} | SmartLic`,
+      description: `${total > 0 ? `${total} editais` : 'Editais'} de ${sector.name.toLowerCase()} em ${ufName}${modalidadeInfo ? ` (${modalidadeInfo.name})` : ''}. Dados ao vivo consolidados de 3 fontes oficiais.`,
       url: canonicalUrl,
       type: 'article',
       locale: 'pt_BR',
     },
     twitter: {
       card: 'summary_large_image',
-      title: `Licitações de ${sector.name} em ${ufName} | SmartLic`,
+      title: `Licitações de ${sector.name} em ${ufName}${modalidadeSuffix} | SmartLic`,
     },
   };
 }
 
 export default async function LicitacoesSectorUfPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ setor: string; uf: string }>;
+  searchParams?: Promise<{ modalidade?: string }>;
 }) {
   const { setor, uf } = await params;
+  const resolvedSearch = searchParams ? await searchParams : {};
+  const modalidadeCode = resolvedSearch?.modalidade ? parseInt(resolvedSearch.modalidade, 10) : null;
+  const modalidadeInfo = modalidadeCode ? (MODALIDADE_MAP[modalidadeCode] ?? null) : null;
+
   const ufUpper = uf.toUpperCase();
   const sector = getSectorFromSlug(setor);
   if (!sector || !ALL_UFS.includes(ufUpper)) notFound();
@@ -157,12 +181,19 @@ export default async function LicitacoesSectorUfPage({
               <span className="text-ink">{ufName}</span>
             </nav>
 
-            {/* AC2: H1 with month and year */}
+            {/* AC2: H1 with month and year; modalidade suffix when ?modalidade= param present */}
             <h1
               className="text-3xl sm:text-4xl lg:text-5xl font-bold text-ink tracking-tight mb-4"
             >
-              Licitações de {sector.name} em {ufName} — {monthYear}
+              Licitações de {sector.name} em {ufName}
+              {modalidadeInfo ? ` — ${modalidadeInfo.name}` : ''} — {monthYear}
             </h1>
+
+            {modalidadeInfo && (
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-brand-blue/10 text-brand-blue mb-3">
+                {modalidadeInfo.name}
+              </span>
+            )}
 
             <p className="text-base sm:text-lg text-ink-secondary max-w-2xl leading-relaxed">
               {stats?.total_editais ?? 0} editais publicados nos últimos 10 dias.

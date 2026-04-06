@@ -68,6 +68,27 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.7,
   }));
 
+  // SEO-CAC-ZERO A1: Modalidade-specific pages (setor×UF×modalidade)
+  // 4 popular modalidades × 405 setor×UF = 1,620 additional URLs
+  const POPULAR_MODALIDADES = [
+    { code: 6, slug: 'pregao-eletronico' },
+    { code: 4, slug: 'concorrencia-eletronica' },
+    { code: 8, slug: 'dispensa' },
+    { code: 12, slug: 'credenciamento' },
+  ];
+
+  const modalidadeRoutes: MetadataRoute.Sitemap = [];
+  for (const { setor, uf } of generateLicitacoesParams()) {
+    for (const mod of POPULAR_MODALIDADES) {
+      modalidadeRoutes.push({
+        url: `${baseUrl}/blog/licitacoes/${setor}/${uf}?modalidade=${mod.code}`,
+        lastModified: today,
+        changeFrequency: 'daily' as const,
+        priority: 0.7,
+      });
+    }
+  }
+
   // SEO Frente 4: City pSEO pages (/blog/licitacoes/cidade/[cidade])
   const cidadeRoutes: MetadataRoute.Sitemap = CITIES.map((c) => ({
     url: `${baseUrl}/blog/licitacoes/cidade/${c.slug}`,
@@ -206,6 +227,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     ...programmaticSectorRoutes,
     // SEO-PLAYBOOK P0: Sector × UF pages (405 combinations)
     ...licitacoesUfRoutes,
+    // SEO-CAC-ZERO A1: Sector × UF × Modalidade pages (1,620 additional URLs)
+    ...modalidadeRoutes,
     // SEO-PLAYBOOK P0: Panorama sector pages
     ...panoramaSectorRoutes,
     // SEO Frente 4: City pSEO pages

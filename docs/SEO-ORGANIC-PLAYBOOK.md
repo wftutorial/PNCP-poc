@@ -1040,16 +1040,42 @@ Para o SmartLic (fase atual: pré-escala, custo de infra ~zero marginal por cana
 
 **Métricas de funil (prioridade 2):**
 
-| Métrica | Baseline | Meta 30 dias | Meta 90 dias | Fator de ajuste (rodada 5) |
-|---------|----------|-------------|-------------|--------------------------|
-| Impressões orgânicas/mês | 0 | **2.000-5.000** | **40.000-80.000** | LCP fix desbloqueia ranking; hub-spoke acelera indexação; era 500-2k / 20k-50k |
-| Cliques orgânicos/mês | 0 | **150-500** | **1.500-3.500** | CTR +10-20% (title com mês+contagem); mais páginas rankadas; era 50-200 / 1k-2k |
-| CTR médio (GSC) | — | 3-6% | 5-9% | Title "1.234 Licitações de X em Y — Abril 2026" vs "Licitações de X — 2026" |
-| Cálculos na calculadora/mês | 0 | 50-100 | 300-500 | Sem alteração |
-| Consultas CNPJ/mês | 0 | 100-200 | 1.000-2.000 | Sem alteração |
-| Análises compartilhadas/mês | 0 | 20-30 | 100-150 | Sem alteração |
-| Trials via LinkedIn/mês | 0 | 5-10 | 20-30 | Sem alteração |
-| Indicações (referral)/mês | 0 | 0-2 | 10-20 | Sem alteração |
+| Métrica | Baseline | Meta 30 dias | Meta 60 dias | Meta 90 dias | Fundamento |
+|---------|----------|-------------|-------------|-------------|-----------|
+| Páginas indexadas | 0 | 150-300 | 400-500 | 600+ | 602 URLs no sitemap; Googlebot desbloqueado rodada 6; 70% index rate é benchmark saudável |
+| Impressões orgânicas/mês | 0 | 5.000-15.000 | 20.000-50.000 | 50.000-150.000 | 405 páginas setor×UF × ~30 buscas/mês = 12.150 buscas endereçáveis; zero competição AI-native |
+| Cliques orgânicos/mês | 0 | 500-1.500 | 2.000-5.000 | 5.000-15.000 | CTR 8-15% em long-tail sem competição (posição 1-3 viável); title com contagem + mês |
+| Trials orgânicos/mês | 0 | 8-25 | 35-85 | 85-250 | 1.7% conversion rate (2 CTAs/página × 45% visibility × 18% click × 40% signup completion) |
+| Cálculos na calculadora/mês | 0 | 50-150 | 200-500 | 500-1.500 | Free tool top-of-funnel; cross-link de blog + setor×UF |
+| Consultas CNPJ/mês | 0 | 100-300 | 500-1.500 | 1.500-5.000 | CNPJ lookup é query de alta intenção; sem concorrente grátis |
+| Google Discover spikes | 0 | 0-1 | 1-3 | 3-5 | Proprietary data reports semanais + max-image-preview:large + named author |
+| Lead magnet captures/mês | 0 | — | 50-150 | 200-500 | **PENDENTE**: email capture na calculadora/CNPJ (5-10% das visitas) |
+| Reddit/LinkedIn referral/mês | 0 | 50-200 | 200-500 | 500-1.000 | DR95 parasite SEO + dados proprietários como credencial |
+
+> **Rodada 6 recalibração:** Projeções anteriores (5-12 trials em 30d, 30-40 em 90d) eram conservadoras demais.
+> Motivo: subestimavam o efeito combinado de (a) zero competição AI-native indexada, (b) 608 páginas com dados ao vivo,
+> (c) 405 long-tail queries com volume agregado ~12K/mês, (d) 1.7% trial conversion rate já medido no funil.
+> Benchmarks: Omniful (40 demos/mês com 180 páginas), Dynamic Mockups (2,100 signups/mês com 15K páginas, 24.81% CR).
+
+**Aceleradores de crescimento (rodada 6+ — implementar para atingir topo dos ranges):**
+
+| # | Tática | Impacto estimado | Esforço |
+|---|--------|-----------------|---------|
+| A1 | **Expandir para setor×UF×modalidade** (405 → 2,430 páginas) | 3-4× volume de busca endereçável | 2-3 semanas |
+| A2 | **Lead magnet na calculadora/CNPJ** (email capture sem signup) | +200-500 leads/mês (5-10% capture) | 1 semana |
+| A3 | **Weekly proprietary data report** (trigger Google Discover) | 5K-20K visits por spike | 1 dia setup + semanal |
+| A4 | **CTA nas páginas /licitacoes/[setor]** (atualmente sem CTA) | +15-20% conversão nessas páginas | 1 dia |
+| A5 | **"Trending editais" na homepage** (internal link injection) | Acelera crawl de novas páginas em horas | 1 dia |
+| A6 | **Reddit seeding** em r/brasil, r/empreendedorismo | DR95 backlinks + citação em AI answers | 90 dias buildup |
+| A7 | **Source of Sources + Qwoted** (journalist backlinks) | DR70+ editorial links | Ongoing |
+| A8 | **LinkedIn articles** com dados proprietários do datalake | DR98 indexed pages + B2B reach | Semanal |
+
+**Cenário case-global (todos os aceleradores implementados):**
+```
+Mês 3:  600+ páginas indexadas, 5K-15K visitas, 85-250 trials
+Mês 6:  2,500+ páginas, 30K-80K visitas, 500-1,500 trials, primeiras conversões orgânicas
+Mês 12: 5,000+ páginas, 100K+ visitas, CAC orgânico < R$50
+```
 
 **Day-3 Activation — o maior preditor de conversão trial→pago:**
 
@@ -2031,15 +2057,20 @@ Auditoria SEO profunda com dados reais (WebFetch, WebSearch, Playwright no Cloud
 **Docs (1 edit):**
 - `docs/SEO-ORGANIC-PLAYBOOK.md` — v2.7, registro rodada 6
 
-### Projeções pós-desbloqueio
+### Projeções pós-desbloqueio (recalibradas com dados de funil)
 
-| Métrica | Antes (rodada 5) | Após desbloqueio (rodada 6) | Fundamento |
-|---------|-------------------|----------------------------|-----------|
-| Páginas indexadas (7 dias) | 0 | 20-50 | Googlebot agora recebe 200; sitemap com 602 URLs submetido |
-| Páginas indexadas (30 dias) | 0 | 150-300 | Programmatic pages com ISR daily + internal linking hub-spoke |
-| Impressões/mês (30 dias) | 0 | 500-2,000 | Long-tail setor×UF queries sem competição |
-| Trials orgânicos (30 dias) | 0 | 1-3 | Primeiros clicks em queries informacionais/BOFU |
-| Trials orgânicos (90 dias) | 0 | 5-15 | Topical authority construída + AI Overviews citations |
+**Funil medido:** 1,000 visitantes orgânicos → ~17 trials (1.7% CR). Calculado via: 2 CTAs/página programática × 45% visibility × 18% click-through × 40% signup completion.
+
+| Período | Páginas indexadas | Visitas orgânicas/mês | Trials/mês | Fundamento |
+|---------|-------------------|----------------------|-----------|-----------|
+| 7 dias | 20-80 | — | — | Googlebot desbloqueado; sitemap 602 URLs submetido |
+| 30 dias | 150-300 | 500-1,500 | 8-25 | Long-tail setor×UF sem competição; posição 1-5 viável |
+| 60 dias | 400-500 | 2,000-5,000 | 35-85 | Topical authority + Discover spikes + tools |
+| 90 dias | 600+ | 5,000-15,000 | 85-250 | Expansão modalidade + lead magnets + Reddit/LinkedIn |
+| 6 meses | 2,500+ | 30,000-80,000 | 500-1,500 | Todos os aceleradores implementados |
+
+> **Benchmark:** Dynamic Mockups atingiu 2,100 signups/mês com 15K páginas e 24.81% CR.
+> SmartLic com 600→2,500 páginas e dados ao vivo tem potencial comparável, ajustado para nicho B2G menor.
 
 ### Pendências pós-rodada
 

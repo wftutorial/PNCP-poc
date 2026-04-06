@@ -64,7 +64,13 @@ function addSecurityHeaders(response: NextResponse): NextResponse {
     "default-src 'self'",
     // SHA-256 hash of the static theme-init inline script in layout.tsx.
     // Domain allowlist covers all external scripts (GA, Clarity, Stripe, etc.).
-    "script-src 'self' 'sha256-cKn8Ad2sQ17kSb7D+OWHpjqjv4Jgu4eo/To/sKp8AsQ=' https://js.stripe.com https://static.cloudflareinsights.com https://cdnjs.cloudflare.com https://cdn.sentry.io https://www.clarity.ms https://www.googletagmanager.com",
+    // HOTFIX (2026-04-06): Next.js 16 injects ~35 inline scripts per page for RSC
+    // hydration payload and __NEXT_DATA__. These change per-request so they can't
+    // have static hashes. Reverting to 'unsafe-inline' (pre-DEBT-108 state).
+    // The static hash approach broke all JS execution in production.
+    // Long-term fix: nonce via middleware without triggering Cache-Control:private
+    // (requires Next.js 15 unstable_noStore() or edge config workaround).
+    "script-src 'self' 'unsafe-inline' https://js.stripe.com https://static.cloudflareinsights.com https://cdnjs.cloudflare.com https://cdn.sentry.io https://www.clarity.ms https://www.googletagmanager.com",
     // DEBT-116: style-src unsafe-inline is an accepted risk.
     // Tailwind CSS and Next.js inject inline styles at runtime (className -> style).
     // Nonce-based styles would require a custom PostCSS plugin + Next.js config changes

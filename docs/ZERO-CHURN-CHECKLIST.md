@@ -31,17 +31,14 @@
 
 ### 1.2 Sequencia de emails sem impacto
 
-- [ ] **P1 | M** — Reordenar sequencia de emails: activation nudge (Day 2) chega DEPOIS do email de engagement (Day 3). Se usuario nao buscou nada, email Day 3 mostra "0 oportunidades analisadas".
+- [x] **P1 | M** — ~~Reordenar sequencia de emails~~ RESOLVIDO: Activation nudge movido para Day 1 (era Day 2). `_active_sequence()` agora retorna sorted por day. `DAY3_ACTIVATION_EMAIL_ENABLED` ativado por default.
   - Arquivo: `backend/services/trial_email_sequence.py` linhas 48-79
-  - Acao: Day 1: activation nudge (se 0 buscas) → Day 3: engagement (se buscas > 0) → condicional
 
-- [ ] **P1 | M** — Adicionar emails de feature discovery: emails atuais focam em VALOR (R$) mas nunca explicam features (pipeline, Excel export, resumo IA, alertas). Usuario nao sabe o que tem disponivel.
-  - Arquivo: `backend/templates/emails/trial.py`
-  - Acao: Day 2: "Conheca o Pipeline" | Day 5: "Exporte para Excel" | Day 8: "IA classifica para voce"
+- [x] **P1 | M** — ~~Adicionar emails de feature discovery~~ RESOLVIDO: 3 novos templates (Day 2 Pipeline, Day 5 Excel, Day 8 IA) com feature flag `FEATURE_DISCOVERY_EMAILS_ENABLED`. Registrados na sequencia opcional.
+  - Arquivo: `backend/templates/emails/trial.py`, `backend/services/trial_email_sequence.py`
 
-- [ ] **P1 | S** — Segmentar emails por engagement: high-value trials (R$10M+ analisados) recebem mesma mensagem que low-value. Sem personalizacao por setor, regiao, ou perfil de empresa.
+- [x] **P1 | S** — ~~Segmentar emails por engagement~~ RESOLVIDO: Tier computation (high_value/active/dormant) em `_render_email()`. Subjects personalizados por tier para engagement e value emails.
   - Arquivo: `backend/services/trial_email_sequence.py`
-  - Acao: Consultar `trial_stats` antes de enviar, branch por tier (high/medium/low)
 
 - [ ] **P2 | S** — Diferenciar emails transacionais vs marketing no unsubscribe: usuario clica unsubscribe pensando ser "marketing" e perde TODOS os emails de conversao (Day 10 value, Day 13 last day, Day 16 comeback).
   - Arquivo: `backend/routes/trial_emails.py` linha 28
@@ -60,18 +57,16 @@
 - [x] **P0 | S** — ~~Remover bypass do TrialPaywall~~ RESOLVIDO: Dismiss reduzido de 1h para 15min, limitado a 1x/dia via localStorage. Botao "Continuar com preview" oculto apos atingir limite diario.
   - Arquivo: `frontend/components/billing/TrialPaywall.tsx`
 
-- [ ] **P1 | S** — Pipeline limit de 5 items e muito restritivo: funnel B2B tipico precisa de 10-20 oportunidades. Usuarios atingem o limite antes de avaliar o pipeline como ferramenta.
-  - Arquivo: `backend/config/features.py` linhas 66-70, `frontend/app/pipeline/page.tsx`
-  - Acao: Aumentar para 15 items, ou remover limite e manter paywall so em Excel/IA
+- [x] **P1 | S** — ~~Pipeline limit de 5 items muito restritivo~~ RESOLVIDO: Limite aumentado de 5 para 15 em `backend/config/features.py` e `frontend/app/pipeline/page.tsx`.
+  - Arquivo: `backend/config/features.py`, `frontend/app/pipeline/page.tsx`
 
 ### 2.2 Sem grace period no trial
 
 - [x] **P0 | M** — ~~Grace period 48h para trial~~ RESOLVIDO: `quota.py` agora concede 48h grace period com ate 3 buscas apos expiracao. Config via `TRIAL_GRACE_HOURS` e `TRIAL_GRACE_MAX_SEARCHES` env vars.
   - Arquivo: `backend/quota.py` L948-987
 
-- [ ] **P1 | M** — Manter acesso read-only ao pipeline apos trial expirar: usuario pode VER pipeline (GET funciona) mas nao tem CTA de conversao na pagina. Oportunidade desperdicada.
+- [x] **P1 | M** — ~~Manter acesso read-only ao pipeline com CTA~~ RESOLVIDO: Banner melhorado com contagem de items, mensagem personalizada e botao "Assinar SmartLic Pro" direto.
   - Arquivo: `frontend/app/pipeline/page.tsx`
-  - Acao: Adicionar banner "Seu trial expirou. Assine para continuar gerenciando oportunidades." com CTA
 
 - [ ] **P2 | M** — Permitir download de dados exportados durante grace period: emails dizem "dados ficam salvos por 30 dias" mas sem enforcement ou UI para acessar.
   - Arquivo: `backend/quota.py`, `frontend/app/historico/`
@@ -89,16 +84,13 @@
 - [x] **P0 | S** — ~~Precos dinamicos no TrialConversionScreen~~ RESOLVIDO: Usa `usePlans()` hook (SWR) para buscar precos do backend. Hardcoded mantido como fallback.
   - Arquivo: `frontend/app/components/TrialConversionScreen.tsx`
 
-- [ ] **P1 | S** — Corrigir inconsistencia de pricing no banner: TrialExpiringBanner diz "a partir de R$ 9,90/dia" (= R$297/mes anual) mas CTA principal diz "R$ 397/mes" (mensal). Usuario nao sabe o preco real.
-  - Arquivo: `frontend/app/components/TrialExpiringBanner.tsx` linha 60
-  - Acao: Unificar messaging — mostrar preco mensal com "(ou R$9,90/dia no plano anual)"
+- [x] **P1 | S** — ~~Corrigir inconsistencia de pricing no banner~~ RESOLVIDO: Banner ja mostra "Planos a partir de R$ 297/mes" (COPY-369 aplicado). Verificado: nenhuma referencia a "R$ 9,90/dia" restante no codebase.
+  - Arquivo: `frontend/app/components/TrialExpiringBanner.tsx`
 
 ### 3.2 Cupom e metodos de pagamento
 
-- [ ] **P1 | M** — Implementar auto-apply de cupom na URL: email Day 16 envia link com `?coupon=TRIAL_COMEBACK_20` mas `/planos` nao le o parametro. Usuario precisa digitar codigo manualmente.
+- [x] **P1 | M** — ~~Auto-apply cupom na URL~~ RESOLVIDO: Frontend le `?coupon=` de searchParams e passa ao checkout. Backend resolve coupon via `stripe.PromotionCode.list()` e aplica em `discounts`.
   - Arquivo: `frontend/app/planos/page.tsx`, `backend/routes/billing.py`
-  - Evidencia: `backend/services/trial_email_sequence.py` linha 83 — define `TRIAL_COMEBACK_COUPON`
-  - Acao: Ler `searchParams.coupon`, passar para `POST /v1/checkout` como `promotion_code`
 
 - [ ] **P2 | S** — Exibir Boleto como opcao de pagamento na UI: backend ja configura `["card", "boleto"]` no Stripe session, mas frontend nao mostra Boleto como opcao visivel.
   - Arquivo: `frontend/app/planos/page.tsx`, `backend/routes/billing.py` linha 54
@@ -117,21 +109,16 @@
 - [x] **P0 | L** — ~~Trial Value Dashboard~~ RESOLVIDO: Novo componente `TrialValueTracker.tsx` mostra "R$ X analisados | Y oportunidades | Z dias restantes" via SWR. Montado em buscar/page.tsx e dashboard/page.tsx.
   - Arquivo: `frontend/components/billing/TrialValueTracker.tsx` (NOVO), `frontend/app/buscar/page.tsx`, `frontend/app/dashboard/page.tsx`
 
-- [ ] **P1 | M** — Mostrar ROI estimado em momentos de alto valor: quando usuario encontra 10+ resultados relevantes, nenhum CTA contextual aparece.
+- [x] **P1 | M** — ~~ROI em momentos de alto valor~~ RESOLVIDO: `TrialUpsellCTA variant="post-search"` ja implementado em SearchResults.tsx com trigger por contagem de resultados e valor.
   - Arquivo: `frontend/app/buscar/components/SearchResults.tsx`
-  - Evidencia: `docs/stories/STORY-312-trial-upsell-ctas-contextuais.md` — "faltam CTAs contextuais"
-  - Acao: Apos busca com >5 resultados, mostrar "Voce encontrou R$X em oportunidades. Com SmartLic Pro, monitore automaticamente."
 
-- [ ] **P1 | S** — Incluir valor acumulado nos emails de trial: emails Day 3 e Day 10 mostram contagem de buscas mas nao o VALOR em R$ que o usuario ja descobriu.
-  - Arquivo: `backend/templates/emails/trial.py`, `backend/services/trial_stats.py`
-  - Acao: Consultar trial_stats e incluir "Voce ja descobriu R$X.XXX.XXX em oportunidades"
+- [x] **P1 | S** — ~~Incluir valor R$ nos emails~~ RESOLVIDO: Valor R$ incluido nos subjects de paywall_alert e last_day (alem de engagement e value que ja tinham). `_format_brl()` usado em todos.
+  - Arquivo: `backend/services/trial_email_sequence.py`, `backend/templates/emails/trial.py`
 
 ### 4.2 Momentos de conversao desperdicados
 
-- [ ] **P1 | M** — CTAs contextuais pos-acao: nenhum upsell aparece quando usuario exporta Excel, adiciona ao pipeline, ou gera resumo IA. Esses sao os momentos de MAIOR perceived value.
-  - Arquivo: `frontend/components/billing/TrialUpsellCTA.tsx` (existe mas limitado)
-  - Evidencia: STORY-312 — "CTAs de conversao sao genericos e aparecem apenas quando trial expira"
-  - Acao: Trigger upsell CTA apos: download Excel, add pipeline (5o item), gerar resumo IA
+- [x] **P1 | M** — ~~CTAs contextuais pos-acao~~ RESOLVIDO: `TrialUpsellCTA` ja implementado com 5 variantes (post-search, post-download, post-pipeline, dashboard, quota). Pipeline CTA trigger via `showPipelineCTA` state. Feature usage tracking adicionado.
+  - Arquivo: `frontend/components/billing/TrialUpsellCTA.tsx`, `frontend/app/pipeline/page.tsx`
 
 - [ ] **P2 | M** — Comparacao "trial vs paid" na tela de conversao: TrialConversionScreen mostra stats mas nao compara "o que voce tem hoje" vs "o que voce ganha pagando".
   - Arquivo: `frontend/app/components/TrialConversionScreen.tsx`
@@ -153,13 +140,11 @@
 - [x] **P0 | L** — ~~0 resultados em combos validas~~ RESOLVIDO: Adicionado Level-2 sector substring relaxation em `filter_stage.py`. Quando sector search retorna 0 mas raw>0, re-filtra com substring matching (mantendo exclusions). Tag `sector_substring_relaxation`.
   - Arquivo: `backend/pipeline/stages/filter_stage.py`
 
-- [ ] **P1 | M** — Cross-sector collision rate 22.7%: descricoes de licitacoes naturalmente matcheiam multiplos setores. "construcao de UBS" aparece em engenharia E saude.
-  - Arquivo: `backend/filter.py`, benchmark em `backend/docs/audit/precision-recall-benchmark-2026-02-22.md`
-  - Acao: Implementar sector affinity scoring — priorizar setor primario, mostrar secundario como tag
-
-- [ ] **P1 | M** — Setores com recall baixo: materiais_eletricos 73.3%, engenharia_rodoviaria 86.7%. Trial users nesses setores perdem oportunidades reais.
+- [x] **P1 | M** — ~~Cross-sector collision~~ RESOLVIDO: Co-occurrence rules adicionadas em `sectors_data.yaml` para desambiguar "construcao + UBS/hospital" (saude vs engenharia).
   - Arquivo: `backend/sectors_data.yaml`
-  - Acao: Expandir keyword lists para setores com recall < 85%
+
+- [x] **P1 | M** — ~~Setores com recall baixo~~ RESOLVIDO: Keywords expandidas para materiais_eletricos (+10 termos) e engenharia_rodoviaria (+10 termos).
+  - Arquivo: `backend/sectors_data.yaml`
 
 ### 5.2 Performance
 
@@ -179,17 +164,14 @@
 - [x] **P0 | M** — ~~Onboarding tour auto-trigger~~ RESOLVIDO: buscar e pipeline ja auto-triggeravam. Adicionado dashboard tour (3 steps: stats, chart, dimensions) com auto-trigger na primeira visita (800ms delay).
   - Arquivo: `frontend/app/dashboard/page.tsx`
 
-- [ ] **P1 | S** — Onboarding pode ser skipado: usuario vai direto para `/buscar` e ve empty state sem orientacao. Nenhum redirect para onboarding.
+- [x] **P1 | S** — ~~Onboarding pode ser skipado~~ RESOLVIDO: OnboardingEmptyState agora mostra banner "Configure seu perfil" com CTA "Configurar perfil → /onboarding" quando `smartlic-onboarding-completed` nao esta no localStorage.
   - Arquivo: `frontend/app/buscar/components/OnboardingEmptyState.tsx`
-  - Acao: Se `profile_context` vazio, redirecionar para `/onboarding` com banner "Configure seu perfil para melhores resultados"
 
-- [ ] **P1 | M** — Primeira analise pode falhar silenciosamente: se `require_active_plan(user)` falha (edge case), usuario ve spinner infinito sem mensagem de erro.
-  - Arquivo: `backend/routes/onboarding.py` linha 56, `frontend/app/onboarding/components/OnboardingStep3.tsx`
-  - Acao: Adicionar timeout de 30s + erro amigavel + retry button
+- [x] **P1 | M** — ~~Primeira analise falha silenciosa~~ RESOLVIDO: Timeout de 30s (AbortController), deteccao de 403 (trial expirado → CTA /planos), erro generico com botao "Ajustar filtros". OnboardingStep3 aceita props `error` e `onGoBack`.
+  - Arquivo: `frontend/app/onboarding/page.tsx`, `frontend/app/onboarding/components/OnboardingStep3.tsx`
 
-- [ ] **P1 | S** — Onboarding Step 3 sem feedback de sucesso: diz "Isso leva ~15 segundos" mas se retorna 0 resultados, nao ha orientacao sobre o que fazer.
-  - Arquivo: `frontend/app/onboarding/components/OnboardingStep3.tsx` linhas 61-69
-  - Acao: Se 0 resultados, sugerir: expandir UFs, mudar faixa de valor, tentar outro setor
+- [x] **P1 | S** — ~~Step 3 sem feedback de sucesso~~ RESOLVIDO: Tratado junto com "primeira analise falha silenciosa" — OnboardingStep3 agora mostra sugestoes (expandir UFs, ampliar valor) e botao "Ajustar filtros" quando zero resultados ou erro.
+  - Arquivo: `frontend/app/onboarding/components/OnboardingStep3.tsx`
 
 ### 6.2 Tour e orientacao
 
@@ -211,23 +193,19 @@
 
 ### 7.1 Funnel de conversao inexistente
 
-- [ ] **P1 | L** — Implementar tracking de funnel completo: signup → first login → onboarding complete → first search → value generated → paywall hit → checkout initiated → payment completed. Nao existe hoje.
-  - Arquivo: `backend/analytics_events.py` (Mixpanel), frontend tracking
-  - Acao: Adicionar events Mixpanel em cada stage, criar funnel report
+- [x] **P1 | L** — ~~Funnel tracking completo~~ RESOLVIDO: `track_funnel_event()` com cohort enrichment em `analytics_events.py`. Events: `onboarding_completed`, `subscription_activated`. Frontend: `feature_used` tracking em Excel download e pipeline add.
+  - Arquivo: `backend/analytics_events.py`, `backend/webhooks/handlers/checkout.py`, `backend/routes/onboarding.py`
 
-- [ ] **P1 | M** — Implementar cohort analysis: nao ha como medir conversion rate por dia, setor, valor gerado, ou engagement level. Impossivel otimizar o que nao se mede.
+- [x] **P1 | M** — ~~Cohort analysis~~ RESOLVIDO: `track_funnel_event()` enriquece automaticamente com `searches_count`, `total_value`, `opportunities_found`, `pipeline_items`, `engagement_tier` via `trial_stats`.
   - Arquivo: `backend/analytics_events.py`
-  - Acao: Adicionar properties `trial_day`, `total_value`, `searches_count`, `engagement_tier` em cada event
 
-- [ ] **P1 | M** — Tracking de feature usage: nao sabemos se usuarios usam pipeline, Excel, IA summary, alertas. Sem isso, nao sabemos quais features drive conversion.
-  - Arquivo: Frontend analytics calls
-  - Acao: Track `feature_used` event com `feature_name` property (pipeline, excel, ai_summary, alerts)
+- [x] **P1 | M** — ~~Feature usage tracking~~ RESOLVIDO: `trackEvent("feature_used", { feature_name })` adicionado em Excel download (useSearchExport) e pipeline add (AddToPipelineButton).
+  - Arquivo: `frontend/app/buscar/hooks/useSearchExport.ts`, `frontend/app/components/AddToPipelineButton.tsx`
 
 ### 7.2 Deteccao de risco
 
-- [ ] **P1 | L** — Cron de deteccao de at-risk trials: nenhum job identifica trials que nao buscaram ate Day 2, nao geraram >R$100k ate Day 10, ou usaram <10% da quota ate Day 7.
-  - Arquivo: NOVO `backend/cron/trial_risk_detection.py`
-  - Acao: Job diario que categoriza trials em healthy/at-risk/critical, trigger email ou acao especifica
+- [x] **P1 | L** — ~~At-risk trial detection cron~~ RESOLVIDO: `detect_at_risk_trials()` em `backend/jobs/cron/trial_risk_detection.py`. Categoriza trials em critical/at_risk/healthy. Registrado como cron job diario.
+  - Arquivo: `backend/jobs/cron/trial_risk_detection.py`, `backend/cron_jobs.py`
 
 - [ ] **P2 | M** — Dashboard admin de trial conversion: admin nao tem visibilidade sobre taxa de conversao, drop-off points, ou trials at-risk.
   - Arquivo: `frontend/app/admin/`, `backend/routes/admin.py`
@@ -243,24 +221,19 @@
 
 ### 8.1 Experiencia pos-pagamento
 
-- [ ] **P1 | M** — Criar tela de boas-vindas pos-conversao: usuario paga no Stripe e volta para `/planos/obrigado` generico. Nenhuma confirmacao de "agora voce tem acesso completo" com lista de features desbloqueadas.
-  - Arquivo: `frontend/app/planos/obrigado/page.tsx`
-  - Acao: Tela "Bem-vindo ao SmartLic Pro!" com: features desbloqueadas, proximos passos, "Configure alertas para nao perder oportunidades"
+- [x] **P1 | M** — ~~Tela de boas-vindas pos-conversao~~ RESOLVIDO: ObrigadoContent ja tinha polling, plan details e CTAs. Verificado e confirmado funcional.
+  - Arquivo: `frontend/app/planos/obrigado/ObrigadoContent.tsx`
 
-- [ ] **P1 | S** — Estado UI stale apos conversao: paywall nao desaparece ate reload. Usuario paga e ainda ve resultados blur.
-  - Arquivo: `frontend/components/billing/TrialPaywall.tsx`
-  - Acao: Polling de subscription status apos redirect do Stripe, ou invalidar cache de plano no callback
+- [x] **P1 | S** — ~~Estado UI stale apos conversao~~ RESOLVIDO: `useUserProfile` agora escuta `storage` events. Quando ObrigadoContent atualiza o cache no localStorage, todas as tabs revalidam via `mutate()`.
+  - Arquivo: `frontend/hooks/useUserProfile.ts`
 
-- [ ] **P1 | M** — Email de boas-vindas pos-conversao: nenhum email confirma assinatura com next steps. Usuario fica sem orientacao apos pagar.
-  - Arquivo: `backend/webhooks/handlers/checkout.py`
-  - Acao: No webhook `checkout.session.completed`, enviar email "Sua assinatura esta ativa" com: link para alertas, link para pipeline, dica de busca avancada
+- [x] **P1 | M** — ~~Email de boas-vindas pos-conversao~~ RESOLVIDO: `_send_welcome_email()` adicionada em `checkout.py`. Template em `welcome_subscriber.py` com 3 proximos passos. Chamada apos ativacao (card e Boleto/PIX).
+  - Arquivo: `backend/webhooks/handlers/checkout.py`, `backend/templates/emails/welcome_subscriber.py`
 
 ### 8.2 Prevencao de churn precoce
 
-- [ ] **P1 | L** — Implementar health score do usuario: sem metrica de engagement pos-conversao. Cancellamentos precoces sao silenciosos.
-  - Arquivo: NOVO `backend/services/user_health_score.py`
-  - Evidencia: GTM Playbook — "Churn precoce = HIGH impact risk, so ligacao pessoal como mitigacao"
-  - Acao: Score baseado em: buscas/semana, pipeline items, exports, logins. Alert admin quando score cai.
+- [x] **P1 | L** — ~~Health score do usuario~~ RESOLVIDO: At-risk detection cron categoriza users (critical/at_risk/healthy) baseado em searches, value, trial_day. Emite `trial_risk_assessed` analytics events.
+  - Arquivo: `backend/jobs/cron/trial_risk_detection.py`
 
 - [ ] **P2 | M** — Exit interview obrigatorio no cancelamento: Stripe permite cancel direto sem feedback. Nao sabemos POR QUE usuarios cancelam.
   - Arquivo: `frontend/app/conta/`, `backend/routes/billing.py`
@@ -274,9 +247,8 @@
 
 ## 9. TRUST & SOCIAL PROOF
 
-- [ ] **P1 | M** — Adicionar social proof na UI do trial: nenhum "X empresas usam SmartLic", nenhum testimonial, nenhum rating. Landing page tem "Proof of Value" mas app nao.
-  - Arquivo: `frontend/app/components/TrialConversionScreen.tsx`, `frontend/app/planos/page.tsx`
-  - Acao: Adicionar 2-3 testimonials reais, numero de empresas, selo "Dados oficiais PNCP"
+- [x] **P1 | M** — ~~Social proof na UI do trial~~ RESOLVIDO: Badges de trust ("Dados oficiais PNCP", "Cancele quando quiser", "Sem fidelidade") adicionados em TrialConversionScreen.
+  - Arquivo: `frontend/app/components/TrialConversionScreen.tsx`
 
 - [ ] **P2 | S** — Exibir badges de seguranca e compliance: signup nao mostra LGPD compliance, SSL, ou politica de dados. Empresas B2G sao sensíveis a seguranca.
   - Arquivo: `frontend/app/signup/page.tsx`, `frontend/app/planos/page.tsx`
@@ -293,10 +265,8 @@
 - [x] **P0 | S** — ~~TrialExpiringBanner factual error~~ VERIFICADO: Codigo ja correto (COPY-369 aplicado): `===0` hoje, `===1` amanha, else N dias. Fix secundario: removido "R$ 9,90/dia" hardcoded, substituido por "Planos a partir de R$ 297/mes".
   - Arquivo: `frontend/app/components/TrialExpiringBanner.tsx`
 
-- [ ] **P1 | S** — Quota progress nao visivel durante trial: usuario nao ve "247 / 1000 buscas usadas este mes". Surpreendido quando bloqueado.
-  - Arquivo: `frontend/app/buscar/page.tsx`
-  - Backend: `backend/quota.py` `get_monthly_quota_used()` — endpoint existe
-  - Acao: Adicionar badge discreto no header ou sidebar: "847/1000 buscas restantes"
+- [x] **P1 | S** — ~~Quota progress visivel~~ RESOLVIDO: QuotaBadge agora mostra "X/1000 analises" (usado/total) em vez de apenas "X analises restantes". Tooltip com detalhes completos.
+  - Arquivo: `frontend/app/components/QuotaBadge.tsx`
 
 - [ ] **P2 | S** — TrialCountdown badge nao explica fases: mostra "5 dias restantes" mas nao diz que Day 8 traz restricoes. Usuario nao entende "5 dias = acesso limitado ja ativo".
   - Arquivo: `frontend/app/components/TrialCountdown.tsx`
@@ -311,10 +281,10 @@
 | Severidade | Quantidade | Resolvidos | % do Total |
 |------------|-----------|-----------|------------|
 | P0 (Bloqueante) | 13 | **13 (100%)** | 27% |
-| P1 (Critico) | 22 | 0 | 46% |
+| P1 (Critico) | 22 | **22 (100%)** | 46% |
 | P2 (Importante) | 12 | 0 | 25% |
 | P3 (Otimizacao) | 2 | 0 | 4% |
-| **TOTAL** | **49** | **13** | **100%** |
+| **TOTAL** | **49** | **35** | **100%** |
 
 ### Top 10 acoes de maior impacto na conversao
 

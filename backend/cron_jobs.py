@@ -112,3 +112,9 @@ from jobs.cron.billing import (  # noqa: F401
     start_plan_reconciliation_task,
     start_stripe_events_purge_task,
 )
+
+# Trial risk detection
+from jobs.cron.trial_risk_detection import (  # noqa: F401
+    detect_at_risk_trials,
+    start_trial_risk_task,
+)

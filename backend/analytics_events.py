@@ -60,6 +60,39 @@ def track_event(event_name: str, properties: dict[str, Any] | None = None) -> No
         pass  # Fire-and-forget — never fail
 
 
+def track_funnel_event(event_name: str, user_id: str, properties: dict[str, Any] | None = None) -> None:
+    """Track a conversion funnel event with user cohort enrichment. Fire-and-forget."""
+    try:
+        props = dict(properties) if properties else {}
+        props["user_id"] = user_id
+
+        # Enrich with trial cohort properties
+        try:
+            from services.trial_stats import get_trial_usage_stats
+            stats = get_trial_usage_stats(user_id)
+            stats_dict = stats.model_dump()
+            props["searches_count"] = stats_dict.get("searches_count", 0)
+            props["opportunities_found"] = stats_dict.get("opportunities_found", 0)
+            props["total_value"] = stats_dict.get("total_value_estimated", 0.0)
+            props["pipeline_items"] = stats_dict.get("pipeline_items_count", 0)
+
+            # Engagement tier
+            value = stats_dict.get("total_value_estimated", 0.0)
+            searches = stats_dict.get("searches_count", 0)
+            if value > 100_000:
+                props["engagement_tier"] = "high_value"
+            elif searches > 0:
+                props["engagement_tier"] = "active"
+            else:
+                props["engagement_tier"] = "dormant"
+        except Exception:
+            pass  # Enrichment is best-effort
+
+        track_event(event_name, props)
+    except Exception:
+        pass  # Fire-and-forget
+
+
 def reset_for_testing() -> None:
     """Reset module state for test isolation."""
     global _mixpanel_client, _mixpanel_initialized

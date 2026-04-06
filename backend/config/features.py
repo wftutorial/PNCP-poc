@@ -68,7 +68,7 @@ TRIAL_EMAILS_ENABLED: bool = str_to_bool(os.getenv("TRIAL_EMAILS_ENABLED", "true
 TRIAL_PAYWALL_ENABLED: bool = str_to_bool(os.getenv("TRIAL_PAYWALL_ENABLED", "true"))
 TRIAL_PAYWALL_DAY: int = int(os.getenv("TRIAL_PAYWALL_DAY", "7"))
 TRIAL_PAYWALL_MAX_RESULTS: int = int(os.getenv("TRIAL_PAYWALL_MAX_RESULTS", "10"))
-TRIAL_PAYWALL_MAX_PIPELINE: int = int(os.getenv("TRIAL_PAYWALL_MAX_PIPELINE", "5"))
+TRIAL_PAYWALL_MAX_PIPELINE: int = int(os.getenv("TRIAL_PAYWALL_MAX_PIPELINE", "15"))
 
 # SEO-PLAYBOOK §7.4 — Day-8 referral invitation email (opt-in, additive to
 # the existing trial sequence). Default False to avoid disturbing production
@@ -78,13 +78,17 @@ REFERRAL_EMAIL_ENABLED: bool = str_to_bool(os.getenv("REFERRAL_EMAIL_ENABLED", "
 # SEO-PLAYBOOK §Day-3 Activation — conditional nudge for trial users that
 # have not yet completed their first search (the "aha moment" predictor).
 # Default False — flip on once the `first_analysis_viewed` signal is wired.
-DAY3_ACTIVATION_EMAIL_ENABLED: bool = str_to_bool(os.getenv("DAY3_ACTIVATION_EMAIL_ENABLED", "false"))
+DAY3_ACTIVATION_EMAIL_ENABLED: bool = str_to_bool(os.getenv("DAY3_ACTIVATION_EMAIL_ENABLED", "true"))
 
 # SEO-PLAYBOOK §7.1 / P6 — Day-3 share activation email. Triggered when a
 # user has analyzed editais (opportunities_found > 0) but has NOT shared any
 # analysis yet. Completes the viral loop: analyst analyzes → shares with
 # decision maker → decision maker converts. Default False until validated.
 SHARE_ACTIVATION_EMAIL_ENABLED: bool = str_to_bool(os.getenv("SHARE_ACTIVATION_EMAIL_ENABLED", "false"))
+
+# Zero-Churn P1 Frente 2B — Feature discovery emails (pipeline, excel, AI).
+# 3 new emails on days 2, 5, 8 highlighting specific features.
+FEATURE_DISCOVERY_EMAILS_ENABLED: bool = str_to_bool(os.getenv("FEATURE_DISCOVERY_EMAILS_ENABLED", "true"))
 
 # DEBT-325: USD to BRL exchange rate for LLM cost estimation
 USD_TO_BRL_RATE: float = float(os.getenv("USD_TO_BRL_RATE", "5.0"))
@@ -312,7 +316,7 @@ def validate_feature_flags() -> None:
     _check_int("TRIAL_DURATION_DAYS", "14", min_val=1, max_val=365)
     _check_int("TRIAL_PAYWALL_DAY", "7", min_val=1, max_val=365)
     _check_int("TRIAL_PAYWALL_MAX_RESULTS", "10", min_val=1, max_val=10000)
-    _check_int("TRIAL_PAYWALL_MAX_PIPELINE", "5", min_val=1, max_val=10000)
+    _check_int("TRIAL_PAYWALL_MAX_PIPELINE", "15", min_val=1, max_val=10000)
 
     # --- Currency / cost ---
     _check_float("USD_TO_BRL_RATE", "5.0", min_val=0.01, max_val=1000.0)

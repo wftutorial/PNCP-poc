@@ -85,6 +85,7 @@ export default function PlanosPage() {
   const [portalLoading, setPortalLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [partnerName, setPartnerName] = useState<string | null>(null);
+  const [couponCode, setCouponCode] = useState<string | null>(null);
 
   // TD-008 AC4: SWR-based dynamic pricing with static fallback
   type PricingMap = Record<BillingPeriod, { monthly: number; total: number; period: string; discount?: number }>;
@@ -126,6 +127,10 @@ export default function PlanosPage() {
     if (params.get("cancelled")) setStatusMsg("Processo cancelado.");
     const billing = params.get("billing");
     if (billing === "monthly" || billing === "semiannual" || billing === "annual") setBillingPeriod(billing);
+    // Zero-churn P1 §3.2: Auto-apply coupon from URL (e.g., ?coupon=TRIAL_COMEBACK_20)
+    const coupon = params.get("coupon");
+    if (coupon) setCouponCode(coupon);
+
     const partnerSlug = params.get("partner") || safeGetItem("smartlic_partner");
     if (partnerSlug) {
       safeSetItem("smartlic_partner", partnerSlug);
@@ -217,7 +222,8 @@ export default function PlanosPage() {
     });
     try {
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "/api";
-      const res = await fetch(`${backendUrl}/v1/checkout?plan_id=smartlic_pro&billing_period=${billingPeriod}`, {
+      const checkoutUrl = `${backendUrl}/v1/checkout?plan_id=smartlic_pro&billing_period=${billingPeriod}${couponCode ? `&coupon=${encodeURIComponent(couponCode)}` : ""}`;
+      const res = await fetch(checkoutUrl, {
         method: "POST", headers: { Authorization: `Bearer ${session.access_token}` },
       });
       if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.detail || "Erro ao iniciar processo"); }

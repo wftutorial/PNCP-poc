@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import useSWR from "swr";
 import { useAuth } from "../app/components/AuthProvider";
 import { FetchError } from "../lib/fetcher";
@@ -99,6 +100,19 @@ export function useUserProfile() {
     }
     return effectiveData;
   })();
+
+  // Zero-churn P1 §8.1: Listen for storage events to revalidate across tabs
+  // When ObrigadoContent polls and caches the new plan, other tabs pick it up
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handler = (e: StorageEvent) => {
+      if (e.key === CACHE_KEY) {
+        mutate();
+      }
+    };
+    window.addEventListener("storage", handler);
+    return () => window.removeEventListener("storage", handler);
+  }, [mutate]);
 
   return {
     data: resolvedData as Record<string, unknown> | null,

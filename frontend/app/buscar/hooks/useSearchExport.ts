@@ -222,6 +222,8 @@ export function useSearchExport(params: UseSearchExportParams): UseSearchExportR
         file_size_bytes: blob.size,
         source: result.download_url ? 'object_storage' : 'filesystem'
       });
+      // Zero-churn P1 §7.1: Feature usage tracking
+      trackEvent('feature_used', { feature_name: 'excel_export' });
     } catch (e) {
       setDownloadError(getUserFriendlyError(e instanceof Error ? e : 'Não foi possível baixar o arquivo.'));
     } finally {

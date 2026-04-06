@@ -74,7 +74,8 @@ export default function PipelinePage() {
   const isTrialExpired = planInfo?.plan_id === "free_trial" && planInfo?.subscription_status === "expired";
 
   // STORY-320 AC10: Pipeline limit for limited_access trial phase
-  const PIPELINE_LIMIT = 5;
+  // Zero-churn P1 §2.1: Increased from 5 to 15 (B2B funnel needs 10-20 items)
+  const PIPELINE_LIMIT = 15;
   const isPipelineLimited = trialPhase === "limited_access";
   const [showPipelineLimitModal, setShowPipelineLimitModal] = useState(false);
 
@@ -273,20 +274,23 @@ export default function PipelinePage() {
         ) : isTrialReadOnly ? (
           /* STORY-265 AC15: Trial expired read-only mode */
           <>
-            <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-card flex items-center justify-between" role="alert">
-              <div className="flex items-center gap-2">
+            <div className="mb-4 p-4 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-card" role="alert">
+              <div className="flex items-center gap-2 mb-2">
                 <svg className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
                 </svg>
-                <p className="text-sm text-amber-800 dark:text-amber-200">
-                  Seu trial expirou. O pipeline está em modo leitura. Ative um plano para continuar gerenciando suas oportunidades.
+                <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+                  Seu trial expirou
                 </p>
               </div>
+              <p className="text-sm text-amber-700 dark:text-amber-300 mb-3">
+                Você tem {items.length} {items.length === 1 ? "oportunidade" : "oportunidades"} no pipeline. Assine para continuar gerenciando e acompanhando seus processos.
+              </p>
               <a
                 href="/planos"
-                className="text-sm font-medium text-[var(--brand-blue)] hover:underline whitespace-nowrap ml-3"
+                className="inline-flex items-center px-4 py-2 rounded-lg bg-[var(--brand-blue)] text-white text-sm font-medium hover:bg-[var(--brand-blue-hover)] transition-colors"
               >
-                Ver planos
+                Assinar SmartLic Pro
               </a>
             </div>
             <ReadOnlyKanban items={items} />

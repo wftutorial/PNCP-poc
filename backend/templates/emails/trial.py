@@ -543,3 +543,181 @@ def render_trial_expired_email(
         is_transactional=False,
         unsubscribe_url=unsubscribe_url,
     )
+
+
+# ============================================================================
+# Email #10 — Day 2: Feature Discovery — Pipeline (Zero-Churn P1 Frente 2B)
+# ============================================================================
+
+def render_trial_feature_pipeline_email(user_name: str, stats: dict, unsubscribe_url: str = "") -> str:
+    """Day 2 — Feature discovery: Pipeline kanban for tracking opportunities.
+
+    Args:
+        user_name: User's display name.
+        stats: Dict with keys from TrialUsageStats.
+        unsubscribe_url: URL for one-click unsubscribe.
+    """
+    body = f"""
+    {_preheader("Organize suas oportunidades com o Pipeline drag-and-drop do SmartLic.")}
+    <h1 style="color: #333; font-size: 22px; margin: 0 0 16px;">
+      Organize suas oportunidades no Pipeline
+    </h1>
+    <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
+      Olá, {user_name}! Você sabia que o SmartLic tem um pipeline visual
+      estilo kanban para acompanhar suas oportunidades de ponta a ponta?
+    </p>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 24px;">
+      <tr>
+        <td style="background-color: #e8f5e9; border-radius: 8px; padding: 16px; border-left: 4px solid {SMARTLIC_GREEN};">
+          <p style="color: #1b5e20; font-size: 14px; margin: 0 0 12px; font-weight: 600;">
+            O que você pode fazer no Pipeline:
+          </p>
+          <ul style="color: #555; font-size: 14px; margin: 0; padding-left: 20px;">
+            <li style="padding: 4px 0;">Arraste oportunidades entre colunas (Lead → Análise → Proposta → Ganho)</li>
+            <li style="padding: 4px 0;">Acompanhe prazos e valores de cada edital</li>
+            <li style="padding: 4px 0;">Tenha uma visão consolidada de todo o seu funil B2G</li>
+          </ul>
+        </td>
+      </tr>
+    </table>
+
+    {_stats_block(stats) if stats.get("searches_count", 0) > 0 else ''}
+
+    <p style="text-align: center; margin: 24px 0 16px;">
+      <a href="{FRONTEND_URL}/pipeline" class="btn"
+         style="display: inline-block; padding: 14px 32px; background-color: {SMARTLIC_GREEN}; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
+        Abrir meu Pipeline
+      </a>
+    </p>
+    <p style="color: #888; font-size: 13px; text-align: center; margin: 16px 0 0;">
+      Dica: após uma busca, clique em "Adicionar ao Pipeline" em qualquer oportunidade.
+    </p>
+    {_unsubscribe_block(unsubscribe_url)}
+    """
+
+    return email_base(
+        title="Organize suas oportunidades no Pipeline — SmartLic",
+        body_html=body,
+        is_transactional=False,
+        unsubscribe_url=unsubscribe_url,
+    )
+
+
+# ============================================================================
+# Email #11 — Day 5: Feature Discovery — Excel Export (Zero-Churn P1 Frente 2B)
+# ============================================================================
+
+def render_trial_feature_excel_email(user_name: str, stats: dict, unsubscribe_url: str = "") -> str:
+    """Day 5 — Feature discovery: Excel export for sharing with team.
+
+    Args:
+        user_name: User's display name.
+        stats: Dict with keys from TrialUsageStats.
+        unsubscribe_url: URL for one-click unsubscribe.
+    """
+    body = f"""
+    {_preheader("Exporte suas análises para Excel estilizado e compartilhe com a equipe.")}
+    <h1 style="color: #333; font-size: 22px; margin: 0 0 16px;">
+      Exporte análises para Excel com 1 clique
+    </h1>
+    <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
+      Olá, {user_name}! Precisa compartilhar oportunidades com sua equipe ou
+      diretoria? O SmartLic gera relatórios Excel estilizados prontos para apresentação.
+    </p>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 24px;">
+      <tr>
+        <td style="background-color: #e8f5e9; border-radius: 8px; padding: 16px; border-left: 4px solid {SMARTLIC_GREEN};">
+          <p style="color: #1b5e20; font-size: 14px; margin: 0 0 12px; font-weight: 600;">
+            O relatório Excel inclui:
+          </p>
+          <ul style="color: #555; font-size: 14px; margin: 0; padding-left: 20px;">
+            <li style="padding: 4px 0;">Lista completa de oportunidades com classificação IA</li>
+            <li style="padding: 4px 0;">Score de viabilidade e análise por fator</li>
+            <li style="padding: 4px 0;">Formatação profissional pronta para decisão</li>
+          </ul>
+        </td>
+      </tr>
+    </table>
+
+    {_stats_block(stats) if stats.get("searches_count", 0) > 0 else ''}
+
+    <p style="text-align: center; margin: 24px 0 16px;">
+      <a href="{FRONTEND_URL}/buscar" class="btn"
+         style="display: inline-block; padding: 14px 32px; background-color: {SMARTLIC_GREEN}; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
+        Exportar meu primeiro relatório
+      </a>
+    </p>
+    <p style="color: #888; font-size: 13px; text-align: center; margin: 16px 0 0;">
+      Dica: após uma busca, clique em "Exportar Excel" no topo dos resultados.
+    </p>
+    {_unsubscribe_block(unsubscribe_url)}
+    """
+
+    return email_base(
+        title="Exporte análises para Excel — SmartLic",
+        body_html=body,
+        is_transactional=False,
+        unsubscribe_url=unsubscribe_url,
+    )
+
+
+# ============================================================================
+# Email #12 — Day 8: Feature Discovery — AI Classification (Zero-Churn P1 Frente 2B)
+# ============================================================================
+
+def render_trial_feature_ai_email(user_name: str, stats: dict, unsubscribe_url: str = "") -> str:
+    """Day 8 — Feature discovery: AI classification across 15 sectors.
+
+    Args:
+        user_name: User's display name.
+        stats: Dict with keys from TrialUsageStats.
+        unsubscribe_url: URL for one-click unsubscribe.
+    """
+    body = f"""
+    {_preheader("A IA do SmartLic classifica oportunidades em 15 setores e calcula viabilidade.")}
+    <h1 style="color: #333; font-size: 22px; margin: 0 0 16px;">
+      IA classifica oportunidades para você
+    </h1>
+    <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
+      Olá, {user_name}! Você está usando todo o poder da IA do SmartLic?
+      Nossa inteligência artificial analisa cada edital e entrega apenas
+      o que importa para o seu negócio.
+    </p>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 24px;">
+      <tr>
+        <td style="background-color: #e8f5e9; border-radius: 8px; padding: 16px; border-left: 4px solid {SMARTLIC_GREEN};">
+          <p style="color: #1b5e20; font-size: 14px; margin: 0 0 12px; font-weight: 600;">
+            Como a IA trabalha para você:
+          </p>
+          <ul style="color: #555; font-size: 14px; margin: 0; padding-left: 20px;">
+            <li style="padding: 4px 0;">Classificação automática em 15 setores especializados</li>
+            <li style="padding: 4px 0;">Score de viabilidade com 4 fatores (modalidade, prazo, valor, geografia)</li>
+            <li style="padding: 4px 0;">Economia de horas filtrando editais irrelevantes automaticamente</li>
+          </ul>
+        </td>
+      </tr>
+    </table>
+
+    {_stats_block(stats) if stats.get("searches_count", 0) > 0 else ''}
+
+    <p style="text-align: center; margin: 24px 0 16px;">
+      <a href="{FRONTEND_URL}/buscar" class="btn"
+         style="display: inline-block; padding: 14px 32px; background-color: {SMARTLIC_GREEN}; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
+        Ver classificação IA
+      </a>
+    </p>
+    <p style="color: #888; font-size: 13px; text-align: center; margin: 16px 0 0;">
+      Dica: na página de resultados, veja o badge de relevância e o score de viabilidade de cada edital.
+    </p>
+    {_unsubscribe_block(unsubscribe_url)}
+    """
+
+    return email_base(
+        title="IA classifica oportunidades para você — SmartLic",
+        body_html=body,
+        is_transactional=False,
+        unsubscribe_url=unsubscribe_url,
+    )

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { usePipeline } from "../../hooks/usePipeline";
+import { useAnalytics } from "../../hooks/useAnalytics";
 import { getUserFriendlyError } from "../../lib/error-messages";
 import type { LicitacaoItem } from "../types";
 
@@ -12,6 +13,7 @@ interface AddToPipelineButtonProps {
 
 export function AddToPipelineButton({ licitacao, className = "" }: AddToPipelineButtonProps) {
   const { addItem } = usePipeline();
+  const { trackEvent } = useAnalytics();
   const [status, setStatus] = useState<"idle" | "loading" | "saved" | "error" | "upgrade" | "limit">("idle");
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -35,6 +37,8 @@ export function AddToPipelineButton({ licitacao, className = "" }: AddToPipeline
         search_id: null,
       });
       setStatus("saved");
+      // Zero-churn P1 §5D: Track pipeline add
+      trackEvent("feature_used", { feature_name: "pipeline_add", pncp_id: licitacao.pncp_id });
       setTimeout(() => setStatus("idle"), 3000);
     } catch (err: unknown) {
       const raw = err instanceof Error ? err.message : "";

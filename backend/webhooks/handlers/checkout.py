@@ -107,6 +107,20 @@ async def handle_checkout_session_completed(sb, event: stripe.Event) -> None:
     # STORY-323 AC6: Create partner referral on conversion
     _create_partner_referral_async(user_id, plan_result, session_data)
 
+    # Zero-churn P1 §8.1: Send welcome email after activation
+    _send_welcome_email(sb, user_id, plan_id)
+
+    # Zero-churn P1: Track subscription activation in funnel
+    try:
+        from analytics_events import track_funnel_event
+        track_funnel_event("subscription_activated", user_id, {
+            "plan_id": plan_id,
+            "billing_period": billing_period,
+            "payment_method": "card",
+        })
+    except Exception:
+        pass
+
 
 async def handle_async_payment_succeeded(sb, event: stripe.Event) -> None:
     """
@@ -188,6 +202,20 @@ async def handle_async_payment_succeeded(sb, event: stripe.Event) -> None:
 
     await invalidate_user_caches(user_id, "Async payment activation complete")
 
+    # Zero-churn P1 §8.1: Send welcome email after async payment activation
+    _send_welcome_email(sb, user_id, plan_id)
+
+    # Zero-churn P1: Track async payment activation in funnel
+    try:
+        from analytics_events import track_funnel_event
+        track_funnel_event("subscription_activated", user_id, {
+            "plan_id": plan_id,
+            "billing_period": billing_period,
+            "payment_method": "boleto_pix",
+        })
+    except Exception:
+        pass
+
 
 async def handle_async_payment_failed(sb, event: stripe.Event) -> None:
     """
@@ -254,6 +282,36 @@ def _send_async_payment_failed_email(sb, user_id: str, plan_id: str | None) -> N
         logger.info(f"Boleto expired email queued for user_id={user_id}")
     except Exception as e:
         logger.warning(f"Failed to send boleto expired email: {e}")
+
+
+def _send_welcome_email(sb, user_id: str, plan_id: str | None) -> None:
+    """Send welcome email after subscription activation (Zero-churn P1 §8.1). Never raises."""
+    try:
+        from email_service import send_email_async
+        from templates.emails.welcome_subscriber import render_welcome_subscriber_email
+        from quota import PLAN_NAMES
+
+        profile = sb.table("profiles").select("email, full_name").eq("id", user_id).single().execute()
+        if not profile.data or not profile.data.get("email"):
+            return
+
+        email = profile.data["email"]
+        name = profile.data.get("full_name") or email.split("@")[0]
+        plan_name = PLAN_NAMES.get(plan_id, "SmartLic Pro") if plan_id else "SmartLic Pro"
+
+        html = render_welcome_subscriber_email(
+            user_name=name,
+            plan_name=plan_name,
+        )
+        send_email_async(
+            to=email,
+            subject=f"Sua assinatura {plan_name} esta ativa!",
+            html=html,
+            tags=[{"name": "category", "value": "welcome_subscriber"}],
+        )
+        logger.info(f"Welcome subscriber email queued for user_id={user_id}")
+    except Exception as e:
+        logger.warning(f"Failed to send welcome email: {e}")
 
 
 def _create_partner_referral_async(

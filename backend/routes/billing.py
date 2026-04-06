@@ -71,6 +71,7 @@ async def get_plans(db=Depends(get_db)):
 async def create_checkout(
     plan_id: str = Query(...),
     billing_period: str = Query("monthly"),
+    coupon: str | None = Query(None),
     user: dict = Depends(require_auth),
     db=Depends(get_db),
 ):
@@ -140,8 +141,22 @@ async def create_checkout(
     except Exception:
         pass
 
-    # STORY-323 AC5: Allow promotion codes at checkout (partner coupons)
-    session_params["allow_promotion_codes"] = True
+    # Zero-churn P1 §3.2: Auto-apply coupon from URL if provided
+    if coupon:
+        try:
+            promo_codes = stripe_lib.PromotionCode.list(code=coupon, active=True, limit=1, api_key=stripe_key)
+            if promo_codes.data:
+                session_params["discounts"] = [{"promotion_code": promo_codes.data[0].id}]
+                logger.info(f"Auto-applied coupon '{coupon}' as promotion_code={promo_codes.data[0].id}")
+            else:
+                logger.warning(f"Coupon '{coupon}' not found or inactive in Stripe")
+                session_params["allow_promotion_codes"] = True
+        except Exception as e:
+            logger.warning(f"Failed to lookup coupon '{coupon}': {e}")
+            session_params["allow_promotion_codes"] = True
+    else:
+        # STORY-323 AC5: Allow promotion codes at checkout (partner coupons)
+        session_params["allow_promotion_codes"] = True
 
     checkout_session = stripe_lib.checkout.Session.create(**session_params, api_key=stripe_key)
     return {"checkout_url": checkout_session.url}

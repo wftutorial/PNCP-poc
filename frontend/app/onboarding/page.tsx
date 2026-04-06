@@ -29,6 +29,7 @@ export default function OnboardingPage() {
   const { user, session, loading: authLoading } = useAuth();
   const [currentStep, setCurrentStep] = useState(0);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [existingContext, setExistingContext] = useState<Record<string, unknown> | null>(null);
 
   const [data, setData] = useState<OnboardingData>({
@@ -114,6 +115,11 @@ export default function OnboardingPage() {
   const submitAndAnalyze = async () => {
     if (!session?.access_token) return;
     setIsAnalyzing(true);
+    setAnalysisError(null);
+
+    // Zero-churn P1 §6.1: 30s timeout for first analysis
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
 
     try {
       // 1. Save profile context (backward compatible)
@@ -135,6 +141,7 @@ export default function OnboardingPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(profilePayload),
+        signal: controller.signal,
       });
 
       if (!profileRes.ok) throw new Error("Erro ao salvar perfil");
@@ -157,10 +164,17 @@ export default function OnboardingPage() {
           faixa_valor_min: data.faixa_valor_min > 0 ? data.faixa_valor_min : null,
           faixa_valor_max: data.faixa_valor_max > 0 ? data.faixa_valor_max : null,
         }),
+        signal: controller.signal,
       });
 
       if (!analysisRes.ok) {
-        // If first analysis fails, still redirect (graceful degradation)
+        // Zero-churn P1 §6.1: Detect trial expired (403)
+        if (analysisRes.status === 403) {
+          setAnalysisError("trial_expired");
+          setIsAnalyzing(false);
+          return;
+        }
+        // Other errors: still redirect with graceful degradation
         toast.success("Perfil salvo! Redirecionando...");
         router.push(`/buscar?ufs=${data.ufs_atuacao.join(",")}`);
         return;
@@ -171,9 +185,16 @@ export default function OnboardingPage() {
       // 3. Redirect to search with auto flag
       toast.success("Perfil salvo! Analisando suas oportunidades...");
       router.push(`/buscar?auto=true&search_id=${search_id}`);
-    } catch {
-      toast.error("Erro ao configurar perfil. Tente novamente.");
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setAnalysisError("timeout");
+      } else {
+        toast.error("Erro ao configurar perfil. Tente novamente.");
+        setAnalysisError("generic");
+      }
       setIsAnalyzing(false);
+    } finally {
+      clearTimeout(timeout);
     }
   };
 
@@ -253,7 +274,14 @@ export default function OnboardingPage() {
               errors={step2Form.formState.errors as Record<string, { message?: string }>}
             />
           )}
-          {currentStep === 2 && <OnboardingStep3 data={data} isAnalyzing={isAnalyzing} />}
+          {currentStep === 2 && (
+            <OnboardingStep3
+              data={data}
+              isAnalyzing={isAnalyzing}
+              error={analysisError}
+              onGoBack={() => { setAnalysisError(null); setCurrentStep(1); }}
+            />
+          )}
 
           {/* Navigation */}
           <div className="flex items-center justify-between mt-8 pt-4 border-t border-[var(--border)]">

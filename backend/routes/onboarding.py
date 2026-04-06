@@ -92,6 +92,15 @@ async def first_analysis(
         _run_first_analysis_pipeline(busca_request, user, tracker, search_id)
     )
 
+    # Zero-churn P1: Track onboarding completion in funnel
+    try:
+        from analytics_events import track_funnel_event
+        track_funnel_event("onboarding_completed", user["id"], {
+            "sector": setor_id,
+        })
+    except Exception:
+        pass
+
     # Build user-friendly message
     uf_list = ", ".join(request.ufs[:5])
     if len(request.ufs) > 5:

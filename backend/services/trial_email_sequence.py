@@ -46,9 +46,12 @@ TRIAL_EMAIL_SEQUENCE = [
 # - activation_nudge (day 2): conditional on stats.searches_count == 0,
 #   filtered at dispatch time inside process_trial_emails.
 TRIAL_EMAIL_SEQUENCE_OPTIONAL = [
-    {"number": 7, "day": 2, "type": "activation_nudge"},
+    {"number": 7, "day": 1, "type": "activation_nudge"},
     {"number": 8, "day": 8, "type": "referral_invitation"},
     {"number": 9, "day": 3, "type": "share_activation"},
+    {"number": 10, "day": 2, "type": "feature_pipeline"},
+    {"number": 11, "day": 5, "type": "feature_excel"},
+    {"number": 12, "day": 8, "type": "feature_ai"},
 ]
 
 
@@ -64,10 +67,12 @@ def _active_sequence() -> list[dict]:
         SHARE_ACTIVATION_EMAIL_ENABLED,
     )
 
+    from config.features import FEATURE_DISCOVERY_EMAILS_ENABLED
+
     sequence = list(TRIAL_EMAIL_SEQUENCE)
     if DAY3_ACTIVATION_EMAIL_ENABLED:
         sequence.append(
-            {"number": 7, "day": 2, "type": "activation_nudge"}
+            {"number": 7, "day": 1, "type": "activation_nudge"}
         )
     if REFERRAL_EMAIL_ENABLED:
         sequence.append(
@@ -77,7 +82,13 @@ def _active_sequence() -> list[dict]:
         sequence.append(
             {"number": 9, "day": 3, "type": "share_activation"}
         )
-    return sequence
+    if FEATURE_DISCOVERY_EMAILS_ENABLED:
+        sequence.extend([
+            {"number": 10, "day": 2, "type": "feature_pipeline"},
+            {"number": 11, "day": 5, "type": "feature_excel"},
+            {"number": 12, "day": 8, "type": "feature_ai"},
+        ])
+    return sorted(sequence, key=lambda x: x["day"])
 
 # AC13: Stripe coupon for reengagement email (20% off first month)
 TRIAL_COMEBACK_COUPON = os.getenv("TRIAL_COMEBACK_COUPON", "TRIAL_COMEBACK_20")
@@ -450,23 +461,34 @@ def _render_email(
     opps = stats.get("opportunities_found", 0)
     pipeline = stats.get("pipeline_items_count", 0)
 
+    # 2C: Compute engagement tier for subject personalization
+    tier = "high_value" if stats.get("total_value_estimated", 0) > 100_000 else \
+           "active" if stats.get("searches_count", 0) > 0 else "dormant"
+
     if email_type == "welcome":
         subject = "Bem-vindo ao SmartLic — seu trial de 14 dias comecou!"
         html = render_trial_welcome_email(user_name, unsubscribe_url=unsubscribe_url)
 
     elif email_type == "engagement":
-        if value > 0:
+        if tier == "dormant":
+            subject = "Empresas do seu setor estão encontrando oportunidades — e você?"
+        elif value > 0:
             subject = f"Voce ja analisou {_format_brl(value)} em oportunidades"
         else:
             subject = "Descubra as oportunidades que esperam por voce"
         html = render_trial_engagement_email(user_name, stats, unsubscribe_url=unsubscribe_url)
 
     elif email_type == "paywall_alert":
-        subject = "Metade do trial — preview limitado a partir de hoje"
+        if value > 0:
+            subject = f"Metade do trial — {_format_brl(value)} em oportunidades até agora"
+        else:
+            subject = "Metade do trial — preview limitado a partir de hoje"
         html = render_trial_paywall_alert_email(user_name, stats, unsubscribe_url=unsubscribe_url)
 
     elif email_type == "value":
-        if value > 0:
+        if tier == "dormant":
+            subject = "Milhares de oportunidades publicadas esta semana — descubra as suas"
+        elif value > 0:
             subject = f"Voce ja analisou {_format_brl(value)} — nao perca esse progresso"
         elif opps > 0:
             subject = f"{opps} oportunidades encontradas — nao perca"
@@ -475,7 +497,10 @@ def _render_email(
         html = render_trial_value_email(user_name, stats, unsubscribe_url=unsubscribe_url)
 
     elif email_type == "last_day":
-        subject = "Amanha seu acesso expira — assine agora"
+        if value > 0:
+            subject = f"Amanhã você perde acesso a {_format_brl(value)} em oportunidades"
+        else:
+            subject = "Amanhã seu acesso expira — assine agora"
         html = render_trial_last_day_email(user_name, stats, unsubscribe_url=unsubscribe_url)
 
     elif email_type == "expired":
@@ -509,6 +534,21 @@ def _render_email(
             opportunities_found=opps,
             unsubscribe_url=unsubscribe_url,
         )
+
+    elif email_type == "feature_pipeline":
+        from templates.emails.trial import render_trial_feature_pipeline_email
+        subject = "Organize suas oportunidades no Pipeline"
+        html = render_trial_feature_pipeline_email(user_name, stats, unsubscribe_url=unsubscribe_url)
+
+    elif email_type == "feature_excel":
+        from templates.emails.trial import render_trial_feature_excel_email
+        subject = "Exporte análises para Excel com 1 clique"
+        html = render_trial_feature_excel_email(user_name, stats, unsubscribe_url=unsubscribe_url)
+
+    elif email_type == "feature_ai":
+        from templates.emails.trial import render_trial_feature_ai_email
+        subject = "IA classifica oportunidades para você"
+        html = render_trial_feature_ai_email(user_name, stats, unsubscribe_url=unsubscribe_url)
 
     elif email_type == "referral_invitation":
         # SEO-PLAYBOOK §7.4 — Day-8 viral loop email. Reuses the existing

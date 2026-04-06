@@ -4453,6 +4453,25 @@ sectors:
           - "diagnostico"
           - "hospitalar"
           - "medico"
+      # Zero-churn P1 §5B: Cross-sector collision — "construcao/reforma" in health context
+      - trigger: "construcao"
+        negative_contexts: []
+        positive_signals:
+          - "UBS"
+          - "hospital"
+          - "posto de saude"
+          - "unidade basica"
+          - "centro de saude"
+          - "ambulatorio"
+      - trigger: "reforma"
+        negative_contexts: []
+        positive_signals:
+          - "UBS"
+          - "hospital"
+          - "posto de saude"
+          - "unidade basica"
+          - "centro de saude"
+          - "ambulatorio"
     context_required_keywords:
       sonda:
         - "vesical"
@@ -5507,6 +5526,21 @@ sectors:
           - "preventiva"
           - "corretiva"
           - "pmoc"
+      # Zero-churn P1 §5B: Cross-sector collision — "construcao" in non-health context stays in engineering
+      - trigger: "construcao"
+        negative_contexts:
+          - "UBS"
+          - "hospital"
+          - "posto de saude"
+          - "unidade basica"
+          - "centro de saude"
+          - "ambulatorio"
+        positive_signals:
+          - "predial"
+          - "edificacao"
+          - "predio"
+          - "imovel"
+          - "reforma predial"
     # CRIT-FLT-007: Domain signals for manutencao_predial
     domain_signals:
       ncm_prefixes:
@@ -5617,6 +5651,14 @@ sectors:
       - "restauracao de pavimento"
       - "ciclovia"
       - "ciclovias"
+      # Zero-churn P1 §5A: Expanded low-recall keywords
+      - "terraplenagem"
+      - "base granular"
+      - "sub-base"
+      - "guia"
+      - "drenagem pluvial"
+      - "defensa metálica"
+      - "defensa metalica"
     exclusions:
       # Software/IT
       - "engenharia de software"
@@ -5701,6 +5743,18 @@ sectors:
         - "semaforica"
         - "placas"
         - "rodovia"
+      # Zero-churn P1 §5A: "guia" is ambiguous (manual/guide vs curb/gutter).
+      # Context ensures only road infrastructure context matches.
+      guia:
+        - "sarjeta"
+        - "meio-fio"
+        - "pavimentação"
+        - "pavimentacao"
+        - "calçada"
+        - "calcada"
+        - "drenagem"
+        - "rodoviária"
+        - "rodoviaria"
     # CRIT-FLT-007: Co-occurrence rules for engenharia_rodoviaria
     co_occurrence_rules:
       # Rule 1: "asfalto" in non-road context (roofing, waterproofing)
@@ -5825,6 +5879,9 @@ sectors:
       - "protecao eletrica"
       - "painel elétrico"
       - "painel eletrico"
+      # Zero-churn P1 §5A: Expanded low-recall keywords
+      - "luminária led"
+      - "luminaria led"
     exclusions:
       # Appliances
       - "eletrodoméstico"

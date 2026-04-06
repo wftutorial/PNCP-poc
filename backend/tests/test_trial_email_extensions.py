@@ -40,16 +40,18 @@ class TestSequenceShape:
         ]
 
     def test_active_sequence_default_flags_off(self):
-        """With both flags false, _active_sequence == TRIAL_EMAIL_SEQUENCE."""
+        """With all optional flags false, _active_sequence == TRIAL_EMAIL_SEQUENCE."""
         with patch("config.DAY3_ACTIVATION_EMAIL_ENABLED", False), \
-             patch("config.REFERRAL_EMAIL_ENABLED", False):
+             patch("config.REFERRAL_EMAIL_ENABLED", False), \
+             patch("config.features.FEATURE_DISCOVERY_EMAILS_ENABLED", False):
             from services.trial_email_sequence import _active_sequence
             seq = _active_sequence()
             assert len(seq) == 6
 
     def test_active_sequence_day3_enabled(self):
         with patch("config.DAY3_ACTIVATION_EMAIL_ENABLED", True), \
-             patch("config.REFERRAL_EMAIL_ENABLED", False):
+             patch("config.REFERRAL_EMAIL_ENABLED", False), \
+             patch("config.features.FEATURE_DISCOVERY_EMAILS_ENABLED", False):
             from services.trial_email_sequence import _active_sequence
             seq = _active_sequence()
             assert len(seq) == 7
@@ -58,7 +60,8 @@ class TestSequenceShape:
 
     def test_active_sequence_referral_enabled(self):
         with patch("config.DAY3_ACTIVATION_EMAIL_ENABLED", False), \
-             patch("config.REFERRAL_EMAIL_ENABLED", True):
+             patch("config.REFERRAL_EMAIL_ENABLED", True), \
+             patch("config.features.FEATURE_DISCOVERY_EMAILS_ENABLED", False):
             from services.trial_email_sequence import _active_sequence
             seq = _active_sequence()
             assert len(seq) == 7
@@ -68,7 +71,8 @@ class TestSequenceShape:
     def test_active_sequence_both_enabled(self):
         with patch("config.DAY3_ACTIVATION_EMAIL_ENABLED", True), \
              patch("config.REFERRAL_EMAIL_ENABLED", True), \
-             patch("config.SHARE_ACTIVATION_EMAIL_ENABLED", False):
+             patch("config.SHARE_ACTIVATION_EMAIL_ENABLED", False), \
+             patch("config.features.FEATURE_DISCOVERY_EMAILS_ENABLED", False):
             from services.trial_email_sequence import _active_sequence
             seq = _active_sequence()
             assert len(seq) == 8
@@ -76,7 +80,8 @@ class TestSequenceShape:
     def test_active_sequence_share_activation_enabled(self):
         with patch("config.DAY3_ACTIVATION_EMAIL_ENABLED", False), \
              patch("config.REFERRAL_EMAIL_ENABLED", False), \
-             patch("config.SHARE_ACTIVATION_EMAIL_ENABLED", True):
+             patch("config.SHARE_ACTIVATION_EMAIL_ENABLED", True), \
+             patch("config.features.FEATURE_DISCOVERY_EMAILS_ENABLED", False):
             from services.trial_email_sequence import _active_sequence
             seq = _active_sequence()
             assert len(seq) == 7
@@ -86,12 +91,26 @@ class TestSequenceShape:
     def test_active_sequence_all_three_optional_enabled(self):
         with patch("config.DAY3_ACTIVATION_EMAIL_ENABLED", True), \
              patch("config.REFERRAL_EMAIL_ENABLED", True), \
-             patch("config.SHARE_ACTIVATION_EMAIL_ENABLED", True):
+             patch("config.SHARE_ACTIVATION_EMAIL_ENABLED", True), \
+             patch("config.features.FEATURE_DISCOVERY_EMAILS_ENABLED", False):
             from services.trial_email_sequence import _active_sequence
             seq = _active_sequence()
             assert len(seq) == 9
             types = [e["type"] for e in seq]
             assert set(["activation_nudge", "referral_invitation", "share_activation"]).issubset(types)
+
+    def test_active_sequence_feature_discovery_enabled(self):
+        """Feature discovery adds 3 emails (pipeline, excel, ai)."""
+        with patch("config.DAY3_ACTIVATION_EMAIL_ENABLED", False), \
+             patch("config.REFERRAL_EMAIL_ENABLED", False), \
+             patch("config.features.FEATURE_DISCOVERY_EMAILS_ENABLED", True):
+            from services.trial_email_sequence import _active_sequence
+            seq = _active_sequence()
+            assert len(seq) == 9  # 6 base + 3 feature discovery
+            types = [e["type"] for e in seq]
+            assert "feature_pipeline" in types
+            assert "feature_excel" in types
+            assert "feature_ai" in types
 
 
 # ============================================================================

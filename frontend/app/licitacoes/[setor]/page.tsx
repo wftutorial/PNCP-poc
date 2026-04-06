@@ -10,6 +10,7 @@ import {
   formatBRL,
   SectorStats,
 } from "@/lib/sectors";
+import { UF_NAMES } from "@/lib/programmatic";
 import { getSectorFaqs } from "@/data/sector-faqs";
 import { getFreshnessLabel } from "@/lib/seo";
 
@@ -241,26 +242,42 @@ export default async function SectorPage({
         </section>
       )}
 
-      {/* SEO-PLAYBOOK Fundação §5: Top UFs + Calculator link */}
+      {/* SEO-PLAYBOOK Fundação §5: Todos os 27 UFs agrupados por região + Calculator link */}
       <section className="max-w-5xl mx-auto py-12 px-4">
         <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">
           Licitações de {sector.name} por estado
         </h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 mb-6">
-          {["sp", "mg", "rs", "pr", "sc"].map((uf) => (
-            <Link
-              key={uf}
-              href={`/blog/licitacoes/${setor}/${uf}`}
-              className="p-3 rounded-lg border border-gray-200 dark:border-gray-700
-                         hover:border-brand-blue hover:shadow transition-all
-                         bg-white dark:bg-gray-900 text-center"
-            >
-              <span className="font-medium text-sm text-gray-900 dark:text-white uppercase">
-                {uf}
-              </span>
-            </Link>
-          ))}
-        </div>
+        {[
+          { regiao: "Sudeste", ufs: ["sp", "rj", "mg", "es"] },
+          { regiao: "Sul", ufs: ["rs", "sc", "pr"] },
+          { regiao: "Centro-Oeste", ufs: ["go", "df", "mt", "ms"] },
+          { regiao: "Nordeste", ufs: ["ba", "pe", "ce", "ma", "pb", "rn", "pi", "al", "se"] },
+          { regiao: "Norte", ufs: ["am", "pa", "ro", "ac", "ap", "rr", "to"] },
+        ].map(({ regiao, ufs }) => (
+          <div key={regiao} className="mb-6">
+            <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">
+              {regiao}
+            </h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+              {ufs.map((uf) => (
+                <Link
+                  key={uf}
+                  href={`/blog/licitacoes/${setor}/${uf}`}
+                  className="p-3 rounded-lg border border-gray-200 dark:border-gray-700
+                             hover:border-brand-blue hover:shadow transition-all
+                             bg-white dark:bg-gray-900 text-center"
+                >
+                  <span className="font-medium text-sm text-gray-900 dark:text-white uppercase">
+                    {uf}
+                  </span>
+                  <span className="block text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">
+                    {UF_NAMES[uf.toUpperCase()]}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        ))}
         <Link
           href={`/calculadora?setor=${setor}`}
           className="inline-flex items-center gap-2 text-sm font-medium text-brand-blue hover:underline"

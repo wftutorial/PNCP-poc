@@ -69,15 +69,14 @@ export async function generateMetadata({
   const stats = await fetchSectorUfBlogStats(setor, ufUpper);
   const total = stats?.total_editais ?? 0;
   const ufName = UF_NAMES[ufUpper] || ufUpper;
-  const year = new Date().getFullYear();
   const canonicalUrl = `https://smartlic.tech/blog/licitacoes/${setor}/${uf}`;
 
   return {
-    title: `Licitações de ${sector.name} em ${ufName} — Editais Abertos ${year} | SmartLic`,
+    title: `${total > 0 ? `${total} ` : ''}Licitações de ${sector.name} em ${ufName} — ${getMonthYear()} | SmartLic`,
     description: `Encontre ${total > 0 ? total : ''} licitações de ${sector.name.toLowerCase()} em ${ufName}. Dados ao vivo de PNCP, PCP e ComprasGov. Filtre por valor, modalidade e prazo. Teste grátis.`,
     alternates: { canonical: canonicalUrl },
     openGraph: {
-      title: `Licitações de ${sector.name} em ${ufName} — Editais Abertos ${year} | SmartLic`,
+      title: `${total > 0 ? `${total} ` : ''}Licitações de ${sector.name} em ${ufName} — ${getMonthYear()} | SmartLic`,
       description: `${total > 0 ? `${total} editais` : 'Editais'} de ${sector.name.toLowerCase()} em ${ufName}. Dados ao vivo consolidados de 3 fontes oficiais.`,
       url: canonicalUrl,
       type: 'article',
@@ -116,7 +115,7 @@ export default async function LicitacoesSectorUfPage({
     { name: 'SmartLic', url: 'https://smartlic.tech' },
     { name: 'Blog', url: 'https://smartlic.tech/blog' },
     { name: 'Licitações', url: 'https://smartlic.tech/blog/licitacoes' },
-    { name: sector.name, url: `https://smartlic.tech/blog/programmatic/${setor}` },
+    { name: sector.name, url: `https://smartlic.tech/licitacoes/${setor}` },
     { name: ufName, url },
   ];
 
@@ -151,7 +150,7 @@ export default async function LicitacoesSectorUfPage({
               <span>/</span>
               <Link href="/blog/licitacoes" className="hover:text-brand-blue">Licitações</Link>
               <span>/</span>
-              <Link href={`/blog/programmatic/${setor}`} className="hover:text-brand-blue">
+              <Link href={`/licitacoes/${setor}`} className="hover:text-brand-blue">
                 {sector.name}
               </Link>
               <span>/</span>
@@ -161,7 +160,6 @@ export default async function LicitacoesSectorUfPage({
             {/* AC2: H1 with month and year */}
             <h1
               className="text-3xl sm:text-4xl lg:text-5xl font-bold text-ink tracking-tight mb-4"
-              style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}
             >
               Licitações de {sector.name} em {ufName} — {monthYear}
             </h1>

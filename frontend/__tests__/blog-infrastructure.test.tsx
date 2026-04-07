@@ -292,7 +292,7 @@ describe('BlogArticleLayout', () => {
 
     expect(blogPosting).toBeDefined();
     expect(blogPosting.headline).toBe('Test Article Title');
-    expect(blogPosting.author.name).toBe('Equipe SmartLic');
+    expect(blogPosting.author.name).toBe('Tiago Sasaki');
     expect(blogPosting.wordCount).toBe(1000);
     expect(blogPosting.articleSection).toBe('Empresas B2G');
     expect(blogPosting.inLanguage).toBe('pt-BR');
@@ -366,14 +366,14 @@ describe('BlogArticleLayout', () => {
     expect(screen.getByText('5 min de leitura')).toBeInTheDocument();
   });
 
-  it('renders author as Equipe SmartLic', () => {
+  it('renders author name with link to author page', () => {
     render(
       <BlogArticleLayout article={mockArticle} relatedArticles={[]}>
         <p>Content</p>
       </BlogArticleLayout>,
     );
 
-    expect(screen.getByText(/Equipe SmartLic/)).toBeInTheDocument();
+    expect(screen.getByText(/Tiago Sasaki/)).toBeInTheDocument();
   });
 
   it('renders article tags', () => {

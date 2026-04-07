@@ -70,6 +70,12 @@ export default function LandingNavbar({ className = '' }: LandingNavbarProps) {
               Sobre
             </Link>
             <Link
+              href="/perguntas"
+              className="text-sm text-ink-secondary/80 hover:text-ink transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] rounded px-2 py-1"
+            >
+              Perguntas
+            </Link>
+            <Link
               href="#suporte"
               className="text-sm text-ink-secondary/80 hover:text-ink transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] rounded px-2 py-1"
             >

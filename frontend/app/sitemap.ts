@@ -5,6 +5,8 @@ import { generateSectorParams, generateLicitacoesParams, generateSectorUfParams 
 import { getAllCaseSlugs } from '@/lib/cases';
 import { CITIES } from '@/lib/cities';
 import { GLOSSARY_TERMS } from '@/lib/glossary-terms';
+import { getAllAuthorSlugs } from '@/lib/authors';
+import { getAllQuestionSlugs } from '@/lib/questions';
 
 /**
  * GTM-COPY-006 AC10: Dynamic sitemap with all public pages
@@ -326,5 +328,33 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: 'weekly' as const,
       priority: 0.8,
     },
+    // S7+S11: Author pages
+    ...getAllAuthorSlugs().map((slug) => ({
+      url: `${baseUrl}/blog/author/${slug}`,
+      lastModified: STATIC_LAST_EDIT,
+      changeFrequency: 'monthly' as const,
+      priority: 0.6,
+    })),
+    // S8: Tech Stack page
+    {
+      url: `${baseUrl}/stack`,
+      lastModified: STATIC_LAST_EDIT,
+      changeFrequency: 'monthly' as const,
+      priority: 0.7,
+    },
+    // S10: Perguntas hub
+    {
+      url: `${baseUrl}/perguntas`,
+      lastModified: STATIC_LAST_EDIT,
+      changeFrequency: 'weekly' as const,
+      priority: 0.8,
+    },
+    // S10: Individual question pages (53+)
+    ...getAllQuestionSlugs().map((slug) => ({
+      url: `${baseUrl}/perguntas/${slug}`,
+      lastModified: STATIC_LAST_EDIT,
+      changeFrequency: 'weekly' as const,
+      priority: 0.7,
+    })),
   ];
 }

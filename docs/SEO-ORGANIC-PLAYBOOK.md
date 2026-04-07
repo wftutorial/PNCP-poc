@@ -1,5 +1,5 @@
 # SmartLic — Playbook de Crescimento Orgânico: CAC Mínimo via Conversão Máxima
-## Versão 3.0 · Atualizado: 2026-04-07 (rodada 8 — Parte 9: S7-S14 substituições on-page finais + zero itens off-page pendentes)
+## Versão 3.1 · Atualizado: 2026-04-07 (rodada 10 — S7+S8+S10+S11+S14 implementados: author pages, Q&A 53pg, tech stack, SEO dashboard)
 
 > **Premissa:** SEO impecável é o piso, não o teto. Quando alguém encontra o SmartLic —
 > por busca orgânica, indicação ou conteúdo — cada touchpoint subsequente deve funcionar
@@ -1742,10 +1742,10 @@ Os três ou não publica.
 
 **Impacto:** Entity authority permanente, Knowledge Panel eligibility, E-E-A-T máximo, citação AI 3.1× maior.
 
-- [ ] Implementar `/sobre` com Organization + LocalBusiness schema
-- [ ] Implementar `/blog/author/[slug]` com Person schema
-- [ ] Criar `lib/authors.ts` com registry de autores
-- [ ] Adicionar CNPJ no footer + link `/sobre`
+- [x] Implementar `/sobre` com Organization + LocalBusiness schema (pré-existente)
+- [x] Implementar `/blog/author/[slug]` com Person schema (2026-04-07, rodada 10)
+- [x] Criar `lib/authors.ts` com registry de autores (2026-04-07, rodada 10)
+- [x] Adicionar CNPJ no footer + link `/sobre` (2026-04-07, rodada 10)
 
 ---
 
@@ -1778,9 +1778,9 @@ Os três ou não publica.
 - Schema: `SoftwareApplication` por ferramenta + `HowTo` empilhado
 - Internal links: `/stack` ↔ `/sobre` ↔ `/dados`
 
-- [ ] Implementar `/stack` com cards por ferramenta + métricas reais
-- [ ] SoftwareApplication + HowTo JSON-LD schema stack
-- [ ] Integrar no sitemap + footer + `/sobre`
+- [x] Implementar `/stack` com cards por ferramenta + métricas reais (2026-04-07, rodada 10)
+- [x] SoftwareApplication + HowTo JSON-LD schema stack (2026-04-07, rodada 10)
+- [x] Integrar no sitemap + footer + `/sobre` (2026-04-07, rodada 10)
 
 ---
 
@@ -1829,11 +1829,11 @@ Os três ou não publica.
 
 **Impacto:** +50 páginas indexáveis KD < 3, QAPage schema = AI citation candidate, entity authority via dados proprietários.
 
-- [ ] Criar `lib/questions.ts` com 50+ perguntas curadas
-- [ ] Implementar `/perguntas` hub + `/perguntas/[slug]` ISR 24h
-- [ ] QAPage + FAQPage + BreadcrumbList JSON-LD stack
-- [ ] Internal linking bidirecional com glossário + blog + landing setorial
-- [ ] Integrar no sitemap + navbar + footer
+- [x] Criar `lib/questions.ts` com 53 perguntas curadas em 6 categorias (2026-04-07, rodada 10)
+- [x] Implementar `/perguntas` hub + `/perguntas/[slug]` ISR 24h (2026-04-07, rodada 10)
+- [x] QAPage + FAQPage + BreadcrumbList JSON-LD stack (2026-04-07, rodada 10)
+- [x] Internal linking bidirecional com glossário + blog + landing setorial (2026-04-07, rodada 10)
+- [x] Integrar no sitemap + navbar + footer (2026-04-07, rodada 10)
 
 ---
 
@@ -1855,8 +1855,8 @@ Os três ou não publica.
 - `lib/authors.ts` — registry (compartilhado com S7)
 - Weekly digest já aponta author → Person schema fecha o loop
 
-- [ ] Implementar `/blog/author/[slug]` com Person schema + artigos
-- [ ] RSS feed por autor
+- [x] Implementar `/blog/author/[slug]` com Person schema + artigos (2026-04-07, rodada 10)
+- [x] RSS feed por autor `/blog/author/[slug]/rss.xml` (2026-04-07, rodada 10)
 - [ ] Vincular weekly digests ao author (já parcialmente feito via E-E-A-T rodada 7)
 
 ---
@@ -1930,10 +1930,10 @@ Os três ou não publica.
 - Frontend: `frontend/app/admin/seo/page.tsx` — Recharts dashboard
 - Cron: semanal, grava snapshot em `seo_metrics`
 
-- [ ] Implementar `gsc_metrics.py` com GSC API extraction
-- [ ] Tabela `seo_metrics` + migration
-- [ ] Dashboard `/admin/seo` com Recharts
-- [ ] Cron semanal para snapshot automatizado
+- [x] Implementar `gsc_metrics.py` com GSC API extraction — graceful skip sem credentials (2026-04-07, rodada 10)
+- [ ] Tabela `seo_metrics` + migration (pendente: aplicar migration no Supabase)
+- [x] Dashboard `/admin/seo` com Recharts (2026-04-07, rodada 10)
+- [x] Cron semanal para snapshot automatizado via `jobs/cron/seo_snapshot.py` (2026-04-07, rodada 10)
 
 ---
 

@@ -20,6 +20,7 @@ export interface BlogArticleMeta {
   keywords: string[];
   relatedSlugs: string[];
   sources?: string[];
+  authorSlug?: string;
 }
 
 /**
@@ -1473,4 +1474,14 @@ export function getRelatedArticles(slug: string): BlogArticleMeta[] {
 
 export function getAllSlugs(): string[] {
   return BLOG_ARTICLES.map((article) => article.slug);
+}
+
+/**
+ * S7+S11: Get articles by author slug.
+ * Articles without explicit authorSlug default to 'tiago-sasaki'.
+ */
+export function getArticlesByAuthor(authorSlug: string): BlogArticleMeta[] {
+  return BLOG_ARTICLES.filter(
+    (a) => (a.authorSlug || 'tiago-sasaki') === authorSlug
+  );
 }

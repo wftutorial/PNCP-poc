@@ -164,6 +164,9 @@ export default function AdminPage() {
             <Link href="/admin/metrics" className="px-4 py-2 border border-[var(--border)] rounded-button text-sm hover:bg-[var(--surface-1)] text-[var(--ink-secondary)]">
               Metrics
             </Link>
+            <Link href="/admin/seo" className="px-4 py-2 border border-[var(--border)] rounded-button text-sm hover:bg-[var(--surface-1)] text-[var(--ink-secondary)]">
+              SEO
+            </Link>
             <Link href="/admin/slo" className="px-4 py-2 border border-[var(--border)] rounded-button text-sm hover:bg-[var(--surface-1)] text-[var(--ink-secondary)]">
               SLOs
             </Link>

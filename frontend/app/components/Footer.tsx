@@ -39,6 +39,9 @@ export default function Footer() {
                 <FooterLink href="/sobre#metodologia">Metodologia</FooterLink>
               </li>
               <li>
+                <FooterLink href="/stack">Tech Stack</FooterLink>
+              </li>
+              <li>
                 <FooterLink href="#como-funciona">Como funciona</FooterLink>
               </li>
             </ul>
@@ -90,6 +93,9 @@ export default function Footer() {
               </li>
               <li>
                 <FooterLink href="/como-priorizar-oportunidades">Priorizar oportunidades</FooterLink>
+              </li>
+              <li>
+                <FooterLink href="/perguntas">Perguntas Frequentes</FooterLink>
               </li>
             </ul>
           </div>
@@ -238,7 +244,7 @@ export default function Footer() {
               © 2026 SmartLic.tech. Todos os direitos reservados.
             </p>
             <p className="text-xs text-ink-muted">
-              CONFENGE Avaliações e Inteligência Artificial LTDA — Av. Pref. Osmar Cunha, 416 - Centro, Florianópolis - SC, 88015-100
+              CONFENGE Avaliações e Inteligência Artificial LTDA — CNPJ 56.688.745/0001-00 — Av. Pref. Osmar Cunha, 416 - Centro, Florianópolis - SC, 88015-100
             </p>
 
             {/* LGPD Badge */}

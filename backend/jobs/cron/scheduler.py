@@ -13,6 +13,7 @@ from jobs.cron.billing import (  # noqa: F401
     start_reconciliation_task, start_pre_dunning_task, start_revenue_share_task,
     start_plan_reconciliation_task, start_stripe_events_purge_task,
 )
+from jobs.cron.seo_snapshot import start_seo_snapshot_task  # noqa: F401
 
 
 def register_all_cron_tasks() -> list:
@@ -25,4 +26,5 @@ def register_all_cron_tasks() -> list:
         start_alerts_task, start_trial_sequence_task,
         start_sector_stats_task, start_support_sla_task, start_daily_volume_task,
         start_plan_reconciliation_task, start_stripe_events_purge_task,
+        start_seo_snapshot_task,
     ]

@@ -7,6 +7,7 @@ import LandingNavbar from './landing/LandingNavbar';
 import Footer from './Footer';
 import ShareButtons from '@/components/share/ShareButtons';
 import type { BlogArticleMeta } from '@/lib/blog';
+import { getAuthorBySlug, DEFAULT_AUTHOR_SLUG } from '@/lib/authors';
 
 /**
  * STORY-261 AC1/AC2/AC3/AC14: Blog article layout component
@@ -72,18 +73,26 @@ export default function BlogArticleLayout({
 }: BlogArticleLayoutProps) {
   const canonicalUrl = `https://smartlic.tech/blog/${article.slug}`;
 
-  // AC2 + MKT-001 AC4: Article JSON-LD with author credentialing
+  // AC2 + MKT-001 AC4 + S7: Article JSON-LD with Person author (E-E-A-T)
+  const resolvedAuthor = getAuthorBySlug(article.authorSlug || DEFAULT_AUTHOR_SLUG);
   const blogPostingSchema = {
     '@context': 'https://schema.org',
     '@type': 'Article',
     headline: article.title,
     description: article.description,
-    author: {
-      '@type': 'Organization',
-      name: 'Equipe SmartLic',
-      description: 'Especialistas em Inteligência de Licitações Públicas',
-      url: 'https://smartlic.tech',
-    },
+    author: resolvedAuthor
+      ? {
+          '@type': 'Person',
+          name: resolvedAuthor.name,
+          url: `https://smartlic.tech/blog/author/${resolvedAuthor.slug}`,
+          jobTitle: resolvedAuthor.role,
+          sameAs: resolvedAuthor.sameAs,
+        }
+      : {
+          '@type': 'Organization',
+          name: 'Equipe SmartLic',
+          url: 'https://smartlic.tech',
+        },
     publisher: {
       '@type': 'Organization',
       name: 'SmartLic',
@@ -246,7 +255,15 @@ export default function BlogArticleLayout({
                   <span>{article.readingTime}</span>
                   <span aria-hidden="true">&middot;</span>
                   <span>
-                    Equipe SmartLic — Especialistas em Inteligência de Licitações Públicas
+                    {resolvedAuthor ? (
+                      <Link href={`/blog/author/${resolvedAuthor.slug}`} className="text-brand-blue hover:underline">
+                        {resolvedAuthor.name}
+                      </Link>
+                    ) : (
+                      'Equipe SmartLic'
+                    )}
+                    {' — '}
+                    {resolvedAuthor?.shortBio || 'Especialistas em Inteligência de Licitações Públicas'}
                   </span>
                 </div>
               </header>

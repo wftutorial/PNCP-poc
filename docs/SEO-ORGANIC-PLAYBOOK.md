@@ -1,5 +1,5 @@
 # SmartLic — Playbook de Crescimento Orgânico: CAC Mínimo via Conversão Máxima
-## Versão 3.1 · Atualizado: 2026-04-07 (rodada 10 — S7+S8+S10+S11+S14 implementados: author pages, Q&A 53pg, tech stack, SEO dashboard)
+## Versão 3.2 · Atualizado: 2026-04-07 (Parte 10 — Modelo MRR R$100K + Parte 11 — Expansão Programática 10K páginas)
 
 > **Premissa:** SEO impecável é o piso, não o teto. Quando alguém encontra o SmartLic —
 > por busca orgânica, indicação ou conteúdo — cada touchpoint subsequente deve funcionar
@@ -27,6 +27,8 @@
 | [7](#parte-7--distribuição-produto-como-canal) | Distribuição | LinkedIn, P6 viral, YouTube, referral |
 | [8](#parte-8--alternativas-on-page-para-ações-off-page) | On-Page Alt. | **Substitutos on-page para cada ação off-page — implementação prioritária** |
 | [9](#parte-9--substituições-on-page-finais-zero-dependência-de-terceiros) | On-Page Final | **S7-S14: entity SEO, Q&A, tech stack, micro-demos, masterclass — abril/2026** |
+| [10](#parte-10--modelo-de-mrr-de-tráfego-orgânico-a-r100k) | Modelo MRR | **Matemática reversa R$100K → clientes → trials → tráfego + alavancas** |
+| [11](#parte-11--expansão-programática-próxima-onda-de-páginas) | Expansão | **CNPJ +5K, órgãos +2K, cidade×setor +1.2K → 10K páginas** |
 
 ---
 
@@ -1957,6 +1959,317 @@ Os três ou não publica.
 3. **Após S8:** Google → "supabase govtech case study" → `/stack` ranqueia
 4. **Após S9:** Google Dataset Search → "licitações Brasil" → SmartLic + embed disponível
 5. **Geral:** AI Overviews → queries informacionais sobre licitações → SmartLic citado
+
+---
+
+## Parte 10 — Modelo de MRR: De Tráfego Orgânico a R$100K
+
+> **Adicionada 2026-04-07.** O playbook até aqui projeta tráfego, trials e CAC — mas nunca mapeia para
+> um alvo de MRR específico. Esta seção fecha o loop: dado o funil medido (Parte 4) e as projeções
+> de tráfego (rodada 6), QUANDO o SEO orgânico entrega R$100K MRR?
+
+### 10.1 — Matemática Reversa
+
+**ARPU blended (mix estimado no mês 6+):**
+
+| Plano | % do mix | Preço mensal | Contribuição |
+|-------|---------|-------------|-------------|
+| Pro anual | 55% | R$297 | R$163 |
+| Pro mensal | 20% | R$397 | R$79 |
+| Consultoria anual | 15% | R$797 | R$120 |
+| Consultoria mensal | 10% | R$997 | R$100 |
+| **ARPU blended** | | | **R$462** |
+
+> À medida que a base amadurece, annual subscribers dominam (menor churn, maior LTV).
+> ARPU pode variar R$400-500 dependendo do mix real. Usar R$430 como estimativa conservadora.
+
+**Clientes necessários:**
+
+```
+R$100.000 MRR ÷ R$430 ARPU = 233 clientes ativos simultâneos
+```
+
+**Churn mensal estimado:**
+
+| Segmento | Churn mensal | Racional |
+|----------|-------------|----------|
+| Pro mensal | 5-7% | Menor comprometimento, testa e sai |
+| Pro anual | 0.5-1% (equivalente mensal) | Lock-in contratual |
+| Consultoria | 2-3% | Multi-user = mais sticky |
+| **Blended** | **3-3.5%** | Ponderado pelo mix acima |
+
+### 10.2 — Modelo de Acumulação (Cenário A: playbook atual)
+
+Usando as projeções da rodada 6 (linha 2566-2572) com 1.7% visitor→trial (funil medido) e 30% trial→pago (topo do range Parte 4):
+
+| Mês | Visitas org/mês | Trials (1.7%) | Pagantes novos (30%) | Churn (3%) | **Ativos** | **MRR** |
+|-----|----------------|--------------|---------------------|------------|-----------|---------|
+| Abr (M1) | 800 | 14 | 4 | 0 | 4 | **R$1.7K** |
+| Mai (M2) | 1.500 | 26 | 8 | 0 | 12 | **R$5.2K** |
+| Jun (M3) | 3.500 | 60 | 18 | 0 | 30 | **R$12.9K** |
+| Jul (M4) | 8.000 | 136 | 41 | 1 | 70 | **R$30.1K** |
+| Ago (M5) | 15.000 | 255 | 77 | 2 | 145 | **R$62.4K** |
+| Set (M6) | 30.000 | 510 | 153 | 4 | 294 | **R$126.4K** |
+| Out (M7) | 50.000 | 850 | 255 | 9 | 540 | **R$232.2K** |
+
+> **R$100K MRR atingido entre agosto e setembro 2026 (mês 5-6), SE o tráfego compõe conforme projetado.**
+
+**Premissas críticas deste cenário:**
+1. 30K visitas/mês no mês 6 → é o **floor** da projeção "30-80K" (linha 2572)
+2. 30% trial→pago → requer Day-3 activation ≥60% e todas as otimizações de conversão ativas
+3. 1.7% visitor→trial → já medido no funil (linha 2564), mas pode melhorar com CNPJ/calculadora (8-15%)
+4. DR ≥15 até mês 4 → necessário para rankear as 2.500+ páginas
+
+### 10.3 — Análise de Sensitividade
+
+| Se... | Trial→pago | Visitas necessárias/mês (M6) | Viável? |
+|-------|-----------|------------------------------|---------|
+| Conversão alta (35%) | 35% | 23.000 | ✅ Dentro do range |
+| Conversão base (30%) | 30% | 30.000 | ✅ Floor do range |
+| Conversão baixa (20%) | 20% | 45.000 | ⚠️ Requer topo do range |
+| Conversão pessimista (15%) | 15% | 60.000 | ❌ Acima da projeção M6 |
+
+> **Conclusão:** Trial→pago ≥25% é o threshold mínimo para R$100K no mês 6.
+> Abaixo de 25%, o alvo desliza para mês 8-9 ou requer canais complementares.
+
+### 10.4 — Alavancas de Aceleração (ordenadas por impacto × esforço)
+
+Cada alavanca abaixo endereça um ponto específico do modelo. Estão priorizadas pelo efeito no timing de R$100K.
+
+#### Alavanca 1: Card Capture no Day 7 (Stripe `trial_end`)
+
+**Impacto:** Trial→pago de 30% → 38-42% (maior alavanca individual de conversão)
+
+**Racional:** O padrão moderno de SaaS (Slack, Notion, Figma, Linear) separa a **decisão** de fornecer o cartão (Day 7, quando trust está alto após uso real) do **comprometimento financeiro** (Day 14, cobrança automática). Isso elimina a fricção de preencher dados de pagamento no momento da pressão de conversão.
+
+**Mecânica:**
+- Paywall Day 7 muda o CTA de "Assinar R$297/mês" para "Continuar grátis até dia 14 — adicione seu cartão para não perder acesso"
+- Stripe checkout session com `trial_end` parameter (data do dia 14)
+- Usuário que adiciona cartão no Day 7 converte automaticamente no Day 14 (a menos que cancele)
+- Email Day 13 muda de "última chance" para "sua assinatura começa amanhã — R$297/mês"
+
+**Efeito no modelo:** Com 38% trial→pago, R$100K MRR é atingido no mês 5 (julho) em vez do mês 6.
+
+**Implementação:** `backend/routes/billing.py` — adicionar `trial_end` ao `stripe.checkout.Session.create()`.
+
+#### Alavanca 2: Win-Back Sequence Pós-Expiração (3 emails adicionais)
+
+**Impacto:** Recupera 5-15% dos trials expirados → +25-150 clientes/mês no cenário maduro
+
+**Racional:** A sequência atual termina no Day 16 com 1 email (cupom TRIAL_COMEBACK_20). Benchmark B2B SaaS: win-back sequences de 3-5 emails em 30 dias recuperam 5-15% dos churned, com ofertas escalating e conteúdo baseado no que o usuário USOU.
+
+**Sequência proposta:**
+
+| Dia pós-expiração | Template | Approach | Oferta |
+|-------------------|----------|----------|--------|
+| D+7 | `winback_value` | Valor — mostrar oportunidades perdidas | "Esta semana, {N} editais de {setor} abriram em {UF}. Você não está monitorando." |
+| D+14 | `winback_offer` | Oferta escalating | 30% off primeiro trimestre (R$208/mês por 3 meses) |
+| D+30 | `winback_final` | Pessoal + FOMO | Email do founder: "Última chance: R$199 para o primeiro mês — 50% off" |
+
+**Condições de skip:**
+- Se usuário já converteu → skip toda a sequência
+- Se `email_marketing_unsubscribed` → skip D+7 e D+30 (valor e pessoal), manter D+14 (transacional com oferta)
+- Se nenhuma busca foi feita durante trial → skip (lead não qualificado, não vale o custo de email)
+
+**Efeito no modelo:** +5-10% de recovery × 500 trials/mês no cenário maduro = +25-50 pagantes adicionais/mês. Isso fecha o gap entre cenário conservador e R$100K.
+
+**Implementação:** `backend/services/trial_email_sequence.py` + 3 novos templates em `backend/templates/emails/`.
+
+#### Alavanca 3: CNPJ Pages no Sitemap (expansão programática)
+
+**Impacto:** +5.000-10.000 páginas indexáveis → +20-40% tráfego long-tail orgânico
+
+**Racional:** `/cnpj/[cnpj]` já existe como SSR dinâmico (qualquer CNPJ funciona), mas `generateStaticParams()` retorna `[]` e as páginas individuais NÃO estão no sitemap. O Google não descobre essas URLs.
+
+O datalake `pncp_raw_bids` contém dezenas de milhares de CNPJs distintos de órgãos compradores. Cada página CNPJ tem conteúdo genuinamente único: perfil B2G da empresa, histórico de participação, score, setores de atuação. Buscas tipo "[nome empresa] licitações" e "[CNPJ] editais" têm volume real e zero competição.
+
+**Mecânica:**
+- Backend: endpoint `GET /v1/sitemap/cnpjs` → retorna top 5.000-10.000 CNPJs mais ativos (por contagem de participações)
+- Frontend: `sitemap.ts` → nova seção gerando URLs `/cnpj/{cnpj}` com priority 0.5 e changefreq weekly
+- Escalonamento: começar com 5.000, expandir para 10.000+ conforme índice de indexação do GSC
+
+**Conteúdo por página (já existente):**
+- Razão social, CNPJ, UF, porte
+- Score B2G (calculado por histórico de contratos)
+- Setores de atuação (inferidos de contratos anteriores)
+- Últimas licitações participadas
+- CTA: "Monitore licitações do seu setor → /signup?ref=cnpj"
+
+**Risco thin content:** BAIXO — cada CNPJ gera dados únicos do perfil B2G. Páginas sem dados suficientes (<3 contratos) podem ser excluídas do sitemap via threshold.
+
+#### Alavanca 4: Páginas de Órgãos Compradores (novo tipo programático)
+
+**Impacto:** +500-2.000 páginas indexáveis com conteúdo único + captura de buscas de alta intenção
+
+**Racional:** Empresas B2G buscam órgãos específicos: "licitações prefeitura de curitiba", "editais secretaria de saúde SP", "compras DNIT 2026". Nenhum concorrente tem páginas dedicadas por órgão comprador com dados agregados.
+
+**Mecânica:**
+- Backend: `GET /v1/orgaos` → top 500-2.000 órgãos distintos por volume de editais
+- Backend: `GET /v1/orgaos/{slug}/stats` → perfil completo (editais publicados, setores, valores, modalidades)
+- Frontend: `/orgaos/[slug]` → página SSR com ISR 24h
+
+**Conteúdo por página:**
+- Nome do órgão, esfera (federal/estadual/municipal), UF
+- Total de editais publicados (30/90/365 dias)
+- Valor total e médio dos editais
+- Setores mais licitados (com percentual)
+- Modalidades preferidas
+- Últimos 10 editais publicados
+- CTA: "Receba alertas quando {órgão} publicar novos editais → /signup"
+
+**Schema:** GovernmentOrganization + Dataset (histórico de compras)
+
+#### Alavanca 5: Artigos BOFU (já identificados na Frente 5, pendente de execução)
+
+**Impacto:** Páginas de comparação convertem 5-10× mais que informacionais
+
+**Artigos prioritários (Frente 5, linha 2581):**
+1. "SmartLic vs Effecti: Comparação Completa 2026"
+2. "SmartLic vs Licitanet: Qual Plataforma Escolher"
+3. "Melhores Plataformas de Licitação 2026: Ranking Completo"
+4. "SmartLic vs Planilha Excel: Quando Automatizar Vale a Pena"
+5. "IA em Licitações: Como Funciona e Quem Oferece" (cluster 10-15 páginas)
+
+**Formato por artigo:**
+- Tabela comparativa feature-by-feature (preço, cobertura, IA, UX)
+- Dados verificáveis: "SmartLic cobre 15 setores × 27 UFs com dados PNCP em tempo real; Effecti cobre..."
+- Veredito honesto: "Se você precisa de X, SmartLic. Se precisa de Y, considere Z."
+- FAQ schema com 5-8 perguntas
+- CTA: trial sem cartão + calculadora ROI
+
+**Rota:** `/blog/comparar/[slug]` ou artigos padrão em `/blog/[slug]`
+
+#### Alavanca 6: Seed Authority — Reconciliação com Estratégia On-Page
+
+**Impacto:** Acelera indexação das 2.550+ páginas em 2-4 semanas
+
+**Contexto:** A Parte 8 substituiu TODAS as ações off-page por alternativas on-page (S7-S14). A filosofia é correta — topical authority + entity SEO + structured data são superiores a long-term vs backlinks de diretório. As pesquisas citadas (BacklinkGen 2026, SearchAtlas 2026) validam essa posição.
+
+**A tensão de timing:** Para um domínio com DR <5 e poucas páginas indexadas, 3-4 backlinks de DR 80-90 fornecem a seed authority que sinaliza ao Google "este domínio é legítimo" — acelerando o crawl budget allocation para as 2.550+ URLs no sitemap. Isso NÃO substitui entity SEO; COMPLEMENTA.
+
+**Proposta: fazer AMBOS (on-page + seed), não ou/ou:**
+
+| Ação | Tempo | DR | Tipo | Status |
+|------|-------|-----|------|--------|
+| Product Hunt launch | 2h | 90 | dofollow | S7 (`/sobre`) é complementar, não substituto |
+| G2 listing + 1 review | 1h | 80 | dofollow | S10 (`/perguntas`) é complementar |
+| Capterra listing | 1h | 85 | dofollow | S7 (`/sobre`) é complementar |
+| Crunchbase profile | 30min | 90 | dofollow | S7 (`/sobre`) é complementar |
+
+**Por que isso não contradiz a Parte 8:**
+- A Parte 8 argumenta que "entity SEO no domínio próprio > listing efêmero em diretório" — correto para *autoridade permanente*
+- Mas seed authority e autoridade permanente são objetivos **diferentes**: seed é para os primeiros 90 dias, entity SEO é para os próximos 5 anos
+- Product Hunt + G2 geram ~4 backlinks DR 80-90 em 1 semana. Entity SEO gera autoridade equivalente em 3-6 meses
+- O custo de oportunidade é 4-5 horas de trabalho humano. O benefício é 2-4 semanas de aceleração na indexação
+- Após DR 15+, a seed authority se torna irrelevante e entity SEO domina — exatamente o que a Parte 8 prevê
+
+**Recomendação:** Executar as 4 ações de seed authority como **complemento** a S7/S8/S9, não como substituição. Documentar como "Parte 6 — Execução Mínima" em vez de "substituída".
+
+### 10.5 — Milestones Mensais e Red Flags
+
+**Dashboard de progresso (verificar semanalmente via `/admin/seo` + Stripe):**
+
+| Mês | Páginas indexadas | Visitas org/mês | Trials/mês | Pagantes ativos | MRR | Red flag se abaixo de |
+|-----|-------------------|----------------|-----------|----------------|-----|----------------------|
+| Abr (M1) | 80-200 | 500-800 | 8-14 | 2-4 | R$1-2K | <50 indexadas |
+| Mai (M2) | 200-500 | 1.000-2.000 | 17-34 | 8-12 | R$3-5K | <150 indexadas |
+| Jun (M3) | 500-1.500 | 2.000-5.000 | 34-85 | 20-30 | R$9-13K | <500 visitas (= authority insuficiente) |
+| Jul (M4) | 1.500-3.000 | 5.000-12.000 | 85-204 | 50-70 | R$22-30K | Trial→pago <20% |
+| Ago (M5) | 3.000-5.000 | 12.000-25.000 | 204-425 | 110-145 | R$47-62K | <8.000 visitas |
+| Set (M6) | 5.000-8.000 | 25.000-50.000 | 425-850 | 230-294 | **R$99-126K** | <20.000 visitas |
+
+**Ações corretivas por red flag:**
+
+| Red flag | Diagnóstico provável | Ação |
+|----------|---------------------|------|
+| <50 indexadas no M1 | Crawling bloqueado ou sitemap não processado | Verificar GSC Coverage; submeter URLs manualmente; verificar robots.txt |
+| <150 indexadas no M2 | Authority insuficiente para crawl budget | **Executar seed authority (PH/G2/Capterra)** — urgente |
+| <500 visitas no M3 | Páginas indexadas mas não rankeando | Verificar posições no GSC; long-tail sem competição deveria rankear pos 1-5 |
+| Trial→pago <20% no M4 | Problema de ativação ou valor percebido | Pausar growth; focar em Day-3 activation; implementar card capture Day 7 |
+| <8.000 visitas no M5 | Projeção otimista ou DR estagnado | Reavaliar timeline; considerar canais complementares |
+| <20.000 visitas no M6 | SEO-only insuficiente para R$100K no prazo | Ativar paid acquisition como suplemento (não substituto) |
+
+### 10.6 — Cenário de Contingência
+
+Se no mês 4 (julho) os red flags indicarem que o cenário SEO-only não atinge R$100K em 2026:
+
+**Plano B — SEO + paid como boost temporário:**
+- Google Ads R$3-5K/mês em keywords "[setor] licitação" (CPC R$2-8)
+- Meta retargeting para visitantes que não converteram (R$1-2K/mês)
+- **Objetivo:** cobrir o gap de tráfego enquanto SEO amadurece
+- **Critério de saída:** desligar paid quando orgânico ultrapassar 20K visitas/mês
+
+Paid não é falha da estratégia SEO — é bridge financing enquanto o compound effect materializa.
+
+---
+
+## Parte 11 — Expansão Programática: Próxima Onda de Páginas
+
+> **Adicionada 2026-04-07.** O playbook atingiu 2.550+ URLs na rodada 7. Para atingir a projeção de
+> 5.000+ páginas (mês 12) e acelerar para 8.000+ (necessário para R$100K no mês 6), esta seção
+> documenta as próximas ondas de expansão programática com conteúdo genuinamente único.
+
+### 11.1 — CNPJ Pages no Sitemap (Onda 1: +5.000-10.000 URLs)
+
+**Status atual:** `/cnpj/[cnpj]` existe como SSR dinâmico (aceita qualquer CNPJ, ISR 24h). Hub `/cnpj` está no sitemap. Páginas individuais NÃO estão.
+
+**Problema:** `generateStaticParams()` retorna `[]`. Google não descobre essas URLs sem sitemap entry ou internal link.
+
+**Solução:**
+1. Backend: `GET /v1/sitemap/cnpjs` → query `pncp_raw_bids` para top CNPJs por volume de participação
+2. Frontend: `sitemap.ts` → nova seção com URLs `/cnpj/{cnpj}`, priority 0.5, changefreq weekly
+3. Threshold: incluir apenas CNPJs com ≥3 contratos (evita thin content)
+4. Escalonamento: 5.000 no M1, expandir para 10.000 conforme GSC confirme indexação saudável
+
+**Buscas capturadas:** "[empresa] licitações", "[CNPJ] editais", "[razão social] compras públicas"
+
+**Estimativa de tráfego:** Volume individual baixo (10-50 buscas/mês por CNPJ), mas volume agregado alto: 5.000 páginas × 20 buscas/mês × 30% CTR = 30.000 visitas/mês potenciais.
+
+### 11.2 — Órgãos Compradores (Onda 2: +500-2.000 URLs)
+
+**Status atual:** Nenhuma página de órgão comprador existe.
+
+**Oportunidade:** "licitações prefeitura de curitiba", "editais secretaria de saúde SP" são buscas de alta intenção sem resposta dedicada em nenhum concorrente.
+
+**Solução:**
+1. Backend: `GET /v1/orgaos` → top órgãos por volume de editais no datalake
+2. Backend: `GET /v1/orgaos/{slug}/stats` → perfil completo
+3. Frontend: `/orgaos/[slug]` → ISR 24h com dados do datalake
+4. Schema: GovernmentOrganization + Dataset
+
+**Conteúdo por página:** nome, esfera, UF, editais publicados (30/90/365d), valor total/médio, setores, modalidades, últimos 10 editais, CTA signup.
+
+### 11.3 — Cidade × Setor (Onda 3: +1.215 URLs)
+
+**Status atual:** 46 city pages + 15 sector pages existem separadamente.
+
+**Oportunidade:** Intersecção cidade × setor captura buscas como "licitação tecnologia curitiba" — mais específica e com maior intenção comercial.
+
+**Solução:** `/licitacoes/cidade/[cidade]/[setor]` — 81 cidades × 15 setores = 1.215 páginas.
+
+**Risco:** Thin content se a interseção cidade+setor não tiver dados suficientes. Mitigação: só gerar página se ≥5 editais nos últimos 30 dias para aquela combinação.
+
+### 11.4 — Roadmap de Escala
+
+| Onda | Páginas | Timeline | Dependência |
+|------|---------|----------|-------------|
+| Onda 1: CNPJ | +5.000 | M1-2 (abril-maio) | Endpoint backend + sitemap update |
+| Onda 2: Órgãos | +500-2.000 | M2-3 (maio-junho) | Endpoint backend + nova rota frontend |
+| Onda 3: Cidade×Setor | +1.215 | M3-4 (junho-julho) | Expansão do `UF_CITIES` backend + nova rota |
+| Onda 4: Artigos BOFU | +5-15 | M1-2 (abril-maio) | Redação de conteúdo |
+| **Total** | **+6.720-14.230** | 4 meses | |
+
+**Projeção de páginas totais:**
+```
+Hoje:    2.550 URLs
++ Onda 1: 5.000 CNPJs   → 7.550
++ Onda 2: 1.000 órgãos   → 8.550
++ Onda 3: 1.215 cidade×setor → 9.765
++ Onda 4: 10 artigos BOFU → 9.775
+= ~10.000 URLs indexáveis com conteúdo único
+```
+
+Com 10.000 URLs × 70% index rate × 20 buscas/mês médias × 10% CTR = **140.000 cliques/mês no cenário maduro** — mais que suficiente para R$100K MRR.
 
 ---
 

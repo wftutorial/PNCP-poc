@@ -269,9 +269,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (data?.user) {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
       if (tz) {
-        supabase.from("profiles").update({ timezone: tz }).eq("id", data.user.id).then(() => {
-          // Fire-and-forget — timezone update is best-effort
-        }).catch(() => {});
+        // Fire-and-forget — timezone update is best-effort
+        void supabase.from("profiles").update({ timezone: tz }).eq("id", data.user.id);
       }
     }
   }, []);

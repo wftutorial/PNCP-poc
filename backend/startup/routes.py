@@ -47,6 +47,9 @@ from routes.share import router as share_router
 from routes.referral import router as referral_router
 from routes.relatorio import router as relatorio_router
 from routes.trial_extension import router as trial_extension_router
+from routes.weekly_digest import router as weekly_digest_router
+from routes.stats_public import router as stats_public_router
+from routes.dados_publicos import router as dados_publicos_router
 
 _v1_routers = [
     admin_router, subscriptions_router, features_router, messages_router,
@@ -64,6 +67,9 @@ _v1_routers = [
     referral_router,
     relatorio_router,
     trial_extension_router,
+    weekly_digest_router,
+    stats_public_router,
+    dados_publicos_router,
 ]
 
 

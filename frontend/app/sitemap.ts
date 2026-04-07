@@ -4,6 +4,7 @@ import { SECTORS } from '@/lib/sectors';
 import { generateSectorParams, generateLicitacoesParams } from '@/lib/programmatic';
 import { getAllCaseSlugs } from '@/lib/cases';
 import { CITIES } from '@/lib/cities';
+import { GLOSSARY_TERMS } from '@/lib/glossary-terms';
 
 /**
  * GTM-COPY-006 AC10: Dynamic sitemap with all public pages
@@ -233,6 +234,47 @@ export default function sitemap(): MetadataRoute.Sitemap {
     ...panoramaSectorRoutes,
     // SEO Frente 4: City pSEO pages
     ...cidadeRoutes,
+    // SEO-PLAYBOOK S1: Individual glossary term pages
+    ...GLOSSARY_TERMS.map((t) => ({
+      url: `${baseUrl}/glossario/${t.slug}`,
+      lastModified: STATIC_LAST_EDIT,
+      changeFrequency: 'weekly' as const,
+      priority: 0.7,
+    })),
+    // SEO-PLAYBOOK S4: Weekly digest index
+    {
+      url: `${baseUrl}/blog/weekly`,
+      lastModified: today,
+      changeFrequency: 'weekly' as const,
+      priority: 0.8,
+    },
+    // SEO-PLAYBOOK S4: Weekly digest pages (last 12 weeks)
+    ...Array.from({ length: 12 }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - i * 7);
+      const jan4 = new Date(d.getFullYear(), 0, 4);
+      const weekNum = Math.ceil(((d.getTime() - jan4.getTime()) / 86400000 + jan4.getDay() + 1) / 7);
+      return {
+        url: `${baseUrl}/blog/weekly/${d.getFullYear()}-w${weekNum}`,
+        lastModified: today,
+        changeFrequency: 'weekly' as const,
+        priority: 0.8,
+      };
+    }),
+    // SEO-PLAYBOOK S6: Citable statistics
+    {
+      url: `${baseUrl}/estatisticas`,
+      lastModified: today,
+      changeFrequency: 'daily' as const,
+      priority: 0.8,
+    },
+    // SEO-PLAYBOOK S2: Public data hub
+    {
+      url: `${baseUrl}/dados`,
+      lastModified: today,
+      changeFrequency: 'daily' as const,
+      priority: 0.9,
+    },
     // SEO-PLAYBOOK P7: RSS feed
     {
       url: `${baseUrl}/blog/rss.xml`,

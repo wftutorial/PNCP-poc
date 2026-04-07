@@ -58,6 +58,12 @@ export default function Footer() {
                 <FooterLink href="/glossario">Glossário de Licitações</FooterLink>
               </li>
               <li>
+                <FooterLink href="/dados">Dados de Licitações</FooterLink>
+              </li>
+              <li>
+                <FooterLink href="/estatisticas">Estatísticas Citáveis</FooterLink>
+              </li>
+              <li>
                 <FooterLink href="/casos">Casos de sucesso</FooterLink>
               </li>
             </ul>

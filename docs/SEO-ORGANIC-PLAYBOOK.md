@@ -1514,7 +1514,7 @@ Os três ou não publica.
 
 **Impacto:** +50-80 páginas indexáveis, +2K-5K impressões/mês (30d), backlinks naturais 3-5/mês após 60d.
 
-**Status:** [ ] Pendente implementação
+**Status:** [x] Implementado (2026-04-06) — `lib/glossary-terms.ts` (50 termos com FAQ + relatedTerms + legalBasis), `app/glossario/[termo]/page.tsx` (ISR 24h, DefinedTerm+FAQPage+BreadcrumbList JSON-LD, sidebar com termos relacionados e links setoriais), hub refatorado para importar de módulo shared, canonical corrigido (sem acento), sitemap integrado (+50 URLs).
 
 ---
 
@@ -1539,7 +1539,7 @@ Os três ou não publica.
 
 **Impacto:** +1 página de altíssimo valor SEO, candidata a AI Overviews, Google Discover, +100-300 leads/mês via download gated.
 
-**Status:** [ ] Pendente implementação
+**Status:** [x] Implementado (2026-04-06) — Backend `GET /v1/dados/agregados` (agregação por setor/UF/modalidade/tendência 30d, cache 6h). Frontend `app/dados/page.tsx` (ISR 6h, Dataset+DataCatalog JSON-LD) + `DadosClient.tsx` (Recharts: bar charts setor/UF, pie modalidade, line tendência, download CSV email-gated). Proxy, sitemap e footer integrados.
 
 ---
 
@@ -1591,7 +1591,7 @@ Os três ou não publica.
 
 **Impacto:** +52 páginas/ano, Google Discover eligibility, freshness signal permanente, +5K-15K impressões/mês após 8 semanas.
 
-**Status:** [ ] Pendente implementação
+**Status:** [x] Implementado (2026-04-06) — Backend `GET /v1/blog/weekly/latest` e `GET /v1/blog/weekly/{year}/{week}` (agregação semanal por setor/UF/modalidade com trends, cache 6h). Frontend `app/blog/weekly/[slug]/page.tsx` (ISR 1h, NewsArticle+Dataset JSON-LD, tabelas setores/UFs com trend arrows, mini-charts) + `app/blog/weekly/page.tsx` (índice últimas 12 semanas). Proxy, sitemap e footer integrados.
 
 ---
 
@@ -1641,7 +1641,7 @@ Os três ou não publica.
 
 **Impacto:** Backlinks naturais 5-10/mês após 90d (jornalistas citando), entity signals permanentes, zero outreach.
 
-**Status:** [ ] Pendente implementação
+**Status:** [x] Implementado (2026-04-06) — Backend `GET /v1/stats/public` (~15-20 stats agregadas: total editais, valores, top UFs/setores/modalidades, cache 6h). Frontend `app/estatisticas/page.tsx` (ISR 6h, Dataset+StatisticalPopulation JSON-LD) + `EstatisticasClient.tsx` (grid cards com botões "Citar estatística" HTML blockquote e "Copiar citação" ABNT). Proxy, sitemap e footer integrados.
 
 ---
 

@@ -23,7 +23,7 @@ export async function generateMetadata({
   if (!question) return {};
 
   return {
-    title: `${question.title} | SmartLic`,
+    title: `${question.title}`,
     description: question.metaDescription,
     alternates: { canonical: buildCanonical(`/perguntas/${slug}`) },
     openGraph: {

@@ -10,7 +10,7 @@ import ObrigadoContent from "./ObrigadoContent";
  * The actual subscription polling and UI are handled by ObrigadoContent ("use client").
  */
 export const metadata: Metadata = {
-  title: "Assinatura Confirmada | SmartLic",
+  title: "Assinatura Confirmada",
   description: "Seu acesso ao SmartLic Pro foi ativado com sucesso.",
   robots: { index: false, follow: false },
 };

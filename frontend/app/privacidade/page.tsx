@@ -1,7 +1,7 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Política de Privacidade | SmartLic',
+  title: 'Política de Privacidade',
   description: 'Política de Privacidade do SmartLic - Como coletamos, usamos e protegemos seus dados',
 };
 

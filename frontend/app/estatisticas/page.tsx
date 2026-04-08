@@ -10,7 +10,7 @@ export const revalidate = 21600; // 6h ISR
 // ---------------------------------------------------------------------------
 
 export const metadata: Metadata = {
-  title: 'Estatísticas de Licitações Públicas no Brasil | SmartLic',
+  title: 'Estatísticas de Licitações Públicas no Brasil',
   description:
     'Dados atualizados de licitações públicas no Brasil: total de editais, valores médios por setor e UF, tendências. Fonte: PNCP. Cite livremente.',
   alternates: {

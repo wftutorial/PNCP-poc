@@ -7,7 +7,7 @@ import DemoClient from './DemoClient';
 export const revalidate = 86400; // 24h ISR
 
 export const metadata: Metadata = {
-  title: 'Demo Interativo — Veja o SmartLic em Ação | SmartLic',
+  title: 'Demo Interativo — Veja o SmartLic em Ação',
   description:
     'Experimente o SmartLic sem criar conta. Demo guiado de 2 minutos: busca multi-fonte, classificação por setor, e análise de viabilidade com 4 fatores. Dados reais do PNCP.',
   alternates: { canonical: buildCanonical('/demo') },

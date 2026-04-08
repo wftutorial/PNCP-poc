@@ -4,7 +4,7 @@ import CnpjSearchForm from './CnpjSearchForm';
 import { LeadCapture } from '@/components/LeadCapture';
 
 export const metadata: Metadata = {
-  title: 'Consulta CNPJ B2G — Histórico de Contratos Públicos | SmartLic',
+  title: 'Consulta CNPJ B2G — Histórico de Contratos Públicos',
   description:
     'Consulte o histórico de contratos públicos de qualquer empresa por CNPJ. Score B2G, setor detectado e oportunidades abertas. Dados do PNCP e Portal da Transparência.',
   alternates: {

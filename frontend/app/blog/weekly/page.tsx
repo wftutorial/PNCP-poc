@@ -5,7 +5,7 @@ import LandingNavbar from '@/app/components/landing/LandingNavbar';
 import Footer from '@/app/components/Footer';
 
 export const metadata: Metadata = {
-  title: 'Digest Semanal de Licitações | SmartLic',
+  title: 'Digest Semanal de Licitações',
   description:
     'Resumo semanal das licitações publicadas no PNCP. Acompanhe os editais publicados, setores em destaque e volume financeiro semana a semana.',
   alternates: { canonical: buildCanonical('/blog/weekly') },

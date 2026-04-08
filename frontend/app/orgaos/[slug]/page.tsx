@@ -65,7 +65,7 @@ export async function generateMetadata({
 
   if (!stats) {
     return {
-      title: 'Órgão não encontrado | SmartLic',
+      title: 'Órgão não encontrado',
       description: 'O órgão informado não foi encontrado na base de dados.',
     };
   }
@@ -77,7 +77,7 @@ export async function generateMetadata({
   }).format(stats.valor_medio_estimado);
 
   return {
-    title: `${stats.nome} — Licitações e Editais | SmartLic`,
+    title: `${stats.nome} — Licitações e Editais`,
     description: `${stats.nome} publicou ${stats.total_licitacoes} licitações. ${stats.licitacoes_30d} nos últimos 30 dias. Valor médio: ${valorMedioFormatado}.`,
     alternates: {
       canonical: `https://smartlic.tech/orgaos/${slug}`,

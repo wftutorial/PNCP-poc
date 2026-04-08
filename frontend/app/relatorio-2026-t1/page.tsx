@@ -9,7 +9,7 @@ const OG_IMAGE = '/api/og?title=Panorama+Licita%C3%A7%C3%B5es+Brasil+2026+T1';
 const PUBLISHED = '2026-04-05';
 
 export const metadata: Metadata = {
-  title: 'Panorama Licitações Brasil 2026 T1 — Relatório Gratuito | SmartLic',
+  title: 'Panorama Licitações Brasil 2026 T1 — Relatório Gratuito',
   description:
     'Dataset de 40 mil+ editais PNCP (jan-mar/2026) analisado por IA. Valor total, modalidades, setores, órgãos e tendências. Download gratuito em PDF.',
   alternates: { canonical: CANONICAL },

@@ -127,7 +127,7 @@ export async function generateMetadata({
   const modalidadeSuffix = modalidadeInfo ? ` — ${modalidadeInfo.name}` : '';
 
   return {
-    title: `${total > 0 ? `${total} ` : ''}Licitações de ${sector.name} em ${ufName}${modalidadeSuffix} — ${getMonthYear()} | SmartLic`,
+    title: `${total > 0 ? `${total} ` : ''}Licitações de ${sector.name} em ${ufName}${modalidadeSuffix} — ${getMonthYear()}`,
     description: `Encontre ${total > 0 ? total : ''} licitações de ${sector.name.toLowerCase()}${modalidadeInfo ? ` via ${modalidadeInfo.name}` : ''} em ${ufName}. Dados ao vivo de PNCP, PCP e ComprasGov. Filtre por valor, modalidade e prazo. Teste grátis.`,
     alternates: { canonical: canonicalUrl },
     openGraph: {

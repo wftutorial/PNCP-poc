@@ -22,7 +22,7 @@ export async function generateMetadata({
   if (!c) return { title: 'Caso não encontrado | SmartLic' };
 
   return {
-    title: `${c.title} | SmartLic`,
+    title: `${c.title}`,
     description: c.description,
     keywords: c.keywords,
     alternates: { canonical: `${baseUrl}/casos/${c.slug}` },

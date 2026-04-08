@@ -5,7 +5,7 @@ import { getAllCases } from '@/lib/cases';
 const baseUrl = process.env.NEXT_PUBLIC_CANONICAL_URL || 'https://smartlic.tech';
 
 export const metadata: Metadata = {
-  title: 'Casos de Sucesso em Licitações — Empresas Reais, Números Reais | SmartLic',
+  title: 'Casos de Sucesso em Licitações — Empresas Reais, Números Reais',
   description:
     'Veja como empresas B2G identificaram milhões em contratos públicos usando análise de viabilidade inteligente. Dados reais de engenharia, saúde e infraestrutura.',
   keywords: [

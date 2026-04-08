@@ -4,7 +4,7 @@ import OrgaoSearchForm from './OrgaoSearchForm';
 import { LeadCapture } from '@/components/LeadCapture';
 
 export const metadata: Metadata = {
-  title: 'Órgãos Compradores — Licitações por Órgão Público | SmartLic',
+  title: 'Órgãos Compradores — Licitações por Órgão Público',
   description:
     'Consulte o perfil de qualquer órgão comprador público. Total de licitações, valores, modalidades e editais recentes. Dados do PNCP atualizados diariamente.',
   alternates: {

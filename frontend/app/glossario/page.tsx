@@ -6,7 +6,7 @@ import { GLOSSARY_TERMS, type GlossaryTerm } from '@/lib/glossary-terms';
 import { buildCanonical } from '@/lib/seo';
 
 export const metadata: Metadata = {
-  title: 'Glossário de Licitações: 50 Termos Essenciais | SmartLic',
+  title: 'Glossário de Licitações: 50 Termos Essenciais',
   description:
     'Glossário completo com 50 termos de licitações públicas explicados de forma prática. Adjudicação, pregão eletrônico, PNCP, SRP e mais. Referência essencial para empresas B2G.',
   alternates: {

@@ -86,7 +86,7 @@ export async function generateMetadata({
 
   if (!data) {
     return {
-      title: 'Digest Semanal | SmartLic',
+      title: 'Digest Semanal',
       robots: { index: false },
     };
   }
@@ -94,7 +94,7 @@ export async function generateMetadata({
   const description = `Digest da semana ${data.week}/${data.year}: ${data.total_bids} editais publicados no PNCP, totalizando ${formatBRL(data.total_value)}. Setor em destaque: ${data.top_sector}. Estado com mais publicações: ${data.top_uf}.`;
 
   return {
-    title: `${data.title} | SmartLic`,
+    title: `${data.title}`,
     description,
     authors: [{ name: getAuthorBySlug(DEFAULT_AUTHOR_SLUG)!.name }],
     alternates: { canonical: buildCanonical(`/blog/weekly/${slug}`) },

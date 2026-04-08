@@ -7,7 +7,7 @@ import LandingNavbar from '@/app/components/landing/LandingNavbar';
 import Footer from '@/app/components/Footer';
 
 export const metadata: Metadata = {
-  title: 'Alertas de Licitações Públicas — Todos os Setores e Estados | SmartLic',
+  title: 'Alertas de Licitações Públicas — Todos os Setores e Estados',
   description: 'Acompanhe licitações em tempo real por setor e estado. Feeds RSS disponíveis. Dados do PNCP atualizados a cada hora.',
   alternates: { canonical: buildCanonical('/alertas-publicos') },
   openGraph: {

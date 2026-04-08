@@ -71,7 +71,7 @@ export async function generateMetadata({
 
   if (!perfil) {
     return {
-      title: 'CNPJ não encontrado | SmartLic',
+      title: 'CNPJ não encontrado',
       description: 'O CNPJ informado não foi encontrado na base de dados.',
     };
   }
@@ -84,7 +84,7 @@ export async function generateMetadata({
   }).format(valor_total_24m);
 
   return {
-    title: `${empresa.razao_social} — Histórico de Contratos Públicos | SmartLic`,
+    title: `${empresa.razao_social} — Histórico de Contratos Públicos`,
     description: `${empresa.razao_social} tem ${total_contratos_24m} contratos com o governo nos últimos 24 meses. Total: ${valorFormatado}. Score B2G: ${score}.`,
     alternates: {
       canonical: `https://smartlic.tech/cnpj/${cnpj}`,

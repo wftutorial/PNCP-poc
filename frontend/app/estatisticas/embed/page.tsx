@@ -5,7 +5,7 @@ import EmbedPreviewClient from './EmbedPreviewClient';
 export const revalidate = 86400; // 24h ISR
 
 export const metadata: Metadata = {
-  title: 'Embed Badge de Estatísticas | SmartLic',
+  title: 'Embed Badge de Estatísticas',
   description:
     'Incorpore estatísticas de licitações públicas no seu site, blog ou reportagem. Widget HTML auto-contido com dados atualizados do PNCP.',
   alternates: { canonical: buildCanonical('/estatisticas/embed') },

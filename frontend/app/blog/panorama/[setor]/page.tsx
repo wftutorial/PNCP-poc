@@ -50,7 +50,7 @@ export async function generateMetadata({
   const canonicalUrl = `https://smartlic.tech/blog/panorama/${setor}`;
 
   return {
-    title: `Panorama de Licitações de ${sector.name} no Brasil — ${year} | SmartLic`,
+    title: `Panorama de Licitações de ${sector.name} no Brasil — ${year}`,
     description: `${total > 0 ? `${total} editais` : 'Editais'} de ${sector.name} publicados nos últimos 90 dias. Dados nacionais ao vivo: sazonalidade, ranking por UF, modalidades e tendência YoY.`,
     alternates: { canonical: canonicalUrl },
     openGraph: {

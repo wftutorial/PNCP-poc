@@ -7,7 +7,7 @@ import { buildCanonical, SITE_URL } from '@/lib/seo';
 import PerguntasFilter from './PerguntasFilter';
 
 export const metadata: Metadata = {
-  title: 'Perguntas Frequentes sobre Licitações Públicas | SmartLic',
+  title: 'Perguntas Frequentes sobre Licitações Públicas',
   description:
     'Respostas completas para 53 perguntas sobre licitações públicas: modalidades, prazos, habilitação, preços, setores e sistemas. Dados verificáveis do PNCP.',
   alternates: { canonical: buildCanonical('/perguntas') },

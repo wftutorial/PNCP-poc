@@ -8,7 +8,7 @@ import ComparadorClient from './ComparadorClient';
 export const revalidate = 86400;
 
 export const metadata: Metadata = {
-  title: 'Comparador de Editais — Compare Licitações Lado a Lado | SmartLic',
+  title: 'Comparador de Editais — Compare Licitações Lado a Lado',
   description:
     'Compare até 3 editais de licitação lado a lado gratuitamente. Veja modalidade, valor, prazo e localização de cada edital. Dados reais do PNCP atualizados diariamente.',
   alternates: {

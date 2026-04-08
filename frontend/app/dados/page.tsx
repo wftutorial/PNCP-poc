@@ -7,7 +7,7 @@ import DadosClient, { DadosData } from './DadosClient';
 export const revalidate = 21600;
 
 export const metadata: Metadata = {
-  title: 'Dados de Licitações Públicas no Brasil — Painel Interativo | SmartLic',
+  title: 'Dados de Licitações Públicas no Brasil — Painel Interativo',
   description:
     'Painel interativo com dados agregados de licitações públicas do PNCP: editais por setor, UF e modalidade. Atualizado a cada 6 horas. Download em CSV.',
   alternates: { canonical: buildCanonical('/dados') },

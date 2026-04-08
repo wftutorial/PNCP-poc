@@ -13,7 +13,7 @@ import { ALL_UFS, UF_NAMES } from '@/lib/programmatic';
  */
 
 export const metadata: Metadata = {
-  title: 'Licitações por Setor e Estado — Dados ao Vivo | SmartLic',
+  title: 'Licitações por Setor e Estado — Dados ao Vivo',
   description:
     'Explore licitações públicas por setor e estado. 15 setores × 27 UFs com dados ao vivo de PNCP, PCP e ComprasGov. Encontre oportunidades para sua empresa.',
   alternates: { canonical: 'https://smartlic.tech/blog/licitacoes' },

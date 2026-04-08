@@ -1556,6 +1556,39 @@ export const BLOG_ARTICLES: BlogArticleMeta[] = [
     ],
     authorSlug: 'tiago',
   },
+
+  // BOFU-04
+  {
+    slug: 'smartlic-vs-licitanet-comparacao',
+    title: 'SmartLic vs Licitanet: Qual Plataforma Escolher em 2026',
+    description:
+      'Comparação entre SmartLic e Licitanet: inteligência na triagem de editais vs plataforma de pregão eletrônico. Entenda o que cada uma faz, onde cada uma é superior e quando usar ambas.',
+    category: 'Guias',
+    tags: ['comparação', 'Licitanet', 'SmartLic', 'pregão eletrônico', '2026'],
+    publishDate: '2026-04-07',
+    readingTime: calculateReadingTime(3000),
+    wordCount: 3000,
+    keywords: [
+      'smartlic vs licitanet',
+      'licitanet ou smartlic',
+      'plataforma pregão eletrônico',
+      'licitanet plataforma licitação',
+      'comparar smartlic licitanet',
+    ],
+    relatedSlugs: [
+      'melhores-plataformas-licitacao-2026-ranking',
+      'smartlic-vs-effecti-comparacao-2026',
+      'smartlic-vs-planilha-excel-quando-automatizar',
+      'pregao-eletronico-guia-passo-a-passo',
+    ],
+    sources: [
+      'PNCP — Portal Nacional de Contratações Públicas (pncp.gov.br)',
+      'Lei 14.133/2021 — Nova Lei de Licitações',
+      'SmartLic datalake — classificação e triagem jan-mar 2026',
+      'Licitanet — funcionalidades conforme site oficial, abril/2026',
+    ],
+    authorSlug: 'tiago',
+  },
 ];
 
 export function getArticleBySlug(slug: string): BlogArticleMeta | undefined {

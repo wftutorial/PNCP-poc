@@ -16,17 +16,29 @@
 ## Executive Summary
 
 - **Total de debitos:** 61 (4 resolved/monitoring, 57 active)
-- **Criticos (P0):** 4 | **Altos (P1):** 12 | **Medios (P2):** 15 | **Baixos (P3):** 12 | **Backlog (P4):** 14 | **Resolved (monitoring):** 4
+- **Criticos (P0):** 2 | **Altos (P1):** 12 | **Medios (P2):** 17 | **Baixos (P3):** 12 | **Backlog (P4):** 14 | **Resolved (monitoring):** 4
 - **Esforco total estimado (Phases 1-4):** 100-130h
 - **Esforco backlog (Phase 5):** 150-250h
-- **Critical path:** ~9h (TD-033 + TD-019 + retention crons + backup + RPC audit)
+- **Critical path:** ~7h (TD-019 + retention crons + RPC audit + timeout fix)
+
+### Dados Reais do Banco (medidos 2026-04-08 via SQL Editor)
+
+| Metrica | Valor |
+|---------|-------|
+| DB total | **146 MB** (29% do limite FREE 500MB) |
+| pncp_raw_bids total | **107 MB** |
+| Total rows | 37.087 |
+| Active rows (is_active=true) | 37.087 |
+| Inactive rows (is_active=false) | **0** |
+
+**Impacto:** TD-033 (Supabase FREE tier) rebaixado de P0 para P2 — headroom de ~350MB. TD-020 (soft-delete bloat) rebaixado de P0 para P2 — zero rows inativas confirmam que o pattern e vestigial.
 
 ### QA Blocking Conditions -- Status
 
 | # | Condition | Status |
 |---|-----------|--------|
 | 1 | Fix TD-007/008/009 phantom file references | FIXED -- replaced with actual oversized files: `quota.py` (1,660 LOC), `consolidation.py` (1,394 LOC), `llm_arbiter.py` (1,362 LOC) |
-| 2 | Upgrade TD-033 to P0 | DONE -- Supabase FREE tier is now P0 |
+| 2 | Upgrade TD-033 to P0 | REVERTED to P2 — DB real = 146MB (29% do FREE 500MB). Estimativa de ~3GB era incorreta. |
 | 3 | Add TD-056 to TD-061 from QA review | DONE -- all 6 items incorporated |
 | 4 | Incorporate all severity recalibrations | DONE -- see inventory tables below |
 
@@ -69,7 +81,7 @@
 | ID | Debito | Severidade | Horas | Prioridade | Status |
 |----|--------|------------|-------|------------|--------|
 | TD-019 | Missing composite index `pncp_raw_bids (uf, modalidade_id, data_publicacao DESC) WHERE is_active=true` -- 50-70% query speedup | High | 1 | P0 | Open |
-| TD-020 | pncp_raw_bids soft-delete bloat -- `is_active=false` rows never cleaned | High | 3 | P0 | Open -- investigate if any rows exist with is_active=false |
+| TD-020 | pncp_raw_bids soft-delete bloat -- `is_active=false` rows never cleaned | Low | 1 | P2 | **DOWNGRADED** — 0 inactive rows confirmado (2026-04-08). Pattern vestigial; investigar remocao da coluna. |
 | TD-021 | profiles.plan_type CHECK vs FK -- dual definition, no referential integrity | Medium | 4 | P1 | Open (downgraded from High per @data-engineer) |
 | TD-022 | pncp_raw_bids.content_hash COMMENT says MD5 but code uses SHA-256 -- stale documentation only | Low | 0.5 | P3 | Open (downgraded from High -- DRAFT was factually wrong) |
 | TD-023 | Missing covering index user_subscriptions (user_id, created_at DESC) WHERE is_active | Medium | 1 | P2 | Open |
@@ -82,7 +94,7 @@
 | TD-030 | RLS policy docs incompletas -- shared_analyses + pncp_raw_bids gaps | Low | 2 | P2 | Open (downgraded -- migration 20260404 addressed most gaps) |
 | TD-031 | Organizations cascade RESTRICT orphan risk | Low | 0.5 | P3 | Open -- zero orgs in prod |
 | TD-032 | conversations/messages sem soft-delete -- LGPD compliance future | Low | 4 | P3 | Open |
-| TD-033 | **Supabase FREE tier 500MB vs ~3GB datalake -- imminent storage exhaustion** | **High / P0** | 0.5 | **P0** | **URGENT** (upgraded from Low per @data-engineer + QA) |
+| TD-033 | Supabase FREE tier 500MB — DB real = 146MB (29%). Monitorar; upgrade quando >350MB | Medium | 0.5 | P2 | **DOWNGRADED** — dados reais refutam urgencia (medido 2026-04-08) |
 | TD-034 | Backup: daily only, 1-day retention, no PITR, no independent backup | Medium | 2 | P1 | Open (upgraded from Low per @data-engineer) |
 | TD-NEW-001 | health_checks table no retention despite COMMENT saying 30-day -- ~43K rows/month growth | Low | 0.5 | P1 | New (@data-engineer) -- bundle with TD-025/026/027 |
 | TD-NEW-002 | purge_old_bids() does not clean is_active=false rows -- may be vestigial pattern | Medium | 1 | P1 | New (@data-engineer) -- investigate first |
@@ -133,12 +145,10 @@ Sorted by priority, then by estimated hours (quick wins first within each tier).
 
 | Prio | ID | Debito | Area | Horas | Notas |
 |------|----|--------|------|-------|-------|
-| **P0** | TD-033 | Supabase FREE tier storage exhaustion | DB/Infra | 0.5 | URGENT -- may already exceed 500MB. Budget decision. |
 | **P0** | TD-019 | Missing composite index pncp_raw_bids | DB | 1 | CREATE INDEX CONCURRENTLY -- 50-70% query speedup |
-| **P0** | TD-020 | pncp_raw_bids soft-delete bloat | DB | 3 | Investigate is_active=false existence first |
 | **P0** | TD-025/026/027 + TD-NEW-001 | 4 retention policies missing (stripe_webhook, alert_sent, trial_email, health_checks) | DB | 2 | Bundle in 1 migration with 4 cron.schedule() calls |
 | **P1** | TD-052 | FeedbackButtons touch target 28px -> 44px | Frontend | 1.5 | Quick win, a11y compliance, every result card |
-| **P1** | TD-034 | Weekly pg_dump to S3 + PITR via Pro tier | DB/Infra | 2 | Requires TD-033 first |
+| **P1** | TD-034 | Weekly pg_dump to S3 + PITR (quando upgrade Pro) | DB/Infra | 2 | Independente; PITR requer Pro tier |
 | **P1** | TD-029 | Alert cron sequential -> asyncio.gather(10) | Backend | 2 | Independent, backend-only |
 | **P1** | TD-061 | Ingestion failure alerting (Slack webhook) | Infra | 3 | Independent, no code dependencies |
 | **P1** | TD-021 | plan_type CHECK -> FK migration (NOT VALID + VALIDATE) | DB | 4 | Off-peak execution, verify no orphan values first |
@@ -195,14 +205,13 @@ Sorted by priority, then by estimated hours (quick wins first within each tier).
 
 ## Plano de Resolucao (5 Fases)
 
-### Phase 1: Quick Wins (Week 1-2) -- ~8h
+### Phase 1: Quick Wins (Week 1-2) -- ~9.5h
 
-**Objective:** Eliminate immediate operational risks and ship low-effort/high-value fixes.
+**Objective:** Ship high-impact low-effort fixes. Performance + security + a11y.
 
-**Track A -- DB/Infra (no dependencies):**
+**Track A -- DB (no dependencies):**
 | Item | Hours | Action |
 |------|-------|--------|
-| TD-033 | 0.5 | Upgrade Supabase to Pro tier. Run `pg_database_size()` before/after. |
 | TD-019 | 1 | `CREATE INDEX CONCURRENTLY idx_pncp_raw_bids_dashboard_query ON pncp_raw_bids (uf, modalidade_id, data_publicacao DESC) WHERE is_active = true` |
 | TD-025/026/027 + TD-NEW-001 | 2 | Single migration with 4 `cron.schedule()` retention jobs (90d webhooks, 90d alerts, 1yr trial emails, 30d health_checks) |
 | TD-022 | 0.5 | Update `COMMENT ON COLUMN content_hash` from MD5 to SHA-256 |
@@ -218,7 +227,7 @@ Sorted by priority, then by estimated hours (quick wins first within each tier).
 |------|-------|--------|
 | TD-059 | 4 | Audit all Supabase RPCs for auth.uid() validation. Document findings. |
 
-**Subtotal: ~10h across 3 parallel tracks. Elapsed: ~4h if all tracks run in parallel.**
+**Subtotal: ~9.5h across 3 parallel tracks. Elapsed: ~4h if all tracks run in parallel.**
 
 ### Phase 2: Foundation (Weeks 3-6) -- ~16h
 
@@ -276,9 +285,9 @@ From @qa Phase 7 review -- cross-area risks where debts compound:
 
 | # | Risco | Areas | Severidade | Mitigacao |
 |---|-------|-------|------------|-----------|
-| 1 | **DB storage exhaustion cascade:** TD-033 + TD-020 + TD-025/026/027 = storage fills, ingestion fails, search returns stale/empty results | DB, Backend, Frontend | Critical | TD-033 (Pro tier) FIRST, then retention crons. **Execute this week.** |
+| 1 | **DB storage growth (monitorar):** TD-025/026/027 retention policies prevent unbounded table growth. DB atual = 146MB (29% do FREE 500MB). Nao e urgente mas sem retention crons, tabelas auxiliares crescem indefinidamente. | DB | Medium | Retention crons (TD-025/026/027) resolvem. Monitorar `pg_database_size()` mensalmente. |
 | 2 | **Silent request death:** TD-015 (Railway 120s kills) + TD-011 (single worker blocks) = long searches die with no Sentry trace, users see generic 504 | Backend, Infra | High | Align timeouts (TD-015), add timeout detection middleware |
-| 3 | **Data loss without recovery:** TD-034 (no PITR) + TD-033 (FREE tier) = if Supabase incident, no independent recovery path | DB, Infra | High | Pro upgrade enables PITR. Add pg_dump to S3. |
+| 3 | **Data loss without recovery:** TD-034 (no PITR, no independent backup) = if Supabase incident, no recovery path | DB, Infra | Medium-High | Add pg_dump to S3 (independente de tier). PITR requer Pro quando necessario. |
 | 4 | **Search page maintainability cliff:** TD-035 (607 LOC) + TD-050 (852 LOC) + TD-051 (3,775 total) = any search feature change requires understanding 3,775 lines of interconnected hooks | Frontend | Medium | Planned refactoring order: TD-050 first, then TD-035 |
 | 5 | **Security audit readiness:** TD-005 (service_role) + TD-030 (incomplete RLS docs) + TD-059 (no RPC audit) = cannot pass security audit | Backend, DB | Medium | RPC audit (TD-059) first, document (TD-030), then migrate tokens (TD-005) |
 | 6 | **Mobile UX degradation:** TD-046 (SSE jank) + TD-052 (touch targets) + TD-047/055 (BottomNav padding) = mobile experience materially worse than desktop | Frontend | Medium | Bundle mobile fixes into single sprint (4-6h total) |
@@ -294,7 +303,7 @@ From @qa Phase 7 review -- cross-area risks where debts compound:
 | `search_datalake` RPC latency (p50) | Needs baseline | 50-70% reduction after TD-019 | `EXPLAIN ANALYZE` before/after |
 | PNCP API availability | 94% | >= 95% | Prometheus `smartlic_pncp_health_*` |
 | Cache hit rate | 65-75% | >= 75% sustained | Prometheus `smartlic_cache_hit_rate` |
-| DB size | ~500MB (estimate) | Monitored, < 80% of tier limit | `pg_database_size()` weekly |
+| DB size | 146 MB (29% FREE) | Monitored, < 80% of tier limit (400MB) | `pg_database_size()` mensal |
 | Search page hooks total lines | 3,775 | < 2,500 after refactoring | `wc -l frontend/app/buscar/hooks/*.ts` |
 
 ### Coverage Thresholds
@@ -323,7 +332,6 @@ From @qa Phase 7 review -- cross-area risks where debts compound:
 
 ```
 PHASE 1 (Week 1-2, parallel tracks):
-  TD-033 Supabase Pro ────────> unblocks TD-034 (PITR + backup)
   TD-019 composite index ────> no dependencies, ship immediately
   TD-025/026/027 + NEW-001 ──> retention crons, bundle in 1 migration
   TD-022 COMMENT fix ────────> ship with retention migration
@@ -331,7 +339,7 @@ PHASE 1 (Week 1-2, parallel tracks):
   TD-059 RPC audit ─────────> informs TD-005 scope
 
 PHASE 2 (Weeks 3-6):
-  TD-034 pg_dump to S3 ─────> requires TD-033
+  TD-034 pg_dump to S3 ─────> independente (PITR requer Pro, mas pg_dump nao)
   TD-020 + NEW-002 investigate > must precede TD-016 (squash)
   TD-021 plan_type FK ──────> must precede TD-016 (squash)
   TD-029 alert cron async ──> independent
@@ -359,7 +367,7 @@ PHASE 5 (Weeks 13-20+):
 
 | Track A (DB/Infra) | Track B (Frontend) | Track C (Security/CI) |
 |--------------------|--------------------|-----------------------|
-| TD-033 Pro upgrade | TD-052 touch targets | TD-059 RPC audit |
+| TD-019 composite index | TD-052 touch targets | TD-059 RPC audit |
 | TD-019 composite index | TD-050 hook split | TD-058 dep scanning |
 | TD-025/026/027 retention | TD-035 hook split | TD-061 alerting |
 | TD-034 pg_dump backup | TD-037 saved presets | TD-060 secret scanning |

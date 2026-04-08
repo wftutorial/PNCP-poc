@@ -76,28 +76,25 @@ DECLARE
     v_updated   int := 0;
     v_unchanged int := 0;
     rec         jsonb;
+    v_existing  int;
 BEGIN
     FOR rec IN SELECT * FROM jsonb_array_elements(p_records)
     LOOP
+        SELECT COUNT(1) INTO v_existing
+        FROM pncp_supplier_contracts
+        WHERE content_hash = rec->>'content_hash';
+
         INSERT INTO pncp_supplier_contracts (
             numero_controle_pncp, ni_fornecedor, nome_fornecedor,
             orgao_cnpj, orgao_nome, uf, municipio, esfera,
             valor_global, data_assinatura, objeto_contrato,
             content_hash, is_active
         ) VALUES (
-            rec->>'numero_controle_pncp',
-            rec->>'ni_fornecedor',
-            rec->>'nome_fornecedor',
-            rec->>'orgao_cnpj',
-            rec->>'orgao_nome',
-            rec->>'uf',
-            rec->>'municipio',
-            rec->>'esfera',
+            rec->>'numero_controle_pncp', rec->>'ni_fornecedor', rec->>'nome_fornecedor',
+            rec->>'orgao_cnpj', rec->>'orgao_nome', rec->>'uf', rec->>'municipio', rec->>'esfera',
             NULLIF(rec->>'valor_global', '')::NUMERIC,
             NULLIF(rec->>'data_assinatura', '')::DATE,
-            rec->>'objeto_contrato',
-            rec->>'content_hash',
-            TRUE
+            rec->>'objeto_contrato', rec->>'content_hash', TRUE
         )
         ON CONFLICT (content_hash) DO UPDATE SET
             nome_fornecedor = EXCLUDED.nome_fornecedor,
@@ -111,14 +108,12 @@ BEGIN
             OR pncp_supplier_contracts.valor_global IS DISTINCT FROM EXCLUDED.valor_global
             OR pncp_supplier_contracts.objeto_contrato IS DISTINCT FROM EXCLUDED.objeto_contrato;
 
-        IF FOUND THEN
-            IF xmax::text::bigint = 0 THEN
-                v_inserted := v_inserted + 1;
-            ELSE
-                v_updated := v_updated + 1;
-            END IF;
-        ELSE
+        IF NOT FOUND THEN
             v_unchanged := v_unchanged + 1;
+        ELSIF v_existing = 0 THEN
+            v_inserted := v_inserted + 1;
+        ELSE
+            v_updated := v_updated + 1;
         END IF;
     END LOOP;
 

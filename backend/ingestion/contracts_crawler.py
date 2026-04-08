@@ -175,7 +175,13 @@ def _chunk(lst: list, size: int):
 
 
 async def _upsert_batch(rows: list[dict]) -> dict:
-    """Upsert a batch of normalized contract rows via Supabase RPC."""
+    """Upsert a batch of normalized contract rows via Supabase RPC.
+
+    Pass the list directly (not json.dumps) — supabase-py serialises RPC params
+    as JSON automatically. Passing a JSON string would send it as a scalar,
+    causing 'cannot extract elements from a scalar' (code 22023).
+    We do a json round-trip to coerce dates/Decimals to strings first.
+    """
     totals = {"inserted": 0, "updated": 0, "unchanged": 0, "total": 0, "batches": 0}
     if not rows:
         return totals
@@ -183,7 +189,8 @@ async def _upsert_batch(rows: list[dict]) -> dict:
     sb = get_supabase()
     for chunk in _chunk(rows, INGESTION_UPSERT_BATCH_SIZE):
         try:
-            payload = json.dumps(chunk, default=str)
+            # json round-trip coerces non-serialisable types; returns list[dict]
+            payload = json.loads(json.dumps(chunk, default=str, ensure_ascii=False))
             result = sb.rpc("upsert_pncp_supplier_contracts", {"p_records": payload}).execute()
             if result.data:
                 counts = result.data[0] if isinstance(result.data, list) else result.data
@@ -218,7 +225,7 @@ async def crawl_contracts_window(
         Stats dict: pages_fetched, records_raw, records_normalized, upserted totals.
     """
     stats: dict[str, Any] = {
-        "window": f"{data_ini}→{data_fim}",
+        "window": f"{data_ini}->{data_fim}",
         "pages_fetched": 0,
         "records_raw": 0,
         "records_normalized": 0,
@@ -228,7 +235,7 @@ async def crawl_contracts_window(
         "errors": 0,
     }
 
-    logger.info("[ContractsCrawler] Window %s→%s starting", data_ini, data_fim)
+    logger.info("[ContractsCrawler] Window %s->%s starting", data_ini, data_fim)
     t0 = time.monotonic()
 
     async with httpx.AsyncClient(headers={"Accept": "application/json"}) as client:
@@ -239,7 +246,7 @@ async def crawl_contracts_window(
             if not items:
                 if page == 1:
                     logger.info(
-                        "[ContractsCrawler] Window %s→%s: no records (total=%d)",
+                        "[ContractsCrawler] Window %s->%s: no records (total=%d)",
                         data_ini, data_fim, total_records,
                     )
                 break
@@ -265,7 +272,7 @@ async def crawl_contracts_window(
 
             if page == 1:
                 logger.info(
-                    "[ContractsCrawler] Window %s→%s: %d total records, %d pages",
+                    "[ContractsCrawler] Window %s->%s: %d total records, %d pages",
                     data_ini, data_fim, total_records, total_pages,
                 )
 
@@ -277,7 +284,7 @@ async def crawl_contracts_window(
 
     elapsed = round(time.monotonic() - t0, 1)
     logger.info(
-        "[ContractsCrawler] Window %s→%s done in %.1fs — "
+        "[ContractsCrawler] Window %s->%s done in %.1fs — "
         "pages=%d raw=%d norm=%d ins=%d upd=%d",
         data_ini, data_fim, elapsed,
         stats["pages_fetched"], stats["records_raw"], stats["records_normalized"],

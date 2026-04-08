@@ -16,11 +16,11 @@
 
 ## Acceptance Criteria
 
-- [ ] AC1: GitHub Actions workflow com `pip-audit` + `npm audit` — 0 high/critical = gate
-- [ ] AC2: jest-axe rodando em 10 componentes criticos (SearchResults, ResultCard, PricingCard, LoginForm, etc.)
-- [ ] AC3: Chromatic configurado com 10 screenshots de referencia
-- [ ] AC4: PRs bloqueados se dep scan ou a11y falhar
-- [ ] AC5: Visual diff review disponivel em PRs
+- [x] AC1: GitHub Actions workflow com `pip-audit` + `npm audit` — 0 high/critical = gate
+- [x] AC2: jest-axe rodando em 10 componentes criticos (SearchResults, ResultCard, PricingCard, LoginForm, etc.)
+- [x] AC3: Chromatic configurado com 10 screenshots de referencia
+- [x] AC4: PRs bloqueados se dep scan ou a11y falhar
+- [x] AC5: Visual diff review disponivel em PRs
 
 ## Notas
 

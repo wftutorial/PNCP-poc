@@ -6,34 +6,91 @@ codes to SmartLic sector IDs used by the search pipeline.
 """
 
 
-# Top 10 CNAE→sector mappings (AC6)
+# CNAE→sector mappings
 # Format: CNAE 4-digit prefix → sector_id
 CNAE_TO_SETOR: dict[str, str] = {
+    # Engenharia / Construção Civil
+    "4120": "engenharia",    # Construção de edifícios
+    "4211": "engenharia",    # Construção de rodovias e ferrovias
+    "4212": "engenharia",    # Construção de obras de arte especiais
+    "4213": "engenharia",    # Obras de urbanização - ruas, praças e calçadas
+    "4221": "engenharia",    # Construção de redes de abastecimento de água
+    "4222": "engenharia",    # Construção de redes de abastecimento de água e saneamento
+    "4223": "engenharia",    # Construção de redes de transportes por dutos
+    "4291": "engenharia",    # Obras portuárias, marítimas e fluviais
+    "4292": "engenharia",    # Montagem de instalações industriais
+    "4299": "engenharia",    # Outras obras de engenharia civil não especificadas
+    "4311": "engenharia",    # Demolição e preparação de canteiros de obras
+    "4312": "engenharia",    # Perfurações e sondagens
+    "4313": "engenharia",    # Obras de terraplenagem
+    "4319": "engenharia",    # Serviços de preparação do terreno NEC
+    "4321": "engenharia",    # Instalações elétricas
+    "4322": "engenharia",    # Instalações hidráulicas, ventilação e refrigeração
+    "4329": "engenharia",    # Outras instalações em construções NEC
+    "4391": "engenharia",    # Obras de fundações
+    "4399": "engenharia",    # Serviços especializados para construção NEC
+    "7111": "engenharia",    # Serviços de arquitetura
+    "7112": "engenharia",    # Serviços de engenharia
+    "7119": "engenharia",    # Atividades técnicas relacionadas à engenharia e arquitetura
     # Vestuário / Uniformes
     "4781": "vestuario",     # Comércio varejista de artigos de vestuário e acessórios
     "1412": "vestuario",     # Confecção de peças de vestuário, exceto roupas íntimas
+    "1413": "vestuario",     # Confecção de roupas íntimas
+    "1421": "vestuario",     # Fabricação de meias
+    "1422": "vestuario",     # Fabricação de artigos do vestuário, produzidos em malharias
     # Facilities / Limpeza
     "8121": "servicos_prediais",  # Limpeza em prédios e em domicílios
-    "8011": "vigilancia",         # Atividades de vigilância e segurança privada
-    # Equipamentos
-    "2710": "equipamentos",  # Fabricação de geradores, transformadores, motores elétricos
-    "3250": "equipamentos",  # Fabricação de instrumentos e materiais para uso médico
-    # Alimentos
+    "8122": "servicos_prediais",  # Imunização e controle de pragas urbanas
+    "8129": "servicos_prediais",  # Limpeza e conservação de logradouros e vias públicas
+    "8130": "servicos_prediais",  # Atividades paisagísticas
+    # Vigilância / Segurança
+    "8011": "vigilancia",    # Atividades de vigilância e segurança privada
+    "8012": "vigilancia",    # Atividades de transporte de valores
+    # Saúde / Hospitalar
+    "3250": "saude",         # Fabricação de instrumentos e materiais para uso médico
+    "4644": "saude",         # Comércio atacadista de instrumentos e materiais para uso médico
+    "4645": "saude",         # Comércio atacadista de instrumentos e materiais odontológicos
+    "8610": "saude",         # Atividades de atendimento hospitalar
+    "8621": "saude",         # Serviços ambulatoriais providos por médicos e odontólogos
+    "8630": "saude",         # Atividades de atenção ambulatorial executadas por outros profissionais da saúde
+    # Alimentação / Merenda
     "1011": "alimentos",     # Abate de reses, exceto suínos
     "1091": "alimentos",     # Fabricação de produtos de panificação e confeitaria
+    "4639": "alimentos",     # Comércio atacadista de produtos alimentícios em geral
+    "4711": "alimentos",     # Comércio varejista de produtos alimentícios em geral
     # TI / Informática
     "6201": "informatica",   # Desenvolvimento de programas de computador sob encomenda
     "6202": "informatica",   # Desenvolvimento e licenciamento de programas de computador
+    "6209": "informatica",   # Suporte técnico, manutenção e outros serviços em TI
+    "6311": "informatica",   # Tratamento de dados, provedores de serviços de aplicação
+    "6319": "informatica",   # Portais, provedores de conteúdo e outros serviços de informação
+    # Equipamentos / Eletroeletrônicos
+    "2710": "equipamentos",  # Fabricação de geradores, transformadores, motores elétricos
+    "2759": "equipamentos",  # Fabricação de outros aparelhos eletrodomésticos NEC
+    "2861": "equipamentos",  # Fabricação de ferramentas
+    # Transporte / Logística
+    "4921": "transporte",    # Transporte rodoviário coletivo de passageiros, com itinerário fixo, municipal
+    "4922": "transporte",    # Transporte rodoviário coletivo de passageiros, intermunicipal
+    "4924": "transporte",    # Transporte escolar
+    "4929": "transporte",    # Outros transportes rodoviários de passageiros NEC
+    "4930": "transporte",    # Transporte rodoviário de carga
+    # Administração Pública (compradores) — mapear para engenharia como setor mais frequente
+    "8411": "engenharia",    # Administração pública em geral
+    "8412": "engenharia",    # Regulação das atividades de saúde, educação, serviços culturais
+    "8413": "engenharia",    # Regulação das atividades econômicas
 }
 
 # Reverse mapping: sector descriptions for user feedback
 SETOR_NAMES: dict[str, str] = {
+    "engenharia": "Engenharia, Projetos e Obras",
     "vestuario": "Vestuário e Uniformes",
     "servicos_prediais": "Serviços Prediais e Facilities",
     "vigilancia": "Vigilância e Segurança",
     "equipamentos": "Equipamentos",
     "alimentos": "Alimentos e Merenda",
-    "informatica": "Hardware e Equipamentos de TI",
+    "informatica": "TI e Sistemas",
+    "saude": "Saúde e Hospitalar",
+    "transporte": "Transporte e Logística",
 }
 
 
@@ -65,9 +122,9 @@ def map_cnae_to_setor(cnae: str) -> str:
                 break
 
     if not prefix or len(prefix) < 4:
-        return "vestuario"  # Default fallback
+        return "geral"  # Default fallback for unknown/unparseable CNAE
 
-    return CNAE_TO_SETOR.get(prefix, "vestuario")
+    return CNAE_TO_SETOR.get(prefix, "geral")
 
 
 def get_setor_name(setor_id: str) -> str:

@@ -25,6 +25,23 @@ _sitemap_cache: dict[str, tuple[dict, float]] = {}
 
 _MAX_CNPJS = 5000
 
+# Seed list: CNPJs de empresas fornecedoras (B2G suppliers) com relatórios intel gerados.
+# Estes aparecem PRIMEIRO no sitemap (prioridade sobre compradores/órgãos)
+# para garantir indexação de fornecedores com conteúdo rico de contratos.
+_SEED_SUPPLIER_CNPJS: list[str] = [
+    "01721078000168",  # LCM Construções
+    "07186297000170",  # CRV Construtora Rezende & Alvarenga
+    "09225035000101",  # GJS Construções
+    "18742098000118",  # Trena Terraplenagem
+    "24515063000149",  # Extra Empreiteira
+    "26420889000150",  # Gamarra Construtora
+    "27735305000106",  # Infrainga Engenharia
+    "33256335000124",  # Distriminas
+    "39336452000184",  # Construsol Sobralense
+    "42192677000119",  # LCA Infraestrutura
+    "47673948000171",  # Borges Gomes
+]
+
 
 class SitemapCnpjsResponse(BaseModel):
     cnpjs: list[str]
@@ -61,6 +78,23 @@ async def sitemap_cnpjs():
     return SitemapCnpjsResponse(**data)
 
 
+def _merge_with_seed(buyer_cnpjs: list[str]) -> list[str]:
+    """Merge seed supplier CNPJs (priority) with buyer CNPJs, dedup, cap at _MAX_CNPJS."""
+    seen: set[str] = set()
+    result: list[str] = []
+    # Seed suppliers first — they have richer contract content
+    for cnpj in _SEED_SUPPLIER_CNPJS:
+        if cnpj not in seen:
+            seen.add(cnpj)
+            result.append(cnpj)
+    # Then buyer CNPJs (orgaos)
+    for cnpj in buyer_cnpjs:
+        if cnpj not in seen:
+            seen.add(cnpj)
+            result.append(cnpj)
+    return result[:_MAX_CNPJS]
+
+
 async def _fetch_top_cnpjs() -> dict:
     """Query pncp_raw_bids for distinct orgao_cnpj with ≥1 active bid.
 
@@ -79,12 +113,16 @@ async def _fetch_top_cnpjs() -> dict:
             if resp.data is not None:
                 # resp.data is a JSON array of CNPJ strings
                 raw = resp.data if isinstance(resp.data, list) else []
-                cnpj_list = [
+                buyer_list = [
                     c for c in raw
                     if c and isinstance(c, str) and len(c) >= 11
-                ][:_MAX_CNPJS]
+                ]
+                cnpj_list = _merge_with_seed(buyer_list)
                 logger.info(
-                    "sitemap_cnpjs (JSON RPC): %d CNPJs returned", len(cnpj_list)
+                    "sitemap_cnpjs (JSON RPC): %d buyers + %d seed suppliers = %d total",
+                    len(buyer_list),
+                    len(_SEED_SUPPLIER_CNPJS),
+                    len(cnpj_list),
                 )
                 return {
                     "cnpjs": cnpj_list,
@@ -121,10 +159,11 @@ async def _fetch_top_cnpjs() -> dict:
                 break
             offset += page_size
 
-        cnpj_list = [
+        buyer_list = [
             cnpj
             for cnpj, _ in sorted(counts.items(), key=lambda x: x[1], reverse=True)
-        ][:_MAX_CNPJS]
+        ]
+        cnpj_list = _merge_with_seed(buyer_list)
 
         logger.info(
             "sitemap_cnpjs (paginated): %d CNPJs from %d distinct, %d pages",

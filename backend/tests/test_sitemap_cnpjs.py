@@ -5,6 +5,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+# Patch seed to empty for tests that focus on buyer-only logic
+_NO_SEED = patch("routes.sitemap_cnpjs._SEED_SUPPLIER_CNPJS", [])
+
 
 @pytest.fixture(autouse=True)
 def _clear_cache():
@@ -23,20 +26,31 @@ def client():
 
 
 def _mock_supabase_with_data(rows: list[dict]):
-    """Build a mock get_supabase that returns given rows."""
+    """Build a mock that forces the paginated fallback path (RPC raises exception)."""
     mock_sb = MagicMock()
+    # Make RPC raise so code falls through to paginated table query
+    mock_sb.rpc.side_effect = Exception("rpc not available in test")
     mock_resp = MagicMock()
     mock_resp.data = rows
-    mock_sb.table.return_value.select.return_value.eq.return_value.not_.is_.return_value.neq.return_value.limit.return_value.execute.return_value = mock_resp
+    (
+        mock_sb.table.return_value
+        .select.return_value
+        .eq.return_value
+        .not_.is_.return_value
+        .neq.return_value
+        .range.return_value
+        .execute.return_value
+    ) = mock_resp
     return mock_sb
 
 
 class TestSitemapCnpjs:
     """Tests for /v1/sitemap/cnpjs."""
 
+    @_NO_SEED
     @patch("supabase_client.get_supabase")
-    def test_returns_cnpjs_with_min_bids(self, mock_get_sb, client):
-        """Only CNPJs with ≥3 bids are returned."""
+    def test_returns_cnpjs_sorted_by_bid_count(self, mock_get_sb, client):
+        """Buyer CNPJs returned sorted by bid count descending."""
         rows = [
             {"orgao_cnpj": "11111111000100"},  # 1 bid
             {"orgao_cnpj": "22222222000200"},  # 3 bids
@@ -53,15 +67,16 @@ class TestSitemapCnpjs:
         resp = client.get("/v1/sitemap/cnpjs")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["total"] == 2
-        # Sorted by count desc — 33... (5) before 22... (3)
+        assert data["total"] == 3
+        # Sorted by count desc — 33... (5) before 22... (3) before 11... (1)
         assert data["cnpjs"][0] == "33333333000300"
         assert data["cnpjs"][1] == "22222222000200"
-        assert "11111111000100" not in data["cnpjs"]
+        assert data["cnpjs"][2] == "11111111000100"
 
+    @_NO_SEED
     @patch("supabase_client.get_supabase")
-    def test_empty_datalake(self, mock_get_sb, client):
-        """Returns empty list when datalake has no data."""
+    def test_empty_datalake_without_seed(self, mock_get_sb, client):
+        """Returns empty list when datalake has no data and seed is empty."""
         mock_get_sb.return_value = _mock_supabase_with_data([])
 
         resp = client.get("/v1/sitemap/cnpjs")
@@ -70,6 +85,34 @@ class TestSitemapCnpjs:
         assert data["cnpjs"] == []
         assert data["total"] == 0
 
+    @patch("supabase_client.get_supabase")
+    def test_seed_cnpjs_always_included(self, mock_get_sb, client):
+        """Seed supplier CNPJs appear in result even when datalake is empty."""
+        mock_get_sb.return_value = _mock_supabase_with_data([])
+
+        resp = client.get("/v1/sitemap/cnpjs")
+        assert resp.status_code == 200
+        data = resp.json()
+        from routes.sitemap_cnpjs import _SEED_SUPPLIER_CNPJS
+        for cnpj in _SEED_SUPPLIER_CNPJS:
+            assert cnpj in data["cnpjs"], f"Seed CNPJ {cnpj} missing from sitemap"
+        assert data["total"] == len(_SEED_SUPPLIER_CNPJS)
+
+    @patch("supabase_client.get_supabase")
+    def test_seed_cnpjs_appear_first(self, mock_get_sb, client):
+        """Seed supplier CNPJs appear before buyer CNPJs in sitemap."""
+        rows = [{"orgao_cnpj": "99999999000999"}] * 3
+        mock_get_sb.return_value = _mock_supabase_with_data(rows)
+
+        resp = client.get("/v1/sitemap/cnpjs")
+        data = resp.json()
+        from routes.sitemap_cnpjs import _SEED_SUPPLIER_CNPJS
+        # First N entries should be the seed suppliers
+        assert data["cnpjs"][:len(_SEED_SUPPLIER_CNPJS)] == _SEED_SUPPLIER_CNPJS
+        # Buyer appears after seeds
+        assert "99999999000999" in data["cnpjs"]
+
+    @_NO_SEED
     @patch("supabase_client.get_supabase")
     def test_filters_invalid_cnpjs(self, mock_get_sb, client):
         """Skips null, empty, and too-short CNPJ values."""

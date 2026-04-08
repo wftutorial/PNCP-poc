@@ -14,10 +14,10 @@
 
 ## Acceptance Criteria
 
-- [ ] AC1: Lista completa de RPCs user-scoped com status (protegida/exposta)
-- [ ] AC2: Todas as RPCs sem auth.uid() corrigidas ou documentadas como intencionais
-- [ ] AC3: Documento de findings salvo em `docs/reviews/rpc-audit-YYYY-MM-DD.md`
-- [ ] AC4: Define escopo de TD-005 (per-user Supabase tokens)
+- [x] AC1: Lista completa de RPCs user-scoped com status (protegida/exposta)
+- [x] AC2: Todas as RPCs sem auth.uid() corrigidas ou documentadas como intencionais
+- [x] AC3: Documento de findings salvo em `docs/reviews/rpc-audit-YYYY-MM-DD.md`
+- [x] AC4: Define escopo de TD-005 (per-user Supabase tokens)
 
 ## Contexto
 

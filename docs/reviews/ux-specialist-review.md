@@ -1,376 +1,300 @@
-# UX Specialist Review — SmartLic
+# UX Specialist Review
 
 **Reviewer:** @ux-design-expert (Uma)
-**Date:** 2026-03-31
-**DRAFT Reviewed:** docs/prd/technical-debt-DRAFT.md (Section 3: Frontend/UX Debts, Section 7: Questions)
-**Frontend Spec Reference:** docs/frontend/frontend-spec.md (Phase 3)
+**Date:** 2026-04-08
+**Phase:** Brownfield Discovery Phase 6
+
+**DRAFT Reviewed:** `docs/prd/technical-debt-DRAFT.md` (Section 3: Frontend/UX Debts, Section 6: Questions for @ux-expert)
+**Frontend Spec Reference:** `docs/frontend/frontend-spec.md` (Phase 3)
+**Codebase Validation:** Direct inspection of `frontend/app/buscar/`, `frontend/components/`, `frontend/app/globals.css`, `frontend/tailwind.config.ts`, `frontend/__tests__/`
 
 ---
 
-## Summary
+## 1. Debitos Validados
 
-The DRAFT's Section 3 (Frontend/UX Debts, FE-001 through FE-032) is well-structured and captures the majority of genuine UX-impacting technical debt. The @architect team correctly identified the two most critical user-facing issues: the search progress stall at 78% (FE-001) and the anxiety-inducing error 524 exposure (FE-006). The prioritization matrix (Section 5) correctly places these as P0.
+For each Frontend/UX debt item in the DRAFT, I validated against the actual codebase. Severity adjustments reflect real UX impact observed in code.
 
-However, my review reveals three significant adjustments:
+| ID | Debito | Severidade Original | Severidade Ajustada | Horas | Prioridade | Impacto UX |
+|----|--------|---------------------|---------------------|-------|------------|------------|
+| TD-035 | useSearchFilters() 600+ lines | High | **High** (confirmed 607 lines) | 12-16h | P1 | Dev-only: maintainability. Does NOT directly affect end-users but slows feature velocity on the most critical page. |
+| TD-036 | Visual regression testing ausente | Medium | **Medium** (confirmed) | 16-20h | P2 | Dev-only: quality gate. No direct user impact but increases risk of shipping visual regressions to production. |
+| TD-037 | Saved filter presets ausente | Medium | **Medium** (confirmed) | 20-24h | P2 | **User-facing**: Power users (consultancies) running the same sector+UF+modality combos repeatedly lose time reconfiguring. |
+| TD-038 | Modal focus trap edge cases | Medium | **Medium-Low** (mitigated) | 4-6h | P2 | User-facing (a11y): FocusTrap from `focus-trap-react` is used correctly in 7 components (MobileDrawer, DeepAnalysisModal, DowngradeModal, InviteMemberModal, PaymentRecoveryModal, CancelSubscriptionModal, TrialConversionScreen). Edge cases are nested portals, not widespread. |
+| TD-039 | Small touch targets (<44px) legacy | Medium | **Medium** (confirmed in 2 components) | 6-8h | P2 | User-facing (mobile): FeedbackButtons (`p-1.5` = ~28px touch target) and CompatibilityBadge (`px-1.5 py-0.5 text-[10px]` = well below 44px) are the primary offenders. BottomNav and MobileDrawer already enforce `min-w-[44px] min-h-[44px]`. |
+| TD-040 | /planos e /pricing duplicados | Medium | **Low** (SEO only) | 2-3h | P3 | Not user-facing: Both pages exist (352 vs 405 lines) with different content (/pricing has ROI calculator, /planos has plan cards). Not true duplicates -- different features. Canonical or redirect is still recommended. |
+| TD-041 | Raw hex colors vs design tokens | Low | **Low** (partially mitigated) | 8-10h | P4 | Dev-only: ~89 hex occurrences across 20+ app files. Most are in `global-error.tsx` (17, justified -- inline styles for crash state), `privacidade/page.tsx` (14, legal page), `dados/DadosClient.tsx` (13). The design token system in `globals.css` + `tailwind.config.ts` is comprehensive and well-maintained. New components use tokens correctly. |
+| TD-042 | CSP unsafe-inline for Tailwind | Low | **Low** (accepted risk, no change) | 0h | P4 | Dev-only: Required for Tailwind. Industry standard tradeoff. No action needed. |
+| TD-043 | Component Storybook ausente | Low | **Low** | 24-32h | P4 | Dev-only: 65+ components without visual catalog. Useful for design handoff but not blocking. |
+| TD-044 | Icons missing aria-hidden | Low | **Low** (largely mitigated) | 3-4h | P4 | User-facing (a11y minor): 90 `aria-hidden` usages found across 30+ files. Most icons are properly marked. The gap is in older components, not systematic. |
+| TD-045 | Sonner toast live regions | Low | **Low** (correct default) | 1-2h | P4 | User-facing (a11y minor): Sonner `<Toaster>` in layout.tsx uses `position="bottom-center" richColors closeButton`. Sonner's default `aria-live="polite"` is correct for most cases. Only edge case is error toasts that should use `role="alert"` (assertive). |
+| TD-046 | Scroll jank SSE (mobile) | Low | **Medium-Low** | 8-12h | P3 | User-facing (mobile): No explicit debounce on scroll during SSE updates found in code. ResultsList renders a flat list without virtualization. For typical result sets (10-50 items per page), this is manageable. At 50+ visible items, mobile jank is expected. |
+| TD-047 | Bottom nav covers content | Low | **Low** (partially addressed) | 2-3h | P4 | User-facing (mobile): BottomNav is 60px fixed bottom. Only `comparador/page.tsx` has explicit `pb-20`. Other pages may have content hidden behind BottomNav on short viewports. |
+| TD-048 | i18n ausente | Low | **Low** (correct prioritization) | 80-120h | P4 | User-facing: Product is Brazil-only. No international expansion planned. Correct to defer. |
+| TD-049 | Offline support ausente | Low | **Low** (correct prioritization) | 40-60h | P4 | User-facing: SaaS web app. Offline mode adds complexity without clear user demand. Correct to defer. |
 
-1. **FE-003 (ViabilityBadge title attr) has already been resolved.** The component now uses a custom accessible tooltip with `role="tooltip"`, `aria-describedby`, keyboard support, and tap-to-toggle on mobile. This debt should be marked RESOLVED and removed from the remediation backlog. The DRAFT incorrectly estimates 4h of work for something already done.
+### Summary of Severity Adjustments
 
-2. **FE-015 (prefers-reduced-motion) is partially resolved.** The global CSS already includes a `@media (prefers-reduced-motion: reduce)` rule that disables all CSS animations. The `useInView` hook and `AnimateOnScroll` component also check for reduced motion. The remaining gap is Framer Motion JavaScript-driven animations on the landing page, which bypass the CSS rule. Scope reduced from "not respected" to "one gap in JS-driven animations."
-
-3. **FE-009 (aria-live) is partially resolved.** Multiple search sub-components already include `aria-live` attributes (BannerStack, DataQualityBanner, EnhancedLoadingProgress, EmptyResults, ErrorDetail, ExpiredCacheBanner, and others -- 28+ usages found). The remaining gap is narrower than described.
-
-4. **Three debts are missing from the DRAFT** that have meaningful UX impact: landing page excessive hydration, pipeline kanban missing drag announcements for screen readers, and colorblind-unsafe chart palette.
-
-Total estimated remediation for the FE debt section: **~128h** (down from DRAFT's ~148h after removing resolved items and adjusting estimates, but up slightly from adding 4 new items).
-
----
-
-## Debts Validated
-
-| ID | Debt | Original Severity | Adjusted Severity | Hours | UX Impact | Notes |
-|----|------|-------------------|-------------------|-------|-----------|-------|
-| FE-001 | Search stuck at 78% for 130+ seconds | CRITICAL | **CRITICAL** | 12 | Direct user trust erosion | Confirmed. Highest-impact UX debt. Users cannot distinguish "working" from "broken." SSE progress stalls during filtering/LLM phases. Must fix with CROSS-001. |
-| FE-002 | `useSearchOrchestration` mega-hook | HIGH | **HIGH** | 16 | Indirect -- regression risk to core UX | Confirmed at 369 lines (not 200+ as DRAFT states). Imports 15 hooks/modules. Decomposition essential for maintainability. |
-| FE-003 | ViabilityBadge uses `title` for critical data | HIGH | **RESOLVED** | 0 | N/A | **Already fixed.** `components/ViabilityBadge.tsx` (213 lines) now has a custom `ViabilityTooltip` with `role="tooltip"`, `aria-describedby`, keyboard Enter/Space toggle, Escape dismiss, outside-click dismiss, and tap-to-toggle on mobile. Zero `title` attributes remain. 21 accessibility-related attributes present. Remove from backlog. |
-| FE-004 | Divergent auth guard patterns | HIGH | **HIGH** | 8 | Security + UX inconsistency | Confirmed. `/buscar` uses manual `useEffect` redirect (line 37 of useSearchOrchestration), while other protected pages use `(protected)/layout.tsx`. |
-| FE-005 | Dual component directory structure | HIGH | **HIGH** | 12 | Developer confusion slows feature velocity | Confirmed: 51 files in `app/components/` vs 33 in `components/`. Reducing estimate from 16h to 12h -- the move is mechanical once the rule is defined. |
-| FE-006 | Error 524 exposes technical details | HIGH | **HIGH** | 6 | User anxiety, churn risk | Confirmed. Retry counter (1/3, 2/3, 3/3) signals fragility to users. |
-| FE-007 | 12 banners on search page | MEDIUM | **HIGH** (upgrade) | 8 | Cognitive overload on core page | Upgrading. 12 banner types on the most important page is excessive. `BannerStack.tsx` (204 lines) has a priority system but no cap on simultaneous display. Need max 2 visible at once. |
-| FE-008 | `/admin` uses useState + manual fetch | MEDIUM | **MEDIUM** | 4 | Stale data for admin users | Confirmed. Low user-facing impact (admin-only). |
-| FE-009 | No `aria-live` for dynamic search results | MEDIUM | **MEDIUM** (partially resolved) | 2 | Screen readers miss results | Partially addressed: 28+ `aria-live` usages found in search module (BannerStack, DataQualityBanner, EnhancedLoadingProgress, EmptyResults, ErrorDetail, etc.). Remaining gap: 6 banners still lack `aria-live`, and the primary results count announcement could be more explicit. Reducing from 4h to 2h. |
-| FE-010 | `mensagens/page.tsx` at 591 lines | MEDIUM | **MEDIUM** | 8 | Maintainability of messaging feature | Confirmed at exactly 591 lines. |
-| FE-011 | Potential `any` types in API proxy routes | MEDIUM | **LOW** (downgrade) | 4 | No direct UX impact | Downgrading. Type safety is a DX concern, not a UX concern. |
-| FE-012 | SVG icons lacking `role="img"` or `aria-label` | MEDIUM | **MEDIUM** | 3 | Informational icons invisible to screen readers | Confirmed. Reducing estimate from 4h to 3h -- mostly mechanical audit. |
-| FE-013 | Inconsistent landmarks | MEDIUM | **LOW** (downgrade) | 2 | Navigation for assistive tech | Code review found `<main>` in 25+ pages including `(protected)/layout.tsx`, `buscar/page.tsx`, `pipeline/page.tsx`, and all landing pages. Gap is narrower than described: some `id` inconsistency and minor `conta/equipe/` branching issues. Reducing from 4h to 2h. |
-| FE-014 | Forms missing `aria-describedby` | MEDIUM | **MEDIUM** | 3 | Form fields lack context for SR users | Confirmed. Reducing from 4h to 3h. |
-| FE-015 | `prefers-reduced-motion` not respected | MEDIUM | **LOW** (downgrade, partially resolved) | 2 | Motion-sensitive users | **Partially resolved.** `globals.css` line 349 includes comprehensive `@media (prefers-reduced-motion: reduce)` rule disabling all CSS animations/transitions. `useInView` and `AnimateOnScroll` also check. Only gap: Framer Motion JS-driven animations on landing page. Reducing from 4h to 2h. |
-| FE-016 | No ErrorBoundary on SWRProvider/UserProvider | MEDIUM | **MEDIUM** | 3 | App crashes to generic error on provider failure | Confirmed. 7-deep provider hierarchy with no boundary. |
-| FE-017 | Frontend feature gates hardcoded | MEDIUM | **LOW** (downgrade) | 3 | No direct UX impact | Downgrading. A `useFeatureFlags` hook already exists fetching from `/api/feature-flags`. This is DX/architecture, not UX. Reducing from 6h to 3h. |
-| FE-018 | Dark mode contrast on search form | MEDIUM | **MEDIUM** | 2 | Reduced readability in dark mode | Confirmed. |
-| FE-019 | 60+ API proxy routes consolidation | MEDIUM | **LOW** (downgrade) | 6 | No direct UX impact | Downgrading. Purely DX/maintenance concern. |
-| FE-020 | No edge caching for stable endpoints | MEDIUM | **MEDIUM** | 2 | Slower page loads for returning users | Confirmed. `/api/setores` and `/api/plans` change monthly at most. |
-| FE-021 | Inline SVGs vs lucide-react | LOW | **LOW** | 3 | Minor bundle size | Confirmed. Reducing from 4h to 3h. |
-| FE-022 | Raw hex values vs semantic tokens | LOW | **LOW** | 4 | Visual inconsistency risk | Confirmed. Concentrated in secondary components (KeyboardShortcutsHelp, ProfileCongratulations, TestimonialSection). |
-| FE-023 | `/conta` redirect flash | LOW | **LOW** | 2 | Momentary flash | Confirmed. |
-| FE-024 | Duplicate footers | LOW | **LOW** | 2 | Landmark confusion | Confirmed. |
-| FE-025 | RootLayout async for CSP nonce | LOW | **LOW** | 2 | No UX impact | Confirmed. |
-| FE-026 | SEO pages thin/duplicate content risk | LOW | **LOW** | 4 | SEO ranking risk | Confirmed. |
-| FE-027 | SearchResults.tsx backward-compat re-exports | LOW | **LOW** | 1 | No UX impact | Confirmed. |
-| FE-028 | Dark mode brand-blue contrast borderline | LOW | **MEDIUM** (upgrade) | 2 | A11y compliance risk | Upgrading. `#116dff` vs `#121212` at 4.5:1 is the minimum AA threshold. For small text (under 18px) this fails. Brand-blue is used for links and interactive elements which are frequently small text. Use `#3388ff` in dark mode (~5.2:1). |
-| FE-029 | Focus order in BuscarModals + BottomNav overlay | LOW | **LOW** | 3 | Modal stacking confusion for keyboard users | Confirmed. |
-| FE-030 | Mobile search limited vertical space | LOW | **MEDIUM** (upgrade) | 4 | Mobile conversion impact | Upgrading. Mobile is likely 40-60% of B2G traffic. Search form fills viewport; results invisible without scrolling. |
-| FE-031 | Dashboard chart sparse for low-usage users | LOW | **LOW** | 3 | Perception of low value during trial | Confirmed. |
-| FE-032 | Pipeline empty state wordy | LOW | **LOW** | 1 | Minor friction | Confirmed. |
-
-**Validation Summary:** 32 debts reviewed. 1 resolved (FE-003). 3 upgraded (FE-007, FE-028, FE-030). 5 downgraded (FE-011, FE-013, FE-015, FE-017, FE-019). 23 confirmed as-is. Net hours saved: ~20h from resolved/reduced items.
+- **TD-040** downgraded Low: /pricing and /planos are NOT true duplicates; /pricing has ROI calculator, /planos has plan comparison. Canonical tag is sufficient.
+- **TD-046** upgraded Medium-Low: No debounce/virtualization found in code. Risk is higher than "Low" on mobile devices with 50+ results.
+- All other severities confirmed as originally assessed.
 
 ---
 
-## Debts Added
+## 2. Debitos Adicionados
 
-| ID | Debt | Severity | Hours | UX Impact | Rationale |
-|----|------|----------|-------|-----------|-----------|
-| FE-033 | **Landing page excessive hydration** -- All 13 child components of the landing page use `"use client"`, but only 3 actually need Framer Motion. The other 10 use it solely for `useState`/`useEffect`/`useInView`. This forces full client-side hydration of marketing content, degrading TTFB, LCP, and SEO for the primary acquisition surface. | HIGH | 10 | Landing page performance directly affects conversion. Estimated LCP improvement from ~3.5s to ~2.0s. | Identified in Phase 3 frontend spec but missing from DRAFT. |
-| FE-034 | **Pipeline kanban missing drag announcements for screen readers** -- `PipelineKanban.tsx` configures `KeyboardSensor` with `sortableKeyboardCoordinates` (keyboard DnD works), but the `DndContext` lacks the `accessibility` prop for `onDragStart`/`onDragOver`/`onDragEnd`/`onDragCancel` announcements, and cards lack `aria-roledescription="sortable"`. | MEDIUM | 4 | Drag-and-drop invisible to screen reader users. Pipeline is a core feature for retained users. | WCAG 2.1 AA requires operable drag-and-drop for assistive technology. |
-| FE-035 | **Chart colors not colorblind-safe** -- The 10-color chart palette (`--chart-1` through `--chart-10`) relies entirely on hue differentiation. No patterns, shapes, or data labels supplement the color coding. ~8% of male users have color vision deficiency. | LOW | 4 | Inaccessible data visualization for colorblind users. | Identified in Phase 3 frontend spec Recommendation 12 but omitted from DRAFT. |
-| FE-036 | **Shepherd.js loaded eagerly on all protected pages** -- `shepherd.js` (~15KB) is imported in `useShepherdTour.ts` and `useOnboarding.tsx`, loaded on all protected pages regardless of whether the user has already completed the tour. Should use `next/dynamic` for lazy-load. | LOW | 2 | ~15KB unnecessary JS per page load for 95%+ of page views. | Bundle size optimization with clear implementation path. |
+Additional UX debts found by exploring the actual codebase:
 
----
+### TD-050: useSearchExecution.ts is 852 lines (NEW - High)
 
-## Debts Challenged
+**File:** `frontend/app/buscar/hooks/useSearchExecution.ts` (852 lines)
+**Issue:** This hook is significantly larger than the flagged useSearchFilters (607 lines) and was not identified in the DRAFT. It handles search API calls, error handling, retry logic, partial results, SSE coordination, and analytics in a single hook.
+**UX Impact:** Dev-only (maintainability). The search page has 3,775 total lines across 13 hooks. useSearchExecution is the largest single file and the most complex.
+**Severity:** High
+**Hours:** 16-20h
+**Recommendation:** Extract into useSearchAPI (pure fetch), useSearchErrorHandling, useSearchPartialResults. Follow the same split pattern that was already applied (useSearchSSE + useSearchSSEHandler separation is a good precedent).
 
-### FE-003 (ViabilityBadge title attr) -- CHALLENGED: ALREADY RESOLVED
+### TD-051: Search hooks total complexity (3,775 lines across 13 hooks) (NEW - Medium)
 
-The DRAFT lists this as HIGH severity requiring 4 hours. Upon inspection of `frontend/components/ViabilityBadge.tsx` (213 lines), the component has already been refactored. The code contains explicit comments referencing `DEBT-FE-002` as the fix ticket. The current implementation:
+**File:** `frontend/app/buscar/hooks/` (13 files, 3,775 total lines)
+**Issue:** The search page hooks collectively form a complex state machine. While individual hooks are reasonably scoped (except TD-035 and TD-050), the orchestration between them involves deeply nested prop passing and ref sharing.
+**UX Impact:** Dev-only. New developers face steep onboarding curve for the most critical feature.
+**Severity:** Medium
+**Hours:** 4h (documentation) + 12h (state machine simplification)
+**Recommendation:** Create `docs/architecture/search-hooks-architecture.md` documenting the hook dependency graph. Consider a state machine library (XState) for the search lifecycle.
 
-- Uses a custom `ViabilityTooltip` component (not HTML `title`)
-- Implements `role="tooltip"` with `useId()`-generated IDs
-- Links trigger and tooltip via `aria-describedby`
-- Supports keyboard activation (Enter, Space) and Escape dismissal
-- Supports tap-to-toggle on mobile via `onClick`
-- Dismisses on outside click
-- Contains 21 accessibility-related attributes across the component
+### TD-052: FeedbackButtons touch target below 44px (NEW - Medium)
 
-**Recommendation:** Remove from backlog entirely. Mark as RESOLVED in the final assessment. This saves 4h from the estimate.
+**File:** `frontend/components/FeedbackButtons.tsx` (lines 178-210)
+**Issue:** Thumbs up/down buttons use `p-1.5` padding around a `w-4 h-4` (16px) icon. Total clickable area is approximately 28x28px, well below WCAG 2.5.5 minimum of 44x44px.
+**UX Impact:** User-facing (mobile a11y). These buttons appear on every search result card. Mobile users may misclick.
+**Severity:** Medium
+**Hours:** 1-2h
+**Recommendation:** Add `min-w-[44px] min-h-[44px]` to the button elements, or increase padding to `p-3`.
 
-### FE-015 (prefers-reduced-motion) -- CHALLENGED: PARTIALLY RESOLVED
+### TD-053: CompatibilityBadge inaccessible on mobile (NEW - Low)
 
-The DRAFT describes this as "not systematically respected." This is inaccurate. Evidence from the codebase:
+**File:** `frontend/components/CompatibilityBadge.tsx` (line 37)
+**Issue:** Badge uses `text-[10px]` which is below the recommended 12px minimum for body text. The badge is not interactive (role="img") so touch target is not applicable, but readability on mobile is poor.
+**UX Impact:** User-facing (readability). Small text on result cards.
+**Severity:** Low
+**Hours:** 0.5h
+**Recommendation:** Increase to `text-xs` (12px) minimum.
 
-1. `globals.css` line 349-355: `@media (prefers-reduced-motion: reduce)` rule sets `animation-duration: 0.01ms !important` and `transition-duration: 0.01ms !important` on all elements -- the most robust CSS-level approach possible.
-2. `hooks/useInView.ts` line 20: Checks `window.matchMedia('(prefers-reduced-motion: reduce)')` and skips animations.
-3. `components/ui/AnimateOnScroll.tsx` line 57: Same media query check.
+### TD-054: Inconsistent error boundary patterns (NEW - Low)
 
-The only remaining gap is Framer Motion's JavaScript-driven animations (primarily on the landing page), which execute outside CSS and are not caught by the global media query rule. Fix is to add `useReducedMotion()` from `framer-motion` to components using `<motion.div>`.
+**Files:** `frontend/components/ErrorBoundary.tsx`, `frontend/components/PageErrorBoundary.tsx`, `frontend/app/buscar/components/SearchErrorBoundary.tsx`, `frontend/app/global-error.tsx`, `frontend/app/buscar/error.tsx`
+**Issue:** Five different error boundary implementations with varying UI patterns. Some use `aria-live`, some do not. Recovery actions differ (retry vs reload vs navigate).
+**UX Impact:** User-facing (consistency). Error recovery is unpredictable across pages.
+**Severity:** Low
+**Hours:** 4-6h
+**Recommendation:** Create a shared `BaseErrorBoundary` component with configurable recovery actions and consistent a11y.
 
-**Recommendation:** Downgrade to LOW, reduce estimate to 2h.
+### TD-055: Missing bottom padding for BottomNav on multiple pages (NEW - Low)
 
-### FE-013 (Inconsistent landmarks) -- CHALLENGED: NARROWER THAN DESCRIBED
-
-Code review found `<main>` elements in 25+ pages, including all critical paths: `(protected)/layout.tsx`, `buscar/page.tsx`, `pipeline/page.tsx`, `alertas/page.tsx`, `status/page.tsx`, `conta/layout.tsx`, and all landing/blog/sobre pages. The actual gap is minor: inconsistent `id` attributes (some use `main-content`, others `buscar-content`, others have no id) and potential `<main>` duplication in conditional branches of `conta/equipe/` pages.
-
-**Recommendation:** Downgrade to LOW, reduce estimate to 2h.
-
-### FE-011 (any types in proxy routes) -- CHALLENGED: NOT A UX DEBT
-
-This is a pure developer experience and type safety concern. Users are never affected by `any` types in API proxy routes. Furthermore, a code search for `: any` in `frontend/app/api/**/*.ts` returned zero confirmed results -- the DRAFT's language was speculative ("potential any types").
-
-**Recommendation:** Downgrade to LOW. Move to System Debt section if retained.
-
----
-
-## Answers to Architect
-
-### Q1 (Section 7): FE-001 -- Maximum acceptable wait time before showing partial results?
-
-**45 seconds** is the maximum before the UI must change state. Based on B2G user research patterns and web app UX standards:
-
-- **0-15 seconds:** Normal progress animation. Users are patient in this window.
-- **15-30 seconds:** Show phase-specific messages. Transition from "Consultando fontes..." to "Filtrando resultados..." resets the user's patience timer. Each phase change signals progress.
-- **30-45 seconds:** Show "Classificando relevancia com IA..." message. The mention of AI sets expectations for computational work.
-- **45+ seconds:** Prominent "Taking longer than expected" state with three options: (a) "Ver resultados parciais" (primary CTA), (b) "Continuar aguardando" (secondary), (c) "Cancelar busca" (tertiary link). The partial results option should be available as soon as any results have passed filtering.
-
-**Phase-specific messages are essential.** The current "Filtrando resultados" is too vague for a 130-second stall. Users tolerate long waits when they can see progress being made. The distinction between fetching, filtering, classifying, and generating gives users a mental model of the work happening. At 45s, switch from determinate progress bar to an indeterminate animation with phase text -- this prevents the "stuck" perception even when the actual percentage has not changed.
-
-### Q2 (Section 7): FE-007 -- Which banners do users interact with?
-
-Without direct Mixpanel/Clarity data (which should be instrumented), my assessment by UX heuristics and banner type:
-
-**High value (keep always visible):**
-1. `SearchErrorBanner` -- Users must know search failed
-2. `PartialResultsPrompt` -- Actionable: "Load more results"
-3. `SourcesUnavailable` -- Sets expectations about result completeness
-
-**Medium value (show contextually, dismiss on interaction):**
-4. `CacheBanner` -- Useful but could be a subtle indicator
-5. `FilterRelaxedBanner` -- Actionable: explains why filters were relaxed
-6. `DataQualityBanner` -- Informational, can be collapsed
-
-**Low value (candidates for consolidation or removal):**
-7. `ExpiredCacheBanner` -- Merge with CacheBanner
-8. `TruncationWarningBanner` -- Edge case
-9. `RefreshBanner` -- Can be an icon button
-10. `OnboardingBanner` -- Only for new users, auto-dismiss
-11. `PartialTimeoutBanner` -- Merge with PartialResultsPrompt
-12. `TourInviteBanner` -- Only for new users, auto-dismiss
-
-**Consolidation opportunities:**
-- `CacheBanner` + `ExpiredCacheBanner` + `RefreshBanner` = single `CacheStatusBanner` with 3 states
-- `PartialResultsPrompt` + `PartialTimeoutBanner` = single `PartialBanner` with variants
-- `OnboardingBanner` can be replaced by the existing Shepherd.js tour
-
-**Recommendation:** Maximum 2 banners visible simultaneously. The existing `BannerStack` priority system should add a `maxVisible: 2` cap. Error banners suppress all others. Informational banners collapse to a single expandable "N more notifications" row after 5 seconds.
-
-### Q3 (Section 7): FE-005 -- Component directory separation rule?
-
-Yes, the proposed structure aligns with my design system vision, with one refinement -- providers should be extracted into their own directory:
-
-```
-components/               # Design system primitives + shared UI
-  ui/                     # Button, Input, Label, etc.
-  skeletons/              # Loading skeletons
-  EmptyState.tsx          # Generic empty states
-  ErrorBoundary.tsx       # Error handling
-  NavigationShell.tsx     # App shell layout
-  Sidebar.tsx             # Desktop nav
-  BottomNav.tsx           # Mobile nav
-  ViabilityBadge.tsx      # Shared badge
-
-providers/                # NEW directory
-  AuthProvider.tsx
-  ThemeProvider.tsx
-  SWRProvider.tsx
-  UserProvider.tsx
-  AnalyticsProvider.tsx
-  BackendStatusProvider.tsx
-
-app/buscar/components/    # Search domain (already well-organized)
-app/components/           # DEPRECATE -- empty and remove
-```
-
-**Providers are not components** -- they are infrastructure. They should live in `providers/` at the root level. The `app/components/` directory should be emptied: everything currently there is either a provider (move to `providers/`), a shared component (move to `components/`), or a page-specific component (move to the relevant `app/[page]/components/`).
-
-### Q4 (Section 7): FE-003 -- ViabilityBadge mobile interaction pattern?
-
-**Already resolved.** The current implementation uses tap-to-expand inline, which is the correct choice:
-
-- Bottom sheets (option b) are too heavy for a tooltip -- they interrupt scanning flow
-- Separate detail views (option c) navigate away from results, disruptive during comparison
-- Inline expand (option a) keeps user in context and allows quick comparison between results
-
-The current `ViabilityTooltip` component toggles via `onClick` on mobile and positions the tooltip below the badge. No further action needed.
-
-One optional enhancement: on mobile, add a subtle info icon next to the first ViabilityBadge a user encounters to teach the tap interaction pattern. After first tap, suppress via localStorage.
-
-### Q5 (Section 7): A11Y-002 -- Should the fix change visual presentation?
-
-**Already resolved** (see FE-003 above). The current tooltip-on-demand pattern is the correct UX choice. An always-visible mini breakdown below each badge would add ~40px vertical space per result card, creating excessive visual noise in the results list. The current hover (desktop) + tap (mobile) pattern balances information density with accessibility.
-
-### Q6 (Section 7): FE-018 -- Dark mode contrast: global or targeted?
-
-**Targeted borders on interactive elements only.** Increasing `--surface-2` globally would change the visual weight of every card, section, and container in dark mode -- a risky visual regression.
-
-Specific fix:
-- Add `border border-ink/10` (10% opacity of ink color) to: sector dropdown, date inputs, value range inputs, UF multi-select
-- Increase `--surface-2` in dark mode by one step (+5% lightness) ONLY for the search form container
-- Do NOT change card surfaces, sidebar, or modal backgrounds
-
-This is a 2-hour change in Tailwind config + 3-4 component files.
-
-### Q7 (Section 7): UX-CRIT-002 -- Silent retry indicator?
-
-Yes, show a subtle progress indicator during silent retries, but make it calming:
-
-- **Silent retry phase (attempts 1-2):** Small pulsing dot (brand-blue, 8px) in the search form header with text "Connecting..." in `--ink-muted` color. No error styling, no red, no counter. This signals "working" without signaling "broken."
-- **After silent retries exhausted (attempt 3 failed):** Show error banner with messaging: "Nao foi possivel conectar a fonte de dados. Geralmente isso se resolve sozinho. [Tentar novamente]" -- one calm retry button, no counter, no HTTP codes.
-- **Never show:** The word "erro" in the silent retry phase, HTTP status codes, or attempt counters.
-
-### Q8 (Section 7): FE-030 -- Collapse title or description for returning users?
-
-**Collapse the description only, not the title.** The title "Busca de Licitacoes" provides essential wayfinding. The description text ("Encontre oportunidades...") is onboarding copy that returning users do not need.
-
-Implementation:
-- **First visit:** Full title + description + sector selector + CTA (current behavior)
-- **Returning users** (localStorage flag `has_searched_before`): Title (smaller, `text-lg` instead of `text-xl`) + sector selector + CTA. Description hidden. This recovers ~60px of vertical space on mobile.
-- **Onboarding flow:** Always show full version during onboarding auto-search, regardless of `has_searched_before`, because the user is being guided.
-
-The `has_searched_before` flag should be set after the first manual search (not auto-search from onboarding), so the compact header appears from the second visit onward.
+**Files:** Most app pages under `frontend/app/`
+**Issue:** Only `comparador/page.tsx` explicitly adds `pb-20` to account for the 60px BottomNav. Other pages rely on layout padding which may not be sufficient on shorter viewports.
+**UX Impact:** User-facing (mobile). Last items in lists may be hidden behind BottomNav.
+**Severity:** Low
+**Hours:** 2-3h
+**Recommendation:** Add a global CSS rule `main { padding-bottom: env(safe-area-inset-bottom, 80px); }` for mobile, or use the NavigationShell layout to inject consistent bottom padding.
 
 ---
 
-## Design Recommendations
+## 3. Respostas ao Architect
 
-### Component Architecture
+Answering all questions from Section 6 directed to @ux-expert:
 
-1. **Provider extraction:** Move all 6 providers from `app/components/` to a new `providers/` directory. This is the highest-leverage architectural change for DX clarity.
+### Q1. TD-035 (search filters 600+ lines): Quais responsabilidades podem ser extraidas do useSearchFilters()?
 
-2. **BannerStack enhancement:** The existing `BannerStack.tsx` already has a priority system. Add: `maxVisible` prop (default 2), auto-collapse for informational banners after 5s, and an expandable "N more notifications" row when banners are suppressed.
+**Answer:** After reading the full 607-line hook, I identify 5 extractable concerns:
 
-3. **useSearchOrchestration decomposition (369 lines -> ~150 lines):**
+1. **useFilterFormState** (~150 lines): Pure form state management (useState for all filter fields, setters with clearResult wrappers). No logic, just state containers.
+2. **useFilterValidation** (~80 lines): `validateTermsClientSide()`, `canSearch` computation, `validationErrors`. Already partially isolated as a standalone function but embedded in the hook.
+3. **useFilterPersistence** (~60 lines): `safeGetItem`/`safeSetItem` for last-used filters, URL search params reading. Already a pattern in `useSearchPersistence.ts` -- merge or compose.
+4. **useFilterAnalytics** (~30 lines): `analytics.track()` calls on filter changes. Extract as a thin wrapper.
+5. **useSectorData** (~100 lines): Sector fetching, fallback, stale cache detection, retry. This is a data-fetching concern, not a filter concern.
 
-| Sub-hook to extract | Estimated LOC | Dependencies |
-|---------------------|---------------|--------------|
-| `useSearchModals` (save, keyboard, upgrade, PDF, trial, payment recovery) | ~60 | planInfo, session |
-| `useSearchTours` (search tour, results tour, onboarding coordination) | ~50 | session, trackEvent |
-| `useSearchBillingGuard` (trial/plan checks, auth redirect) | ~50 | planInfo, session, authLoading |
-| `usePdfGeneration` (PDF modal, loading, download) | ~40 | session, searchId, sectorName |
+**Recommended split:** Keep useSearchFilters as a facade that composes these 5 hooks. Total API surface stays the same for consumers.
 
-The remaining `useSearchOrchestration` becomes a ~150-line compositor that imports these 4 hooks + `useSearchFilters` + `useSearch` and assembles the `searchResultsProps` return value.
+### Q2. TD-036 (visual regression): Percy ou Chromatic? Qual coverage minimo?
 
-### Design System
+**Answer:** **Chromatic** is recommended over Percy for this project:
 
-1. **Dark mode brand-blue variant:** Define `--brand-blue-dark: #3388ff` for dark mode small text. Keep `#116dff` for large text and filled backgrounds. This fixes FE-028 at the token level.
+- Chromatic integrates natively with Storybook (if TD-043 is addressed later)
+- Chromatic offers component-level snapshots, not just page-level
+- Pricing: Chromatic free tier (5K snapshots/month) is sufficient for initial setup
+- Percy requires separate infrastructure and is page-snapshot oriented
 
-2. **Dark mode form input borders:** Establish a rule: all form inputs in dark mode must have `border border-ink/10` minimum. Apply via Tailwind config extension.
+**Minimum coverage for first setup (10 critical screens):**
+1. `/buscar` -- empty state, loading state, results state, error state
+2. `/buscar` -- FilterPanel open (mobile)
+3. `/planos` -- pricing cards
+4. `/pipeline` -- kanban board
+5. `/dashboard` -- analytics charts
+6. `/login` -- form state
+7. `ResultCard` -- all badge variants (viability, LLM, reliability)
+8. `EnhancedLoadingProgress` -- all progress states
+9. `BannerStack` -- multiple banners
+10. `MobileDrawer` -- open state
 
-3. **Badge component standardization:** Extract shared pattern from ViabilityBadge, ReliabilityBadge, LlmSourceBadge, and plan badges into a generic `Badge` primitive with props for color, icon, size, and tooltip content.
+This covers ~80% of user-visible surface area with 10 snapshots.
 
-### Accessibility
+### Q3. TD-037 (saved filters): Qual o UX pattern recomendado?
 
-1. **Results count announcement:** Add `<span aria-live="polite" className="sr-only">` to `ResultsHeader` that updates when results arrive: "{count} oportunidades encontradas".
+**Answer:** Recommended UX pattern:
 
-2. **SVG classification audit:** Classify all inline SVGs as decorative (`aria-hidden="true"`) or informational (`role="img" aria-label="..."`). Priority: status icons in `/historico` and `/mensagens` that may carry meaning.
+- **Location:** Dropdown button next to the search button, labeled "Filtros salvos" with a bookmark icon
+- **Save flow:** After a successful search, show a subtle "Salvar filtros" button in the results toolbar. Click opens a modal with: name input (auto-suggest based on sector+UFs), optional description
+- **Load flow:** Dropdown shows list of saved presets with name, date saved, and a "delete" action
+- **Limit:** 10 presets per user (sufficient for consultancies managing multiple clients)
+- **Storage:** Supabase table `saved_filter_presets` (user_id, name, filters_json, created_at). NOT localStorage -- presets should be available across devices.
+- **Data model:** filters_json stores the full `UseSearchFiltersSnapshot` type already defined in the codebase
 
-3. **Pipeline drag announcements:** Add `accessibility` prop to `DndContext` with Portuguese-language announcements for drag start/over/end/cancel events. Add `aria-roledescription="item ordenavel"` to pipeline cards.
+### Q4. TD-038 (focus trap): Quais edge cases especificos?
 
-4. **Automated a11y testing expansion:** `@axe-core/playwright` is already a devDependency with tests in `e2e-tests/accessibility-audit.spec.ts`. Expand coverage to onboarding, conta, mensagens, and admin pages.
+**Answer:** After inspecting all 7 FocusTrap usages in the codebase:
 
-### Performance UX
+- **Validated:** All use `focus-trap-react` with proper `active` prop and escape key handling
+- **Edge cases found:**
+  1. **DeepAnalysisModal:** Opens via portal. If another modal is already open (e.g., upgrade modal triggered from within analysis), focus trap may conflict. Not observed but architecturally possible.
+  2. **TrialConversionScreen:** Full-screen overlay. No `returnFocusOnDeactivate` configuration found -- focus may not return to trigger element.
+  3. **BottomNav "more" drawer:** Uses custom overlay, NOT FocusTrap. This is an inconsistency -- the "more" menu overlay should trap focus for a11y compliance.
+- **Severity adjustment:** These are real but low-frequency. The BottomNav case is the most impactful since it affects every mobile user.
 
-1. **Landing page Server Component conversion:** Convert 10 of 13 landing page child components from `"use client"` to Server Components. Only HeroSection (interactive CTA), SectorsGrid (dynamic), and AnalysisExamplesCarousel (animation) need client-side JS. Estimated LCP improvement: ~3.5s to ~2.0s.
+### Q5. TD-039 (touch targets): Quantos componentes legacy estao abaixo de 44px?
 
-2. **Edge caching:** Add `Cache-Control: public, s-maxage=3600, stale-while-revalidate=86400` to `/api/setores` and `/api/plans`. Eliminates ~100ms per search page load for returning users.
+**Answer:** Inventory of sub-44px touch targets found in code:
 
-3. **Shepherd.js lazy loading:** Wrap import in `next/dynamic` to load only when tour is activated. Saves ~15KB per page view for the 95%+ of views where the tour is not needed.
+| Component | Element | Current Size | File |
+|-----------|---------|-------------|------|
+| FeedbackButtons | Thumbs up/down buttons | ~28x28px (`p-1.5` + 16px icon) | `components/FeedbackButtons.tsx` |
+| CompatibilityBadge | Badge itself (non-interactive, role="img") | ~20x16px | `components/CompatibilityBadge.tsx` |
+| TrialUpsellCTA | Close button | ~28x28px (`p-1` + icon) | `components/billing/TrialUpsellCTA.tsx` |
 
----
+**Components already compliant:**
+- BottomNav: All items `min-w-[44px] min-h-[44px]` -- compliant
+- MobileDrawer: All items `min-h-[44px]` -- compliant
+- MobileMenu: All items `min-h-[44px]` or `min-h-[48px]` -- compliant
+- Global CSS: `button { min-height: 44px; }` base rule in globals.css -- covers most cases
 
-## Resolution Order Recommended
+**Total:** 3 components need fixes. The global CSS `button { min-height: 44px }` covers standard buttons. The offenders are components with custom padding that overrides the base.
 
-Ordered by user impact, considering dependencies between items.
+### Q6. TD-040 (/planos vs /pricing): Redirect 301 ou manter ambos com canonical?
 
-### Sprint 1 -- User Trust and Acquisition (P0, ~36h)
+**Answer:** **Maintain both with canonical pointing to /planos.**
 
-| Priority | ID | Debt | Hours | Justification |
-|----------|-----|------|-------|---------------|
-| 1 | FE-001 + CROSS-001 | Search stuck at 78% -- add phase-specific progress events + "longer than expected" UI | 12 | Highest UX impact. Users closing tabs during legitimate searches = lost trials. |
-| 2 | FE-006 | Error 524 silent retry + calm messaging | 6 | Second highest anxiety-inducing UX issue. |
-| 3 | FE-007 | Banner consolidation -- max 2 visible, priority suppression | 8 | Cognitive overload on the core page. |
-| 4 | FE-033 | Landing page RSC conversion (10 of 13 components) | 10 | Landing LCP directly affects trial signups. |
+Rationale:
+- `/pricing` (352 lines) has a unique ROI Calculator feature not present in `/planos`
+- `/planos` (405 lines) is the canonical pricing page with plan comparison
+- These are NOT duplicates -- they serve different user intents
+- Redirect 301 would lose the ROI calculator, which is valuable for conversion
 
-### Sprint 2 -- Architecture and Security (P1, ~38h)
+**Implementation:**
+1. Add `<link rel="canonical" href="https://smartlic.tech/planos" />` to `/pricing/page.tsx`
+2. Consider merging the ROI calculator INTO `/planos` as a tab or section (longer term)
+3. Alternatively, rename `/pricing` to `/calculadora-roi` for clarity
 
-| Priority | ID | Debt | Hours | Justification |
-|----------|-----|------|-------|---------------|
-| 5 | FE-004 | Unify auth guard patterns | 8 | Security debt. Must resolve before scaling. |
-| 6 | FE-005 | Component directory consolidation + provider extraction | 12 | Enables all future frontend work. |
-| 7 | FE-002 | Decompose useSearchOrchestration | 16 | Depends on FE-005 (clear structure). Enables FE-004 (auth extraction). |
-| 8 | FE-028 | Dark mode brand-blue contrast fix | 2 | WCAG AA compliance gap, trivial to fix. |
+### Q7. TD-043 (Storybook): Prioridade real considerando 65+ componentes?
 
-### Sprint 3 -- Accessibility and Polish (P2, ~33h)
+**Answer:** **Low priority, defer to P4.** Reasoning:
 
-| Priority | ID | Debt | Hours | Justification |
-|----------|-----|------|-------|---------------|
-| 9 | FE-030 | Mobile search compact header for returning users | 4 | Mobile conversion improvement. |
-| 10 | FE-009 | Complete aria-live on remaining banners + results count | 2 | Screen reader accessibility for core feature. |
-| 11 | FE-034 | Pipeline kanban drag announcements | 4 | Screen reader accessibility for retained users. |
-| 12 | FE-012 | SVG accessibility audit | 3 | WCAG compliance. |
-| 13 | FE-014 | Forms aria-describedby | 3 | WCAG compliance. |
-| 14 | FE-010 | Decompose mensagens/page.tsx | 8 | Maintainability of second most complex page. |
-| 15 | FE-016 | ErrorBoundary on provider stack | 3 | Resilience. |
-| 16 | FE-018 | Dark mode form contrast | 2 | Readability. |
-| 17 | FE-020 | Edge caching for stable endpoints | 2 | Performance with minimal effort. |
-| 18 | FE-008 | Admin page SWR migration | 4 | Consistency. |
+- 312 test files in `frontend/__tests__/` provide strong coverage already
+- Storybook's primary value is design handoff and visual documentation. With a single developer/designer, the ROI is low.
+- **If team grows to 3+ frontend developers:** Storybook becomes Medium priority
+- **Minimum scope if implemented:** 15 components -- the core UI kit (`Button`, `Input`, `Label`, `CurrencyInput`, `Pagination`) plus the 10 most complex feature components (`SearchForm`, `ResultCard`, `EnhancedLoadingProgress`, `FilterPanel`, `PlanCard`, `BottomNav`, `MobileDrawer`, `FeedbackButtons`, `ViabilityBadge`, `BannerStack`)
 
-### Backlog (P3, ~44h)
+### Q8. TD-046 (scroll jank SSE): Debounce atual e quantos ms? Virtualized list seria mais efetivo?
 
-FE-013 (2h), FE-015 (2h), FE-017 (3h), FE-021 (3h), FE-022 (4h), FE-023 (2h), FE-024 (2h), FE-025 (2h), FE-026 (4h), FE-027 (1h), FE-029 (3h), FE-031 (3h), FE-032 (1h), FE-035 (4h), FE-036 (2h). Also FE-011 (4h) and FE-019 (6h) which are DX concerns not UX.
+**Answer:** After searching the codebase:
 
-**Total: ~151h** (36 + 38 + 33 + 44) across 35 items (32 original - 1 resolved + 4 added).
-
----
-
-## Risk Assessment
-
-### R-UX-001: Trial Conversion Loss from Search UX Issues (HIGH)
-
-**Debts:** FE-001, FE-006, FE-007
-**Risk:** During the 14-day trial, if a user's first 2-3 searches hit the "stuck at 78%" issue or an error 524 with technical retry counters, conversion probability drops sharply. B2G users are busy professionals who will not troubleshoot or wait 2+ minutes for a search that appears broken.
-**Quantified impact:** Assuming 20% of searches hit the long-running path and 50% of those users abandon, approximately 10% of trial users may have a degraded first experience.
-**Mitigation:** Sprint 1 items (FE-001, FE-006, FE-007).
-
-### R-UX-002: Acquisition Performance from Landing Page Hydration (HIGH)
-
-**Debt:** FE-033
-**Risk:** The landing page is the primary acquisition surface. All 13 child components using `"use client"` forces full client-side hydration of marketing content. Estimated LCP ~3.5s vs target ~2.0s. Every 100ms of load time reduces conversion by ~1% (industry research). A 1.5s gap represents a meaningful conversion loss.
-**Mitigation:** Sprint 1 item (FE-033). Convert 10 components to Server Components.
-
-### R-UX-003: Accessibility Legal Exposure (MEDIUM)
-
-**Debts:** FE-028, FE-009, FE-012, FE-014, FE-034, FE-035
-**Risk:** Brazilian Lei 13.146/2015 (Lei Brasileira de Inclusao) requires digital accessibility. SmartLic interfaces with government procurement systems and targets B2G companies -- the exact domain where accessibility compliance is scrutinized. The brand-blue contrast failure (FE-028) for small text and missing pipeline drag announcements (FE-034) are the most visible gaps.
-**Mitigation:** Sprint 2 (FE-028) and Sprint 3 (FE-009, FE-012, FE-014, FE-034) items.
-
-### R-UX-004: Auth Guard Divergence Leading to Data Exposure (HIGH)
-
-**Debt:** FE-004
-**Risk:** The dual auth pattern creates a window where a code change to `(protected)/layout.tsx` is not reflected in `/buscar`'s manual `useEffect` check, potentially exposing search data to unauthenticated users.
-**Mitigation:** Sprint 2 (FE-004). Treat as security fix, not UX cleanup.
-
-### R-UX-005: Mobile User Abandonment (MEDIUM)
-
-**Debts:** FE-030, FE-029
-**Risk:** If B2G users access SmartLic from mobile during field visits, the current search experience where the form fills the entire viewport and results require scrolling may cause abandonment. Users may not realize the search produced results below the fold.
-**Mitigation:** Sprint 3 (FE-030).
-
-### R-UX-006: Developer Velocity Degradation (LOW, compounding)
-
-**Debts:** FE-002, FE-005, FE-010
-**Risk:** The 369-line mega-hook, dual component directories, and 591-line page file slow down every frontend feature addition. As the product grows, this velocity drag compounds. New developers will struggle with the ambiguous component structure.
-**Mitigation:** Sprint 2 (FE-005, FE-002) and Sprint 3 (FE-010).
+- **No explicit debounce on scroll/render during SSE updates found.** The SSE handler (`useSearchSSEHandler.ts`, 237 lines) updates state directly via `setResult()`.
+- **Current mitigation:** Client-side pagination (10/20/50 items per page via `ResultsPagination`) effectively limits the visible DOM to at most 50 ResultCards.
+- **Virtualization analysis:**
+  - At 10-20 items/page (default): Virtualization adds complexity without benefit
+  - At 50 items/page: Minor benefit on low-end mobile devices
+  - The real jank source is SSE state updates triggering re-renders of the entire search results tree, not the list itself
+- **Recommendation:** Instead of virtualized list, use `React.memo` on `ResultCard` and ensure `ResultsList` only re-renders when its specific slice of data changes. Add `useDeferredValue` for the results array during SSE streaming. This is simpler and more effective than react-window for this use case.
+- **Estimated debounce if added:** 100-150ms on SSE state updates would be sufficient.
 
 ---
 
-*Review completed 2026-03-31 by @ux-design-expert (Uma) as Phase 6 of Brownfield Discovery workflow.*
-*Previous draft review (2026-03-30) superseded by this version -- updated to cover all 32 DRAFT items (FE-001 through FE-032), answer all 8 architect questions, and reflect latest code verification.*
-*Next: Phase 7 (@qa gate review).*
+## 4. Recomendacoes de Design
+
+### 4.1 Design System Improvements
+
+The design system in `globals.css` + `tailwind.config.ts` is **well-architected**. Specific strengths:
+- WCAG contrast ratios documented inline for every color token
+- Full dark mode support with contrast validation
+- Semantic color aliases (success, error, warning) with subtle backgrounds
+- Chart palette (10 colors) and gem palette for data visualization
+- `prefers-reduced-motion` respected globally
+
+**Improvements:**
+1. **Consolidate animation definitions.** Animations are defined BOTH in `globals.css` (`@keyframes`) AND in `tailwind.config.ts` (`keyframes` + `animation`). The CSS keyframes are redundant -- Tailwind generates them from config. Remove duplicates from `globals.css` (keep only those used by non-Tailwind selectors like Shepherd.js).
+2. **Add spacing scale documentation.** The `spacing` key in tailwind config is empty (comment-only). Document the 4px base grid intention with actual values.
+3. **Typography scale gap.** Fluid typography vars (`--text-hero` through `--text-body-lg`) are defined in CSS but NOT mapped in tailwind config `fontSize`. Add `hero: 'var(--text-hero)'`, etc. to enable `text-hero` utility classes.
+
+### 4.2 Component Refactoring Suggestions
+
+**Priority 1 (P1):**
+- Split `useSearchExecution.ts` (852 lines) into 3 hooks (TD-050)
+- Split `useSearchFilters.ts` (607 lines) into 5 hooks (TD-035)
+
+**Priority 2 (P2):**
+- Create shared `BaseErrorBoundary` composing the 5 existing patterns (TD-054)
+- Merge feedback button touch target fix with global CSS audit (TD-039 + TD-052)
+
+**Priority 3 (P3):**
+- Extract `useSectorData` from useSearchFilters -- this is a data concern, not a filter concern
+- Consider React Server Components for `ResultCard` to reduce client bundle (currently all client-side)
+
+### 4.3 Accessibility Roadmap
+
+**Immediate (0-2 weeks):**
+- Fix FeedbackButtons touch target: `min-w-[44px] min-h-[44px]` (1h)
+- Fix TrialUpsellCTA close button touch target (0.5h)
+- Add `aria-hidden="true"` to remaining decorative icons (2h)
+
+**Short-term (1-2 months):**
+- Add FocusTrap to BottomNav "more" overlay (2h)
+- Audit Sonner toast `role` attributes for error toasts (1h)
+- Fix CompatibilityBadge minimum text size (0.5h)
+
+**Long-term (3-6 months):**
+- Quarterly axe-core audit integrated into CI (4h setup)
+- Screen reader testing with NVDA/VoiceOver for top 5 flows (8h)
+- WCAG 2.2 Level AAA audit for focus appearance (already partially compliant)
+
+### 4.4 Mobile UX Improvements
+
+1. **BottomNav safe area:** Add global `pb-[env(safe-area-inset-bottom,80px)]` to main content wrapper for mobile viewports. This prevents content from being hidden behind the 60px BottomNav.
+2. **SSE streaming UX:** Add `useDeferredValue` to prevent jank during result streaming. More effective than debounce or virtualization for this use case.
+3. **Filter panel mobile:** The filter panel on mobile could benefit from a bottom sheet pattern (slide up from bottom) instead of the current inline expansion. This is a larger UX change -- recommend prototyping in Q3.
+
+### 4.5 Testing Strategy
+
+**Current state:** 312 test files is excellent coverage for a frontend of this size. The buscar-specific tests (17 files) cover critical paths well.
+
+**Recommended additions:**
+1. **Visual regression (TD-036):** Chromatic with 10 critical screens (see Q2 answer above)
+2. **a11y automated testing:** Add `jest-axe` to existing Jest tests for the top 10 components. Estimated: 4h setup + 1h per component = 14h total.
+3. **Mobile-specific Playwright tests:** Add iPhone viewport tests for BottomNav padding, FeedbackButtons tap targets, and FilterPanel mobile drawer. Estimated: 6h.
+4. **Storybook (TD-043):** Defer unless team grows. The 312 existing tests provide adequate coverage.
+
+---
+
+## Resumo de Impacto
+
+| Categoria | Itens | Horas Totais Estimadas |
+|-----------|-------|----------------------|
+| Debitos Confirmados (DRAFT) | 15 | 110-160h |
+| Debitos Adicionados (Novos) | 6 | 33-47h |
+| **Total** | **21** | **143-207h** |
+
+### Top 5 por Impacto (recomendacao de priorizacao):
+
+1. **TD-050** (NEW): useSearchExecution 852 lines -- P1, 16-20h
+2. **TD-035**: useSearchFilters 607 lines -- P1, 12-16h
+3. **TD-037**: Saved filter presets -- P2, 20-24h (user-facing value)
+4. **TD-052** (NEW): FeedbackButtons touch target -- P1, 1-2h (quick win, a11y compliance)
+5. **TD-036**: Visual regression testing -- P2, 16-20h (quality gate)

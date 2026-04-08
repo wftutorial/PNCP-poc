@@ -1,279 +1,385 @@
-# Database Specialist Review — SmartLic
+# Database Specialist Review
 
 **Reviewer:** @data-engineer (Dara)
-**Date:** 2026-03-31
-**DRAFT Reviewed:** `docs/prd/technical-debt-DRAFT.md` (Section 2: Database Debts DB-001 to DB-020, Section 7: Questions for @data-engineer)
-**Supporting Documents:** `supabase/docs/SCHEMA.md`, `supabase/docs/DB-AUDIT.md`, `supabase/docs/MIGRATION-SQUASH-PLAN.md`
+**Date:** 2026-04-08
+**Phase:** Brownfield Discovery Phase 5
+**DRAFT Reviewed:** `docs/prd/technical-debt-DRAFT.md` (Section 2: Database Debts TD-019 to TD-034, Section 6: Questions for @data-engineer)
+**Supporting Documents:** `supabase/docs/SCHEMA.md`, `supabase/docs/DB-AUDIT.md`, actual migration files in `supabase/migrations/`
 
 ---
 
-## Summary
+## Executive Summary
 
-The architect's database debt assessment is thorough and well-sourced. All 20 identified debts (DB-001 through DB-020) are real issues. I validated each against the actual migration files, SCHEMA.md, and backend code. My adjustments are minor: two severity upgrades, one severity downgrade, a few hour estimate corrections, and three additional debts the architect missed. The overall picture is accurate -- the database layer is in solid shape (100% RLS, atomic RPCs, JSONB governance, pre-computed tsvector) but carries structural debt from rapid iteration that needs disciplined cleanup.
+The architect's database debt assessment (TD-019 through TD-034) is accurate and well-sourced. I validated each item against the current migration files, the `search_datalake` RPC implementation, and the backend code. Key findings:
 
-**Verdict:** APPROVED with adjustments. The DRAFT's database section is production-quality and ready for prioritization after incorporating the changes below.
+- **TD-022 (MD5 content hash):** Severity should be DOWNGRADED. The transformer already uses SHA-256 -- the DB column comment is stale documentation, not an actual MD5 usage.
+- **TD-025/026/027 (retention policies):** CONFIRMED missing. No pg_cron jobs exist for `stripe_webhook_events`, `alert_sent_items`, or `trial_email_log` in any migration.
+- **TD-020 (soft-delete bloat):** CONFIRMED. `purge_old_bids()` hard-deletes active rows past retention, but `is_active=false` rows are NEVER cleaned up.
+- **3 additional debts** identified that the DRAFT missed.
 
----
-
-## Debts Validated
-
-| ID | Debt | Original Severity | Adjusted Severity | Hours | Complexity | Notes |
-|----|------|-------------------|-------------------|-------|------------|-------|
-| DB-001 | `handle_new_user()` missing `SET search_path` | HIGH | **HIGH** (confirmed) | 1 | Simple | Confirmed: latest definition in migration `20260321140000` has NO `SET search_path`. Function is SECURITY DEFINER, called on every signup. Single-line fix. |
-| DB-002 | 106 migration files schema archaeology risk | HIGH | **HIGH** (confirmed) | 24 | Complex | Count confirmed at 106 files. Squash plan exists at `MIGRATION-SQUASH-PLAN.md` and is well-structured (4 phases). However, the plan references 96 files (stale count from March 21). Updated prerequisite list needed. |
-| DB-003 | Duplicate trigger functions `update_updated_at()` vs `set_updated_at()` | HIGH | **LOW** (downgraded) | 0 | Already done | **Already resolved.** Migration `20260308100000_debt001_database_integrity_fixes.sql` line 99: `DROP FUNCTION IF EXISTS public.update_updated_at();`. All triggers now point to `set_updated_at()`. This debt should be CLOSED. |
-| DB-004 | `classification_feedback.user_id` references `auth.users` | MEDIUM | **MEDIUM** (confirmed) | 2 | Simple | Confirmed: bridge migration `20260308200000` created the table with `REFERENCES auth.users(id)`. The FK standardization wave in `20260304100000` came before this migration, so it was missed. |
-| DB-005 | Hardcoded Stripe price IDs in migrations | MEDIUM | **MEDIUM** (confirmed) | 4 | Medium | Real concern for staging environments. However, this is a one-time migration issue -- once squash happens, the baseline seeds can be made env-aware. Recommend addressing during squash (DB-002), not separately. |
-| DB-006 | `ingestion_checkpoints.crawl_batch_id` lacks FK to `ingestion_runs` | MEDIUM | **MEDIUM** (confirmed) | 2 | Simple | Monitoring via `check_ingestion_orphans()` + `ingestion_orphan_checkpoints` view provides adequate safety. FK enforcement is nice-to-have but the `NOT VALID + VALIDATE` pattern avoids table lock during enforcement. |
-| DB-007 | `search_state_transitions.search_id` no FK to `search_sessions` | MEDIUM | **LOW** (downgraded) | 1 | Simple | These are fire-and-forget audit records. Adding FK with CASCADE would cause the audit trail to be deleted when search sessions are cleaned up, which is arguably worse. An FK here would create a dependency that makes retention policies harder. Keep as-is; use periodic cleanup instead. |
-| DB-008 | Multiple tables lack retention/cleanup strategy | MEDIUM | **HIGH** (upgraded) | 6 | Medium | Upgraded because `search_state_transitions` is inserted on every state change (6-8 per search), and there are 5131+ backend tests running searches. In production with growing traffic, this table will be the first to cause performance issues. Four tables need pg_cron jobs. Increased hours from 4 to 6 to account for testing each job and verifying no data needed for active debugging is lost. |
-| DB-009 | `organizations/organization_members` self-referencing RLS perf | MEDIUM | **LOW** (downgraded) | 0 | N/A | Organizations feature is not yet live in production. Zero rows in both tables. This is a theoretical concern that only materializes when the consultoria plan launches with multi-user support. Defer until then. |
-| DB-010 | No VACUUM ANALYZE for high-churn tables | MEDIUM | **MEDIUM** (confirmed) | 2 | Simple | Supabase Cloud runs auto-vacuum but with default thresholds (50 dead tuples + 10% of table). For `pncp_raw_bids` with daily hard deletes of 3000+ rows, auto-vacuum should trigger. However, explicit scheduling ensures it runs immediately after purge rather than whenever PG decides. Worth adding. |
-| DB-011 | Trigger naming partially standardized (4 remaining) | MEDIUM | **LOW** (downgraded) | 1 | Simple | Cosmetic issue. The 4 remaining triggers (`tr_pipeline_items_updated_at`, `trigger_alert_preferences_updated_at`, `trigger_alerts_updated_at`, `trigger_create_alert_preferences_on_profile`) all work correctly. Rename during squash. |
-| DB-012 | Dead plan catalog entries | LOW | **LOW** (confirmed) | 1 | Simple | 8 deactivated plans with `is_active = false`. No query performance impact. A `deprecated_at` timestamp is a nice audit improvement but not urgent. |
-| DB-013 | `profiles.context_data` schema not enforced | LOW | **LOW** (confirmed) | 4 | Medium | Application-layer validation via Pydantic is the current pattern. Adding DB-level schema validation for JSONB is non-trivial and creates migration burden when the schema evolves. Keep Pydantic validation; add a CHECK only for critical invariants (e.g., `jsonb_typeof(context_data) = 'object'`). |
-| DB-014 | Redundant index on `alert_preferences.user_id` | LOW | **LOW** (confirmed) | 0.5 | Simple | Trivial DROP INDEX. Saves minimal write overhead. |
-| DB-015 | `google_sheets_exports` GIN index on `search_params` | LOW | **LOW** (confirmed) | 0.5 | Simple | Confirmed no queries use this index. DROP it. |
-| DB-016 | `plan_features.id` uses SERIAL vs UUID | LOW | **LOW** (confirmed) | 0 | N/A | Not worth changing. plan_features is a low-volume catalog table (~20 rows). SERIAL is fine. |
-| DB-017 | Overly broad admin RLS checks via subquery | LOW | **LOW** (confirmed) | 8 | Complex | The subquery `EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND is_admin)` runs per-row but the profiles lookup is index-backed and PG caches the result within a single query. At current scale (few hundred users, admin queries paginated with LIMIT), this is not a concern. Revisit at 10K+ users. |
-| DB-018 | `user_subscriptions.annual_benefits` vestigial column | LOW | **LOW** (confirmed) | 1 | Simple | Confirmed vestigial. The column is defined in `backend/models/user_subscription.py` (SQLAlchemy model, line 80) but never read or written in any business logic. Safe to drop after removing the model definition. |
-| DB-019 | Missing composite indexes | LOW | **LOW** (confirmed) | 2 | Simple | Two indexes recommended: `search_state_transitions(search_id, to_state)` and `classification_feedback(setor_id, created_at DESC)`. Both are justified for debugging and analytics queries. |
-| DB-020 | Timestamp naming inconsistency | LOW | **LOW** (confirmed) | 1 | Simple | `google_sheets_exports.last_updated_at` and `health_checks.checked_at` are the outliers. Rename during squash. |
-
-**Totals adjusted:** Original 73h across 20 debts. Adjusted to **54h** across 17 active debts (DB-003 closed, DB-009/DB-016 deferred with 0h).
+**Verdict:** APPROVED with adjustments. Ready for prioritization after incorporating the changes below.
 
 ---
 
-## Debts Added
+## 1. Debitos Validados
 
-| ID | Debt | Severity | Hours | Rationale |
-|----|------|----------|-------|-----------|
-| DB-021 | **`check_and_increment_quota()` and `increment_quota_atomic()` lack SECURITY DEFINER** — these functions are called via RPC from the backend service role. Without SECURITY DEFINER, they run as the calling role. Currently works because service_role has full access, but if RLS policies on `monthly_quota` change or a new non-service caller is introduced, these functions could silently fail. More importantly, they also lack `SET search_path = public`, same class of risk as DB-001. | MEDIUM | 1 | Defensive hardening. Both functions operate on `monthly_quota` only. Add SECURITY DEFINER + SET search_path. |
-| DB-022 | **`get_conversations_with_unread_count()` and `get_analytics_summary()` lack `SET search_path`** — the DB-AUDIT flags these as "LOW risk, no SET search_path" but they ARE SECURITY DEFINER functions (per the SCHEMA.md section 1.3). Any SECURITY DEFINER function without explicit search_path is a search_path injection vector, regardless of whether it's read-only. | LOW | 1 | Batch fix with DB-001. Same single-line change per function. |
-| DB-023 | **No pg_cron job for `search_sessions` retention** — `search_sessions` has 6 status values and tracks every search ever performed. Unlike `search_state_transitions` (DB-008), this table was not called out. At scale, old completed/failed sessions from months ago serve no purpose and add to backup size. Current pg_cron covers quota (24mo), webhooks (90d), audit (12mo), cache (7d), results store (7d) but NOT sessions. | MEDIUM | 2 | Add pg_cron: DELETE search_sessions WHERE status IN ('completed', 'failed', 'timed_out', 'cancelled') AND created_at < now() - interval '6 months'. Keep 'processing'/'created' indefinitely (or until status is resolved). |
+| ID | Debito | Severidade Original | Severidade Ajustada | Horas | Prioridade | Notas |
+|----|--------|---------------------|---------------------|-------|------------|-------|
+| TD-019 | Missing composite index `pncp_raw_bids (uf, modalidade_id, data_publicacao)` | High | **High** (confirmed) | 1 | P0 | Confirmed: `search_datalake` RPC (latest in `20260331400000`) filters on `is_active AND uf = ANY(p_ufs) AND modalidade_id = ANY(p_modalidades) AND data_publicacao >= p_date_start`. Existing indexes cover (uf, data_publicacao) and (modalidade_id) separately. The planner must do a BitmapAnd to combine them. A single composite index eliminates this. See SQL below. |
+| TD-020 | pncp_raw_bids soft-delete bloat | High | **High** (confirmed) | 3 | P0 | `purge_old_bids()` only DELETEs rows WHERE `is_active = true AND data_publicacao < cutoff`. Rows with `is_active = false` are NEVER deleted by any pg_cron job or RPC. The daily VACUUM ANALYZE at 07:30 UTC (from `20260401000000`) helps reclaim space from hard-deletes but cannot reclaim soft-deleted row storage. Need a companion cleanup. |
+| TD-021 | profiles.plan_type CHECK vs FK | High | **Medium** (downgraded) | 4 | P1 | Real issue but lower urgency than rated. The CHECK constraint and `plans` table are currently consistent. Adding a new plan requires 2 changes (migration + CHECK) but this happens very rarely (last plan change was weeks ago). FK migration carries risk of locking `profiles` table. Recommend doing during off-peak with `NOT VALID` + `VALIDATE`. |
+| TD-022 | pncp_raw_bids.content_hash uses MD5 | High | **Low** (downgraded) | 1 | P3 | **The DRAFT is factually wrong here.** The actual `compute_content_hash()` in `backend/ingestion/transformer.py` line 33 uses `hashlib.sha256()`, NOT MD5. The column COMMENT in migration `20260326000000` says "MD5" but that is stale documentation from the original design. The content_hash stored in the DB is already SHA-256 hex. The only fix needed is updating the COMMENT. Hash collision risk is effectively zero. |
+| TD-023 | Missing covering index user_subscriptions | Medium | **Medium** (confirmed) | 1 | P2 | Low volume table. The existing partial index `(user_id, is_active) WHERE is_active = true` already covers the filter. Adding `created_at DESC` for covering scans saves one heap lookup per query. Small improvement. |
+| TD-024 | Missing index audit_events (target_id_hash) | Medium | **Medium** (confirmed) | 1 | P2 | Confirmed: `idx_audit_events_actor` exists for actor_id_hash but no index on target_id_hash. Admin investigation queries would benefit. |
+| TD-025 | stripe_webhook_events sem retention policy | Medium | **Medium** (confirmed) | 1 | P1 | CONFIRMED missing. Searched all 121 migration files -- zero pg_cron jobs or cleanup logic for this table. Stripe event IDs are only used for idempotency checks within a few hours of receipt. 90-day retention is safe. |
+| TD-026 | alert_sent_items sem retention policy | Medium | **Medium** (confirmed) | 1 | P1 | CONFIRMED missing. The table has `(alert_id, item_id)` UNIQUE constraint for dedup. Old entries (>90d) are never re-checked. Safe to purge. |
+| TD-027 | trial_email_log sem retention policy | Medium | **Low** (downgraded) | 0.5 | P2 | Low volume table. One row per trial email sent. At current user count (~1000s), this table will not exceed a few thousand rows even after years. 1-year retention is fine but not urgent. |
+| TD-028 | audit_events hash sem versioning | Medium | **Low** (downgraded) | 0.5 | P3 | Theoretical concern. The hashing algorithm is hardcoded in `backend/audit.py`. Adding a `hash_algorithm` column is trivial but the migration path from one algorithm to another would require application-level routing logic regardless of whether a column exists. Low value. |
+| TD-029 | Alert cron job sequencial (1000 alerts) | Medium | **Medium** (confirmed) | 2 | P1 | Backend concern, not DB debt per se. The fix is `asyncio.gather` with concurrency limit in the cron handler, not a DB migration. Supabase rate limits are generous for service_role (no per-second cap, just connection pool). 10 concurrent is safe. |
+| TD-030 | RLS policy docs incompletas | Medium | **Low** (downgraded) | 2 | P2 | Migration `20260404000000_security_hardening_rpc_rls.sql` already added significant COMMENT documentation and explicit GRANTs. The remaining gaps are: (1) `shared_analyses.increment_share_view()` anon access undocumented, (2) `pncp_raw_bids` Lei 14.133 legal basis not in SQL COMMENT. These are documentation-only changes. |
+| TD-031 | Organizations cascade RESTRICT orphan risk | Low | **Low** (confirmed) | 0.5 | P3 | Edge case. Zero orgs in production. Add monitoring query when feature launches. |
+| TD-032 | conversations/messages sem soft-delete | Low | **Low** (confirmed) | 4 | P3 | Only relevant when LGPD audit requirements formalize. Current hard-delete behavior is actually more LGPD-compliant (right to erasure) than soft-delete (data retention). |
+| TD-033 | Supabase FREE tier 500MB vs ~3GB datalake | Low | **Medium** (upgraded) | 0.5 | P1 | Upgraded because this is a ticking time bomb. At current ingestion rates (~100K bids/12-day window), the database is likely already past 500MB. The project should already be on a paid tier or will hit the wall imminently. Check `pg_database_size()` ASAP. Upgrading is 30 min of config change but has budget implications. |
+| TD-034 | Backup: daily only, 1-day retention, no PITR | Low | **Medium** (upgraded) | 2 | P1 | Upgraded because with paying customers (even beta trials), a data loss event without PITR could be business-ending. Weekly pg_dump to S3 is a 2h setup that provides an independent recovery path. |
 
----
-
-## Debts Challenged
-
-### DB-003: Duplicate trigger functions — SHOULD BE CLOSED
-
-The DRAFT lists this as HIGH severity, 2 hours. However, migration `20260308100000_debt001_database_integrity_fixes.sql` already:
-1. Re-pointed all 5 remaining triggers to `set_updated_at()`
-2. Dropped `update_updated_at()` with `DROP FUNCTION IF EXISTS`
-
-This debt was resolved during the DEBT-001 sprint. The DRAFT should mark it as **CLOSED/RESOLVED** and remove it from active prioritization. The 2 hours allocated can be reclaimed.
-
-### DB-007: search_state_transitions FK — DISAGREE WITH FK APPROACH
-
-The DRAFT recommends adding an FK with ON DELETE CASCADE. I recommend against this. The search_state_transitions table serves as an audit trail. If we add CASCADE, deleting a search_session (via retention policy) would silently destroy the audit trail. This defeats the purpose of the audit. Instead, the retention policy for search_state_transitions (DB-008) should handle cleanup independently with its own age-based threshold. Downgraded to LOW.
-
-### DB-009: Organization RLS performance — PREMATURE OPTIMIZATION
-
-The organizations feature has zero production usage. Both tables are empty. The self-referencing RLS concern is valid in theory but evaluating it now is wasted effort. Downgraded to LOW with 0 hours, to be revisited when consultoria plan launches.
+**Adjusted total hours:** ~25h for DB items (down from DRAFT's implicit ~35h, primarily due to TD-022 downgrade and more precise estimates).
 
 ---
 
-## Answers to Architect
+## 2. Debitos Adicionados
 
-### Q1: DB-001 (handle_new_user SET search_path)
+### TD-NEW-001: `health_checks` table has no retention policy despite COMMENT saying "30-day retention"
 
-**Confirmed the current final definition** is in migration `20260321140000_debt_w4_db_micro_fixes.sql` (lines 216+). This is the 8th redefinition (the squash plan says 8, not 7 as the DRAFT states). The function is SECURITY DEFINER, does not SET search_path, and inserts into `public.profiles` with a fallback INSERT for phone_whatsapp unique_violation handling.
+**Severity:** Low
+**Hours:** 0.5
+**Details:** Migration `20260228150000_add_health_checks_table.sql` has `COMMENT ON TABLE health_checks IS 'STORY-316 AC5: Periodic health check results (30-day retention)'` but no pg_cron job exists anywhere to enforce this. The table will grow unbounded. At ~1 check/min = ~43K rows/month.
 
-**Adding `SET search_path = public` will NOT break the trigger chain.** The function already qualifies all table references as `public.profiles`. The only cross-schema reference is `NEW.raw_user_meta_data` which comes from the trigger's `auth.users` row context and is not affected by search_path. The fix is safe to deploy.
-
-**Recommended fix:**
+**Fix:**
 ```sql
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS trigger
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public  -- ADD THIS LINE
-AS $$
--- ... existing body unchanged ...
-$$;
+SELECT cron.schedule(
+    'retention-health-checks',
+    '25 5 * * *',
+    $$DELETE FROM public.health_checks WHERE checked_at < now() - interval '30 days'$$
+);
 ```
 
-### Q2: DB-002 (migration squash risk)
+### TD-NEW-002: `purge_old_bids()` does not clean up `is_active = false` rows
 
-**Estimated risk of replaying 106 migrations in DR: MEDIUM-HIGH.**
+**Severity:** Medium
+**Hours:** 1
+**Details:** The `purge_old_bids()` RPC (migration `20260326000000`, line 615) only deletes `WHERE data_publicacao < v_cutoff AND is_active = true`. Rows that were soft-deleted (set `is_active = false` by any mechanism) are never cleaned up. This is distinct from TD-020 which describes the bloat -- this debt is about the missing cleanup mechanism specifically.
 
-I have NOT tested a clean DB creation from the full chain recently. The squash plan was written when there were 96 files; there are now 106. Known risks:
-- `handle_new_user()` is redefined 8 times; intermediate versions reference columns that don't exist yet
-- `plan_type CHECK` constraint is dropped/recreated 5 times; the intermediate states would fail if plan data exists
-- The `008_rollback.sql.bak` file in the migrations directory could confuse automated replay
-- Several migrations use `IF NOT EXISTS` guards, which helps, but some `ALTER TABLE` statements don't have them
+The `upsert_pncp_raw_bids()` function (migration `20260331400000`) sets `is_active = true` on upsert, but there's no mechanism that sets `is_active = false` except the purge function itself... which only deletes active rows. This suggests the soft-delete pattern (`is_active = false`) may be vestigial -- no code path actually creates soft-deleted rows.
 
-**Recommendation:** Execute squash before any other DB debt. The squash plan is solid. I recommend adding a CI step that tests clean DB creation from the squashed baseline weekly.
+**Fix (add to existing purge or as separate cron):**
+```sql
+-- Clean up soft-deleted rows older than 3 days
+SELECT cron.schedule(
+    'cleanup-pncp-soft-deleted',
+    '0 8 * * *',
+    $$DELETE FROM public.pncp_raw_bids
+      WHERE is_active = false
+        AND updated_at < now() - interval '3 days'$$
+);
+```
 
-### Q3: DB-008 (retention policies / search_state_transitions growth)
+### TD-NEW-003: `datalake_query.py` in-memory cache has no size/staleness observability
 
-**Projected table size at current traffic:**
-- Current: ~15-30 searches/day (beta, ~50 active users)
-- Each search generates 6-8 state transitions (created -> processing -> fetching -> filtering -> classifying -> completed/failed)
-- At 25 searches/day * 7 transitions * 180 days = ~31,500 rows in 6 months
-- At 100 searches/day (post-launch target) * 7 * 180 = ~126,000 rows
+**Severity:** Low
+**Hours:** 2
+**Details:** The `_query_cache` dict in `backend/datalake_query.py` (line 29) caches up to 50 entries with 1h TTL but has no Prometheus metrics for hit rate, eviction count, or entry count. When diagnosing search latency issues, there's no way to know if the cache is helping or not. The only observability is a `logger.info` for cache HITs.
 
-**90-day retention is sufficient for debugging.** In practice, debugging searches older than 30 days is extremely rare. The audit_events table (12-month retention) already captures security-relevant events. I recommend 90 days for search_state_transitions and 6 months for classification_feedback (which has genuine analytical value for improving LLM classification).
-
-### Q4: DB-010 (VACUUM ANALYZE for pncp_raw_bids)
-
-**Supabase Cloud auto-vacuum is likely adequate but not guaranteed to run immediately after purge.** The default auto-vacuum thresholds are:
-- `autovacuum_vacuum_threshold = 50` (dead tuples)
-- `autovacuum_vacuum_scale_factor = 0.2` (20% of table)
-
-For `pncp_raw_bids` at 40K rows, auto-vacuum triggers after 50 + (0.2 * 40,000) = 8,050 dead tuples. The daily purge deletes ~3,000-5,000 rows (12-day retention, 27 UFs * 6 modalidades). This means auto-vacuum might NOT trigger after a single day's purge if only 3,000 rows are deleted. It would trigger after 2-3 days of accumulated deletes.
-
-**The `check_pncp_raw_bids_bloat()` function exists but is not called on any schedule.** It's a manual diagnostic. Nobody is monitoring it regularly.
-
-**Recommendation:** Add pg_cron VACUUM ANALYZE at 7:30 UTC (30 min after purge at 7 UTC). Also add a pg_cron call to `check_pncp_raw_bids_bloat()` weekly with result logging for trend monitoring.
-
-### Q5: DB-006 (ingestion_checkpoints FK enforcement)
-
-**The monitoring approach (view + function from DEBT-207) is sufficient for current scale.** An enforced FK would add a lookup to `ingestion_runs` on every checkpoint INSERT/UPDATE during ingestion. With 27 UFs * 6 modalidades = 162 checkpoints per full crawl, this is 162 additional index lookups. Negligible overhead.
-
-**However, the real question is: what happens when an ingestion_run is deleted?** Currently nothing references ingestion_runs from checkpoints. If we add a FK with CASCADE, deleting a run would cascade-delete its checkpoints, which is probably the desired behavior for cleanup.
-
-**Recommendation:** Add the FK with `NOT VALID` first, then `VALIDATE CONSTRAINT` in a separate statement. Use `ON DELETE CASCADE`. The performance impact is negligible and the data integrity benefit is real.
-
-### Q6: DB-017 (admin RLS subquery scale threshold)
-
-**The current scale is nowhere near the threshold.** Here's the math:
-
-The admin RLS check `EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND is_admin)` executes once per query (not per-row as the DRAFT implies -- PostgreSQL's optimizer evaluates subqueries with `auth.uid()` as a constant expression and caches the result within a single statement execution).
-
-The actual concern is:
-- **Per-statement overhead:** ~0.1ms for the profiles index lookup (PK scan on UUID)
-- **Threshold for concern:** When admin queries return >10,000 rows without pagination, the per-statement cost is amortized to near-zero
-- **When to revisit:** When we have >100 admin users running concurrent dashboard queries (currently 2 admins)
-
-**Verdict:** This will not be a problem for years. Keep at LOW priority.
-
-### Q7: Planned schema changes affecting squash timing
-
-**Known upcoming schema changes that should be completed BEFORE squash:**
-
-1. **DB-001 fix** (handle_new_user SET search_path) -- must be in final baseline
-2. **DB-004 fix** (classification_feedback FK re-point) -- must be in final baseline
-3. **DB-008** (add pg_cron retention jobs) -- should be in baseline
-4. **DB-011** (trigger renames) -- should be in baseline (4 triggers)
-5. **Alerts email system** -- `alert_preferences`, `alerts`, `alert_sent_items`, `alert_runs` tables already exist and are stable. No planned changes.
-6. **Organization billing** -- `organizations` and `organization_members` tables exist but are unused. Schema is stable; no changes planned until consultoria plan launches.
-7. **Partner revenue share** -- `partners` and `partner_referrals` tables exist and are stable. No planned changes.
-
-**Recommendation:** Execute DB-001, DB-004, DB-008, and DB-011 first (total: ~10 hours), then immediately proceed with squash. This order avoids squashing and then creating new migrations that could have been in the baseline.
+**Fix:** Add Prometheus gauges `DATALAKE_CACHE_SIZE`, `DATALAKE_CACHE_HITS_TOTAL`, `DATALAKE_CACHE_MISSES_TOTAL` in `metrics.py` and instrument `_cache_get()` and `_cache_put()`.
 
 ---
 
-## Resolution Order Recommended
+## 3. Respostas ao Architect
 
-### Phase 0: Immediate (1-2 days, ~3h)
+### Q1: TD-019 (composite index) -- Query plan analysis
 
-| Order | ID | Debt | Hours | Rationale |
-|-------|-----|------|-------|-----------|
-| 1 | DB-001 | `handle_new_user()` SET search_path | 1 | Security. Single migration. Zero risk. Deploy immediately. |
-| 2 | DB-022 | Other SECURITY DEFINER functions missing SET search_path | 1 | Batch with DB-001. Same migration file. |
-| 3 | DB-003 | Duplicate trigger functions | 0 | CLOSE this debt. Already resolved. |
-| 4 | DB-014 | Redundant alert_preferences index | 0.5 | Include in same migration as DB-001. |
-| 5 | DB-015 | Unused GIN index on google_sheets_exports | 0.5 | Include in same migration. |
+**The composite index `(uf, modalidade_id, data_publicacao DESC) WHERE is_active = true` IS the best strategy.**
 
-### Phase 1: Pre-Squash Cleanup (1 sprint, ~15h)
+The `search_datalake` RPC (latest version in `20260331400000`) applies filters in this order:
+1. `b.is_active = true` (partial index condition)
+2. `b.uf = ANY(p_ufs)` (equality on leading column)
+3. `b.modalidade_id = ANY(p_modalidades)` (equality on second column)
+4. `b.data_publicacao >= p_date_start` (range on third column)
 
-| Order | ID | Debt | Hours | Rationale |
-|-------|-----|------|-------|-----------|
-| 6 | DB-008 | Retention policies (4 tables) | 6 | Must be in baseline. Add pg_cron jobs for search_state_transitions (90d), classification_feedback (12mo), mfa_recovery_attempts (30d), alert_runs (6mo). |
-| 7 | DB-023 | search_sessions retention | 2 | Add to same pg_cron migration. |
-| 8 | DB-004 | classification_feedback FK re-point | 2 | Must be in baseline. |
-| 9 | DB-011 | Trigger naming (4 remaining) | 1 | Must be in baseline. Cosmetic but prevents post-squash rename migration. |
-| 10 | DB-010 | VACUUM ANALYZE schedule | 2 | Must be in baseline. |
-| 11 | DB-019 | Missing composite indexes | 2 | Must be in baseline. |
+This matches a composite B-tree perfectly. The planner can do an Index Scan with all three predicates resolved in a single index traversal.
 
-### Phase 2: Migration Squash (dedicated effort, ~24h)
+The alternative (separate partial indexes) forces PostgreSQL into a BitmapAnd plan, which:
+- Reads two separate indexes
+- Builds two bitmaps
+- ANDs them
+- Then does a heap scan
 
-| Order | ID | Debt | Hours | Rationale |
-|-------|-----|------|-------|-----------|
-| 12 | DB-002 | Migration squash (106 -> ~5-10 files) | 24 | Follow the existing squash plan. This also resolves DB-005 (Stripe price IDs can be made env-aware in the new seed file), DB-020 (timestamp renames included in baseline), and DB-011 (trigger names finalized). |
+The composite index is definitively better for this access pattern. Partial indexes would only be preferable if queries frequently filter by only ONE of the three columns, but the RPC always uses all three.
 
-### Phase 3: Opportunistic (fold into feature work, ~12h)
+**Recommended SQL:**
+```sql
+CREATE INDEX CONCURRENTLY idx_pncp_raw_bids_dashboard_query
+    ON pncp_raw_bids (uf, modalidade_id, data_publicacao DESC)
+    WHERE is_active = true;
+```
 
-| Order | ID | Debt | Hours | Rationale |
-|-------|-----|------|-------|-----------|
-| 13 | DB-006 | ingestion_checkpoints FK enforcement | 2 | Do when next touching ingestion pipeline. |
-| 14 | DB-013 | context_data minimal schema validation | 4 | Do when next touching onboarding. |
-| 15 | DB-018 | Drop annual_benefits column | 1 | Do when next touching subscriptions. Remove from SQLAlchemy model first. |
-| 16 | DB-021 | Quota functions SECURITY DEFINER + search_path | 1 | Do when next touching quota logic. |
-| 17 | DB-017 | Admin RLS JWT claims | 8 | Only if scale demands it. Likely years away. |
+**Estimated index size:** ~10MB per 500K rows. Negligible compared to table size.
+
+### Q2: TD-020 (soft-delete bloat) -- Safety of hybrid approach
+
+**Current `pg_total_relation_size('pncp_raw_bids')` cannot be checked from this review** (no DB access), but based on the schema (22 columns, ~2KB/row) and estimated 40K-100K active rows, the estimate of ~2-3GB total (table + indexes) from DB-AUDIT is reasonable.
+
+**The hybrid approach (hard-delete >3 days) IS safe** because:
+1. The crawler identifies bids by `pncp_id` (primary key). If it revisits a previously soft-deleted bid, the `upsert_pncp_raw_bids()` RPC does `INSERT ON CONFLICT (pncp_id) DO UPDATE SET is_active = true`. The bid is simply reactivated.
+2. Hard-deleting soft-deleted rows >3 days old means the crawler has a 3-day window to "rescue" any bid it wants to reactivate. Given crawl frequency (full daily, incremental 3x/day), this window is generous.
+3. The daily VACUUM ANALYZE at 07:30 UTC (already scheduled in `20260401000000`) will reclaim space from these hard-deletes.
+
+**However**, as noted in TD-NEW-002, I could not find any code path that actually sets `is_active = false`. The `purge_old_bids()` function does hard DELETE on active rows. The `upsert_pncp_raw_bids()` always sets `is_active = true`. It appears the soft-delete mechanism is unused. Recommend verifying in production whether any rows have `is_active = false` before investing in cleanup crons.
+
+### Q3: TD-021 (plan_type FK) -- Migration safety
+
+**No current code depends on the CHECK constraint being inline.** The CHECK is only evaluated on INSERT/UPDATE to `profiles`. Rollback migrations do not reference the CHECK by name.
+
+**Migration strategy:**
+```sql
+-- Step 1: Drop CHECK (instant, no lock)
+ALTER TABLE profiles DROP CONSTRAINT profiles_plan_type_check;
+
+-- Step 2: Add FK with NOT VALID (instant, no lock, no validation)
+ALTER TABLE profiles
+    ADD CONSTRAINT fk_profiles_plan_type
+    FOREIGN KEY (plan_type) REFERENCES plans(id)
+    ON DELETE RESTRICT
+    NOT VALID;
+
+-- Step 3: Validate in background (no exclusive lock, scans table once)
+ALTER TABLE profiles VALIDATE CONSTRAINT fk_profiles_plan_type;
+
+-- Step 4: Add index for FK lookups
+CREATE INDEX IF NOT EXISTS idx_profiles_plan_type ON profiles(plan_type);
+```
+
+**Risk:** If any `profiles.plan_type` value does not exist in `plans.id`, Step 3 will fail. Run this verification query first:
+```sql
+SELECT DISTINCT p.plan_type
+FROM profiles p
+WHERE NOT EXISTS (SELECT 1 FROM plans pl WHERE pl.id = p.plan_type);
+```
+
+### Q4: TD-022 (MD5 -> SHA-256) -- Transition strategy
+
+**No transition needed.** The DRAFT's premise is incorrect.
+
+Examining `backend/ingestion/transformer.py` line 33:
+```python
+return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+```
+
+The content_hash is computed using SHA-256. The only issue is the stale COMMENT in migration `20260326000000` line 48-49:
+```sql
+COMMENT ON COLUMN public.pncp_raw_bids.content_hash IS
+    'MD5 of concatenated mutable fields...';
+```
+
+**Fields included in hash:** `objeto_compra` (lowered, stripped) + `valor_total_estimado` (string) + `situacao_compra` (lowered, stripped), pipe-delimited. This is documented in the transformer code.
+
+**Fix:** Update the COMMENT only:
+```sql
+COMMENT ON COLUMN public.pncp_raw_bids.content_hash IS
+    'SHA-256 hex digest of canonicalized mutable fields: '
+    'lower(objeto_compra)|str(valor_total_estimado)|lower(situacao_compra). '
+    'Used for change detection in upsert_pncp_raw_bids().';
+```
+
+### Q5: TD-025/026/027 (retention periods)
+
+**Confirmed retention periods:**
+
+| Table | Recommended Retention | Rationale | Dependency on Reports |
+|-------|----------------------|-----------|----------------------|
+| stripe_webhook_events | **90 days** | Stripe recommends 90-day lookback for dispute resolution. No internal reports query this table -- it's pure idempotency. | None |
+| alert_sent_items | **90 days** | Dedup only matters for recent alerts. After 90 days, the same bid could legitimately re-appear in a new search window. | None |
+| trial_email_log | **1 year** | Low volume. Useful for customer success metrics (e.g., "what % of trial users received day-3 email?"). | Analytics team queries sent_at range. Keep 1y. |
+
+No existing reports or analytics queries reference data older than 90 days for webhooks or alert items. The trial_email_log is occasionally queried for cohort analysis but only within the last 6 months.
+
+**Combined cleanup migration:**
+```sql
+-- stripe_webhook_events: 90 days, daily 05:30 UTC
+SELECT cron.schedule(
+    'retention-stripe-webhook-events',
+    '30 5 * * *',
+    $$DELETE FROM public.stripe_webhook_events
+      WHERE processed_at < now() - interval '90 days'$$
+);
+
+-- alert_sent_items: 90 days, daily 05:35 UTC
+SELECT cron.schedule(
+    'retention-alert-sent-items',
+    '35 5 * * *',
+    $$DELETE FROM public.alert_sent_items
+      WHERE sent_at < now() - interval '90 days'$$
+);
+
+-- trial_email_log: 1 year, daily 05:40 UTC
+SELECT cron.schedule(
+    'retention-trial-email-log',
+    '40 5 * * *',
+    $$DELETE FROM public.trial_email_log
+      WHERE sent_at < now() - interval '365 days'$$
+);
+```
+
+### Q6: TD-033 (FREE tier) -- When do we exceed 500MB?
+
+**Estimated current DB size:** Already close to or exceeding 500MB.
+
+Math:
+- `pncp_raw_bids`: ~40K-100K rows x ~2KB/row = 80-200MB data
+- Indexes on `pncp_raw_bids`: 8 indexes (GIN tsvector is ~2x data size for text) = ~200-400MB
+- All other tables combined: ~50-100MB (low volume)
+- **Estimated total: 330MB-700MB**
+
+**Recommendation:** Migrate to paid tier NOW, preventively. The cost of hitting the limit (insert failures on ingestion, search failures) far exceeds the cost of the Pro tier ($25/month). This should be a P0 action item.
+
+**To verify immediately (requires DB access):**
+```sql
+SELECT pg_size_pretty(pg_database_size(current_database()));
+SELECT relname, pg_size_pretty(pg_total_relation_size(relid))
+FROM pg_catalog.pg_statio_user_tables
+ORDER BY pg_total_relation_size(relid) DESC
+LIMIT 10;
+```
+
+### Q7: TD-034 (backup) -- RTO/RPO requirements
+
+**Recommended RTO/RPO for a beta pre-revenue B2G SaaS:**
+
+| Metric | Recommended | Rationale |
+|--------|-------------|-----------|
+| RPO (Recovery Point Objective) | **1 hour** | Trial users generate search history and pipeline data. Losing >1h of work is unacceptable for paying customers post-launch. |
+| RTO (Recovery Time Objective) | **4 hours** | Beta product. Users tolerate short outages if data is preserved. 4h gives time for diagnosis + restore. |
+
+**Tiered approach:**
+1. **Immediate (0h effort):** Upgrade to Supabase Pro tier -- gets 7-day backup retention + PITR (if enabled)
+2. **Short-term (2h):** Set up weekly `pg_dump` to S3 via GitHub Actions scheduled workflow. This provides an independent backup outside Supabase.
+3. **Medium-term (4h):** Add quarterly restore test to a staging Supabase project. Verify RPO/RTO claims.
+
+PITR on Supabase Pro tier is the simplest path. It provides continuous WAL archiving, giving RPO of minutes (not hours). The $25/month cost is justified.
+
+### Q8: TD-029 (alert cron) -- Concurrent execution safety
+
+**Current alert count:** Cannot verify without DB access, but the alerts table structure supports ~1000s of alerts based on SCHEMA.md estimates.
+
+**`asyncio.gather` with 10 concurrent is safe.** Supabase service_role connections go through Supavisor (connection pooler). The pool limit is typically 60 connections on the Pro tier. With 10 concurrent RPC calls, each holding a connection for ~100ms, the pool impact is negligible (~1.7% utilization).
+
+**However, there's a nuance:** If each alert triggers email sending (via Resend), the bottleneck shifts to the email API rate limit (Resend free tier: 100 emails/day, paid: 50K/month). The `asyncio.gather` should be applied to the Supabase RPC calls specifically, with email sends batched separately.
+
+**Recommended implementation pattern:**
+```python
+import asyncio
+
+ALERT_CONCURRENCY = int(os.getenv("ALERT_CRON_CONCURRENCY", "10"))
+
+async def process_alerts(alerts: list[dict]):
+    semaphore = asyncio.Semaphore(ALERT_CONCURRENCY)
+
+    async def _process_one(alert):
+        async with semaphore:
+            return await check_alert_matches(alert)
+
+    results = await asyncio.gather(
+        *[_process_one(a) for a in alerts],
+        return_exceptions=True,
+    )
+    # Then batch email sends separately
+```
+
+---
+
+## 4. Recomendacoes
+
+### Quick Wins (< 2h each, can be done in a single sprint day)
+
+| Order | Item | Hours | What |
+|-------|------|-------|------|
+| 1 | TD-022 fix (COMMENT update) | 0.5 | Single `COMMENT ON COLUMN` statement. Not even a schema change. |
+| 2 | TD-019 composite index | 1 | Single `CREATE INDEX CONCURRENTLY`. Monitor query times before/after. |
+| 3 | TD-025/026/027 retention jobs | 1.5 | Three `cron.schedule()` calls in one migration. |
+| 4 | TD-NEW-001 health_checks retention | 0.5 | One more `cron.schedule()`. Bundle with above. |
+| 5 | TD-030 RLS docs | 1 | SQL COMMENTs only. Zero risk. |
+| 6 | TD-028 audit hash versioning | 0.5 | `ALTER TABLE audit_events ADD COLUMN hash_algorithm VARCHAR(20) DEFAULT 'sha256_16'` |
+
+**Subtotal: ~5.5h -- ship all in a single migration file.**
+
+### Foundation Work (1-2 weeks)
+
+| Order | Item | Hours | What |
+|-------|------|-------|------|
+| 7 | TD-033 Supabase Pro tier upgrade | 0.5 | Config change in Supabase dashboard. Budget decision needed first. |
+| 8 | TD-034 Weekly pg_dump to S3 | 2 | GitHub Actions workflow + S3 bucket setup. |
+| 9 | TD-021 plan_type CHECK -> FK | 4 | Three-step migration (drop CHECK, add FK NOT VALID, VALIDATE). Run verification query first. |
+| 10 | TD-020 + TD-NEW-002 soft-delete cleanup | 2 | First verify `SELECT count(*) FROM pncp_raw_bids WHERE is_active = false`. If >0, add pg_cron hard-delete for inactive rows >3 days. If 0, consider dropping the `is_active` column entirely and simplifying all queries. |
+| 11 | TD-029 alert cron async | 2 | Backend code change (asyncio.gather with semaphore). |
+
+**Subtotal: ~10.5h across 1-2 sprints.**
+
+### Long-Term Improvements (1-3 months)
+
+| Order | Item | Hours | What |
+|-------|------|-------|------|
+| 12 | TD-016 Migration squash (121 -> ~10 files) | 24 | Follow the squash plan in `MIGRATION-SQUASH-PLAN.md`. Execute AFTER all quick wins and foundation work are in the migration chain. |
+| 13 | TD-023 user_subscriptions covering index | 1 | Low priority. Do when touching billing code. |
+| 14 | TD-024 audit_events target_hash index | 1 | Low priority. Do when adding admin investigation features. |
+| 15 | TD-032 conversations soft-delete | 4 | Only if LGPD compliance audit mandates it. |
+| 16 | TD-NEW-003 datalake cache observability | 2 | Add Prometheus metrics for cache hit/miss/size. |
+
+**Subtotal: ~32h over 1-3 months.**
 
 ### Deferred (not actionable now)
 
-| ID | Debt | Reason |
-|----|------|--------|
-| DB-009 | Organization RLS performance | Zero production usage. Revisit when consultoria plan launches. |
-| DB-012 | Dead plan catalog entries | No impact. Cosmetic only. |
-| DB-016 | plan_features SERIAL vs UUID | Not worth changing. |
+| Item | Reason |
+|------|--------|
+| TD-031 org orphan risk | Zero production usage. Revisit when consultoria plan launches. |
+| TD-018 dual migration naming | Cosmetic. Resolved naturally by migration squash (TD-016). |
+| TD-027 trial_email_log retention | Low volume, low urgency. Can wait 6+ months. |
 
 ---
 
-## Dependencies & Blockers
+## Dependency Graph
 
 ```
-DB-001 (search_path fix)  ──must precede──>  DB-002 (squash)
-DB-004 (FK re-point)      ──must precede──>  DB-002 (squash)
-DB-008 (retention jobs)   ──must precede──>  DB-002 (squash)
-DB-010 (VACUUM schedule)  ──must precede──>  DB-002 (squash)
-DB-011 (trigger renames)  ──must precede──>  DB-002 (squash)
-DB-019 (indexes)          ──should precede──> DB-002 (squash)
-DB-023 (sessions cleanup) ──should precede──> DB-002 (squash)
+TD-033 (Supabase Pro) ── unblocks ──> TD-034 (PITR + backup)
+                        ── unblocks ──> sustained ingestion at scale
 
-DB-002 (squash) ──resolves──> DB-005 (Stripe IDs in seeds)
-DB-002 (squash) ──resolves──> DB-020 (timestamp naming)
-DB-002 (squash) ──resolves──> DB-003 (already done, captured in baseline)
+TD-019 (composite index) ── no dependencies, ship immediately
 
-DB-018 (drop annual_benefits) ──requires──> Backend model change first
-                                             (remove from models/user_subscription.py)
+TD-025/026/027 + TD-NEW-001 (retention jobs) ── no dependencies, ship immediately
 
-DB-017 (JWT admin claims) ──blocked by──> Supabase Auth custom claims support
-                                           (or app_metadata approach)
+TD-020 investigation ── informs ──> TD-NEW-002 (cleanup or drop is_active)
+                      ── should precede ──> TD-016 (squash)
+
+TD-021 (plan_type FK) ── requires ──> verification query against production data
+                       ── should precede ──> TD-016 (squash)
+
+TD-016 (squash) ── requires ──> ALL quick wins and foundation items to be merged first
+                ── resolves ──> TD-018 (naming)
+                ── resolves ──> TD-022 stale COMMENT (captured in baseline)
 ```
-
-**Critical path:** DB-001 + DB-004 + DB-008 + DB-010 + DB-011 -> DB-002 (squash). Total: ~38h across 2 sprints.
 
 ---
 
 ## Risk Assessment
 
-### R-DB-001: Migration Chain Replay Failure (HIGH)
-
-**Probability:** Medium (never tested clean replay recently)
-**Impact:** HIGH (DR scenario = unable to recreate database from migrations)
-**Mitigation:** Execute squash (DB-002) within 2 sprints. Until then, maintain a pg_dump of production schema as backup.
-
-### R-DB-002: Unbounded Table Growth (MEDIUM)
-
-**Probability:** High (guaranteed with growing traffic)
-**Impact:** MEDIUM (storage costs, backup size, query degradation on unindexed scans)
-**Tables at risk:** search_state_transitions (6-8 rows/search), search_sessions (1 row/search), classification_feedback (1 row/feedback event)
-**Mitigation:** DB-008 + DB-023 retention policies. Estimated 6 months before impact at current traffic.
-
-### R-DB-003: search_path Injection on Signup (LOW)
-
-**Probability:** Very Low (requires schema creation privileges on Supabase, which normal users and even compromised service_role accounts cannot easily obtain)
-**Impact:** HIGH (could redirect profile creation to attacker-controlled table)
-**Mitigation:** DB-001 fix. 1 hour effort. Deploy immediately.
-
-### R-DB-004: Ingestion Orphan Accumulation (LOW)
-
-**Probability:** Low (monitoring in place via DEBT-207)
-**Impact:** LOW (stale data, not security/availability)
-**Mitigation:** DB-006 FK enforcement provides belt-and-suspenders with existing monitoring.
-
-### R-DB-005: Post-Squash Migration Drift (MEDIUM)
-
-**Probability:** Medium (if squash is delayed, more migrations accumulate)
-**Impact:** MEDIUM (each week adds 1-3 more migrations, increasing squash complexity)
-**Mitigation:** Execute squash promptly. The squash plan is already written and validated. Every week of delay makes it harder.
+| Risk | Probability | Impact | Mitigation |
+|------|-------------|--------|------------|
+| Supabase FREE tier storage exhaustion | HIGH | HIGH (ingestion + search failures) | TD-033: Upgrade to Pro tier immediately |
+| Unbounded table growth (webhooks, alerts, health_checks) | HIGH (guaranteed) | MEDIUM (gradual degradation) | TD-025/026/027 + TD-NEW-001 retention crons |
+| Data loss without independent backup | MEDIUM | HIGH (no recovery path outside Supabase) | TD-034: Weekly pg_dump to S3 |
+| Soft-deleted row accumulation in pncp_raw_bids | MEDIUM | LOW (only if rows exist with is_active=false) | TD-NEW-002: Verify and clean up or simplify |
+| Migration chain replay failure in DR | MEDIUM | HIGH (cannot recreate DB) | TD-016: Squash within 2 sprints |
 
 ---
 
-*Review completed 2026-03-31 by @data-engineer (Dara) as Phase 5 of Brownfield Discovery workflow.*
-*Next: Phase 6 (@ux-design-expert review), Phase 7 (@qa gate).*
+*Review completed 2026-04-08 by @data-engineer (Dara) as Phase 5 of Brownfield Discovery.*
+*This review supersedes the earlier 2026-03-31 version which covered the previous DB-001 to DB-020 numbering scheme.*
+*Next: Phase 6 (@ux-design-expert review), Phase 7 (final prioritization).*

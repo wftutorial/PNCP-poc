@@ -1,119 +1,194 @@
-# EPIC: Resolucao de Debitos Tecnicos -- SmartLic
+# EPIC: Resolucao de Debitos Tecnicos — SmartLic
 
-**ID:** EPIC-DEBT-2026
-**Data:** 2026-03-23
-**Owner:** @pm (Morgan)
-**Status:** Draft
-**Source:** `docs/prd/technical-debt-assessment.md` (FINAL v1.0, 54 items, ~196h, 6 batches)
-**Supersedes:** Previous epic (76 items / 5 waves / ~259h) -- assessment was re-reviewed by specialists (Phases 5-7), 18% error rate corrected, 6 items removed as already resolved.
-
----
+**Epic ID:** EPIC-TD-2026
+**Owner:** @architect (Aria)
+**Status:** Planning
+**Created:** 2026-04-08
+**Timeline:** 20 semanas (5 fases)
+**Budget:** R$ 18.000 (Fases 1-4) + R$ 30.000 (Fase 5, sob demanda)
+**Supersedes:** Previous epic EPIC-DEBT-2026 (54 items / 6 batches / ~196h) -- assessment v2.0 re-validated by 4 specialists, corrected to 61 items across 5 phases.
 
 ## Objetivo
 
-Resolver 54 debitos tecnicos identificados na avaliacao formal de divida tecnica (Brownfield Discovery Phase 10), eliminando riscos de seguranca, memory leaks em producao, gaps de acessibilidade, e monolitos de codigo que impedem onboarding de desenvolvedores e aumentam risco de regressao.
+Resolver 61 debitos tecnicos identificados no Brownfield Discovery (Assessment v2.0, validado por @architect, @data-engineer, @ux-design-expert, @qa), priorizando itens P0 (critical path ~9h) e P1 (foundation ~65h), garantindo estabilidade operacional e preparando a plataforma para escala. O custo de nao agir e estimado em R$ 161.800 - R$ 229.800/ano em riscos acumulados.
 
 **Justificativa de negocio:**
-- **Seguranca:** Dual Stripe webhook router pode causar double-processing de pagamentos (DEBT-324)
-- **Estabilidade:** `_plan_status_cache` sem limite cresce indefinidamente em producao (DEBT-323, CRITICAL)
-- **Aquisicao:** Landing page renderiza 13 componentes client-side, prejudicando LCP e SEO (TD-M07)
-- **Compliance:** Gaps de acessibilidade (WCAG 2.1) bloqueiam expansao para clientes governamentais (XC-06)
-- **Velocidade de desenvolvimento:** 6 arquivos backend >1500 LOC dificultam manutencao e code review
+- **Operacional:** Supabase FREE tier (500MB) vs datalake ~3GB — risco de parada total do sistema de busca
+- **Performance:** Indice composto ausente causa 2-3x mais latencia em toda busca ao datalake
+- **Seguranca:** service_role usado para operacoes de usuario + RPCs sem auditoria de auth.uid()
+- **Manutenibilidade:** 3.775 LOC em hooks de busca + 3 arquivos backend >1.300 LOC cada
+- **Mobile UX:** Touch targets 28px (minimo 44px), scroll jank no SSE, conteudo cortado por BottomNav
 
 ## Escopo
 
 ### Incluido
-- Todos os 54 debitos catalogados no assessment FINAL
-- 6 batches de resolucao (0-5), ordenados por risco e ROI
-- Migrations de banco (NOT NULL, CHECK constraints, cache eviction fix)
-- Decomposicao de monolitos backend (filter, schemas, webhooks, jobs, quota, cache)
-- Conversao RSC da landing page (islands pattern)
-- Fixes de acessibilidade (screen reader, viability badges, duplicate IDs)
-- Cleanup de dead code (ComprasGov, feature flags, compat shims)
+- Todos os 61 debitos catalogados no Assessment Final v2.0
+- 5 fases de resolucao, ordenadas por risco e ROI
+- 4 itens P0 (Criticos — Semanas 1-2): Storage, indice, bloat, retencao
+- 12 itens P1 (Altos — Semanas 2-6): Backup, alertas, hooks, seguranca, touch targets
+- 15 itens P2 (Medios — Semanas 5-8): Timeouts, backend refactoring, a11y, visual regression
+- 12 itens P3 (Baixos — Semanas 9-12): Migration squash, cache, error boundaries
+- 14 itens P4 (Backlog — Semanas 13-20): i18n, offline, Storybook (sob demanda)
+- 4 itens Resolved (monitoramento apenas)
 
 ### Excluido
-- Rewrite completo de arquitetura (apenas decomposicao incremental com facade pattern)
+- Rewrite completo de arquitetura (apenas decomposicao incremental)
 - Mudancas de stack (permanece FastAPI + Next.js)
-- DEBT-311 (test LOC ratio 1.87x -- aceito como normal pelo QA)
-- DEBT-321 (blog.ts hardcoded -- decisao intencional de design)
-- Novas features -- este epic e puramente de debt reduction
+- Novas features (exceto TD-037 saved filter presets, que e user-facing value direto)
+- TD-048 i18n (100h, Brasil-only) e TD-049 offline (50h, sem demanda) — Fase 5 sob demanda
 
 ## Criterios de Sucesso
 
-| Metrica | Antes | Depois (target) |
-|---------|-------|-----------------|
-| Backend monolith files >1500 LOC | 6 | 0 |
-| Frontend HIGH debt items | 2 | 0 |
-| CRITICAL items abertos | 1 | 0 |
-| WCAG a11y violations (axe-core) | Desconhecido | 0 (paginas primarias) |
-| Landing page LCP | >3s (estimado) | <2.5s |
-| Client JS bundle (landing) | Baseline | -40KB+ gzipped |
-| Open DB integrity items | 4 | 0 |
-| Backend tests pass | 7656 | 7656 (zero regressions) |
-| Frontend tests pass | 5733 | 5733 (zero regressions) |
-| OpenAPI schema | Baseline | Unchanged after decomposition |
+### Performance
+| Metrica | Atual | Meta | Medicao |
+|---------|-------|------|---------|
+| `search_datalake` RPC latencia (p50) | Sem baseline | 50-70% reducao apos TD-019 | `EXPLAIN ANALYZE` antes/depois |
+| PNCP API disponibilidade | 94% | >= 95% | Prometheus `smartlic_pncp_health_*` |
+| Cache hit rate | 65-75% | >= 75% sustentado | Prometheus `smartlic_cache_hit_rate` |
+| DB size | ~500MB (estimado) | Monitorado, < 80% do limite do tier | `pg_database_size()` semanal |
+| Search page hooks total lines | 3.775 | < 2.500 apos refatoracao | `wc -l frontend/app/buscar/hooks/*.ts` |
 
-## Timeline
+### Cobertura
+| Area | Atual | Meta | Gate |
+|------|-------|------|------|
+| Backend test coverage | >= 70% (CI gate) | Manter >= 70% | `pytest --cov` |
+| Frontend test coverage | >= 60% (CI gate) | Manter >= 60% | `npm run test:coverage` |
+| a11y automated coverage | 0% | >= 80% dos top 10 componentes | jest-axe apos TD-056 |
+| Visual regression | 0% | 10 telas criticas | Chromatic apos TD-036 |
+| Dependency vulnerability scan | Nao em CI | 0 high/critical findings | pip-audit + npm audit apos TD-058 |
 
-Assumindo 1 desenvolvedor full-time (~6h/dia produtivas):
-
-| Batch | Story | Horas | Duracao | Inicio (relativo) | Dependencias |
-|-------|-------|-------|---------|-------------------|--------------|
-| 0 | STORY-DEBT-0: Stripe Webhook Audit | 3h | 0.5 dia | Dia 1 | Nenhuma |
-| 1 | STORY-DEBT-1: Quick Wins (DB + Backend) | 5h | 1 dia | Dia 2 | Nenhuma |
-| 2 | STORY-DEBT-2: Landing Performance | 10h | 2 dias | Dia 3 | Independente |
-| 3 | STORY-DEBT-3: Security + A11y | 17h | 3 dias | Dia 5 | Batch 0 (DEBT-324 -> DEBT-307) |
-| 4 | STORY-DEBT-4: Architecture Decomposition | 32h | 5.5 dias | Dia 8 | Pode paralelizar com Batch 3 |
-| 5 | STORY-DEBT-5: Polish + Cleanup | 73h | 12 dias | Dia 14 | Batches 1-4 concluidos |
-| | **Total** | **~140h core** | **~25 dias** | | |
-
-**Nota:** Batch 5 inclui ~27h de items LOW/backlog que podem ser priorizados oportunisticamente durante feature work ao inves de blocos dedicados.
-
-## Budget
-
-| Item | Valor |
-|------|-------|
-| Esforco total estimado | ~196h (140h core batches 0-4 + 56h backlog batch 5) |
-| Custo estimado (R$150/h dev) | R$29.400 |
-| Custo minimo (Batches 0-4 only) | R$10.050 (67h) |
-| Timeline minima (Batches 0-4) | ~12 dias uteis |
+### Seguranca
+| Check | Atual | Meta |
+|-------|-------|------|
+| RPCs com auth.uid() validado | Desconhecido | 100% das user-scoped RPCs (apos TD-059) |
+| Dependencies com CVEs conhecidas | Desconhecido | 0 high/critical (apos TD-058) |
+| Secrets no git history | Desconhecido | 0 (apos TD-060) |
 
 ## Stories
 
-| ID | Titulo | Batch | Prioridade | Horas | Arquivo |
-|----|--------|-------|------------|-------|---------|
-| STORY-DEBT-0 | Stripe Webhook Audit + Fix | 0 | P0 | 3h | [story-debt-0-webhook-audit.md](story-debt-0-webhook-audit.md) |
-| STORY-DEBT-1 | Quick Wins (DB Integrity + Backend Fixes) | 1 | P0 | 5h | [story-debt-1-quick-wins.md](story-debt-1-quick-wins.md) |
-| STORY-DEBT-2 | Landing Page RSC + Performance | 2 | P1 | 10h | [story-debt-2-landing-performance.md](story-debt-2-landing-performance.md) |
-| STORY-DEBT-3 | Security Decomposition + Accessibility | 3 | P1 | 17h | [story-debt-3-security-a11y.md](story-debt-3-security-a11y.md) |
-| STORY-DEBT-4 | Backend Module Decomposition | 4 | P2 | 32h | [story-debt-4-architecture.md](story-debt-4-architecture.md) |
-| STORY-DEBT-5 | Polish, Cleanup + DX Improvements | 5 | P3 | 73h | [story-debt-5-polish.md](story-debt-5-polish.md) |
+### Fase 1: Quick Wins (Semanas 1-2) — ~10h, R$ 1.500
+- **STORY-TD-001:** [Quick Wins P0 — Eliminar riscos de parada operacional](story-TD-001-quick-wins-p0.md)
+  - TD-033: Supabase Pro upgrade (0.5h)
+  - TD-019: Indice composto pncp_raw_bids (1h)
+  - TD-020: Soft-delete bloat cleanup (3h)
+  - TD-025/026/027/NEW-001: 4 retention policies (2h)
+  - TD-022: content_hash COMMENT fix (0.5h)
+  - TD-052: FeedbackButtons touch target (1.5h)
+  - TD-053: CompatibilityBadge font size (0.5h)
+  - TD-059: RPC auth.uid() audit (4h)
+
+### Fase 2: Foundation (Semanas 3-6) — ~16h, R$ 2.400
+- **STORY-TD-002:** [DB Foundation — Backup, integridade e cleanup](story-TD-002-db-foundation.md)
+  - TD-034: Weekly pg_dump + PITR (2h)
+  - TD-020/NEW-002: Soft-delete investigation + cleanup cron (3h)
+  - TD-021: plan_type CHECK -> FK migration (4h)
+  - TD-NEW-002: purge_old_bids() fix (1h)
+- **STORY-TD-003:** [Backend Foundation — Alertas, timeouts e async](story-TD-003-backend-foundation.md)
+  - TD-061: Ingestion failure alerting (3h)
+  - TD-015: Railway/Gunicorn timeout alignment (2h)
+  - TD-029: Alert cron asyncio.gather (2h)
+
+### Fase 3: Hardening (Semanas 5-8) — ~54h, R$ 8.100
+- **STORY-TD-004:** [Frontend Hardening — Hooks decomposition e filtros salvos](story-TD-004-frontend-hardening.md)
+  - TD-050: useSearchExecution 852 LOC -> 3 hooks (18h)
+  - TD-035: useSearchFilters 607 LOC -> 5 hooks (14h)
+  - TD-037: Saved filter presets feature (22h)
+- **STORY-TD-005:** [Security & Backend Hardening — Scanning e refactoring](story-TD-005-security-qa.md)
+  - TD-058: pip-audit + npm audit in CI (4h)
+  - TD-007: quota.py split (12h)
+  - TD-008: consolidation.py split (8h)
+
+### Fase 4: Polish (Semanas 9-12) — ~44h, R$ 6.600
+- **STORY-TD-006:** Quality Automation — Visual regression, a11y, LLM modularizacao
+  - TD-036: Chromatic visual regression (18h)
+  - TD-056: jest-axe a11y testing (14h)
+  - TD-009: llm_arbiter.py split (8h)
+  - TD-058: Dependency scanning CI integration (4h)
+
+### Fase 5: Long-term (Semanas 13-20) — ~200h, sob demanda
+- **STORY-TD-007:** Long-term Backlog
+  - TD-016: Migration squash 121 -> ~10 (24h) — APOS todas migracoes Fases 1-4
+  - TD-005: Per-user Supabase tokens (16h) — apos TD-059
+  - TD-051: Search hooks architecture docs + XState (16h)
+  - TD-011: Railway auto-scaling (4h)
+  - TD-046: useDeferredValue SSE scroll (10h)
+  - TD-043: Storybook (28h) — se equipe FE >= 3
+  - TD-048/049: i18n + offline (150h) — adiado indefinidamente
+  - Demais P3/P4: ~30h oportunisticos
 
 ## Riscos
 
 | Risco | Severidade | Mitigacao |
 |-------|------------|-----------|
-| Monolith decomposition quebra imports de teste | HIGH | Decomposicao incremental (1 arquivo por vez). Full test suite (7656 tests) apos cada move. Facade `__init__.py` preserva imports existentes. |
-| Double-processing de webhooks corrompeu dados de billing | HIGH | Batch 0 audit primeiro. Verificar logs de producao, Stripe Dashboard URL, idempotency keys. |
-| filter/core.py decomposition regressao | HIGH | Maior risco: 3871 LOC + 14 test files (3704 LOC). Preservar `from filter import X`. Coverage >80% antes de iniciar. |
-| Landing RSC migration quebra Framer Motion animations | MEDIUM | Islands pattern: RSC wrapper + client animation children. Build-time error detection (`npm run build` fails on RSC import errors). Visual regression tests com Playwright screenshots. |
-| Feature flag cleanup remove flag ativa em producao | MEDIUM | Grep usage em FE + BE antes de remover qualquer flag. Cross-reference ambos codebases. |
-| Redis failure modes nao avaliadas neste assessment | MEDIUM | Gap reconhecido. Avaliar durante proximo incident review (CB fail open/closed, rate limit behavior, reconnection). |
+| DB storage exhaustion cascade (TD-033 + TD-020 + TD-025/026/027) | CRITICAL | Fase 1 executar esta semana — upgrade + retencao |
+| Hook decomposition quebra testes existentes | HIGH | Facade pattern preserva imports. Full test suite apos cada move. |
+| Migration squash (TD-016) invalida checkpoints de dev | HIGH | MUST ser LAST apos todas migracoes Fases 1-4 |
+| Silent request death sem Sentry trace (TD-015 + TD-011) | HIGH | Fase 2: alinhar timeouts + middleware deteccao |
+| Backend decomposition quebra imports de teste | MEDIUM | 1 arquivo por vez, full test suite, `__init__.py` facade |
+| Perda de dados sem backup independente (TD-034 + TD-033) | HIGH | Fase 1 (Pro) + Fase 2 (pg_dump + PITR) |
 
 ## Dependencias
 
-| Dependencia | Tipo | Impacto |
-|-------------|------|---------|
-| DEBT-324 audit -> DEBT-307 decomp | Interna (Batch 0 -> Batch 3) | Nao decompor webhooks antes de auditar duplicacao |
-| jest-axe setup (TD-L01) -> a11y fixes | Interna (Batch 5 -> Batch 3) | Recomendacao: iniciar Batch 3 com setup jest-axe para prevenir regressao |
-| DEBT-301/302/305 decomp -> DEBT-304 packaging | Interna (Batch 4) | Decompor modulos individuais antes de reorganizar packages |
-| TD-H02 (auth unification) -> TD-NEW-01 (duplicate IDs) | Interna (Batch 3) | Resolver duplicate IDs durante unificacao de auth |
-| Stripe Dashboard access | Externa | Necessario para Batch 0 webhook URL audit |
-| Railway production logs | Externa | Necessario para Batch 0 log analysis |
-| Supabase migration pipeline | Externa | Batches 1, 4 requerem `supabase db push` |
+### Resolution Order (DAG)
+
+```
+FASE 1 (Semanas 1-2, parallel tracks):
+  TD-033 Supabase Pro ────────> desbloqueia TD-034 (PITR + backup)
+  TD-019 indice composto ────> sem dependencias, ship imediatamente
+  TD-025/026/027 + NEW-001 ──> retencao, bundle 1 migracao
+  TD-022 COMMENT fix ────────> ship com migracao de retencao
+  TD-052 FeedbackButtons ───> ship independentemente (1.5h)
+  TD-059 RPC audit ─────────> informa escopo TD-005
+
+FASE 2 (Semanas 3-6):
+  TD-034 pg_dump to S3 ─────> requer TD-033
+  TD-020 + NEW-002 ─────────> deve preceder TD-016 (squash)
+  TD-021 plan_type FK ──────> deve preceder TD-016 (squash)
+  TD-029 alert cron async ──> independente
+  TD-061 ingestion alerting > independente
+  TD-015 timeout alignment ─> independente
+
+FASE 3 (Semanas 7-12):
+  TD-050 useSearchExecution ──> antes de TD-035
+  TD-035 useSearchFilters ───> apos TD-050, antes de TD-037
+  TD-037 saved filter presets > apos TD-035
+  TD-007/008 backend splits ─> independente, paralelo com FE
+
+FASE 4 (Semanas 9-12):
+  TD-036 visual regression ──> paralelo com Fase 3
+  TD-056 jest-axe ───────────> independente
+  TD-058 dep scanning ──────> independente
+  TD-009 llm_arbiter split ─> independente
+
+FASE 5 (Semanas 13-20+):
+  TD-016 migration squash ──> APOS todas migracoes Fases 1-4
+  TD-005 per-user tokens ───> apos TD-059 definir escopo
+  Demais P3/P4 ─────────────> oportunisticos
+```
+
+### Parallelization Tracks
+
+| Track A (DB/Infra) | Track B (Frontend) | Track C (Security/CI) |
+|--------------------|--------------------|-----------------------|
+| TD-033 Pro upgrade | TD-052 touch targets | TD-059 RPC audit |
+| TD-019 composite index | TD-050 hook split | TD-058 dep scanning |
+| TD-025/026/027 retention | TD-035 hook split | TD-061 alerting |
+| TD-034 pg_dump backup | TD-037 saved presets | TD-060 secret scanning |
+| TD-020 bloat cleanup | TD-036 visual regression | |
+| TD-021 FK migration | TD-056 jest-axe | |
+
+Tres tracks paralelos podem executar simultaneamente se staffed.
+
+## Documentos Relacionados
+
+- [Assessment Tecnico Final v2.0](../prd/technical-debt-assessment.md) — 61 debitos detalhados, grafo de dependencias, matriz de priorizacao, criterios de sucesso
+- [Relatorio Executivo v2.0](../reports/TECHNICAL-DEBT-REPORT.md) — Analise de custos, ROI 9:1, recomendacoes
+- [Review Database](../reviews/db-specialist-review.md) — Validacao @data-engineer (Fase 5)
+- [Review Frontend/UX](../reviews/ux-specialist-review.md) — Validacao @ux-design-expert (Fase 6)
+- [QA Review](../reviews/qa-review.md) — Aprovacao final @qa (Fase 7)
 
 ---
 
-*Gerado 2026-03-23 por @pm (Morgan) durante Brownfield Discovery Phase 10.*
-*Baseado no Technical Debt Assessment FINAL v1.0 (54 items, ~196h, 6 batches).*
-*Supersedes previous epic (76 items / 5 waves / ~259h) based on specialist-reviewed assessment with 18% error correction.*
+*Epic v2.0 criado em 2026-04-08 por @pm (Morgan) durante Brownfield Discovery Phase 10 — Planning.*
+*Baseado no Technical Debt Assessment Final v2.0 (61 items, 5 phases, ~320h total).*
+*Supersedes previous epic (54 items / 6 batches / ~196h) based on specialist-reviewed assessment v2.0.*

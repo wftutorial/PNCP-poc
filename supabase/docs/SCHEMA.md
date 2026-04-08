@@ -1,608 +1,800 @@
-# SmartLic Database Schema Reference
+# SmartLic Database Schema Documentation
 
-> **Generated:** 2026-03-31 | **Auditor:** @data-engineer (Dara) -- Brownfield Discovery Phase 2
-> **Source:** 106 migration files in `supabase/migrations/`
-> **Database:** PostgreSQL 17 (Supabase Cloud) | **Schema:** `public`
-> **Extensions:** pg_trgm, pg_cron
-
----
-
-## Overview
-
-| Metric | Value |
-|--------|-------|
-| Total tables | 35 |
-| Tables with RLS | 35 (100%) |
-| RPC Functions | 15 |
-| Triggers | 14 |
-| pg_cron Jobs | 5 |
-| CHECK Constraints | 30+ |
-| Indexes | 80+ |
-| Custom Types | 1 (alert_frequency ENUM) |
-| Views | 2 (diagnostic) |
+**Project:** PNCP-poc (SmartLic)
+**Database:** Supabase (PostgreSQL 17)
+**Generated:** 2026-04-08
+**Auditor:** @data-engineer (Dara) -- Brownfield Discovery Phase 2
 
 ---
 
-## Tables
+## Table of Contents
+
+1. [Core Tables](#core-tables)
+2. [Subscription & Billing](#subscription--billing)
+3. [Search & Analytics](#search--analytics)
+4. [Data Lake (PNCP Ingestion)](#data-lake-pncp-ingestion)
+5. [Messaging & Support](#messaging--support)
+6. [Organizations & Multi-User](#organizations--multi-user)
+7. [Monitoring & Audit](#monitoring--audit)
+8. [Third-Party Integrations](#third-party-integrations)
+9. [Indexes](#indexes)
+10. [RLS Policies](#rls-policies)
+11. [Functions & RPCs](#functions--rpcs)
+12. [Triggers](#triggers)
+13. [Enums & Custom Types](#enums--custom-types)
+
+---
+
+## Core Tables
 
 ### profiles
+**Purpose:** User account metadata (extends Supabase auth.users)
+**Primary Key:** `id` (UUID, references auth.users)
+**Rows:** ~1,000s
 
-Extends `auth.users` with application-specific fields. Auto-created by `handle_new_user()` trigger.
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| id | UUID | No | Foreign key to auth.users |
+| email | TEXT | No | User email |
+| full_name | TEXT | Yes | Full name |
+| company | TEXT | Yes | Company name |
+| sector | TEXT | Yes | Business sector |
+| phone_whatsapp | TEXT | Yes | WhatsApp contact |
+| whatsapp_consent | BOOLEAN | Yes | LGPD consent for WhatsApp |
+| plan_type | TEXT | No | `free_trial` \| `smartlic_pro` \| `master` \| legacy types |
+| is_admin | BOOLEAN | Yes | Admin flag |
+| avatar_url | TEXT | Yes | Profile picture URL |
+| context_data | JSONB | Yes | Onboarding context: ufs_atuacao, faixa_valor_min/max, porte_empresa, etc. |
+| timezone | TEXT | Yes | User timezone (e.g., "America/Sao_Paulo") |
+| created_at | TIMESTAMPTZ | No | Account creation timestamp |
+| updated_at | TIMESTAMPTZ | No | Last profile update |
 
-| Column | Type | Nullable | Default | Notes |
-|--------|------|----------|---------|-------|
-| id | uuid PK | No | — | FK to auth.users(id) ON DELETE CASCADE |
-| email | text | No | — | Unique partial index |
-| full_name | text | Yes | — | |
-| company | text | Yes | — | |
-| sector | text | Yes | — | Business sector |
-| phone_whatsapp | text | Yes | — | 10-11 digits, unique partial index |
-| whatsapp_consent | boolean | Yes | false | LGPD marketing consent |
-| whatsapp_consent_at | timestamptz | Yes | — | LGPD audit trail |
-| plan_type | text | No | 'free_trial' | CHECK: free_trial, consultor_agil, maquina, sala_guerra, master, smartlic_pro, consultoria |
-| is_admin | boolean | No | false | System administrator flag |
-| avatar_url | text | Yes | — | |
-| context_data | jsonb | Yes | '{}' | Onboarding wizard data (< 512KB) |
-| subscription_status | text | Yes | 'trial' | CHECK: trial, active, canceling, past_due, expired |
-| trial_expires_at | timestamptz | Yes | — | 14-day trial expiration |
-| subscription_end_date | timestamptz | Yes | — | When canceled sub ends |
-| email_unsubscribed | boolean | Yes | false | Email opt-out (LGPD) |
-| email_unsubscribed_at | timestamptz | Yes | — | |
-| marketing_emails_enabled | boolean | No | true | Marketing email opt-in |
-| referred_by_partner_id | uuid | Yes | — | FK to partners(id) |
-| created_at | timestamptz | No | now() | |
-| updated_at | timestamptz | No | now() | Auto-updated by trigger |
+**Constraints:**
+- `plan_type` CHECK: `free_trial` | `consultor_agil` | `maquina` | `sala_guerra` | `smartlic_pro` | `master`
+- Unique: `(id)`
 
-**Indexes:** idx_profiles_is_admin (partial), idx_profiles_email_trgm (GIN trigram), idx_profiles_email_unique (unique partial), idx_profiles_phone_whatsapp_unique (unique partial), idx_profiles_context_porte, idx_profiles_subscription_status (partial), idx_profiles_referred_by_partner (partial).
+**Indexes:**
+- `idx_profiles_context_porte`: GIN on `context_data->>'porte_empresa'` (WHERE porte_empresa IS NOT NULL)
 
 ---
 
 ### plans
+**Purpose:** Catalog of available subscription plans
+**Primary Key:** `id` (TEXT)
+**Rows:** ~6 active
 
-Static plan catalog. Seeded by migrations.
-
-| Column | Type | Nullable | Default | Notes |
-|--------|------|----------|---------|-------|
-| id | text PK | No | — | e.g., 'smartlic_pro', 'consultoria' |
-| name | text | No | — | |
-| description | text | Yes | — | |
-| max_searches | int | Yes | — | NULL = unlimited |
-| price_brl | numeric(10,2) | No | 0 | Base monthly price |
-| duration_days | int | Yes | — | NULL = perpetual |
-| stripe_price_id | text | Yes | — | Legacy default |
-| stripe_price_id_monthly | text | Yes | — | |
-| stripe_price_id_semiannual | text | Yes | — | |
-| stripe_price_id_annual | text | Yes | — | |
-| is_active | boolean | No | true | |
-| created_at | timestamptz | No | now() | |
-| updated_at | timestamptz | No | now() | |
-
-**Active plans:** smartlic_pro (R$397/mo), consultoria (R$997/mo), master, free_trial.
-**Deactivated legacy:** consultor_agil, maquina, sala_guerra, pack_5, pack_10, pack_20, monthly, annual.
-
----
-
-### plan_billing_periods
-
-Multi-period pricing. Source of truth for Stripe price IDs.
-
-| Column | Type | Nullable | Default | Notes |
-|--------|------|----------|---------|-------|
-| id | uuid PK | No | gen_random_uuid() | |
-| plan_id | text | No | — | FK plans(id) CASCADE |
-| billing_period | text | No | — | CHECK: monthly, semiannual, annual |
-| price_cents | integer | No | — | BRL centavos |
-| discount_percent | integer | Yes | 0 | |
-| stripe_price_id | text | Yes | — | |
-| created_at | timestamptz | Yes | now() | |
-
-**Unique:** (plan_id, billing_period)
-
----
-
-### plan_features
-
-Feature flags per plan + billing period.
-
-| Column | Type | Nullable | Default | Notes |
-|--------|------|----------|---------|-------|
-| id | serial PK | No | — | |
-| plan_id | text | No | — | FK plans(id) CASCADE |
-| billing_period | varchar(10) | No | — | CHECK: monthly, semiannual, annual |
-| feature_key | varchar(100) | No | — | e.g., full_access, multi_user |
-| enabled | boolean | No | true | |
-| metadata | jsonb | Yes | '{}' | < 512KB |
-| created_at | timestamptz | No | now() | |
-| updated_at | timestamptz | No | now() | |
-
-**Unique:** (plan_id, billing_period, feature_key)
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| id | TEXT | No | e.g., `smartlic_pro`, `free` |
+| name | TEXT | No | User-facing plan name |
+| description | TEXT | Yes | Marketing description |
+| max_searches | INT | Yes | NULL = unlimited |
+| price_brl | NUMERIC(10,2) | No | BRL price (legacy, see plan_billing_periods) |
+| duration_days | INT | Yes | Subscription period (NULL = perpetual/master) |
+| stripe_price_id | TEXT | Yes | Stripe Price ID (legacy, see plan_billing_periods) |
+| stripe_price_id_monthly | TEXT | Yes | Monthly Stripe Price ID |
+| stripe_price_id_semiannual | TEXT | Yes | Semiannual Stripe Price ID (10% off) |
+| stripe_price_id_annual | TEXT | Yes | Annual Stripe Price ID (20% off) |
+| is_active | BOOLEAN | No | Soft-delete flag |
+| created_at | TIMESTAMPTZ | No | Creation timestamp |
 
 ---
 
 ### user_subscriptions
+**Purpose:** Track active subscriptions and purchased packs per user
+**Primary Key:** `id` (UUID)
+**Foreign Keys:** `user_id` -> profiles(id), `plan_id` -> plans(id)
+**Rows:** ~10,000s (active subscriptions)
 
-Active subscriptions per user.
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| id | UUID | No | Unique subscription instance |
+| user_id | UUID | No | References profiles(id) |
+| plan_id | TEXT | No | References plans(id) |
+| billing_period | VARCHAR(10) | Yes | `monthly` \| `semiannual` \| `annual` |
+| credits_remaining | INT | Yes | NULL = unlimited (monthly/annual) |
+| starts_at | TIMESTAMPTZ | No | Subscription start date |
+| expires_at | TIMESTAMPTZ | Yes | Expiration (NULL = never expires) |
+| stripe_subscription_id | TEXT | Yes | Stripe recurring subscription ID |
+| stripe_customer_id | TEXT | Yes | Stripe customer ID |
+| is_active | BOOLEAN | No | Soft-delete flag |
+| created_at | TIMESTAMPTZ | No | Record creation |
 
-| Column | Type | Nullable | Default | Notes |
-|--------|------|----------|---------|-------|
-| id | uuid PK | No | gen_random_uuid() | |
-| user_id | uuid | No | — | FK profiles(id) CASCADE |
-| plan_id | text | No | — | FK plans(id) RESTRICT |
-| credits_remaining | int | Yes | — | NULL = unlimited |
-| starts_at | timestamptz | No | now() | |
-| expires_at | timestamptz | Yes | — | |
-| stripe_subscription_id | text | Yes | — | Unique partial |
-| stripe_customer_id | text | Yes | — | |
-| is_active | boolean | No | true | |
-| billing_period | varchar(10) | No | 'monthly' | CHECK: monthly, semiannual, annual |
-| annual_benefits | jsonb | No | '{}' | < 512KB |
-| subscription_status | text | Yes | 'active' | CHECK: active, trialing, past_due, canceled, expired |
-| first_failed_at | timestamptz | Yes | — | Dunning tracking |
-| version | integer | No | 1 | Optimistic locking |
-| created_at | timestamptz | No | now() | |
-| updated_at | timestamptz | No | now() | |
+**Constraints:**
+- `billing_period` CHECK: `monthly` | `semiannual` | `annual`
+
+**Indexes:**
+- `idx_user_subscriptions_user`: (user_id)
+- `idx_user_subscriptions_active`: (user_id, is_active) WHERE is_active = true
 
 ---
+
+### plan_billing_periods
+**Purpose:** Multi-period pricing for plans (monthly, semiannual 10% off, annual 20% off)
+**Primary Key:** `id` (UUID)
+**Foreign Keys:** `plan_id` -> plans(id)
+**Rows:** ~10
+
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| id | UUID | No | Unique billing period config |
+| plan_id | TEXT | No | References plans(id) |
+| billing_period | VARCHAR(10) | No | `monthly` \| `semiannual` \| `annual` |
+| price_cents | INT | No | Price in cents (BRL) |
+| discount_percent | INT | Yes | Discount for this period (0, 10, 20) |
+| stripe_price_id | TEXT | Yes | Stripe Price ID for this period |
+| created_at | TIMESTAMPTZ | No | Creation timestamp |
+
+**Constraints:**
+- `UNIQUE(plan_id, billing_period)`
+- `billing_period` CHECK: `monthly` | `semiannual` | `annual`
+
+---
+
+### plan_features
+**Purpose:** Feature flags per plan + billing period
+**Primary Key:** `id` (SERIAL)
+**Foreign Keys:** `plan_id` -> plans(id)
+**Rows:** ~20
+
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| id | SERIAL | No | Auto-increment |
+| plan_id | TEXT | No | References plans(id) |
+| billing_period | VARCHAR(10) | No | `monthly` \| `semiannual` \| `annual` |
+| feature_key | VARCHAR(100) | No | e.g., `early_access`, `proactive_search`, `ai_analysis` |
+| enabled | BOOLEAN | No | Feature is active for this plan+period |
+| metadata | JSONB | Yes | Feature-specific configuration |
+| created_at | TIMESTAMPTZ | No | Creation timestamp |
+| updated_at | TIMESTAMPTZ | No | Last update |
+
+**Constraints:**
+- `UNIQUE(plan_id, billing_period, feature_key)`
+- `billing_period` CHECK: `monthly` | `semiannual` | `annual`
+
+**Indexes:**
+- `idx_plan_features_lookup`: (plan_id, billing_period, enabled) WHERE enabled = true
+
+---
+
+## Subscription & Billing
 
 ### monthly_quota
+**Purpose:** Track monthly search quota per user for plan-based pricing
+**Primary Key:** `id` (UUID)
+**Unique:** `(user_id, month_year)`
+**Rows:** ~10,000s (one row per user-month)
 
-Monthly search usage tracking. Retention: 24 months.
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| id | UUID | No | Unique record |
+| user_id | UUID | No | References auth.users(id) |
+| month_year | VARCHAR(7) | No | Format: "2026-02" |
+| searches_count | INT | No | Number of searches this month |
+| created_at | TIMESTAMPTZ | No | Creation timestamp |
+| updated_at | TIMESTAMPTZ | No | Last update |
 
-| Column | Type | Nullable | Default | Notes |
-|--------|------|----------|---------|-------|
-| id | uuid PK | No | gen_random_uuid() | |
-| user_id | uuid | No | — | FK profiles(id) CASCADE |
-| month_year | varchar(7) | No | — | Format: "2026-02" |
-| searches_count | int | No | 0 | |
-| created_at | timestamptz | No | now() | |
-| updated_at | timestamptz | No | now() | |
-
-**Unique:** (user_id, month_year)
-
----
-
-### search_sessions
-
-Search history per user with full lifecycle tracking.
-
-| Column | Type | Nullable | Default | Notes |
-|--------|------|----------|---------|-------|
-| id | uuid PK | No | gen_random_uuid() | |
-| user_id | uuid | No | — | FK profiles(id) CASCADE |
-| search_id | uuid | Yes | — | Correlation ID for SSE/ARQ/cache |
-| sectors | text[] | No | — | |
-| ufs | text[] | No | — | |
-| data_inicial | date | No | — | |
-| data_final | date | No | — | |
-| custom_keywords | text[] | Yes | — | |
-| total_raw | int | No | 0 | |
-| total_filtered | int | No | 0 | |
-| valor_total | numeric(14,2) | Yes | 0 | |
-| resumo_executivo | text | Yes | — | LLM-generated summary |
-| destaques | text[] | Yes | — | |
-| excel_storage_path | text | Yes | — | |
-| status | text | No | 'created' | CHECK: created, processing, completed, failed, timed_out, cancelled |
-| error_message | text | Yes | — | |
-| error_code | text | Yes | — | |
-| started_at | timestamptz | No | now() | |
-| completed_at | timestamptz | Yes | — | |
-| duration_ms | integer | Yes | — | |
-| pipeline_stage | text | Yes | — | Last stage reached |
-| raw_count | integer | Yes | 0 | |
-| response_state | text | Yes | — | live, cached, degraded, empty_failure |
-| failed_ufs | text[] | Yes | — | |
-| created_at | timestamptz | No | now() | |
-
-**Key indexes:** idx_search_sessions_user_status_created (composite), idx_search_sessions_search_id (partial), idx_search_sessions_inflight (partial for SIGTERM cleanup).
-
----
-
-### search_results_cache
-
-L2 persistent cache (SWR pattern). Max 10 entries per user with priority-based eviction.
-
-| Column | Type | Nullable | Default | Notes |
-|--------|------|----------|---------|-------|
-| id | uuid PK | No | gen_random_uuid() | |
-| user_id | uuid | No | — | FK profiles(id) CASCADE |
-| params_hash | text | No | — | Per-user cache key |
-| params_hash_global | text | Yes | — | Cross-user cache key |
-| search_params | jsonb | No | — | |
-| results | jsonb | No | — | CHECK: <= 2MB |
-| total_results | integer | No | 0 | |
-| sources_json | jsonb | No | '["pncp"]' | |
-| fetched_at | timestamptz | No | now() | |
-| priority | text | No | 'cold' | hot, warm, cold |
-| access_count | integer | No | 0 | |
-| last_accessed_at | timestamptz | Yes | — | |
-| last_success_at | timestamptz | Yes | — | |
-| last_attempt_at | timestamptz | Yes | — | |
-| fail_streak | integer | No | 0 | |
-| degraded_until | timestamptz | Yes | — | |
-| coverage | jsonb | Yes | — | |
-| fetch_duration_ms | integer | Yes | — | |
-| created_at | timestamptz | No | now() | |
-
-**Unique:** (user_id, params_hash). **Cleanup trigger:** priority-based eviction (cold first). **pg_cron:** cold entries > 7 days deleted daily.
-
----
-
-### search_results_store
-
-L3 persistent storage. 24h default TTL. Prevents "Busca nao encontrada" after L1/L2 expiry.
-
-| Column | Type | Nullable | Default |
-|--------|------|----------|---------|
-| search_id | uuid PK | No | — |
-| user_id | uuid | No | — |
-| results | jsonb | No | — |
-| sector | text | Yes | — |
-| ufs | text[] | Yes | — |
-| total_filtered | int | Yes | 0 |
-| created_at | timestamptz | Yes | now() |
-| expires_at | timestamptz | Yes | now() + 24h |
-
-**CHECK:** results < 2MB. **pg_cron:** expired > 7 days deleted daily.
-
----
-
-### search_state_transitions
-
-Audit trail for search state machine. Fire-and-forget inserts.
-
-| Column | Type | Nullable | Default |
-|--------|------|----------|---------|
-| id | uuid PK | No | gen_random_uuid() |
-| search_id | uuid | No | — |
-| from_state | text | Yes | — |
-| to_state | text | No | — |
-| stage | text | Yes | — |
-| details | jsonb | Yes | '{}' |
-| duration_since_previous_ms | integer | Yes | — |
-| created_at | timestamptz | No | now() |
-
-**JSONB constraint:** details < 512KB.
-
----
-
-### pipeline_items
-
-Opportunity pipeline (kanban). Optimistic locking via version column.
-
-| Column | Type | Nullable | Default |
-|--------|------|----------|---------|
-| id | uuid PK | No | gen_random_uuid() |
-| user_id | uuid | No | — |
-| pncp_id | text | No | — |
-| objeto | text | No | — |
-| orgao | text | Yes | — |
-| uf | text | Yes | — |
-| valor_estimado | numeric | Yes | — |
-| data_encerramento | timestamptz | Yes | — |
-| link_pncp | text | Yes | — |
-| stage | text | No | 'descoberta' |
-| notes | text | Yes | — |
-| version | integer | No | 1 |
-| created_at | timestamptz | No | now() |
-| updated_at | timestamptz | No | now() |
-
-**Unique:** (user_id, pncp_id). **Stage CHECK:** descoberta, analise, preparando, enviada, resultado.
-
----
-
-### classification_feedback
-
-User feedback on bid classification accuracy.
-
-| Column | Type | Nullable | Default |
-|--------|------|----------|---------|
-| id | uuid PK | No | gen_random_uuid() |
-| user_id | uuid | No | — |
-| search_id | uuid | No | — |
-| bid_id | text | No | — |
-| setor_id | text | No | — |
-| user_verdict | text | No | — |
-| reason | text | Yes | — |
-| category | text | Yes | — |
-| bid_objeto | text | Yes | — |
-| bid_valor | decimal | Yes | — |
-| bid_uf | text | Yes | — |
-| confidence_score | integer | Yes | — |
-| relevance_source | text | Yes | — |
-| created_at | timestamptz | Yes | now() |
-
-**Unique:** (user_id, search_id, bid_id). **user_verdict CHECK:** false_positive, false_negative, correct.
-
----
-
-### pncp_raw_bids
-
-Raw PNCP bid records (datalake layer). 40K+ rows. 12-day retention.
-
-| Column | Type | Nullable | Default | Notes |
-|--------|------|----------|---------|-------|
-| pncp_id | text PK | No | — | Natural key |
-| objeto_compra | text | No | — | |
-| valor_total_estimado | numeric(18,2) | Yes | — | |
-| modalidade_id | integer | No | — | 4=Concorrencia, 5=Pregao, etc. |
-| modalidade_nome | text | Yes | — | |
-| situacao_compra | text | Yes | — | |
-| esfera_id | text | Yes | — | |
-| uf | text | No | — | |
-| municipio | text | Yes | — | |
-| codigo_municipio_ibge | text | Yes | — | |
-| orgao_razao_social | text | Yes | — | |
-| orgao_cnpj | text | Yes | — | |
-| unidade_nome | text | Yes | — | |
-| data_publicacao | timestamptz | Yes | — | |
-| data_abertura | timestamptz | Yes | — | |
-| data_encerramento | timestamptz | Yes | — | |
-| link_sistema_origem | text | Yes | — | |
-| link_pncp | text | Yes | — | |
-| content_hash | text | No | — | MD5 for change detection |
-| tsv | tsvector | No | — | Pre-computed, maintained by trigger |
-| ingested_at | timestamptz | No | now() | |
-| updated_at | timestamptz | No | now() | |
-| source | text | No | 'pncp' | |
-| crawl_batch_id | text | Yes | — | Links to ingestion_runs |
-| is_active | boolean | No | true | |
-
-**Key indexes:** idx_pncp_raw_bids_fts GIN(tsv), idx_pncp_raw_bids_uf_date (partial), idx_pncp_raw_bids_content_hash.
-
----
-
-### ingestion_checkpoints
-
-Per-(source, uf, modalidade, batch) crawl progress for resumable crawls.
-
-| Column | Type | Nullable | Default |
-|--------|------|----------|---------|
-| id | bigint IDENTITY PK | No | — |
-| source | text | No | 'pncp' |
-| uf | text | No | — |
-| modalidade_id | integer | No | — |
-| last_date | date | No | — |
-| last_page | integer | Yes | 1 |
-| records_fetched | integer | Yes | 0 |
-| status | text | No | 'pending' |
-| error_message | text | Yes | — |
-| started_at | timestamptz | Yes | — |
-| completed_at | timestamptz | Yes | — |
-| crawl_batch_id | text | No | — |
-
-**Unique:** (source, uf, modalidade_id, crawl_batch_id). **Status CHECK:** pending, running, completed, failed.
-
----
-
-### ingestion_runs
-
-Top-level ingestion batch ledger.
-
-| Column | Type | Nullable | Default |
-|--------|------|----------|---------|
-| id | bigint IDENTITY PK | No | — |
-| crawl_batch_id | text UNIQUE | No | — |
-| run_type | text | No | — |
-| status | text | No | 'running' |
-| started_at | timestamptz | No | now() |
-| completed_at | timestamptz | Yes | — |
-| total_fetched | integer | No | 0 |
-| inserted | integer | No | 0 |
-| updated | integer | No | 0 |
-| unchanged | integer | No | 0 |
-| errors | integer | No | 0 |
-| ufs_completed | text[] | Yes | — |
-| ufs_failed | text[] | Yes | — |
-| duration_s | numeric(10,1) | Yes | — |
-| metadata | jsonb | No | '{}' |
-
-**run_type CHECK:** full, incremental. **status CHECK:** running, completed, failed, partial. **JSONB constraint:** metadata < 512KB.
-
----
-
-### conversations / messages
-
-InMail messaging system.
-
-**conversations:** id (uuid), user_id, subject (max 200), category (suporte/sugestao/funcionalidade/bug/outro), status (aberto/respondido/resolvido), first_response_at, last_message_at, created_at, updated_at.
-
-**messages:** id (uuid), conversation_id, sender_id, body (1-5000 chars), is_admin_reply, read_by_user, read_by_admin, created_at. Trigger updates parent conversation.last_message_at.
+**Indexes:**
+- `idx_monthly_quota_user_month`: (user_id, month_year)
 
 ---
 
 ### stripe_webhook_events
+**Purpose:** Idempotency log for Stripe webhook processing
+**Primary Key:** `id` (VARCHAR(255), Stripe event ID)
+**Rows:** ~100,000s (90-day retention)
 
-Idempotency log. 90-day retention.
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| id | VARCHAR(255) | No | Stripe event ID (evt_xxx) |
+| type | VARCHAR(100) | No | Event type (e.g., customer.subscription.updated) |
+| processed_at | TIMESTAMPTZ | No | Processing timestamp |
+| payload | JSONB | Yes | Full Stripe event object |
 
-Columns: id (varchar PK, evt_xxx format), type, processed_at, payload (jsonb), status (varchar, default 'completed'), received_at.
+**Constraints:**
+- `id` REGEX CHECK: `^evt_`
+
+**Indexes:**
+- `idx_webhook_events_type`: (type, processed_at)
+- `idx_webhook_events_recent`: (processed_at DESC)
 
 ---
+
+## Search & Analytics
+
+### search_sessions
+**Purpose:** History of user search queries
+**Primary Key:** `id` (UUID)
+**Foreign Keys:** `user_id` -> profiles(id)
+**Rows:** ~100,000s
+
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| id | UUID | No | Unique search session |
+| user_id | UUID | No | References profiles(id) |
+| sectors | TEXT[] | No | Sectors searched (array) |
+| ufs | TEXT[] | No | States searched (array) |
+| data_inicial | DATE | No | Start date for search |
+| data_final | DATE | No | End date for search |
+| custom_keywords | TEXT[] | Yes | User-provided keywords |
+| total_raw | INT | No | Total raw results found |
+| total_filtered | INT | No | Results after filtering |
+| valor_total | NUMERIC(14,2) | Yes | Total estimated value |
+| resumo_executivo | TEXT | Yes | Executive summary (AI-generated) |
+| destaques | TEXT[] | Yes | Key highlights |
+| excel_storage_path | TEXT | Yes | Supabase Storage path (future) |
+| search_id | UUID | Yes | Search ID for pipeline linking |
+| created_at | TIMESTAMPTZ | No | Session creation |
+
+**Indexes:**
+- `idx_search_sessions_user`: (user_id)
+- `idx_search_sessions_created`: (user_id, created_at DESC)
+
+---
+
+### search_results_cache
+**Purpose:** Persistent cache of last 5 search results per user
+**Primary Key:** `id` (UUID)
+**Unique:** `(user_id, params_hash)`
+**Rows:** ~5,000s
+
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| id | UUID | No | Unique cache entry |
+| user_id | UUID | No | References auth.users(id) |
+| params_hash | TEXT | No | Hash of search parameters |
+| search_params | JSONB | No | Search parameters snapshot |
+| results | JSONB | No | Cached result rows |
+| total_results | INT | No | Number of results |
+| sources | TEXT[] | Yes | Result sources |
+| fetched_at | TIMESTAMPTZ | Yes | When results were fetched |
+| created_at | TIMESTAMPTZ | No | Cache entry creation |
+
+**Indexes:**
+- `idx_search_cache_user`: (user_id, created_at DESC)
+- `idx_search_cache_params_hash`: (params_hash)
+
+---
+
+### search_state_transitions
+**Purpose:** Track search state machine transitions for diagnostics
+**Primary Key:** `id` (UUID)
+**Rows:** ~1,000,000s
+
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| id | UUID | No | Unique transition record |
+| search_id | UUID | No | References search session |
+| from_state | TEXT | No | Previous state |
+| to_state | TEXT | No | New state |
+| metadata | JSONB | Yes | Transition metadata |
+| transitioned_at | TIMESTAMPTZ | No | Timestamp |
+
+---
+
+### pipeline_items
+**Purpose:** User's procurement opportunity pipeline (opportunity tracking)
+**Primary Key:** `id` (UUID)
+**Foreign Keys:** `user_id` -> auth.users(id)
+**Unique:** `(user_id, pncp_id)`
+**Rows:** ~10,000s
+
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| id | UUID | No | Unique pipeline item |
+| user_id | UUID | No | References auth.users(id) |
+| pncp_id | TEXT | No | Bid ID snapshot |
+| objeto | TEXT | No | Procurement object description |
+| orgao | TEXT | Yes | Procurement agency name |
+| uf | TEXT | Yes | State |
+| valor_estimado | NUMERIC | Yes | Estimated value |
+| data_encerramento | TIMESTAMPTZ | Yes | Bid deadline |
+| link_pncp | TEXT | Yes | Link to PNCP |
+| stage | TEXT | No | `descoberta` \| `analise` \| `preparando` \| `enviada` \| `resultado` |
+| notes | TEXT | Yes | User notes |
+| created_at | TIMESTAMPTZ | No | Creation timestamp |
+| updated_at | TIMESTAMPTZ | No | Last update |
+
+**Constraints:**
+- `stage` CHECK: `descoberta` | `analise` | `preparando` | `enviada` | `resultado`
+
+**Indexes:**
+- `idx_pipeline_user_stage`: (user_id, stage)
+- `idx_pipeline_encerramento`: (data_encerramento) WHERE stage NOT IN ('enviada', 'resultado')
+- `idx_pipeline_user_created`: (user_id, created_at DESC)
+
+---
+
+## Data Lake (PNCP Ingestion)
+
+### pncp_raw_bids
+**Purpose:** Core data lake: raw PNCP bid records (12-day retention)
+**Primary Key:** `pncp_id` (TEXT)
+**Rows:** ~100,000s (12-day rolling window)
+
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| pncp_id | TEXT | No | PNCP unique identifier |
+| objeto_compra | TEXT | No | Procurement object description |
+| valor_total_estimado | NUMERIC(18,2) | Yes | Estimated total value |
+| modalidade_id | INT | No | Procurement modality code |
+| modalidade_nome | TEXT | Yes | Modality name |
+| situacao_compra | TEXT | Yes | Purchase situation/status |
+| esfera_id | TEXT | Yes | Government sphere (federal/state/municipal) |
+| uf | TEXT | No | State (2-letter code) |
+| municipio | TEXT | Yes | Municipality name |
+| codigo_municipio_ibge | TEXT | Yes | IBGE municipality code |
+| orgao_razao_social | TEXT | Yes | Agency legal name |
+| orgao_cnpj | TEXT | Yes | Agency CNPJ |
+| unidade_nome | TEXT | Yes | Unit name |
+| data_publicacao | TIMESTAMPTZ | Yes | Publication date |
+| data_abertura | TIMESTAMPTZ | Yes | Opening date |
+| data_encerramento | TIMESTAMPTZ | Yes | Closing date |
+| link_sistema_origem | TEXT | Yes | Link to source system |
+| link_pncp | TEXT | Yes | PNCP link |
+| content_hash | TEXT | No | MD5 of mutable fields (change detection) |
+| tsv | TSVECTOR | No | Pre-computed Portuguese tsvector of objeto_compra |
+| ingested_at | TIMESTAMPTZ | No | Ingestion timestamp |
+| updated_at | TIMESTAMPTZ | No | Last update |
+| source | TEXT | No | Source system (default: `pncp`) |
+| crawl_batch_id | TEXT | Yes | Ingestion run batch ID |
+| is_active | BOOLEAN | No | Soft-delete flag |
+
+**Indexes:**
+- `idx_pncp_raw_bids_fts`: GIN (tsv) -- full-text search
+- `idx_pncp_raw_bids_uf_date`: (uf, data_publicacao DESC) WHERE is_active
+- `idx_pncp_raw_bids_modalidade`: (modalidade_id) WHERE is_active
+- `idx_pncp_raw_bids_valor`: (valor_total_estimado) WHERE is_active AND valor_total_estimado IS NOT NULL
+- `idx_pncp_raw_bids_esfera`: (esfera_id) WHERE is_active
+- `idx_pncp_raw_bids_encerramento`: (data_encerramento) WHERE is_active AND data_encerramento IS NOT NULL
+- `idx_pncp_raw_bids_content_hash`: (content_hash)
+- `idx_pncp_raw_bids_ingested_at`: (ingested_at DESC)
+
+---
+
+### ingestion_runs
+**Purpose:** Top-level ledger for data lake ingestion batches
+**Primary Key:** `id` (BIGINT IDENTITY)
+**Unique:** `(crawl_batch_id)`
+**Rows:** ~100s
+
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| id | BIGINT | No | Auto-increment |
+| crawl_batch_id | TEXT | No | Batch identifier (unique) |
+| run_type | TEXT | No | `full` \| `incremental` |
+| status | TEXT | No | `running` \| `completed` \| `failed` \| `partial` |
+| started_at | TIMESTAMPTZ | No | Run start time |
+| completed_at | TIMESTAMPTZ | Yes | Run completion time |
+| total_fetched | INT | No | Total rows fetched from source |
+| inserted | INT | No | New rows inserted |
+| updated | INT | No | Existing rows updated |
+| unchanged | INT | No | Rows skipped (unchanged) |
+| errors | INT | No | Rows that failed |
+| ufs_completed | TEXT[] | Yes | States that completed |
+| ufs_failed | TEXT[] | Yes | States that failed |
+| duration_s | NUMERIC(10,1) | Yes | Execution time in seconds |
+| metadata | JSONB | No | Worker version, config snapshot, trigger source |
+
+**Constraints:**
+- `status` CHECK: `running` | `completed` | `failed` | `partial`
+- `run_type` CHECK: `full` | `incremental`
+
+**Indexes:**
+- `idx_ingestion_runs_started`: (started_at DESC)
+- `idx_ingestion_runs_status`: (status) WHERE status IN ('running', 'failed')
+
+---
+
+### ingestion_checkpoints
+**Purpose:** Per-UF/modality progress tracking within a crawl batch
+**Primary Key:** `id` (BIGINT IDENTITY)
+**Unique:** `(source, uf, modalidade_id, crawl_batch_id)`
+**Rows:** ~10,000s
+
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| id | BIGINT | No | Auto-increment |
+| source | TEXT | No | Source system (default: `pncp`) |
+| uf | TEXT | No | State code |
+| modalidade_id | INT | No | Modality code |
+| last_date | DATE | No | Last date processed |
+| last_page | INT | Yes | Last page number (1-indexed) |
+| records_fetched | INT | Yes | Records fetched in this checkpoint |
+| status | TEXT | No | `pending` \| `running` \| `completed` \| `failed` |
+| error_message | TEXT | Yes | Error message if failed |
+| started_at | TIMESTAMPTZ | Yes | Start timestamp |
+| completed_at | TIMESTAMPTZ | Yes | Completion timestamp |
+| crawl_batch_id | TEXT | No | References ingestion_runs.crawl_batch_id |
+
+**Constraints:**
+- `status` CHECK: `pending` | `running` | `completed` | `failed`
+
+**Indexes:**
+- `idx_ingestion_checkpoints_batch`: (crawl_batch_id, status)
+- `idx_ingestion_checkpoints_uf_mod`: (uf, modalidade_id)
+
+---
+
+## Messaging & Support
+
+### conversations
+**Purpose:** Support/messaging conversations between users and admins
+**Primary Key:** `id` (UUID)
+**Foreign Keys:** `user_id` -> profiles(id)
+**Rows:** ~10,000s
+
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| id | UUID | No | Unique conversation |
+| user_id | UUID | No | References profiles(id) |
+| subject | TEXT | No | Conversation subject (max 200 chars) |
+| category | TEXT | No | `suporte` \| `sugestao` \| `funcionalidade` \| `bug` \| `outro` |
+| status | TEXT | No | `aberto` \| `respondido` \| `resolvido` |
+| last_message_at | TIMESTAMPTZ | No | Timestamp of latest message |
+| created_at | TIMESTAMPTZ | No | Creation timestamp |
+| updated_at | TIMESTAMPTZ | No | Last update |
+
+**Constraints:**
+- `subject` CHECK: length <= 200
+- `category` CHECK: `suporte` | `sugestao` | `funcionalidade` | `bug` | `outro`
+- `status` CHECK: `aberto` | `respondido` | `resolvido`
+
+**Indexes:**
+- `idx_conversations_user_id`: (user_id)
+- `idx_conversations_status`: (status)
+- `idx_conversations_last_message`: (last_message_at DESC)
+
+---
+
+### messages
+**Purpose:** Individual messages within conversations
+**Primary Key:** `id` (UUID)
+**Foreign Keys:** `conversation_id` -> conversations(id), `sender_id` -> profiles(id)
+**Rows:** ~100,000s
+
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| id | UUID | No | Unique message |
+| conversation_id | UUID | No | References conversations(id) |
+| sender_id | UUID | No | References profiles(id) |
+| body | TEXT | No | Message content (1-5000 chars) |
+| is_admin_reply | BOOLEAN | No | Message is from admin |
+| read_by_user | BOOLEAN | No | User has read this message |
+| read_by_admin | BOOLEAN | No | Admin has read this message |
+| created_at | TIMESTAMPTZ | No | Message timestamp |
+
+**Constraints:**
+- `body` CHECK: length BETWEEN 1 AND 5000
+
+**Indexes:**
+- `idx_messages_conversation`: (conversation_id, created_at)
+- `idx_messages_unread_by_user`: (conversation_id) WHERE is_admin_reply = true AND read_by_user = false
+- `idx_messages_unread_by_admin`: (conversation_id) WHERE is_admin_reply = false AND read_by_admin = false
+
+---
+
+## Organizations & Multi-User
+
+### organizations
+**Purpose:** Multi-user organization accounts (consultoria/agency)
+**Primary Key:** `id` (UUID)
+**Foreign Keys:** `owner_id` -> auth.users(id)
+**Rows:** ~100s
+
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| id | UUID | No | Unique organization |
+| name | TEXT | No | Organization name |
+| logo_url | TEXT | Yes | Logo URL |
+| owner_id | UUID | No | References auth.users(id) (RESTRICT delete) |
+| max_members | INT | No | Member limit (default 5) |
+| plan_type | TEXT | No | Organization plan (default: `consultoria`) |
+| stripe_customer_id | TEXT | Yes | Stripe customer for org billing |
+| created_at | TIMESTAMPTZ | No | Creation timestamp |
+| updated_at | TIMESTAMPTZ | No | Last update |
+
+**Indexes:**
+- `idx_organizations_owner`: (owner_id)
+
+---
+
+### organization_members
+**Purpose:** Organization membership with role-based access
+**Primary Key:** `id` (UUID)
+**Foreign Keys:** `org_id` -> organizations(id), `user_id` -> auth.users(id)
+**Unique:** `(org_id, user_id)`
+**Rows:** ~1,000s
+
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| id | UUID | No | Unique membership record |
+| org_id | UUID | No | References organizations(id) |
+| user_id | UUID | No | References auth.users(id) |
+| role | TEXT | No | `owner` \| `admin` \| `member` |
+| invited_at | TIMESTAMPTZ | No | Invitation timestamp |
+| accepted_at | TIMESTAMPTZ | Yes | Acceptance timestamp (NULL = pending) |
+
+**Constraints:**
+- `role` CHECK: `owner` | `admin` | `member`
+
+**Indexes:**
+- `idx_org_members_org`: (org_id)
+- `idx_org_members_user`: (user_id)
+
+---
+
+## Monitoring & Audit
 
 ### audit_events
+**Purpose:** Security audit log (12-month retention)
+**Primary Key:** `id` (UUID)
+**Rows:** ~1,000,000s (12-month rolling)
 
-Security audit log with hashed PII (LGPD). 12-month retention.
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| id | UUID | No | Unique audit event |
+| timestamp | TIMESTAMPTZ | No | Event timestamp |
+| event_type | TEXT | No | Event category (auth.login, billing.checkout, etc.) |
+| actor_id_hash | TEXT | Yes | SHA-256 hash of actor user ID (16 hex chars) |
+| target_id_hash | TEXT | Yes | SHA-256 hash of target user ID (16 hex chars) |
+| details | JSONB | Yes | Structured event metadata (sanitized) |
+| ip_hash | TEXT | Yes | SHA-256 hash of client IP (16 hex chars) |
 
-Columns: id (uuid), timestamp, event_type, actor_id_hash (SHA-256 x16), target_id_hash, details (jsonb), ip_hash.
-
----
-
-### trial_email_log
-
-Trial email sequence tracking (6 emails over 14 days).
-
-Columns: id (uuid), user_id, email_type, email_number (1-6 CHECK), sent_at, opened_at, clicked_at, resend_email_id. Unique: (user_id, email_number).
-
----
-
-### alert_preferences / alerts / alert_sent_items / alert_runs
-
-Email alert system.
-
-- **alert_preferences:** user_id (unique), frequency (ENUM: daily/twice_weekly/weekly/off), enabled, last_digest_sent_at. Auto-created on profile insert.
-- **alerts:** user_id, name, filters (jsonb), active.
-- **alert_sent_items:** alert_id, item_id (unique pair), sent_at.
-- **alert_runs:** alert_id, run_at, items_found, items_sent, status.
+**Indexes:**
+- `idx_audit_events_event_type`: (event_type)
+- `idx_audit_events_timestamp`: (timestamp)
+- `idx_audit_events_actor`: (actor_id_hash) WHERE actor_id_hash IS NOT NULL
+- `idx_audit_events_type_timestamp`: (event_type, timestamp DESC)
 
 ---
 
-### user_oauth_tokens / google_sheets_exports
+### incidents
+**Purpose:** System incident tracking for status page
+**Primary Key:** `id` (UUID)
+**Rows:** ~10s
 
-OAuth and export tracking.
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| id | UUID | No | Unique incident |
+| started_at | TIMESTAMPTZ | No | Incident start time |
+| resolved_at | TIMESTAMPTZ | Yes | Incident resolution time |
+| status | TEXT | No | `ongoing` \| `resolved` |
+| affected_sources | TEXT[] | No | Affected components |
+| description | TEXT | No | Incident description |
 
-- **user_oauth_tokens:** user_id, provider (google/microsoft/dropbox), access_token (AES-256), refresh_token, expires_at, scope. Unique: (user_id, provider).
-- **google_sheets_exports:** user_id, spreadsheet_id, spreadsheet_url, search_params (jsonb GIN), total_rows, created_at, last_updated_at.
+**Constraints:**
+- `status` CHECK: `ongoing` | `resolved`
 
----
-
-### organizations / organization_members
-
-Multi-user org accounts.
-
-- **organizations:** id, name, logo_url, owner_id (FK profiles RESTRICT), max_members (default 5), plan_type ('consultoria'), stripe_customer_id.
-- **organization_members:** org_id, user_id (unique pair), role (owner/admin/member), invited_at, accepted_at.
-
----
-
-### partners / partner_referrals
-
-Revenue share tracking.
-
-- **partners:** id, name, slug (unique), contact_email, revenue_share_pct (default 25%), status, stripe_coupon_id.
-- **partner_referrals:** partner_id, referred_user_id (nullable, SET NULL on delete), signup_at, converted_at, churned_at, monthly_revenue, revenue_share_amount.
+**Indexes:**
+- `idx_incidents_status`: (status) WHERE status = 'ongoing'
+- `idx_incidents_started_at`: (started_at DESC)
 
 ---
 
-### reconciliation_log / health_checks / incidents
+### health_checks
+**Purpose:** Periodic health check results
+**Primary Key:** `id` (UUID)
+**Rows:** ~10,000s
 
-Operations tables.
-
-- **reconciliation_log:** Stripe-DB sync audit. Columns: run_at, total_checked, divergences_found, auto_fixed, manual_review, duration_ms, details (jsonb).
-- **health_checks:** Periodic health results. Columns: checked_at, overall_status (healthy/degraded/unhealthy), sources_json, components_json, latency_ms. 30-day retention.
-- **incidents:** System incidents. Columns: started_at, resolved_at, status (ongoing/resolved), affected_sources, description.
-
----
-
-### mfa_recovery_codes / mfa_recovery_attempts
-
-MFA backup authentication.
-
-- **mfa_recovery_codes:** user_id, code_hash (bcrypt), used_at, created_at.
-- **mfa_recovery_attempts:** user_id, attempted_at, success. Brute force tracking.
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| id | UUID | No | Unique check result |
+| check_name | TEXT | No | Health check name |
+| status | TEXT | No | `ok` \| `warning` \| `error` |
+| details | JSONB | Yes | Check details |
+| checked_at | TIMESTAMPTZ | No | Check timestamp |
 
 ---
 
-## Functions / RPCs
+## Alerts & Notifications
 
-### Quota
+### alerts
+**Purpose:** User-defined email alert rules with search filters
+**Primary Key:** `id` (UUID)
+**Foreign Keys:** `user_id` -> profiles(id)
+**Rows:** ~1,000s
 
-| Function | Returns | Purpose |
-|----------|---------|---------|
-| `check_and_increment_quota(user_id, month_year, max_quota)` | (allowed, new_count, previous_count, quota_remaining) | Primary atomic quota enforcement |
-| `increment_quota_atomic(user_id, month_year, max_quota)` | (new_count, was_at_limit, previous_count) | Legacy atomic increment |
-| `increment_quota_fallback_atomic(user_id, month_year, max_quota)` | (new_count) | Concurrency fallback |
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| id | UUID | No | Unique alert rule |
+| user_id | UUID | No | References profiles(id) |
+| name | TEXT | No | Alert name |
+| filters | JSONB | No | Search filters: {setor, ufs[], valor_min, valor_max, keywords[]} |
+| active | BOOLEAN | No | Alert is active |
+| created_at | TIMESTAMPTZ | No | Creation timestamp |
+| updated_at | TIMESTAMPTZ | No | Last update |
 
-### Datalake
-
-| Function | Purpose |
-|----------|---------|
-| `upsert_pncp_raw_bids(p_records JSONB)` | Batch upsert via INSERT ON CONFLICT. SECURITY DEFINER. Returns (inserted, updated, unchanged). |
-| `search_datalake(p_ufs, p_date_start, p_date_end, p_tsquery, p_modalidades, p_valor_min, p_valor_max, p_esferas, p_modo, p_limit)` | Full-featured search using pre-computed tsv. Two modes: publicacao/abertas. Max 5000. SECURITY DEFINER. |
-| `purge_old_bids(p_retention_days)` | Hard-deletes bids older than retention (default 12 days). SECURITY DEFINER. |
-
-### Analytics / Messaging
-
-| Function | Purpose |
-|----------|---------|
-| `get_conversations_with_unread_count(...)` | Eliminates N+1 in conversation listing |
-| `get_analytics_summary(user_id, start, end)` | Summary stats (searches, value, member_since) |
-
-### Billing Helpers
-
-| Function | Purpose |
-|----------|---------|
-| `get_user_billing_period(user_id)` | Returns current billing period |
-| `user_has_feature(user_id, feature_key)` | Check plan feature access |
-| `get_user_features(user_id)` | Get all enabled features |
-
-### Utility
-
-| Function | Purpose |
-|----------|---------|
-| `handle_new_user()` | Trigger: auto-creates profile on signup |
-| `set_updated_at()` | Canonical updated_at trigger function |
-| `get_table_columns_simple(table_name)` | Schema validation RPC |
-| `pncp_raw_bids_tsv_trigger()` | Maintains pre-computed tsv column |
-| `check_pncp_raw_bids_bloat()` | Monitoring: dead tuple ratio |
-| `check_ingestion_orphans()` | Monitoring: orphan checkpoints |
-
-### Views
-
-| View | Purpose |
-|------|---------|
-| `ingestion_orphan_checkpoints` | Checkpoints without matching runs |
-| `pncp_raw_bids_bloat_stats` | Table bloat statistics |
+**Indexes:**
+- `idx_alerts_user_id`: (user_id)
+- `idx_alerts_active`: (user_id, active) WHERE active = true
 
 ---
 
-## Triggers
+### alert_sent_items
+**Purpose:** Dedup tracking for alert sent items
+**Primary Key:** `id` (UUID)
+**Unique:** `(alert_id, item_id)`
+**Rows:** ~100,000s
 
-| Trigger | Table | Function | Event |
-|---------|-------|----------|-------|
-| on_auth_user_created | auth.users | handle_new_user() | AFTER INSERT |
-| trg_profiles_updated_at | profiles | set_updated_at() | BEFORE UPDATE |
-| trg_plans_updated_at | plans | set_updated_at() | BEFORE UPDATE |
-| trg_plan_features_updated_at | plan_features | set_updated_at() | BEFORE UPDATE |
-| trg_user_subscriptions_updated_at | user_subscriptions | set_updated_at() | BEFORE UPDATE |
-| trg_organizations_updated_at | organizations | set_updated_at() | BEFORE UPDATE |
-| tr_pipeline_items_updated_at | pipeline_items | set_updated_at() | BEFORE UPDATE |
-| trigger_alert_preferences_updated_at | alert_preferences | set_updated_at() | BEFORE UPDATE |
-| trigger_alerts_updated_at | alerts | set_updated_at() | BEFORE UPDATE |
-| trg_pncp_raw_bids_updated_at | pncp_raw_bids | set_updated_at() | BEFORE UPDATE |
-| trg_pncp_raw_bids_tsv | pncp_raw_bids | pncp_raw_bids_tsv_trigger() | BEFORE INSERT/UPDATE OF objeto_compra |
-| trg_update_conversation_last_message | messages | update_conversation_last_message() | AFTER INSERT |
-| trg_cleanup_search_cache | search_results_cache | cleanup_search_cache_per_user() | AFTER INSERT |
-| trigger_create_alert_preferences_on_profile | profiles | create_default_alert_preferences() | AFTER INSERT |
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| id | UUID | No | Unique record |
+| alert_id | UUID | No | References alerts(id) |
+| item_id | TEXT | No | Bid ID sent in this alert |
+| sent_at | TIMESTAMPTZ | No | Send timestamp |
 
----
-
-## pg_cron Jobs
-
-| Job | Schedule | Action |
-|-----|----------|--------|
-| cleanup-monthly-quota | 1st monthly, 2am UTC | DELETE monthly_quota > 24 months |
-| cleanup-webhook-events | Daily, 3am UTC | DELETE stripe_webhook_events > 90 days |
-| cleanup-audit-events | 1st monthly, 4am UTC | DELETE audit_events > 12 months |
-| cleanup-cold-cache-entries | Daily, 5am UTC | DELETE cold cache > 7 days |
-| cleanup-expired-search-results | Daily, 4am UTC | DELETE expired results > 7 days |
+**Indexes:**
+- `idx_alert_sent_items_dedup`: UNIQUE (alert_id, item_id)
+- `idx_alert_sent_items_alert_id`: (alert_id)
+- `idx_alert_sent_items_sent_at`: (sent_at)
 
 ---
 
-## FK Reference Standard
+### alert_preferences
+**Purpose:** User preferences for alerts (email frequency, quiet hours, etc.)
+**Primary Key:** `id` (UUID)
+**Foreign Keys:** `user_id` -> profiles(id)
+**Unique:** `(user_id)`
+**Rows:** ~1,000s
 
-All user-referencing FKs standardized to `profiles(id)` (not auth.users) via migration waves 018, 20260225120000, 20260304100000.
-
-**ON DELETE behavior:**
-- Most tables: `CASCADE`
-- user_subscriptions.plan_id -> plans: `RESTRICT`
-- organizations.owner_id -> profiles: `RESTRICT`
-- partner_referrals.referred_user_id -> profiles: `SET NULL`
-
----
-
-## RLS Policy Patterns
-
-All 35 tables have RLS enabled. Naming convention (DEBT-207): `{action}_{table}_{role}`.
-
-1. **User-owned:** `auth.uid() = user_id` (SELECT/INSERT/UPDATE/DELETE)
-2. **Service role:** `TO service_role USING (true)` (ALL operations)
-3. **Admin read:** `profiles.is_admin = true` check
-4. **Public read:** `USING (true)` for catalog tables (plans, plan_billing_periods)
-5. **Authenticated read:** `TO authenticated USING (true)` for public data (pncp_raw_bids)
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| id | UUID | No | Unique preferences record |
+| user_id | UUID | No | References profiles(id) |
+| email_frequency | TEXT | No | `immediate` \| `daily` \| `weekly` \| `never` |
+| quiet_hours_start | INT | Yes | Hour in 24h format (0-23) |
+| quiet_hours_end | INT | Yes | Hour in 24h format (0-23) |
+| created_at | TIMESTAMPTZ | No | Creation timestamp |
+| updated_at | TIMESTAMPTZ | No | Last update |
 
 ---
 
-## Custom Type
+## Viral Growth & Sharing
 
-```sql
-CREATE TYPE alert_frequency AS ENUM ('daily', 'twice_weekly', 'weekly', 'off');
-```
+### shared_analyses
+**Purpose:** Shareable public bid analyses (30-day expiration)
+**Primary Key:** `id` (UUID)
+**Unique:** `(hash)`
+**Foreign Keys:** `user_id` -> auth.users(id)
+**Rows:** ~10,000s
+
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| id | UUID | No | Unique analysis |
+| hash | VARCHAR(12) | No | Short shareable hash (unique) |
+| user_id | UUID | No | References auth.users(id) |
+| bid_id | TEXT | No | PNCP bid ID |
+| bid_title | TEXT | No | Bid title snapshot |
+| bid_orgao | TEXT | Yes | Bid agency |
+| bid_uf | TEXT | Yes | Bid state |
+| bid_valor | NUMERIC | Yes | Bid value |
+| bid_modalidade | TEXT | Yes | Bid modality |
+| viability_score | INT | No | 0-100 score |
+| viability_level | TEXT | No | `alta` \| `media` \| `baixa` |
+| viability_factors | JSONB | No | Factors determining score |
+| view_count | INT | Yes | Public view count |
+| created_at | TIMESTAMPTZ | No | Creation timestamp |
+| expires_at | TIMESTAMPTZ | No | Expiration timestamp (default +30 days) |
+
+**Constraints:**
+- `viability_score` CHECK: BETWEEN 0 AND 100
+- `viability_level` CHECK: `alta` | `media` | `baixa`
+
+**Indexes:**
+- `idx_shared_analyses_hash`: (hash)
+- `idx_shared_analyses_user`: (user_id)
+- `idx_shared_analyses_expires`: (expires_at)
+
+---
+
+## SEO & Marketing
+
+### leads
+**Purpose:** Email capture (calculadora, CNPJ, alerts signup)
+**Primary Key:** `id` (UUID)
+**Unique:** `(email, source)`
+**Rows:** ~100,000s
+
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| id | UUID | No | Unique lead |
+| email | TEXT | No | Email address |
+| source | TEXT | No | Lead source (calculadora, cnpj, alertas, etc.) |
+| setor | TEXT | Yes | Business sector (if provided) |
+| uf | TEXT | Yes | State (if provided) |
+| captured_at | TIMESTAMPTZ | No | Capture timestamp |
+
+**Indexes:**
+- `idx_leads_email_source`: (email, source)
+
+---
+
+### seo_metrics
+**Purpose:** Weekly Google Search Console snapshots
+**Primary Key:** `id` (BIGINT IDENTITY)
+**Unique:** `(date, source)`
+**Rows:** ~52 (weekly GSC data)
+
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| id | BIGINT | No | Auto-increment |
+| date | DATE | No | Metric date |
+| source | TEXT | No | Source (default: `gsc`) |
+| impressions | INT | No | Google Search impressions |
+| clicks | INT | No | Click-through count |
+| ctr | NUMERIC(6,4) | No | Click-through rate |
+| avg_position | NUMERIC(6,2) | No | Average ranking position |
+| pages_indexed | INT | No | Pages indexed in Google |
+| top_queries | JSONB | No | Top search queries |
+| top_pages | JSONB | No | Top landing pages |
+| created_at | TIMESTAMPTZ | No | Record creation |
+
+**Indexes:**
+- `idx_seo_metrics_date_desc`: (date DESC)
+
+---
+
+### referrals
+**Purpose:** Referral program tracking
+**Primary Key:** `id` (UUID)
+**Rows:** ~100s
+
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| id | UUID | No | Unique referral |
+| referrer_id | UUID | Yes | References profiles(id) |
+| referred_email | TEXT | Yes | Email of referred person |
+| status | TEXT | No | `pending` \| `signed_up` \| `trial_ended` \| `converted` |
+| code | TEXT | Yes | Unique referral code |
+| created_at | TIMESTAMPTZ | No | Creation timestamp |
+
+---
+
+## Enums & Custom Types
+
+**plan_type (profiles.plan_type, organizations.plan_type):**
+- `free_trial` -- Free trial period
+- `smartlic_pro` -- Single plan tier (monthly, semiannual, annual)
+- `consultor_agil` -- Legacy (deprecated)
+- `maquina` -- Legacy (deprecated)
+- `sala_guerra` -- Legacy (deprecated)
+- `master` -- Admin unlimited access
+
+**billing_period (user_subscriptions, plan_features, plan_billing_periods):**
+- `monthly`
+- `semiannual` (10% discount)
+- `annual` (20% discount)
+
+**pipeline_stage (pipeline_items.stage):**
+- `descoberta` -- Discovery
+- `analise` -- Analysis
+- `preparando` -- Preparing proposal
+- `enviada` -- Bid submitted
+- `resultado` -- Result (won/lost)
+
+**conversation_status (conversations.status):**
+- `aberto` -- Open
+- `respondido` -- Replied
+- `resolvido` -- Resolved
+
+**conversation_category (conversations.category):**
+- `suporte` -- Support
+- `sugestao` -- Suggestion
+- `funcionalidade` -- Feature request
+- `bug` -- Bug report
+- `outro` -- Other
+
+**ingestion_status (ingestion_runs.status, ingestion_checkpoints.status):**
+- `pending`, `running`, `completed`, `failed`, `partial`
+
+**incident_status (incidents.status):**
+- `ongoing`, `resolved`
+
+**organization_role (organization_members.role):**
+- `owner` -- Full control
+- `admin` -- Manage members
+- `member` -- Read-only access
+
+**oauth_provider (user_oauth_tokens.provider):**
+- `google`, `microsoft`, `dropbox`

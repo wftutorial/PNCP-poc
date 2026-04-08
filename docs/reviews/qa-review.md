@@ -1,248 +1,348 @@
-# QA Review — Technical Debt Assessment — SmartLic
+# QA Review - Technical Debt Assessment
 
 **Reviewer:** @qa (Quinn)
-**Date:** 2026-03-31
-**Version:** v3 (supersedes v2 from 2026-03-30)
-**Documents Reviewed:** `docs/prd/technical-debt-DRAFT.md` (63 debts, Phase 4), `docs/reviews/db-specialist-review.md` (Phase 5), `docs/reviews/ux-specialist-review.md` (Phase 6)
-**Codebase Verification:** Spot-checked key claims against actual source files (migration count, ViabilityBadge.tsx, useSearchOrchestration.ts line count, globals.css reduced-motion rule, trigger DROP in migration 20260308100000)
+**Date:** 2026-04-08
+**Phase:** Brownfield Discovery Phase 7
+**Version:** v4 (supersedes v3 from 2026-03-31)
+**Documents Reviewed:** `docs/prd/technical-debt-DRAFT.md` (49 items TD-001 to TD-049), `docs/reviews/db-specialist-review.md` (Phase 5), `docs/reviews/ux-specialist-review.md` (Phase 6)
+**Codebase Verification:** Verified transformer.py hash algorithm, search hooks line counts, backend file sizes, migration count, FeedbackButtons touch targets
 
 ---
 
-## Gate Status: APPROVED
+## Gate Status: APPROVED WITH CONDITIONS
 
-The assessment is comprehensive, well-structured, and actionable. Both specialist reviews are thorough and evidence-based, catching 2 already-resolved debts, correcting 9 severity ratings, and adding 7 new debts. After incorporating the adjustments documented below, this assessment is ready for Phase 8 (final consolidation by @architect).
+The assessment is thorough and actionable. Both specialist reviews added genuine value (severity recalibrations, 9 new items). However, 3 factual errors in the DRAFT and 4 coverage gaps must be addressed before the final document is published.
 
----
-
-## Assessment Quality Score
-
-| Dimension | Score (1-5) | Notes |
-|-----------|-------------|-------|
-| Completeness | 4 | 63 debts across 4 categories (System, DB, FE, Cross-Cutting) is thorough. Specialists added 7 more (3 DB, 4 FE). A few gaps remain (see Section 3) but none are blocking. |
-| Accuracy | 4 | Two debts already resolved (DB-003, FE-003), one partially resolved (FE-015, FE-009). All caught by specialists. useSearchOrchestration described as "200+ lines" -- actual is 369 (verified via `wc -l`). DB-003 DROP confirmed in migration 20260308100000. FE-003 `role="tooltip"` confirmed in ViabilityBadge.tsx. Migration count of 106 confirmed. |
-| Prioritization | 4 | P0 items are correct (security fix DB-001 + user trust FE-001/FE-006). P1/P2 separation is reasonable. One concern: CROSS-006 (scaling, 32h) at P1 is premature for current traffic (~25 searches/day). |
-| Effort Estimates | 3 | Total hours inflated by double-counting between CROSS items and their constituent SYS/FE/DB items. DRAFT shows ~506h but acknowledges overlap. Actual deduplicated effort is ~350-390h. DB specialist reduced DB section from 73h to 54h. UX specialist adjustments net to roughly flat (~148h) after closures and additions. |
-| Dependencies | 4 | Dependency graph is clear and correct. DB specialist added important nuance: DB-007 FK with CASCADE would destroy audit trail. One missing dependency and one questionable dependency identified (see Section 6). |
-| Risk Coverage | 4 | 8 risks in DRAFT, 5 added by DB specialist, 6 added by UX specialist. No major risk category unaddressed. Minor gap: test suite fragility during refactoring not explicitly addressed (see Section 3). |
-
-**Overall: 3.8/5** -- Strong assessment with corrections needed before finalization, none blocking.
+**Conditions for full APPROVED:**
+1. Fix TD-007/008/009 phantom file references (see Section 3.1)
+2. Add the 4 missing concerns from Section 3
+3. Incorporate severity recalibrations from Section 2 into the final matrix
 
 ---
 
-## Gaps Identified
+## 1. Assessment Completeness
 
-### Gap 1: Test Suite Fragility During Refactoring (MEDIUM)
-
-The DRAFT identifies debts requiring ~350-390h of refactoring. The project has 7656+ backend tests and 5733+ frontend tests with a zero-failure policy. However, the assessment does not address:
-
-- **Which tests will break** during SYS-001 (filter decomposition, 40h), SYS-003/004 (cron/job decomposition, 32h), and FE-002 (useSearchOrchestration decomposition, 16h). For SYS-001 alone, expect 50+ test files referencing `filter.py` or `filter/` imports.
-- **Test pollution patterns** documented in project memory (`sys.modules` injection, `importlib.reload`, global singleton leakage) that could resurface during module restructuring.
-- **Windows full-suite constraint** -- `run_tests_safe.py` with subprocess isolation is required on Windows; direct `pytest` hangs. This adds overhead to every refactoring verification cycle.
-
-**Recommendation:** The final assessment should include a "Test Impact" column for HIGH-effort items, estimating test files needing import path updates. Budget 20-30% overhead on effort estimates for test maintenance.
-
-### Gap 2: No Observability Debt Category (LOW)
-
-Observability-specific debt is scattered across categories:
-
-- SYS-014 (LLM cost monitoring) is in System
-- DB-010 (VACUUM monitoring) is in Database
-- The `check_pncp_raw_bids_bloat()` function exists but nobody monitors it (DB specialist confirmed)
-- Prometheus metrics, Sentry error grouping, and alerting rules are not assessed as a category
-
-Individual items are captured, but a coherent "Observability and Alerting" section in the final assessment would help plan monitoring improvements as a single initiative rather than scattered fixes.
-
-### Gap 3: No CI/CD Pipeline Debt Assessment (LOW)
-
-The DRAFT mentions the 3-layer migration CI flow and Railway deploy rules but does not assess CI workflow run times, the `.railwayignore` configuration, the Docker `CACHEBUST` ARG mechanism, or whether redundant workflows exist. Acceptable because CI/CD is operational rather than structural debt, but worth noting for awareness.
-
-### Gap 4: Worker/Queue Resilience (LOW)
-
-The DRAFT covers `job_queue.py` decomposition (SYS-004) but does not assess ARQ's known lack of runtime reconnection (issue #386), the restart wrapper pattern, queue depth monitoring, dead letter handling, or in-flight job behavior during Railway deploy restarts. Should be noted as a known operational concern in the final assessment.
+| Area | Covered? | Items | Gaps |
+|------|----------|-------|------|
+| Backend/System debts | Yes | TD-001 to TD-018 | TD-007/008/009 reference nonexistent files (see Section 3.1) |
+| Database debts | Yes, thoroughly | TD-019 to TD-034 + TD-NEW-001/002/003 | None significant after @data-engineer review |
+| Frontend/UX debts | Yes, thoroughly | TD-035 to TD-049 + TD-050 to TD-055 | None significant after @ux-expert review |
+| Cross-cutting concerns | Partially | Section 4 in DRAFT | Missing: rate limiting debt, dependency pinning (Section 3.3) |
+| Security | Partially | TD-005, TD-022, TD-030, TD-042 | Missing: OWASP dependency scanning (Section 3.4) |
+| Testing | Not covered as standalone | Mentioned in specialist reviews | Missing: backend test anti-patterns, flaky test tracking (Section 3.5) |
 
 ---
 
-## Cross-Cutting Risks
+## 2. Severity Calibration
 
-| Risk | Areas Affected | Probability | Impact | Mitigation |
-|------|---------------|-------------|--------|------------|
-| **Refactoring regression** -- Large decompositions (SYS-001, SYS-003, SYS-004, FE-002) will break import paths across 100+ test files | Backend, Frontend, CI | HIGH | MEDIUM | Run full test suite after each decomposition using `run_tests_safe.py --parallel 4`. Budget 20-30% overhead. Use `__init__.py` re-exports during transition. |
-| **Migration squash data loss** -- DB-002 squash creates new baseline. If any migration side effect (data transform, seed insert) is missed in squashed version, data integrity is silently lost | Database, Backend | MEDIUM | HIGH | DB specialist's phased approach (fix DB-001/004/008/010/011 before squash) is correct. Add: test clean DB creation from squashed baseline against pg_dump of production schema. |
-| **Auth unification regression** -- FE-004 + CROSS-002 touch three auth enforcement points. A mistake could create temporary auth bypass | Frontend, Backend | LOW | CRITICAL | Require dedicated security review before and after. Extend E2E Playwright tests with auth boundary checks. |
-| **SSE breaking change** -- CROSS-001 modifies both backend event emission and frontend event handling. Mismatched deploy order could break search progress | Backend, Frontend, Infra | MEDIUM | HIGH | Deploy backend first (new events are additive). Frontend must handle both old and new event shapes during transition. |
-| **Feature flag removal side effects** -- SYS-008/CROSS-003 removing old flags could re-enable or disable features unexpectedly | Backend, Frontend | MEDIUM | MEDIUM | Never remove a flag without grep-verifying all references. Add `deprecated_since` field; only remove flags deprecated 2+ sprints with zero references. |
-| **LLM cost spike during refactoring** -- If SYS-014 (cost monitoring) is not implemented before SYS-001 (filter decomposition), a regression in classification logic could bypass MAX_ZERO_MATCH_ITEMS cap without alerting | Backend | LOW | HIGH | Implement SYS-014 early (alongside P0 items). 6h investment provides safety net for all subsequent work. |
+### 2.1 Specialist Agreement Analysis
 
----
+Both specialists were consistent in methodology: code-verified, hours-estimated, and prioritized. No conflicts between @data-engineer and @ux-expert since their domains do not overlap.
 
-## Specialist Review Reconciliation
+### 2.2 Severity Adjustments Validated
 
-### DB Review Adjustments
+All specialist recalibrations are justified and validated:
 
-The @data-engineer review is methodical and evidence-based. All adjustments are well-justified.
+| ID | Original | @data-engineer | @ux-expert | QA Verdict | Rationale |
+|----|----------|---------------|------------|------------|-----------|
+| TD-021 | High | **Medium** | -- | **Medium** (agree) | Infrequent plan changes, CHECK and table are consistent today |
+| TD-022 | High | **Low** | -- | **Low** (agree) | Verified: `transformer.py` line 34 uses `hashlib.sha256()`. DRAFT was factually wrong. |
+| TD-027 | Medium | **Low** | -- | **Low** (agree) | Low volume table, 1-year retention is fine but not urgent |
+| TD-028 | Medium | **Low** | -- | **Low** (agree) | Theoretical concern with minimal practical value |
+| TD-030 | Medium | **Low** | -- | **Low** (agree) | Migration 20260404 already addressed most gaps |
+| TD-033 | Low | **Medium** | -- | **Medium** (agree) | Ticking time bomb. Should be P0 action, not P1. |
+| TD-034 | Low | **Medium** | -- | **Medium** (agree) | Paying beta users = data loss is business-ending |
+| TD-040 | Medium | -- | **Low** | **Low** (agree) | Verified: pages have different content (ROI calc vs plan cards) |
+| TD-046 | Low | -- | **Medium-Low** | **Medium-Low** (agree) | No debounce found in SSE handler code |
 
-| Action | Items | Impact on Backlog |
-|--------|-------|-------------------|
-| **Closure** | DB-003 (duplicate triggers) -- already resolved in migration `20260308100000` | -2h, remove from active backlog |
-| **Deferrals** | DB-009 (org RLS perf, 0 production rows), DB-016 (SERIAL vs UUID, not worth changing) | -5h deferred |
-| **Severity upgrade** | DB-008 (retention policies, MEDIUM to HIGH) -- table growth is guaranteed and will be first perf issue at scale | Moves to higher priority |
-| **Severity downgrades** | DB-003 (HIGH to CLOSED), DB-007 (MEDIUM to LOW, FK CASCADE would destroy audit), DB-009 (MEDIUM to LOW), DB-011 (MEDIUM to LOW, cosmetic) | 4 items deprioritized |
-| **Hour adjustments** | DB-008 (4h to 6h), DB-012 (2h to 1h) | Net DB section: 73h to 54h for 17 active debts |
-| **New items** | DB-021 (quota RPCs missing SECURITY DEFINER, 1h), DB-022 (2 more functions missing SET search_path, 1h), DB-023 (search_sessions retention, 2h) | +4h, +3 items |
+### 2.3 Items Potentially Under-Rated
 
-**Critical insight accepted:** DB-007 FK with ON DELETE CASCADE would destroy the audit trail when search sessions are cleaned up. The DB specialist's recommendation to handle cleanup via independent retention policy is correct. The DRAFT's CASCADE recommendation must be revised.
+| ID | Current | Recommended | Rationale |
+|----|---------|-------------|-----------|
+| TD-033 | Medium (adjusted) | **High / P0** | @data-engineer estimates DB may already exceed 500MB. Insert failures on ingestion = complete service outage for the core feature. This is not "medium" -- it is an operational time bomb. |
+| TD-015 | Medium | **Medium-High** | Railway kills requests at 120s but Gunicorn expects 180s. This causes silent failures with NO error logging on the backend side. Users see 504 with no trace in Sentry. Combined with the async search pipeline (CRIT-072), long searches can silently die. |
+| TD-011 | Medium | **Medium-High** | Single-worker with no auto-scaling means a single slow request blocks ALL concurrent requests. Combined with TD-015, this is a latency cliff under load. |
 
-**Resolution order validated:** Phase 0 (immediate security) -> Phase 1 (pre-squash cleanup) -> Phase 2 (squash) -> Phase 3 (opportunistic). Dependencies are correctly mapped.
+### 2.4 Items Potentially Over-Rated
 
-### UX Review Adjustments
-
-The @ux-design-expert review is thorough and provides actionable design guidance with code-level evidence.
-
-| Action | Items | Impact on Backlog |
-|--------|-------|-------------------|
-| **Closure** | FE-003 (ViabilityBadge) -- already has accessible tooltip with `role="tooltip"`, `aria-describedby`, keyboard support, tap-to-toggle mobile | -4h, remove from active backlog |
-| **Partial resolutions** | FE-015 (reduced-motion CSS done, only Framer Motion JS gap remains, 4h to 2h), FE-009 (28+ aria-live usages found, narrow gap, 4h to 2h) | -4h combined |
-| **Severity upgrades** | FE-007 (MEDIUM to HIGH, 12 banners on core page), FE-028 (LOW to MEDIUM, brand-blue contrast fails AA for small text), FE-030 (LOW to MEDIUM, mobile conversion impact) | 3 items elevated |
-| **Severity downgrades** | FE-011 (MEDIUM to LOW, not UX debt), FE-013 (MEDIUM to LOW, narrower gap than described), FE-015 (MEDIUM to LOW, largely resolved), FE-017 (MEDIUM to LOW, not UX), FE-019 (MEDIUM to LOW, purely DX) | 5 items deprioritized |
-| **New items** | FE-033 (landing page hydration, HIGH, 10h), FE-034 (pipeline drag announcements, MEDIUM, 4h), FE-035 (chart colorblind safety, LOW, 4h), FE-036 (Shepherd.js eager loading, LOW, 2h) | +20h, +4 items |
-
-**Critical insight accepted:** FE-033 (landing page RSC conversion) is a legitimate HIGH-severity addition. All 13 landing page children use `"use client"` but only 3 need client-side JS. Estimated LCP improvement from ~3.5s to ~2.0s is credible and directly affects trial acquisition.
-
-### Conflicts Between Reviews
-
-**No direct contradictions found.** The specialist reviews are complementary (DB focuses on data layer, UX on user-facing layer).
-
-One **tension worth resolving:**
-
-- The DRAFT places CROSS-006 (scaling constraint, 32h) at P1. Neither specialist flagged scaling as urgent. Given current traffic (~25 searches/day, ~50 users), the single-process constraint is a ceiling, not an active fire. **Recommendation:** Downgrade CROSS-006 from P1 to P2 with a trigger condition: "Move to P1 when daily searches exceed 200 or concurrent searches exceed 10."
+| ID | Current | Recommended | Rationale |
+|----|---------|-------------|-----------|
+| TD-035 | High | **Medium** | 607 lines is large but the hook is well-structured internally (the UX review confirms 5 clean extraction points). It works correctly and has tests. Refactoring is a maintainability improvement, not a defect. |
+| TD-050 | High (new) | **Medium-High** | Same reasoning as TD-035. 852 lines is large but functional. The distinction between "code smell" and "debt" matters for prioritization. |
 
 ---
 
-## Dependency Validation
+## 3. Gaps Identificados
 
-### Validated Dependencies (correct as documented)
+### 3.1 CRITICAL: Phantom File References in DRAFT
 
-1. **DB-001/004/008/010/011 -> DB-002 (squash)** -- Individual fixes must be in baseline before squashing. DB specialist confirmed with specific migration references and recommended DB-019 and DB-023 also precede squash.
-2. **SYS-001 -> SYS-009** -- Cannot clean root filter shims until package is canonical.
-3. **CROSS-001 = FE-001 + SYS-013** -- Single coordinated SSE fix.
-4. **CROSS-003 = SYS-008 + FE-017** -- Unified feature flag implementation.
-5. **FE-005 -> FE-010** -- Need clear directory structure before extracting new components.
-6. **SYS-005 -> SYS-019** -- Root cache shim depends on package consolidation.
-7. **SYS-003 -> SYS-004** -- Both reference same Redis pool patterns.
+The DRAFT lists these backend debts with specific file names:
 
-### Dependency Corrections
+| ID | DRAFT Claims | Actual File | Status |
+|----|-------------|-------------|--------|
+| TD-007 | `Execute.py` oversized (58KB) | **Does not exist** in `backend/` | INVALID |
+| TD-008 | `Generate.py` oversized (27KB) | **Does not exist** in `backend/` | INVALID |
+| TD-009 | `Filter_stage.py` oversized (20KB) | **Does not exist** in `backend/` | INVALID |
 
-1. **FE-002 -> FE-004 (questionable direction)** -- The DRAFT says decomposing useSearchOrchestration enables auth guard unification because "auth logic is currently embedded in the mega-hook." The hook has a manual `useEffect` redirect at ~line 37. However, the auth unification (FE-004) requires a decision on whether `/buscar` joins the `(protected)` route group or gets middleware-level guard -- this is an architectural decision independent of hook decomposition. **Recommendation:** Remove FE-002 -> FE-004 dependency. These can be done in parallel.
+**Actual oversized backend files (verified via `wc -l`):**
 
-2. **Missing: SYS-014 should precede SYS-001** -- LLM cost monitoring (6h) should be in place before filter decomposition (40h). The filter package includes the classification pipeline that invokes LLM. A refactoring error during SYS-001 that accidentally removes MAX_ZERO_MATCH_ITEMS cap or changes classification thresholds would be caught by cost monitoring. Without it, the error persists until the monthly OpenAI bill arrives.
+| File | Lines | Concern |
+|------|-------|---------|
+| `backend/quota.py` | 1,660 | Quota logic, plan enforcement, atomic operations |
+| `backend/consolidation.py` | 1,394 | Multi-source result consolidation |
+| `backend/llm_arbiter.py` | 1,362 | LLM classification pipeline |
+| `backend/routes/search.py` | 784 | Search endpoint handlers |
+| `backend/routes/user.py` | 715 | User profile routes |
+| `backend/routes/blog_stats.py` | 704 | Blog analytics |
 
-3. **Missing: DB-023 -> DB-002** -- The DB specialist added DB-023 (search_sessions retention) and recommended it precede the squash, but this is not in the DRAFT's dependency graph. Should be added.
+TD-010 correctly identifies `quota.py` as oversized (though states 65KB+, actual is 1,660 lines / ~55KB). TD-007/008/009 must be **replaced** with debts referencing the actual files above, or **removed** if the referenced files were refactored/renamed since the architecture doc was written.
 
-### Circular Dependencies
+**Action required:** Correct or remove TD-007, TD-008, TD-009. Replace with actual oversized file debts.
 
-None detected. The dependency graph is a directed acyclic graph. DB dependencies are linear. FE dependencies are independent of DB. CROSS items bridge them without creating cycles.
+### 3.2 Missing: Test Infrastructure Debt
 
----
+Neither the DRAFT nor specialists cover testing debt:
 
-## Test Strategy Post-Resolution
+- **5,131+ backend tests with 30s global timeout:** The `pyproject.toml` timeout and the Anti-Hang Rules in CLAUDE.md suggest past incidents with hanging tests. No tracking mechanism for flaky tests exists.
+- **No mutation testing:** High line coverage (70% threshold) does not guarantee test quality. Mutation testing would reveal weak assertions.
+- **Test execution time on Windows:** The `run_tests_safe.py` subprocess isolation script exists specifically because the standard `pytest` runner hangs on Windows. This is a development velocity debt.
+- **Frontend: 2,681+ tests but no a11y testing in CI:** jest-axe is not integrated (noted by @ux-expert but not captured as a formal debt item).
 
-### Per-Debt Category
+**Proposed:** TD-056 (Medium, P2): Integrate jest-axe into frontend CI for top 10 components. TD-057 (Low, P3): Add flaky test tracking/quarantine mechanism for backend.
 
-| Debt Category | Required Tests | Automation Level |
-|---------------|---------------|-----------------|
-| **DB Security (DB-001, DB-021, DB-022)** | Verify handle_new_user(), quota RPCs, analytics RPCs work after SET search_path. Test with non-public schema to confirm path isolation. | Manual SQL + automated integration via pytest against test DB |
-| **DB Retention (DB-008, DB-023)** | Verify pg_cron jobs delete correct rows, preserve active records. Test boundary conditions (exactly 90 days, exactly 6 months). Verify no FK violations. | Automated: test migration + test data script, verify row counts |
-| **DB Squash (DB-002)** | Full migration replay from squashed baseline on clean DB. Compare resulting schema against pg_dump of production (diff should be empty). Verify all RPCs, triggers, RLS, indexes. | Semi-automated: script to create clean DB + squash + diff |
-| **Backend Decomposition (SYS-001, 003, 004, 005, 006)** | Full 7656+ test suite must pass. Import path verification: no test importing from legacy locations. Coverage must not decrease. | Automated: `python scripts/run_tests_safe.py --parallel 4` |
-| **Frontend Hook Decomposition (FE-002)** | All 5733+ frontend tests pass. Focus: useSearchOrchestration tests, search flow E2E. No behavioral regression on search page. | Automated: `npm test` + `npm run test:e2e` |
-| **Auth Unification (FE-004, CROSS-002)** | E2E: unauthenticated access to /buscar redirects, expired session handling, OAuth callback, all protected routes. Manual: incognito to each protected page. | Playwright E2E (extend existing 60 tests) + manual smoke |
-| **SSE Fix (CROSS-001, FE-001)** | E2E: search taking >45s shows phase-specific messages, "longer than expected" UI, partial results option. Backend unit tests for new progress events. | Semi-automated: E2E + manual with slow search |
-| **Accessibility (FE-009, 012, 014, 028, 034)** | axe-core on all pages (extend accessibility-audit.spec.ts). Manual NVDA screen reader test on search results, pipeline, forms. Color contrast check for brand-blue. | Automated: axe-core Playwright + manual NVDA |
-| **Landing RSC (FE-033)** | Lighthouse CI: LCP < 2.5s (target < 2.0s). All interactive elements work (CTAs, sector grid, carousel). Visual regression test. | Automated: Lighthouse CI + Playwright screenshots |
-| **Feature Flag Governance (CROSS-003)** | Each deprecated flag: verify default matches production behavior. Flag service: test backend API, frontend consumption, flag override in tests. | Automated: pytest for backend, jest for frontend hook |
+### 3.3 Missing: Dependency Management Debt
 
-### Regression Test Plan
+- **No `pip-audit` or `safety` in CI:** Backend dependencies are not scanned for known vulnerabilities.
+- **No `npm audit` gate in CI:** Frontend dependencies not scanned.
+- **requirements.txt uses loose pinning:** Many entries use `>=` without upper bounds, risking breaking changes on fresh installs.
 
-| Refactoring Item | Test Files at Risk | Risk Level | Mitigation |
-|------------------|--------------------|------------|------------|
-| SYS-001 (filter decomposition) | 15-20 `test_filter*.py` + 10+ `test_search*.py` + 5+ `test_classification*.py` | HIGH | Update imports incrementally. Use `__init__.py` re-exports during transition. |
-| SYS-003/004 (cron/job decomposition) | `test_cron*.py`, `test_job*.py`, `test_arq*.py` | MEDIUM | ARQ mock pattern via conftest `_isolate_arq_module` must be updated if module paths change. |
-| FE-002 (hook decomposition) | `useSearchOrchestration*.test.ts`, `search-resilience.test.tsx`, `buscar.test.ts` | MEDIUM | Extract sub-hooks with identical external API contract. |
-| FE-005 (directory consolidation) | All frontend tests importing from `app/components/` or `components/` | HIGH | Use TypeScript path aliases for backward compatibility. Update `moduleNameMapper` in jest.config.js. Pitfall: `@/` alias maps to `<rootDir>/` -- directory renames affect test resolution. |
-| DB-002 (migration squash) | `test_crit001_schema_alignment.py` and any tests creating test DBs from migrations | LOW | Tests mock Supabase; they do not replay migrations. Verify post-squash schema matches test assumptions. |
+**Proposed:** TD-058 (Medium, P2): Add dependency vulnerability scanning to CI (pip-audit + npm audit).
 
----
+### 3.4 Missing: Security Scanning Debt
 
-## Metrics and Success Criteria
+- **No SAST/DAST in CI:** No static or dynamic application security testing.
+- **No secret scanning:** Beyond `.env` gitignore, no automated detection of accidentally committed secrets.
+- **TD-005 (per-user tokens) lacks a concrete attack scenario:** The DRAFT says "risk of privilege escalation if RPC doesn't validate auth.uid()" but does not inventory which RPCs are vulnerable. This needs a targeted audit.
 
-### Per-Priority Band
+**Proposed:** TD-059 (Medium, P1): Audit all Supabase RPCs for auth.uid() validation gaps. TD-060 (Low, P3): Add GitHub secret scanning + SAST to CI.
 
-| Priority | Metric | Target | Measurement |
-|----------|--------|--------|-------------|
-| **P0** | Security vulnerabilities, search UX incidents | Zero SET search_path vulnerabilities; <5% of searches trigger "longer than expected" UI | Sentry monitoring; Mixpanel partial-results-prompt events |
-| **P1** | Module sizes, test pass rate | No backend module >500 LOC (from filter package); no frontend hook >200 LOC; zero test failures | `wc -l` audit; CI green |
-| **P2** | Accessibility compliance, flag count | axe-core zero critical violations; active flags <20 (from 30+) | Lighthouse CI; flag audit script |
-| **P3** | Code hygiene | No duplicate functions, no redundant indexes, no vestigial columns | Schema audit query (run quarterly) |
+### 3.5 Missing: Monitoring/Alerting Gaps
 
-### Overall Success Criteria
+- **No alerting on ingestion failures:** If the daily crawl fails, there is no PagerDuty/Slack notification. The `ingestion_runs` table logs failures but nobody is watching.
+- **No SLO alerting:** SLO targets exist (PNCP 95%, cache 70%) but no alerts fire when breached.
+- **TD-NEW-003 (datalake cache observability)** was correctly identified by @data-engineer but the same gap exists for the L1 InMemoryCache and L2 Supabase cache.
 
-1. **Zero test regressions** -- Full suite (backend + frontend + E2E) passes after each debt resolution sprint
-2. **Migration replay verified** -- Clean DB creation from squashed baseline matches production schema (pg_dump diff)
-3. **LCP < 2.5s** -- Landing page after FE-033 RSC conversion (Lighthouse CI)
-4. **Search UX** -- No searches "stuck" without user feedback for >45 seconds (Mixpanel tracking)
-5. **Security** -- All SECURITY DEFINER functions have SET search_path (verified via schema audit query)
-6. **Effort tracking** -- Actual hours within 30% of estimates (retrospective validation)
+**Proposed:** TD-061 (Medium, P1): Add alerting for ingestion pipeline failures (Slack webhook or Sentry alert rule).
 
 ---
 
-## Final Verdict
+## 4. Riscos Cruzados
 
-### Strengths of this Assessment
+Cross-area risks where debts compound:
 
-1. **Comprehensive coverage** -- 63 debts across 4 categories with clear IDs, severity, effort, and rationale. Production-quality documentation.
-2. **Effective multi-phase process** -- Both specialist reviews validated claims against actual code, caught already-resolved items, and added missing debts with evidence. The reviews are not rubber stamps.
-3. **Clear dependency graph** -- Section 6 dependencies are correct and match specialists' recommended resolution orders.
-4. **Actionable prioritization** -- P0 items are genuinely urgent (security + user trust). Priority bands enable sprint planning.
-5. **Thorough risk identification** -- 8 DRAFT risks + 5 DB risks + 6 UX risks cover security, performance, accessibility, and operational concerns.
-6. **Specialist answers are excellent** -- DB specialist answered all 7 architect questions with specific migration references and SQL examples. UX specialist answered all 8 questions with concrete UX thresholds and component recommendations.
-
-### Weaknesses / Areas for Improvement
-
-1. **Effort double-counting** -- CROSS items share effort with constituent SYS/FE/DB items but total (506h) sums them independently. Final assessment must deduplicate. Estimated unique effort: ~350-390h.
-2. **Missing test impact analysis** -- For a project with 13,000+ tests and zero-failure policy, every major refactoring needs a test impact estimate. Add "Test Impact" column to prioritization matrix.
-3. **CROSS-006 premature at P1** -- 32h on scaling architecture is premature for 25 searches/day. Should be P2 with trigger condition.
-4. **useSearchOrchestration line count error** -- DRAFT says "200+ lines," actual is 369. Minor but suggests incomplete verification. UX specialist corrected.
-5. **No observability coherence** -- Monitoring debt is scattered. Should be presented as a coherent initiative in final assessment.
-6. **DB-007 CASCADE recommendation is wrong** -- DRAFT recommends FK with ON DELETE CASCADE. DB specialist correctly argues this destroys audit trail. Must be revised.
-
-### Recommendation
-
-**APPROVED -- proceed to Phase 8 (final assessment consolidation by @architect).**
-
-The following adjustments MUST be incorporated in the final version:
-
-| # | Adjustment | Source |
-|---|-----------|--------|
-| 1 | Close DB-003 (duplicate triggers) -- mark RESOLVED, remove from active backlog (-2h) | DB specialist |
-| 2 | Close FE-003 (ViabilityBadge) -- mark RESOLVED, remove from active backlog (-4h) | UX specialist |
-| 3 | Accept DB severity changes: DB-007 to LOW (no CASCADE), DB-008 to HIGH, DB-009/016 deferred | DB specialist |
-| 4 | Accept UX severity changes: FE-007 to HIGH, FE-028/030 to MEDIUM, FE-011/013/015/017/019 to LOW | UX specialist |
-| 5 | Add 7 new items: DB-021, DB-022, DB-023, FE-033, FE-034, FE-035, FE-036 | Both specialists |
-| 6 | Deduplicate effort totals -- CROSS items should note "included in SYS-X + FE-Y" | QA review |
-| 7 | Downgrade CROSS-006 from P1 to P2 with trigger condition (>200 daily searches) | QA review |
-| 8 | Add SYS-014 (LLM cost monitoring, 6h) to P0 as safety net before refactoring | QA review |
-| 9 | Fix useSearchOrchestration description: "369 lines" not "200+" | UX specialist (verified) |
-| 10 | Revise DB-007: remove CASCADE FK recommendation, use independent retention policy | DB specialist |
-| 11 | Add DB-023 to dependency graph (should precede DB-002) | DB specialist |
-| 12 | Remove FE-002 -> FE-004 dependency (independent items) | QA review |
-| 13 | Add "Test Impact" column to prioritization matrix for HIGH-effort items | QA review |
-
-**Estimated final debt count:** 68 items (63 original - 2 closed + 7 added)
-
-**Estimated deduplicated effort:** ~350-390h across all priorities.
+| Risco | Areas Afetadas | Severidade | Mitigacao |
+|-------|---------------|------------|-----------|
+| **DB storage exhaustion cascade:** TD-033 (FREE tier) + TD-020 (soft-delete bloat) + TD-025/026/027 (no retention) = storage fills, ingestion fails, search returns stale data, users see empty results | DB, Backend, Frontend | **Critical** | Upgrade Supabase tier (TD-033) FIRST, then add retention crons |
+| **Silent request death:** TD-015 (Railway 120s kills) + TD-011 (single worker blocks) + TD-004 (async deadline) = long searches die silently, no Sentry trace, user sees generic 504 | Backend, Infra, Frontend | **High** | Align timeouts (TD-015), add Railway timeout detection middleware |
+| **Search page maintainability cliff:** TD-035 (607 lines) + TD-050 (852 lines) + TD-051 (3,775 total) = any search feature change requires understanding 3,775 lines of interconnected hooks | Frontend | **Medium** | Refactor in planned order: useSearchExecution first, then useSearchFilters |
+| **Security audit readiness:** TD-005 (service_role usage) + TD-030 (incomplete RLS docs) + TD-059 (no RPC audit) = cannot pass a security audit | Backend, DB, Security | **Medium** | RPC audit (TD-059) first, then document (TD-030), then migrate tokens (TD-005) |
+| **Data loss without recovery:** TD-034 (no PITR/backup) + TD-033 (FREE tier) = if Supabase has an incident, no independent recovery path exists | DB, Infra | **High** | Supabase Pro upgrade enables PITR. Add pg_dump to S3 as independent backup. |
+| **Mobile UX degradation:** TD-046 (SSE jank) + TD-052 (touch targets) + TD-047 (BottomNav covers content) + TD-055 (missing padding) = mobile experience is materially worse than desktop | Frontend, UX | **Medium** | Bundle mobile fixes into a single sprint (4-6h total) |
 
 ---
 
-*Review completed 2026-03-31 by @qa (Quinn) as Phase 7 of Brownfield Discovery workflow.*
-*Gate decision: APPROVED -- proceed to Phase 8 (@architect final consolidation).*
-*Previous phases: Phase 4 (DRAFT by @architect), Phase 5 (DB review by @data-engineer), Phase 6 (UX review by @ux-design-expert).*
+## 5. Dependencias Validadas
+
+### 5.1 Resolution Order Review
+
+The @data-engineer proposed a dependency graph. I validate and extend it:
+
+```
+PHASE 1 - Immediate (Week 1-2, no dependencies):
+  TD-033 Supabase Pro upgrade -----> unblocks TD-034 (PITR)
+  TD-019 composite index ----------> ship independently
+  TD-025/026/027 + TD-NEW-001 ----> retention crons (bundle in 1 migration)
+  TD-022 COMMENT fix --------------> ship with retention crons
+  TD-052 FeedbackButtons touch ----> ship independently (1h)
+
+PHASE 2 - Foundation (Week 3-6):
+  TD-034 weekly pg_dump to S3 -----> requires TD-033 (Pro tier for larger DB)
+  TD-020 + TD-NEW-002 investigate -> must precede TD-016 (squash)
+  TD-021 plan_type FK migration ---> must precede TD-016 (squash)
+  TD-029 alert cron async ---------> independent, backend-only
+  TD-061 ingestion alerting -------> independent, infra-only
+  TD-059 RPC auth.uid() audit -----> informs TD-005 scope
+
+PHASE 3 - Refactoring (Week 7-12):
+  TD-050 useSearchExecution split -> before TD-035 (shared patterns)
+  TD-035 useSearchFilters split ---> after TD-050 (reuse extraction patterns)
+  TD-037 saved filter presets -----> after TD-035 (cleaner hook surface)
+  Backend file splits -------------> after correcting TD-007/008/009 references
+
+PHASE 4 - Quality & Tooling (Week 12-20):
+  TD-016 migration squash ---------> AFTER all Phase 1-2 migrations are merged
+  TD-036 visual regression --------> can parallel with Phase 3
+  TD-058 dependency scanning ------> independent, CI-only
+  TD-056 jest-axe integration -----> independent, CI-only
+
+PHASE 5 - Backlog (ongoing):
+  TD-043 Storybook, TD-048 i18n, TD-049 offline -- defer
+```
+
+### 5.2 Sequence Validation
+
+- **No circular dependencies detected.** The graph is a DAG.
+- **TD-033 must be FIRST.** It is the single highest-risk item (potential imminent storage failure) and unblocks TD-034.
+- **TD-016 (migration squash) must be LAST** among DB changes. All quick-win migrations must be merged before squashing, otherwise the squash captures an intermediate state.
+- **Frontend refactoring (TD-050/035) can run in parallel** with DB Phase 2 work -- no cross-domain dependencies.
+
+### 5.3 Parallelization Opportunities
+
+| Track A (DB/Infra) | Track B (Frontend) | Track C (Security/CI) |
+|--------------------|--------------------|-----------------------|
+| TD-033 Pro upgrade | TD-052 touch targets | TD-059 RPC audit |
+| TD-019 composite index | TD-050 hook split | TD-058 dep scanning |
+| TD-025/026/027 retention | TD-035 hook split | TD-061 alerting |
+| TD-034 pg_dump backup | TD-037 saved presets | TD-060 secret scanning |
+| TD-020 bloat cleanup | TD-036 visual regression | |
+
+Three parallel tracks can execute simultaneously if staffed.
+
+---
+
+## 6. Testes Requeridos
+
+For each debt resolution phase, the testing requirements:
+
+### Phase 1 (Quick Wins)
+
+| TD | Test Type | Specific Tests |
+|----|-----------|---------------|
+| TD-033 | Manual validation | Run `pg_database_size()` before/after upgrade. Verify ingestion runs successfully post-upgrade. |
+| TD-019 | Integration test | Run `EXPLAIN ANALYZE` on `search_datalake` RPC before/after index. Verify Index Scan (not BitmapAnd). Target: 50-70% latency reduction. |
+| TD-025/026/027 | Unit test (SQL) | Verify cron jobs schedule correctly. Insert old rows, trigger cron, verify deletion. |
+| TD-052 | E2E (Playwright) | Mobile viewport test: verify FeedbackButtons tap target >= 44x44px. |
+
+### Phase 2 (Foundation)
+
+| TD | Test Type | Specific Tests |
+|----|-----------|---------------|
+| TD-034 | Manual + automated | Restore pg_dump to staging. Verify data integrity. Time the restore (validate RTO). |
+| TD-021 | Integration test | Insert profile with invalid plan_type -- verify FK violation. Run existing billing tests to ensure no regression. |
+| TD-020 | Integration test | Seed rows with `is_active=false`, run cleanup, verify deletion. Run `search_datalake` to ensure no active rows affected. |
+| TD-029 | Unit test | Mock 100 alerts, verify asyncio.gather processes all with correct concurrency limit. Verify error isolation (one failure does not kill batch). |
+| TD-059 | Security audit | For each RPC, verify `auth.uid()` is checked. Document findings. |
+
+### Phase 3 (Refactoring)
+
+| TD | Test Type | Specific Tests |
+|----|-----------|---------------|
+| TD-050 | Unit + integration | All existing `useSearchExecution` tests must pass after split. No new functionality -- pure refactor. Run full frontend test suite (`npm test`). |
+| TD-035 | Unit + integration | Same as TD-050. All existing `useSearchFilters` tests must pass. |
+| TD-037 | Unit + E2E | New tests: save preset, load preset, delete preset, limit enforcement (max 10). E2E: full save/load flow on /buscar. |
+
+### Phase 4 (Quality & Tooling)
+
+| TD | Test Type | Specific Tests |
+|----|-----------|---------------|
+| TD-016 | Full regression | After squash: fresh `supabase db push` on empty database. Verify all tables, indexes, RPCs, RLS policies match production schema. Run full backend test suite. |
+| TD-036 | CI integration | Chromatic snapshots for 10 screens. Verify baseline is green. Run on PR to catch regressions. |
+| TD-058 | CI integration | `pip-audit` and `npm audit` run in CI. Verify they report known vulnerabilities (if any). |
+
+---
+
+## 7. Metricas de Sucesso
+
+### Performance Benchmarks
+
+| Metric | Current | Target | Measurement |
+|--------|---------|--------|-------------|
+| `search_datalake` RPC latency (p50) | Unknown (needs baseline) | 50-70% reduction after TD-019 | `EXPLAIN ANALYZE` before/after |
+| PNCP API availability | 94% | >= 95% | Prometheus `smartlic_pncp_health_*` |
+| Cache hit rate | 65-75% | >= 75% sustained | Prometheus `smartlic_cache_hit_rate` |
+| DB size | ~500MB (estimate) | Monitored, < 80% of tier limit | `pg_database_size()` weekly |
+| Search page hooks total lines | 3,775 | < 2,500 after refactoring | `wc -l frontend/app/buscar/hooks/*.ts` |
+
+### Coverage Thresholds
+
+| Area | Current | Target | Gate |
+|------|---------|--------|------|
+| Backend test coverage | >= 70% (CI gate) | Maintain >= 70% | `pytest --cov` |
+| Frontend test coverage | >= 60% (CI gate) | Maintain >= 60% | `npm run test:coverage` |
+| a11y automated coverage | 0% | >= 80% of top 10 components | jest-axe after TD-056 |
+| Visual regression coverage | 0% | 10 critical screens | Chromatic after TD-036 |
+| Dependency vulnerability scan | Not in CI | 0 high/critical findings | pip-audit + npm audit after TD-058 |
+
+### Security Scan Results
+
+| Check | Current | Target |
+|-------|---------|--------|
+| RPCs with auth.uid() validation | Unknown | 100% of user-scoped RPCs (after TD-059) |
+| Dependencies with known CVEs | Unknown | 0 high/critical (after TD-058) |
+| Secrets in git history | Unknown | 0 (after TD-060) |
+
+---
+
+## 8. Parecer Final
+
+### Summary Statistics
+
+| Category | DRAFT | After Specialist Reviews | After QA Review |
+|----------|-------|--------------------------|-----------------|
+| Total debt items | 49 (TD-001 to TD-049) | 55 (+ TD-NEW-001/002/003 from DB, + TD-050/051/052/053/054/055 from UX) | 61 (+ TD-056 to TD-061 proposed by QA) |
+| Critical/Resolved (monitoring) | 4 | 4 | 4 |
+| High severity | 8 | 6 (2 downgraded) | 6 |
+| Medium severity | 16 | 18 (2 upgraded, adjustments) | 20 |
+| Low severity | 21 | 27 | 31 |
+| Invalid items | 0 | 0 | 3 (TD-007/008/009 reference nonexistent files) |
+
+### Critical Path
+
+The absolutely critical sequence that must execute in order:
+
+1. **TD-033** -- Upgrade Supabase to Pro tier (0.5h, budget decision). Blocks everything at scale.
+2. **TD-019** -- Composite index on pncp_raw_bids (1h). Immediate query performance gain.
+3. **TD-025/026/027 + TD-NEW-001** -- Retention crons (1.5h). Prevents unbounded table growth.
+4. **TD-034** -- Weekly pg_dump to S3 (2h). Independent backup path.
+5. **TD-059** -- RPC auth.uid() audit (4h). Security posture baseline.
+
+Total critical path: ~9h of focused work.
+
+### Estimated Total Effort
+
+| Phase | Items | Hours | Timeline |
+|-------|-------|-------|----------|
+| Phase 1 (Quick Wins) | 8 | 6-8h | Week 1-2 |
+| Phase 2 (Foundation) | 7 | 14-18h | Week 3-6 |
+| Phase 3 (Refactoring) | 5 | 52-68h | Week 7-12 |
+| Phase 4 (Quality/Tooling) | 6 | 28-36h | Week 12-20 |
+| Phase 5 (Backlog) | ~20 | 150-250h | Ongoing |
+| **Active total (Phases 1-4)** | **26** | **100-130h** | **~20 weeks** |
+
+### Risk Assessment
+
+| Risk Level | Count | Action |
+|------------|-------|--------|
+| Immediate operational risk | 2 (TD-033 storage, TD-034 no backup) | Execute this week |
+| Security gap | 3 (TD-005, TD-059, TD-058) | Plan for Phase 2 |
+| Maintainability drag | 8 (oversized files/hooks) | Phase 3, non-urgent |
+| Accepted/deferred | ~20 | Backlog, revisit quarterly |
+
+### GO/NO-GO Recommendation for Phase 8
+
+**GO** -- with the following conditions:
+
+| # | Condition | Source | Blocking? |
+|---|-----------|--------|-----------|
+| 1 | Fix TD-007/008/009 phantom file references. Replace with actual oversized files: `quota.py` (1,660 lines), `consolidation.py` (1,394 lines), `llm_arbiter.py` (1,362 lines). | QA verification | YES |
+| 2 | Upgrade TD-033 to P0. Supabase FREE tier storage limit is an imminent operational risk. | QA + DB specialist | YES |
+| 3 | Add 6 QA-proposed items (TD-056 to TD-061) to the final matrix, or explicitly document why excluded. | QA review | NO (advisory) |
+| 4 | Incorporate all specialist severity recalibrations into the final priority matrix. The DRAFT matrix is stale. | Both specialists | YES |
+
+The assessment is comprehensive, well-structured, and actionable. The specialist reviews added substantial value -- particularly @data-engineer's finding that TD-022 (MD5) was factually incorrect and @ux-expert's discovery of TD-050 (an 852-line hook larger than the one flagged in the DRAFT). The debt inventory, once corrected per the conditions above, provides a solid foundation for Phase 8 sprint planning.
+
+---
+
+*Review completed 2026-04-08 by @qa (Quinn) as Phase 7 of Brownfield Discovery.*
+*Previous version: v3 (2026-03-31) reviewed the earlier 63-item numbering scheme.*
+*Next: Phase 8 -- Final Technical Debt Assessment (incorporate all review feedback, publish final document).*

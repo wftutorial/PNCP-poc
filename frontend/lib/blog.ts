@@ -1454,6 +1454,108 @@ export const BLOG_ARTICLES: BlogArticleMeta[] = [
       'PNCP — Portal Nacional de Contratações Públicas (pncp.gov.br)',
     ],
   },
+
+  // ──────────────────────────────────────────────
+  // SEO Q2/2026: Onda 4 — Artigos BOFU (comparação)
+  // ──────────────────────────────────────────────
+
+  // BOFU-01
+  {
+    slug: 'smartlic-vs-planilha-excel-quando-automatizar',
+    title: 'SmartLic vs Planilha Excel: Quando Automatizar Licitações Vale a Pena',
+    description:
+      'Comparação detalhada entre gerenciar licitações em planilha Excel e usar uma plataforma como o SmartLic. Números reais de tempo, custo e ROI para decidir quando automatizar.',
+    category: 'Guias',
+    tags: ['comparação', 'planilha excel', 'automação', 'ROI', 'SmartLic'],
+    publishDate: '2026-04-07',
+    readingTime: calculateReadingTime(3000),
+    wordCount: 3000,
+    keywords: [
+      'smartlic vs planilha excel',
+      'automatizar licitações',
+      'plataforma de licitação vs excel',
+      'quando automatizar licitações',
+      'gestão de editais excel',
+    ],
+    relatedSlugs: [
+      'como-aumentar-taxa-vitoria-licitacoes',
+      'reduzir-tempo-analisando-editais-irrelevantes',
+      'analise-viabilidade-editais-guia',
+      'melhores-plataformas-licitacao-2026-ranking',
+    ],
+    sources: [
+      'PNCP — Portal Nacional de Contratações Públicas (pncp.gov.br)',
+      'Lei 14.133/2021, art. 55 — prazos mínimos por modalidade',
+      'SmartLic datalake — dados de processamento jan-mar 2026',
+    ],
+    authorSlug: 'tiago',
+  },
+
+  // BOFU-02
+  {
+    slug: 'melhores-plataformas-licitacao-2026-ranking',
+    title: 'Melhores Plataformas de Licitação 2026: Ranking Completo e Honesto',
+    description:
+      'Ranking das principais plataformas de licitação em 2026: SmartLic, Effecti, Licitanet, LicitaWeb e PCP. Comparação por IA, cobertura, preço e fase do processo atendida.',
+    category: 'Guias',
+    tags: ['ranking', 'plataformas de licitação', 'comparação', '2026', 'SmartLic'],
+    publishDate: '2026-04-07',
+    readingTime: calculateReadingTime(3100),
+    wordCount: 3100,
+    keywords: [
+      'melhores plataformas de licitação',
+      'ranking plataformas licitação 2026',
+      'comparar plataformas de licitação',
+      'effecti vs smartlic vs licitanet',
+      'ferramenta para licitação',
+    ],
+    relatedSlugs: [
+      'smartlic-vs-planilha-excel-quando-automatizar',
+      'smartlic-vs-effecti-comparacao-2026',
+      'inteligencia-artificial-licitacoes-como-funciona',
+      'pncp-guia-completo-empresas',
+    ],
+    sources: [
+      'PNCP — Portal Nacional de Contratações Públicas (pncp.gov.br)',
+      'Lei 14.133/2021 — Nova Lei de Licitações',
+      'Sites oficiais das plataformas — preços abril/2026',
+      'SmartLic datalake — 800K+ publicações analisadas',
+    ],
+    authorSlug: 'tiago',
+  },
+
+  // BOFU-03
+  {
+    slug: 'smartlic-vs-effecti-comparacao-2026',
+    title: 'SmartLic vs Effecti: Comparação Completa 2026 — Qual Escolher',
+    description:
+      'Comparação detalhada entre SmartLic e Effecti: IA vs automação documental, preço, cobertura, pontos fortes e fracos de cada plataforma. Veredito honesto por perfil de empresa.',
+    category: 'Guias',
+    tags: ['comparação', 'Effecti', 'SmartLic', 'plataformas de licitação', '2026'],
+    publishDate: '2026-04-07',
+    readingTime: calculateReadingTime(3100),
+    wordCount: 3100,
+    keywords: [
+      'smartlic vs effecti',
+      'effecti ou smartlic',
+      'comparar plataformas licitação',
+      'effecti preço funcionalidades',
+      'melhor plataforma licitação 2026',
+    ],
+    relatedSlugs: [
+      'melhores-plataformas-licitacao-2026-ranking',
+      'smartlic-vs-planilha-excel-quando-automatizar',
+      'como-aumentar-taxa-vitoria-licitacoes',
+      'triagem-editais-vantagem-estrategica-clientes',
+    ],
+    sources: [
+      'PNCP — Portal Nacional de Contratações Públicas (pncp.gov.br)',
+      'Lei 14.133/2021 — Nova Lei de Licitações',
+      'SmartLic datalake — classificação e triagem jan-mar 2026',
+      'Effecti — site oficial, funcionalidades e preços abril/2026',
+    ],
+    authorSlug: 'tiago',
+  },
 ];
 
 export function getArticleBySlug(slug: string): BlogArticleMeta | undefined {

@@ -533,6 +533,117 @@
           "title": "AlertResponse",
           "type": "object"
         },
+        "AlertaBid": {
+          "properties": {
+            "data_abertura": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Data Abertura"
+            },
+            "data_publicacao": {
+              "title": "Data Publicacao",
+              "type": "string"
+            },
+            "link_pncp": {
+              "default": "",
+              "title": "Link Pncp",
+              "type": "string"
+            },
+            "modalidade": {
+              "default": "",
+              "title": "Modalidade",
+              "type": "string"
+            },
+            "municipio": {
+              "default": "",
+              "title": "Municipio",
+              "type": "string"
+            },
+            "orgao": {
+              "title": "Orgao",
+              "type": "string"
+            },
+            "pncp_id": {
+              "default": "",
+              "title": "Pncp Id",
+              "type": "string"
+            },
+            "titulo": {
+              "title": "Titulo",
+              "type": "string"
+            },
+            "uf": {
+              "title": "Uf",
+              "type": "string"
+            },
+            "valor": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Valor"
+            }
+          },
+          "required": [
+            "titulo",
+            "orgao",
+            "uf",
+            "data_publicacao"
+          ],
+          "title": "AlertaBid",
+          "type": "object"
+        },
+        "AlertasResponse": {
+          "properties": {
+            "bids": {
+              "items": {
+                "$ref": "#/components/schemas/AlertaBid"
+              },
+              "title": "Bids",
+              "type": "array"
+            },
+            "last_updated": {
+              "title": "Last Updated",
+              "type": "string"
+            },
+            "sector_id": {
+              "title": "Sector Id",
+              "type": "string"
+            },
+            "sector_name": {
+              "title": "Sector Name",
+              "type": "string"
+            },
+            "total": {
+              "title": "Total",
+              "type": "integer"
+            },
+            "uf": {
+              "title": "Uf",
+              "type": "string"
+            }
+          },
+          "required": [
+            "sector_id",
+            "sector_name",
+            "uf",
+            "bids",
+            "total",
+            "last_updated"
+          ],
+          "title": "AlertasResponse",
+          "type": "object"
+        },
         "AuthStatusResponse": {
           "properties": {
             "confirmed": {
@@ -1545,6 +1656,44 @@
           "title": "CTAEventRequest",
           "type": "object"
         },
+        "CalculadoraDadosResponse": {
+          "properties": {
+            "avg_value": {
+              "title": "Avg Value",
+              "type": "number"
+            },
+            "p25_value": {
+              "title": "P25 Value",
+              "type": "number"
+            },
+            "p75_value": {
+              "title": "P75 Value",
+              "type": "number"
+            },
+            "setor_name": {
+              "title": "Setor Name",
+              "type": "string"
+            },
+            "total_editais_mes": {
+              "title": "Total Editais Mes",
+              "type": "integer"
+            },
+            "uf": {
+              "title": "Uf",
+              "type": "string"
+            }
+          },
+          "required": [
+            "total_editais_mes",
+            "avg_value",
+            "p25_value",
+            "p75_value",
+            "setor_name",
+            "uf"
+          ],
+          "title": "CalculadoraDadosResponse",
+          "type": "object"
+        },
         "CancelFeedbackRequest": {
           "description": "Post-cancellation feedback (UX-308 AC6).",
           "properties": {
@@ -1638,6 +1787,88 @@
           "title": "CheckoutResponse",
           "type": "object"
         },
+        "CidadeSectorStats": {
+          "properties": {
+            "avg_value": {
+              "title": "Avg Value",
+              "type": "number"
+            },
+            "cidade": {
+              "title": "Cidade",
+              "type": "string"
+            },
+            "has_sufficient_data": {
+              "default": false,
+              "title": "Has Sufficient Data",
+              "type": "boolean"
+            },
+            "last_updated": {
+              "title": "Last Updated",
+              "type": "string"
+            },
+            "orgaos_frequentes": {
+              "default": [],
+              "items": {
+                "$ref": "#/components/schemas/TopEntry"
+              },
+              "title": "Orgaos Frequentes",
+              "type": "array"
+            },
+            "sector_id": {
+              "title": "Sector Id",
+              "type": "string"
+            },
+            "sector_name": {
+              "title": "Sector Name",
+              "type": "string"
+            },
+            "top_modalidades": {
+              "default": [],
+              "items": {
+                "$ref": "#/components/schemas/TopEntry"
+              },
+              "title": "Top Modalidades",
+              "type": "array"
+            },
+            "top_oportunidades": {
+              "default": [],
+              "items": {
+                "$ref": "#/components/schemas/SampleItem"
+              },
+              "title": "Top Oportunidades",
+              "type": "array"
+            },
+            "total_editais": {
+              "title": "Total Editais",
+              "type": "integer"
+            },
+            "uf": {
+              "title": "Uf",
+              "type": "string"
+            },
+            "value_range_max": {
+              "default": 0.0,
+              "title": "Value Range Max",
+              "type": "number"
+            },
+            "value_range_min": {
+              "default": 0.0,
+              "title": "Value Range Min",
+              "type": "number"
+            }
+          },
+          "required": [
+            "cidade",
+            "uf",
+            "sector_id",
+            "sector_name",
+            "total_editais",
+            "avg_value",
+            "last_updated"
+          ],
+          "title": "CidadeSectorStats",
+          "type": "object"
+        },
         "CidadeStats": {
           "properties": {
             "avg_value": {
@@ -1677,6 +1908,197 @@
             "last_updated"
           ],
           "title": "CidadeStats",
+          "type": "object"
+        },
+        "ComparadorBid": {
+          "properties": {
+            "data_abertura": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Data Abertura"
+            },
+            "data_publicacao": {
+              "title": "Data Publicacao",
+              "type": "string"
+            },
+            "link_pncp": {
+              "default": "",
+              "title": "Link Pncp",
+              "type": "string"
+            },
+            "modalidade": {
+              "default": "",
+              "title": "Modalidade",
+              "type": "string"
+            },
+            "municipio": {
+              "default": "",
+              "title": "Municipio",
+              "type": "string"
+            },
+            "orgao": {
+              "title": "Orgao",
+              "type": "string"
+            },
+            "pncp_id": {
+              "title": "Pncp Id",
+              "type": "string"
+            },
+            "titulo": {
+              "title": "Titulo",
+              "type": "string"
+            },
+            "uf": {
+              "title": "Uf",
+              "type": "string"
+            },
+            "valor": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Valor"
+            }
+          },
+          "required": [
+            "pncp_id",
+            "titulo",
+            "orgao",
+            "uf",
+            "data_publicacao"
+          ],
+          "title": "ComparadorBid",
+          "type": "object"
+        },
+        "ComparadorBidsResponse": {
+          "properties": {
+            "bids": {
+              "items": {
+                "$ref": "#/components/schemas/ComparadorBid"
+              },
+              "title": "Bids",
+              "type": "array"
+            },
+            "total": {
+              "title": "Total",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "bids",
+            "total"
+          ],
+          "title": "ComparadorBidsResponse",
+          "type": "object"
+        },
+        "ComparadorSearchResponse": {
+          "properties": {
+            "bids": {
+              "items": {
+                "$ref": "#/components/schemas/ComparadorBid"
+              },
+              "title": "Bids",
+              "type": "array"
+            },
+            "query": {
+              "title": "Query",
+              "type": "string"
+            },
+            "total": {
+              "title": "Total",
+              "type": "integer"
+            },
+            "uf": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Uf"
+            }
+          },
+          "required": [
+            "query",
+            "uf",
+            "bids",
+            "total"
+          ],
+          "title": "ComparadorSearchResponse",
+          "type": "object"
+        },
+        "ContratoPublico": {
+          "properties": {
+            "data_inicio": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Data Inicio"
+            },
+            "descricao": {
+              "title": "Descricao",
+              "type": "string"
+            },
+            "esfera": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Esfera"
+            },
+            "orgao": {
+              "title": "Orgao",
+              "type": "string"
+            },
+            "uf": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Uf"
+            },
+            "valor": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Valor"
+            }
+          },
+          "required": [
+            "orgao",
+            "descricao"
+          ],
+          "title": "ContratoPublico",
           "type": "object"
         },
         "ConversationCategory": {
@@ -1870,6 +2292,22 @@
               ],
               "title": "Freshness",
               "type": "string"
+            },
+            "uf_result_counts": {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "description": "ISSUE-073: contagem de resultados por UF",
+              "title": "Uf Result Counts",
+              "type": "object"
+            },
+            "ufs_empty": {
+              "description": "ISSUE-073: UFs processadas com 0 resultados pos-filtragem",
+              "items": {
+                "type": "string"
+              },
+              "title": "Ufs Empty",
+              "type": "array"
             },
             "ufs_failed": {
               "description": "UFs que falharam (timeout/erro)",
@@ -2089,6 +2527,81 @@
             "password"
           ],
           "title": "CreateUserRequest",
+          "type": "object"
+        },
+        "DadosAgregadosResponse": {
+          "properties": {
+            "avg_value": {
+              "title": "Avg Value",
+              "type": "number"
+            },
+            "by_modalidade": {
+              "items": {
+                "$ref": "#/components/schemas/ModalidadeAggregate"
+              },
+              "title": "By Modalidade",
+              "type": "array"
+            },
+            "by_sector": {
+              "items": {
+                "$ref": "#/components/schemas/SectorAggregate"
+              },
+              "title": "By Sector",
+              "type": "array"
+            },
+            "by_uf": {
+              "items": {
+                "$ref": "#/components/schemas/UfAggregate"
+              },
+              "title": "By Uf",
+              "type": "array"
+            },
+            "period": {
+              "title": "Period",
+              "type": "string"
+            },
+            "period_end": {
+              "title": "Period End",
+              "type": "string"
+            },
+            "period_start": {
+              "title": "Period Start",
+              "type": "string"
+            },
+            "total_bids": {
+              "title": "Total Bids",
+              "type": "integer"
+            },
+            "total_value": {
+              "title": "Total Value",
+              "type": "number"
+            },
+            "trend_30d": {
+              "items": {
+                "$ref": "#/components/schemas/routes__dados_publicos__TrendPoint"
+              },
+              "title": "Trend 30D",
+              "type": "array"
+            },
+            "updated_at": {
+              "title": "Updated At",
+              "type": "string"
+            }
+          },
+          "required": [
+            "updated_at",
+            "period",
+            "period_start",
+            "period_end",
+            "total_bids",
+            "total_value",
+            "avg_value",
+            "by_sector",
+            "by_uf",
+            "by_modalidade",
+            "trend_30d"
+          ],
+          "title": "DadosAgregadosResponse",
           "type": "object"
         },
         "DailyVolumeResponse": {
@@ -2391,6 +2904,106 @@
           "title": "DimensionItem",
           "type": "object"
         },
+        "EditaisAmostra": {
+          "properties": {
+            "data_encerramento": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Data Encerramento"
+            },
+            "descricao": {
+              "title": "Descricao",
+              "type": "string"
+            },
+            "modalidade": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Modalidade"
+            },
+            "orgao": {
+              "title": "Orgao",
+              "type": "string"
+            },
+            "uf": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Uf"
+            },
+            "valor_estimado": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Valor Estimado"
+            }
+          },
+          "required": [
+            "orgao",
+            "descricao"
+          ],
+          "title": "EditaisAmostra",
+          "type": "object"
+        },
+        "EmpresaInfo": {
+          "properties": {
+            "cnae_principal": {
+              "title": "Cnae Principal",
+              "type": "string"
+            },
+            "cnpj": {
+              "title": "Cnpj",
+              "type": "string"
+            },
+            "porte": {
+              "title": "Porte",
+              "type": "string"
+            },
+            "razao_social": {
+              "title": "Razao Social",
+              "type": "string"
+            },
+            "situacao": {
+              "title": "Situacao",
+              "type": "string"
+            },
+            "uf": {
+              "title": "Uf",
+              "type": "string"
+            }
+          },
+          "required": [
+            "razao_social",
+            "cnpj",
+            "cnae_principal",
+            "porte",
+            "uf",
+            "situacao"
+          ],
+          "title": "EmpresaInfo",
+          "type": "object"
+        },
         "EsferaGovernamental": {
           "description": "Esfera governamental para filtro de busca.\n\nDefine o n\u00edvel de governo do \u00f3rg\u00e3o contratante:\n- FEDERAL (F): Uni\u00e3o, minist\u00e9rios, autarquias federais\n- ESTADUAL (E): Estados, DF, secretarias estaduais\n- MUNICIPAL (M): Prefeituras, c\u00e2maras municipais",
           "enum": [
@@ -2411,6 +3024,118 @@
           ],
           "title": "ExperienciaLicitacoes",
           "type": "string"
+        },
+        "ExtendRequest": {
+          "properties": {
+            "condition": {
+              "description": "Extension condition: profile_complete, feedback_given, or referral_signup",
+              "title": "Condition",
+              "type": "string"
+            }
+          },
+          "required": [
+            "condition"
+          ],
+          "title": "ExtendRequest",
+          "type": "object"
+        },
+        "ExtendResponse": {
+          "properties": {
+            "days_added": {
+              "title": "Days Added",
+              "type": "integer"
+            },
+            "new_expires_at": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "New Expires At"
+            },
+            "total_extended": {
+              "title": "Total Extended",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "days_added",
+            "total_extended"
+          ],
+          "title": "ExtendResponse",
+          "type": "object"
+        },
+        "ExtensionItem": {
+          "properties": {
+            "claimed": {
+              "title": "Claimed",
+              "type": "boolean"
+            },
+            "condition": {
+              "title": "Condition",
+              "type": "string"
+            },
+            "days": {
+              "title": "Days",
+              "type": "integer"
+            },
+            "eligible": {
+              "title": "Eligible",
+              "type": "boolean"
+            },
+            "label": {
+              "title": "Label",
+              "type": "string"
+            }
+          },
+          "required": [
+            "condition",
+            "label",
+            "days",
+            "claimed",
+            "eligible"
+          ],
+          "title": "ExtensionItem",
+          "type": "object"
+        },
+        "ExtensionsStatusResponse": {
+          "properties": {
+            "enabled": {
+              "title": "Enabled",
+              "type": "boolean"
+            },
+            "extensions": {
+              "items": {
+                "$ref": "#/components/schemas/ExtensionItem"
+              },
+              "title": "Extensions",
+              "type": "array"
+            },
+            "max_extension": {
+              "title": "Max Extension",
+              "type": "integer"
+            },
+            "remaining": {
+              "default": 0,
+              "title": "Remaining",
+              "type": "integer"
+            },
+            "total_extended": {
+              "title": "Total Extended",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "enabled",
+            "extensions",
+            "total_extended",
+            "max_extension"
+          ],
+          "title": "ExtensionsStatusResponse",
+          "type": "object"
         },
         "FPKeywordSuggestion": {
           "description": "Keyword appearing frequently in false positives.",
@@ -3290,6 +4015,70 @@
           "title": "InviteMemberRequest",
           "type": "object"
         },
+        "LeadCaptureRequest": {
+          "properties": {
+            "captured_at": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Captured At"
+            },
+            "email": {
+              "title": "Email",
+              "type": "string"
+            },
+            "setor": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Setor"
+            },
+            "source": {
+              "title": "Source",
+              "type": "string"
+            },
+            "uf": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Uf"
+            }
+          },
+          "required": [
+            "email",
+            "source"
+          ],
+          "title": "LeadCaptureRequest",
+          "type": "object"
+        },
+        "LeadCaptureResponse": {
+          "properties": {
+            "success": {
+              "title": "Success",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "success"
+          ],
+          "title": "LeadCaptureResponse",
+          "type": "object"
+        },
         "LicitacaoItem": {
           "description": "Individual bid item for display in search results.\n\nUsed for FREE tier preview feature - shows 5-10 items fully,\nrest are displayed blurred/partial without links.",
           "example": {
@@ -3636,6 +4425,45 @@
           "title": "LicitacaoItem",
           "type": "object"
         },
+        "LicitacaoRecente": {
+          "properties": {
+            "data_publicacao": {
+              "title": "Data Publicacao",
+              "type": "string"
+            },
+            "modalidade_nome": {
+              "title": "Modalidade Nome",
+              "type": "string"
+            },
+            "objeto_compra": {
+              "title": "Objeto Compra",
+              "type": "string"
+            },
+            "uf": {
+              "title": "Uf",
+              "type": "string"
+            },
+            "valor_total_estimado": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Valor Total Estimado"
+            }
+          },
+          "required": [
+            "objeto_compra",
+            "modalidade_nome",
+            "data_publicacao",
+            "uf"
+          ],
+          "title": "LicitacaoRecente",
+          "type": "object"
+        },
         "MessageResponse": {
           "description": "Single message in a conversation thread.",
           "properties": {
@@ -3722,6 +4550,52 @@
           "title": "MfaStatusResponse",
           "type": "object"
         },
+        "ModalidadeAggregate": {
+          "properties": {
+            "code": {
+              "title": "Code",
+              "type": "integer"
+            },
+            "count": {
+              "title": "Count",
+              "type": "integer"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "pct": {
+              "title": "Pct",
+              "type": "number"
+            }
+          },
+          "required": [
+            "code",
+            "name",
+            "count",
+            "pct"
+          ],
+          "title": "ModalidadeAggregate",
+          "type": "object"
+        },
+        "ModalidadeCount": {
+          "properties": {
+            "count": {
+              "title": "Count",
+              "type": "integer"
+            },
+            "nome": {
+              "title": "Nome",
+              "type": "string"
+            }
+          },
+          "required": [
+            "nome",
+            "count"
+          ],
+          "title": "ModalidadeCount",
+          "type": "object"
+        },
         "NewOpportunitiesResponse": {
           "description": "DEBT-127 AC6-AC9: New opportunities since last search.",
           "properties": {
@@ -3763,6 +4637,98 @@
           "title": "NewOpportunitiesResponse",
           "type": "object"
         },
+        "OrgaoStatsResponse": {
+          "properties": {
+            "aviso_legal": {
+              "title": "Aviso Legal",
+              "type": "string"
+            },
+            "cnpj": {
+              "title": "Cnpj",
+              "type": "string"
+            },
+            "esfera": {
+              "title": "Esfera",
+              "type": "string"
+            },
+            "licitacoes_30d": {
+              "title": "Licitacoes 30D",
+              "type": "integer"
+            },
+            "licitacoes_365d": {
+              "title": "Licitacoes 365D",
+              "type": "integer"
+            },
+            "licitacoes_90d": {
+              "title": "Licitacoes 90D",
+              "type": "integer"
+            },
+            "municipio": {
+              "title": "Municipio",
+              "type": "string"
+            },
+            "nome": {
+              "title": "Nome",
+              "type": "string"
+            },
+            "top_modalidades": {
+              "items": {
+                "$ref": "#/components/schemas/ModalidadeCount"
+              },
+              "title": "Top Modalidades",
+              "type": "array"
+            },
+            "top_setores": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Top Setores",
+              "type": "array"
+            },
+            "total_licitacoes": {
+              "title": "Total Licitacoes",
+              "type": "integer"
+            },
+            "uf": {
+              "title": "Uf",
+              "type": "string"
+            },
+            "ultimas_licitacoes": {
+              "items": {
+                "$ref": "#/components/schemas/LicitacaoRecente"
+              },
+              "title": "Ultimas Licitacoes",
+              "type": "array"
+            },
+            "valor_medio_estimado": {
+              "title": "Valor Medio Estimado",
+              "type": "number"
+            },
+            "valor_total_estimado": {
+              "title": "Valor Total Estimado",
+              "type": "number"
+            }
+          },
+          "required": [
+            "nome",
+            "cnpj",
+            "esfera",
+            "uf",
+            "municipio",
+            "total_licitacoes",
+            "licitacoes_30d",
+            "licitacoes_90d",
+            "licitacoes_365d",
+            "valor_medio_estimado",
+            "valor_total_estimado",
+            "top_modalidades",
+            "top_setores",
+            "ultimas_licitacoes",
+            "aviso_legal"
+          ],
+          "title": "OrgaoStatsResponse",
+          "type": "object"
+        },
         "PanoramaStats": {
           "properties": {
             "avg_value": {
@@ -3779,7 +4745,7 @@
             },
             "sazonalidade": {
               "items": {
-                "$ref": "#/components/schemas/TrendPoint"
+                "$ref": "#/components/schemas/routes__blog_stats__TrendPoint"
               },
               "title": "Sazonalidade",
               "type": "array"
@@ -3828,6 +4794,77 @@
             "last_updated"
           ],
           "title": "PanoramaStats",
+          "type": "object"
+        },
+        "PerfilB2GResponse": {
+          "properties": {
+            "aviso_legal": {
+              "title": "Aviso Legal",
+              "type": "string"
+            },
+            "contratos": {
+              "items": {
+                "$ref": "#/components/schemas/ContratoPublico"
+              },
+              "title": "Contratos",
+              "type": "array"
+            },
+            "editais_abertos_setor": {
+              "title": "Editais Abertos Setor",
+              "type": "integer"
+            },
+            "editais_amostra": {
+              "default": [],
+              "items": {
+                "$ref": "#/components/schemas/EditaisAmostra"
+              },
+              "title": "Editais Amostra",
+              "type": "array"
+            },
+            "empresa": {
+              "$ref": "#/components/schemas/EmpresaInfo"
+            },
+            "score": {
+              "title": "Score",
+              "type": "string"
+            },
+            "setor_detectado": {
+              "title": "Setor Detectado",
+              "type": "string"
+            },
+            "setor_nome": {
+              "title": "Setor Nome",
+              "type": "string"
+            },
+            "total_contratos_24m": {
+              "title": "Total Contratos 24M",
+              "type": "integer"
+            },
+            "ufs_atuacao": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Ufs Atuacao",
+              "type": "array"
+            },
+            "valor_total_24m": {
+              "title": "Valor Total 24M",
+              "type": "number"
+            }
+          },
+          "required": [
+            "empresa",
+            "contratos",
+            "score",
+            "setor_detectado",
+            "setor_nome",
+            "editais_abertos_setor",
+            "total_contratos_24m",
+            "valor_total_24m",
+            "ufs_atuacao",
+            "aviso_legal"
+          ],
+          "title": "PerfilB2GResponse",
           "type": "object"
         },
         "PerfilContexto": {
@@ -4635,6 +5672,99 @@
           "title": "RecoveryCodesResponse",
           "type": "object"
         },
+        "ReferralCodeResponse": {
+          "properties": {
+            "code": {
+              "description": "8-char alphanumeric referral code",
+              "title": "Code",
+              "type": "string"
+            },
+            "share_url": {
+              "description": "Full signup URL with ?ref= param",
+              "title": "Share Url",
+              "type": "string"
+            }
+          },
+          "required": [
+            "code",
+            "share_url"
+          ],
+          "title": "ReferralCodeResponse",
+          "type": "object"
+        },
+        "ReferralRedeemRequest": {
+          "properties": {
+            "code": {
+              "maxLength": 8,
+              "minLength": 8,
+              "title": "Code",
+              "type": "string"
+            },
+            "referred_user_id": {
+              "minLength": 1,
+              "title": "Referred User Id",
+              "type": "string"
+            }
+          },
+          "required": [
+            "code",
+            "referred_user_id"
+          ],
+          "title": "ReferralRedeemRequest",
+          "type": "object"
+        },
+        "ReferralRedeemResponse": {
+          "properties": {
+            "code": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Code"
+            },
+            "status": {
+              "title": "Status",
+              "type": "string"
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "title": "ReferralRedeemResponse",
+          "type": "object"
+        },
+        "ReferralStatsResponse": {
+          "properties": {
+            "code": {
+              "title": "Code",
+              "type": "string"
+            },
+            "credits_earned_months": {
+              "default": 0,
+              "title": "Credits Earned Months",
+              "type": "integer"
+            },
+            "total_converted": {
+              "default": 0,
+              "title": "Total Converted",
+              "type": "integer"
+            },
+            "total_signups": {
+              "default": 0,
+              "title": "Total Signups",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "code"
+          ],
+          "title": "ReferralStatsResponse",
+          "type": "object"
+        },
         "RegenerateRecoveryResponse": {
           "properties": {
             "codes": {
@@ -4654,6 +5784,62 @@
             "codes"
           ],
           "title": "RegenerateRecoveryResponse",
+          "type": "object"
+        },
+        "RelatorioRequest": {
+          "properties": {
+            "cargo": {
+              "enum": [
+                "diretor",
+                "gerente",
+                "analista",
+                "consultor",
+                "outro"
+              ],
+              "title": "Cargo",
+              "type": "string"
+            },
+            "email": {
+              "format": "email",
+              "title": "Email",
+              "type": "string"
+            },
+            "empresa": {
+              "maxLength": 100,
+              "minLength": 2,
+              "title": "Empresa",
+              "type": "string"
+            },
+            "newsletter_opt_in": {
+              "default": false,
+              "title": "Newsletter Opt In",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "email",
+            "empresa",
+            "cargo"
+          ],
+          "title": "RelatorioRequest",
+          "type": "object"
+        },
+        "RelatorioResponse": {
+          "properties": {
+            "download_url": {
+              "title": "Download Url",
+              "type": "string"
+            },
+            "email_queued": {
+              "title": "Email Queued",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "download_url",
+            "email_queued"
+          ],
+          "title": "RelatorioResponse",
           "type": "object"
         },
         "ReplyRequest": {
@@ -4998,6 +6184,88 @@
           "title": "RootResponse",
           "type": "object"
         },
+        "SEOMetricRow": {
+          "properties": {
+            "avg_position": {
+              "title": "Avg Position",
+              "type": "number"
+            },
+            "clicks": {
+              "title": "Clicks",
+              "type": "integer"
+            },
+            "ctr": {
+              "title": "Ctr",
+              "type": "number"
+            },
+            "date": {
+              "title": "Date",
+              "type": "string"
+            },
+            "impressions": {
+              "title": "Impressions",
+              "type": "integer"
+            },
+            "pages_indexed": {
+              "title": "Pages Indexed",
+              "type": "integer"
+            },
+            "top_pages": {
+              "items": {},
+              "title": "Top Pages",
+              "type": "array"
+            },
+            "top_queries": {
+              "items": {},
+              "title": "Top Queries",
+              "type": "array"
+            }
+          },
+          "required": [
+            "date",
+            "impressions",
+            "clicks",
+            "ctr",
+            "avg_position",
+            "pages_indexed",
+            "top_queries",
+            "top_pages"
+          ],
+          "title": "SEOMetricRow",
+          "type": "object"
+        },
+        "SEOMetricsResponse": {
+          "properties": {
+            "latest_date": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Latest Date"
+            },
+            "metrics": {
+              "items": {
+                "$ref": "#/components/schemas/SEOMetricRow"
+              },
+              "title": "Metrics",
+              "type": "array"
+            },
+            "total": {
+              "title": "Total",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "metrics",
+            "total"
+          ],
+          "title": "SEOMetricsResponse",
+          "type": "object"
+        },
         "SampleItem": {
           "properties": {
             "data": {
@@ -5202,6 +6470,39 @@
           "title": "SearchesOverTimeResponse",
           "type": "object"
         },
+        "SectorAggregate": {
+          "properties": {
+            "avg_value": {
+              "title": "Avg Value",
+              "type": "number"
+            },
+            "count": {
+              "title": "Count",
+              "type": "integer"
+            },
+            "sector_id": {
+              "title": "Sector Id",
+              "type": "string"
+            },
+            "sector_name": {
+              "title": "Sector Name",
+              "type": "string"
+            },
+            "total_value": {
+              "title": "Total Value",
+              "type": "number"
+            }
+          },
+          "required": [
+            "sector_id",
+            "sector_name",
+            "count",
+            "total_value",
+            "avg_value"
+          ],
+          "title": "SectorAggregate",
+          "type": "object"
+        },
         "SectorBlogStats": {
           "properties": {
             "avg_value": {
@@ -5240,7 +6541,7 @@
             },
             "trend_90d": {
               "items": {
-                "$ref": "#/components/schemas/TrendPoint"
+                "$ref": "#/components/schemas/routes__blog_stats__TrendPoint"
               },
               "title": "Trend 90D",
               "type": "array"
@@ -5409,7 +6710,7 @@
             "trend_90d": {
               "default": [],
               "items": {
-                "$ref": "#/components/schemas/TrendPoint"
+                "$ref": "#/components/schemas/routes__blog_stats__TrendPoint"
               },
               "title": "Trend 90D",
               "type": "array"
@@ -5490,6 +6791,257 @@
             "setores"
           ],
           "title": "SetoresResponse",
+          "type": "object"
+        },
+        "ShareAnaliseRequest": {
+          "description": "Request to create a shareable analysis link.",
+          "properties": {
+            "bid_id": {
+              "minLength": 1,
+              "title": "Bid Id",
+              "type": "string"
+            },
+            "bid_modalidade": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Bid Modalidade"
+            },
+            "bid_orgao": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Bid Orgao"
+            },
+            "bid_title": {
+              "maxLength": 500,
+              "minLength": 1,
+              "title": "Bid Title",
+              "type": "string"
+            },
+            "bid_uf": {
+              "anyOf": [
+                {
+                  "maxLength": 2,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Bid Uf"
+            },
+            "bid_valor": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Bid Valor"
+            },
+            "viability_factors": {
+              "additionalProperties": true,
+              "title": "Viability Factors",
+              "type": "object"
+            },
+            "viability_level": {
+              "pattern": "^(alta|media|baixa)$",
+              "title": "Viability Level",
+              "type": "string"
+            },
+            "viability_score": {
+              "maximum": 100.0,
+              "minimum": 0.0,
+              "title": "Viability Score",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "bid_id",
+            "bid_title",
+            "viability_score",
+            "viability_level"
+          ],
+          "title": "ShareAnaliseRequest",
+          "type": "object"
+        },
+        "ShareAnaliseResponse": {
+          "description": "Response with the shareable URL.",
+          "properties": {
+            "hash": {
+              "title": "Hash",
+              "type": "string"
+            },
+            "url": {
+              "title": "Url",
+              "type": "string"
+            }
+          },
+          "required": [
+            "url",
+            "hash"
+          ],
+          "title": "ShareAnaliseResponse",
+          "type": "object"
+        },
+        "SharedAnalisePublic": {
+          "description": "Public view of a shared analysis (no user_id exposed).",
+          "properties": {
+            "bid_id": {
+              "title": "Bid Id",
+              "type": "string"
+            },
+            "bid_modalidade": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Bid Modalidade"
+            },
+            "bid_orgao": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Bid Orgao"
+            },
+            "bid_title": {
+              "title": "Bid Title",
+              "type": "string"
+            },
+            "bid_uf": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Bid Uf"
+            },
+            "bid_valor": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Bid Valor"
+            },
+            "created_at": {
+              "title": "Created At",
+              "type": "string"
+            },
+            "hash": {
+              "title": "Hash",
+              "type": "string"
+            },
+            "viability_factors": {
+              "additionalProperties": true,
+              "title": "Viability Factors",
+              "type": "object"
+            },
+            "viability_level": {
+              "title": "Viability Level",
+              "type": "string"
+            },
+            "viability_score": {
+              "title": "Viability Score",
+              "type": "integer"
+            },
+            "view_count": {
+              "default": 0,
+              "title": "View Count",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "hash",
+            "bid_id",
+            "bid_title",
+            "viability_score",
+            "viability_level",
+            "viability_factors",
+            "created_at"
+          ],
+          "title": "SharedAnalisePublic",
+          "type": "object"
+        },
+        "SitemapCnpjsResponse": {
+          "properties": {
+            "cnpjs": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Cnpjs",
+              "type": "array"
+            },
+            "total": {
+              "title": "Total",
+              "type": "integer"
+            },
+            "updated_at": {
+              "title": "Updated At",
+              "type": "string"
+            }
+          },
+          "required": [
+            "cnpjs",
+            "total",
+            "updated_at"
+          ],
+          "title": "SitemapCnpjsResponse",
+          "type": "object"
+        },
+        "SitemapOrgaosResponse": {
+          "properties": {
+            "orgaos": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Orgaos",
+              "type": "array"
+            },
+            "total": {
+              "title": "Total",
+              "type": "integer"
+            },
+            "updated_at": {
+              "title": "Updated At",
+              "type": "string"
+            }
+          },
+          "required": [
+            "orgaos",
+            "total",
+            "updated_at"
+          ],
+          "title": "SitemapOrgaosResponse",
           "type": "object"
         },
         "StatusLicitacao": {
@@ -5696,27 +7248,27 @@
           "title": "TourEventRequest",
           "type": "object"
         },
-        "TrendPoint": {
+        "TrendingSector": {
           "properties": {
-            "avg_value": {
-              "title": "Avg Value",
-              "type": "number"
-            },
-            "count": {
-              "title": "Count",
+            "count_this_week": {
+              "title": "Count This Week",
               "type": "integer"
             },
-            "period": {
-              "title": "Period",
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "slug": {
+              "title": "Slug",
               "type": "string"
             }
           },
           "required": [
-            "period",
-            "count",
-            "avg_value"
+            "slug",
+            "name",
+            "count_this_week"
           ],
-          "title": "TrendPoint",
+          "title": "TrendingSector",
           "type": "object"
         },
         "TrialStatusResponse": {
@@ -5817,6 +7369,29 @@
             "avg_opportunity_value"
           ],
           "title": "TrialValueResponse",
+          "type": "object"
+        },
+        "UfAggregate": {
+          "properties": {
+            "count": {
+              "title": "Count",
+              "type": "integer"
+            },
+            "total_value": {
+              "title": "Total Value",
+              "type": "number"
+            },
+            "uf": {
+              "title": "Uf",
+              "type": "string"
+            }
+          },
+          "required": [
+            "uf",
+            "count",
+            "total_value"
+          ],
+          "title": "UfAggregate",
           "type": "object"
         },
         "UfStatusDetail": {
@@ -6140,6 +7715,18 @@
               "title": "Quota Used",
               "type": "integer"
             },
+            "subscription_end_date": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ISO 8601 \u2014 data real de renova\u00e7\u00e3o Stripe (current_period_end), null para trial/admin",
+              "title": "Subscription End Date"
+            },
             "subscription_status": {
               "description": "Status: 'trial', 'active', 'expired', or 'past_due'",
               "title": "Subscription Status",
@@ -6178,13 +7765,6 @@
         },
         "ValidationError": {
           "properties": {
-            "ctx": {
-              "title": "Context",
-              "type": "object"
-            },
-            "input": {
-              "title": "Input"
-            },
             "loc": {
               "items": {
                 "anyOf": [
@@ -6254,6 +7834,177 @@
           "title": "VerifyRecoveryResponse",
           "type": "object"
         },
+        "WeeklyDigestResponse": {
+          "properties": {
+            "avg_value": {
+              "title": "Avg Value",
+              "type": "number"
+            },
+            "by_modalidade": {
+              "items": {
+                "$ref": "#/components/schemas/WeeklyModalidadeStat"
+              },
+              "title": "By Modalidade",
+              "type": "array"
+            },
+            "by_sector": {
+              "items": {
+                "$ref": "#/components/schemas/WeeklyHighlight"
+              },
+              "title": "By Sector",
+              "type": "array"
+            },
+            "by_uf": {
+              "items": {
+                "$ref": "#/components/schemas/WeeklyUfStat"
+              },
+              "title": "By Uf",
+              "type": "array"
+            },
+            "period_end": {
+              "title": "Period End",
+              "type": "string"
+            },
+            "period_start": {
+              "title": "Period Start",
+              "type": "string"
+            },
+            "slug": {
+              "title": "Slug",
+              "type": "string"
+            },
+            "title": {
+              "title": "Title",
+              "type": "string"
+            },
+            "top_sector": {
+              "title": "Top Sector",
+              "type": "string"
+            },
+            "top_uf": {
+              "title": "Top Uf",
+              "type": "string"
+            },
+            "total_bids": {
+              "title": "Total Bids",
+              "type": "integer"
+            },
+            "total_value": {
+              "title": "Total Value",
+              "type": "number"
+            },
+            "updated_at": {
+              "title": "Updated At",
+              "type": "string"
+            },
+            "week": {
+              "title": "Week",
+              "type": "integer"
+            },
+            "year": {
+              "title": "Year",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "year",
+            "week",
+            "slug",
+            "title",
+            "period_start",
+            "period_end",
+            "total_bids",
+            "total_value",
+            "avg_value",
+            "by_sector",
+            "by_uf",
+            "by_modalidade",
+            "top_sector",
+            "top_uf",
+            "updated_at"
+          ],
+          "title": "WeeklyDigestResponse",
+          "type": "object"
+        },
+        "WeeklyHighlight": {
+          "properties": {
+            "avg_value": {
+              "title": "Avg Value",
+              "type": "number"
+            },
+            "count": {
+              "title": "Count",
+              "type": "integer"
+            },
+            "sector_id": {
+              "title": "Sector Id",
+              "type": "string"
+            },
+            "sector_name": {
+              "title": "Sector Name",
+              "type": "string"
+            },
+            "trend": {
+              "title": "Trend",
+              "type": "string"
+            }
+          },
+          "required": [
+            "sector_name",
+            "sector_id",
+            "count",
+            "avg_value",
+            "trend"
+          ],
+          "title": "WeeklyHighlight",
+          "type": "object"
+        },
+        "WeeklyModalidadeStat": {
+          "properties": {
+            "count": {
+              "title": "Count",
+              "type": "integer"
+            },
+            "modalidade": {
+              "title": "Modalidade",
+              "type": "string"
+            },
+            "pct": {
+              "title": "Pct",
+              "type": "number"
+            }
+          },
+          "required": [
+            "modalidade",
+            "count",
+            "pct"
+          ],
+          "title": "WeeklyModalidadeStat",
+          "type": "object"
+        },
+        "WeeklyUfStat": {
+          "properties": {
+            "count": {
+              "title": "Count",
+              "type": "integer"
+            },
+            "total_value": {
+              "title": "Total Value",
+              "type": "number"
+            },
+            "uf": {
+              "title": "Uf",
+              "type": "string"
+            }
+          },
+          "required": [
+            "uf",
+            "count",
+            "total_value"
+          ],
+          "title": "WeeklyUfStat",
+          "type": "object"
+        },
         "WelcomeEmailResponse": {
           "properties": {
             "message": {
@@ -6270,6 +8021,52 @@
             "message"
           ],
           "title": "WelcomeEmailResponse",
+          "type": "object"
+        },
+        "routes__blog_stats__TrendPoint": {
+          "properties": {
+            "avg_value": {
+              "title": "Avg Value",
+              "type": "number"
+            },
+            "count": {
+              "title": "Count",
+              "type": "integer"
+            },
+            "period": {
+              "title": "Period",
+              "type": "string"
+            }
+          },
+          "required": [
+            "period",
+            "count",
+            "avg_value"
+          ],
+          "title": "TrendPoint",
+          "type": "object"
+        },
+        "routes__dados_publicos__TrendPoint": {
+          "properties": {
+            "count": {
+              "title": "Count",
+              "type": "integer"
+            },
+            "date": {
+              "title": "Date",
+              "type": "string"
+            },
+            "value": {
+              "title": "Value",
+              "type": "number"
+            }
+          },
+          "required": [
+            "date",
+            "count",
+            "value"
+          ],
+          "title": "TrendPoint",
           "type": "object"
         }
       },
@@ -6456,6 +8253,82 @@
             }
           ],
           "summary": "Get Filter Stats",
+          "tags": [
+            "admin"
+          ]
+        }
+      },
+      "/v1/admin/at-risk-trials": {
+        "get": {
+          "description": "Paginated list of trial users with risk categorization.",
+          "operationId": "get_at_risk_trials_v1_admin_at_risk_trials_get",
+          "parameters": [
+            {
+              "in": "query",
+              "name": "page",
+              "required": false,
+              "schema": {
+                "default": 0,
+                "minimum": 0,
+                "title": "Page",
+                "type": "integer"
+              }
+            },
+            {
+              "in": "query",
+              "name": "limit",
+              "required": false,
+              "schema": {
+                "default": 20,
+                "maximum": 100,
+                "minimum": 1,
+                "title": "Limit",
+                "type": "integer"
+              }
+            },
+            {
+              "in": "query",
+              "name": "risk_category",
+              "required": false,
+              "schema": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Risk Category"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              },
+              "description": "Successful Response"
+            },
+            "422": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              },
+              "description": "Validation Error"
+            }
+          },
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "summary": "Get At Risk Trials",
           "tags": [
             "admin"
           ]
@@ -7133,6 +9006,57 @@
           ]
         }
       },
+      "/v1/admin/seo-metrics": {
+        "get": {
+          "description": "Return SEO metrics for the last N days. Admin-only.",
+          "operationId": "get_seo_metrics_v1_admin_seo_metrics_get",
+          "parameters": [
+            {
+              "in": "query",
+              "name": "days",
+              "required": false,
+              "schema": {
+                "default": 90,
+                "maximum": 365,
+                "minimum": 1,
+                "title": "Days",
+                "type": "integer"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/SEOMetricsResponse"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            },
+            "422": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              },
+              "description": "Validation Error"
+            }
+          },
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "summary": "Get Seo Metrics",
+          "tags": [
+            "seo_admin"
+          ]
+        }
+      },
       "/v1/admin/slo": {
         "get": {
           "description": "AC7-AC9: SLO compliance data for admin dashboard.\n\nReturns all SLO statuses, alert evaluations, and metadata.",
@@ -7253,6 +9177,31 @@
           "summary": "Test Send Trial Email",
           "tags": [
             "trial-emails"
+          ]
+        }
+      },
+      "/v1/admin/trial-metrics": {
+        "get": {
+          "description": "Trial conversion metrics dashboard.\n\nReturns active trial count, 30-day conversion rate, risk distribution,\nand email funnel stats from trial_email_log.",
+          "operationId": "get_trial_metrics_v1_admin_trial_metrics_get",
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              },
+              "description": "Successful Response"
+            }
+          },
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "summary": "Get Trial Metrics",
+          "tags": [
+            "admin"
           ]
         }
       },
@@ -7656,6 +9605,58 @@
           "summary": "Reset User Password",
           "tags": [
             "admin"
+          ]
+        }
+      },
+      "/v1/alertas/{setor_id}/uf/{uf}": {
+        "get": {
+          "description": "Return latest 20 bids for sector \u00d7 UF from datalake (public, no auth).",
+          "operationId": "get_alertas_v1_alertas__setor_id__uf__uf__get",
+          "parameters": [
+            {
+              "in": "path",
+              "name": "setor_id",
+              "required": true,
+              "schema": {
+                "title": "Setor Id",
+                "type": "string"
+              }
+            },
+            {
+              "in": "path",
+              "name": "uf",
+              "required": true,
+              "schema": {
+                "title": "Uf",
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/AlertasResponse"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            },
+            "422": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              },
+              "description": "Validation Error"
+            }
+          },
+          "summary": "Get Alertas",
+          "tags": [
+            "alertas-publicos"
           ]
         }
       },
@@ -8996,7 +10997,7 @@
       },
       "/v1/auth/check-email": {
         "get": {
-          "description": "AC15: Pre-signup email validation.\n\nReturns { available: bool, disposable: bool, corporate: bool }.\n\nSecurity:\n- Does NOT reveal if email already exists (always available=true for disposable).\n- Rate limited: 10 req/min/IP.",
+          "description": "AC15: Pre-signup email validation.\n\nReturns { available: bool, disposable: bool, corporate: bool }.\n\nSecurity:\n- Does NOT reveal if email already exists (always available=true for disposable).\n- MED-SEC-001: Rate limited 3 req/10min per IP (Redis + fallback).",
           "operationId": "check_email_v1_auth_check_email_get",
           "parameters": [
             {
@@ -9039,7 +11040,7 @@
       },
       "/v1/auth/check-phone": {
         "get": {
-          "description": "AC11-AC12: Pre-signup phone uniqueness check.\n\nReturns { available: bool } only \u2014 no data leakage.\nAC13: Optional company param triggers fingerprint abuse detection (non-blocking).\nRate limited: 10 req/min/IP.",
+          "description": "AC11-AC12: Pre-signup phone uniqueness check.\n\nReturns { available: bool } only \u2014 no data leakage.\nAC13: Optional company param triggers fingerprint abuse detection (non-blocking).\nMED-SEC-001: Rate limited 3 req/10min per IP (Redis + fallback).",
           "operationId": "check_phone_v1_auth_check_phone_get",
           "parameters": [
             {
@@ -9099,7 +11100,7 @@
       },
       "/v1/auth/resend-confirmation": {
         "post": {
-          "description": "Resend signup confirmation email with 60s rate limiting.\n\nAC4: Calls Supabase auth.resend({ type: 'signup', email }).\nAC1-AC6: Frontend uses this with countdown timer.",
+          "description": "Resend signup confirmation email with 60s rate limiting.\n\nMED-SEC-001: Rate limited to 3 req/10min per IP to prevent trial multi-account abuse.\nAC4: Calls Supabase auth.resend({ type: 'signup', email }).\nAC1-AC6: Frontend uses this with countdown timer.",
           "operationId": "resend_confirmation_v1_auth_resend_confirmation_post",
           "requestBody": {
             "content": {
@@ -9186,7 +11187,7 @@
       },
       "/v1/auth/validate-signup-email": {
         "post": {
-          "description": "STORY-258 AC3: Backend disposable email validation (defense-in-depth).\n\nReturns 422 if email domain is disposable.",
+          "description": "STORY-258 AC3: Backend disposable email validation (defense-in-depth).\n\nMED-SEC-001: Rate limited to 3 req/10min per IP to prevent trial multi-account abuse.\nReturns 422 if email domain is disposable.",
           "operationId": "validate_signup_email_v1_auth_validate_signup_email_post",
           "requestBody": {
             "content": {
@@ -9350,6 +11351,58 @@
           ]
         }
       },
+      "/v1/blog/stats/cidade/{cidade}/setor/{setor_id}": {
+        "get": {
+          "description": "City \u00d7 Sector stats: cross-reference city with sector keywords.\n\nPublic (no auth). Cached 6h.",
+          "operationId": "get_cidade_sector_stats_v1_blog_stats_cidade__cidade__setor__setor_id__get",
+          "parameters": [
+            {
+              "in": "path",
+              "name": "cidade",
+              "required": true,
+              "schema": {
+                "title": "Cidade",
+                "type": "string"
+              }
+            },
+            {
+              "in": "path",
+              "name": "setor_id",
+              "required": true,
+              "schema": {
+                "title": "Setor Id",
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/CidadeSectorStats"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            },
+            "422": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              },
+              "description": "Validation Error"
+            }
+          },
+          "summary": "Get Cidade Sector Stats",
+          "tags": [
+            "blog-stats"
+          ]
+        }
+      },
       "/v1/blog/stats/panorama/{setor_id}": {
         "get": {
           "description": "National panorama: totals, seasonality, estimated YoY growth.\n\nPublic (no auth). Cached 6h.",
@@ -9485,6 +11538,78 @@
           "summary": "Get Sector Uf Stats",
           "tags": [
             "blog-stats"
+          ]
+        }
+      },
+      "/v1/blog/weekly/latest": {
+        "get": {
+          "operationId": "weekly_digest_latest_v1_blog_weekly_latest_get",
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/WeeklyDigestResponse"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            }
+          },
+          "summary": "Digest semanal atual (p\u00fablico)",
+          "tags": [
+            "weekly_digest"
+          ]
+        }
+      },
+      "/v1/blog/weekly/{year}/{week}": {
+        "get": {
+          "operationId": "weekly_digest_by_week_v1_blog_weekly__year___week__get",
+          "parameters": [
+            {
+              "in": "path",
+              "name": "year",
+              "required": true,
+              "schema": {
+                "title": "Year",
+                "type": "integer"
+              }
+            },
+            {
+              "in": "path",
+              "name": "week",
+              "required": true,
+              "schema": {
+                "title": "Week",
+                "type": "integer"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/WeeklyDigestResponse"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            },
+            "422": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              },
+              "description": "Validation Error"
+            }
+          },
+          "summary": "Digest semanal para um per\u00edodo espec\u00edfico (p\u00fablico)",
+          "tags": [
+            "weekly_digest"
           ]
         }
       },
@@ -9629,6 +11754,63 @@
           ]
         }
       },
+      "/v1/calculadora/dados": {
+        "get": {
+          "operationId": "calculadora_dados_v1_calculadora_dados_get",
+          "parameters": [
+            {
+              "description": "Sector ID (e.g. 'saude')",
+              "in": "query",
+              "name": "setor",
+              "required": true,
+              "schema": {
+                "description": "Sector ID (e.g. 'saude')",
+                "title": "Setor",
+                "type": "string"
+              }
+            },
+            {
+              "description": "UF sigla (e.g. 'SP')",
+              "in": "query",
+              "name": "uf",
+              "required": true,
+              "schema": {
+                "description": "UF sigla (e.g. 'SP')",
+                "maxLength": 2,
+                "minLength": 2,
+                "title": "Uf",
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/CalculadoraDadosResponse"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            },
+            "422": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              },
+              "description": "Validation Error"
+            }
+          },
+          "summary": "Dados reais PNCP para a calculadora de oportunidades (p\u00fablico)",
+          "tags": [
+            "calculadora"
+          ]
+        }
+      },
       "/v1/change-password": {
         "post": {
           "description": "Change current user's password.",
@@ -9679,6 +11861,22 @@
                 "title": "Billing Period",
                 "type": "string"
               }
+            },
+            {
+              "in": "query",
+              "name": "coupon",
+              "required": false,
+              "schema": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Coupon"
+              }
             }
           ],
           "responses": {
@@ -9711,6 +11909,136 @@
           "summary": "Create Checkout",
           "tags": [
             "billing"
+          ]
+        }
+      },
+      "/v1/comparador/bids": {
+        "get": {
+          "description": "Fetch specific bids by pncp_id from datalake (public, no auth).",
+          "operationId": "get_bids_by_ids_v1_comparador_bids_get",
+          "parameters": [
+            {
+              "description": "Comma-separated pncp_ids (max 5)",
+              "in": "query",
+              "name": "ids",
+              "required": true,
+              "schema": {
+                "description": "Comma-separated pncp_ids (max 5)",
+                "title": "Ids",
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ComparadorBidsResponse"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            },
+            "422": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              },
+              "description": "Validation Error"
+            }
+          },
+          "summary": "Get Bids By Ids",
+          "tags": [
+            "comparador"
+          ]
+        }
+      },
+      "/v1/comparador/buscar": {
+        "get": {
+          "description": "Search bids by text query from datalake (public, no auth).",
+          "operationId": "buscar_editais_v1_comparador_buscar_get",
+          "parameters": [
+            {
+              "description": "Termo de busca (m\u00ednimo 3 caracteres)",
+              "in": "query",
+              "name": "q",
+              "required": true,
+              "schema": {
+                "description": "Termo de busca (m\u00ednimo 3 caracteres)",
+                "minLength": 3,
+                "title": "Q",
+                "type": "string"
+              }
+            },
+            {
+              "description": "Filtrar por UF (ex: SP, RJ)",
+              "in": "query",
+              "name": "uf",
+              "required": false,
+              "schema": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Filtrar por UF (ex: SP, RJ)",
+                "title": "Uf"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ComparadorSearchResponse"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            },
+            "422": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              },
+              "description": "Validation Error"
+            }
+          },
+          "summary": "Buscar Editais",
+          "tags": [
+            "comparador"
+          ]
+        }
+      },
+      "/v1/dados/agregados": {
+        "get": {
+          "operationId": "dados_agregados_v1_dados_agregados_get",
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/DadosAgregadosResponse"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            }
+          },
+          "summary": "Dados agregados do PNCP para o painel p\u00fablico (sem autentica\u00e7\u00e3o)",
+          "tags": [
+            "dados_publicos"
           ]
         }
       },
@@ -9797,6 +12125,48 @@
           ]
         }
       },
+      "/v1/empresa/{cnpj}/perfil-b2g": {
+        "get": {
+          "operationId": "perfil_b2g_v1_empresa__cnpj__perfil_b2g_get",
+          "parameters": [
+            {
+              "in": "path",
+              "name": "cnpj",
+              "required": true,
+              "schema": {
+                "title": "Cnpj",
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/PerfilB2GResponse"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            },
+            "422": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              },
+              "description": "Validation Error"
+            }
+          },
+          "summary": "Perfil B2G p\u00fablico de uma empresa por CNPJ",
+          "tags": [
+            "empresa-publica"
+          ]
+        }
+      },
       "/v1/feature-flags": {
         "get": {
           "description": "List all feature flags with current values (authenticated users).\n\nDEBT-205 / DEBT-SYS-009: Public endpoint consumed by frontend via SWR.\nReturns flag name, value, description, and category \u2014 no admin metadata.",
@@ -9819,6 +12189,31 @@
             }
           ],
           "summary": "List Public Feature Flags",
+          "tags": [
+            "feature-flags"
+          ]
+        }
+      },
+      "/v1/feature-flags/experiments": {
+        "get": {
+          "description": "Return active experiment variants for the authenticated user.",
+          "operationId": "get_experiments_v1_feature_flags_experiments_get",
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              },
+              "description": "Successful Response"
+            }
+          },
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "summary": "Get Experiments",
           "tags": [
             "feature-flags"
           ]
@@ -10023,6 +12418,48 @@
           "summary": "Background Tasks Health",
           "tags": [
             "health"
+          ]
+        }
+      },
+      "/v1/lead-capture": {
+        "post": {
+          "description": "Store a lead capture (public, no auth, rate-limited by global middleware).",
+          "operationId": "capture_lead_v1_lead_capture_post",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeadCaptureRequest"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/LeadCaptureResponse"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            },
+            "422": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              },
+              "description": "Validation Error"
+            }
+          },
+          "summary": "Capture Lead",
+          "tags": [
+            "lead-capture"
           ]
         }
       },
@@ -10751,6 +13188,48 @@
           ]
         }
       },
+      "/v1/orgao/{cnpj}/stats": {
+        "get": {
+          "operationId": "orgao_stats_v1_orgao__cnpj__stats_get",
+          "parameters": [
+            {
+              "in": "path",
+              "name": "cnpj",
+              "required": true,
+              "schema": {
+                "title": "Cnpj",
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/OrgaoStatsResponse"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            },
+            "422": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              },
+              "description": "Validation Error"
+            }
+          },
+          "summary": "Estat\u00edsticas p\u00fablicas de um \u00f3rg\u00e3o comprador por CNPJ",
+          "tags": [
+            "orgao-publico"
+          ]
+        }
+      },
       "/v1/partner/dashboard": {
         "get": {
           "description": "AC14: Dashboard for the logged-in partner.\n\nPartner is identified by matching their auth email to partners.contact_email.",
@@ -11071,6 +13550,9 @@
           "security": [
             {
               "HTTPBearer": []
+            },
+            {
+              "HTTPBearer": []
             }
           ],
           "summary": "Get Alert Preferences",
@@ -11116,6 +13598,9 @@
           "security": [
             {
               "HTTPBearer": []
+            },
+            {
+              "HTTPBearer": []
             }
           ],
           "summary": "Update Alert Preferences",
@@ -11143,6 +13628,9 @@
           "security": [
             {
               "HTTPBearer": []
+            },
+            {
+              "HTTPBearer": []
             }
           ],
           "summary": "Get Profile Completeness",
@@ -11168,6 +13656,9 @@
             }
           },
           "security": [
+            {
+              "HTTPBearer": []
+            },
             {
               "HTTPBearer": []
             }
@@ -11215,11 +13706,157 @@
           "security": [
             {
               "HTTPBearer": []
+            },
+            {
+              "HTTPBearer": []
             }
           ],
           "summary": "Save Profile Context",
           "tags": [
             "user"
+          ]
+        }
+      },
+      "/v1/referral/code": {
+        "get": {
+          "description": "Return the authenticated user's referral code (create if missing).",
+          "operationId": "get_referral_code_v1_referral_code_get",
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ReferralCodeResponse"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            }
+          },
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "summary": "Get Referral Code",
+          "tags": [
+            "referral"
+          ]
+        }
+      },
+      "/v1/referral/redeem": {
+        "post": {
+          "description": "Register a referral redemption during signup.\n\nThe authenticated user is the *referred* user. We look up the row\nowned by the referrer (matched by code) and link the referred_user_id\nwhile promoting status to 'signed_up'. If no such row exists we\nsilently succeed to avoid leaking code existence.",
+          "operationId": "redeem_referral_v1_referral_redeem_post",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReferralRedeemRequest"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ReferralRedeemResponse"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            },
+            "422": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              },
+              "description": "Validation Error"
+            }
+          },
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "summary": "Redeem Referral",
+          "tags": [
+            "referral"
+          ]
+        }
+      },
+      "/v1/referral/stats": {
+        "get": {
+          "description": "Aggregate stats for the authenticated user's referrals.",
+          "operationId": "get_referral_stats_v1_referral_stats_get",
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ReferralStatsResponse"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            }
+          },
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "summary": "Get Referral Stats",
+          "tags": [
+            "referral"
+          ]
+        }
+      },
+      "/v1/relatorio-2026-t1/request": {
+        "post": {
+          "description": "Capture a report lead and dispatch the delivery email.\n\nFlow:\n  1. Upsert row into `report_leads` on (email, source).\n  2. Attempt to send the delivery email via Resend (best-effort).\n  3. Return the download URL + email_queued flag.\n\nPersistence failure -> 500. Email failure -> 200 with email_queued=False.",
+          "operationId": "request_relatorio_v1_relatorio_2026_t1_request_post",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RelatorioRequest"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/RelatorioResponse"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            },
+            "422": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              },
+              "description": "Validation Error"
+            }
+          },
+          "summary": "Request Relatorio",
+          "tags": [
+            "relatorio"
           ]
         }
       },
@@ -11625,6 +14262,32 @@
           ]
         }
       },
+      "/v1/sectors/trending": {
+        "get": {
+          "description": "Top 5 sectors by bid count in the last 7 days (public, no auth).\n\nUsed by homepage TrendingEditais component to inject fresh internal links.\nDeclared BEFORE /sectors/{slug}/stats to avoid FastAPI path parameter shadowing.",
+          "operationId": "get_trending_sectors_v1_sectors_trending_get",
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "items": {
+                      "$ref": "#/components/schemas/TrendingSector"
+                    },
+                    "title": "Response Get Trending Sectors V1 Sectors Trending Get",
+                    "type": "array"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            }
+          },
+          "summary": "Get Trending Sectors",
+          "tags": [
+            "sectors-public"
+          ]
+        }
+      },
       "/v1/sectors/{slug}/stats": {
         "get": {
           "description": "Public sector stats for SEO landing pages (AC1).\n\nNo auth required. Returns cached stats (6h TTL).",
@@ -11748,6 +14411,52 @@
           ]
         }
       },
+      "/v1/sessions/{search_id}/download": {
+        "get": {
+          "description": "Download Excel for a previously completed search session.\n\nZero-Churn P2 \u00a72.2: Allows downloads within DATA_RETENTION_DAYS even\nafter trial/subscription expires. Bypasses quota checks \u2014 only previously\ngenerated data can be downloaded.",
+          "operationId": "download_session_excel_v1_sessions__search_id__download_get",
+          "parameters": [
+            {
+              "in": "path",
+              "name": "search_id",
+              "required": true,
+              "schema": {
+                "title": "Search Id",
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              },
+              "description": "Successful Response"
+            },
+            "422": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              },
+              "description": "Validation Error"
+            }
+          },
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "summary": "Download Session Excel",
+          "tags": [
+            "sessions"
+          ]
+        }
+      },
       "/v1/setores": {
         "get": {
           "description": "Return available procurement sectors for frontend dropdown.",
@@ -11765,6 +14474,181 @@
             }
           },
           "summary": "Listar Setores"
+        }
+      },
+      "/v1/share/analise": {
+        "post": {
+          "description": "Create a shareable analysis link for a bid's viability assessment.",
+          "operationId": "create_shared_analysis_v1_share_analise_post",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShareAnaliseRequest"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ShareAnaliseResponse"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            },
+            "422": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              },
+              "description": "Validation Error"
+            }
+          },
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "summary": "Create Shared Analysis",
+          "tags": [
+            "share"
+          ]
+        }
+      },
+      "/v1/share/analise/{hash}": {
+        "get": {
+          "description": "Public endpoint: retrieve a shared viability analysis by hash.",
+          "operationId": "get_shared_analysis_v1_share_analise__hash__get",
+          "parameters": [
+            {
+              "in": "path",
+              "name": "hash",
+              "required": true,
+              "schema": {
+                "title": "Hash",
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/SharedAnalisePublic"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            },
+            "422": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              },
+              "description": "Validation Error"
+            }
+          },
+          "summary": "Get Shared Analysis",
+          "tags": [
+            "share"
+          ]
+        }
+      },
+      "/v1/sitemap/cnpjs": {
+        "get": {
+          "operationId": "sitemap_cnpjs_v1_sitemap_cnpjs_get",
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/SitemapCnpjsResponse"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            }
+          },
+          "summary": "CNPJs com \u22651 licita\u00e7\u00e3o no datalake (para sitemap)",
+          "tags": [
+            "sitemap"
+          ]
+        }
+      },
+      "/v1/sitemap/orgaos": {
+        "get": {
+          "operationId": "sitemap_orgaos_v1_sitemap_orgaos_get",
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/SitemapOrgaosResponse"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            }
+          },
+          "summary": "\u00d3rg\u00e3os compradores com \u22651 licita\u00e7\u00e3o no datalake (para sitemap)",
+          "tags": [
+            "sitemap"
+          ]
+        }
+      },
+      "/v1/stats/public": {
+        "get": {
+          "operationId": "stats_public_v1_stats_public_get",
+          "parameters": [
+            {
+              "description": "json | embed | badge",
+              "in": "query",
+              "name": "format",
+              "required": false,
+              "schema": {
+                "default": "json",
+                "description": "json | embed | badge",
+                "title": "Format",
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              },
+              "description": "Successful Response"
+            },
+            "422": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              },
+              "description": "Validation Error"
+            }
+          },
+          "summary": "Estat\u00edsticas p\u00fablicas agregadas do PNCP (sem auth)",
+          "tags": [
+            "stats_public"
+          ]
         }
       },
       "/v1/status": {
@@ -11854,7 +14738,7 @@
       },
       "/v1/trial-emails/unsubscribe": {
         "get": {
-          "description": "AC2/AC5: One-click unsubscribe from trial marketing emails.",
+          "description": "AC2/AC5: One-click unsubscribe from trial marketing emails.\nZero-churn P2 \u00a71.2: Only disables marketing/promotional emails.\nCritical conversion emails (Day 7/10/13/16) remain active unless\nuser explicitly opts out of those too.",
           "operationId": "unsubscribe_trial_emails_v1_trial_emails_unsubscribe_get",
           "parameters": [
             {
@@ -11950,6 +14834,80 @@
           "summary": "Get Trial Status",
           "tags": [
             "user"
+          ]
+        }
+      },
+      "/v1/trial/extend": {
+        "post": {
+          "description": "Extend trial by completing a condition.",
+          "operationId": "extend_trial_endpoint_v1_trial_extend_post",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExtendRequest"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ExtendResponse"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            },
+            "422": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              },
+              "description": "Validation Error"
+            }
+          },
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "summary": "Extend Trial Endpoint",
+          "tags": [
+            "trial"
+          ]
+        }
+      },
+      "/v1/trial/extensions": {
+        "get": {
+          "description": "Get trial extension checklist status.",
+          "operationId": "get_extensions_status_v1_trial_extensions_get",
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ExtensionsStatusResponse"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            }
+          },
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "summary": "Get Extensions Status",
+          "tags": [
+            "trial"
           ]
         }
       },

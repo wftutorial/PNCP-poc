@@ -1,6 +1,6 @@
 """SEO Onda 1: Public endpoint for sitemap CNPJ expansion.
 
-Returns top CNPJs (orgao_cnpj) from pncp_raw_bids with ≥3 bids,
+Returns top CNPJs (orgao_cnpj) from pncp_raw_bids with ≥1 bid,
 enabling the frontend sitemap to generate /cnpj/{cnpj} URLs for
 Google discovery. Public (no auth). Cache: InMemory 24h TTL.
 """
@@ -19,7 +19,7 @@ router = APIRouter(tags=["sitemap"])
 _CACHE_TTL_SECONDS = 24 * 60 * 60  # 24h
 _sitemap_cache: dict[str, tuple[dict, float]] = {}
 
-_MIN_BIDS = 3
+_MIN_BIDS = 1
 _MAX_CNPJS = 5000
 
 
@@ -46,7 +46,7 @@ def _set_cached(key: str, data: dict) -> None:
 @router.get(
     "/sitemap/cnpjs",
     response_model=SitemapCnpjsResponse,
-    summary="CNPJs com ≥3 licitações no datalake (para sitemap)",
+    summary="CNPJs com ≥1 licitação no datalake (para sitemap)",
 )
 async def sitemap_cnpjs():
     cached = _get_cached("cnpjs")

@@ -1,6 +1,6 @@
 """SEO Onda 2: Public endpoint for sitemap órgão expansion.
 
-Returns top órgãos compradores (by orgao_cnpj) from pncp_raw_bids with ≥5 bids,
+Returns top órgãos compradores (by orgao_cnpj) from pncp_raw_bids with ≥1 bid,
 enabling the frontend sitemap to generate /orgao/{cnpj} URLs for
 Google discovery. Public (no auth). Cache: InMemory 24h TTL.
 """
@@ -19,7 +19,7 @@ router = APIRouter(tags=["sitemap"])
 _CACHE_TTL_SECONDS = 24 * 60 * 60  # 24h
 _sitemap_cache: dict[str, tuple[dict, float]] = {}
 
-_MIN_BIDS = 5
+_MIN_BIDS = 1
 _MAX_ORGAOS = 2000
 
 
@@ -46,7 +46,7 @@ def _set_cached(key: str, data: dict) -> None:
 @router.get(
     "/sitemap/orgaos",
     response_model=SitemapOrgaosResponse,
-    summary="Órgãos compradores com ≥5 licitações no datalake (para sitemap)",
+    summary="Órgãos compradores com ≥1 licitação no datalake (para sitemap)",
 )
 async def sitemap_orgaos():
     cached = _get_cached("orgaos")
@@ -59,7 +59,7 @@ async def sitemap_orgaos():
 
 
 async def _fetch_top_orgaos() -> dict:
-    """Query pncp_raw_bids for distinct orgao_cnpj with ≥5 active bids."""
+    """Query pncp_raw_bids for distinct orgao_cnpj with ≥1 active bid."""
     try:
         from supabase_client import get_supabase
 

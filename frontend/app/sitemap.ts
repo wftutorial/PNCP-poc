@@ -32,7 +32,7 @@ async function fetchSitemapCnpjs(): Promise<string[]> {
   try {
     const backendUrl = process.env.BACKEND_URL || 'http://localhost:8000';
     const resp = await fetch(`${backendUrl}/v1/sitemap/cnpjs`, {
-      next: { revalidate: 86400 }, // 24h ISR
+      cache: 'no-store', // always fresh at build/ISR time — sitemap data must be current
     });
     if (!resp.ok) return [];
     const data = await resp.json();
@@ -53,7 +53,7 @@ async function fetchSitemapOrgaos(): Promise<string[]> {
   try {
     const backendUrl = process.env.BACKEND_URL || 'http://localhost:8000';
     const resp = await fetch(`${backendUrl}/v1/sitemap/orgaos`, {
-      next: { revalidate: 86400 }, // 24h ISR
+      cache: 'no-store', // always fresh at build/ISR time — sitemap data must be current
     });
     if (!resp.ok) return [];
     const data = await resp.json();

@@ -742,6 +742,65 @@ export default function InteligenciaArtificialLicitacoesComoFunciona() {
         </Link>.
       </p>
 
+      {/* Cluster links — spoke articles */}
+      <h2>Aprofunde cada aspecto da IA em licitações</h2>
+
+      <p>
+        Este artigo é o ponto de entrada para o tema. Para aprofundar aspectos
+        específicos, explore os guias especializados:
+      </p>
+
+      <ul className="list-disc pl-6 space-y-2">
+        <li>
+          <Link href="/blog/ia-triagem-editais-filtrar-licitacoes">
+            IA para Triagem de Editais: Como Filtrar 500 Licitações por Dia
+          </Link>{' '}
+          — pipeline de 3 camadas, funil de triagem com dados reais
+        </li>
+        <li>
+          <Link href="/blog/precisao-ia-licitacoes-taxa-acerto">
+            Precisão da IA: O que 85-93% de Acerto Significa na Prática
+          </Link>{' '}
+          — tabela de acurácia por setor, tipos de erro e custo de cada um
+        </li>
+        <li>
+          <Link href="/blog/ia-licitacoes-por-setor-saude-ti-engenharia">
+            IA em Licitações por Setor: Saúde, TI, Engenharia e Facilities
+          </Link>{' '}
+          — desempenho da IA em cada setor com dados específicos
+        </li>
+        <li>
+          <Link href="/blog/roi-ia-licitacoes-calculadora-retorno">
+            ROI de IA em Licitações: Quanto sua Empresa Economiza
+          </Link>{' '}
+          — cálculo de retorno com 3 perfis de empresa
+        </li>
+        <li>
+          <Link href="/blog/como-escolher-plataforma-ia-licitacoes">
+            Como Escolher uma Plataforma de IA: 7 Critérios Objetivos
+          </Link>{' '}
+          — framework de avaliação e tabela comparativa
+        </li>
+        <li>
+          <Link href="/blog/ia-licitacoes-limitacoes-o-que-nao-faz">
+            O que IA NÃO Faz em Licitações: 5 Limitações
+          </Link>{' '}
+          — transparência radical sobre o que não funciona
+        </li>
+        <li>
+          <Link href="/blog/ia-licitacoes-pequenas-empresas-mei-epp">
+            IA para Pequenas Empresas: Guia para MEI e EPP
+          </Link>{' '}
+          — vantagens da LC 123 potencializadas por IA
+        </li>
+        <li>
+          <Link href="/blog/ia-nova-lei-licitacoes-14133-fornecedores">
+            IA e a Nova Lei 14.133: O que Muda para Fornecedores
+          </Link>{' '}
+          — impacto da nova lei e como a IA se adapta
+        </li>
+      </ul>
+
       {/* FAQ Section */}
       <h2>Perguntas Frequentes</h2>
 

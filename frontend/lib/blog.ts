@@ -1170,10 +1170,11 @@ export const BLOG_ARTICLES: BlogArticleMeta[] = [
       'como IA analisa licitações',
     ],
     relatedSlugs: [
-      'analise-viabilidade-editais-guia',
-      'pncp-guia-completo-empresas',
-      'inteligencia-artificial-consultoria-licitacao-2026',
-      'reduzir-tempo-analisando-editais-irrelevantes',
+      'ia-triagem-editais-filtrar-licitacoes',
+      'precisao-ia-licitacoes-taxa-acerto',
+      'roi-ia-licitacoes-calculadora-retorno',
+      'como-escolher-plataforma-ia-licitacoes',
+      'ia-licitacoes-limitacoes-o-que-nao-faz',
     ],
     sources: [
       'PNCP — Portal Nacional de Contratações Públicas (pncp.gov.br)',
@@ -1586,6 +1587,263 @@ export const BLOG_ARTICLES: BlogArticleMeta[] = [
       'Lei 14.133/2021 — Nova Lei de Licitações',
       'SmartLic datalake — classificação e triagem jan-mar 2026',
       'Licitanet — funcionalidades conforme site oficial, abril/2026',
+    ],
+    authorSlug: 'tiago',
+  },
+
+  // ── Cluster "IA em Licitações" — 8 spokes (Onda 4) ──
+
+  // CLUSTER-IA-01
+  {
+    slug: 'roi-ia-licitacoes-calculadora-retorno',
+    title: 'ROI de IA em Licitações: Quanto sua Empresa Economiza com Triagem Automatizada',
+    description:
+      'Cálculo detalhado do retorno sobre investimento de ferramentas de IA para licitações. 3 perfis de empresa, custos reais e dados do PNCP.',
+    category: 'Empresas B2G',
+    tags: ['ROI', 'inteligência artificial', 'economia', 'triagem automatizada'],
+    publishDate: '2026-04-07',
+    readingTime: calculateReadingTime(3000),
+    wordCount: 3000,
+    keywords: [
+      'ROI inteligência artificial licitações',
+      'retorno investimento plataforma licitação',
+      'quanto custa IA para licitação',
+      'vale a pena pagar ferramenta licitação',
+    ],
+    relatedSlugs: [
+      'inteligencia-artificial-licitacoes-como-funciona',
+      'ia-triagem-editais-filtrar-licitacoes',
+      'ia-licitacoes-limitacoes-o-que-nao-faz',
+      'vale-a-pena-disputar-pregao',
+      'smartlic-vs-planilha-excel-quando-automatizar',
+    ],
+    sources: [
+      'PNCP — Portal Nacional de Contratações Públicas (pncp.gov.br)',
+      'Lei 14.133/2021 — Nova Lei de Licitações e Contratos Administrativos',
+      'SmartLic datalake — dados de classificação e triagem, jan-mar 2026',
+    ],
+    authorSlug: 'tiago',
+  },
+
+  // CLUSTER-IA-02
+  {
+    slug: 'como-escolher-plataforma-ia-licitacoes',
+    title: 'Como Escolher uma Plataforma de IA para Licitações: 7 Critérios Objetivos',
+    description:
+      'Framework de avaliação com 7 critérios objetivos para comparar plataformas de IA para licitações. Tabela comparativa e perguntas para o vendedor.',
+    category: 'Guias',
+    tags: ['plataforma de licitação', 'IA', 'comparação', 'critérios de avaliação'],
+    publishDate: '2026-04-07',
+    readingTime: calculateReadingTime(3200),
+    wordCount: 3200,
+    keywords: [
+      'como escolher plataforma licitação com IA',
+      'comparar ferramentas licitação IA',
+      'critérios plataforma licitação',
+      'o que avaliar ferramenta licitação',
+    ],
+    relatedSlugs: [
+      'inteligencia-artificial-licitacoes-como-funciona',
+      'precisao-ia-licitacoes-taxa-acerto',
+      'melhores-plataformas-licitacao-2026-ranking',
+      'smartlic-vs-effecti-comparacao-2026',
+      'smartlic-vs-licitanet-comparacao',
+    ],
+    sources: [
+      'PNCP — Portal Nacional de Contratações Públicas (pncp.gov.br)',
+      'Lei 14.133/2021 — Nova Lei de Licitações',
+      'Sites oficiais das plataformas — preços e funcionalidades abril/2026',
+      'SmartLic datalake — métricas de freshness e cobertura',
+    ],
+    authorSlug: 'tiago',
+  },
+
+  // CLUSTER-IA-03
+  {
+    slug: 'ia-licitacoes-limitacoes-o-que-nao-faz',
+    title: 'O que IA NÃO Faz em Licitações: 5 Limitações que Ninguém Conta',
+    description:
+      'Transparência radical: 5 coisas que a inteligência artificial não consegue fazer em licitações públicas — e por que entender isso é uma vantagem competitiva.',
+    category: 'Guias',
+    tags: ['limitações IA', 'licitações', 'transparência', 'análise crítica'],
+    publishDate: '2026-04-07',
+    readingTime: calculateReadingTime(2800),
+    wordCount: 2800,
+    keywords: [
+      'limitações IA licitações',
+      'IA não substitui analista licitação',
+      'problemas IA editais',
+      'IA licitações funciona mesmo',
+    ],
+    relatedSlugs: [
+      'inteligencia-artificial-licitacoes-como-funciona',
+      'precisao-ia-licitacoes-taxa-acerto',
+      'roi-ia-licitacoes-calculadora-retorno',
+      'inteligencia-artificial-consultoria-licitacao-2026',
+      'clausulas-escondidas-editais-licitacao',
+    ],
+    sources: [
+      'PNCP — Portal Nacional de Contratações Públicas (pncp.gov.br)',
+      'SmartLic datalake — dados de classificação e revisão humana, jan-mar 2026',
+    ],
+    authorSlug: 'tiago',
+  },
+
+  // CLUSTER-IA-04
+  {
+    slug: 'ia-triagem-editais-filtrar-licitacoes',
+    title: 'IA para Triagem de Editais: Como Filtrar 500 Licitações por Dia sem Analista',
+    description:
+      'Como a inteligência artificial transforma 3.200 publicações diárias do PNCP em 15 editais relevantes. Pipeline de triagem em 3 camadas com dados reais.',
+    category: 'Empresas B2G',
+    tags: ['triagem de editais', 'IA', 'filtro automático', 'produtividade'],
+    publishDate: '2026-04-07',
+    readingTime: calculateReadingTime(3000),
+    wordCount: 3000,
+    keywords: [
+      'triagem de editais com IA',
+      'filtrar licitações automaticamente',
+      'automação triagem editais',
+      'IA classificação editais',
+    ],
+    relatedSlugs: [
+      'inteligencia-artificial-licitacoes-como-funciona',
+      'precisao-ia-licitacoes-taxa-acerto',
+      'ia-licitacoes-por-setor-saude-ti-engenharia',
+      'reduzir-tempo-analisando-editais-irrelevantes',
+      'equipe-40-horas-mes-editais-descartados',
+    ],
+    sources: [
+      'PNCP — Portal Nacional de Contratações Públicas (pncp.gov.br)',
+      'SmartLic datalake — pipeline de triagem, jan-mar 2026 (800K+ publicações)',
+    ],
+    authorSlug: 'tiago',
+  },
+
+  // CLUSTER-IA-05
+  {
+    slug: 'precisao-ia-licitacoes-taxa-acerto',
+    title: 'Precisão da IA em Licitações: O que 85-93% de Acerto Significa na Prática',
+    description:
+      'Dados reais de acurácia por setor na classificação de editais por IA. Tabela com 15 setores, tipos de erro e o custo de cada um.',
+    category: 'Guias',
+    tags: ['precisão IA', 'acurácia', 'classificação setorial', 'taxa de acerto'],
+    publishDate: '2026-04-07',
+    readingTime: calculateReadingTime(3000),
+    wordCount: 3000,
+    keywords: [
+      'precisão IA licitações',
+      'taxa de acerto IA editais',
+      'IA classificação setorial precisão',
+      'erro IA licitação',
+    ],
+    relatedSlugs: [
+      'inteligencia-artificial-licitacoes-como-funciona',
+      'ia-licitacoes-por-setor-saude-ti-engenharia',
+      'roi-ia-licitacoes-calculadora-retorno',
+      'ia-licitacoes-limitacoes-o-que-nao-faz',
+    ],
+    sources: [
+      'PNCP — Portal Nacional de Contratações Públicas (pncp.gov.br)',
+      'SmartLic datalake — métricas de classificação por setor, jan-mar 2026',
+    ],
+    authorSlug: 'tiago',
+  },
+
+  // CLUSTER-IA-06
+  {
+    slug: 'ia-licitacoes-por-setor-saude-ti-engenharia',
+    title: 'IA em Licitações por Setor: Saúde, TI, Engenharia e Facilities',
+    description:
+      'Análise detalhada de como a IA classifica editais em 4 setores-chave: volume, valor médio, precisão de classificação e desafios específicos de cada setor.',
+    category: 'Guias',
+    tags: ['IA por setor', 'licitações saúde', 'licitações TI', 'engenharia', 'facilities'],
+    publishDate: '2026-04-07',
+    readingTime: calculateReadingTime(3200),
+    wordCount: 3200,
+    keywords: [
+      'IA licitações saúde TI engenharia',
+      'inteligência artificial licitações saúde',
+      'IA editais TI',
+      'licitações engenharia ferramenta IA',
+    ],
+    relatedSlugs: [
+      'inteligencia-artificial-licitacoes-como-funciona',
+      'ia-triagem-editais-filtrar-licitacoes',
+      'precisao-ia-licitacoes-taxa-acerto',
+      'licitacoes-saude-2026',
+      'licitacoes-ti-software-2026',
+    ],
+    sources: [
+      'PNCP — Portal Nacional de Contratações Públicas (pncp.gov.br)',
+      'Lei 14.133/2021 — Nova Lei de Licitações',
+      'SmartLic datalake — classificação por setor, jan-mar 2026',
+    ],
+    authorSlug: 'tiago',
+  },
+
+  // CLUSTER-IA-07
+  {
+    slug: 'ia-licitacoes-pequenas-empresas-mei-epp',
+    title: 'IA em Licitações para Pequenas Empresas: Guia para Quem Fatura até R$4,8M',
+    description:
+      'Como microempresas e EPPs podem usar inteligência artificial para competir em licitações. Vantagens da LC 123 potencializadas por IA, ROI e workflow prático.',
+    category: 'Empresas B2G',
+    tags: ['pequenas empresas', 'MEI', 'EPP', 'IA em licitações', 'LC 123'],
+    publishDate: '2026-04-07',
+    readingTime: calculateReadingTime(3000),
+    wordCount: 3000,
+    keywords: [
+      'IA licitações pequenas empresas',
+      'ferramenta licitação MEI',
+      'plataforma licitação microempresa',
+      'EPP licitação automatizar',
+    ],
+    relatedSlugs: [
+      'inteligencia-artificial-licitacoes-como-funciona',
+      'roi-ia-licitacoes-calculadora-retorno',
+      'ia-nova-lei-licitacoes-14133-fornecedores',
+      'mei-microempresa-vantagens-licitacoes',
+      'como-participar-primeira-licitacao-2026',
+    ],
+    sources: [
+      'PNCP — Portal Nacional de Contratações Públicas (pncp.gov.br)',
+      'Lei Complementar 123/2006 — Estatuto da Microempresa e EPP',
+      'Lei 14.133/2021 — Nova Lei de Licitações',
+      'SmartLic datalake — editais com preferência ME/EPP, jan-mar 2026',
+    ],
+    authorSlug: 'tiago',
+  },
+
+  // CLUSTER-IA-08
+  {
+    slug: 'ia-nova-lei-licitacoes-14133-fornecedores',
+    title: 'IA e a Nova Lei de Licitações (14.133): O que Muda para Fornecedores em 2026',
+    description:
+      'Como a Lei 14.133/2021 criou uma sobrecarga de informação que só a IA resolve. Análise artigo por artigo das mudanças e como ferramentas inteligentes se adaptam.',
+    category: 'Guias',
+    tags: ['Lei 14.133', 'nova lei licitações', 'IA', 'PNCP', 'fornecedores'],
+    publishDate: '2026-04-07',
+    readingTime: calculateReadingTime(3000),
+    wordCount: 3000,
+    keywords: [
+      'IA nova lei licitações 14133',
+      'lei 14133 tecnologia fornecedores',
+      'PNCP inteligência artificial',
+      'automação lei licitações 2026',
+    ],
+    relatedSlugs: [
+      'inteligencia-artificial-licitacoes-como-funciona',
+      'ia-licitacoes-pequenas-empresas-mei-epp',
+      'ia-licitacoes-limitacoes-o-que-nao-faz',
+      'lei-14133-guia-fornecedores',
+      'pncp-guia-completo-empresas',
+    ],
+    sources: [
+      'Lei 14.133/2021 — Nova Lei de Licitações e Contratos Administrativos',
+      'PNCP — Portal Nacional de Contratações Públicas (pncp.gov.br)',
+      'Decreto 10.764/2021 — Regulamenta o PNCP',
+      'SmartLic datalake — volume de publicações PNCP, 2024-2026',
     ],
     authorSlug: 'tiago',
   },

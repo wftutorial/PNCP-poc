@@ -2128,7 +2128,7 @@ O datalake `pncp_raw_bids` contém dezenas de milhares de CNPJs distintos de ór
 2. [x] "SmartLic vs Licitanet: Qual Plataforma Escolher" — `smartlic-vs-licitanet-comparacao.tsx` (2026-04-07)
 3. [x] "Melhores Plataformas de Licitação 2026: Ranking Completo" — `melhores-plataformas-licitacao-2026-ranking.tsx` (2026-04-07)
 4. [x] "SmartLic vs Planilha Excel: Quando Automatizar Vale a Pena" — `smartlic-vs-planilha-excel-quando-automatizar.tsx` (2026-04-07)
-5. [ ] "IA em Licitações: Como Funciona e Quem Oferece" (cluster 10-15 páginas)
+5. [x] "IA em Licitações: Como Funciona e Quem Oferece" (cluster 10 páginas — 2 existentes + 8 novos: ROI, Escolher Plataforma, Limitações, Triagem, Precisão, Por Setor, Pequenas Empresas, Lei 14.133) — 2026-04-07
 
 **Formato por artigo:**
 - Tabela comparativa feature-by-feature (preço, cobertura, IA, UX)
@@ -2891,7 +2891,7 @@ Auditoria SEO profunda com dados reais (WebFetch, WebSearch, Playwright no Cloud
 
 - **GSC URL Inspection 20 páginas top** — submeter manualmente as páginas mais importantes para acelerar indexação
 - **Frente 4 (AI Overviews):** Atomic Answer Technique nos 51 artigos — parágrafo 40-60 palavras após cada H2
-- **Frente 5 (Topical Authority):** ~~Artigos BOFU: "SmartLic vs Effecti", "Melhores plataformas licitação 2026"~~ ✅ (4/5 artigos BOFU escritos: Excel, Ranking, Effecti, Licitanet — 2026-04-07). Pendente: cluster "IA em Licitações" (10-15 páginas — nicho vazio)
+- **Frente 5 (Topical Authority):** ~~Artigos BOFU: "SmartLic vs Effecti", "Melhores plataformas licitação 2026"~~ ✅ (4/5 artigos BOFU escritos: Excel, Ranking, Effecti, Licitanet — 2026-04-07). ✅ Cluster "IA em Licitações" (10 páginas: 2 existentes + 8 novos spokes — ROI, Escolher Plataforma, Limitações, Triagem, Precisão, Por Setor, Pequenas Empresas, Lei 14.133) — 2026-04-07
 - **Monitorar GSC Coverage diariamente** — target: primeiras páginas indexadas em 3-7 dias
 - **Cloudflare Cache Rules** — configurar para cachear HTML em rotas públicas (TTFB optimization)
 

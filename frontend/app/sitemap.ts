@@ -14,8 +14,8 @@ import { getAllMasterclassTemas } from '@/lib/masterclasses';
  * STORY-261 AC10: Includes /blog and /blog/{slug} routes
  * STORY-324 AC12: Includes /licitacoes and /licitacoes/{setor} routes
  * SEO-PLAYBOOK P0: Includes programmatic, licitacoes setor×UF, and panorama routes
- * SEO-PLAYBOOK Onda 1: Includes /cnpj/{cnpj} pages from datalake (≥3 bids)
- * SEO-PLAYBOOK Onda 2: Includes /orgaos/{cnpj} pages from datalake (≥5 bids)
+ * SEO-PLAYBOOK Onda 1: Includes /cnpj/{cnpj} pages from datalake (≥1 bid, ~4k-5k URLs)
+ * SEO-PLAYBOOK Onda 2: Includes /orgaos/{cnpj} pages from datalake (≥1 bid, top 2000 by volume)
  *
  * Next.js generates sitemap.xml automatically from this file.
  *
@@ -444,9 +444,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'weekly' as const,
       priority: 0.8,
     })),
-    // SEO-PLAYBOOK Onda 1: CNPJ pages from datalake (≥3 bids)
+    // SEO-PLAYBOOK Onda 1: CNPJ pages from datalake (≥1 bid, ~4k-5k URLs)
     ...cnpjRoutes,
-    // SEO-PLAYBOOK Onda 2: Órgãos compradores pages from datalake (≥5 bids)
+    // SEO-PLAYBOOK Onda 2: Órgãos compradores pages from datalake (≥1 bid, top 2000)
     ...orgaoRoutes,
   ];
 }

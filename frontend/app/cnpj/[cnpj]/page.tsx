@@ -6,6 +6,15 @@ import { LeadCapture } from '@/components/LeadCapture';
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
 
+interface EditaisAmostra {
+  orgao: string;
+  descricao: string;
+  valor_estimado: number | null;
+  data_encerramento: string | null;
+  uf: string | null;
+  modalidade: string | null;
+}
+
 interface PerfilB2G {
   empresa: {
     razao_social: string;
@@ -27,6 +36,7 @@ interface PerfilB2G {
   setor_detectado: string;
   setor_nome: string;
   editais_abertos_setor: number;
+  editais_amostra: EditaisAmostra[];
   total_contratos_24m: number;
   valor_total_24m: number;
   ufs_atuacao: string[];

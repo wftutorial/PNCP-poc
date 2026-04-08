@@ -98,7 +98,7 @@ class TestCalculadoraDados:
 class TestEmpresaPublica:
     BAPI_PATCH = "routes.empresa_publica._fetch_brasilapi"
     PT_PATCH = "routes.empresa_publica._fetch_contratos_pt"
-    COUNT_PATCH = "routes.empresa_publica._count_editais_abertos"
+    COUNT_PATCH = "routes.empresa_publica._fetch_editais_abertos"
 
     def test_invalid_cnpj_format(self, client):
         resp = client.get("/v1/empresa/123/perfil-b2g")
@@ -115,7 +115,7 @@ class TestEmpresaPublica:
 
         with patch(self.BAPI_PATCH, new_callable=AsyncMock, return_value=mock_bapi):
             with patch(self.PT_PATCH, new_callable=AsyncMock, return_value=[]):
-                with patch(self.COUNT_PATCH, new_callable=AsyncMock, return_value=42):
+                with patch(self.COUNT_PATCH, new_callable=AsyncMock, return_value=(42, [])):
                     resp = client.get("/v1/empresa/09225035000101/perfil-b2g")
 
         assert resp.status_code == 200
@@ -143,7 +143,7 @@ class TestEmpresaPublica:
 
         with patch(self.BAPI_PATCH, new_callable=AsyncMock, return_value=mock_bapi):
             with patch(self.PT_PATCH, new_callable=AsyncMock, return_value=mock_contratos):
-                with patch(self.COUNT_PATCH, new_callable=AsyncMock, return_value=15):
+                with patch(self.COUNT_PATCH, new_callable=AsyncMock, return_value=(15, [])):
                     resp = client.get("/v1/empresa/09225035000101/perfil-b2g")
 
         assert resp.status_code == 200
@@ -172,10 +172,100 @@ class TestEmpresaPublica:
 
         with patch(self.BAPI_PATCH, new_callable=AsyncMock, return_value=mock_bapi):
             with patch(self.PT_PATCH, new_callable=AsyncMock, return_value=mock_contratos):
-                with patch(self.COUNT_PATCH, new_callable=AsyncMock, return_value=28):
+                with patch(self.COUNT_PATCH, new_callable=AsyncMock, return_value=(28, [])):
                     resp = client.get("/v1/empresa/12345678000199/perfil-b2g")
 
         assert resp.status_code == 200
         data = resp.json()
         assert data["score"] == "INICIANTE"
         assert data["setor_detectado"] == "informatica"
+
+    def test_sem_historico_with_editais_amostra(self, client):
+        mock_bapi = {
+            "razao_social": "Empresa Teste",
+            "cnae_fiscal": "4781",
+            "porte": "ME",
+            "uf": "SP",
+            "descricao_situacao_cadastral": "ATIVA",
+        }
+        sample_bid = {
+            "nomeOrgao": "PREFEITURA DE CAMPINAS",
+            "objetoCompra": "Aquisição de uniformes escolares para rede municipal",
+            "valorTotalEstimado": 85000.0,
+            "dataEncerramentoProposta": "2026-05-15T23:59:00",
+            "uf": "SP",
+            "modalidadeNome": "Pregão Eletrônico",
+        }
+
+        with patch(self.BAPI_PATCH, new_callable=AsyncMock, return_value=mock_bapi):
+            with patch(self.PT_PATCH, new_callable=AsyncMock, return_value=[]):
+                with patch(self.COUNT_PATCH, new_callable=AsyncMock, return_value=(3, [sample_bid])):
+                    resp = client.get("/v1/empresa/09225035000101/perfil-b2g")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["score"] == "SEM_HISTORICO"
+        assert data["editais_abertos_setor"] == 3
+        assert len(data["editais_amostra"]) == 1
+        amostra = data["editais_amostra"][0]
+        assert amostra["orgao"] == "PREFEITURA DE CAMPINAS"
+        assert amostra["descricao"] == "Aquisição de uniformes escolares para rede municipal"
+        assert amostra["valor_estimado"] == 85000.0
+        assert amostra["data_encerramento"] == "2026-05-15"
+        assert amostra["uf"] == "SP"
+        assert amostra["modalidade"] == "Pregão Eletrônico"
+
+    def test_editais_amostra_empty_for_ativo(self, client):
+        mock_bapi = {
+            "razao_social": "Empresa Ativa",
+            "cnae_fiscal": "4120",
+            "porte": "EPP",
+            "uf": "MG",
+            "descricao_situacao_cadastral": "ATIVA",
+        }
+        mock_contratos = [
+            {
+                "unidadeGestora": {"nome": "Orgão MG", "uf": "MG"},
+                "valorFinalCompra": 200_000,
+                "dataInicioVigencia": "2025-01-01",
+                "objeto": "Obras diversas",
+            }
+        ] * 5
+
+        with patch(self.BAPI_PATCH, new_callable=AsyncMock, return_value=mock_bapi):
+            with patch(self.PT_PATCH, new_callable=AsyncMock, return_value=mock_contratos):
+                with patch(self.COUNT_PATCH, new_callable=AsyncMock, return_value=(10, [])):
+                    resp = client.get("/v1/empresa/09225035000101/perfil-b2g")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["score"] == "ATIVO"
+        assert data["editais_amostra"] == []
+
+    def test_editais_amostra_max_five(self, client):
+        mock_bapi = {
+            "razao_social": "Empresa Sem Hist",
+            "cnae_fiscal": "4781",
+            "porte": "ME",
+            "uf": "SP",
+            "descricao_situacao_cadastral": "ATIVA",
+        }
+        sample_bid = {
+            "nomeOrgao": "ORGAO X",
+            "objetoCompra": "Objeto qualquer",
+            "valorTotalEstimado": 10000.0,
+            "dataEncerramentoProposta": "2026-06-01",
+            "uf": "SP",
+            "modalidadeNome": "Dispensa",
+        }
+        # Simulate datalake returning 10 bids — backend should cap at 5
+        ten_bids = [sample_bid] * 10
+
+        with patch(self.BAPI_PATCH, new_callable=AsyncMock, return_value=mock_bapi):
+            with patch(self.PT_PATCH, new_callable=AsyncMock, return_value=[]):
+                with patch(self.COUNT_PATCH, new_callable=AsyncMock, return_value=(10, ten_bids)):
+                    resp = client.get("/v1/empresa/09225035000101/perfil-b2g")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["editais_amostra"]) == 5

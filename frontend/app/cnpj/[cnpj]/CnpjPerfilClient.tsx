@@ -20,6 +20,15 @@ interface Empresa {
   situacao: string;
 }
 
+interface EditaisAmostra {
+  orgao: string;
+  descricao: string;
+  valor_estimado: number | null;
+  data_encerramento: string | null;
+  uf: string | null;
+  modalidade: string | null;
+}
+
 interface PerfilB2G {
   empresa: Empresa;
   contratos: Contrato[];
@@ -27,6 +36,7 @@ interface PerfilB2G {
   setor_detectado: string;
   setor_nome: string;
   editais_abertos_setor: number;
+  editais_amostra: EditaisAmostra[];
   total_contratos_24m: number;
   valor_total_24m: number;
   ufs_atuacao: string[];
@@ -66,7 +76,7 @@ const SCORE_CONFIG = {
 } as const;
 
 export default function CnpjPerfilClient({ perfil }: { perfil: PerfilB2G }) {
-  const { empresa, contratos, score, setor_nome, editais_abertos_setor, total_contratos_24m, valor_total_24m, ufs_atuacao, aviso_legal } = perfil;
+  const { empresa, contratos, score, setor_nome, editais_abertos_setor, editais_amostra, total_contratos_24m, valor_total_24m, ufs_atuacao, aviso_legal } = perfil;
 
   const scoreConfig = SCORE_CONFIG[score as keyof typeof SCORE_CONFIG] || SCORE_CONFIG.SEM_HISTORICO;
 
@@ -211,6 +221,54 @@ export default function CnpjPerfilClient({ perfil }: { perfil: PerfilB2G }) {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* Editais abertos — fallback para SEM_HISTORICO */}
+      {contratos.length === 0 && editais_amostra.length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-lg font-bold text-gray-800 mb-2">
+            Editais Abertos no seu Setor
+          </h2>
+          <p className="text-sm text-gray-600 mb-4">
+            {editais_abertos_setor} editais de <strong>{setor_nome}</strong> abriram
+            nos últimos 30 dias em {empresa.uf}. Veja uma amostra — estas são
+            oportunidades reais que empresas do seu CNAE estão disputando agora.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b-2 border-gray-200">
+                  <th className="text-left py-3 px-2 font-semibold text-gray-600">Órgão</th>
+                  <th className="text-left py-3 px-2 font-semibold text-gray-600">Objeto</th>
+                  <th className="text-right py-3 px-2 font-semibold text-gray-600 hidden sm:table-cell">Valor Est.</th>
+                  <th className="text-right py-3 px-2 font-semibold text-gray-600 hidden sm:table-cell">Encerramento</th>
+                </tr>
+              </thead>
+              <tbody>
+                {editais_amostra.map((edital, i) => (
+                  <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="py-3 px-2 max-w-[180px] truncate font-medium">
+                      {edital.orgao}
+                      {edital.uf && <span className="text-gray-400 ml-1 font-normal">({edital.uf})</span>}
+                    </td>
+                    <td className="py-3 px-2 max-w-[280px] text-gray-600">
+                      <span className="line-clamp-2">{edital.descricao}</span>
+                    </td>
+                    <td className="py-3 px-2 text-right whitespace-nowrap hidden sm:table-cell">
+                      {edital.valor_estimado ? formatBRL(edital.valor_estimado) : '—'}
+                    </td>
+                    <td className="py-3 px-2 text-right whitespace-nowrap text-gray-500 hidden sm:table-cell">
+                      {edital.data_encerramento || '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-gray-400 mt-3 italic">
+            Fonte: PNCP — Portal Nacional de Contratações Públicas. Atualizado diariamente.
+          </p>
         </div>
       )}
 

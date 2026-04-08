@@ -55,6 +55,15 @@ class EmpresaInfo(BaseModel):
     situacao: str
 
 
+class EditaisAmostra(BaseModel):
+    orgao: str
+    descricao: str
+    valor_estimado: Optional[float] = None
+    data_encerramento: Optional[str] = None
+    uf: Optional[str] = None
+    modalidade: Optional[str] = None
+
+
 class PerfilB2GResponse(BaseModel):
     empresa: EmpresaInfo
     contratos: list[ContratoPublico]
@@ -62,6 +71,7 @@ class PerfilB2GResponse(BaseModel):
     setor_detectado: str
     setor_nome: str
     editais_abertos_setor: int
+    editais_amostra: list[EditaisAmostra] = []
     total_contratos_24m: int
     valor_total_24m: float
     ufs_atuacao: list[str]
@@ -271,14 +281,18 @@ async def _fetch_contratos_pt(cnpj: str) -> list[dict]:
 # Datalake — open bids count
 # ---------------------------------------------------------------------------
 
-async def _count_editais_abertos(setor_id: str, uf: str) -> int:
-    """Count open bids in detected sector/UF from datalake (last 30 days)."""
+async def _fetch_editais_abertos(setor_id: str, uf: str) -> tuple[int, list[dict]]:
+    """Count + sample open bids in detected sector/UF from datalake (last 30 days).
+
+    Returns (count, sample) where sample contains up to 5 bid dicts.
+    No extra API call — same single query_datalake call as before.
+    """
     try:
         from datalake_query import query_datalake
 
         sector = SECTORS.get(setor_id)
         if not sector:
-            return 0
+            return 0, []
 
         now = datetime.now(timezone.utc)
         results = await query_datalake(
@@ -288,10 +302,29 @@ async def _count_editais_abertos(setor_id: str, uf: str) -> int:
             keywords=list(sector.keywords),
             limit=2000,
         )
-        return len(results)
+        return len(results), results[:5]
     except Exception as e:
-        logger.warning("Datalake count failed for %s/%s: %s", setor_id, uf, e)
-        return 0
+        logger.warning("Datalake fetch failed for %s/%s: %s", setor_id, uf, e)
+        return 0, []
+
+
+def _to_edital_amostra(bid: dict) -> dict:
+    """Map a normalized datalake bid to EditaisAmostra fields."""
+    desc = bid.get("objetoCompra") or "Sem descrição"
+    if len(desc) > 200:
+        desc = desc[:197] + "..."
+    data_enc = bid.get("dataEncerramentoProposta")
+    if data_enc and len(data_enc) > 10:
+        data_enc = data_enc[:10]
+    valor = bid.get("valorTotalEstimado")
+    return {
+        "orgao": bid.get("nomeOrgao") or "Não informado",
+        "descricao": desc,
+        "valor_estimado": float(valor) if valor is not None else None,
+        "data_encerramento": data_enc,
+        "uf": bid.get("uf"),
+        "modalidade": bid.get("modalidadeNome"),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -382,7 +415,12 @@ async def _build_perfil(cnpj: str) -> dict:
         score = "SEM_HISTORICO"
 
     # 5. Open bids in detected sector
-    editais_count = await _count_editais_abertos(setor_id, uf) if uf else 0
+    if uf:
+        editais_count, editais_raw = await _fetch_editais_abertos(setor_id, uf)
+    else:
+        editais_count, editais_raw = 0, []
+
+    editais_amostra = [_to_edital_amostra(b) for b in editais_raw[:5]]
 
     return {
         "empresa": {
@@ -398,6 +436,7 @@ async def _build_perfil(cnpj: str) -> dict:
         "setor_detectado": setor_id,
         "setor_nome": setor_nome,
         "editais_abertos_setor": editais_count,
+        "editais_amostra": editais_amostra,
         "total_contratos_24m": total_24m,
         "valor_total_24m": round(valor_total, 2),
         "ufs_atuacao": sorted(ufs_set),

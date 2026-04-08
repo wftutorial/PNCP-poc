@@ -256,8 +256,8 @@ async def _fetch_contratos_pt(cnpj: str) -> list[dict]:
         logger.warning("PORTAL_TRANSPARENCIA_API_KEY not set — skipping contracts")
         return []
 
-    url = "https://api.portaldatransparencia.gov.br/api-de-dados/contratos"
-    params = {"cpfCnpj": cnpj, "pagina": 1, "quantidade": 20}
+    url = "https://api.portaldatransparencia.gov.br/api-de-dados/contratos/cpf-cnpj"
+    params = {"cpfCnpj": cnpj, "pagina": 1}
     headers = {"chave-api-dados": api_key}
 
     try:
@@ -275,6 +275,87 @@ async def _fetch_contratos_pt(cnpj: str) -> list[dict]:
     except Exception as e:
         logger.warning("Portal Transparência error for %s: %s", cnpj, e)
         return []
+
+
+# ---------------------------------------------------------------------------
+# Local Supabase index — primary source for supplier contracts (all spheres)
+# ---------------------------------------------------------------------------
+
+async def _fetch_contratos_local(cnpj: str) -> tuple[list[dict], str]:
+    """Query pncp_supplier_contracts table — O(1) lookup by ni_fornecedor index.
+
+    Primary source covering all government spheres (Federal, Estadual, Municipal,
+    Distrital) once the contracts crawler has populated the table.
+
+    Falls back to Portal da Transparência (federal only, Fase 0 fix) when the
+    table is empty or the feature is not yet populated.
+
+    Returns:
+        (contracts_list, fonte_label)
+    """
+    import os
+    if os.getenv("CONTRACTS_INGESTION_ENABLED", "true").lower() not in ("true", "1"):
+        return await _fetch_contratos_pt_normalized(cnpj), "PT"
+
+    try:
+        from supabase_client import get_supabase
+        sb = get_supabase()
+
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=730)).date().isoformat()
+
+        resp = (
+            sb.table("pncp_supplier_contracts")
+            .select("orgao_nome,uf,esfera,valor_global,data_assinatura,objeto_contrato")
+            .eq("ni_fornecedor", cnpj)
+            .eq("is_active", True)
+            .gte("data_assinatura", cutoff)
+            .order("data_assinatura", desc=True)
+            .limit(20)
+            .execute()
+        )
+
+        if resp.data:
+            logger.debug("[Perfil] Local DB: %d contracts for %s", len(resp.data), cnpj)
+            return resp.data, "PNCP_LOCAL"
+
+    except Exception as exc:
+        logger.warning("[Perfil] Local DB query failed for %s: %s", cnpj, exc)
+
+    # Fallback to Portal da Transparência (federal contracts only)
+    return await _fetch_contratos_pt_normalized(cnpj), "PT"
+
+
+async def _fetch_contratos_pt_normalized(cnpj: str) -> list[dict]:
+    """Fetch and normalize Portal da Transparência contracts (federal only)."""
+    raw = await _fetch_contratos_pt(cnpj)
+    result = []
+    for c in raw:
+        orgao_data = c.get("unidadeGestora", {})
+        valor = None
+        for vf in ("valorFinalCompra", "valorInicial", "valorInicialCompra"):
+            if c.get(vf):
+                try:
+                    fv = float(c[vf])
+                    if fv > 0:
+                        valor = fv
+                        break
+                except (ValueError, TypeError):
+                    pass
+        data_inicio = c.get("dataInicioVigencia") or c.get("dataFimCompra") or ""
+        if data_inicio and len(data_inicio) > 10:
+            data_inicio = data_inicio[:10]
+        descricao = c.get("objeto") or c.get("descricaoObjeto") or "Sem descrição"
+        if len(descricao) > 200:
+            descricao = descricao[:197] + "..."
+        result.append({
+            "orgao": orgao_data.get("nome") or orgao_data.get("nomeOrgao") or "Não informado",
+            "valor": valor,
+            "data_inicio": data_inicio,
+            "descricao": descricao,
+            "esfera": "Federal",
+            "uf": orgao_data.get("uf") or "",
+        })
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -346,43 +427,8 @@ async def _build_perfil(cnpj: str) -> dict:
     setor_id = map_cnae_to_setor(cnae_str)
     setor_nome = get_setor_name(setor_id)
 
-    # 3. Contracts — PNCP primary (all spheres), PT fallback (federal only)
-    contratos_pncp = await _fetch_contratos_pncp(cnpj)
-
-    if contratos_pncp:
-        contratos_all = contratos_pncp
-        fonte = "PNCP"
-    else:
-        # Fallback to Portal da Transparência (federal only)
-        contratos_pt_raw = await _fetch_contratos_pt(cnpj)
-        contratos_all = []
-        for c in contratos_pt_raw:
-            orgao_data = c.get("unidadeGestora", {})
-            valor = None
-            for vf in ("valorFinalCompra", "valorInicial", "valorInicialCompra"):
-                if c.get(vf):
-                    try:
-                        fv = float(c[vf])
-                        if fv > 0:
-                            valor = fv
-                            break
-                    except (ValueError, TypeError):
-                        pass
-            data_inicio = c.get("dataInicioVigencia") or c.get("dataFimCompra") or ""
-            if data_inicio and len(data_inicio) > 10:
-                data_inicio = data_inicio[:10]
-            descricao = c.get("objeto") or c.get("descricaoObjeto") or "Sem descrição"
-            if len(descricao) > 200:
-                descricao = descricao[:197] + "..."
-            contratos_all.append({
-                "orgao": orgao_data.get("nome") or orgao_data.get("nomeOrgao") or "Não informado",
-                "valor": valor,
-                "data_inicio": data_inicio,
-                "descricao": descricao,
-                "esfera": "Federal",
-                "uf": orgao_data.get("uf") or "",
-            })
-        fonte = "PT"
+    # 3. Contracts — Local Supabase index (primary), PT API fallback (federal only)
+    contratos_all, fonte = await _fetch_contratos_local(cnpj)
 
     ufs_set: set[str] = set()
     valor_total = 0.0
@@ -393,12 +439,15 @@ async def _build_perfil(cnpj: str) -> dict:
         if uf_contrato:
             ufs_set.add(uf_contrato)
         if c.get("valor"):
-            valor_total += c["valor"]
+            try:
+                valor_total += float(c["valor"])
+            except (ValueError, TypeError):
+                pass
         contratos_parsed.append({
-            "orgao": c["orgao"],
-            "valor": c.get("valor"),
-            "data_inicio": c.get("data_inicio"),
-            "descricao": c["descricao"],
+            "orgao": c.get("orgao") or c.get("orgao_nome") or "Não informado",
+            "valor": c.get("valor") or c.get("valor_global"),
+            "data_inicio": c.get("data_inicio") or c.get("data_assinatura"),
+            "descricao": c.get("descricao") or c.get("objeto_contrato") or "Sem descrição",
             "esfera": c.get("esfera"),
             "uf": uf_contrato or None,
         })

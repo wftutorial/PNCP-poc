@@ -130,6 +130,59 @@ async def ingestion_incremental_job(ctx: dict) -> dict:
     return {**result, "duration_s": duration_s}
 
 
+async def contracts_full_crawl_job(ctx: dict) -> dict:
+    """ARQ job: Full contracts crawl. Daily at 06:00 UTC (3am BRT).
+
+    Crawls last 730 days of PNCP contracts and indexes by ni_fornecedor.
+    Expected runtime: 3-6h for full backfill, ~30 min for daily refresh.
+    Timeout: 8h safety.
+    """
+    if not DATALAKE_ENABLED:
+        logger.info("[ContractsCrawler:Full] Skipped — DATALAKE_ENABLED=false")
+        return {"status": "skipped", "reason": "DATALAKE_ENABLED=false"}
+
+    import time as _time
+    start = _time.monotonic()
+    logger.info("[ContractsCrawler:Full] Starting full contracts crawl")
+    try:
+        from ingestion.contracts_crawler import run_full_crawl
+        result = await run_full_crawl()
+    except Exception as e:
+        duration_s = round(_time.monotonic() - start, 1)
+        logger.error("[ContractsCrawler:Full] Failed after %.1fs: %s", duration_s, e, exc_info=True)
+        await _notify_failure("ContractsFull", f"{type(e).__name__}: {e}", duration_s)
+        return {"status": "failed", "error": str(e), "duration_s": duration_s}
+    duration_s = round(_time.monotonic() - start, 1)
+    logger.info("[ContractsCrawler:Full] Completed in %.1fs — ins=%d", duration_s, result.get("inserted", 0))
+    return {**result, "duration_s": duration_s}
+
+
+async def contracts_incremental_job(ctx: dict) -> dict:
+    """ARQ job: Incremental contracts crawl. 3×/day (12:00, 18:00, 00:00 UTC).
+
+    Crawls last 3 days (+1 overlap). Expected runtime: 5-15 min.
+    Timeout: 1h safety.
+    """
+    if not DATALAKE_ENABLED:
+        logger.info("[ContractsCrawler:Incr] Skipped — DATALAKE_ENABLED=false")
+        return {"status": "skipped", "reason": "DATALAKE_ENABLED=false"}
+
+    import time as _time
+    start = _time.monotonic()
+    logger.info("[ContractsCrawler:Incr] Starting incremental contracts crawl")
+    try:
+        from ingestion.contracts_crawler import run_incremental_crawl
+        result = await run_incremental_crawl()
+    except Exception as e:
+        duration_s = round(_time.monotonic() - start, 1)
+        logger.error("[ContractsCrawler:Incr] Failed after %.1fs: %s", duration_s, e, exc_info=True)
+        await _notify_failure("ContractsIncr", f"{type(e).__name__}: {e}", duration_s)
+        return {"status": "failed", "error": str(e), "duration_s": duration_s}
+    duration_s = round(_time.monotonic() - start, 1)
+    logger.info("[ContractsCrawler:Incr] Completed in %.1fs — ins=%d", duration_s, result.get("inserted", 0))
+    return {**result, "duration_s": duration_s}
+
+
 async def ingestion_purge_job(ctx: dict) -> dict:
     """ARQ job: Purge old bids older than retention_days from pncp_raw_bids.
 

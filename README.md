@@ -43,7 +43,10 @@ cd pncp-poc
 2. Configure variáveis de ambiente:
 ```bash
 cp .env.example .env
-# Edite .env e adicione sua OPENAI_API_KEY
+# Edite .env com no mínimo:
+# OPENAI_API_KEY, SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY,
+# SUPABASE_JWT_SECRET, STRIPE_WEBHOOK_SECRET,
+# NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY
 ```
 
 3. Inicie os serviços com Docker Compose:
@@ -117,7 +120,10 @@ cd pncp-poc
 2. Configure variáveis de ambiente:
 ```bash
 cp .env.example .env
-# Edite .env e adicione sua OPENAI_API_KEY
+# Edite .env com no mínimo:
+# OPENAI_API_KEY, SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY,
+# SUPABASE_JWT_SECRET, STRIPE_WEBHOOK_SECRET,
+# NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY
 ```
 
 3. Backend:

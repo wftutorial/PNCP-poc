@@ -60,6 +60,19 @@ function addSecurityHeaders(response: NextResponse): NextResponse {
   // THEME_INIT_HASH: sha256-cKn8Ad2sQ17kSb7D+OWHpjqjv4Jgu4eo/To/sKp8AsQ=
 
   // AC1+AC4: Content Security Policy — enforcing mode with hash-based script-src
+  const scriptSrc = [
+    "'self'",
+    "'unsafe-inline'",
+    // React/Turbopack dev runtime relies on eval() for source maps and stacks.
+    ...(process.env.NODE_ENV === "development" ? ["'unsafe-eval'"] : []),
+    "https://js.stripe.com",
+    "https://static.cloudflareinsights.com",
+    "https://cdnjs.cloudflare.com",
+    "https://cdn.sentry.io",
+    "https://www.clarity.ms",
+    "https://www.googletagmanager.com",
+  ].join(" ");
+
   const csp = [
     "default-src 'self'",
     // SHA-256 hash of the static theme-init inline script in layout.tsx.
@@ -79,7 +92,7 @@ function addSecurityHeaders(response: NextResponse): NextResponse {
     // Industry consensus (open issue Feb 2026, no upstream fix): 'unsafe-inline'
     // is unavoidable for Next.js + public CDN caching. CSP still provides real
     // protection via connect-src, object-src 'none', frame-src, default-src.
-    "script-src 'self' 'unsafe-inline' https://js.stripe.com https://static.cloudflareinsights.com https://cdnjs.cloudflare.com https://cdn.sentry.io https://www.clarity.ms https://www.googletagmanager.com",
+    `script-src ${scriptSrc}`,
     // DEBT-116: style-src unsafe-inline is an accepted risk.
     // Tailwind CSS and Next.js inject inline styles at runtime (className -> style).
     // Nonce-based styles would require a custom PostCSS plugin + Next.js config changes

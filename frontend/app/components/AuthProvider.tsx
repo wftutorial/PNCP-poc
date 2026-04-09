@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "../../lib/supabase";
+import { getSupabase, isSupabaseConfigured } from "../../lib/supabase";
 import type { User, Session } from "@supabase/supabase-js";
 
 interface AuthContextType {
@@ -32,6 +32,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // UX-408 AC1: isMounted ref prevents setState after unmount
   const isMountedRef = useRef(true);
+  const supabase = getSupabase();
+  const hasSupabaseConfig = isSupabaseConfigured();
 
   // Fetch admin status when session changes
   const fetchAdminStatus = useCallback(async (accessToken: string) => {
@@ -66,12 +68,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (!supabase) {
+      if (process.env.NODE_ENV !== "production" && !hasSupabaseConfig) {
+        console.warn(
+          "[AuthProvider] Supabase não configurado. Defina NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY no frontend/.env.local."
+        );
+      }
+      setUser(null);
+      setSession(null);
+      setIsAdmin(false);
+      setIsAdminLoading(false);
+      setLoading(false);
+      return;
+    }
+
+    const supabaseClient = supabase;
     const authTimeout = setTimeout(async () => {
       if (!isMountedRef.current) return; // UX-408 AC1
       if (process.env.NODE_ENV !== "production") console.warn("[AuthProvider] Auth check timeout — attempting session fallback");
       // AC5: On timeout, try getSession() which reads local cookies (fast, no network)
       try {
-        const { data: { session: fallbackSession } } = await supabase.auth.getSession();
+        const { data: { session: fallbackSession } } = await supabaseClient.auth.getSession();
         if (!isMountedRef.current) return; // UX-408 AC1
         if (fallbackSession?.user) {
           if (process.env.NODE_ENV !== "production") console.info("[AuthProvider] Timeout fallback: using session data");
@@ -89,7 +106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const initAuth = async () => {
       try {
         // Fast path: getSession() reads local JWT (~50ms, no network round-trip)
-        const { data: { session: localSession } } = await supabase.auth.getSession();
+        const { data: { session: localSession } } = await supabaseClient.auth.getSession();
 
         if (!isMountedRef.current) return; // UX-408 AC1
 
@@ -101,7 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setLoading(false);
 
           // Background: upgrade to server-validated user (non-blocking)
-          supabase.auth.getUser().then(({ data: { user: validatedUser } }) => {
+          supabaseClient.auth.getUser().then(({ data: { user: validatedUser } }) => {
             if (validatedUser && isMountedRef.current) setUser(validatedUser);
           }).catch(() => { /* keep session user as fallback */ });
 
@@ -113,7 +130,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         // No local session — fall back to server-validated getUser() for public pages / expired sessions
-        const { data: { user: validatedUser }, error: userError } = await supabase.auth.getUser();
+        const { data: { user: validatedUser }, error: userError } = await supabaseClient.auth.getUser();
 
         if (!isMountedRef.current) return; // UX-408 AC1
 
@@ -121,7 +138,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           clearTimeout(authTimeout);
           setUser(validatedUser);
           setLoading(false);
-          const { data: { session: sess } } = await supabase.auth.getSession();
+          const { data: { session: sess } } = await supabaseClient.auth.getSession();
           if (!isMountedRef.current) return; // UX-408 AC1
           setSession(sess);
           if (sess?.access_token) {
@@ -136,11 +153,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         // AC6: getUser returned null — try refreshing the session once
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        const { data: { session: currentSession } } = await supabaseClient.auth.getSession();
         if (!isMountedRef.current) return; // UX-408 AC1
         if (currentSession) {
           if (process.env.NODE_ENV !== "production") console.info("[AuthProvider] getUser returned null, attempting session refresh (AC6)");
-          const { data: { session: refreshedSession } } = await supabase.auth.refreshSession();
+          const { data: { session: refreshedSession } } = await supabaseClient.auth.refreshSession();
 
           if (!isMountedRef.current) return; // UX-408 AC1
           if (refreshedSession?.user) {
@@ -168,7 +185,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // AC5: error — fall back to session data
         try {
-          const { data: { session: fallbackSession } } = await supabase.auth.getSession();
+          const { data: { session: fallbackSession } } = await supabaseClient.auth.getSession();
           if (!isMountedRef.current) return; // UX-408 AC1
           if (fallbackSession?.user) {
             if (process.env.NODE_ENV !== "production") console.info("[AuthProvider] Falling back to session data (AC5)");
@@ -194,7 +211,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     initAuth();
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+    const { data: { subscription } } = supabaseClient.auth.onAuthStateChange(
       async (_event, session) => {
         if (!isMountedRef.current) return; // UX-408 AC1
         setSession(session);
@@ -207,7 +224,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             fetchAdminStatus(session.access_token);
           }
           // Background: validate user with server (non-blocking)
-          supabase.auth.getUser().then(({ data: { user } }) => {
+          supabaseClient.auth.getUser().then(({ data: { user } }) => {
             if (user && isMountedRef.current) setUser(user); // Upgrade to validated user
           }).catch(() => { /* keep session user as fallback */ });
         } else {
@@ -223,11 +240,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const refreshInterval = setInterval(async () => {
       if (!isMountedRef.current) return; // UX-408 AC1
       try {
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        const { data: { session: currentSession } } = await supabaseClient.auth.getSession();
         if (!currentSession || !isMountedRef.current) return;
 
         const { data: { session: refreshed }, error } =
-          await supabase.auth.refreshSession();
+          await supabaseClient.auth.refreshSession();
 
         if (!isMountedRef.current) return; // UX-408 AC1
         if (error || !refreshed) {
@@ -260,9 +277,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       clearInterval(refreshInterval);
       subscription.unsubscribe();
     };
-  }, [fetchAdminStatus]);
+  }, [fetchAdminStatus, hasSupabaseConfig, supabase]);
 
   const signInWithEmail = useCallback(async (email: string, password: string) => {
+    if (!supabase) {
+      throw new Error("Autenticação indisponível. Configure NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY.");
+    }
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
     // Zero-Churn P2 §1.2: Keep timezone current on every login (handles existing users)
@@ -273,7 +293,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         void supabase.from("profiles").update({ timezone: tz }).eq("id", data.user.id);
       }
     }
-  }, []);
+  }, [supabase]);
 
   const signUpWithEmail = useCallback(async (
     email: string,
@@ -284,6 +304,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     phoneWhatsApp?: string,
     whatsappConsent?: boolean
   ) => {
+    if (!supabase) {
+      throw new Error("Autenticação indisponível. Configure NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY.");
+    }
     const { error } = await supabase.auth.signUp({
       email,
       password,
@@ -299,9 +322,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
     });
     if (error) throw error;
-  }, []);
+  }, [supabase]);
 
   const signInWithMagicLink = useCallback(async (email: string) => {
+    if (!supabase) {
+      throw new Error("Autenticação indisponível. Configure NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY.");
+    }
     // Use canonical URL for OAuth redirects (not railway.app domain)
     const canonicalUrl = process.env.NEXT_PUBLIC_CANONICAL_URL || window.location.origin;
     const { error } = await supabase.auth.signInWithOtp({
@@ -311,9 +337,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
     });
     if (error) throw error;
-  }, []);
+  }, [supabase]);
 
   const signInWithGoogle = useCallback(async () => {
+    if (!supabase) {
+      throw new Error("Autenticação indisponível. Configure NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY.");
+    }
     // Use canonical URL for OAuth redirects (not railway.app domain)
     const canonicalUrl = process.env.NEXT_PUBLIC_CANONICAL_URL || window.location.origin;
     const redirectUrl = `${canonicalUrl}/auth/callback`;
@@ -341,14 +370,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw error;
     }
     if (process.env.NODE_ENV !== "production") console.log("[AuthProvider] OAuth redirect initiated");
-  }, []);
+  }, [supabase]);
 
   const signOut = useCallback(async () => {
+    if (!supabase) {
+      setUser(null);
+      setSession(null);
+      router.push("/");
+      return;
+    }
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
     // Redirect to home page after logout
     router.push("/");
-  }, [router]);
+  }, [router, supabase]);
 
   return (
     <AuthContext.Provider

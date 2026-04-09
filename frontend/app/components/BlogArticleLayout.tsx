@@ -1,6 +1,3 @@
-'use client';
-
-import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
 import LandingNavbar from './landing/LandingNavbar';
@@ -8,6 +5,7 @@ import Footer from './Footer';
 import ShareButtons from '@/components/share/ShareButtons';
 import type { BlogArticleMeta } from '@/lib/blog';
 import { getAuthorBySlug, DEFAULT_AUTHOR_SLUG } from '@/lib/authors';
+import { ReadingProgressBar } from './ReadingProgressBar';
 
 /**
  * STORY-261 AC1/AC2/AC3/AC14: Blog article layout component
@@ -20,37 +18,6 @@ interface BlogArticleLayoutProps {
   children: React.ReactNode;
   article: BlogArticleMeta;
   relatedArticles: BlogArticleMeta[];
-}
-
-/* ---------- Reading Progress Bar ---------- */
-
-function ReadingProgressBar() {
-  const [progress, setProgress] = useState(0);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      const scrollTop = window.scrollY;
-      const docHeight =
-        document.documentElement.scrollHeight - window.innerHeight;
-      setProgress(docHeight > 0 ? (scrollTop / docHeight) * 100 : 0);
-    };
-
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  return (
-    <div
-      className="fixed top-0 left-0 z-[60] h-[3px] bg-brand-blue transition-[width] duration-150 ease-out"
-      style={{ width: `${progress}%` }}
-      role="progressbar"
-      aria-valuenow={Math.round(progress)}
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-label="Progresso de leitura"
-      data-testid="reading-progress-bar"
-    />
-  );
 }
 
 /* ---------- Helpers ---------- */

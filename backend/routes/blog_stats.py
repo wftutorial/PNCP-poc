@@ -181,6 +181,38 @@ class PanoramaStats(BaseModel):
     last_updated: str
 
 
+class ContratosSetorTopEntry(BaseModel):
+    nome: str
+    cnpj: str
+    total_contratos: int
+    valor_total: float
+
+
+class ContratosSetorUfEntry(BaseModel):
+    uf: str
+    total_contratos: int
+    valor_total: float
+
+
+class ContratosSetorTrend(BaseModel):
+    month: str
+    count: int
+    value: float
+
+
+class ContratosSetorStats(BaseModel):
+    sector_id: str
+    sector_name: str
+    total_contracts: int
+    total_value: float
+    avg_value: float
+    top_orgaos: list[ContratosSetorTopEntry]
+    top_fornecedores: list[ContratosSetorTopEntry]
+    monthly_trend: list[ContratosSetorTrend]
+    by_uf: list[ContratosSetorUfEntry]
+    last_updated: str
+
+
 # ---------------------------------------------------------------------------
 # Cache helpers
 # ---------------------------------------------------------------------------
@@ -702,3 +734,142 @@ def _estimate_seasonality(
             "avg_value": round(avg_value * factor, 2),
         })
     return months
+
+
+# ---------------------------------------------------------------------------
+# Endpoint 5: Contratos by sector (Wave 3.1 — pillar pages)
+# ---------------------------------------------------------------------------
+
+def _safe_float_blog(val) -> float:
+    if val is None:
+        return 0.0
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return 0.0
+
+
+@router.get("/contratos/{setor_id}", response_model=ContratosSetorStats)
+async def get_contratos_setor_stats(setor_id: str):
+    """National contract stats by sector from pncp_supplier_contracts.
+
+    Public (no auth). Cached 6h.
+    """
+    sector = _validate_sector(setor_id)
+    cache_key = f"contratos_setor:{sector.id}"
+
+    cached = _cache_get(cache_key)
+    if cached:
+        return ContratosSetorStats(**cached)
+
+    keywords_lower = {kw.lower() for kw in sector.keywords}
+
+    try:
+        from supabase_client import get_supabase
+        sb = get_supabase()
+
+        resp = (
+            sb.table("pncp_supplier_contracts")
+            .select(
+                "ni_fornecedor,nome_fornecedor,orgao_cnpj,orgao_nome,"
+                "valor_global,data_assinatura,objeto_contrato,uf"
+            )
+            .eq("is_active", True)
+            .order("data_assinatura", desc=True)
+            .limit(5000)
+            .execute()
+        )
+    except Exception as e:
+        logger.error("contratos_setor DB query failed for %s: %s", sector.id, e)
+        raise HTTPException(status_code=502, detail="Erro ao consultar o datalake de contratos")
+
+    rows = resp.data or []
+
+    # Filter by sector keywords
+    matched = []
+    for row in rows:
+        text = (row.get("objeto_contrato") or "").lower()
+        if any(kw in text for kw in keywords_lower):
+            matched.append(row)
+
+    # Aggregations
+    total_value = 0.0
+    orgao_agg: dict[str, dict] = {}
+    forn_agg: dict[str, dict] = {}
+    uf_agg: dict[str, dict] = {}
+    monthly: Counter = Counter()
+    monthly_values: dict[str, float] = {}
+
+    for row in matched:
+        valor = _safe_float_blog(row.get("valor_global"))
+        total_value += valor
+
+        org_cnpj = row.get("orgao_cnpj") or ""
+        if org_cnpj:
+            if org_cnpj not in orgao_agg:
+                orgao_agg[org_cnpj] = {"nome": row.get("orgao_nome") or org_cnpj, "cnpj": org_cnpj, "contratos": 0, "valor": 0.0}
+            orgao_agg[org_cnpj]["contratos"] += 1
+            orgao_agg[org_cnpj]["valor"] += valor
+
+        ni = row.get("ni_fornecedor") or ""
+        if ni:
+            if ni not in forn_agg:
+                forn_agg[ni] = {"nome": row.get("nome_fornecedor") or ni, "cnpj": ni, "contratos": 0, "valor": 0.0}
+            forn_agg[ni]["contratos"] += 1
+            forn_agg[ni]["valor"] += valor
+
+        uf = (row.get("uf") or "").upper()
+        if uf:
+            if uf not in uf_agg:
+                uf_agg[uf] = {"uf": uf, "contratos": 0, "valor": 0.0}
+            uf_agg[uf]["contratos"] += 1
+            uf_agg[uf]["valor"] += valor
+
+        data_str = (row.get("data_assinatura") or "")[:7]
+        if data_str:
+            monthly[data_str] += 1
+            monthly_values[data_str] = monthly_values.get(data_str, 0.0) + valor
+
+    total_contracts = len(matched)
+    avg_value = round(total_value / total_contracts, 2) if total_contracts else 0.0
+
+    top_orgaos = sorted(orgao_agg.values(), key=lambda x: x["valor"], reverse=True)[:10]
+    top_fornecedores = sorted(forn_agg.values(), key=lambda x: x["valor"], reverse=True)[:10]
+    by_uf = sorted(uf_agg.values(), key=lambda x: x["valor"], reverse=True)
+
+    # Monthly trend (last 12 months)
+    now = datetime.now(timezone.utc)
+    trend = []
+    for i in range(12):
+        d = now - timedelta(days=30 * i)
+        month_key = d.strftime("%Y-%m")
+        trend.append({
+            "month": month_key,
+            "count": monthly.get(month_key, 0),
+            "value": round(monthly_values.get(month_key, 0.0), 2),
+        })
+    trend.reverse()
+
+    data = {
+        "sector_id": sector.id,
+        "sector_name": sector.name,
+        "total_contracts": total_contracts,
+        "total_value": round(total_value, 2),
+        "avg_value": avg_value,
+        "top_orgaos": [
+            {"nome": o["nome"], "cnpj": o["cnpj"], "total_contratos": o["contratos"], "valor_total": round(o["valor"], 2)}
+            for o in top_orgaos if o["valor"] > 0
+        ],
+        "top_fornecedores": [
+            {"nome": f["nome"], "cnpj": f["cnpj"], "total_contratos": f["contratos"], "valor_total": round(f["valor"], 2)}
+            for f in top_fornecedores if f["valor"] > 0
+        ],
+        "monthly_trend": trend,
+        "by_uf": [
+            {"uf": u["uf"], "total_contratos": u["contratos"], "valor_total": round(u["valor"], 2)}
+            for u in by_uf
+        ],
+        "last_updated": now.isoformat(),
+    }
+    _cache_set(cache_key, data)
+    return ContratosSetorStats(**data)

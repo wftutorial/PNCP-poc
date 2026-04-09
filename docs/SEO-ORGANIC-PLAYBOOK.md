@@ -2362,10 +2362,10 @@ Com 10.000 URLs × 70% index rate × 20 buscas/mês médias × 10% CTR = **140.0
 
 **Target:** "contratos [nome do órgão]"
 
-- [ ] Backend: `GET /v1/contratos/orgao/{cnpj}/stats`
-- [ ] Frontend: `app/contratos/orgao/[cnpj]/page.tsx`
+- [x] Backend: `GET /v1/contratos/orgao/{cnpj}/stats` (2026-04-08, Wave 2.3)
+- [x] Frontend: `app/contratos/orgao/[cnpj]/page.tsx` (2026-04-08, Wave 2.3)
   - JSON-LD: GovernmentOrganization + Dataset + BreadcrumbList
-- [ ] Implementar APÓS confirmar crawl health no GSC com 12.2.1 e 12.2.2
+- [x] Sitemap: 2000 URLs via reuse de `fetchSitemapOrgaos()` (2026-04-08, Wave 2.3)
 
 **Estimativa tráfego:** 2.000 × 30 buscas/mês × 10% CTR = ~6.000 cliques/mês
 
@@ -2378,18 +2378,25 @@ CREATE INDEX IF NOT EXISTS idx_psc_uf_data ON pncp_supplier_contracts (uf, data_
 CREATE INDEX IF NOT EXISTS idx_psc_uf_fornecedor ON pncp_supplier_contracts (uf, ni_fornecedor);
 ```
 
-### 12.3 — Wave 3: Content Authority (+26 URLs) — PENDENTE
+### 12.3 — Wave 3: Content Authority (+26 URLs) — PARCIALMENTE IMPLEMENTADO
 
-#### 12.3.1 — `/blog/contratos/[setor]` — 15 Pillar Pages
+#### 12.3.1 — `/blog/contratos/[setor]` — 15 Pillar Pages ✅ Implementado (2026-04-08)
 
-- 2.500-3.000 palavras cada, "Contratos Públicos de {Setor}: Panorama Nacional {Year}"
-- Hub para `/contratos/{setor}/{uf}` (27 links por UF)
-- JSON-LD: Article + Dataset + FAQPage
+- [x] 15 páginas com editorial ~300 palavras por setor, FAQ, stats ao vivo
+- [x] Hub para `/contratos/{setor}/{uf}` (27 links por UF)
+- [x] JSON-LD: Article + Dataset + FAQPage + BreadcrumbList via SchemaMarkup
+- [x] Backend: `GET /v1/blog/stats/contratos/{setor_id}` (blog_stats.py)
+- [x] Frontend: `app/blog/contratos/[setor]/page.tsx` (ISR 24h)
+- [x] Sitemap: 15 URLs priority 0.8
 
-#### 12.3.2 — `/blog/licitacoes-do-dia` — Daily Digest (Google Discover)
+#### 12.3.2 — `/blog/licitacoes-do-dia` — Daily Digest (Google Discover) ✅ Implementado (2026-04-08)
 
-- ISR 1h, conteúdo atualizado diariamente com dados de `pncp_raw_bids`
-- Target: Google Discover feed para profissionais B2G
+- [x] ISR 1h, conteúdo atualizado diariamente com dados de `pncp_raw_bids`
+- [x] Target: Google Discover feed para profissionais B2G
+- [x] Backend: `GET /v1/blog/daily/latest` + `GET /v1/blog/daily/{date}` (daily_digest.py)
+- [x] Frontend hub: `app/blog/licitacoes-do-dia/page.tsx` (últimos 30 dias)
+- [x] Frontend detail: `app/blog/licitacoes-do-dia/[date]/page.tsx` (NewsArticle + Dataset)
+- [x] Sitemap: hub + 30 URLs dinâmicos
 
 #### 12.3.3 — 10 Artigos sobre Contratos
 
@@ -2412,8 +2419,10 @@ Preenche gap no conteúdo (todo conteúdo atual foca em licitações):
 | Wave 1: Cross-linking + Enriquecimento | 0 (melhora 7K existentes) | ✅ Implementado | 2026-04-08 |
 | Wave 2.1: /contratos/{setor}/{uf} | +405 | ✅ Implementado | 2026-04-08 |
 | Wave 2.2: /fornecedores/{setor}/{uf} | +405 | ✅ Implementado | 2026-04-08 |
-| Wave 2.3: /contratos/orgao/{cnpj} | +2.000 | Pendente | Semana 5-6 |
-| Wave 3: Content authority | +26 | Pendente | Semana 6+ |
+| Wave 2.3: /contratos/orgao/{cnpj} | +2.000 | ✅ Implementado | 2026-04-08 |
+| Wave 3.1: /blog/contratos/{setor} | +15 | ✅ Implementado | 2026-04-08 |
+| Wave 3.2: /blog/licitacoes-do-dia | +30/mês | ✅ Implementado | 2026-04-08 |
+| Wave 3.3: Content articles | +10 | Pendente | Semana 6+ |
 | **Total** | **+2.836** | | |
 
 **Projeção de páginas totais:**

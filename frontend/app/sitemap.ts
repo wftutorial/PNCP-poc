@@ -474,5 +474,38 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'daily' as const,
       priority: 0.6,
     })),
+    // SEO Wave 2.3 (12.2.3): /contratos/orgao/{cnpj} pages (reuse orgao list, ~2000)
+    ...orgaoList.map((cnpj) => ({
+      url: `${baseUrl}/contratos/orgao/${cnpj}`,
+      lastModified: today,
+      changeFrequency: 'weekly' as const,
+      priority: 0.5,
+    })),
+    // SEO Wave 3.1: /blog/contratos/{setor} pillar pages (15)
+    ...generateSectorParams().map(({ setor }) => ({
+      url: `${baseUrl}/blog/contratos/${setor}`,
+      lastModified: today,
+      changeFrequency: 'weekly' as const,
+      priority: 0.8,
+    })),
+    // SEO Wave 3.2: /blog/licitacoes-do-dia hub + last 30 days
+    {
+      url: `${baseUrl}/blog/licitacoes-do-dia`,
+      lastModified: today,
+      changeFrequency: 'daily' as const,
+      priority: 0.9,
+    },
+    ...Array.from({ length: 30 }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().slice(0, 10);
+      const freq: 'hourly' | 'daily' = i === 0 ? 'hourly' : 'daily';
+      return {
+        url: `${baseUrl}/blog/licitacoes-do-dia/${dateStr}`,
+        lastModified: i === 0 ? today : d,
+        changeFrequency: freq,
+        priority: i === 0 ? 0.9 : 0.7,
+      };
+    }),
   ];
 }

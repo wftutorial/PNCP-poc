@@ -680,3 +680,107 @@ export function generateLicitacoesFAQs(
     },
   ];
 }
+
+
+// ---------------------------------------------------------------------------
+// Wave 3.1 — Contratos by sector helpers
+// ---------------------------------------------------------------------------
+
+export interface ContratosSetorTopEntry {
+  nome: string;
+  cnpj: string;
+  total_contratos: number;
+  valor_total: number;
+}
+
+export interface ContratosSetorUfEntry {
+  uf: string;
+  total_contratos: number;
+  valor_total: number;
+}
+
+export interface ContratosSetorTrend {
+  month: string;
+  count: number;
+  value: number;
+}
+
+export interface ContratosSetorStats {
+  sector_id: string;
+  sector_name: string;
+  total_contracts: number;
+  total_value: number;
+  avg_value: number;
+  top_orgaos: ContratosSetorTopEntry[];
+  top_fornecedores: ContratosSetorTopEntry[];
+  monthly_trend: ContratosSetorTrend[];
+  by_uf: ContratosSetorUfEntry[];
+  last_updated: string;
+}
+
+export async function fetchContratosSetorStats(sectorSlug: string): Promise<ContratosSetorStats | null> {
+  const backendUrl = process.env.BACKEND_URL;
+  if (!backendUrl) return null;
+
+  try {
+    const sectorId = sectorSlug.replace(/-/g, '_');
+    const res = await fetch(`${backendUrl}/v1/blog/stats/contratos/${sectorId}`, {
+      next: { revalidate: 86400 },
+    });
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
+export function generateContratosSetorFAQs(
+  sectorName: string,
+  totalContracts?: number,
+  topOrgao?: string,
+): { question: string; answer: string }[] {
+  const count = totalContracts ?? 0;
+  return [
+    {
+      question: `Quantos contratos publicos de ${sectorName} existem?`,
+      answer: `Foram identificados ${count > 0 ? count.toLocaleString('pt-BR') : 'centenas de'} contratos publicos de ${sectorName} nos dados do PNCP. O volume varia por estado e ano, com tendencia de crescimento apos a Lei 14.133/2021.`,
+    },
+    {
+      question: `Quais orgaos mais compram ${sectorName}?`,
+      answer: `${topOrgao ? `O principal comprador e ${topOrgao}.` : 'Os principais compradores sao orgaos federais e estaduais.'} O ranking completo de orgaos compradores esta disponivel nesta pagina, atualizado com dados do PNCP.`,
+    },
+    {
+      question: `Como encontrar contratos publicos de ${sectorName} por estado?`,
+      answer: `Nesta pagina voce encontra a distribuicao de contratos de ${sectorName} por UF. Clique em qualquer estado para ver detalhes de orgaos compradores, fornecedores e valores na pagina dedicada.`,
+    },
+    {
+      question: `Qual o valor medio dos contratos de ${sectorName}?`,
+      answer: `O valor medio varia significativamente por modalidade e escopo. Pregoes eletronicos de ${sectorName} tendem a ter valores menores, enquanto concorrencias abrangem contratos de maior porte. Use o SmartLic para filtrar por faixa de valor.`,
+    },
+    {
+      question: `Como monitorar novos contratos de ${sectorName}?`,
+      answer: `O SmartLic monitora automaticamente novas publicacoes de contratos e licitacoes de ${sectorName} no PNCP. Com o teste gratis de 14 dias voce recebe alertas e analise de viabilidade por IA.`,
+    },
+  ];
+}
+
+export function getContratosEditorialContent(sectorId: string): string {
+  const editorials: Record<string, string> = {
+    vestuario: 'O mercado de contratos publicos de vestuario e uniformes movimenta bilhoes anualmente no Brasil. Orgaos das esferas federal, estadual e municipal demandam uniformes, EPIs, calcados e tecidos para forcas armadas, saude, educacao e seguranca publica. A Lei 14.133/2021 trouxe maior transparencia a estas contratacoes, com dados abertos no PNCP. Empresas que monitoram sistematicamente estas oportunidades identificam padroes de compra por orgao e sazonalidade — tipicamente com picos no segundo semestre, quando orcamentos precisam ser executados.',
+    alimentos: 'Contratos publicos de alimentos representam uma das maiores categorias de gastos do governo brasileiro. Programas como PNAE (alimentacao escolar) e compras para hospitais, presidios e forcas armadas geram demanda constante. A agricultura familiar tem tratamento preferencial em ate 30% das compras alimenticias governamentais. A analise de contratos firmados revela quais orgaos compram mais, valores medios por regiao e tendencias de preco que orientam a formacao de propostas competitivas.',
+    informatica: 'O setor de informatica e tecnologia da informacao e um dos maiores em volume de contratacoes publicas. Equipamentos, licencas de software, servicos de suporte tecnico e desenvolvimento de sistemas representam investimentos expressivos em todas as esferas de governo. Com a transformacao digital do setor publico acelerada pela Lei 14.133/2021 e pelo Governo Digital, a tendencia e de crescimento sustentado. Empresas que analisam o historico de contratos identificam oportunidades recorrentes e orgaos com demanda sistematica.',
+    engenharia: 'Contratos de engenharia e obras publicas respondem pela maior fatia do orcamento de contratacoes governamentais. Rodovias, edificacoes, saneamento e infraestrutura urbana geram contratos de alto valor com prazos plurianuais. A analise de dados do PNCP revela quais orgaos mais investem, valores medios regionais e sazonalidade orcamentaria — informacoes essenciais para planejar participacoes competitivas em licitacoes do setor.',
+    saude: 'O setor de saude publica e o segundo maior em volume de contratacoes, abrangendo medicamentos, equipamentos hospitalares, insumos, servicos de diagnostico e manutencao de equipamentos medicos. Hospitais universitarios, secretarias de saude e o Ministerio da Saude publicam editais frequentemente, com padroes de compra que podem ser identificados pela analise historica de contratos. A urgencia sanitaria frequentemente resulta em dispensas de licitacao, ampliando as oportunidades para fornecedores qualificados.',
+    software: 'Contratos de software e servicos digitais crescem aceleradamente no setor publico. Desenvolvimento de sistemas, computacao em nuvem, ciberseguranca e licenciamento de software corporativo compoe uma parcela crescente dos gastos governamentais em TI. A analise de contratos firmados permite identificar orgaos que investem em modernizacao digital, valores de referencia para propostas e tendencias tecnologicas priorizadas pelo governo.',
+    facilities: 'O setor de facilities — limpeza, conservacao, manutencao predial e jardinagem — representa um mercado estavel de contratacoes publicas. Orgaos de todas as esferas demandam estes servicos continuamente, com contratos tipicamente anuais e renovaveis. A analise do historico de contratos revela orgaos com maior demanda, valores regionais de referencia e sazonalidade de renovacoes, permitindo planejamento estrategico de participacoes.',
+    vigilancia: 'Servicos de vigilancia e seguranca patrimonial sao demandados sistematicamente por orgaos publicos em todo o territorio nacional. Contratos abrangem vigilancia armada e desarmada, monitoramento eletronico, portaria e seguranca de eventos. O mercado e altamente regulado e exige certificacoes especificas. A transparencia dos dados de contratos permite comparar valores praticados por regiao e identificar orgaos com renovacoes previstas.',
+    transporte: 'Contratos de transporte e logistica no setor publico incluem fretamento, locacao de veiculos, servicos de mudanca e logistica de distribuicao. Orgaos federais e estaduais sao os maiores demandantes, com contratos que variam de pequeno a grande porte. A analise de dados historicos permite identificar rotas e regioes com maior demanda, valores medios e orgaos com contratacoes recorrentes.',
+    mobiliario: 'O mercado de mobiliario para o setor publico abrange moveis escolares, mobiliario hospitalar, moveis de escritorio e equipamentos ergonomicos. Programas de expansao da rede publica de educacao e saude geram demanda expressiva. A analise de contratos anteriores revela especificacoes tecnicas comuns, faixas de preco por tipo de movel e orgaos compradores frequentes.',
+    papelaria: 'Material de expediente e papelaria e uma categoria de compras recorrentes em todos os orgaos publicos. Apesar dos valores unitarios menores, o volume agregado e significativo. Pregoes eletronicos e atas de registro de precos sao as modalidades predominantes. A analise de contratos historicos permite identificar padroes de compra e planejar participacoes em licitacoes com margens adequadas.',
+    materiais_eletricos: 'Materiais eletricos e de iluminacao compoe uma categoria tecnica de contratacoes publicas, incluindo luminarias, cabos, disjuntores, transformadores e sistemas de iluminacao publica. A modernizacao da infraestrutura eletrica de predios publicos e a substituicao por LED geram demanda crescente. A analise de contratos permite identificar especificacoes mais solicitadas e orgaos com programas de eficiencia energetica.',
+    materiais_hidraulicos: 'Materiais hidraulicos e de saneamento sao demandados para manutencao e expansao de redes de agua e esgoto, alem de instalacoes prediais. Companhias estaduais de saneamento, prefeituras e orgaos federais sao os principais compradores. A analise de contratos historicos revela valores de referencia regionais e tendencias de investimento em infraestrutura hidrica.',
+    manutencao_predial: 'Servicos de manutencao predial — eletrica, hidraulica, pintura, climatizacao e reparos gerais — representam contratos continuos em orgaos publicos. A demanda e estavel e previsivel, com renovacoes tipicamente anuais. A analise de dados de contratos permite identificar orgaos com maior volume de manutencao, valores regionais e oportunidades de renovacao proximas.',
+    engenharia_rodoviaria: 'Contratos de engenharia rodoviaria abrangem construcao, pavimentacao, sinalizacao e manutencao de rodovias federais e estaduais. Sao contratos de alto valor e longa duracao, frequentemente com aditivos. A analise do PNCP revela investimentos por regiao, orgaos contratantes (DNIT, DERs estaduais) e tendencias de investimento em infraestrutura viaria.',
+  };
+  return editorials[sectorId] || `O setor de contratos publicos nesta categoria apresenta oportunidades significativas para fornecedores qualificados. A analise de dados do PNCP revela padroes de compra, orgaos compradores frequentes e valores de referencia que orientam a participacao estrategica em licitacoes.`;
+}

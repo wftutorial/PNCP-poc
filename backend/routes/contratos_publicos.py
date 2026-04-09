@@ -1,11 +1,12 @@
-"""SEO Wave 2: Public stats endpoints for /contratos and /fornecedores programmatic pages.
+"""SEO Wave 2+: Public stats endpoints for /contratos and /fornecedores programmatic pages.
 
-Two public (no auth) endpoints that aggregate contract data from pncp_supplier_contracts
+Public (no auth) endpoints that aggregate contract data from pncp_supplier_contracts
 by sector (keyword matching on objeto_contrato) and UF. Cache: InMemory 24h TTL.
 
 Endpoints:
-  GET /contratos/{setor}/{uf}/stats  — spending transparency (12.2.1)
-  GET /fornecedores/{setor}/{uf}/stats — supplier directory (12.2.2)
+  GET /contratos/{setor}/{uf}/stats       — spending transparency (12.2.1)
+  GET /fornecedores/{setor}/{uf}/stats    — supplier directory (12.2.2)
+  GET /contratos/orgao/{cnpj}/stats       — org contract profile (12.2.3)
 """
 
 import logging
@@ -26,6 +27,9 @@ router = APIRouter(tags=["contratos-publicos"])
 _CACHE_TTL_SECONDS = 24 * 60 * 60  # 24h
 _contratos_cache: dict[str, tuple[dict, float]] = {}
 _fornecedores_cache: dict[str, tuple[dict, float]] = {}
+_orgao_contratos_cache: dict[str, tuple[dict, float]] = {}
+
+_CNPJ_RE = re.compile(r"^\d{14}$")
 
 ALL_UFS = [
     "AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "MA",
@@ -74,6 +78,23 @@ class ContratosStatsResponse(BaseModel):
     total_value: float
     avg_value: float
     top_orgaos: list[OrgaoRank]
+    top_fornecedores: list[FornecedorRank]
+    monthly_trend: list[MonthlyTrend]
+    sample_contracts: list[SampleContract]
+    last_updated: str
+    aviso_legal: str
+
+
+# ---------------------------------------------------------------------------
+# Response model — Orgao Contratos (Wave 2.3)
+# ---------------------------------------------------------------------------
+
+class OrgaoContratosStatsResponse(BaseModel):
+    orgao_nome: str
+    orgao_cnpj: str
+    total_contracts: int
+    total_value: float
+    avg_value: float
     top_fornecedores: list[FornecedorRank]
     monthly_trend: list[MonthlyTrend]
     sample_contracts: list[SampleContract]
@@ -161,6 +182,126 @@ async def _fetch_sector_contracts(sector_id_clean: str, uf_upper: str) -> list[d
             matched.append(row)
 
     return matched
+
+
+# ---------------------------------------------------------------------------
+# Endpoint: Orgao Contratos Stats (Wave 2.3)
+# MUST be defined BEFORE /contratos/{setor}/{uf}/stats to avoid route conflict
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/contratos/orgao/{cnpj}/stats",
+    response_model=OrgaoContratosStatsResponse,
+    summary="Perfil de contratos de um orgao publico (por CNPJ)",
+)
+async def orgao_contratos_stats(cnpj: str):
+    cnpj_clean = cnpj.strip()
+    if not _CNPJ_RE.match(cnpj_clean):
+        raise HTTPException(status_code=400, detail="CNPJ invalido (esperado 14 digitos)")
+
+    cache_key = f"orgao_contratos:{cnpj_clean}"
+    cached = _get_cached(_orgao_contratos_cache, cache_key)
+    if cached:
+        return OrgaoContratosStatsResponse(**cached)
+
+    try:
+        from supabase_client import get_supabase
+        sb = get_supabase()
+
+        resp = (
+            sb.table("pncp_supplier_contracts")
+            .select(
+                "ni_fornecedor,nome_fornecedor,orgao_cnpj,orgao_nome,"
+                "valor_global,data_assinatura,objeto_contrato"
+            )
+            .eq("orgao_cnpj", cnpj_clean)
+            .eq("is_active", True)
+            .order("data_assinatura", desc=True)
+            .limit(5000)
+            .execute()
+        )
+    except Exception as e:
+        logger.error("orgao_contratos DB query failed for %s: %s", cnpj_clean, e)
+        raise HTTPException(status_code=502, detail="Erro ao consultar o datalake de contratos")
+
+    rows = resp.data or []
+    if not rows:
+        raise HTTPException(status_code=404, detail="Nenhum contrato encontrado para este orgao")
+
+    orgao_nome = (rows[0].get("orgao_nome") or cnpj_clean).strip()
+
+    total_value = 0.0
+    forn_agg: dict[str, dict] = defaultdict(lambda: {"nome": "", "cnpj": "", "contratos": 0, "valor": 0.0})
+    monthly: Counter = Counter()
+    monthly_values: dict[str, float] = defaultdict(float)
+
+    for row in rows:
+        valor = _safe_float(row.get("valor_global"))
+        total_value += valor
+
+        ni = row.get("ni_fornecedor") or ""
+        if ni:
+            forn_agg[ni]["cnpj"] = ni
+            forn_agg[ni]["nome"] = row.get("nome_fornecedor") or ni
+            forn_agg[ni]["contratos"] += 1
+            forn_agg[ni]["valor"] += valor
+
+        data_str = (row.get("data_assinatura") or "")[:7]
+        if data_str:
+            monthly[data_str] += 1
+            monthly_values[data_str] += valor
+
+    total_contracts = len(rows)
+    avg_value = round(total_value / total_contracts, 2) if total_contracts else 0.0
+
+    top_fornecedores = sorted(forn_agg.values(), key=lambda x: x["valor"], reverse=True)[:20]
+
+    now = datetime.now(timezone.utc)
+    trend = []
+    for i in range(12):
+        d = now - timedelta(days=30 * i)
+        month_key = d.strftime("%Y-%m")
+        trend.append({
+            "month": month_key,
+            "count": monthly.get(month_key, 0),
+            "value": round(monthly_values.get(month_key, 0.0), 2),
+        })
+    trend.reverse()
+
+    sample_contracts = []
+    for row in rows[:10]:
+        obj = (row.get("objeto_contrato") or "").strip()
+        if len(obj) > 200:
+            obj = obj[:197] + "..."
+        sample_contracts.append({
+            "objeto": obj or "Nao informado",
+            "orgao": orgao_nome,
+            "fornecedor": (row.get("nome_fornecedor") or "").strip() or "Nao informado",
+            "valor": _safe_float(row.get("valor_global")) or None,
+            "data_assinatura": (row.get("data_assinatura") or "")[:10],
+        })
+
+    response_data = {
+        "orgao_nome": orgao_nome,
+        "orgao_cnpj": cnpj_clean,
+        "total_contracts": total_contracts,
+        "total_value": round(total_value, 2),
+        "avg_value": avg_value,
+        "top_fornecedores": [
+            {"nome": f["nome"], "cnpj": f["cnpj"], "total_contratos": f["contratos"], "valor_total": round(f["valor"], 2)}
+            for f in top_fornecedores if f["valor"] > 0
+        ],
+        "monthly_trend": trend,
+        "sample_contracts": sample_contracts,
+        "last_updated": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "aviso_legal": (
+            "Dados de fontes publicas: Portal Nacional de Contratacoes Publicas (PNCP). "
+            "Atualizacao diaria."
+        ),
+    }
+
+    _set_cached(_orgao_contratos_cache, cache_key, response_data)
+    return OrgaoContratosStatsResponse(**response_data)
 
 
 # ---------------------------------------------------------------------------

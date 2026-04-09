@@ -2280,6 +2280,152 @@ Com 10.000 URLs × 70% index rate × 20 buscas/mês médias × 10% CTR = **140.0
 
 ---
 
+## Parte 12 — Contratos & Fornecedores: Expansão Programática via Dados de Contratos
+
+> **Adicionada 2026-04-08.** O backfill de contratos (`pncp_supplier_contracts`, ~4.2M rows, 730 dias)
+> criou um ativo de dados massivo que estava subutilizado — alimentava apenas `/cnpj/[cnpj]`.
+> Esta parte documenta 3 waves de expansão que desbloqueiam esse ativo para SEO programático,
+> adicionando ~2.800 páginas de alta qualidade com dados únicos e competição quase zero no Google BR.
+
+### 12.0 — Premissa: Por que Contratos são um Ativo SEO
+
+**Dados públicos por lei (Lei 14.133/2021, art. 174)** — sem restrição de auth, sem robots.txt.
+
+**Volume:** ~4.2M contratos × 18 campos cada = dados ricos e únicos que nenhum concorrente indexa. O PNCP tem UI terrível para consultar contratos — SmartLic pode ser a melhor interface pública.
+
+**Keywords inexploradas:**
+- "contratos públicos [setor] [estado]" — 0 competição, ~50-200 buscas/mês por combinação
+- "fornecedores do governo [setor] [estado]" — 0 competição, ~30-150 buscas/mês
+- "contratos [nome do órgão]" — ~10-50 buscas/mês × 2.000 órgãos = ~60K agregado
+- "quanto o governo gasta em [setor]" — informacional, gera backlinks de jornalistas
+
+### 12.1 — Wave 1: Cross-Linking + Enriquecimento (0 novas URLs)
+
+**Status:** ✅ IMPLEMENTADO (2026-04-08)
+
+**Objetivo:** Conectar os clusters `/cnpj/` (5K páginas) e `/orgaos/` (2K páginas) que estavam isolados, e enriquecer páginas de órgãos com dados de contratos.
+
+#### 12.1.1 — Cross-Linking /cnpj ↔ /orgaos
+
+- [x] Backend: `ContratoPublico` model agora inclui `orgao_cnpj` (empresa_publica.py)
+- [x] Backend: `_fetch_contratos_local()` seleciona `orgao_cnpj` do banco
+- [x] Backend: Fallback PNCP API também extrai `orgao_cnpj` de `orgaoEntidade.cnpjCompra`
+- [x] Frontend: Coluna "Órgão" na tabela de contratos de `/cnpj/[cnpj]` agora é `<Link>` para `/orgaos/{orgao_cnpj}`
+- [x] Frontend: `/cnpj/[cnpj]` relatedPages inclui "Órgãos Compradores" (link para /orgaos)
+- [x] Frontend: `/orgaos/[slug]` relatedPages inclui "Consulta CNPJ" (link para /cnpj)
+- [x] Frontend: `/orgaos/[slug]` "Principais Fornecedores" já linkava para `/cnpj/{cnpj}` (pré-existente)
+
+**Impacto SEO:** Dense internal linking entre 7.000 páginas. Google passa a enxergar o "marketplace graph" comprador-fornecedor. Aumenta crawl depth e distribui PageRank.
+
+#### 12.1.2 — Enriquecimento /orgaos com Contratos
+
+- [x] Backend: `OrgaoStatsResponse` agora inclui `total_contratos_24m` e `valor_total_contratos_24m`
+- [x] Backend: `_fetch_top_fornecedores()` refatorada para `_fetch_contracts_data()` — retorna fornecedores + totais em uma única query
+- [x] Frontend: Nova seção "Contratos Firmados (24 meses)" em `/orgaos/[slug]` com 2 cards (total contratos + valor total)
+- [x] Frontend: `<meta description>` enriquecida com dados de contratos ("X contratos firmados")
+- [x] Frontend: `<title>` atualizado para "Licitações, Editais e Contratos" (era só "Licitações e Editais")
+
+**Impacto SEO:** Páginas de órgãos passam de "thin" para "data-rich". Metadata enriquecida captura queries de "contratos [órgão]".
+
+### 12.2 — Wave 2: Novos Clusters Programáticos (+2.810 URLs) — PENDENTE
+
+#### 12.2.1 — `/contratos/[setor]/[uf]` — Spending Transparency (405 páginas)
+
+**Target:** "contratos públicos [setor] [estado]", "quanto o governo gasta em [setor] em [estado]"
+
+- [ ] Backend: `GET /v1/contratos/{setor}/{uf}/stats` em `routes/contratos_publicos.py`
+  - Response: total_contracts, total_value, avg_value, top_orgaos, top_fornecedores, monthly_trend, sample_contracts
+  - Detecção de setor: reusar keywords de `sectors_data.yaml` com matching em `objeto_contrato`
+  - Cache: InMemory 24h TTL
+- [ ] Frontend: `app/contratos/page.tsx` (hub) + `app/contratos/[setor]/[uf]/page.tsx`
+  - JSON-LD: Dataset + BreadcrumbList + FAQPage
+  - ISR: 86400 (24h), LeadCapture no footer
+- [ ] Internal linking: FROM `/blog/licitacoes/{setor}/{uf}`, `/cnpj/`, `/orgaos/`, `/alertas-publicos/`
+- [ ] Sitemap: 405 URLs adicionadas com priority 0.6
+
+**Estimativa tráfego:** 405 × 100 buscas/mês × 15% CTR = ~6.000 cliques/mês
+
+#### 12.2.2 — `/fornecedores/[setor]/[uf]` — Supplier Directory (405 páginas)
+
+**Target:** "fornecedores do governo [setor] [estado]", "empresas que vendem para o governo"
+
+- [ ] Backend: `GET /v1/fornecedores/{setor}/{uf}/stats`
+  - Response: total_suppliers, supplier ranking (top 50), top_orgaos_compradores
+- [ ] Frontend: `app/fornecedores/page.tsx` (hub) + `app/fornecedores/[setor]/[uf]/page.tsx`
+  - JSON-LD: Dataset + ItemList + BreadcrumbList + FAQPage
+  - Cada fornecedor linkado para `/cnpj/{cnpj}`
+- [ ] Sitemap: 405 URLs
+
+**Estimativa tráfego:** 405 × 60 buscas/mês × 15% CTR = ~3.600 cliques/mês
+
+#### 12.2.3 — `/contratos/orgao/[cnpj]` — Organ Contracts Profile (2.000 páginas)
+
+**Target:** "contratos [nome do órgão]"
+
+- [ ] Backend: `GET /v1/contratos/orgao/{cnpj}/stats`
+- [ ] Frontend: `app/contratos/orgao/[cnpj]/page.tsx`
+  - JSON-LD: GovernmentOrganization + Dataset + BreadcrumbList
+- [ ] Implementar APÓS confirmar crawl health no GSC com 12.2.1 e 12.2.2
+
+**Estimativa tráfego:** 2.000 × 30 buscas/mês × 10% CTR = ~6.000 cliques/mês
+
+#### Migration SQL necessária (Wave 2)
+
+```sql
+CREATE INDEX IF NOT EXISTS idx_psc_orgao_cnpj ON pncp_supplier_contracts (orgao_cnpj);
+CREATE INDEX IF NOT EXISTS idx_psc_uf ON pncp_supplier_contracts (uf);
+CREATE INDEX IF NOT EXISTS idx_psc_uf_data ON pncp_supplier_contracts (uf, data_assinatura DESC);
+CREATE INDEX IF NOT EXISTS idx_psc_uf_fornecedor ON pncp_supplier_contracts (uf, ni_fornecedor);
+```
+
+### 12.3 — Wave 3: Content Authority (+26 URLs) — PENDENTE
+
+#### 12.3.1 — `/blog/contratos/[setor]` — 15 Pillar Pages
+
+- 2.500-3.000 palavras cada, "Contratos Públicos de {Setor}: Panorama Nacional {Year}"
+- Hub para `/contratos/{setor}/{uf}` (27 links por UF)
+- JSON-LD: Article + Dataset + FAQPage
+
+#### 12.3.2 — `/blog/licitacoes-do-dia` — Daily Digest (Google Discover)
+
+- ISR 1h, conteúdo atualizado diariamente com dados de `pncp_raw_bids`
+- Target: Google Discover feed para profissionais B2G
+
+#### 12.3.3 — 10 Artigos sobre Contratos
+
+Preenche gap no conteúdo (todo conteúdo atual foca em licitações):
+1. "Como consultar contratos públicos no PNCP: Guia completo"
+2. "Contratos públicos por estado: Ranking de gastos do governo"
+3. "Diferença entre licitação e contrato público"
+4. "Como verificar se uma empresa tem contratos com o governo"
+5. "Maiores contratos públicos de {setor} em {year}"
+6. "Aditivos contratuais: O que são e como monitorar"
+7. "Subcontratação em licitações: Regras da Lei 14.133"
+8. "Prazo de vigência de contratos públicos: Guia prático"
+9. "Como uma empresa iniciante pode ganhar contratos com o governo"
+10. "Transparência em compras públicas: Como a Lei 14.133 mudou tudo"
+
+### 12.4 — Roadmap de Escala
+
+| Wave | Páginas | Status | Timeline |
+|------|---------|--------|----------|
+| Wave 1: Cross-linking + Enriquecimento | 0 (melhora 7K existentes) | ✅ Implementado | 2026-04-08 |
+| Wave 2.1: /contratos/{setor}/{uf} | +405 | Pendente | Semana 2-3 |
+| Wave 2.2: /fornecedores/{setor}/{uf} | +405 | Pendente | Semana 3-4 |
+| Wave 2.3: /contratos/orgao/{cnpj} | +2.000 | Pendente | Semana 5-6 |
+| Wave 3: Content authority | +26 | Pendente | Semana 6+ |
+| **Total** | **+2.836** | | |
+
+**Projeção de páginas totais:**
+```
+Hoje (Parte 11):  ~10.000 URLs
++ Wave 2:         +2.810 URLs → 12.810
++ Wave 3:         +26 URLs    → 12.836
+= ~13.000 URLs indexáveis com conteúdo único
+```
+
+---
+
 ## Registro de Operações — Indexação GSC (2026-04-04/05)
 
 ### Contexto: por que foi necessário fazer isso manualmente

@@ -170,6 +170,14 @@ async def lifespan(app_instance: FastAPI):
 
     # === STARTUP ===
     validate_env_vars()
+    supabase_configured = bool(
+        os.getenv("SUPABASE_URL") and os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+    )
+    if not supabase_configured:
+        logger.warning(
+            "STARTUP: SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY not set — "
+            "running in local degraded mode with minimal background tasks."
+        )
 
     # CRIT-SYNC-FIX: Detect dangerous async + multi-worker combination
     _check_async_multiworker_mismatch()
@@ -209,24 +217,31 @@ async def lifespan(app_instance: FastAPI):
     )
     from progress import _periodic_tracker_cleanup
 
-    task_registry.register("cache_cleanup", start_cache_cleanup_task)
-    task_registry.register("session_cleanup", start_session_cleanup_task)
-    task_registry.register("cache_refresh", start_cache_refresh_task)
-    task_registry.register("trial_sequence", start_trial_sequence_task)
-    task_registry.register("reconciliation", start_reconciliation_task)
-    task_registry.register("health_canary", start_health_canary_task)
-    task_registry.register("revenue_share", start_revenue_share_task)
-    task_registry.register("sector_stats", start_sector_stats_task)
-    task_registry.register("support_sla", start_support_sla_task)
-    task_registry.register("daily_volume", start_daily_volume_task)
-    task_registry.register("results_cleanup", start_results_cleanup_task)
-    task_registry.register("stripe_purge", start_stripe_events_purge_task)
-    task_registry.register("plan_reconciliation", start_plan_reconciliation_task)
     task_registry.register("tracker_cleanup", _periodic_tracker_cleanup, is_coroutine=True)
     task_registry.register("saturation_metrics", _periodic_saturation_metrics, is_coroutine=True)
-    task_registry.register("warmup", start_warmup_task)
-    task_registry.register("coverage_check", start_coverage_check_task)
-    task_registry.register("trial_risk", start_trial_risk_task)
+    task_registry.register("cache_cleanup", start_cache_cleanup_task)
+
+    if supabase_configured:
+        task_registry.register("session_cleanup", start_session_cleanup_task)
+        task_registry.register("cache_refresh", start_cache_refresh_task)
+        task_registry.register("trial_sequence", start_trial_sequence_task)
+        task_registry.register("reconciliation", start_reconciliation_task)
+        task_registry.register("health_canary", start_health_canary_task)
+        task_registry.register("revenue_share", start_revenue_share_task)
+        task_registry.register("sector_stats", start_sector_stats_task)
+        task_registry.register("support_sla", start_support_sla_task)
+        task_registry.register("daily_volume", start_daily_volume_task)
+        task_registry.register("results_cleanup", start_results_cleanup_task)
+        task_registry.register("stripe_purge", start_stripe_events_purge_task)
+        task_registry.register("plan_reconciliation", start_plan_reconciliation_task)
+        task_registry.register("warmup", start_warmup_task)
+        task_registry.register("coverage_check", start_coverage_check_task)
+        task_registry.register("trial_risk", start_trial_risk_task)
+    else:
+        logger.info(
+            "STARTUP: Skipping Supabase-dependent cron tasks "
+            "(session cleanup, reconciliation, alerts/billing, warmup, coverage)."
+        )
 
     await task_registry.start_all()
 
@@ -238,7 +253,10 @@ async def lifespan(app_instance: FastAPI):
     except Exception:
         pass
 
-    await _check_cache_schema()
+    if supabase_configured:
+        await _check_cache_schema()
+    else:
+        logger.info("CRIT-001: Schema health check skipped (Supabase not configured)")
 
     # Initialize circuit breakers from Redis
     from pncp_client import get_circuit_breaker
@@ -251,32 +269,41 @@ async def lifespan(app_instance: FastAPI):
     logger.info("GTM-CRIT-005: Circuit breakers initialized from Redis (pncp, pcp, comprasgov)")
 
     # Schema contract validation
-    from schemas.contract import validate_schema_contract
-    try:
-        from supabase_client import get_supabase
-        db = get_supabase()
-        passed, missing = validate_schema_contract(db)
-        if not passed:
-            logger.critical(f"SCHEMA CONTRACT VIOLATED: missing {missing}. Run migrations. SERVICE DEGRADED.")
-        else:
-            logger.info("CRIT-004: Schema contract validated — 0 missing columns")
-    except Exception as e:
-        logger.warning(f"CRIT-004: Schema validation could not run ({e}) — proceeding with caution")
+    if supabase_configured:
+        from schemas.contract import validate_schema_contract
+        try:
+            from supabase_client import get_supabase
+            db = get_supabase()
+            passed, missing = validate_schema_contract(db)
+            if not passed:
+                logger.critical(f"SCHEMA CONTRACT VIOLATED: missing {missing}. Run migrations. SERVICE DEGRADED.")
+            else:
+                logger.info("CRIT-004: Schema contract validated — 0 missing columns")
+        except Exception as e:
+            logger.warning(f"CRIT-004: Schema validation could not run ({e}) — proceeding with caution")
+    else:
+        logger.info("CRIT-004: Schema validation skipped (Supabase not configured)")
 
     # Recover stale searches
-    from search_state_manager import recover_stale_searches
-    await recover_stale_searches(max_age_minutes=10)
+    if supabase_configured:
+        from search_state_manager import recover_stale_searches
+        await recover_stale_searches(max_age_minutes=10)
+    else:
+        logger.info("CRIT-003: stale search recovery skipped (Supabase not configured)")
 
     _log_registered_routes(app_instance)
 
     # Supabase connectivity probe
-    try:
-        from supabase_client import get_supabase
-        db = get_supabase()
-        db.table("profiles").select("id").limit(1).execute()
-        logger.info("STARTUP GATE: Supabase connectivity confirmed")
-    except Exception as e:
-        logger.critical(f"STARTUP GATE: Supabase unreachable — {e}. SERVICE DEGRADED but staying alive.")
+    if supabase_configured:
+        try:
+            from supabase_client import get_supabase
+            db = get_supabase()
+            db.table("profiles").select("id").limit(1).execute()
+            logger.info("STARTUP GATE: Supabase connectivity confirmed")
+        except Exception as e:
+            logger.critical(f"STARTUP GATE: Supabase unreachable — {e}. SERVICE DEGRADED but staying alive.")
+    else:
+        logger.info("STARTUP GATE: Supabase not configured — connectivity probe skipped")
 
     # Redis connectivity check
     if os.getenv("REDIS_URL"):
@@ -294,11 +321,17 @@ async def lifespan(app_instance: FastAPI):
 
     _state.startup_time = time.monotonic()
 
-    try:
-        warmup_result = await warmup_top_params()
-        logger.info(f"GTM-ARCH-002: Post-deploy warmup complete: {warmup_result}")
-    except Exception as e:
-        logger.warning(f"GTM-ARCH-002: Post-deploy warmup failed (non-fatal): {e}")
+    from config import WARMUP_ENABLED
+    if supabase_configured and WARMUP_ENABLED:
+        try:
+            warmup_result = await warmup_top_params()
+            logger.info(f"GTM-ARCH-002: Post-deploy warmup complete: {warmup_result}")
+        except Exception as e:
+            logger.warning(f"GTM-ARCH-002: Post-deploy warmup failed (non-fatal): {e}")
+    elif not WARMUP_ENABLED:
+        logger.info("GTM-ARCH-002: Post-deploy warmup skipped (WARMUP_ENABLED=false)")
+    else:
+        logger.info("GTM-ARCH-002: Post-deploy warmup skipped (Supabase not configured)")
 
     logger.info("APPLICATION READY — all routes registered, accepting traffic")
 

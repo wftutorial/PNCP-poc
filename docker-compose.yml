@@ -26,7 +26,6 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-      target: development
     container_name: bidiq-backend
     ports:
       - "${BACKEND_PORT:-8000}:8000"
@@ -78,7 +77,7 @@ services:
       - bidiq-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/health"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
       interval: 30s
       timeout: 3s
       retries: 3

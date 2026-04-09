@@ -26,6 +26,7 @@ interface PerfilB2G {
   };
   contratos: Array<{
     orgao: string;
+    orgao_cnpj?: string | null;
     valor: number | null;
     data_inicio: string | null;
     descricao: string;
@@ -165,6 +166,7 @@ export default async function CnpjPerfilPage({
       breadcrumbLabel={empresa.razao_social}
       relatedPages={[
         { href: '/cnpj', title: 'Nova consulta CNPJ' },
+        { href: '/orgaos', title: 'Órgãos Compradores' },
         { href: '/calculadora', title: 'Calculadora de Oportunidades' },
         { href: '/licitacoes', title: 'Licitações por Setor' },
       ]}

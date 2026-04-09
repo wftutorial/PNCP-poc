@@ -1,5 +1,5 @@
 # SmartLic — Playbook de Crescimento Orgânico: CAC Mínimo via Conversão Máxima
-## Versão 3.2 · Atualizado: 2026-04-07 (Parte 10 — Modelo MRR R$100K + Parte 11 — Expansão Programática 10K páginas)
+## Versão 3.3 · Atualizado: 2026-04-08 (Parte 12 — Contratos & Fornecedores: Expansão Programática via Dados de Contratos)
 
 > **Premissa:** SEO impecável é o piso, não o teto. Quando alguém encontra o SmartLic —
 > por busca orgânica, indicação ou conteúdo — cada touchpoint subsequente deve funcionar
@@ -29,6 +29,7 @@
 | [9](#parte-9--substituições-on-page-finais-zero-dependência-de-terceiros) | On-Page Final | **S7-S14: entity SEO, Q&A, tech stack, micro-demos, masterclass — abril/2026** |
 | [10](#parte-10--modelo-de-mrr-de-tráfego-orgânico-a-r100k) | Modelo MRR | **Matemática reversa R$100K → clientes → trials → tráfego + alavancas** |
 | [11](#parte-11--expansão-programática-próxima-onda-de-páginas) | Expansão | **CNPJ +5K, órgãos +2K, cidade×setor +1.2K → 10K páginas** |
+| [12](#parte-12--contratos--fornecedores-expansão-programática-via-dados-de-contratos) | Contratos | **3 waves: cross-linking +0, /contratos +405, /fornecedores +405, /contratos/orgao +2K → +2.8K páginas** |
 
 ---
 

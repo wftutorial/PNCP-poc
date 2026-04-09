@@ -36,6 +36,64 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **15 Setores:** Definidos em `backend/sectors_data.yaml` — cada setor tem keywords, exclusoes, e viability_value_range.
 
+## Smart Routing — Auto-Invocação de Skills
+
+**REGRA OBRIGATÓRIA:** Quando o usuário envia uma mensagem sem invocar um `/comando` explícito, analise o conteúdo e invoque o skill correspondente via `Skill` tool antes de responder. Use a tabela abaixo como mapa de decisão.
+
+**Pule o roteamento apenas se:**
+- O usuário já digitou `/comando` explicitamente
+- É conversa casual sem tarefa acionável (agradecimento, pergunta factual simples)
+- O usuário disse "responda diretamente" ou equivalente
+
+### Tabela de Roteamento
+
+| Sinais na mensagem do usuário | Skill a invocar |
+|-------------------------------|----------------|
+| **Inteligência B2G** | |
+| CNPJ + analisar / pesquisar / editais / histórico / oportunidades | `intel-busca` |
+| mapear concorrentes / fornecedores / players / quem ganha / market share | `intel-b2g` |
+| qualificar leads / scoring / tier / priorizar prospects | `qualify-b2g` |
+| cadência / prospecção / sequência de abordagem / follow-up sistemático | `cadencia-b2g` |
+| pipeline comercial / funil / forecast / MRR / estágios de venda | `pipeline-b2g` |
+| preço / benchmark / valor estimado / quanto custa / margem / P50/P90 | `pricing-b2g` |
+| participar edital / go-no-go / dossiê / checklist habilitação / decisão edital | `war-room-b2g` |
+| proposta comercial / apresentação / deck / documento de proposta | `proposta-b2g` |
+| reter cliente / upsell / churn / health score / renovação | `retention-b2g` |
+| monitorar editais / alertas / novos editais do dia / radar | `radar-b2g` |
+| relatório executivo / análise profunda CNPJ + editais + mercado | `report-b2g` |
+| **Advisory Boards** | |
+| copy / texto / mensagem / landing page / email marketing / UX writing | `copymasters` |
+| marketing / crescimento / GTM / SEO / conteúdo / CAC / aquisição orgânica | `marketing` |
+| cold email / cold outreach / LinkedIn / SDR / abordagem inicial | `outreach` |
+| revenue / monetização / pricing / modelo de negócio / unit economics | `turbocash` |
+| decisão técnica / arquitetura / trade-off / estratégia produto/tech | `conselho` |
+| **Desenvolvimento** | |
+| bug / erro / quebrou / problema / fix / não funciona | `squad-creator` (args: "bidiq-hotfix") |
+| nova feature / implementar / desenvolver / adicionar funcionalidade | `squad-creator` (args: "bidiq-feature-e2e") |
+| integrar API / novo cliente / fonte de dados | `squad-creator` (args: "bidiq-api-integration") |
+| performance / lento / timeout / otimizar | `squad-creator` (args: "bidiq-performance-audit") |
+| próxima issue / o que fazer agora / próximo passo técnico / prioridade | `pick-next-issue` |
+| revisar PR / fazer merge / validar PR / governance PR | `review-pr` |
+| roadmap / status geral / audit / o que está atrasado / sincronizar | `audit-roadmap` |
+| banco de dados / schema / migration / RLS / query / supabase estrutura | `data-engineer` |
+| testes / cobertura / QA / suite / validação qualidade | `qa` |
+| arquitetura / impacto da mudança / ADR / design sistema | `architect` |
+| **Meta / Sessão** | |
+| beta / usuários reais / feedback / testar com usuário / sessão beta | `beta-team` |
+| squad / equipe / time / coordenar agentes / orquestrar | `squad-creator` |
+| aios-master / orquestrar tudo / tarefa complexa multi-agente | `aios-master` |
+
+### Exemplos de roteamento automático
+
+- *"preciso analisar o CNPJ 12345 para ver seus editais"* → invoca `intel-busca`
+- *"como faço para abordar esse lead?"* → invoca `cadencia-b2g`
+- *"qual o preço médio dos contratos de limpeza em SC?"* → invoca `pricing-b2g`
+- *"o login está quebrado"* → invoca `squad-creator` com args `bidiq-hotfix`
+- *"qual a próxima coisa para fazer no produto?"* → invoca `pick-next-issue`
+- *"preciso escrever o email de trial expiring"* → invoca `copymasters`
+
+---
+
 ## Behavioral Rules
 
 ### NEVER

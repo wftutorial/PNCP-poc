@@ -77,6 +77,8 @@ class OrgaoStatsResponse(BaseModel):
     top_setores: list[str]
     ultimas_licitacoes: list[LicitacaoRecente]
     top_fornecedores: list[FornecedorTop] = []
+    total_contratos_24m: int = 0
+    valor_total_contratos_24m: float = 0.0
     aviso_legal: str
 
 
@@ -269,8 +271,8 @@ async def _build_orgao_stats(cnpj: str) -> dict:
             "uf": (row.get("uf") or uf or "").strip().upper(),
         })
 
-    # Top fornecedores from pncp_supplier_contracts (graceful: empty if backfill not done)
-    top_fornecedores = await _fetch_top_fornecedores(cnpj)
+    # Contracts data from pncp_supplier_contracts (graceful: empty if backfill not done)
+    contracts_data = await _fetch_contracts_data(cnpj)
 
     return {
         "nome": nome,
@@ -287,7 +289,9 @@ async def _build_orgao_stats(cnpj: str) -> dict:
         "top_modalidades": top_modalidades,
         "top_setores": top_setores,
         "ultimas_licitacoes": ultimas_licitacoes,
-        "top_fornecedores": top_fornecedores,
+        "top_fornecedores": contracts_data["top_fornecedores"],
+        "total_contratos_24m": contracts_data["total_contratos_24m"],
+        "valor_total_contratos_24m": contracts_data["valor_total_contratos_24m"],
         "aviso_legal": (
             "Dados de fontes públicas: Portal Nacional de Contratações Públicas (PNCP). "
             "Atualização diária."
@@ -295,11 +299,13 @@ async def _build_orgao_stats(cnpj: str) -> dict:
     }
 
 
-async def _fetch_top_fornecedores(orgao_cnpj: str, limit: int = 10) -> list[dict]:
-    """Query pncp_supplier_contracts for top suppliers of this organ by contract value.
+async def _fetch_contracts_data(orgao_cnpj: str, limit: int = 10) -> dict:
+    """Query pncp_supplier_contracts for top suppliers and aggregate contract stats.
 
-    Returns empty list gracefully when table is empty (during/before backfill).
+    Returns dict with 'top_fornecedores', 'total_contratos_24m', 'valor_total_contratos_24m'.
+    Returns empty/zero gracefully when table is empty (during/before backfill).
     """
+    result = {"top_fornecedores": [], "total_contratos_24m": 0, "valor_total_contratos_24m": 0.0}
     try:
         from supabase_client import get_supabase
         sb = get_supabase()
@@ -318,9 +324,20 @@ async def _fetch_top_fornecedores(orgao_cnpj: str, limit: int = 10) -> list[dict
 
         rows = resp.data or []
         if not rows:
-            return []
+            return result
 
-        # Aggregate
+        # Aggregate totals for the organ
+        total_valor = 0.0
+        for r in rows:
+            try:
+                total_valor += float(r.get("valor_global") or 0)
+            except (ValueError, TypeError):
+                pass
+
+        result["total_contratos_24m"] = len(rows)
+        result["valor_total_contratos_24m"] = round(total_valor, 2)
+
+        # Aggregate by supplier
         from collections import defaultdict
         agg: dict[str, dict] = defaultdict(lambda: {"nome": "", "cnpj": "", "contratos": 0, "valor": 0.0})
         for r in rows:
@@ -336,7 +353,7 @@ async def _fetch_top_fornecedores(orgao_cnpj: str, limit: int = 10) -> list[dict
                 pass
 
         top = sorted(agg.values(), key=lambda x: x["valor"], reverse=True)[:limit]
-        return [
+        result["top_fornecedores"] = [
             {
                 "nome": t["nome"],
                 "cnpj": t["cnpj"],
@@ -348,5 +365,6 @@ async def _fetch_top_fornecedores(orgao_cnpj: str, limit: int = 10) -> list[dict
         ]
 
     except Exception as exc:
-        logger.warning("top_fornecedores query failed for %s: %s", orgao_cnpj, exc)
-        return []
+        logger.warning("contracts_data query failed for %s: %s", orgao_cnpj, exc)
+
+    return result

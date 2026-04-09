@@ -4,6 +4,7 @@ import Link from 'next/link';
 
 interface Contrato {
   orgao: string;
+  orgao_cnpj?: string | null;
   valor: number | null;
   data_inicio: string | null;
   descricao: string;
@@ -207,7 +208,15 @@ export default function CnpjPerfilClient({ perfil }: { perfil: PerfilB2G }) {
               <tbody>
                 {contratos.map((c, i) => (
                   <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="py-3 px-2 max-w-[200px] truncate">{c.orgao}</td>
+                    <td className="py-3 px-2 max-w-[200px] truncate">
+                      {c.orgao_cnpj ? (
+                        <Link href={`/orgaos/${c.orgao_cnpj}`} className="text-blue-600 hover:underline">
+                          {c.orgao}
+                        </Link>
+                      ) : (
+                        c.orgao
+                      )}
+                    </td>
                     <td className="py-3 px-2 whitespace-nowrap text-gray-500">{c.esfera || '—'}{c.uf ? ` (${c.uf})` : ''}</td>
                     <td className="py-3 px-2 max-w-[300px] truncate text-gray-600">{c.descricao}</td>
                     <td className="py-3 px-2 text-right whitespace-nowrap">

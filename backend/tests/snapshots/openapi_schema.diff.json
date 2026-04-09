@@ -7765,6 +7765,13 @@
         },
         "ValidationError": {
           "properties": {
+            "ctx": {
+              "title": "Context",
+              "type": "object"
+            },
+            "input": {
+              "title": "Input"
+            },
             "loc": {
               "items": {
                 "anyOf": [
@@ -13550,9 +13557,6 @@
           "security": [
             {
               "HTTPBearer": []
-            },
-            {
-              "HTTPBearer": []
             }
           ],
           "summary": "Get Alert Preferences",
@@ -13598,9 +13602,6 @@
           "security": [
             {
               "HTTPBearer": []
-            },
-            {
-              "HTTPBearer": []
             }
           ],
           "summary": "Update Alert Preferences",
@@ -13628,9 +13629,6 @@
           "security": [
             {
               "HTTPBearer": []
-            },
-            {
-              "HTTPBearer": []
             }
           ],
           "summary": "Get Profile Completeness",
@@ -13656,9 +13654,6 @@
             }
           },
           "security": [
-            {
-              "HTTPBearer": []
-            },
             {
               "HTTPBearer": []
             }
@@ -13704,9 +13699,6 @@
             }
           },
           "security": [
-            {
-              "HTTPBearer": []
-            },
             {
               "HTTPBearer": []
             }

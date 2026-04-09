@@ -8,7 +8,7 @@ import os
 
 from fastapi import FastAPI
 
-from config import setup_logging, log_feature_flags
+from config import setup_logging, log_feature_flags, validate_feature_flags
 from startup.sentry import init_sentry
 from startup.lifespan import lifespan
 from startup.middleware_setup import setup_middleware, setup_metrics_endpoint, DOCS_ACCESS_TOKEN
@@ -24,6 +24,7 @@ def create_app() -> FastAPI:
     # Logging
     setup_logging(level=os.getenv("LOG_LEVEL", "INFO"))
     log_feature_flags()
+    validate_feature_flags()
 
     # Sentry
     _env = os.getenv("ENVIRONMENT", os.getenv("ENV", "development")).lower()

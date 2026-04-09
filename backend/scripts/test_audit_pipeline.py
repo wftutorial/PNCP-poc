@@ -148,7 +148,7 @@ class TestUnitCrossSector:
         items = [
             {"objetoCompra": "uniforme e limpeza predial conservação", "uf": "SP", "valorTotalEstimado": 100000},
         ]
-        result = analyze_cross_sector(items, ["vestuario", "facilities"], ["SP"])
+        result = analyze_cross_sector(items, ["vestuario", "servicos_prediais"], ["SP"])
         # May or may not collide depending on exact keywords — just test structure
         assert "total_collisions" in result
         assert "collision_rate" in result

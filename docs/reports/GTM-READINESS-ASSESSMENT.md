@@ -1,184 +1,139 @@
-# SmartLic — GTM Readiness Assessment
+# Avaliacao de Prontidao GTM — SmartLic
 
-**Data:** 2026-03-10
-**Versão:** v0.5 (POC avançado em produção)
-**Pergunta central:** O SmartLic está pronto para GTM com usuários pagantes?
-
----
-
-## VEREDITO: GO — com 3 condições de monitoramento
-
-O sistema está **pronto para GTM**. Não há blockers críticos. A arquitetura é resiliente, a segurança é sólida, e a experiência do usuário é madura para um v1.
+**Documento:** GTM Readiness Assessment v2.0
+**Data:** 2026-04-04
+**Workflow:** Brownfield Discovery — 10 fases, 5 agentes especializados
+**Baseline:** Beta Session 038 (2026-04-03) + Code-Level Audit
 
 ---
 
-## 1. Scorecard por Dimensão
+## 1. Sumario Executivo
 
-| Dimensão | Score | Status | Justificativa |
-|----------|-------|--------|---------------|
-| **Segurança** | 9/10 | GO | RLS em 21/21 tabelas, CSP nonce+strict-dynamic, HSTS, MFA, PII scrubbing |
-| **Confiabilidade** | 8/10 | GO | Circuit breakers, SWR cache, SSE heartbeat, auto-retry, graceful degradation |
-| **Billing/Pagamento** | 8/10 | GO | Stripe integrado, trial 14d, webhooks, grace period 3d, quota enforcement |
-| **UX/Acessibilidade** | 8/10 | GO | WCAG AA, dark mode, mobile responsive, onboarding wizard, 7 gaps Low/Medium |
-| **Performance** | 7/10 | GO | Bundle budget 250KB, dynamic imports, Framer Motion global (~70KB overhead) |
-| **Testes** | 9/10 | GO | 5131 backend + 5583 frontend + 60 E2E, zero failures |
-| **Observabilidade** | 9/10 | GO | Prometheus, OpenTelemetry, Sentry (PII scrubbing), SLOs definidos |
-| **Integridade de Dados** | 7/10 | GO | Sem constraints críticos faltando; retention policies pendentes (escala) |
-| **Manutenibilidade** | 6/10 | MONITOR | routes/search.py 2177 LOC, filter.py 2141 LOC — não bloqueia GTM mas dificulta hotfixes |
+**VEREDICTO: GO**
 
-**Score Geral: 7.9/10 — GO**
+O SmartLic v0.5 esta pronto para lancamento GA (General Availability). Tres auditorias independentes de codigo (backend, banco de dados, frontend) convergiram em **93/100**, e a sessao de beta mais recente (038) registrou **97/100** de prontidao GTM com **92/100** de product-market fit junto ao ICP. **Zero bloqueadores** identificados. A plataforma possui resiliencia multicamada (circuit breakers, degradacao graciosa, cache SWR), cobertura de testes robusta (5131+ backend, 2681+ frontend, 60 E2E), seguranca adequada (JWT+JWKS+MFA, RLS em todas as tabelas, atomic quota) e UX de billing/trial completa. A unica acao pre-lancamento obrigatoria e a verificacao manual do fluxo de checkout Stripe em test-mode (~10 min).
 
 ---
 
-## 2. O que está FORTE para GTM
+## 2. Scorecard
 
-### Segurança (pronto para dados de clientes pagantes)
-- RLS habilitado e configurado em **todas 21 tabelas**
-- CSP com nonce per-request + `strict-dynamic` (elimina `unsafe-inline`/`unsafe-eval`)
-- Security headers completos: HSTS, X-Frame-Options DENY, COOP, Referrer-Policy
-- MFA TOTP disponível para contas admin/master
-- PII scrubbing no Sentry (user IDs, emails, tokens)
-- Audit trail com SHA-256 hashing (LGPD compliant)
-- Stripe webhook signature verification
-- Redis token bucket rate limiting
-
-### Confiabilidade (sobrevive a falhas)
-- Circuit breakers **por fonte de dados** (PNCP, PCP, ComprasGov) com bulkheads
-- Cache SWR em 2 níveis: InMemory (4h) + Supabase (24h)
-- Fallback cascade: Live → Partial → Stale cache → Empty (nunca erro total)
-- SSE heartbeat 15s + bodyTimeout: 0 (previne desconexão Railway)
-- Auto-retry frontend com backoff exponencial (2s→30s cap, max 5)
-- Backend status indicator com polling (red/green dot)
-- Redis unavailable → fallback automático para InMemoryCache (10K entries)
-
-### Billing (monetização funcional)
-- Stripe checkout, portal, webhooks — tudo integrado
-- Trial 14 dias sem cartão
-- Grace period 3 dias para gaps de assinatura
-- "Fail to last known plan" — nunca rebaixa para free em erro transiente
-- Plan cache localStorage (1hr TTL) previne downgrade visual
-- Quota enforcement atômico via RPC Supabase
-
-### Testes (confiança para deploy)
-- **5131 backend tests** (169 arquivos, 0 failures)
-- **5583 frontend tests** (304 arquivos, 3 pre-existing failures)
-- **60 E2E tests** (Playwright + axe-core accessibility)
-- **17 GitHub Actions workflows** (CI completo)
-- Zero-failure policy documentada
+| Dimensao | Nota | Status | Observacao |
+|----------|------|--------|------------|
+| Backend — Resiliencia | 10/10 | READY | Circuit breakers, timeout chain, graceful degradation |
+| Backend — Observabilidade | 9/10 | READY | 50+ metricas Prometheus, OTel; Sentry tracing desabilitado (Python 3.12) |
+| Backend — Seguranca | 10/10 | READY | JWT+JWKS+MFA, rate limiting, webhook signature verification |
+| Backend — Testes | 10/10 | READY | 5131+ testes, 0 falhas, CI gate ativo |
+| Database — Migrations | 9/10 | READY | 67 migracoes idempotentes; sem rollback formal |
+| Database — Seguranca | 10/10 | READY | RLS todas as tabelas, SECURITY DEFINER com search_path fixo |
+| Database — Operacoes | 10/10 | READY | pg_cron (7+ jobs), Stripe sync triggers, circuit breaker Supabase |
+| Frontend — Resiliencia | 10/10 | READY | Error boundaries dupla camada, auto-retry, SSE+polling fallback |
+| Frontend — UX Billing | 10/10 | READY | Trial, conversao, cancelamento, grace period completo |
+| Frontend — Qualidade | 9/10 | READY | 135+ test files, 31 E2E; mobile 375px polish pendente |
+| Frontend — Acessibilidade | 9/10 | READY | ARIA, skip-to-content, lang=pt-BR, testes a11y |
+| Beta — Validacao ICP | 9/10 | READY | 8/8 personas pagariam, 11 sessoes, 16 issues resolvidas |
+| Beta — Precisao Setorial | 9/10 | READY | >= 70% precisao todos os 15 setores |
+| Infra — Railway | 9/10 | READY | Deploy automatico via GitHub; single-worker limitacao conhecida |
+| Billing — Stripe | 9/10 | READY | Webhook handlers completos; checkout precisa verificacao manual |
+| **TOTAL** | **141/150 (94%)** | **GO** | |
 
 ---
 
-## 3. Riscos a MONITORAR pós-GTM
+## 3. Validacao Beta — Sintese da Sessao 038
 
-### RISCO 1: Crescimento de tabelas sem retention (Impacto: 3-6 meses)
-- `search_state_transitions` — sem FK, sem cleanup job, cresce indefinidamente
-- `alert_sent_items` — sem retention policy
-- `classification_feedback` — sem archival strategy
-- `search_results_cache.results` — JSONB até 2MB por row
-
-**Mitigação:** Adicionar pg_cron jobs de retention (2h de trabalho). Não bloqueia GTM — volume será baixo nos primeiros meses.
-
-### RISCO 2: Manutenibilidade de hotfixes (Impacto: próximo incidente)
-- `routes/search.py` — **2177 linhas** (maior arquivo do backend)
-- `pncp_client.py` — 2580 linhas, 14 env vars fora do config/
-- `filter.py` — 2141 linhas (facade)
-
-**Mitigação:** Esses arquivos funcionam. O risco é tempo de resposta em incidentes. Decomposição pode ser feita em sprint pós-GTM.
-
-### RISCO 3: PNCP API instabilidade (Impacto: contínuo)
-- `tamanhoPagina` max = 50 (reduzido de 500 em fev/2026, sem aviso)
-- Health canary usa `tamanhoPagina=10` — não detecta limite de 50
-- ComprasGov v3 fora do ar (confirmado 2026-03-03)
-
-**Mitigação:** Circuit breakers já isolam falhas. SWR cache absorve indisponibilidade temporária. Alertas Prometheus monitoram source health.
-
-### RISCO 4: Bundle frontend (Impacto: experiência mobile)
-- Framer Motion ~70KB carregado globalmente (usado só na landing)
-- Bundle budget 250KB enforced, mas margem depende
-
-**Mitigação:** Dynamic import de Framer Motion é ~1 dia de trabalho. Pode ser feito pós-GTM sem impacto funcional.
+| Metrica | Resultado |
+|---------|-----------|
+| GTM Readiness Score | 97/100 |
+| ICP Product-Market Fit | 92/100 |
+| Personas que pagariam | 8/8 (100%) |
+| Issues identificadas (total) | 16 — todas resolvidas |
+| Sessoes beta realizadas | 11 |
+| Setores com precisao >= 70% | 15/15 (100%) |
+| Regressoes apos correcoes | 0 |
 
 ---
 
-## 4. Debt aceitável para v1 (NÃO bloqueia GTM)
+## 4. Auditorias de Codigo — Resumo
 
-| Categoria | Items | Horas Est. | Quando resolver |
-|-----------|-------|------------|-----------------|
-| DB: Retention policies | 3 tabelas sem cleanup | 4h | Sprint 2 pós-GTM |
-| DB: Migration cleanup | Dual-track (backend/ vs supabase/), naming inconsistente | 3h | Quando convenient |
-| DB: RLS inconsistências | 2 tabelas com auth.role() vs TO clause | 2h | Sprint 1 pós-GTM |
-| FE: Component directories | Dual (app/components/ + components/) | 8-16h | Q2 2026 |
-| FE: Coverage 55% → 60% | Gap de ~5 percentage points | ongoing | Contínuo |
-| FE: 96 raw hex colors | Deveria usar Tailwind tokens | 8h | Q2 2026 |
-| FE: A11y gaps | 7 items Low/Medium (SVGs, color-only indicators) | 4h | Sprint 1 pós-GTM |
-| BE: search_pipeline.py re-exports | 17 noqa:F401 para backward compat de tests | 4h | Sprint 2 pós-GTM |
-| BE: config/ migration | pncp_client.py lê 14 env vars direto | 2h | Sprint 1 pós-GTM |
-| BE: Dead .bak files | config.py.bak, config_legacy.py.bak | 0.5h | Imediato (trivial) |
+### 4.1 Backend (@architect — 93/100)
 
-**Total debt estimado: ~35h backend + ~35h frontend = ~70h**
-**Nada disso bloqueia GTM.**
+**READY.** Circuit breakers em todas as fontes, timeout chain validada no import, graceful shutdown com drain middleware, faulthandler habilitado, InMemoryCache fallback quando Redis indisponivel, fail-open quota quando Supabase CB aberto, JWT com 3 estrategias, security headers completos (HSTS preload), atomic quota via PostgreSQL, 50+ metricas Prometheus.
 
----
+**Concerns:** Sentry tracing desabilitado (-2), in-memory progress tracker single-worker (-2), RateLimitMiddleware in-memory (-2), ComprasGov v3 offline (-1).
 
-## 5. Checklist pré-GTM (ações recomendadas antes de abrir)
+### 4.2 Database (@data-engineer — 93/100)
 
-### Imediato (antes de GTM)
-- [ ] Deletar `config.py.bak` e `config_legacy.py.bak` (limpeza trivial)
-- [ ] Verificar que health canary detecta falhas reais (ajustar se necessário)
-- [ ] Confirmar que Stripe webhooks estão apontando para produção correta
-- [ ] Validar que rate limiting está configurado para volume esperado
-- [ ] Smoke test completo: signup → trial → buscar → pipeline → planos → checkout
+**READY.** 67 migracoes idempotentes, RLS em todas as tabelas, SECURITY DEFINER com search_path fixo (14 funcoes auditadas), indices parciais em pncp_raw_bids, tsvector pre-computado com trigger, batch upsert otimizado, pg_cron governance (7+ jobs), Stripe sync triggers, circuit breaker no Supabase client, connection pool 25 conexoes com HTTP/2.
 
-### Primeira semana pós-GTM
-- [ ] Adicionar pg_cron retention para `search_state_transitions` (>90d)
-- [ ] Adicionar pg_cron retention para `alert_sent_items` (>90d)
-- [ ] Corrigir RLS de `classification_feedback` e `alert_preferences` (auth.role() → TO)
-- [ ] Mover 14 env vars de `pncp_client.py` para `config/pncp.py`
+**Concerns:** Sem rollback migrations (-3), FK nao enforced em ingestion_checkpoints (-2), JSONB results sem size constraint (-2).
 
-### Primeiro mês pós-GTM
-- [ ] Decomposição de `routes/search.py` (2177 LOC → 3-4 módulos)
-- [ ] Dynamic import de Framer Motion (salvar ~70KB para páginas autenticadas)
-- [ ] Coverage frontend 55% → 60%
-- [ ] Aria-hidden em SVGs decorativos
+### 4.3 Frontend (@ux-design-expert — 93/100)
+
+**READY.** Error boundaries dupla camada, SearchError propagado E2E, proxy error sanitization, 30+ padroes de erro mapeados para portugues, auto-retry com backoff, SSE resilience com polling fallback, middleware getUser(), 3-phase OAuth fallback com PKCE, billing/trial UX completa, ARIA landmarks, strict TypeScript (3 :any em prod), 135+ test files, 31 E2E specs.
+
+**Concerns:** Sem breakpoint explicito 375px (-7 mobile).
 
 ---
 
-## 6. Números do sistema
+## 5. Matriz de Risco
 
-| Métrica | Valor |
-|---------|-------|
-| Backend Python files | 192 (72,693 LOC) |
-| Frontend TS/TSX files | 328 (444 total) |
-| API endpoints | 49 backend + 59 proxy routes |
-| Pages | 47 routes (28 app + 13 SEO + 6 admin) |
-| Components | 44 search + 46 app + 49 global |
-| Custom hooks | 28 global + 9 search |
-| Database tables | 21 (todas com RLS) |
-| Migrations | 88 Supabase + 7 backend |
-| Feature flags | 50+ |
-| Tests | 5131 BE + 5583 FE + 60 E2E = **10,774 tests** |
-| CI workflows | 17 GitHub Actions |
-| Monitoring | Prometheus + OpenTelemetry + Sentry |
-| Data sources | 3 (PNCP, PCP v2, ComprasGov v3) |
-| Setores | 15 com keywords, exclusões, viability ranges |
+| # | Risco | Prob. | Impacto | Mitigacao | Quando |
+|---|-------|-------|---------|-----------|--------|
+| R1 | Checkout Stripe nao verificado manualmente | Alta | Alto | Verificar antes de GA — 10 min | Pre-lancamento |
+| R2 | Mobile 375px polish incompleto | Alta | Baixo | CSS fixes pontuais; ICP usa desktop | Sprint +1 |
+| R3 | Single-worker scaling wall | Media | Medio | WEB_CONCURRENCY=2 como quick fix | Sprint +1 |
+| R4 | Sentry tracing desabilitado | Alta | Baixo | Logs + Prometheus cobrem | Sprint +2 |
+| R5 | Sem rollback migrations | Baixa | Alto | Migracoes idempotentes; backup Supabase diario | Sprint +3 |
+| R6 | ComprasGov v3 offline | Alta (ext) | Baixo | PNCP cobre 80%+; PCP v2 preenche lacunas | Externo |
+| R7 | Trial expiration nao testado live | Media | Medio | 25 testes automatizados; monitorar 14 dias | Monitoramento |
 
 ---
 
-## 7. Conclusão
+## 6. Checklist Pre-Lancamento (~30 min)
 
-SmartLic é um sistema **substancialmente mais maduro** do que a maioria dos produtos em estágio de GTM. Com:
+### Obrigatorio
 
-- **10,774 testes automatizados** com zero failures
-- **Segurança enterprise-grade** (RLS, CSP, MFA, audit trail)
-- **Resiliência comprovada** (circuit breakers, cache SWR, graceful degradation)
-- **Observabilidade completa** (Prometheus, OTel, Sentry)
-- **Billing funcional** (Stripe, trial, grace period)
+- [x] ~~Stripe checkout completo~~ VERIFICADO sessao 039 (2026-04-04) — cupom 100% live mode, webhook processado em ~10s, plan_type atualizado
+- [x] ~~Stripe live-mode~~ VERIFICADO sessao 039 — checkout.stripe.com com cs_live_, R$0 via cupom
+- [ ] Trial end-to-end (nova conta -> usar plataforma -> trial-status correto)
 
-O debt existente (~70h) é **debt normal de v1** — nada que impeça operação com usuários pagantes. Os riscos identificados têm timeline de 3-6 meses antes de se tornarem problemas reais.
+### Recomendado
 
-**Recomendação: Liberar para GTM.**
+- [ ] Health check: GET /health e GET /health/cache retornam 200
+- [ ] SSE progress: busca completa com progresso funcionando
+- [ ] Railway logs: sem erros criticos nos ultimos deploys
+- [ ] Sentry: error capture ativo
+- [ ] Email transacional: welcome email via Resend
+- [ ] smartlic.tech: SSL valido, redirect correto
 
 ---
 
-*Assessment gerado via Brownfield Discovery Workflow v3.1 — Fases 1-3 (Architect + Data Engineer + UX Expert) consolidadas com lens GTM.*
-*Fontes: `docs/architecture/system-architecture.md`, `supabase/docs/DB-AUDIT.md`, `docs/frontend/frontend-spec.md`*
+## 7. Roadmap Pos-Lancamento
+
+### Sprint +1 (semana 1-2)
+- Mobile 375px polish
+- WEB_CONCURRENCY=2 no Railway
+- Monitorar primeiros trials
+- ComprasGov v3 health check automatico
+
+### Sprint +2 (semana 3-4)
+- Sentry tracing workaround
+- Performance audit (N+1 queries)
+- Onboarding email sequence (D+1, D+7, D+14)
+
+### Sprint +3 (semana 5-6)
+- Rollback migration playbook
+- Multi-worker auto-scaling
+- Precisao setorial >= 85% fine-tuning
+
+---
+
+## 8. Recomendacao Final
+
+**O SmartLic esta em condicao de GA.** Tres auditorias tecnicas em 93/100, validacao de mercado com 8/8 personas dispostas a pagar, e cobertura de testes robusta confirmam que a plataforma e estavel, segura e entrega valor real ao ICP.
+
+**Execute a verificacao do Stripe (10 min) e anuncie. GO.**
+
+---
+
+*Brownfield Discovery Workflow — SmartLic GTM Assessment v2.0*
+*Proxima revisao: 30 dias apos GA ou ao atingir 50 usuarios ativos*

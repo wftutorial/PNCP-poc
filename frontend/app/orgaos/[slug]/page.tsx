@@ -34,6 +34,8 @@ interface OrgaoStats {
   top_modalidades: ModalidadeCount[];
   top_setores: string[];
   ultimas_licitacoes: LicitacaoRecente[];
+  total_contratos_24m?: number;
+  valor_total_contratos_24m?: number;
   aviso_legal: string;
 }
 
@@ -76,9 +78,13 @@ export async function generateMetadata({
     minimumFractionDigits: 0,
   }).format(stats.valor_medio_estimado);
 
+  const contratosDesc = stats.total_contratos_24m
+    ? ` ${stats.total_contratos_24m} contratos firmados (24 meses).`
+    : '';
+
   return {
-    title: `${stats.nome} — Licitações e Editais`,
-    description: `${stats.nome} publicou ${stats.total_licitacoes} licitações. ${stats.licitacoes_30d} nos últimos 30 dias. Valor médio: ${valorMedioFormatado}.`,
+    title: `${stats.nome} — Licitações, Editais e Contratos`,
+    description: `${stats.nome} publicou ${stats.total_licitacoes} licitações. ${stats.licitacoes_30d} nos últimos 30 dias. Valor médio: ${valorMedioFormatado}.${contratosDesc}`,
     alternates: {
       canonical: `https://smartlic.tech/orgaos/${slug}`,
     },
@@ -157,6 +163,7 @@ export default async function OrgaoPerfilPage({
       breadcrumbLabel={stats.nome}
       relatedPages={[
         { href: '/orgaos', title: 'Órgãos Compradores' },
+        { href: '/cnpj', title: 'Consulta CNPJ' },
         { href: '/calculadora', title: 'Calculadora de Oportunidades' },
         { href: '/licitacoes', title: 'Licitações por Setor' },
       ]}

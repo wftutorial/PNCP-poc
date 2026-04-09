@@ -126,9 +126,9 @@ class TestAC9LlmArbiterPendingReview:
             result = classify_contract_primary_match(
                 objeto="Manutencao de equipamentos hospitalares",
                 valor=200_000,
-                setor_name="Saude",
+                setor_name="Medicamentos",
                 prompt_level="zero_match",
-                setor_id="saude",
+                setor_id="medicamentos",
                 search_id="test-354-2",
             )
 
@@ -458,8 +458,8 @@ class TestAC10ReclassifyJob:
             result = await reclassify_pending_bids_job(
                 ctx={},
                 search_id="search-retry",
-                sector_name="Saude",
-                sector_id="saude",
+                sector_name="Medicamentos",
+                sector_id="medicamentos",
                 attempt=1,
             )
 
@@ -556,8 +556,8 @@ class TestAC10ReclassifyJob:
             result = await reclassify_pending_bids_job(
                 ctx={},
                 search_id="search-maxretry",
-                sector_name="Saude",
-                sector_id="saude",
+                sector_name="Medicamentos",
+                sector_id="medicamentos",
                 attempt=3,  # Already at max
             )
 

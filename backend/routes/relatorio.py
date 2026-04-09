@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/relatorio-2026-t1", tags=["relatorio"])
 
 # Public download URL — Supabase Storage. Update after uploading the real PDF.
-PDF_PUBLIC_URL = "https://smartlic.tech/downloads/panorama-2026-t1.pdf"
+PDF_PUBLIC_URL = "https://fqqyovlzdzimiwfofdjk.supabase.co/storage/v1/object/public/public-downloads/panorama-2026-t1.pdf"
 REPORT_SOURCE = "panorama-2026-t1"
 
 

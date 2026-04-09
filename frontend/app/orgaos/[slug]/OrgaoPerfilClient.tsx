@@ -38,6 +38,8 @@ interface OrgaoStats {
   top_setores: string[];
   ultimas_licitacoes: LicitacaoRecente[];
   top_fornecedores?: FornecedorTop[];
+  total_contratos_24m?: number;
+  valor_total_contratos_24m?: number;
   aviso_legal: string;
 }
 
@@ -89,6 +91,8 @@ export default function OrgaoPerfilClient({ stats }: { stats: OrgaoStats }) {
     top_setores,
     ultimas_licitacoes,
     top_fornecedores,
+    total_contratos_24m,
+    valor_total_contratos_24m,
     aviso_legal,
   } = stats;
 
@@ -276,6 +280,25 @@ export default function OrgaoPerfilClient({ stats }: { stats: OrgaoStats }) {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Contratos Firmados — spending data from pncp_supplier_contracts */}
+      {total_contratos_24m != null && total_contratos_24m > 0 && (
+        <div className="mb-8">
+          <h2 className="text-lg font-bold text-gray-800 mb-4">Contratos Firmados (24 meses)</h2>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div className="bg-white border rounded-xl p-5 text-center">
+              <p className="text-3xl font-black text-gray-900">{total_contratos_24m}</p>
+              <p className="text-sm text-gray-500 mt-1">Contratos assinados</p>
+            </div>
+            <div className="bg-white border rounded-xl p-5 text-center">
+              <p className="text-3xl font-black text-gray-900">
+                {valor_total_contratos_24m ? formatBRL(valor_total_contratos_24m) : 'N/D'}
+              </p>
+              <p className="text-sm text-gray-500 mt-1">Valor total contratado</p>
+            </div>
           </div>
         </div>
       )}

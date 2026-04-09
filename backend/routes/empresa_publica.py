@@ -39,6 +39,7 @@ _ESFERA_LABELS = {"F": "Federal", "E": "Estadual", "M": "Municipal", "D": "Distr
 
 class ContratoPublico(BaseModel):
     orgao: str
+    orgao_cnpj: Optional[str] = None
     valor: Optional[float] = None
     data_inicio: Optional[str] = None
     descricao: str
@@ -214,8 +215,12 @@ async def _fetch_contratos_pncp(cnpj: str) -> list[dict]:
                     if len(descricao) > 200:
                         descricao = descricao[:197] + "..."
 
+                    orgao_cnpj_raw = orgao.get("cnpjCompra") or orgao.get("cnpj") or ""
+                    orgao_cnpj_clean = re.sub(r"\D", "", orgao_cnpj_raw) or None
+
                     matched.append({
                         "orgao": unidade.get("nomeUnidade", "") or orgao.get("razaoSocial", "Não informado"),
+                        "orgao_cnpj": orgao_cnpj_clean,
                         "valor": valor,
                         "data_inicio": data_assinatura,
                         "descricao": descricao,
@@ -305,7 +310,7 @@ async def _fetch_contratos_local(cnpj: str) -> tuple[list[dict], str]:
 
         resp = (
             sb.table("pncp_supplier_contracts")
-            .select("orgao_nome,uf,esfera,valor_global,data_assinatura,objeto_contrato")
+            .select("orgao_cnpj,orgao_nome,uf,esfera,valor_global,data_assinatura,objeto_contrato")
             .eq("ni_fornecedor", cnpj)
             .eq("is_active", True)
             .gte("data_assinatura", cutoff)
@@ -445,6 +450,7 @@ async def _build_perfil(cnpj: str) -> dict:
                 pass
         contratos_parsed.append({
             "orgao": c.get("orgao") or c.get("orgao_nome") or "Não informado",
+            "orgao_cnpj": c.get("orgao_cnpj") or None,
             "valor": c.get("valor") or c.get("valor_global"),
             "data_inicio": c.get("data_inicio") or c.get("data_assinatura"),
             "descricao": c.get("descricao") or c.get("objeto_contrato") or "Sem descrição",

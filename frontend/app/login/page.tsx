@@ -174,6 +174,24 @@ function LoginContent() {
     }
   };
 
+  const handleGoogleSignIn = async () => {
+    setError(null);
+    setLoading(true);
+    trackEvent('login_attempted', { method: "google" });
+
+    try {
+      await signInWithGoogle();
+    } catch (err: unknown) {
+      const rawMessage = err instanceof Error ? err.message : "Erro ao entrar com Google";
+      const translatedMessage = translateAuthError(rawMessage);
+      trackEvent('login_failed', { method: "google", error_category: categorizeLoginError(rawMessage) });
+      setError(translatedMessage);
+      toast.error(translatedMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // UX-359 AC3/AC5: Auto-scroll to form via URL param
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -257,7 +275,7 @@ function LoginContent() {
             error={error}
             success={success}
             onSubmit={onFormSubmit}
-            onGoogleSignIn={() => signInWithGoogle()}
+            onGoogleSignIn={handleGoogleSignIn}
           />
         </div>
       </div>

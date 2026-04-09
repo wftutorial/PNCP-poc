@@ -152,6 +152,23 @@ export default function SignupPage() {
     }
   };
 
+  const handleGoogleSignup = async () => {
+    setError(null);
+    setLoading(true);
+    trackEvent('signup_attempted', { method: "google" });
+
+    try {
+      await signInWithGoogle();
+    } catch (err: unknown) {
+      const rawMessage = err instanceof Error ? err.message : "Erro ao cadastrar com Google";
+      const translatedMessage = translateAuthError(rawMessage);
+      setError(translatedMessage);
+      toast.error(translatedMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // SEO-PLAYBOOK Frente 2: persist ?ref=CODE for referral program
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -298,7 +315,7 @@ export default function SignupPage() {
             </span>
           </div>
 
-          <SignupOAuth onGoogleSignup={() => signInWithGoogle()} />
+          <SignupOAuth onGoogleSignup={handleGoogleSignup} />
 
           <SignupForm
             form={form}

@@ -296,6 +296,7 @@ export const AUTH_ERROR_MAP: Record<string, string> = {
   "Failed to fetch": "Erro de conexão. Verifique sua internet.",
   "NetworkError": "Erro de conexão. Verifique sua internet.",
   "network error": "Erro de conexão. Verifique sua internet.",
+  "Autenticação indisponível": "Autenticação indisponível neste ambiente. Configure as variáveis do Supabase no frontend/.env.local.",
 };
 
 /**
